@@ -80,9 +80,9 @@ func (s) TestConfigUpdate_ControlChannel(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -166,9 +166,9 @@ func (s) TestConfigUpdate_ControlChannelWithCreds(t *testing.T) {
 	// server certificate used for the RLS server and the backend specifies a
 	// DNS SAN of "*.test.example.com". Hence we use a dial target which is a
 	// subdomain of the same here.
-	cc, err := grpc.Dial(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(clientCreds))
+	cc, err := grpc.NewClient(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -226,9 +226,9 @@ func (s) TestConfigUpdate_ControlChannelServiceConfig(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -263,9 +263,9 @@ func (s) TestConfigUpdate_DefaultTarget(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -537,9 +537,9 @@ func (s) TestConfigUpdate_BadChildPolicyConfigs(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -866,9 +866,9 @@ func (s) TestDataCachePurging(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -957,9 +957,9 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
