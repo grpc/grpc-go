@@ -449,8 +449,8 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 
 // Test verifies that LB waits for child policy configuration update
 // inline on receipt of configuration update.
-func (s) TestChildPoliciesConfigUpdatedInline(t *testing.T) {
-	// Override the newConfigHook to ensure picker was updated.
+func (s) TestChildPolicyConfigUpdateBlocking(t *testing.T) {
+	// Override the ClientConnUpdateHook to track when the picker is updated.
 	clientConnUpdateDone := make(chan struct{}, 1)
 	origNewClientConnUpdateHookHook := clusterresolver.ClientConnUpdateHook
 	clusterresolver.ClientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
@@ -486,7 +486,7 @@ func (s) TestChildPoliciesConfigUpdatedInline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update resources on management server: %v", err)
 	}
 
 	// Create xDS client, configure cds_experimental LB policy with a manual
@@ -499,10 +499,10 @@ func (s) TestChildPoliciesConfigUpdatedInline(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Close the listener and ensure that the config is updated.
+	// Ensure that the child policy config update is processed.
 	lis.Close()
 	select {
-	case <-clientConnUpdateDone:
+	case <-clientConnUpdateDone: // Success: config update was processed within the expected time.
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for inline child policy configuration update on receipt of configuration update.")
 	}

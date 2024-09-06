@@ -51,8 +51,8 @@ var (
 	newChildBalancer  = func(bb balancer.Builder, cc balancer.ClientConn, o balancer.BuildOptions) balancer.Balancer {
 		return bb.Build(cc, o)
 	}
-	// Below function is no-op in actual code, but can be overridden in
-	// tests to give tests visibility into exactly when certain events happen.
+	// This function is a no-op in production code but can be overridden
+	// in tests to track the timing of specific events for test visibility.
 	ClientConnUpdateHook = func() {}
 )
 
@@ -311,8 +311,8 @@ func (b *clusterResolverBalancer) run() {
 			case *ccUpdate:
 				b.handleClientConnUpdate(update)
 				if update.done != nil {
-					// Close the channel to convey to the consumers of updateCh
-					// that child policies config are updated inline.
+					// Close the channel to signal to consumers of updateCh
+					// that the child policies' configuration has been updated.
 					close(update.done)
 				}
 			case exitIdle:
