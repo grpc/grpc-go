@@ -75,7 +75,7 @@ func doRPCAndGetPath(client testgrpc.TestServiceClient, timeout time.Duration) t
 }
 
 func dialTCPUserTimeout(ctx context.Context, addr string) (net.Conn, error) {
-	control := func(network, address string, c syscall.RawConn) error {
+	control := func(_, _ string, c syscall.RawConn) error {
 		var syscallErr error
 		controlErr := c.Control(func(fd uintptr) {
 			syscallErr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, 20000)

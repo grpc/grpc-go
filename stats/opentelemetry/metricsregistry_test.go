@@ -61,7 +61,9 @@ func newServerStatsHandler(options MetricsOptions) metricsRecorderForTest {
 // the expected metrics emissions, which includes default metrics and optional
 // label assertions.
 func (s) TestMetricsRegistryMetrics(t *testing.T) {
-	internal.SnapshotMetricRegistryForTesting.(func(t *testing.T))(t)
+	cleanup := internal.SnapshotMetricRegistryForTesting()
+	defer cleanup()
+
 	intCountHandle1 := estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "int-counter-1",
 		Description:    "Sum of calls from test",

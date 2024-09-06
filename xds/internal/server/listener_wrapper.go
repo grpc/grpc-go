@@ -410,8 +410,8 @@ type ldsWatcher struct {
 	name   string
 }
 
-func (lw *ldsWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.DoneNotifier) {
-	defer onDone.OnDone()
+func (lw *ldsWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	defer onDone()
 	if lw.parent.closed.HasFired() {
 		lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
 		return
@@ -422,8 +422,8 @@ func (lw *ldsWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone 
 	lw.parent.handleLDSUpdate(update.Resource)
 }
 
-func (lw *ldsWatcher) OnError(err error, onDone xdsresource.DoneNotifier) {
-	defer onDone.OnDone()
+func (lw *ldsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	defer onDone()
 	if lw.parent.closed.HasFired() {
 		lw.logger.Warningf("Resource %q received error: %v after listener was closed", lw.name, err)
 		return
@@ -435,8 +435,8 @@ func (lw *ldsWatcher) OnError(err error, onDone xdsresource.DoneNotifier) {
 	// continue to use the old configuration.
 }
 
-func (lw *ldsWatcher) OnResourceDoesNotExist(onDone xdsresource.DoneNotifier) {
-	defer onDone.OnDone()
+func (lw *ldsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	defer onDone()
 	if lw.parent.closed.HasFired() {
 		lw.logger.Warningf("Resource %q received resource-does-not-exist error after listener was closed", lw.name)
 		return

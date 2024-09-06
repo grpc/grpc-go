@@ -128,9 +128,13 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 }
 
 func (h *clientStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
-	s := status.Convert(err)
-	callLatency := float64(time.Since(startTime)) / float64(time.Second)
-	h.clientMetrics.callDuration.Record(ctx, callLatency, otelmetric.WithAttributes(otelattribute.String("grpc.method", ci.method), otelattribute.String("grpc.target", ci.target), otelattribute.String("grpc.status", canonicalString(s.Code()))))
+	callLatency := float64(time.Since(startTime)) / float64(time.Second) // calculate ASAP
+	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
+		otelattribute.String("grpc.method", ci.method),
+		otelattribute.String("grpc.target", ci.target),
+		otelattribute.String("grpc.status", canonicalString(status.Code(err))),
+	))
+	h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -188,7 +192,11 @@ func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCSta
 			return
 		}
 
-		h.clientMetrics.attemptStarted.Add(ctx, 1, otelmetric.WithAttributes(otelattribute.String("grpc.method", ci.method), otelattribute.String("grpc.target", ci.target)))
+		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
+			otelattribute.String("grpc.method", ci.method),
+			otelattribute.String("grpc.target", ci.target),
+		))
+		h.clientMetrics.attemptStarted.Add(ctx, 1, attrs)
 	case *stats.OutPayload:
 		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
@@ -244,10 +252,11 @@ func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 		}
 	}
 
-	clientAttributeOption := otelmetric.WithAttributes(attributes...)
-	h.clientMetrics.attemptDuration.Record(ctx, latency, clientAttributeOption)
-	h.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), clientAttributeOption)
-	h.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), clientAttributeOption)
+	// Allocate vararg slice once.
+	opts := []otelmetric.RecordOption{otelmetric.WithAttributeSet(otelattribute.NewSet(attributes...))}
+	h.clientMetrics.attemptDuration.Record(ctx, latency, opts...)
+	h.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), opts...)
+	h.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), opts...)
 }
 
 const (

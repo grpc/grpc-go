@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server is a server for the custom load balancer example.
 package main
 
 import (

@@ -66,6 +66,7 @@ func makeClientTLSConfig(t *testing.T, mTLS bool) *tls.Config {
 		// verification function. So, the server credentials tests will rely
 		// solely on the success/failure of the server-side handshake.
 		InsecureSkipVerify: true,
+		NextProtos:         []string{"h2"},
 	}
 }
 
