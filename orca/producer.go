@@ -84,7 +84,7 @@ func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOpt
 	// subsequent calls.
 	return grpcsync.OnceFunc(func() {
 		p.unregisterListener(l, opts.ReportInterval)
-		closeF()
+		closeFn()
 	})
 }
 
