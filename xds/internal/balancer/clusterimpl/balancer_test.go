@@ -844,7 +844,6 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 // Test verifies that child policies was updated on receipt of
 // configuration update.
 func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
@@ -864,9 +863,6 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	stub.Register(childPolicyName1, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			updatedChildPolicy = childPolicyName1
-			bd.ClientConn.UpdateState(balancer.State{
-				Picker: base.NewErrPicker(errors.New("dummy error picker")),
-			})
 			return nil
 		},
 	})
@@ -874,9 +870,6 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	stub.Register(childPolicyName2, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			updatedChildPolicy = childPolicyName2
-			bd.ClientConn.UpdateState(balancer.State{
-				Picker: base.NewErrPicker(errors.New("dummy error picker")),
-			})
 			return nil
 		},
 	})
@@ -885,8 +878,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testServiceName,
+			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: childPolicyName1,
 			},
@@ -903,8 +895,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testServiceName,
+			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: childPolicyName2,
 			},
@@ -921,7 +912,6 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 // Test verifies that config update fails if child policy config
 // failed to parse.
 func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 
 	builder := balancer.Get(Name)
@@ -933,12 +923,6 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	const parseConfigError = "failed to parse config"
 	const childPolicyName = "stubBalancer-FailedToParseChildPolicyConfig"
 	stub.Register(childPolicyName, stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bd.ClientConn.UpdateState(balancer.State{
-				Picker: base.NewErrPicker(errors.New("dummy error picker")),
-			})
-			return nil
-		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return nil, errors.New(parseConfigError)
 		},
@@ -947,8 +931,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:        testClusterName,
-			EDSServiceName: testServiceName,
+			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: childPolicyName,
 			},
@@ -956,7 +939,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	})
 
 	if err == nil || !strings.Contains(err.Error(), parseConfigError) {
-		t.Errorf("Got error: %v, want error: parsed config to fail.", err)
+		t.Fatalf("Got error: %v, want error: %s", err, parseConfigError)
 	}
 }
 
