@@ -20,11 +20,12 @@
 [rule.unreachable-code]
 [rule.var-declaration]
 [rule.use-any]
-[rule.empty-lines]
 
 # Disabled rules
 # https://github.com/grpc/grpc-go/issues/7444 to track TODO(s)
 [rule.empty-block]
+    Disabled = true
+[rule.import-shadowing]
     Disabled = true
 [rule.exported]
     Disabled = true # TODO: Enable after existing issues are fixed
