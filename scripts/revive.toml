@@ -7,6 +7,7 @@
 [rule.error-return]
 [rule.error-strings]
 [rule.error-naming]
+[rule.exported]
 [rule.increment-decrement]
 [rule.indent-error-flow]
 [rule.package-comments]
@@ -27,8 +28,6 @@
     Disabled = true
 [rule.import-shadowing]
     Disabled = true
-[rule.exported]
-    Disabled = true # TODO: Enable after existing issues are fixed
 [rule.redefines-builtin-id]
     Disabled = true # TODO: Enable after existing issues are fixed
 
