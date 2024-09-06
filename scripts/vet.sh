@@ -181,6 +181,7 @@ revive \
   -set_exit_status=1 \
   -exclude "reflection/test/grpc_testing_not_regenerate/" \
   -exclude "**/*.pb.go" \
+  -formatter plain \
   -config "$(dirname "$0")/revive.toml" \
   ./...
 

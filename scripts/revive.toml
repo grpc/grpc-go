@@ -8,8 +8,6 @@
 [rule.error-strings]
 [rule.error-naming]
 [rule.increment-decrement]
-[rule.indent-error-flow]
-[rule.package-comments]
 [rule.range]
 [rule.receiver-naming]
 [rule.superfluous-else]
@@ -30,4 +28,8 @@
 [rule.exported]
     Disabled = true # TODO: Enable after existing issues are fixed
 [rule.redefines-builtin-id]
+    Disabled = true # TODO: Enable after existing issues are fixed
+[rule.package-comments]
+    Disabled = true # TODO: Enable after existing issues are fixed
+[rule.indent-error-flow]
     Disabled = true # TODO: Enable after existing issues are fixed
