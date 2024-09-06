@@ -840,6 +840,62 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	}
 }
 
+// TestPickFirstLeaf_InitialResolverError verifies the behaviour when a resolver
+// returns an error before any valid configuration.
+func (s) TestPickFirstLeaf_InitialResolverError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	r := manual.NewBuilderWithScheme("whatever")
+	balChan := make(chan *stateStoringBalancer, 1)
+	balancer.Register(&stateStoringBalancerBuilder{balancer: balChan})
+
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(stateStoringServiceConfig),
+	}
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+
+	ccClosed := false
+	defer func() {
+		if !ccClosed {
+			cc.Close()
+		}
+	}()
+
+	stateSubscriber := &ccStateSubscriber{}
+	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
+	// At this point, the resolver has not returned any addresses to the channel.
+	// This RPC must block until the context expires.
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(sCtx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("EmptyCall() = %s, want %s", status.Code(err), codes.DeadlineExceeded)
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	r.CC.ReportError(fmt.Errorf("test error"))
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Close the clientconn to flush the connectivity state manager.
+	cc.Close()
+	ccClosed = true
+
+	/// The clientconn should never transition to CONNECTING.
+	wantTransitions := []connectivity.State{
+		connectivity.TransientFailure,
+		connectivity.Shutdown,
+	}
+
+	if diff := cmp.Diff(wantTransitions, stateSubscriber.transitions); diff != "" {
+		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // stateStoringBalancer stores the state of the subconns being created.
 type stateStoringBalancer struct {
 	balancer.Balancer

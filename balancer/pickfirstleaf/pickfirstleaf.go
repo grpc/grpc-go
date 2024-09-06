@@ -159,8 +159,14 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	}, func() {
 		close(doneCh)
 	})
+	<-doneCh
 }
 
+// resolverError is called by the ClientConn when the name resolver producers an
+// an error or when pickfirst determined the resolver update to be invalid.
+// If the resolver returns an error before sending the first update,
+// it is handled by the gracefulswitch balancer (which is always the top-level
+// LB policy on any channel), so we don't need to handle that here.
 // Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) resolverError(err error) {
 	if b.logger.V(2) {
