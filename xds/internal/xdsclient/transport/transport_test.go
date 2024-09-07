@@ -18,15 +18,61 @@
 package transport_test
 
 import (
+	"context"
+	"encoding/json"
+	"net"
 	"testing"
 
+  "google.golang.org/grpc/credentials"
+  "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/xds/bootstrap"
+	internalbootstrap "google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport/internal"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
+
+const testDialerCredsBuilderName = "test_dialer_creds"
+
+func init() {
+	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
+}
+
+// testDialerCredsBuilder implements the `Credentials` interface defined in
+// package `xds/bootstrap` and encapsulates an insecure credential with a
+// custom Dialer that specifies how to dial the xDS server.
+type testDialerCredsBuilder struct{}
+
+func (t *testDialerCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
+	return &testDialerCredsBundle{}, func() {}, nil
+}
+
+func (t *testDialerCredsBuilder) Name() string {
+	return testDialerCredsBuilderName
+}
+
+// testDialerCredsBundle implements the `Bundle` interface defined in package
+// `credentials` and encapsulates an insecure credential with a custom Dialer
+// that specifies how to dial the xDS server.
+type testDialerCredsBundle struct{}
+
+func (t *testDialerCredsBundle) TransportCredentials() credentials.TransportCredentials {
+	return insecure.NewCredentials()
+}
+
+func (t *testDialerCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+	return nil
+}
+
+func (t *testDialerCredsBundle) NewWithMode(string) (credentials.Bundle, error) {
+	return &testDialerCredsBundle{}, nil
+}
+
+func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error) {
+	return nil, nil
+}
 
 func (s) TestNewWithGRPCDial(t *testing.T) {
 	// Override the dialer with a custom one.
@@ -39,7 +85,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 	internal.GRPCNewClient = customDialer
 	defer func() { internal.GRPCNewClient = oldDial }()
 
-	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "server-address"})
+	serverCfg, err := internalbootstrap.ServerConfigForTesting(internalbootstrap.ServerConfigTestingOptions{URI: "server-address"})
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
@@ -80,5 +126,38 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	if customDialerCalled {
 		t.Fatalf("transport.New(%+v) custom dialer called = true, want false", opts)
+	}
+}
+
+func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
+	serverCfg, err := internalbootstrap.ServerConfigForTesting(internalbootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []internalbootstrap.ChannelCreds{{Type: testDialerCredsBuilderName}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+	if serverCfg.DialerOption() == nil {
+		t.Fatalf("Dialer for xDS transport in server config for testing is nil, want non-nil")
+	}
+	// Create a new transport.
+	opts := transport.Options{
+		ServerCfg: serverCfg,
+		NodeProto: &v3corepb.Node{},
+		OnRecvHandler: func(update transport.ResourceUpdate, onDone func()) error {
+			onDone()
+			return nil
+		},
+		OnErrorHandler: func(error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
+	}
+	c, err := transport.New(opts)
+	defer func() {
+		if c != nil {
+			c.Close()
+		}
+	}()
+	if err != nil {
+		t.Fatalf("transport.New(%v) failed: %v", opts, err)
 	}
 }
