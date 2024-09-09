@@ -19,11 +19,22 @@
 package pickfirstleaf
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
+)
+
+const (
+	// Default short timeout, to be used when waiting for events which are not
+	// expected to happen.
+	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
 type s struct {
@@ -189,5 +200,63 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 
 	if got, want := addressList.increment(), false; got != want {
 		t.Errorf("addressList.increment() = %t, want %t", got, want)
+	}
+}
+
+// TestPickFirstLeaf_TFPickerUpdate sends TRANSIENT_FAILURE subconn state updates
+// for each subconn managed by a pickfirst balancer. It verifies that the picker
+// is updated with the expected frequency.
+func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	bal.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+			},
+		},
+	})
+
+	// PF should report TRANSIENT_FAILURE only once all the sunbconns have failed
+	// once.
+	tfErr := fmt.Errorf("test err: connection refused")
+	sc0 := <-cc.NewSubConnCh
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	p := <-cc.NewPickerCh
+	_, err := p.Pick(balancer.PickInfo{})
+	if want, got := balancer.ErrNoSubConnAvailable, err; got != want {
+		t.Fatalf("picker.Pick() = %v, want %v", got, want)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	p = <-cc.NewPickerCh
+	_, err = p.Pick(balancer.PickInfo{})
+	if want, got := tfErr, err; got != want {
+		t.Fatalf("picker.Pick() = %v, want %v", got, want)
+	}
+
+	// Subsequent TRANSIENT_FAILUREs should be reported only after seeing "# of subconns"
+	// TRANSIENT_FAILUREs.
+	newTfErr := fmt.Errorf("test err: unreachable")
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case p = <-cc.NewPickerCh:
+		sc, err := p.Pick(balancer.PickInfo{})
+		t.Fatalf("unexpected picker update: %v, %v", sc, err)
+	}
+
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
+	p = <-cc.NewPickerCh
+	_, err = p.Pick(balancer.PickInfo{})
+	if want, got := newTfErr, err; got != want {
+		t.Fatalf("picker.Pick() = %v, want %v", got, want)
 	}
 }

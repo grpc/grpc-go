@@ -149,6 +149,7 @@ type pickfirstBalancer struct {
 	subConns         *resolver.AddressMap // scData for active subonns mapped by address.
 	addressList      addressList
 	firstPass        bool
+	numTF            int
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
@@ -529,11 +530,14 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// We have finished the first pass, keep re-connecting failing subconns.
 	switch newState.ConnectivityState {
 	case connectivity.TransientFailure:
+		b.numTF++
 		sd.lastErr = newState.ConnectionError
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: newState.ConnectionError},
-		})
+		if b.numTF%b.subConns.Len() == 0 {
+			b.cc.UpdateState(balancer.State{
+				ConnectivityState: connectivity.TransientFailure,
+				Picker:            &picker{err: newState.ConnectionError},
+			})
+		}
 		// We don't need to request re-resolution since the subconn already does
 		// that before reporting TRANSIENT_FAILURE.
 		// TODO: #7534 - Move re-resolution requests from subconn into pick_first.
@@ -545,6 +549,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 // Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) endFirstPass(lastErr error) {
 	b.firstPass = false
+	b.numTF = 0
 	b.state = connectivity.TransientFailure
 
 	b.cc.UpdateState(balancer.State{
