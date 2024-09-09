@@ -23,9 +23,9 @@ import (
 	"net"
 	"testing"
 
-  "google.golang.org/grpc/credentials"
-  "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	internalbootstrap "google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
