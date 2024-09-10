@@ -406,7 +406,7 @@ func TestEqual(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			gotMatch := test.hi1.Equal(test.hi2)
 			if gotMatch != test.wantMatch {
-				t.Errorf("want %v; hi1.Equal(hi2) = %v", test.wantMatch, gotMatch)
+				t.Errorf("wantMatch %v; hi1.Equal(hi2) = %v", test.wantMatch, gotMatch)
 			}
 		})
 	}
