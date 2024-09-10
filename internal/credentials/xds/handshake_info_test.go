@@ -368,14 +368,15 @@ func TestEqual(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			desc: "same providers, same SAN matchers",
+			desc: "same SAN matchers with different content",
 			hi1: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
 			hi2: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
-			wantMatch: true,
+			wantMatch: false,
 		},
 		{
 			desc:      "different requireClientCert flags",
@@ -384,7 +385,7 @@ func TestEqual(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			desc: "different mockCertProvider instances",
+			desc: "same rootProvider but different mockCertProvider state",
 			hi1: &HandshakeInfo{
 				rootProvider:      mockProvider1,
 				identityProvider:  mockProvider1,
