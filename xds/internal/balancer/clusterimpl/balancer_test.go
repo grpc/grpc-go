@@ -851,10 +851,10 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
-	// Keep track of which child policy was updated
+	// Keep track of which child policy was updated.
 	updatedChildPolicy := ""
 
-	// Create stub balancers to track config updates
+	// Create stub balancers to track config updates.
 	const (
 		childPolicyName1 = "stubBalancer1"
 		childPolicyName2 = "stubBalancer2"
@@ -874,7 +874,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 		},
 	})
 
-	// Initial config update with childPolicyName1
+	// Initial config update with childPolicyName1.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
@@ -891,7 +891,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 		t.Fatal("Child policy 1 was not updated on initial configuration update.")
 	}
 
-	// Second config update with childPolicyName2
+	// Second config update with childPolicyName2.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
