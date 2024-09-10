@@ -163,7 +163,7 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	<-doneCh
 }
 
-// resolverError is called by the ClientConn when the name resolver producers an
+// resolverError is called by the ClientConn when the name resolver produces
 // an error or when pickfirst determined the resolver update to be invalid.
 // If the resolver returns an error before sending the first update,
 // it is handled by the gracefulswitch balancer (which is always the top-level

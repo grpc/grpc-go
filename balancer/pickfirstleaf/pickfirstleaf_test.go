@@ -250,7 +250,7 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	case p = <-cc.NewPickerCh:
 		sc, err := p.Pick(balancer.PickInfo{})
-		t.Fatalf("unexpected picker update: %v, %v", sc, err)
+		t.Fatalf("Unexpected picker update: %v, %v", sc, err)
 	}
 
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
