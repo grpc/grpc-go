@@ -104,7 +104,7 @@ func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *g
 	}
 	ctx = grpc.NewContextWithServerTransportStream(ctx, alts)
 
-	any, err := handler(ctx, req)
+	res, err := handler(ctx, req)
 	if err != nil { // maybe trailers-only if headers haven't already been sent
 		if !alts.attachedLabels.Swap(true) {
 			alts.SetTrailer(alts.metadataExchangeLabels)
@@ -115,7 +115,7 @@ func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *g
 		}
 	}
 
-	return any, err
+	return res, err
 }
 
 // attachLabelsStream embeds a grpc.ServerStream, and intercepts the
