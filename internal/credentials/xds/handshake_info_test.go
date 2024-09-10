@@ -34,7 +34,7 @@ type mockCertProvider struct {
 	id int
 }
 
-func (d *mockCertProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+func (d *mockCertProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
 	return &certprovider.KeyMaterial{}, nil
 }
 
@@ -368,15 +368,14 @@ func TestEqual(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			desc: "same providers, same SAN matchers but extra SAN matcher",
+			desc: "same providers, same SAN matchers",
 			hi1: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
 			hi2: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
-				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
-			wantMatch: false,
+			wantMatch: true,
 		},
 		{
 			desc:      "different requireClientCert flags",
