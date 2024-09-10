@@ -242,3 +242,50 @@ func (s) TestDataCache_ResetBackoffState(t *testing.T) {
 		t.Fatalf("unexpected diff in backoffState for cache entry after dataCache.resetBackoffState(): %s", diff)
 	}
 }
+
+var cacheEntriesMetricsTests = []*cacheEntry{
+	{size: 3},
+	{size: 3},
+	{size: 3},
+	{size: 3},
+	{size: 3},
+}
+
+func (s) TestDataCache_Metrics(t *testing.T) {
+	tmr := stats.NewTestMetricsRecorder(t)
+	dc := newDataCache(50, nil, tmr, "")
+
+	dc.updateRLSServerTarget("rls-server-target")
+	for i, k := range cacheKeys {
+		dc.addEntry(k, cacheEntriesMetricsTests[i])
+	}
+
+	// 5 total entries, size 3 each, so should record 5 entries and 15
+	// size.
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 5)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 15)
+
+	// Resize down the cache to 3 entries. This should scale down the cache to 3
+	// entries with 3 bytes each, so should record 3 entries and 9 size.
+	dc.resize(9)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 3)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 9)
+
+	// Update an entry to have size 5. This should reflect in the size metrics,
+	// which will increase by 2 to 11, while the number of cache entries should
+	// stay same. This write is deterministic and writes to the last one.
+	dc.updateEntrySize(cacheEntriesMetricsTests[4], 5)
+
+	defer func() {
+		cacheEntriesMetricsTests[4].size = 3
+	}()
+
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 3)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 11)
+
+	// Delete this scaled up cache key. This should scale down the cache to 2
+	// entries, and remove 5 size so cache size should be 6.
+	dc.deleteAndCleanup(cacheKeys[4], cacheEntriesMetricsTests[4])
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 2)
+	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 6)
+}
