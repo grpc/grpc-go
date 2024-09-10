@@ -384,7 +384,7 @@ func TestEqual(t *testing.T) {
 			wantMatch: false,
 		},
 		{
-			desc: "different mockCertProvider state (same id but different instance)",
+			desc: "different mockCertProvider instances",
 			hi1: &HandshakeInfo{
 				rootProvider:      mockProvider1,
 				identityProvider:  mockProvider1,
