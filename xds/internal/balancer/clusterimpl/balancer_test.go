@@ -861,14 +861,14 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 	)
 
 	stub.Register(childPolicyName1, stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
 			updatedChildPolicy = childPolicyName1
 			return nil
 		},
 	})
 
 	stub.Register(childPolicyName2, stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
 			updatedChildPolicy = childPolicyName2
 			return nil
 		},
@@ -923,7 +923,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	const parseConfigError = "failed to parse config"
 	const childPolicyName = "stubBalancer-FailedToParseChildPolicyConfig"
 	stub.Register(childPolicyName, stub.BalancerFuncs{
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+		ParseConfig: func(_ json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return nil, errors.New(parseConfigError)
 		},
 	})
