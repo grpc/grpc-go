@@ -965,7 +965,7 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	// change).
 	const childPolicyName = "stubBalancer-PickerUpdatedSynchronouslyOnConfigUpdate"
 	stub.Register(childPolicyName, stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			bd.ClientConn.UpdateState(balancer.State{
 				Picker: base.NewErrPicker(errors.New("dummy error picker")),
 			})
