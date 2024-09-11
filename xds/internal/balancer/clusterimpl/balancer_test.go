@@ -943,6 +943,81 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	}
 }
 
+// TestPickerUpdatedSynchronouslyOnConfigUpdate covers the case picker is updated
+// synchronous on receipt of configuration update.
+func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
+	// Override the newConfigHook to ensure picker was updated.
+	clientConnUpdateDone := make(chan struct{}, 1)
+	origClientConnUpdateHook := clientConnUpdateHook
+	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
+	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
+
+	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
+	xdsC := fakeclient.NewClient()
+
+	builder := balancer.Get(Name)
+	cc := testutils.NewBalancerClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	// Create a stub balancer which waits for the cluster_impl policy to be
+	// closed before sending a picker update (upon receipt of a subConn state
+	// change).
+	const childPolicyName = "stubBalancer-PickerUpdatedSynchronouslyOnConfigUpdate"
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bd.ClientConn.UpdateState(balancer.State{
+				Picker: base.NewErrPicker(errors.New("dummy error picker")),
+			})
+			return nil
+		},
+	})
+
+	const (
+		dropReason      = "test-dropping-category"
+		dropNumerator   = 1
+		dropDenominator = 2
+	)
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		BalancerConfig: &LBConfig{
+			Cluster:             testClusterName,
+			EDSServiceName:      testServiceName,
+			LoadReportingServer: testLRSServerConfig,
+			DropCategories: []DropConfig{{
+				Category:           dropReason,
+				RequestsPerMillion: million * dropNumerator / dropDenominator,
+			}},
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: childPolicyName,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultShortTestTimeout)
+	defer cancel()
+	select {
+	case <-cc.NewPickerCh:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for the picker update on receipt of configuration update.")
+	}
+
+	select {
+	case <-clientConnUpdateDone:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for client conn update to be completed.")
+	}
+}
+
 func assertString(f func() (string, error)) string {
 	s, err := f()
 	if err != nil {

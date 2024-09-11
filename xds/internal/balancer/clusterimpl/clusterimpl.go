@@ -56,6 +56,9 @@ const (
 var (
 	connectedAddress  = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
 	errBalancerClosed = fmt.Errorf("%s LB policy is closed", Name)
+	// Below function is no-op in actual code, but can be overridden in
+	// tests to give tests visibility into exactly when certain events happen.
+	clientConnUpdateHook = func() {}
 )
 
 func init() {
@@ -101,6 +104,12 @@ type clusterImplBalancer struct {
 	edsServiceName   string
 	lrsServer        *bootstrap.ServerConfig
 	loadWrapper      *loadstore.Wrapper
+
+	// Set during UpdateClientConnState when pushing updates to child policies.
+	// Prevents state updates from child policies causing new pickers to be sent
+	// up the channel. Cleared after all child policies have processed the
+	// updates sent to them, after which a new picker is sent up the channel.
+	inhibitPickerUpdates bool
 
 	clusterNameMu sync.Mutex
 	clusterName   string
@@ -199,6 +208,7 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 }
 
 func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) error {
+	defer clientConnUpdateHook()
 	if b.logger.V(2) {
 		b.logger.Infof("Received configuration: %s", pretty.ToJSON(s.BalancerConfig))
 	}
@@ -232,6 +242,8 @@ func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) 
 	}
 
 	b.config = newConfig
+	b.inhibitPickerUpdates = true
+	defer func() { b.inhibitPickerUpdates = false }()
 
 	b.telemetryLabels = newConfig.TelemetryLabels
 	dc := b.handleDropAndRequestCount(newConfig)
@@ -326,14 +338,16 @@ func (b *clusterImplBalancer) ExitIdle() {
 func (b *clusterImplBalancer) UpdateState(state balancer.State) {
 	b.serializer.TrySchedule(func(context.Context) {
 		b.childState = state
-		b.ClientConn.UpdateState(balancer.State{
-			ConnectivityState: b.childState.ConnectivityState,
-			Picker: b.newPicker(&dropConfigs{
-				drops:           b.drops,
-				requestCounter:  b.requestCounter,
-				requestCountMax: b.requestCountMax,
-			}),
-		})
+		if !b.inhibitPickerUpdates {
+			b.ClientConn.UpdateState(balancer.State{
+				ConnectivityState: b.childState.ConnectivityState,
+				Picker: b.newPicker(&dropConfigs{
+					drops:           b.drops,
+					requestCounter:  b.requestCounter,
+					requestCountMax: b.requestCountMax,
+				}),
+			})
+		}
 	})
 }
 
