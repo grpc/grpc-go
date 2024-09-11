@@ -1651,3 +1651,81 @@ func (s) TestGRPCLBStatsQuashEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Test ensures the picker is updated synchronously upon receipt
+// of a configuration update.
+func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
+	// Override the newPickerUpdated to ensure picker was updated.
+	pickerUpdated := make(chan struct{}, 1)
+	origNewPickerUpdated := newPickerUpdated
+	newPickerUpdated = func() { t.Logf("Invoking the picker update."); pickerUpdated <- struct{}{} }
+	defer func() { newPickerUpdated = origNewPickerUpdated }()
+
+	// Override the clientConn update hook to get notified.
+	clientConnUpdateDone := make(chan struct{}, 1)
+	origClientConnUpdateHook := clientConnUpdateHook
+	clientConnUpdateHook = func() { t.Logf("Client conn update done."); clientConnUpdateDone <- struct{}{} }
+	defer func() {
+		clientConnUpdateHook = origClientConnUpdateHook
+	}()
+
+	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(t, 3, "", nil)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
+	_ = []*lbpb.Server{{
+		IpAddress:        tss.beIPs[0],
+		Port:             int32(tss.bePorts[0]),
+		LoadBalanceToken: lbToken,
+	}, {
+		IpAddress:        tss.beIPs[1],
+		Port:             int32(tss.bePorts[1]),
+		LoadBalanceToken: lbToken,
+	}, {
+		IpAddress:        tss.beIPs[2],
+		Port:             int32(tss.bePorts[2]),
+		LoadBalanceToken: lbToken,
+	}}
+
+	// Connect to the test backends.
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
+		grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	defer cc.Close()
+
+	// Push a service config with grpclb as the load balancing policy and
+	// configure pick_first as its child policy.
+	rs := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(`{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`)}
+
+	// Push a resolver update with the remote balancer address specified via
+	// attributes.
+	r.UpdateState(grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-pickerUpdated:
+		t.Log("Picker was updated synchronously on receipt of configuration update.")
+	case <-clientConnUpdateDone:
+		t.Fatal("Client conn update was completed before picker update.")
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for picker update upon receiving a configuration update")
+	}
+
+	// Once picker was updated, wait for client conn update
+	// to complete.
+	select {
+	case <-clientConnUpdateDone:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for client conn update upon receiving a configuration update")
+	}
+}

@@ -57,6 +57,12 @@ const (
 
 var errServerTerminatedConnection = errors.New("grpclb: failed to recv server list: server terminated connection")
 var logger = grpclog.Component("grpclb")
+var (
+	// Below function is no-op in actual code, but can be overridden in
+	// tests to give tests visibility into exactly when certain events happen.
+	newPickerUpdated     = func() {}
+	clientConnUpdateHook = func() {}
+)
 
 func convertDuration(d *durationpb.Duration) time.Duration {
 	if d == nil {
@@ -194,6 +200,12 @@ type lbBalancer struct {
 
 	fallbackTimeout time.Duration
 	doneCh          chan struct{}
+
+	// Set during UpdateClientConnState when pushing updates to child policies.
+	// Prevents state updates from child policies causing new pickers to be sent
+	// up the channel. Cleared after all child policies have processed the
+	// updates sent to them, after which a new picker is sent up the channel.
+	inhibitPickerUpdates bool
 
 	// manualResolver is used in the remote LB ClientConn inside grpclb. When
 	// resolved address updates are received by grpclb, filtered updates will be
@@ -395,7 +407,9 @@ func (lb *lbBalancer) updateStateAndPicker(forceRegeneratePicker bool, resetDrop
 		cc = lb.cc.ClientConn
 	}
 
-	cc.UpdateState(balancer.State{ConnectivityState: lb.state, Picker: lb.picker})
+	if !lb.inhibitPickerUpdates {
+		cc.UpdateState(balancer.State{ConnectivityState: lb.state, Picker: lb.picker})
+	}
 }
 
 // fallbackToBackendsAfter blocks for fallbackTimeout and falls back to use
@@ -463,12 +477,13 @@ func (lb *lbBalancer) ResolverError(error) {
 }
 
 func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	defer clientConnUpdateHook()
+
 	if lb.logger.V(2) {
 		lb.logger.Infof("UpdateClientConnState: %s", pretty.ToJSON(ccs))
 	}
 	gc, _ := ccs.BalancerConfig.(*grpclbServiceConfig)
 	lb.handleServiceConfig(gc)
-
 	backendAddrs := ccs.ResolverState.Addresses
 
 	var remoteBalancerAddrs []resolver.Address
@@ -483,6 +498,10 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// fallback. Empty address is not valid.
 		return balancer.ErrBadResolverState
 	}
+
+	lb.mu.Lock()
+	lb.inhibitPickerUpdates = true
+	lb.mu.Unlock()
 
 	if len(remoteBalancerAddrs) == 0 {
 		if lb.ccRemoteLB != nil {
@@ -515,6 +534,9 @@ func (lb *lbBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		// list of backends being used to the new fallback backends.
 		lb.refreshSubConns(lb.resolvedBackendAddrs, true, lb.usePickFirst)
 	}
+	lb.inhibitPickerUpdates = false
+	newPickerUpdated()
+	lb.cc.UpdateState(balancer.State{ConnectivityState: lb.state, Picker: lb.picker})
 	lb.mu.Unlock()
 	return nil
 }
