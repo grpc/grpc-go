@@ -130,7 +130,7 @@ type SubConn interface {
 	// UpdateAddresses updates the addresses used in this SubConn.
 	// gRPC checks if currently-connected address is still in the new list.
 	// If it's in the list, the connection will be kept.
-	// If it's not in the list, the connection will gracefully closed, and
+	// If it's not in the list, the connection will gracefully close, and
 	// a new connection will be created.
 	//
 	// This will trigger a state transition for the SubConn.

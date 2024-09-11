@@ -87,7 +87,7 @@ func (s) TestSuccessfulFirstUpdate(t *testing.T) {
 // TestTwoBalancersSameType tests the scenario where there is a graceful switch
 // load balancer setup with a current and pending load balancer of the same
 // type. Any ClientConn update should be forwarded to the current lb if there is
-// a current lb and no pending lb, and the only the pending lb if the graceful
+// a current lb and no pending lb, and only the pending lb if the graceful
 // switch balancer contains both a current lb and a pending lb. The pending load
 // balancer should also swap into current whenever it updates with a
 // connectivity state other than CONNECTING.
@@ -725,7 +725,7 @@ func (s) TestUpdateSubConnStateRace(t *testing.T) {
 }
 
 // TestInlineCallbackInBuild tests the scenario where a balancer calls back into
-// the balancer.ClientConn API inline from it's build function.
+// the balancer.ClientConn API inline from its build function.
 func (s) TestInlineCallbackInBuild(t *testing.T) {
 	tcc, gsb := setup(t)
 	// This build call should cause all of the inline updates to forward to the

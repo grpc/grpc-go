@@ -60,7 +60,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Make a echo client and send an RPC.
+	// Make an echo client and send an RPC.
 	rgc := ecpb.NewEchoClient(conn)
 	callUnaryEcho(rgc, "hello world")
 }

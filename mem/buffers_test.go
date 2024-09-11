@@ -199,7 +199,7 @@ func (s) TestBuffer_RefAfterFree(t *testing.T) {
 	buf := newBuffer([]byte("abcd"), mem.NopBufferPool{})
 	buf.Ref()
 
-	// This first call should not panc and bring the ref counter down to 1
+	// This first call should not panic and bring the ref counter down to 1
 	buf.Free()
 	// This second call actually frees the buffer
 	buf.Free()

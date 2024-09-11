@@ -138,7 +138,7 @@ func (s) TestManager_Enabled_TimerFires(t *testing.T) {
 	defer mgr.Close()
 	mgr.ExitIdleMode()
 
-	// Ensure that the timer callback fires within a appropriate amount of time.
+	// Ensure that the timer callback fires within an appropriate amount of time.
 	select {
 	case <-callbackCh:
 	case <-time.After(2 * defaultTestIdleTimeout):
@@ -306,7 +306,7 @@ const (
 	stateActiveRPCs
 )
 
-// racyIdlnessEnforcer is a test idleness enforcer used specifically to test the
+// racyEnforcer is a test idleness enforcer used specifically to test the
 // race between idle timeout and incoming RPCs.
 type racyEnforcer struct {
 	t       *testing.T

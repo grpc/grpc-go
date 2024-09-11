@@ -159,7 +159,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Make a echo client and send RPCs.
+	// Make an echo client and send RPCs.
 	rgc := ecpb.NewEchoClient(conn)
 	callUnaryEcho(rgc, "hello world")
 	callBidiStreamingEcho(rgc)

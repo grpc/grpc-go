@@ -117,7 +117,7 @@ func (ts *testServer) start() error {
 	return nil
 }
 
-// handleconn accepts a new raw connection, and invokes the test provided
+// handleConn accepts a new raw connection, and invokes the test provided
 // handshake function to perform TLS handshake, and returns the result on the
 // `hsResult` channel.
 func (ts *testServer) handleConn() {

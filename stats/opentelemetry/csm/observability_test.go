@@ -45,7 +45,7 @@ import (
 // the bootstrap env var to a bootstrap file with a nodeID provided. It sets CSM
 // Env Vars as well, and mocks the resource detector's returned attribute set to
 // simulate the environment. It registers a cleanup function on the provided t
-// to restore the environment to it's original state.
+// to restore the environment to its original state.
 func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID, csmCanonicalServiceName, csmWorkloadName string) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, "xds_server_uri")
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
