@@ -202,8 +202,7 @@ func New(opts Options) (*Transport, error) {
 			Timeout: 20 * time.Second,
 		}),
 	}
-	dialerOpts := opts.ServerCfg.DialerOption()
-	if dialerOpts != nil {
+	if dialerOpts := opts.ServerCfg.DialerOption(); dialerOpts != nil {
 		dopts = append(dopts, dialerOpts)
 	}
 	grpcNewClient := transportinternal.GRPCNewClient.(func(string, ...grpc.DialOption) (*grpc.ClientConn, error))

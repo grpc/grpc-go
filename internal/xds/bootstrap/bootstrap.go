@@ -313,8 +313,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		}
 		sc.selectedCreds = cc
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
-		d, ok := bundle.(dialer)
-		if ok {
+		if d, ok := bundle.(dialer); ok {
 			sc.dialerOption = grpc.WithContextDialer(d.Dialer)
 		}
 		sc.cleanups = append(sc.cleanups, cancel)

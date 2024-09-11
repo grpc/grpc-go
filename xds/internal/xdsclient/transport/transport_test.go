@@ -34,46 +34,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
-const testDialerCredsBuilderName = "test_dialer_creds"
-
-func init() {
-	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
-}
-
-// testDialerCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates an insecure credential with a
-// custom Dialer that specifies how to dial the xDS server.
-type testDialerCredsBuilder struct{}
-
-func (t *testDialerCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return &testDialerCredsBundle{}, func() {}, nil
-}
-
-func (t *testDialerCredsBuilder) Name() string {
-	return testDialerCredsBuilderName
-}
-
-// testDialerCredsBundle implements the `Bundle` interface defined in package
-// `credentials` and encapsulates an insecure credential with a custom Dialer
-// that specifies how to dial the xDS server.
-type testDialerCredsBundle struct{}
-
-func (t *testDialerCredsBundle) TransportCredentials() credentials.TransportCredentials {
-	return insecure.NewCredentials()
-}
-
-func (t *testDialerCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
-	return nil
-}
-
-func (t *testDialerCredsBundle) NewWithMode(string) (credentials.Bundle, error) {
-	return &testDialerCredsBundle{}, nil
-}
-
-func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error) {
-	return nil, nil
-}
-
 func (s) TestNewWithGRPCDial(t *testing.T) {
 	// Override the dialer with a custom one.
 	customDialerCalled := false
@@ -127,6 +87,46 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 	if customDialerCalled {
 		t.Fatalf("transport.New(%+v) custom dialer called = true, want false", opts)
 	}
+}
+
+const testDialerCredsBuilderName = "test_dialer_creds"
+
+func init() {
+	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
+}
+
+// testDialerCredsBuilder implements the `Credentials` interface defined in
+// package `xds/bootstrap` and encapsulates an insecure credential with a
+// custom Dialer that specifies how to dial the xDS server.
+type testDialerCredsBuilder struct{}
+
+func (t *testDialerCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
+	return &testDialerCredsBundle{}, func() {}, nil
+}
+
+func (t *testDialerCredsBuilder) Name() string {
+	return testDialerCredsBuilderName
+}
+
+// testDialerCredsBundle implements the `Bundle` interface defined in package
+// `credentials` and encapsulates an insecure credential with a custom Dialer
+// that specifies how to dial the xDS server.
+type testDialerCredsBundle struct{}
+
+func (t *testDialerCredsBundle) TransportCredentials() credentials.TransportCredentials {
+	return insecure.NewCredentials()
+}
+
+func (t *testDialerCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+	return nil
+}
+
+func (t *testDialerCredsBundle) NewWithMode(string) (credentials.Bundle, error) {
+	return &testDialerCredsBundle{}, nil
+}
+
+func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error) {
+	return nil, nil
 }
 
 func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
