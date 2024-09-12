@@ -40,9 +40,9 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-// StoppableServiceRegistrar is an interface that extends the grpc.ServiceRegistrar
-// interface with additional methods to stop and gracefully stop the server.
-type StoppableServiceRegistrar interface {
+// GRPCServer is an interface that groups methods implemented by a grpc.Server
+// or an xds.GRPCServer that are used by the StubServer.
+type GRPCServer interface {
 	grpc.ServiceRegistrar
 	Stop()
 	GracefulStop()
@@ -68,7 +68,7 @@ type StubServer struct {
 	//
 	// If nil, a new grpc.Server is created, listening on the provided Network
 	// and Address fields, or listening using the provided Listener.
-	S StoppableServiceRegistrar
+	S GRPCServer
 
 	// Parameters for Listen and Dial. Defaults will be used if these are empty
 	// before Start.
@@ -173,7 +173,7 @@ func (ss *StubServer) StartHandlerServer(sopts ...grpc.ServerOption) error {
 
 	handler, ok := ss.S.(interface{ http.Handler })
 	if !ok {
-		return fmt.Errorf("server of type %T does not implement http.Handler", ss.S)
+		panic(fmt.Sprintf("server of type %T does not implement http.Handler", ss.S))
 	}
 
 	go func() {
