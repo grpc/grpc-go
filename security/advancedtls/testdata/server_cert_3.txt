@@ -33,14 +33,14 @@ Certificate:
                     ac:cd
                 Exponent: 65537 (0x10001)
         X509v3 extensions:
-            X509v3 Authority Key Identifier: 
+            X509v3 Authority Key Identifier:
                 keyid:6E:1B:8B:C9:34:74:E7:7B:8D:2A:4F:41:0E:98:50:30:14:01:16:B1
 
-            X509v3 Basic Constraints: 
+            X509v3 Basic Constraints:
                 CA:FALSE
-            X509v3 Key Usage: 
+            X509v3 Key Usage:
                 Digital Signature, Non Repudiation, Key Encipherment, Data Encipherment
-            X509v3 Subject Alternative Name: 
+            X509v3 Subject Alternative Name:
                 DNS:google.com, DNS:apple.com, DNS:amazon.com
     Signature Algorithm: sha256WithRSAEncryption
          9f:96:96:1c:41:cd:4c:39:9c:80:2d:b9:a0:4b:42:8f:e2:24:

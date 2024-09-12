@@ -67,6 +67,9 @@ not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/te
 # - Ensure all usages of grpc_testing package are renamed when importing.
 not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
 
+# - Ensure that no trailing spaces are found.
+not git grep '[[:blank:]]$'
+
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
