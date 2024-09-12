@@ -285,8 +285,8 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.updateState()
 }
 
-// ParseConfig parses a child config list and returns a LB to use with the
-// endpointsharding balancer.
+// ParseConfig parses a child config list and returns an LB config to use with
+// the endpointsharding balancer.
 //
 // cfg is expected to be a JSON array of LB policy names + configs as the
 // format of the loadBalancingConfig field in ServiceConfig.
