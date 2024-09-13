@@ -169,9 +169,8 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 	r.data[handle.Name] = incr
 }
 
-// WaitForInt64Histo waits for an int histo metric to be recorded and
-// verifies that the recorded metrics data matches the expected
-// metricsDataWant.
+// WaitForInt64Histo waits for an int histo metric to be recorded and verifies
+// that the recorded metrics data matches the expected metricsDataWant.
 func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) {
 	got, err := r.intHistoCh.Receive(ctx)
 	if err != nil {
