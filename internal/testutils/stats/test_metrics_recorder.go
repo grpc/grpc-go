@@ -21,9 +21,9 @@ package stats
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -44,67 +44,30 @@ type TestMetricsRecorder struct {
 	floatHistoCh *testutils.Channel
 	intGaugeCh   *testutils.Channel
 
-	// The most recent update for each metric name.
-	mu   sync.Mutex
-	data map[estats.Metric]float64
+	// Mu protects Data.
+	Mu sync.Mutex
+	// Data is the most recent update for each metric name.
+	Data map[estats.Metric]float64
 }
 
-// NewTestMetricsRecorder returns new TestMetricsRecorder
-func NewTestMetricsRecorder(t *testing.T) *TestMetricsRecorder {
-	tmr := &TestMetricsRecorder{
-		t: t,
-
+// NewTestMetricsRecorder returns a new TestMetricsRecorder.
+func NewTestMetricsRecorder() *TestMetricsRecorder {
+	return &TestMetricsRecorder{
 		intCountCh:   testutils.NewChannelWithSize(10),
 		floatCountCh: testutils.NewChannelWithSize(10),
 		intHistoCh:   testutils.NewChannelWithSize(10),
 		floatHistoCh: testutils.NewChannelWithSize(10),
 		intGaugeCh:   testutils.NewChannelWithSize(10),
 
-		data: make(map[estats.Metric]float64),
-	}
-
-	return tmr
-}
-
-// AssertDataForMetric asserts data is present for metric. The zero value in the
-// check is equivalent to unset.
-func (r *TestMetricsRecorder) AssertDataForMetric(metricName string, wantVal float64) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.data[estats.Metric(metricName)] != wantVal {
-		r.t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", metricName, r.data[estats.Metric(metricName)], wantVal)
+		Data: make(map[estats.Metric]float64),
 	}
 }
 
-// AssertNoDataForMetric asserts no data is present for metric.
-func (r *TestMetricsRecorder) AssertNoDataForMetric(metricName string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.data[estats.Metric(metricName)]; ok {
-		r.t.Fatalf("Data is present for metric %v", metricName)
-	}
-}
-
-// PollForDataForMetric polls the metric data for the want. Fails if context
-// provided expires before data for metric is found.
-func (r *TestMetricsRecorder) PollForDataForMetric(ctx context.Context, metricName string, wantVal float64) {
-	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
-		r.mu.Lock()
-		if r.data[estats.Metric(metricName)] == wantVal {
-			r.mu.Unlock()
-			return
-		}
-		r.mu.Unlock()
-	}
-	r.t.Fatalf("Timeout waiting for data %v for metric %v", wantVal, metricName)
-}
-
-// ClearMetrics clears the metrics data stores of the test metrics recorder by
-// setting all the data to 0.
+// ClearMetrics clears the metrics data store of the test metrics recorder.
 func (r *TestMetricsRecorder) ClearMetrics() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data = make(map[estats.Metric]float64)
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Data = make(map[estats.Metric]float64)
 }
 
 // MetricsData represents data associated with a metric.
@@ -122,16 +85,18 @@ type MetricsData struct {
 
 // WaitForInt64Count waits for an int64 count metric to be recorded and
 // verifies that the recorded metrics data matches the expected
-// metricsDataWant.
-func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsDataWant MetricsData) {
+// metricsDataWant. Returns an error if failed to wait or received wrong
+// data.
+func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.intCountCh.Receive(ctx)
 	if err != nil {
-		r.t.Fatalf("timeout waiting for int64Count")
+		return fmt.Errorf("timeout waiting for int64Count")
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
-		r.t.Fatalf("int64count metricsData received unexpected value (-got, +want): %v", diff)
+		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
 	}
+	return nil
 }
 
 // RecordInt64Count sends the metrics data to the intCountCh channel
@@ -145,23 +110,25 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 		LabelVals: labels,
 	})
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Data[handle.Name] = float64(incr)
 }
 
 // WaitForFloat64Count waits for a float count metric to be recorded and
 // verifies that the recorded metrics data matches the expected
-// metricsDataWant.
-func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) {
+// metricsDataWant. Returns an error if failed to wait or received wrong
+// data.
+func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.floatCountCh.Receive(ctx)
 	if err != nil {
-		r.t.Fatalf("timeout waiting for float64Count")
+		return fmt.Errorf("timeout waiting for float64Count")
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
-		r.t.Fatalf("float64count metricsData received unexpected value (-got, +want): %v", diff)
+		return fmt.Errorf("float64count metricsData received unexpected value (-got, +want): %v", diff)
 	}
+	return nil
 }
 
 // RecordFloat64Count sends the metrics data to the floatCountCh channel
@@ -175,22 +142,24 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 		LabelVals: labels,
 	})
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = incr
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Data[handle.Name] = incr
 }
 
 // WaitForInt64Histo waits for an int histo metric to be recorded and verifies
-// that the recorded metrics data matches the expected metricsDataWant.
-func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) {
+// that the recorded metrics data matches the expected metricsDataWant. Returns
+// an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.intHistoCh.Receive(ctx)
 	if err != nil {
-		r.t.Fatalf("timeout waiting for int64Histo")
+		return fmt.Errorf("timeout waiting for int64Histo")
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
-		r.t.Fatalf("int64Histo metricsData received unexpected value (-got, +want): %v", diff)
+		return fmt.Errorf("int64Histo metricsData received unexpected value (-got, +want): %v", diff)
 	}
+	return nil
 }
 
 // RecordInt64Histo sends the metrics data to the intHistoCh channel
@@ -204,23 +173,24 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 		LabelVals: labels,
 	})
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Data[handle.Name] = float64(incr)
 }
 
 // WaitForFloat64Histo waits for a float histo metric to be recorded and
 // verifies that the recorded metrics data matches the expected
 // metricsDataWant.
-func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) {
+func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.floatHistoCh.Receive(ctx)
 	if err != nil {
-		r.t.Fatalf("timeout waiting for float64Histo")
+		return fmt.Errorf("timeout waiting for float64Histo")
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
-		r.t.Fatalf("float64Histo metricsData received unexpected value (-got, +want): %v", diff)
+		return fmt.Errorf("float64Histo metricsData received unexpected value (-got, +want): %v", diff)
 	}
+	return nil
 }
 
 // RecordFloat64Histo sends the metrics data to the floatHistoCh channel
@@ -234,23 +204,24 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 		LabelVals: labels,
 	})
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = incr
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Data[handle.Name] = incr
 }
 
 // WaitForInt64Gauge waits for a int gauge metric to be recorded and
 // verifies that the recorded metrics data matches the expected
 // metricsDataWant.
-func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) {
+func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.intGaugeCh.Receive(ctx)
 	if err != nil {
-		r.t.Fatalf("timeout waiting for int64Gauge")
+		return fmt.Errorf("timeout waiting for int64Gauge")
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
-		r.t.Fatalf("int64Gauge metricsData received unexpected value (-got, +want): %v", diff)
+		return fmt.Errorf("int64Gauge metricsData received unexpected value (-got, +want): %v", diff)
 	}
+	return nil
 }
 
 // RecordInt64Gauge sends the metrics data to the intGaugeCh channel
@@ -264,9 +235,9 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 		LabelVals: labels,
 	})
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[handle.Name] = float64(incr)
+	r.Mu.Lock()
+	defer r.Mu.Unlock()
+	r.Data[handle.Name] = float64(incr)
 }
 
 // To implement a stats.Handler, which allows it to be set as a dial option:

@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/testutils/stats"
 )
@@ -251,7 +252,7 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 		{size: 4},
 		{size: 5},
 	}
-	tmr := stats.NewTestMetricsRecorder(t)
+	tmr := stats.NewTestMetricsRecorder()
 	dc := newDataCache(50, nil, tmr, "")
 
 	dc.updateRLSServerTarget("rls-server-target")
@@ -259,26 +260,44 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 		dc.addEntry(k, cacheEntriesMetricsTests[i])
 	}
 
+	const cacheEntriesKey = "grpc.lb.rls.cache_entries"
+	const cacheSizeKey = "grpc.lb.rls.cache_size"
 	// 5 total entries which add up to 15 size, so should record that.
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 5)
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 15)
+	if got := tmr.Data[estats.Metric(cacheEntriesKey)]; got != 5 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 5)
+	}
+	if got := tmr.Data[estats.Metric(cacheSizeKey)]; got != 15 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 15)
+	}
 
 	// Resize down the cache to 2 entries (deterministic as based of LRU).
 	dc.resize(9)
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 2)
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 9)
+	if got := tmr.Data[estats.Metric(cacheEntriesKey)]; got != 2 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 2)
+	}
+	if got := tmr.Data[estats.Metric(cacheSizeKey)]; got != 9 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 9)
+	}
 
 	// Update an entry to have size 6. This should reflect in the size metrics,
 	// which will increase by 1 to 11, while the number of cache entries should
 	// stay same. This write is deterministic and writes to the last one.
 	dc.updateEntrySize(cacheEntriesMetricsTests[4], 6)
 
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 2)
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 10)
+	if got := tmr.Data[estats.Metric(cacheEntriesKey)]; got != 2 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 2)
+	}
+	if got := tmr.Data[estats.Metric(cacheSizeKey)]; got != 10 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 10)
+	}
 
-	// Delete this scaled up cache key. This should scale down the cache to 2
+	// Delete this scaled up cache key. This should scale down the cache to 1
 	// entries, and remove 6 size so cache size should be 4.
 	dc.deleteAndCleanup(cacheKeys[4], cacheEntriesMetricsTests[4])
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_entries", 1)
-	tmr.AssertDataForMetric("grpc.lb.rls.cache_size", 4)
+	if got := tmr.Data[estats.Metric(cacheEntriesKey)]; got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 1)
+	}
+	if got := tmr.Data[estats.Metric(cacheSizeKey)]; got != 4 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 4)
+	}
 }

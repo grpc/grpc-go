@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
@@ -266,7 +267,7 @@ func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	tmr := stats.NewTestMetricsRecorder(t)
+	tmr := stats.NewTestMetricsRecorder()
 	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
@@ -278,9 +279,15 @@ func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
 	defer cancel()
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
 
-	tmr.AssertDataForMetric("grpc.lb.rls.default_target_picks", 1)
-	tmr.AssertNoDataForMetric("grpc.lb.rls.failed_picks")
-	tmr.AssertNoDataForMetric("grpc.lb.rls.target_picks")
+	if got := tmr.Data[estats.Metric("grpc.lb.rls.default_target_picks")]; got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.default_target_picks", got, 1)
+	}
+	if _, ok := tmr.Data[estats.Metric("grpc.lb.rls.target_picks")]; ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.target_picks")
+	}
+	if _, ok := tmr.Data[estats.Metric("grpc.lb.rls.failed_picks")]; ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.failed_picks")
+	}
 }
 
 // Test_RLSTargetPicksMetric tests the target picks metric. It configures an RLS
@@ -306,7 +313,7 @@ func (s) Test_RLSTargetPicksMetric(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	tmr := stats.NewTestMetricsRecorder(t)
+	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
 	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
@@ -318,9 +325,15 @@ func (s) Test_RLSTargetPicksMetric(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
-	tmr.AssertDataForMetric("grpc.lb.rls.target_picks", 1)
-	tmr.AssertNoDataForMetric("grpc.lb.rls.failed_picks")
-	tmr.AssertNoDataForMetric("grpc.lb.rls.default_target_picks")
+	if got := tmr.Data[estats.Metric("grpc.lb.rls.target_picks")]; got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.target_picks", got, 1)
+	}
+	if _, ok := tmr.Data[estats.Metric("grpc.lb.rls.default_target_picks")]; ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.default_target_picks")
+	}
+	if _, ok := tmr.Data[estats.Metric("grpc.lb.rls.failed_picks")]; ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.failed_picks")
+	}
 }
 
 // Test_RLSFailedPicksMetric tests the failed picks metric. It configures an RLS
@@ -338,7 +351,7 @@ func (s) Test_RLSFailedPicksMetric(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	tmr := stats.NewTestMetricsRecorder(t)
+	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
 	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
@@ -352,9 +365,15 @@ func (s) Test_RLSFailedPicksMetric(t *testing.T) {
 	defer cancel()
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
 
-	tmr.AssertDataForMetric("grpc.lb.rls.failed_picks", 1)
-	tmr.AssertNoDataForMetric("grpc.lb.rls.target_picks")
-	tmr.AssertNoDataForMetric("grpc.lb.rls.default_target_picks")
+	if got := tmr.Data[estats.Metric("grpc.lb.rls.failed_picks")]; got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.failed_picks", got, 1)
+	}
+	if _, ok := tmr.Data[estats.Metric("grpc.lb.rls.target_picks")]; ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.target_picks")
+	}
+	if _, ok := tmr.Data[estats.Metric("grpc.lb.rls.default_target_picks")]; ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.default_target_picks")
+	}
 }
 
 // Test verifies the scenario where there is a matching entry in the data cache

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils/stats"
@@ -108,7 +109,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmr := stats.NewTestMetricsRecorder(t)
+			tmr := stats.NewTestMetricsRecorder()
 			wsc := &weightedSubConn{
 				metricsRecorder: tmr,
 				weightVal:       3,
@@ -117,9 +118,15 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 			}
 			wsc.weight(test.nowTime, test.weightExpirationPeriod, test.blackoutPeriod, true)
 
-			tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", test.endpointWeightStaleWant)
-			tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", test.endpointWeightNotYetUsableWant)
-			tmr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", test.endpointWeightWant)
+			if got := tmr.Data[estats.Metric("grpc.lb.wrr.endpoint_weight_stale")]; got != test.endpointWeightStaleWant {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, test.endpointWeightStaleWant)
+			}
+			if got := tmr.Data[estats.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable")]; got != test.endpointWeightNotYetUsableWant {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_not_yet_usable", got, test.endpointWeightNotYetUsableWant)
+			}
+			if got := tmr.Data[estats.Metric("grpc.lb.wrr.endpoint_weight_stale")]; got != test.endpointWeightStaleWant {
+				t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, test.endpointWeightStaleWant)
+			}
 		})
 	}
 
@@ -130,7 +137,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 // with no weights. Both of these should emit a count metric for round robin
 // fallback.
 func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
-	tmr := stats.NewTestMetricsRecorder(t)
+	tmr := stats.NewTestMetricsRecorder()
 	wsc := &weightedSubConn{
 		metricsRecorder: tmr,
 		weightVal:       0,
@@ -147,7 +154,9 @@ func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
 	// There is only one SubConn, so no matter if the SubConn has a weight or
 	// not will fallback to round robin.
 	p.regenerateScheduler()
-	tmr.AssertDataForMetric("grpc.lb.wrr.rr_fallback", 1)
+	if got := tmr.Data[estats.Metric("grpc.lb.wrr.rr_fallback")]; got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
+	}
 	tmr.ClearMetrics()
 
 	// With two SubConns, if neither of them have weights, it will also fallback
@@ -159,5 +168,7 @@ func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
 	}
 	p.subConns = append(p.subConns, wsc2)
 	p.regenerateScheduler()
-	tmr.AssertDataForMetric("grpc.lb.wrr.rr_fallback", 1)
+	if got := tmr.Data[estats.Metric("grpc.lb.wrr.rr_fallback")]; got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
+	}
 }
