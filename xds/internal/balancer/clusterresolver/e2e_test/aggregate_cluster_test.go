@@ -1184,7 +1184,7 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	// Create a ClientConn.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to NewClient() local test server: %v", err)
 	}
 	defer cc.Close()
 
