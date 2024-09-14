@@ -314,6 +314,7 @@ func newStringP(s string) *string {
 }
 
 func TestEqual(t *testing.T) {
+
 	mockProvider1 := &mockCertProvider{id: 1}
 	mockProvider2 := &mockCertProvider{id: 2}
 
