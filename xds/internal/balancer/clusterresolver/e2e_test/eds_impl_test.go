@@ -181,7 +181,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -316,7 +316,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -480,7 +480,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -555,7 +555,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// policy receives an EDS update with no localities.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 	testClient := testgrpc.NewTestServiceClient(cc)
@@ -953,7 +953,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	// removed" error.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
@@ -1024,7 +1024,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
