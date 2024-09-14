@@ -1106,7 +1106,7 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	// removed" error.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to NewClient local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
