@@ -25,8 +25,8 @@ How to get your contributions merged smoothly and quickly.
   is a great place to start. These issues are well-documented and usually can be
   resolved with a single pull request.
 
-- If you are adding a new file, make sure it has the copyright message template 
-  at the top as a comment. You can copy over the message from an existing file 
+- If you are adding a new file, make sure it has the copyright message template
+  at the top as a comment. You can copy over the message from an existing file
   and update the year.
 
 - The grpc package should only depend on standard Go packages and a small number
@@ -41,10 +41,10 @@ How to get your contributions merged smoothly and quickly.
 - Provide a good **PR description** as a record of **what** change is being made
   and **why** it was made. Link to a github issue if it exists.
 
-- If you want to fix formatting or style, consider whether your changes are an 
-  obvious improvement or might be considered a personal preference. If a style 
-  change is based on preference, it likely will not be accepted. If it corrects 
-  widely agreed-upon anti-patterns, then please do create a PR and explain the 
+- If you want to fix formatting or style, consider whether your changes are an
+  obvious improvement or might be considered a personal preference. If a style
+  change is based on preference, it likely will not be accepted. If it corrects
+  widely agreed-upon anti-patterns, then please do create a PR and explain the
   benefits of the change.
 
 - Unless your PR is trivial, you should expect there will be reviewer comments

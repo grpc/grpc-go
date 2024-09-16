@@ -138,7 +138,7 @@ func startServer(t *testing.T, r reportType) *testServer {
 			MinReportingInterval:  10 * time.Millisecond,
 		}
 		internal.ORCAAllowAnyMinReportingInterval.(func(so *orca.ServiceOptions))(&oso)
-		sopts = append(sopts, stubserver.RegisterServiceServerOption(func(s *grpc.Server) {
+		sopts = append(sopts, stubserver.RegisterServiceServerOption(func(s grpc.ServiceRegistrar) {
 			if err := orca.Register(s, oso); err != nil {
 				t.Fatalf("Failed to register orca service: %v", err)
 			}

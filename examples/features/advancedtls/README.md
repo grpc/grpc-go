@@ -16,7 +16,7 @@ The clients are designed to call these servers with varying configurations of cr
 ```
 # Run the server
 $ go run server/main.go -credentials_directory $(pwd)/creds
-# Run the clients from the `grpc-go/examples/features/advancedtls` directory 
+# Run the clients from the `grpc-go/examples/features/advancedtls` directory
 $ go run client/main.go -credentials_directory $(pwd)/creds
 ```
 
