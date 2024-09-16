@@ -19,14 +19,26 @@
 package xds
 
 import (
+	"context"
 	"crypto/x509"
 	"net"
 	"net/url"
 	"regexp"
 	"testing"
 
+	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/xds/matcher"
 )
+
+type mockCertProvider struct {
+	id int
+}
+
+func (d *mockCertProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
+	return &certprovider.KeyMaterial{}, nil
+}
+
+func (d *mockCertProvider) Close() {}
 
 func TestDNSMatch(t *testing.T) {
 	tests := []struct {
@@ -299,4 +311,103 @@ func TestMatchingSANExists_Success(t *testing.T) {
 
 func newStringP(s string) *string {
 	return &s
+}
+
+func TestEqual(t *testing.T) {
+	mockProvider1 := &mockCertProvider{id: 1}
+	mockProvider2 := &mockCertProvider{id: 2}
+
+	tests := []struct {
+		desc      string
+		hi1       *HandshakeInfo
+		hi2       *HandshakeInfo
+		wantMatch bool
+	}{
+		{
+			desc:      "both HandshakeInfo are nil",
+			hi1:       nil,
+			hi2:       nil,
+			wantMatch: true,
+		},
+		{
+			desc:      "one HandshakeInfo is nil",
+			hi1:       nil,
+			hi2:       NewHandshakeInfo(mockProvider1, nil, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc:      "different root providers",
+			hi1:       NewHandshakeInfo(mockProvider1, nil, nil, false),
+			hi2:       NewHandshakeInfo(mockProvider2, nil, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc:      "different identity providers",
+			hi1:       NewHandshakeInfo(nil, mockProvider1, nil, false),
+			hi2:       NewHandshakeInfo(nil, mockProvider2, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc: "same providers, same SAN matchers",
+			hi1: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+			}, false),
+			hi2: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+			}, false),
+			wantMatch: true,
+		},
+		{
+			desc: "same providers, different SAN matchers",
+			hi1: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+			}, false),
+			hi2: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
+			}, false),
+			wantMatch: false,
+		},
+		{
+			desc: "same SAN matchers with different content",
+			hi1: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+			}, false),
+			hi2: NewHandshakeInfo(mockProvider1, mockProvider1, []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
+				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
+			}, false),
+			wantMatch: false,
+		},
+		{
+			desc:      "different requireClientCert flags",
+			hi1:       NewHandshakeInfo(mockProvider1, mockProvider1, nil, true),
+			hi2:       NewHandshakeInfo(mockProvider1, mockProvider1, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc: "same rootProvider but different mockCertProvider state",
+			hi1: &HandshakeInfo{
+				rootProvider:      mockProvider1,
+				identityProvider:  mockProvider1,
+				sanMatchers:       nil,
+				requireClientCert: false,
+			},
+			hi2: &HandshakeInfo{
+				rootProvider:      &mockCertProvider{id: 1},
+				identityProvider:  mockProvider1,
+				sanMatchers:       nil,
+				requireClientCert: false,
+			},
+			wantMatch: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			gotMatch := test.hi1.Equal(test.hi2)
+			if gotMatch != test.wantMatch {
+				t.Errorf("hi1.Equal(hi2) = %v; wantMatch %v", gotMatch, test.wantMatch)
+			}
+		})
+	}
 }
