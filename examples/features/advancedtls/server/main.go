@@ -16,6 +16,8 @@
  *
  */
 
+// Binary server is an example client demonstrating how to set up a secure gRPC
+// server using advancedtls.
 package main
 
 import (

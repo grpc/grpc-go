@@ -49,6 +49,7 @@ type TestMetricsRecorder struct {
 	data map[estats.Metric]float64
 }
 
+// NewTestMetricsRecorder returns new TestMetricsRecorder
 func NewTestMetricsRecorder(t *testing.T) *TestMetricsRecorder {
 	tmr := &TestMetricsRecorder{
 		t: t,
@@ -97,6 +98,7 @@ func (r *TestMetricsRecorder) ClearMetrics() {
 	r.data = make(map[estats.Metric]float64)
 }
 
+// MetricsData represents data associated with a metric.
 type MetricsData struct {
 	Handle *estats.MetricDescriptor
 
@@ -109,6 +111,9 @@ type MetricsData struct {
 	LabelVals []string
 }
 
+// WaitForInt64Count waits for an int64 count metric to be recorded and
+// verifies that the recorded metrics data matches the expected
+// metricsDataWant.
 func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsDataWant MetricsData) {
 	got, err := r.intCountCh.Receive(ctx)
 	if err != nil {
@@ -120,6 +125,8 @@ func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsData
 	}
 }
 
+// RecordInt64Count sends the metrics data to the intCountCh channel
+// and updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	r.intCountCh.Send(MetricsData{
 		Handle:    handle.Descriptor(),
@@ -133,6 +140,9 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 	r.data[handle.Name] = float64(incr)
 }
 
+// WaitForFloat64Count waits for a float count metric to be recorded and
+// verifies that the recorded metrics data matches the expected
+// metricsDataWant.
 func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) {
 	got, err := r.floatCountCh.Receive(ctx)
 	if err != nil {
@@ -144,6 +154,8 @@ func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDa
 	}
 }
 
+// RecordFloat64Count sends the metrics data to the floatCountCh channel
+// and updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
 	r.floatCountCh.Send(MetricsData{
 		Handle:    handle.Descriptor(),
@@ -157,6 +169,8 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 	r.data[handle.Name] = incr
 }
 
+// WaitForInt64Histo waits for an int histo metric to be recorded and verifies
+// that the recorded metrics data matches the expected metricsDataWant.
 func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsDataWant MetricsData) {
 	got, err := r.intHistoCh.Receive(ctx)
 	if err != nil {
@@ -168,6 +182,8 @@ func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsData
 	}
 }
 
+// RecordInt64Histo sends the metrics data to the intHistoCh channel
+// and updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
 	r.intHistoCh.Send(MetricsData{
 		Handle:    handle.Descriptor(),
@@ -181,6 +197,9 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 	r.data[handle.Name] = float64(incr)
 }
 
+// WaitForFloat64Histo waits for a float histo metric to be recorded and
+// verifies that the recorded metrics data matches the expected
+// metricsDataWant.
 func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) {
 	got, err := r.floatHistoCh.Receive(ctx)
 	if err != nil {
@@ -192,6 +211,8 @@ func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDa
 	}
 }
 
+// RecordFloat64Histo sends the metrics data to the floatHistoCh channel
+// and updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
 	r.floatHistoCh.Send(MetricsData{
 		Handle:    handle.Descriptor(),
@@ -205,6 +226,9 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 	r.data[handle.Name] = incr
 }
 
+// WaitForInt64Gauge waits for a int gauge metric to be recorded and
+// verifies that the recorded metrics data matches the expected
+// metricsDataWant.
 func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) {
 	got, err := r.intGaugeCh.Receive(ctx)
 	if err != nil {
@@ -216,6 +240,8 @@ func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsData
 	}
 }
 
+// RecordInt64Gauge sends the metrics data to the intGaugeCh channel
+// and updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
 	r.intGaugeCh.Send(MetricsData{
 		Handle:    handle.Descriptor(),
@@ -231,28 +257,37 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 
 // To implement a stats.Handler, which allows it to be set as a dial option:
 
+// TagRPC is TestMetricsRecorder's implementation of TagRPC.
 func (r *TestMetricsRecorder) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	return ctx
 }
 
+// HandleRPC is TestMetricsRecorder's implementation of HandleRPC.
 func (r *TestMetricsRecorder) HandleRPC(context.Context, stats.RPCStats) {}
 
+// TagConn is TestMetricsRecorder's implementation of TagConn.
 func (r *TestMetricsRecorder) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
+// HandleConn is TestMetricsRecorder's implementation of HandleConn.
 func (r *TestMetricsRecorder) HandleConn(context.Context, stats.ConnStats) {}
 
 // NoopMetricsRecorder is a noop MetricsRecorder to be used in tests to prevent
 // nil panics.
 type NoopMetricsRecorder struct{}
 
+// RecordInt64Count is a noop implementation of RecordInt64Count.
 func (r *NoopMetricsRecorder) RecordInt64Count(*estats.Int64CountHandle, int64, ...string) {}
 
+// RecordFloat64Count is a noop implementation of RecordFloat64Count.
 func (r *NoopMetricsRecorder) RecordFloat64Count(*estats.Float64CountHandle, float64, ...string) {}
 
+// RecordInt64Histo is a noop implementation of RecordInt64Histo.
 func (r *NoopMetricsRecorder) RecordInt64Histo(*estats.Int64HistoHandle, int64, ...string) {}
 
+// RecordFloat64Histo is a noop implementation of RecordFloat64Histo.
 func (r *NoopMetricsRecorder) RecordFloat64Histo(*estats.Float64HistoHandle, float64, ...string) {}
 
+// RecordInt64Gauge is a noop implementation of RecordInt64Gauge.
 func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, ...string) {}

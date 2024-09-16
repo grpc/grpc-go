@@ -16,6 +16,8 @@
  *
  */
 
+// Binary client is an example client demonstrating use of advancedtls, to set
+// up a secure gRPC client connection with various TLS authentication methods.
 package main
 
 import (

@@ -191,6 +191,8 @@ var (
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
+	// ChannelzTurnOffForTesting disables the Channelz service for testing
+	// purposes.
 	ChannelzTurnOffForTesting func()
 
 	// TriggerXDSResourceNotFoundForTesting causes the provided xDS Client to
