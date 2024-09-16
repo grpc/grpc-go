@@ -109,7 +109,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 }
 
 // TestErrorFromParentLB_ConnectionError tests the case where the parent of the
-// clusterresolver LB policy sends its a connection error. The parent policy,
+// clusterresolver LB policy sends it a connection error. The parent policy,
 // CDS LB policy, sends a connection error when the ADS stream to the management
 // server breaks. The test verifies that there is no perceivable effect because
 // of this connection error, and that RPCs continue to work (because the LB
@@ -193,7 +193,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	// notify the test about the following events:
 	// - an EDS requested with the expected resource name is requested
 	// - EDS resource is unrequested, i.e, an EDS request with no resource name
-	//   is received, which indicates that we are not longer interested in that
+	//   is received, which indicates that we are no longer interested in that
 	//   resource.
 	edsResourceRequestedCh := make(chan struct{}, 1)
 	edsResourceCanceledCh := make(chan struct{}, 1)

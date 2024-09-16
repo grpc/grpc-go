@@ -114,7 +114,7 @@ func (c *errProtoCodec) Name() string {
 func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 	grpctest.TLogger.ExpectError("grpc: server failed to encode response")
 
-	// Create an codec that errors when encoding messages.
+	// Create a codec that errors when encoding messages.
 	encodingErr := errors.New("encoding failed")
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
 
@@ -150,7 +150,7 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 // Tests the case where decoding fails on the server. Verifies that there is
 // no panic and that the decoding error is propagated to the client.
 func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
-	// Create an codec that errors when decoding messages.
+	// Create a codec that errors when decoding messages.
 	decodingErr := errors.New("decoding failed")
 	ec := &errProtoCodec{name: t.Name(), decodingErr: decodingErr}
 
@@ -192,7 +192,7 @@ func (s) TestEncodeDoesntPanicOnClient(t *testing.T) {
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 
-	// Create an codec that errors when encoding messages.
+	// Create a codec that errors when encoding messages.
 	encodingErr := errors.New("encoding failed")
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
 
@@ -228,7 +228,7 @@ func (s) TestDecodeDoesntPanicOnClient(t *testing.T) {
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 
-	// Create an codec that errors when decoding messages.
+	// Create a codec that errors when decoding messages.
 	decodingErr := errors.New("decoding failed")
 	ec := &errProtoCodec{name: t.Name(), decodingErr: decodingErr}
 
@@ -283,7 +283,7 @@ func (p *countingProtoCodec) Name() string {
 // Tests the case where ForceServerCodec option is used on the server. Verifies
 // that encoding and decoding happen once per RPC.
 func (s) TestForceServerCodec(t *testing.T) {
-	// Create an server with the counting proto codec.
+	// Create a server with the counting proto codec.
 	codec := &countingProtoCodec{name: t.Name()}
 	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(codec))
 	defer backend.Stop()

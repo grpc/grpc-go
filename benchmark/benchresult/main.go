@@ -21,7 +21,7 @@ To format the benchmark result:
 
 	go run benchmark/benchresult/main.go resultfile
 
-To see the performance change based on a old result:
+To see the performance change based on an old result:
 
 	go run benchmark/benchresult/main.go resultfile_old resultfile
 

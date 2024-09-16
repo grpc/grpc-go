@@ -212,7 +212,7 @@ func (s) TestBalancer_OneAddress(t *testing.T) {
 // balancer startup case which triggers the first picker and scheduler update
 // before any load reports are received.
 //
-// Note that this test and others, metrics emission asssertions are a snapshot
+// Note that this test and others, metrics emission assertions are a snapshot
 // of the most recently emitted metrics. This is due to the nondeterminism of
 // scheduler updates with respect to test bodies, so the assertions made are
 // from the most recently synced state of the system (picker/scheduler) from the

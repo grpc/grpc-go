@@ -63,7 +63,7 @@ func main() {
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make a RPC every second. This should trigger telemetry to be emitted from
+	// Make an RPC every second. This should trigger telemetry to be emitted from
 	// the client and the server.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)

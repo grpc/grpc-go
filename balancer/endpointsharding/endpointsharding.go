@@ -133,7 +133,7 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			// Return first error found, and always commit full processing of
 			// updating children. If desired to process more specific errors
 			// across all endpoints, caller should make these specific
-			// validations, this is a current limitation for simplicities sake.
+			// validations, this is a current limitation for simplicity sake.
 			ret = err
 		}
 	}

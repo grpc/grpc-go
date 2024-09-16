@@ -1060,7 +1060,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 // TestOpenCensusTags tests this instrumentation code's ability to propagate
 // OpenCensus tags across the wire. It also tests the server stats handler's
 // functionality of adding the server method tag for the application to see. The
-// test makes an Unary RPC without a tag map and with a tag map, and expects to
+// test makes a Unary RPC without a tag map and with a tag map, and expects to
 // see a tag map at the application layer with server method tag in the first
 // case, and a tag map at the application layer with the populated tag map plus
 // server method tag in second case.
