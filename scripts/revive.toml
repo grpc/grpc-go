@@ -24,9 +24,8 @@
 [rule.use-any]
 
 # Disabled rules
-# https://github.com/grpc/grpc-go/issues/7444 to track TODO(s)
-[rule.empty-block]
+[rule.empty-block] # Disabled to allow intentional no-op blocks (e.g., channel draining).
     Disabled = true
-[rule.import-shadowing]
+[rule.import-shadowing] # Disabled to allow intentional reuse of variable names that are the same as package imports.
     Disabled = true
 
