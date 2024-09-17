@@ -43,22 +43,21 @@ import (
 
 const testDialerCredsBuilderName = "test_dialer_creds"
 
-var (
-	mgmtServerAddress  string
-	customDialerCalled bool
-)
-
-func init() {
-	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
-}
-
 // testDialerCredsBuilder implements the `Credentials` interface defined in
 // package `xds/bootstrap` and encapsulates an insecure credential with a
 // custom Dialer that specifies how to dial the xDS server.
-type testDialerCredsBuilder struct{}
+type testDialerCredsBuilder struct {
+	dialerCalled chan struct{}
+}
 
-func (t *testDialerCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return &testDialerCredsBundle{}, func() {}, nil
+func (t *testDialerCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
+	cfg := &struct {
+		MgmtServerAddress string `json:"mgmtServerAddress"`
+	}{}
+	if err := json.Unmarshal(config, &cfg); err != nil {
+		return nil, func() {}, fmt.Errorf("failed to unmarshal config: %v", err)
+	}
+	return &testDialerCredsBundle{t.dialerCalled, cfg.MgmtServerAddress}, func() {}, nil
 }
 
 func (t *testDialerCredsBuilder) Name() string {
@@ -68,7 +67,10 @@ func (t *testDialerCredsBuilder) Name() string {
 // testDialerCredsBundle implements the `Bundle` interface defined in package
 // `credentials` and encapsulates an insecure credential with a custom Dialer
 // that specifies how to dial the xDS server.
-type testDialerCredsBundle struct{}
+type testDialerCredsBundle struct {
+	dialerCalled      chan struct{}
+	mgmtServerAddress string
+}
 
 func (t *testDialerCredsBundle) TransportCredentials() credentials.TransportCredentials {
 	return insecure.NewCredentials()
@@ -84,13 +86,15 @@ func (t *testDialerCredsBundle) NewWithMode(string) (credentials.Bundle, error) 
 
 // Dialer specifies how to dial the xDS management server.
 func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error) {
-	customDialerCalled = true
+	close(t.dialerCalled)
 	// Create a pass-through connection (no-op) to the xDS management server.
-	return net.Dial("tcp", mgmtServerAddress)
+	return net.Dial("tcp", t.mgmtServerAddress)
 }
 
 func (s) TestClientCustomDialerFromCredentialsBundle(t *testing.T) {
-	customDialerCalled = false
+	// Create and register the credentials bundle builder.
+	credsBuilder := &testDialerCredsBuilder{dialerCalled: make(chan struct{})}
+	bootstrap.RegisterCredentials(credsBuilder)
 
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -100,16 +104,16 @@ func (s) TestClientCustomDialerFromCredentialsBundle(t *testing.T) {
 	bc, err := internalbootstrap.NewContentsForTesting(internalbootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
-			"channel_creds": [{"type": %q}]
-		}]`, mgmtServer.Address, testDialerCredsBuilderName)),
+			"channel_creds": [{
+				"type": %q,
+				"config": {"mgmtServerAddress": %q}
+			}]
+		}]`, mgmtServer.Address, testDialerCredsBuilderName, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-
-	// Set the management server address to be used by the custom dialer.
-	mgmtServerAddress = mgmtServer.Address
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	var resolverBuilder resolver.Builder
@@ -148,11 +152,14 @@ func (s) TestClientCustomDialerFromCredentialsBundle(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	if !customDialerCalled {
-		t.Fatalf("xDS client transport custom dialer called = false, want true")
+	// Verify that the custom dialer was called.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout when waiting for custom dialer to be called")
+	case <-credsBuilder.dialerCalled:
 	}
 }
