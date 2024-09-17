@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -36,18 +35,16 @@ import (
 // have taken place. It also persists metrics data keyed on the metrics
 // descriptor.
 type TestMetricsRecorder struct {
-	t *testing.T
-
 	intCountCh   *testutils.Channel
 	floatCountCh *testutils.Channel
 	intHistoCh   *testutils.Channel
 	floatHistoCh *testutils.Channel
 	intGaugeCh   *testutils.Channel
 
-	// Mu protects Data.
+	// Mu protects data.
 	Mu sync.Mutex
-	// Data is the most recent update for each metric name.
-	Data map[estats.Metric]float64
+	// data is the most recent update for each metric name.
+	data map[estats.Metric]float64
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -59,15 +56,22 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		floatHistoCh: testutils.NewChannelWithSize(10),
 		intGaugeCh:   testutils.NewChannelWithSize(10),
 
-		Data: make(map[estats.Metric]float64),
+		data: make(map[estats.Metric]float64),
 	}
+}
+
+// Metric returns the most recent data for a metric, and
+// whether this recorder has received data for a metric.
+func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
+	data, ok := r.data[estats.Metric(name)]
+	return data, ok
 }
 
 // ClearMetrics clears the metrics data store of the test metrics recorder.
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.Mu.Lock()
 	defer r.Mu.Unlock()
-	r.Data = make(map[estats.Metric]float64)
+	r.data = make(map[estats.Metric]float64)
 }
 
 // MetricsData represents data associated with a metric.
@@ -112,7 +116,7 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 
 	r.Mu.Lock()
 	defer r.Mu.Unlock()
-	r.Data[handle.Name] = float64(incr)
+	r.data[handle.Name] = float64(incr)
 }
 
 // WaitForFloat64Count waits for a float count metric to be recorded and
@@ -144,7 +148,7 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 
 	r.Mu.Lock()
 	defer r.Mu.Unlock()
-	r.Data[handle.Name] = incr
+	r.data[handle.Name] = incr
 }
 
 // WaitForInt64Histo waits for an int histo metric to be recorded and verifies
@@ -175,7 +179,7 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 
 	r.Mu.Lock()
 	defer r.Mu.Unlock()
-	r.Data[handle.Name] = float64(incr)
+	r.data[handle.Name] = float64(incr)
 }
 
 // WaitForFloat64Histo waits for a float histo metric to be recorded and
@@ -206,7 +210,7 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 
 	r.Mu.Lock()
 	defer r.Mu.Unlock()
-	r.Data[handle.Name] = incr
+	r.data[handle.Name] = incr
 }
 
 // WaitForInt64Gauge waits for a int gauge metric to be recorded and
@@ -237,7 +241,7 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 
 	r.Mu.Lock()
 	defer r.Mu.Unlock()
-	r.Data[handle.Name] = float64(incr)
+	r.data[handle.Name] = float64(incr)
 }
 
 // To implement a stats.Handler, which allows it to be set as a dial option:
