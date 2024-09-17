@@ -60,8 +60,8 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 	}
 }
 
-// Metric returns the most recent data for a metric, and
-// whether this recorder has received data for a metric.
+// Metric returns the most recent data for a metric, and whether this recorder
+// has received data for a metric.
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 	data, ok := r.data[estats.Metric(name)]
 	return data, ok
@@ -87,10 +87,9 @@ type MetricsData struct {
 	LabelVals []string
 }
 
-// WaitForInt64Count waits for an int64 count metric to be recorded and
-// verifies that the recorded metrics data matches the expected
-// metricsDataWant. Returns an error if failed to wait or received wrong
-// data.
+// WaitForInt64Count waits for an int64 count metric to be recorded and verifies
+// that the recorded metrics data matches the expected metricsDataWant. Returns
+// an error if failed to wait or received wrong data.
 func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.intCountCh.Receive(ctx)
 	if err != nil {
@@ -103,8 +102,8 @@ func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsData
 	return nil
 }
 
-// RecordInt64Count sends the metrics data to the intCountCh channel
-// and updates the internal data map with the recorded value.
+// RecordInt64Count sends the metrics data to the intCountCh channel and updates
+// the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	r.intCountCh.ReceiveOrFail()
 	r.intCountCh.Send(MetricsData{
@@ -120,9 +119,8 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 }
 
 // WaitForFloat64Count waits for a float count metric to be recorded and
-// verifies that the recorded metrics data matches the expected
-// metricsDataWant. Returns an error if failed to wait or received wrong
-// data.
+// verifies that the recorded metrics data matches the expected metricsDataWant.
+// Returns an error if failed to wait or received wrong data.
 func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.floatCountCh.Receive(ctx)
 	if err != nil {
@@ -135,8 +133,8 @@ func (r *TestMetricsRecorder) WaitForFloat64Count(ctx context.Context, metricsDa
 	return nil
 }
 
-// RecordFloat64Count sends the metrics data to the floatCountCh channel
-// and updates the internal data map with the recorded value.
+// RecordFloat64Count sends the metrics data to the floatCountCh channel and
+// updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHandle, incr float64, labels ...string) {
 	r.floatCountCh.ReceiveOrFail()
 	r.floatCountCh.Send(MetricsData{
@@ -166,8 +164,8 @@ func (r *TestMetricsRecorder) WaitForInt64Histo(ctx context.Context, metricsData
 	return nil
 }
 
-// RecordInt64Histo sends the metrics data to the intHistoCh channel
-// and updates the internal data map with the recorded value.
+// RecordInt64Histo sends the metrics data to the intHistoCh channel and updates
+// the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, incr int64, labels ...string) {
 	r.intHistoCh.ReceiveOrFail()
 	r.intHistoCh.Send(MetricsData{
@@ -183,8 +181,8 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 }
 
 // WaitForFloat64Histo waits for a float histo metric to be recorded and
-// verifies that the recorded metrics data matches the expected
-// metricsDataWant.
+// verifies that the recorded metrics data matches the expected metricsDataWant.
+// Returns an error if failed to wait or received wrong data.
 func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.floatHistoCh.Receive(ctx)
 	if err != nil {
@@ -197,8 +195,8 @@ func (r *TestMetricsRecorder) WaitForFloat64Histo(ctx context.Context, metricsDa
 	return nil
 }
 
-// RecordFloat64Histo sends the metrics data to the floatHistoCh channel
-// and updates the internal data map with the recorded value.
+// RecordFloat64Histo sends the metrics data to the floatHistoCh channel and
+// updates the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHandle, incr float64, labels ...string) {
 	r.floatHistoCh.ReceiveOrFail()
 	r.floatHistoCh.Send(MetricsData{
@@ -213,9 +211,8 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 	r.data[handle.Name] = incr
 }
 
-// WaitForInt64Gauge waits for a int gauge metric to be recorded and
-// verifies that the recorded metrics data matches the expected
-// metricsDataWant.
+// WaitForInt64Gauge waits for a int gauge metric to be recorded and verifies
+// that the recorded metrics data matches the expected metricsDataWant.
 func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsDataWant MetricsData) error {
 	got, err := r.intGaugeCh.Receive(ctx)
 	if err != nil {
@@ -228,8 +225,8 @@ func (r *TestMetricsRecorder) WaitForInt64Gauge(ctx context.Context, metricsData
 	return nil
 }
 
-// RecordInt64Gauge sends the metrics data to the intGaugeCh channel
-// and updates the internal data map with the recorded value.
+// RecordInt64Gauge sends the metrics data to the intGaugeCh channel and updates
+// the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, incr int64, labels ...string) {
 	r.intGaugeCh.ReceiveOrFail()
 	r.intGaugeCh.Send(MetricsData{
