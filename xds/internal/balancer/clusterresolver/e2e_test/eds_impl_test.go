@@ -179,9 +179,9 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -314,9 +314,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -478,9 +478,9 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -553,9 +553,9 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// Create a ClientConn and ensure that RPCs fail with "all priorities
 	// removed" error. This is the expected error when the cluster_resolver LB
 	// policy receives an EDS update with no localities.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 	testClient := testgrpc.NewTestServiceClient(cc)
@@ -596,7 +596,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 	// notify the test about the following events:
 	// - an EDS requested with the expected resource name is requested
 	// - EDS resource is unrequested, i.e, an EDS request with no resource name
-	//   is received, which indicates that we are no longer interested in that
+	//   is received, which indicates that we are not longer interested in that
 	//   resource.
 	edsResourceRequestedCh := make(chan struct{}, 1)
 	edsResourceCanceledCh := make(chan struct{}, 1)
@@ -847,7 +847,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatalf("Timeout when waiting for old EDS watch %q to be canceled and new one %q to be registered", edsServiceName, clusterName)
 	}
 
-	// Make an RPC, and ensure that it gets routed to second backend,
+	// Make a RPC, and ensure that it gets routed to second backend,
 	// corresponding to the cluster_name.
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
@@ -951,9 +951,9 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 
 	// Create a ClientConn and verify that RPCs fail with "all priorities
 	// removed" error.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
@@ -1022,9 +1022,9 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -1104,9 +1104,9 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 
 	// Create a ClientConn and verify that RPCs fail with "all priorities
 	// removed" error.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create new client for local test server: %v", err)
 	}
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
