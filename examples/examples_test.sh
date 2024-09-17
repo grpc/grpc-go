@@ -51,6 +51,7 @@ pass () {
 EXAMPLES=(
     "helloworld"
     "route_guide"
+    "features/advancedtls"
     "features/authentication"
     "features/authz"
     "features/cancellation"
@@ -75,12 +76,14 @@ EXAMPLES=(
 declare -A SERVER_ARGS=(
     ["features/unix_abstract"]="-addr $UNIX_ADDR"
     ["default"]="-port $SERVER_PORT"
+    ["features/advancedtls"]="-credentials_directory $(dirname $(realpath "$0"))/features/advancedtls/creds"
 )
 
 declare -A CLIENT_ARGS=(
     ["features/unix_abstract"]="-addr $UNIX_ADDR"
     ["features/orca"]="-test=true"
     ["default"]="-addr localhost:$SERVER_PORT"
+    ["features/advancedtls"]="-credentials_directory $(dirname $(realpath "$0"))/features/advancedtls/creds"
 )
 
 declare -A SERVER_WAIT_COMMAND=(
@@ -125,6 +128,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/orca"]="Server listening"
     ["features/retry"]="request succeeded count: 4"
     ["features/unix_abstract"]="serving on @abstract-unix-socket"
+    ["features/advancedtls"]=""
 )
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
@@ -149,6 +153,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/orca"]="Per-call load report received: map\[db_queries:10\]"
     ["features/retry"]="UnaryEcho reply: message:\"Try and Success\""
     ["features/unix_abstract"]="calling echo.Echo/UnaryEcho to unix-abstract:abstract-unix-socket"
+    ["features/advancedtls"]=""
 )
 
 cd ./examples
@@ -188,7 +193,7 @@ for example in ${EXAMPLES[@]}; do
         $(cat $CLIENT_LOG)
         "
     else
-        pass "client successfully communitcated with server"
+        pass "client successfully communicated with server"
     fi
 
     # Check server log for expected output if expecting an

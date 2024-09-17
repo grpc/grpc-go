@@ -43,9 +43,15 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {}
-func (noopClusterWatcher) OnError(err error)                                {}
-func (noopClusterWatcher) OnResourceDoesNotExist()                          {}
+func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
+}
+func (noopClusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	onDone()
+}
+func (noopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
+}
 
 type clusterUpdateErrTuple struct {
 	update xdsresource.ClusterUpdate
@@ -60,20 +66,23 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {
+func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
+	onDone()
 }
 
-func (cw *clusterWatcher) OnError(err error) {
+func (cw *clusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
+	onDone()
 }
 
-func (cw *clusterWatcher) OnResourceDoesNotExist() {
+func (cw *clusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
+	onDone()
 }
 
 // badClusterResource returns a cluster resource for the given name which
@@ -180,10 +189,10 @@ func (s) TestCDSWatch(t *testing.T) {
 
 			nodeID := uuid.New().String()
 			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
@@ -330,10 +339,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			nodeID := uuid.New().String()
 			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-				Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+				Servers: []byte(fmt.Sprintf(`[{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+				}]`, mgmtServer.Address)),
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 				Authorities: map[string]json.RawMessage{
 					// Xdstp resource names used in this test do not specify an
@@ -434,10 +443,10 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -727,10 +736,10 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -908,10 +917,10 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed
@@ -1000,10 +1009,10 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}`, mgmtServer.Address))},
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			// Xdstp style resource names used in this test use a slash removed

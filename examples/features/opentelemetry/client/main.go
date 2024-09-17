@@ -16,6 +16,7 @@
  *
  */
 
+// Binary client is a client for the OpenTelemetry example.
 package main
 
 import (
@@ -59,7 +60,7 @@ func main() {
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make a RPC every second. This should trigger telemetry to be emitted from
+	// Make an RPC every second. This should trigger telemetry to be emitted from
 	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})

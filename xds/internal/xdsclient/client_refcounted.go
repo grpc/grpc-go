@@ -35,8 +35,8 @@ const (
 var (
 	// The following functions are no-ops in the actual code, but can be
 	// overridden in tests to give them visibility into certain events.
-	xdsClientImplCreateHook = func(name string) {}
-	xdsClientImplCloseHook  = func(name string) {}
+	xdsClientImplCreateHook = func(string) {}
+	xdsClientImplCloseHook  = func(string) {}
 )
 
 func clientRefCountedClose(name string) {
@@ -78,7 +78,7 @@ func newRefCounted(name string, watchExpiryTimeout, idleAuthorityTimeout time.Du
 	if err != nil {
 		return nil, nil, err
 	}
-	c.logger.Infof("Created client with name %q to primary xDS management server: %q", name, config.XDSServers()[0])
+	c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, config)
 	client := &clientRefCounted{clientImpl: c, refCount: 1}
 	clients[name] = client
 	xdsClientImplCreateHook(name)

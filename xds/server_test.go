@@ -194,10 +194,10 @@ func (s) TestNewServer_Failure(t *testing.T) {
 				grpc.Creds(xdsCreds),
 				func() grpc.ServerOption {
 					bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-						Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+						Servers: []byte(fmt.Sprintf(`[{
 							"server_uri": %q,
 							"channel_creds": [{"type": "insecure"}]
-						}`, nonExistentManagementServer))},
+						}]`, nonExistentManagementServer)),
 						Node: []byte(fmt.Sprintf(`{"id": "%s"}`, uuid.New().String())),
 						CertificateProviders: map[string]json.RawMessage{
 							"cert-provider-instance": json.RawMessage("{}"),
@@ -231,7 +231,7 @@ func (s) TestRegisterService(t *testing.T) {
 	fs := newFakeGRPCServer()
 
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	s, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), "non-existent-management-server")))
@@ -355,7 +355,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case ldsRequestCh <- req.GetResourceNames():
@@ -374,7 +374,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	// test to verify that Serve() is called on the underlying server.
 	fs := newFakeGRPCServer()
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	// Create a new xDS enabled gRPC server and pass it a server option to get
@@ -410,7 +410,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
 	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
+	wantNames := []string{strings.ReplaceAll(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())}
 	if !cmp.Equal(gotNames, wantNames) {
 		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
 	}
@@ -496,10 +496,10 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	// providers.
 	nodeID := uuid.NewString()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
@@ -572,7 +572,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case ldsRequestCh <- req.GetResourceNames():
@@ -588,10 +588,10 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// providers.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
@@ -647,7 +647,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
 	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
+	wantNames := []string{strings.ReplaceAll(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())}
 	if !cmp.Equal(gotNames, wantNames) {
 		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
 	}

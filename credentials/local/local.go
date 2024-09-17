@@ -77,7 +77,7 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 	}
 }
 
-func (*localTC) ClientHandshake(ctx context.Context, authority string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (*localTC) ClientHandshake(_ context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	secLevel, err := getSecurityLevel(conn.RemoteAddr().Network(), conn.RemoteAddr().String())
 	if err != nil {
 		return nil, nil, err
@@ -108,7 +108,7 @@ func (c *localTC) Clone() credentials.TransportCredentials {
 }
 
 // OverrideServerName overrides the server name used to verify the hostname on the returned certificates from the server.
-// Since this feature is specific to TLS (SNI + hostname verification check), it does not take any effet for local credentials.
+// Since this feature is specific to TLS (SNI + hostname verification check), it does not take any effect for local credentials.
 func (c *localTC) OverrideServerName(serverNameOverride string) error {
 	c.info.ServerName = serverNameOverride
 	return nil

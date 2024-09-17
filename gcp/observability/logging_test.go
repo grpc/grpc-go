@@ -134,7 +134,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -157,7 +157,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -204,7 +204,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -285,7 +285,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -344,7 +344,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -367,7 +367,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -512,7 +512,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			SequenceID:  4,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -548,7 +548,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 // Client and Server RPC Events configured to log. Both sides should log and
 // share the exporter, so the exporter should receive the collective amount of
 // calls for both a client stream (corresponding to a Client RPC Event) and a
-// server stream (corresponding ot a Server RPC Event). The specificity of the
+// server stream (corresponding to a Server RPC Event). The specificity of the
 // entries are tested in previous tests.
 func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 	fle := &fakeLoggingExporter{
@@ -558,7 +558,7 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -589,7 +589,7 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -650,7 +650,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -673,7 +673,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
@@ -787,7 +787,7 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -822,10 +822,10 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -870,7 +870,7 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			SequenceID:  2,
 			Authority:   ss.Address,
 			Payload: payload{
-				Message: []uint8{},
+				Message: nil,
 			},
 		},
 		{
@@ -1125,7 +1125,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -1149,7 +1149,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
@@ -1240,6 +1240,7 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 // TestMethodInConfiguration tests different method names with an expectation on
 // whether they should error or not.
 func (s) TestMethodInConfiguration(t *testing.T) {
+
 	// To skip creating a stackdriver exporter.
 	fle := &fakeLoggingExporter{
 		t: t,
@@ -1249,7 +1250,7 @@ func (s) TestMethodInConfiguration(t *testing.T) {
 		newLoggingExporter = ne
 	}(newLoggingExporter)
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(_ context.Context, _ *config) (loggingExporter, error) {
 		return fle, nil
 	}
 

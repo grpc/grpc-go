@@ -44,6 +44,11 @@ import (
 
 var strSort = func(s1, s2 string) bool { return s1 < s2 }
 
+var noopRecvHandler = func(_ transport.ResourceUpdate, onDone func()) error {
+	onDone()
+	return nil
+}
+
 // TestTransport_BackoffAfterStreamFailure tests the case where the management
 // server returns an error in the ADS streaming RPC. The test verifies the
 // following:
@@ -101,7 +106,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
-		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnRecvHandler: noopRecvHandler, // No data model layer validation.
 		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
@@ -262,7 +267,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
-		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnRecvHandler: noopRecvHandler, // No data model layer validation.
 		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
@@ -394,7 +399,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
 		ServerCfg:      serverCfg,
-		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnRecvHandler:  noopRecvHandler,                                     // No data model layer validation.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No on send handler
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.

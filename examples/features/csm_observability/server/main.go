@@ -16,6 +16,7 @@
  *
  */
 
+// Binary server is a server for the CSM Observability example.
 package main
 
 import (
@@ -46,7 +47,7 @@ type echoServer struct {
 	addr string
 }
 
-func (s *echoServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, s.addr)}, nil
 }
 

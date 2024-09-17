@@ -191,7 +191,7 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 	}
 }
 
-// TestRefuseStartWithExcludeAndWildCardAll tests the sceanrio where an
+// TestRefuseStartWithExcludeAndWildCardAll tests the scenario where an
 // observability configuration is provided with client RPC event specifying to
 // exclude, and which matches on the '*' wildcard (any). This should cause an
 // error when trying to start the observability system.
@@ -369,7 +369,7 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 		newExporter = ne
 	}(newExporter)
 
-	newExporter = func(config *config) (tracingMetricsExporter, error) {
+	newExporter = func(*config) (tracingMetricsExporter, error) {
 		return fe, nil
 	}
 
@@ -387,7 +387,7 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	defer cleanup()
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -569,7 +569,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		newLoggingExporter = oldNewLoggingExporter
 	}()
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -584,7 +584,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		newExporter = oldNewExporter
 	}()
 
-	newExporter = func(config *config) (tracingMetricsExporter, error) {
+	newExporter = func(*config) (tracingMetricsExporter, error) {
 		return fe, nil
 	}
 
@@ -610,7 +610,7 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -711,7 +711,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		newLoggingExporter = oldNewLoggingExporter
 	}()
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -726,7 +726,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		newExporter = oldNewExporter
 	}()
 
-	newExporter = func(config *config) (tracingMetricsExporter, error) {
+	newExporter = func(*config) (tracingMetricsExporter, error) {
 		return fe, nil
 	}
 
@@ -752,7 +752,7 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -855,7 +855,7 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		newLoggingExporter = oldNewLoggingExporter
 	}()
 
-	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+	newLoggingExporter = func(context.Context, *config) (loggingExporter, error) {
 		return fle, nil
 	}
 
@@ -870,7 +870,7 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		newExporter = oldNewExporter
 	}()
 
-	newExporter = func(config *config) (tracingMetricsExporter, error) {
+	newExporter = func(*config) (tracingMetricsExporter, error) {
 		return fe, nil
 	}
 
@@ -903,7 +903,7 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 	}
 	defer cleanup()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {

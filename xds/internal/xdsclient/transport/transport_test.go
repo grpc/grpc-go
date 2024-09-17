@@ -45,9 +45,12 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 	}
 	// Create a new transport and ensure that the custom dialer was called.
 	opts := transport.Options{
-		ServerCfg:      serverCfg,
-		NodeProto:      &v3corepb.Node{},
-		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
+		ServerCfg: serverCfg,
+		NodeProto: &v3corepb.Node{},
+		OnRecvHandler: func(update transport.ResourceUpdate, onDone func()) error {
+			onDone()
+			return nil
+		},
 		OnErrorHandler: func(error) {},
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},
 	}

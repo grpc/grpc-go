@@ -49,7 +49,7 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
 	bc := e2e.DefaultBootstrapContents(t, nodeID, fs1.Address)
-	xdsC, close, err := NewForTesting(OptionsForTesting{
+	xdsC, closeFn, err := NewForTesting(OptionsForTesting{
 		Name:               t.Name(),
 		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
@@ -57,7 +57,7 @@ func (s) TestLRSClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
-	defer close()
+	defer closeFn()
 
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(serverCfg1)
@@ -132,8 +132,20 @@ func (s) TestLRSClient(t *testing.T) {
 	// Cancel this load reporting stream, server should see error canceled.
 	lrsCancel2()
 
-	// Server should receive a stream canceled error.
-	if u, err := fs2.LRSRequestChan.Receive(ctx); err != nil || status.Code(u.(*fakeserver.Request).Err) != codes.Canceled {
-		t.Errorf("unexpected LRS request: %v, %v, want error canceled", u, err)
+	// Server should receive a stream canceled error. There may be additional
+	// load reports from the client in the channel.
+	for {
+		u, err := fs2.LRSRequestChan.Receive(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error while reading LRS request: %v", err)
+		}
+		// Ignore load reports sent before the stream was cancelled.
+		if u.(*fakeserver.Request).Err == nil {
+			continue
+		}
+		if status.Code(u.(*fakeserver.Request).Err) != codes.Canceled {
+			t.Errorf("unexpected LRS request: %v, want error canceled", u)
+		}
+		break
 	}
 }

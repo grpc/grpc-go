@@ -132,7 +132,9 @@ type recordingLoadBalancer struct {
 // test then asserts that the recorded metrics show up on both configured stats
 // handlers.
 func (s) TestMetricsRecorderList(t *testing.T) {
-	internal.SnapshotMetricRegistryForTesting.(func(t *testing.T))(t)
+	cleanup := internal.SnapshotMetricRegistryForTesting()
+	defer cleanup()
+
 	mr := manual.NewBuilderWithScheme("test-metrics-recorder-list")
 	defer mr.Close()
 
@@ -144,8 +146,8 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	// Create two stats.Handlers which also implement MetricsRecorder, configure
 	// one as a global dial option and one as a local dial option.
-	mr1 := stats.NewTestMetricsRecorder(t, []string{})
-	mr2 := stats.NewTestMetricsRecorder(t, []string{})
+	mr1 := stats.NewTestMetricsRecorder(t)
+	mr2 := stats.NewTestMetricsRecorder(t)
 
 	defer internal.ClearGlobalDialOptions()
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(mr1))
@@ -212,7 +214,9 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 // TestMetricRecorderListPanic tests that the metrics recorder list panics if
 // received the wrong number of labels for a particular metric.
 func (s) TestMetricRecorderListPanic(t *testing.T) {
-	internal.SnapshotMetricRegistryForTesting.(func(t *testing.T))(t)
+	cleanup := internal.SnapshotMetricRegistryForTesting()
+	defer cleanup()
+
 	intCountHandle := estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "simple counter",
 		Description:    "sum of all emissions from tests",

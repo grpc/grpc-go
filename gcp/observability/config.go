@@ -245,8 +245,8 @@ type cloudLogging struct {
 type cloudMonitoring struct{}
 
 type cloudTrace struct {
-	// SamplingRate is the global setting that controls the probability of a RPC
-	// being traced. For example, 0.05 means there is a 5% chance for a RPC to
+	// SamplingRate is the global setting that controls the probability of an RPC
+	// being traced. For example, 0.05 means there is a 5% chance for an RPC to
 	// be traced, 1.0 means trace every call, 0 means don’t start new traces. By
 	// default, the sampling_rate is 0.
 	SamplingRate float64 `json:"sampling_rate,omitempty"`

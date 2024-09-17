@@ -37,7 +37,7 @@ func init() {
 
 type orcabb struct{}
 
-func (orcabb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (orcabb) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	return &orcab{cc: cc}
 }
 

@@ -83,7 +83,7 @@ performing compression and decompression.
 A `Compressor` contains code to compress and decompress by wrapping `io.Writer`s
 and `io.Reader`s, respectively.  (The form of `Compress` and `Decompress` were
 chosen to most closely match Go's standard package
-[implementations](https://golang.org/pkg/compress/) of compressors.  Like
+[implementations](https://golang.org/pkg/compress/) of compressors).  Like
 `Codec`s, `Compressor`s are registered by name into a global registry maintained
 in the `encoding` package.
 

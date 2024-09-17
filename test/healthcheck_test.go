@@ -86,7 +86,7 @@ func defaultWatchFunc(s *testHealthServer, in *healthpb.HealthCheckRequest, stre
 	return nil
 }
 
-type healthWatchFunc func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error
+type healthWatchFunc func(*testHealthServer, *healthpb.HealthCheckRequest, healthgrpc.Health_WatchServer) error
 
 type testHealthServer struct {
 	healthgrpc.UnimplementedHealthServer
@@ -96,7 +96,7 @@ type testHealthServer struct {
 	update    chan struct{}
 }
 
-func (s *testHealthServer) Check(ctx context.Context, in *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
+func (s *testHealthServer) Check(context.Context, *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
 	return &healthpb.HealthCheckResponse{
 		Status: healthpb.HealthCheckResponse_SERVING,
 	}, nil
@@ -538,7 +538,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 // closes the skipReset channel(since it has not been closed inside health check func) to unblock
 // onGoAway/onClose goroutine.
 func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *testing.T) {
-	watchFunc := func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
+	watchFunc := func(_ *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 		if in.Service != "delay" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"delay\"")
@@ -601,7 +601,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 // closes the allowedToReset channel(since it has not been closed inside health check func) to unblock
 // onGoAway/onClose goroutine.
 func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
-	watchFunc := func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
+	watchFunc := func(_ *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 		if in.Service != "delay" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"delay\"")
@@ -763,7 +763,7 @@ func (s) TestHealthCheckDisable(t *testing.T) {
 }
 
 func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
-	watchFunc := func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
+	watchFunc := func(_ *testHealthServer, in *healthpb.HealthCheckRequest, _ healthgrpc.Health_WatchServer) error {
 		if in.Service != "channelzSuccess" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"channelzSuccess\"")
@@ -812,7 +812,7 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 }
 
 func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
-	watchFunc := func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
+	watchFunc := func(_ *testHealthServer, in *healthpb.HealthCheckRequest, _ healthgrpc.Health_WatchServer) error {
 		if in.Service != "channelzFailure" {
 			return status.Error(codes.FailedPrecondition,
 				"this special Watch function only handles request with service name to be \"channelzFailure\"")
@@ -1008,7 +1008,7 @@ func testHealthWatchMultipleClients(t *testing.T, e env) {
 	healthWatchChecker(t, stream2, healthpb.HealthCheckResponse_NOT_SERVING)
 }
 
-// TestHealthWatchSameStatusmakes a streaming Watch() RPC on the health server
+// TestHealthWatchSameStatus makes a streaming Watch() RPC on the health server
 // and makes sure that the health status of the server is as expected after
 // multiple calls to SetServingStatus with the same status.
 func (s) TestHealthWatchSameStatus(t *testing.T) {
@@ -1127,7 +1127,7 @@ func (s) TestUnknownHandler(t *testing.T) {
 	// An example unknownHandler that returns a different code and a different
 	// method, making sure that we do not expose what methods are implemented to
 	// a client that is not authenticated.
-	unknownHandler := func(srv any, stream grpc.ServerStream) error {
+	unknownHandler := func(any, grpc.ServerStream) error {
 		return status.Error(codes.Unauthenticated, "user unauthenticated")
 	}
 	for _, e := range listTestEnv() {

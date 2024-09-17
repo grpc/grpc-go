@@ -327,7 +327,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	case <-timer.C:
 		t.Fatalf("Client didn't make another connection request in time.")
 	}
-	// Make sure the connection stays alive for sometime.
+	// Make sure the connection stays alive for some time.
 	time.Sleep(time.Second)
 	atomic.StoreUint32(&over, 1)
 	client.Close()
@@ -651,7 +651,7 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	defer conn.Close()
 
 	if got := conn.dopts.minConnectTimeout(); got != mct {
-		t.Errorf("unexpect minConnectTimeout on the connection: %v, want %v", got, mct)
+		t.Errorf("unexpected minConnectTimeout on the connection: %v, want %v", got, mct)
 	}
 }
 

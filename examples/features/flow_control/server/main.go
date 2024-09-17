@@ -35,7 +35,7 @@ import (
 
 var port = flag.Int("port", 50052, "port number")
 
-var payload string = string(make([]byte, 8*1024)) // 8KB
+var payload = string(make([]byte, 8*1024)) // 8KB
 
 // server is used to implement EchoServer.
 type server struct {

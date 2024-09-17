@@ -404,7 +404,7 @@ func DoPerRPCCreds(ctx context.Context, tc testgrpc.TestServiceClient, serviceAc
 	}
 }
 
-// DoGoogleDefaultCredentials performs an unary RPC with google default credentials
+// DoGoogleDefaultCredentials performs a unary RPC with google default credentials
 func DoGoogleDefaultCredentials(ctx context.Context, tc testgrpc.TestServiceClient, defaultServiceAccount string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
@@ -423,7 +423,7 @@ func DoGoogleDefaultCredentials(ctx context.Context, tc testgrpc.TestServiceClie
 	}
 }
 
-// DoComputeEngineChannelCredentials performs an unary RPC with compute engine channel credentials
+// DoComputeEngineChannelCredentials performs a unary RPC with compute engine channel credentials
 func DoComputeEngineChannelCredentials(ctx context.Context, tc testgrpc.TestServiceClient, defaultServiceAccount string) {
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
@@ -801,7 +801,7 @@ func NewTestServer(opts ...NewTestServerOptions) testgrpc.TestServiceServer {
 	return &testServer{}
 }
 
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+func (s *testServer) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 	return new(testpb.Empty), nil
 }
 

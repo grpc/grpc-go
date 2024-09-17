@@ -192,7 +192,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	return acbw, nil
 }
 
-func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
+func (ccb *ccBalancerWrapper) RemoveSubConn(balancer.SubConn) {
 	// The graceful switch balancer will never call this.
 	logger.Errorf("ccb RemoveSubConn(%v) called unexpectedly, sc")
 }
@@ -275,6 +275,16 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 			setConnectedAddress(&scs, curAddr)
 		}
 		acbw.stateListener(scs)
+		acbw.ac.mu.Lock()
+		defer acbw.ac.mu.Unlock()
+		if s == connectivity.Ready {
+			// When changing states to READY, reset stateReadyChan.  Wait until
+			// after we notify the LB policy's listener(s) in order to prevent
+			// ac.getTransport() from unblocking before the LB policy starts
+			// tracking the subchannel as READY.
+			close(acbw.ac.stateReadyChan)
+			acbw.ac.stateReadyChan = make(chan struct{})
+		}
 	})
 }
 
@@ -332,8 +342,8 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 	pData := acbw.producers[pb]
 	if pData == nil {
 		// Not found; create a new one and add it to the producers map.
-		p, close := pb.Build(acbw)
-		pData = &refCountedProducer{producer: p, close: close}
+		p, closeFn := pb.Build(acbw)
+		pData = &refCountedProducer{producer: p, close: closeFn}
 		acbw.producers[pb] = pData
 	}
 	// Account for this new reference.

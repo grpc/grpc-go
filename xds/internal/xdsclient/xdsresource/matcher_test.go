@@ -123,7 +123,7 @@ func (s) TestFractionMatcherMatch(t *testing.T) {
 	}()
 
 	// rand > fraction, should return false.
-	RandInt63n = func(n int64) int64 {
+	RandInt63n = func(int64) int64 {
 		return fraction + 1
 	}
 	if matched := fm.match(); matched {
@@ -131,7 +131,7 @@ func (s) TestFractionMatcherMatch(t *testing.T) {
 	}
 
 	// rand == fraction, should return true.
-	RandInt63n = func(n int64) int64 {
+	RandInt63n = func(int64) int64 {
 		return fraction
 	}
 	if matched := fm.match(); !matched {
@@ -139,7 +139,7 @@ func (s) TestFractionMatcherMatch(t *testing.T) {
 	}
 
 	// rand < fraction, should return true.
-	RandInt63n = func(n int64) int64 {
+	RandInt63n = func(int64) int64 {
 		return fraction - 1
 	}
 	if matched := fm.match(); !matched {

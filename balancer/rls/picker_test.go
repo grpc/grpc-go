@@ -48,7 +48,7 @@ import (
 func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
 	// Setup RLS Server to return a response with an empty target string.
 	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{}}
 	})
 
@@ -193,7 +193,7 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 			// also lead to creation of a pending entry, and further RPCs by the
 			// client should not result in RLS requests being sent out.
 			rlsReqCh := make(chan struct{}, 1)
-			interceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+			interceptor := func(ctx context.Context, _ any, _ *grpc.UnaryServerInfo, _ grpc.UnaryHandler) (resp any, err error) {
 				rlsReqCh <- struct{}{}
 				<-ctx.Done()
 				return nil, ctx.Err()
@@ -260,7 +260,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
 	// Start a test backend, and setup the fake RLS server to return this as a
 	// target in the RLS response.
 	testBackendCh, testBackendAddress := startBackend(t)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 	})
 
@@ -304,7 +304,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry_WithHeaderData(t *testi
 	// RLS server to be part of RPC metadata as X-Google-RLS-Data header.
 	const headerDataContents = "foo,bar,baz"
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			gotHeaderData := metadata.ValueFromIncomingContext(ctx, "x-google-rls-data")
 			if len(gotHeaderData) != 1 || gotHeaderData[0] != headerDataContents {
 				return nil, fmt.Errorf("got metadata in `X-Google-RLS-Data` is %v, want %s", gotHeaderData, headerDataContents)
@@ -320,7 +320,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry_WithHeaderData(t *testi
 
 	// Setup the fake RLS server to return the above backend as a target in the
 	// RLS response. Also, populate the header data field in the response.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{
 			Targets:    []string{backend.Address},
 			HeaderData: headerDataContents,
@@ -389,7 +389,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+			rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
@@ -498,7 +498,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+			rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
@@ -597,7 +597,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			// Start a test backend, and set up the fake RLS server to return this as
 			// a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+			rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
@@ -622,7 +622,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			// Set up the fake RLS server to return errors. This will push the cache
 			// entry into backoff.
 			var rlsLastErr = status.Error(codes.DeadlineExceeded, "last RLS request failed")
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+			rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Err: rlsLastErr}
 			})
 
@@ -698,7 +698,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+			rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
@@ -796,7 +796,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+			rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 

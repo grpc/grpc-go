@@ -41,6 +41,9 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
+// CertificateChains represents a slice of certificate chains, each consisting
+// of a sequence of certificates. Each chain represents a path from a leaf
+// certificate up to a root certificate in the certificate hierarchy.
 type CertificateChains [][]*x509.Certificate
 
 // HandshakeVerificationInfo contains information about a handshake needed for

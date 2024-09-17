@@ -50,7 +50,7 @@ func (s) TestErrorCodeString(t *testing.T) {
 		{err: ErrCodeCompression, want: "COMPRESSION_ERROR"},
 		{err: ErrCodeConnect, want: "CONNECT_ERROR"},
 		{err: ErrCodeEnhanceYourCalm, want: "ENHANCE_YOUR_CALM"},
-		{err: ErrCodeIndaequateSecurity, want: "INADEQUATE_SECURITY"},
+		{err: ErrCodeInadequateSecurity, want: "INADEQUATE_SECURITY"},
 		{err: ErrCodeHTTP11Required, want: "HTTP_1_1_REQUIRED"},
 		// Type casting known error case
 		{err: ErrCode(0x1), want: "PROTOCOL_ERROR"},

@@ -317,7 +317,7 @@ func (tcc *BalancerClientConn) WaitForPicker(ctx context.Context, f func(balance
 // iteration until where it goes wrong.
 //
 // Step 2. the return values of f should be repetitions of the same permutation.
-// E.g. if want is {a,a,b}, the check failes if f returns:
+// E.g. if want is {a,a,b}, the check fails if f returns:
 //   - {a,b,a,b,a,a}: though it satisfies step 1, the second iteration is not
 //     repeating the first iteration.
 //
@@ -379,7 +379,7 @@ type TestConstPicker struct {
 }
 
 // Pick returns the const SubConn or the error.
-func (tcp *TestConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (tcp *TestConstPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	if tcp.Err != nil {
 		return balancer.PickResult{}, tcp.Err
 	}

@@ -372,13 +372,13 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create bootstrap configuration pointing to the above management server,
-	// and one that does not have ceritificate providers configuration.
+	// and one that does not have certificate providers configuration.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
@@ -405,7 +405,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }
 
-// A ceritificate provider builder that returns a nil Provider from the starter
+// A certificate provider builder that returns a nil Provider from the starter
 // func passed to certprovider.NewBuildableConfig().
 type errCertProviderBuilder struct{}
 
@@ -433,7 +433,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create bootstrap configuration pointing to the above management server
-	// and one that includes ceritificate providers configuration for
+	// and one that includes certificate providers configuration for
 	// errCertProviderBuilder.
 	nodeID := uuid.New().String()
 	providerCfg := json.RawMessage(fmt.Sprintf(`{
@@ -441,10 +441,10 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 		"config": {}
 	}`, errCertProviderName))
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []json.RawMessage{[]byte(fmt.Sprintf(`{
+		Servers: []byte(fmt.Sprintf(`[{
 			"server_uri": %q,
 			"channel_creds": [{"type": "insecure"}]
-		}`, mgmtServer.Address))},
+		}]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
@@ -481,7 +481,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create bootstrap configuration pointing to the above management server
-	// and one that includes ceritificate providers configuration.
+	// and one that includes certificate providers configuration.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 

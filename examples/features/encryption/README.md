@@ -29,9 +29,9 @@ create grpc
 base on TLS. Refer to the
 [godoc](https://godoc.org/google.golang.org/grpc/credentials) for details.
 
-In our example, we use the public/private keys created ahead: 
-* "server_cert.pem" contains the server certificate (public key). 
-* "server_key.pem" contains the server private key. 
+In our example, we use the public/private keys created ahead:
+* "server_cert.pem" contains the server certificate (public key).
+* "server_key.pem" contains the server private key.
 * "ca_cert.pem" contains the certificate (certificate authority)
 that can verify the server's certificate.
 
@@ -56,7 +56,7 @@ And finally we make an RPC call over the created `grpc.ClientConn` to test the s
 connection based upon TLS is successfully up.
 
 ### ALTS
-NOTE: ALTS currently needs special early access permission on GCP. You can ask 
+NOTE: ALTS currently needs special early access permission on GCP. You can ask
 about the detailed process in https://groups.google.com/forum/#!forum/grpc-io.
 
 ALTS is the Google's Application Layer Transport Security, which supports mutual
@@ -93,12 +93,12 @@ allows users to configure mutual TLS at the connection level.
 
 In this example, we use the following public/private keys created ahead of time:
 
-* "server_cert.pem" contains the server's certificate (public key). 
-* "server_key.pem" contains the server's private key. 
+* "server_cert.pem" contains the server's certificate (public key).
+* "server_key.pem" contains the server's private key.
 * "ca_cert.pem" contains the certificate of the certificate authority that can
   verify the server's certificate.
-* "client_cert.pem" contains the client's certificate (public key). 
-* "client_key.pem" contains the client's private key. 
+* "client_cert.pem" contains the client's certificate (public key).
+* "client_key.pem" contains the client's private key.
 * "client_ca_cert.pem" contains the certificate of the certificate authority
   that can verify the client's certificate.
 

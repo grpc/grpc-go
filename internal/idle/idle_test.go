@@ -124,7 +124,7 @@ func (s) TestManager_Disabled(t *testing.T) {
 
 	// The idleness manager is explicitly not closed here. But since the manager
 	// is disabled, it will not start the run goroutine, and hence we expect the
-	// leakchecker to not find any leaked goroutines.
+	// leak checker to not find any leaked goroutines.
 }
 
 // TestManager_Enabled_TimerFires tests the case where the idle manager
@@ -138,7 +138,7 @@ func (s) TestManager_Enabled_TimerFires(t *testing.T) {
 	defer mgr.Close()
 	mgr.ExitIdleMode()
 
-	// Ensure that the timer callback fires within a appropriate amount of time.
+	// Ensure that the timer callback fires within an appropriate amount of time.
 	select {
 	case <-callbackCh:
 	case <-time.After(2 * defaultTestIdleTimeout):
@@ -242,7 +242,7 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Since the unrary RPC terminated and we have no other active RPCs, the
+	// Since the unary RPC terminated and we have no other active RPCs, the
 	// channel must move to idle eventually.
 	select {
 	case <-enforcer.enterIdleCh:
@@ -306,7 +306,7 @@ const (
 	stateActiveRPCs
 )
 
-// racyIdlnessEnforcer is a test idleness enforcer used specifically to test the
+// racyEnforcer is a test idleness enforcer used specifically to test the
 // race between idle timeout and incoming RPCs.
 type racyEnforcer struct {
 	t       *testing.T

@@ -16,6 +16,7 @@
  *
  */
 
+// Binary client is a client for the custom load balancer example.
 package main
 
 import (
@@ -67,7 +68,7 @@ func main() {
 	defer cancel()
 	ec := pb.NewEchoClient(cc)
 	if err := waitForDistribution(ctx, ec); err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err)
 	}
 	fmt.Println("Successful multiple iterations of 1:2 ratio")
 }

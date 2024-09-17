@@ -319,7 +319,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "MatcherToNotPrinicipal",
+			name: "MatcherToNotPrincipal",
 			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
@@ -336,7 +336,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// PrinicpalProductViewer tests the construction of a chained engine
+		// PrincipalProductViewer tests the construction of a chained engine
 		// with a policy that allows any downstream to send a GET request on a
 		// certain path.
 		{
@@ -1812,15 +1812,15 @@ func (sts *ServerTransportStreamWithMethod) Method() string {
 	return sts.method
 }
 
-func (sts *ServerTransportStreamWithMethod) SetHeader(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SetHeader(metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SendHeader(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SendHeader(metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SetTrailer(metadata.MD) error {
 	return nil
 }
 
@@ -1844,11 +1844,11 @@ type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
 
-func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
+func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(json.RawMessage) (config audit.LoggerConfig, err error) {
 	return TestAuditLoggerBufferConfig{}, nil
 }
 
-func (b *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerBufferBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerBuffer{auditEvents: &b.auditEvents}
 }
 
@@ -1885,7 +1885,7 @@ func (b TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.Ra
 	return c, nil
 }
 
-func (b *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerCustomConfigBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerCustomConfig{}
 }
 

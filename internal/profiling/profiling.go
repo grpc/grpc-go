@@ -189,7 +189,7 @@ func (stat *Stat) AppendTimer(timer *Timer) {
 var statsInitialized int32
 
 // Stats for the last defaultStreamStatsBufsize RPCs will be stored in memory.
-// This is can be configured by the registering server at profiling service
+// This can be configured by the registering server at profiling service
 // initialization with google.golang.org/grpc/profiling/service.ProfilingConfig
 const defaultStreamStatsSize uint32 = 16 << 10
 

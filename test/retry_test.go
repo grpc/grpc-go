@@ -226,7 +226,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sErr := func(c codes.Code) serverOp {
-		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		return func(testgrpc.TestService_FullDuplexCallServer) error {
 			return status.New(c, "this is a test error").Err()
 		}
 	}
@@ -455,7 +455,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		func() {
 			serverOpIter = 0
 			serverOps = tc.serverOps
@@ -464,9 +464,9 @@ func (s) TestRetryStreaming(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%v: Error while creating stream: %v", tc.desc, err)
 			}
-			for _, op := range tc.clientOps {
+			for j, op := range tc.clientOps {
 				if err := op(stream); err != nil {
-					t.Errorf("%v: %v", tc.desc, err)
+					t.Errorf("%d %d %v: %v", i, j, tc.desc, err)
 					break
 				}
 			}
@@ -512,7 +512,7 @@ func (s) TestMaxCallAttempts(t *testing.T) {
 		unaryCallCount := 0
 
 		ss := &stubserver.StubServer{
-			FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 				streamCallCount++
 				return status.New(codes.Unavailable, "this is a test error").Err()
 			},

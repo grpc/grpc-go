@@ -39,7 +39,7 @@ import (
 // testLegacyPerRPCCredentials is a PerRPCCredentials that has yet incorporated security level.
 type testLegacyPerRPCCredentials struct{}
 
-func (cr testLegacyPerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (cr testLegacyPerRPCCredentials) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
 	return nil, nil
 }
 
@@ -84,7 +84,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					if !test.serverInsecureCreds {
 						return &testpb.Empty{}, nil
 					}
@@ -144,7 +144,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}

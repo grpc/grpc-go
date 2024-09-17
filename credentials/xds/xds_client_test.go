@@ -117,7 +117,7 @@ func (ts *testServer) start() error {
 	return nil
 }
 
-// handleconn accepts a new raw connection, and invokes the test provided
+// handleConn accepts a new raw connection, and invokes the test provided
 // handshake function to perform TLS handshake, and returns the result on the
 // `hsResult` channel.
 func (ts *testServer) handleConn() {
@@ -146,7 +146,10 @@ func testServerTLSHandshake(rawConn net.Conn) handshakeResult {
 	if err != nil {
 		return handshakeResult{err: err}
 	}
-	cfg := &tls.Config{Certificates: []tls.Certificate{cert}}
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		NextProtos:   []string{"h2"},
+	}
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
 		return handshakeResult{err: err}
@@ -186,7 +189,7 @@ type fakeProvider struct {
 	err error
 }
 
-func (f *fakeProvider) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+func (f *fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
 	return f.km, f.err
 }
 
@@ -419,7 +422,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 	// server-side by simply blocking on the client-side handshake to timeout
 	// and not writing any handshake data.
 	hErr := errors.New("server handshake error")
-	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+	ts := newTestServerWithHandshakeFunc(func(net.Conn) handshakeResult {
 		<-clientDone
 		return handshakeResult{err: hErr}
 	})

@@ -68,7 +68,7 @@ func (s) TestReportLoad(t *testing.T) {
 	tr, err := transport.New(transport.Options{
 		ServerCfg:      serverCfg,
 		NodeProto:      nodeProto,
-		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
+		OnRecvHandler:  noopRecvHandler,                                     // No ADS validation.
 		OnErrorHandler: func(error) {},                                      // No ADS stream error handling.
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No ADS stream update handling.
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
@@ -151,12 +151,14 @@ func (s) TestReportLoad(t *testing.T) {
 					// TotalMetricValue is the aggregation of 3.14 + 2.718 = 5.858
 					{MetricName: testKey1, NumRequestsFinishedWithMetric: 2, TotalMetricValue: 5.858}},
 				TotalSuccessfulRequests: 1,
+				TotalIssuedRequests:     1,
 			},
 			{
 				Locality: &v3corepb.Locality{Region: "test-region2"},
 				LoadMetricStats: []*v3endpointpb.EndpointLoadMetricStats{
 					{MetricName: testKey2, NumRequestsFinishedWithMetric: 1, TotalMetricValue: 1.618}},
 				TotalSuccessfulRequests: 1,
+				TotalIssuedRequests:     1,
 			},
 		},
 	}
@@ -211,7 +213,7 @@ func (s) TestReportLoad(t *testing.T) {
 	}
 
 	// Cancel the first load reporting call, and ensure that the stream does not
-	// close (because we have aother call open).
+	// close (because we have another call open).
 	cancelLRS1()
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()

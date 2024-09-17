@@ -94,7 +94,7 @@ func startBackendsForBalancerSwitch(t *testing.T) ([]*stubserver.StubServer, fun
 	backends := make([]*stubserver.StubServer, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 		}
 		if err := backend.StartServer(); err != nil {
 			t.Fatalf("Failed to start backend: %v", err)
@@ -334,7 +334,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	// apply the grpclb policy. But since grpclb is not registered, it should
 	// fallback to the default LB policy which is pick_first. The ClientConn is
 	// also expected to filter out the grpclb address when sending the addresses
-	// list fo pick_first.
+	// list for pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address"}}
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}
@@ -375,7 +375,7 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 			close(uccsCalled)
 			return nil
 		},
-		Close: func(data *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			(<-scChan).Shutdown()
 		},
 	})

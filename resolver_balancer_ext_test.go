@@ -45,8 +45,7 @@ import (
 // 4. balancer.ClientConn.ResolveNow() ->
 // 5. resolver.Resolver.ResolveNow() ->
 func (s) TestResolverBalancerInteraction(t *testing.T) {
-	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
-	fmt.Println(name)
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	bf := stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bd.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
@@ -105,7 +104,7 @@ func (b *resolverBuilderWithErr) Close() {}
 // 4. resolver.Builder.Build() fails.
 func (s) TestResolverBuildFailure(t *testing.T) {
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
-	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	resErrCh := make(chan error, 1)
 	resolver.Register(&resolverBuilderWithErr{errCh: resErrCh, scheme: name})
 
@@ -131,7 +130,7 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 // the channel enters idle mode.
 func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
-	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 
 	// Create a manual resolver that spams UpdateState calls until it is closed.
 	rb := manual.NewBuilderWithScheme(name)
@@ -176,7 +175,7 @@ func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 // time as the balancer being closed while the channel enters idle mode.
 func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
-	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 
 	// Create a balancer that calls UpdateState once asynchronously, attempting
 	// to make the channel appear ready even after entering idle.
@@ -221,7 +220,7 @@ func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 	channelz.TurnOn()
 	defer internal.ChannelzTurnOffForTesting()
 	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
-	name := strings.Replace(strings.ToLower(t.Name()), "/", "", -1)
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 
 	// Create a balancer that calls NewSubConn once asynchronously, attempting
 	// to create a subchannel after going idle.

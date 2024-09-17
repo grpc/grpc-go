@@ -351,7 +351,7 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
-// Closes all registered cluster wathers and removes them from the internal map.
+// Closes all registered cluster watchers and removes them from the internal map.
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) closeAllWatchers() {
@@ -364,7 +364,7 @@ func (b *cdsBalancer) closeAllWatchers() {
 // Close cancels the CDS watch, closes the child policy and closes the
 // cdsBalancer.
 func (b *cdsBalancer) Close() {
-	b.serializer.TrySchedule(func(ctx context.Context) {
+	b.serializer.TrySchedule(func(context.Context) {
 		b.closeAllWatchers()
 
 		if b.childLB != nil {

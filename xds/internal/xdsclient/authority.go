@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/internal/grpclog"
@@ -148,7 +149,7 @@ func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) {
 	a.startWatchTimersLocked(rType, u.ResourceNames)
 }
 
-func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
+func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate, onDone func()) error {
 	rType := a.resourceTypeGetter(resourceUpdate.URL)
 	if rType == nil {
 		return xdsresource.NewErrorf(xdsresource.ErrorTypeResourceTypeUnsupported, "Resource URL %v unknown in response from server", resourceUpdate.URL)
@@ -159,13 +160,39 @@ func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate
 		ServerConfig:    a.serverCfg,
 	}
 	updates, md, err := decodeAllResources(opts, rType, resourceUpdate)
-	a.updateResourceStateAndScheduleCallbacks(rType, updates, md)
+	a.updateResourceStateAndScheduleCallbacks(rType, updates, md, onDone)
 	return err
 }
 
-func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Type, updates map[string]resourceDataErrTuple, md xdsresource.UpdateMetadata) {
+func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Type, updates map[string]resourceDataErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
+
+	// We build a list of callback funcs to invoke, and invoke them at the end
+	// of this method instead of inline (when handling the update for a
+	// particular resource), because we want to make sure that all calls to
+	// increment watcherCnt happen before any callbacks are invoked. This will
+	// ensure that the onDone callback is never invoked before all watcher
+	// callbacks are invoked, and the watchers have processed the update.
+	watcherCnt := new(atomic.Int64)
+	done := func() {
+		watcherCnt.Add(-1)
+		if watcherCnt.Load() == 0 {
+			onDone()
+		}
+	}
+	funcsToSchedule := []func(context.Context){}
+	defer func() {
+		if len(funcsToSchedule) == 0 {
+			// When there are no watchers for the resources received as part of
+			// this update, invoke onDone explicitly to unblock the next read on
+			// the ADS stream.
+			onDone()
+		}
+		for _, f := range funcsToSchedule {
+			a.serializer.ScheduleOr(f, onDone)
+		}
+	}()
 
 	resourceStates := a.resources[rType]
 	for name, uErr := range updates {
@@ -210,7 +237,8 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				for watcher := range state.watchers {
 					watcher := watcher
 					err := uErr.err
-					a.serializer.TrySchedule(func(context.Context) { watcher.OnError(err) })
+					watcherCnt.Add(1)
+					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnError(err, done) })
 				}
 				continue
 			}
@@ -225,7 +253,8 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				for watcher := range state.watchers {
 					watcher := watcher
 					resource := uErr.resource
-					a.serializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource) })
+					watcherCnt.Add(1)
+					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnUpdate(resource, done) })
 				}
 			}
 			// Sync cache.
@@ -300,7 +329,8 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 			for watcher := range state.watchers {
 				watcher := watcher
-				a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+				watcherCnt.Add(1)
+				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnResourceDoesNotExist(done) })
 			}
 		}
 	}
@@ -429,7 +459,7 @@ func (a *authority) newConnectionError(err error) {
 			for watcher := range state.watchers {
 				watcher := watcher
 				a.serializer.TrySchedule(func(context.Context) {
-					watcher.OnError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
+					watcher.OnError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
 				})
 			}
 		}
@@ -495,7 +525,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.logger.Infof("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
 		}
 		resource := state.cache
-		a.serializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource) })
+		a.serializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
 	}
 
 	return func() {
@@ -548,7 +578,7 @@ func (a *authority) handleWatchTimerExpiryLocked(rType xdsresource.Type, resourc
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
-		a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+		a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
 	}
 }
 
@@ -574,13 +604,13 @@ func (a *authority) triggerResourceNotFoundForTesting(rType xdsresource.Type, re
 	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
-		a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
+		a.serializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
 	}
 }
 
 // sendDiscoveryRequestLocked sends a discovery request for the specified
 // resource type and resource names. Even though this method does not directly
-// access the resource cache, it is important that `resourcesMu` be beld when
+// access the resource cache, it is important that `resourcesMu` be held when
 // calling this method to ensure that a consistent snapshot of resource names is
 // being requested.
 func (a *authority) sendDiscoveryRequestLocked(rType xdsresource.Type, resources map[string]*resourceState) {

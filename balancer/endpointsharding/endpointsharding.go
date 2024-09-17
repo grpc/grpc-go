@@ -133,7 +133,7 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			// Return first error found, and always commit full processing of
 			// updating children. If desired to process more specific errors
 			// across all endpoints, caller should make these specific
-			// validations, this is a current limitation for simplicities sake.
+			// validations, this is a current limitation for simplicity sake.
 			ret = err
 		}
 	}
@@ -165,7 +165,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	}
 }
 
-func (es *endpointSharding) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (es *endpointSharding) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
 	// UpdateSubConnState is deprecated.
 }
 
@@ -285,6 +285,11 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.updateState()
 }
 
+// ParseConfig parses a child config list and returns an LB config to use with
+// the endpointsharding balancer.
+//
+// cfg is expected to be a JSON array of LB policy names + configs as the
+// format of the loadBalancingConfig field in ServiceConfig.
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }
