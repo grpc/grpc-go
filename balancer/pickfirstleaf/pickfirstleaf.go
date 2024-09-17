@@ -18,6 +18,11 @@
 
 // Package pickfirstleaf contains the pick_first load balancing policy which
 // will be the universal leaf policy after dualstack changes are implemented.
+//
+// # Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package pickfirstleaf
 
 import (
@@ -25,7 +30,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -41,7 +45,6 @@ import (
 
 func init() {
 	if envconfig.NewPickFirstEnabled {
-		internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 		// Register as the default pick_first balancer.
 		Name = "pick_first"
 	}
@@ -173,9 +176,6 @@ func (b *pickfirstBalancer) resolverError(err error) {
 	if b.logger.V(2) {
 		b.logger.Infof("Received error from the name resolver: %v", err)
 	}
-	if b.state == connectivity.Shutdown {
-		return
-	}
 	// The picker will not change since the balancer does not currently
 	// report an error.
 	if b.state != connectivity.TransientFailure {
@@ -207,9 +207,6 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 // updateClientConnState handles clientConn state changes.
 // Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState) error {
-	if b.state == connectivity.Shutdown {
-		return errBalancerClosed
-	}
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {
 		// Cleanup state pertaining to the previous resolver state.
 		// Treat an empty address list like an error by calling b.ResolverError.
@@ -265,7 +262,7 @@ func (b *pickfirstBalancer) updateClientConnState(state balancer.ClientConnState
 	}
 
 	b.reconcileSubConns(newEndpoints)
-	// If its the first resolver update or the balancer was already READY
+	// If it's the first resolver update or the balancer was already READY
 	// (but the new address list does not contain the ready subconn) or
 	// CONNECTING, enter CONNECTING.
 	// We may be in TRANSIENT_FAILURE due to a previous empty address list,
@@ -382,9 +379,7 @@ func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
 			sd.subConn.Shutdown()
 		}
 	}
-	for _, k := range b.subConns.Keys() {
-		b.subConns.Delete(k)
-	}
+	b.subConns = resolver.NewAddressMap()
 	b.subConns.Set(selected.addr, selected)
 }
 
@@ -394,7 +389,7 @@ func (b *pickfirstBalancer) shutdownRemaining(selected *scData) {
 // attempted.
 // Only executed in the context of a serializer callback.
 func (b *pickfirstBalancer) requestConnection() {
-	if !b.addressList.isValid() || b.state == connectivity.Shutdown {
+	if !b.addressList.isValid() {
 		return
 	}
 	curAddr := b.addressList.currentAddress()
@@ -408,14 +403,7 @@ func (b *pickfirstBalancer) requestConnection() {
 			// This should never happen, unless the clientConn is being shut
 			// down.
 			b.logger.Warningf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
-			// The LB policy remains in TRANSIENT_FAILURE until a new resolver
-			// update is received.
-			b.state = connectivity.TransientFailure
-			b.addressList.reset()
-			b.cc.UpdateState(balancer.State{
-				ConnectivityState: connectivity.TransientFailure,
-				Picker:            &picker{err: fmt.Errorf("failed to create a new subConn: %v", err)},
-			})
+			// Do nothing, the LB policy will be closed soon.
 			return
 		}
 		b.subConns.Set(curAddr, sd)
@@ -434,6 +422,11 @@ func (b *pickfirstBalancer) requestConnection() {
 	case connectivity.Ready:
 		// Should never happen.
 		b.logger.Errorf("Requesting a connection even though we have a READY subconn")
+	case connectivity.Shutdown:
+		// Should never happen.
+		b.logger.Errorf("SubConn with state SHUTDOWN present in subconns map")
+	case connectivity.Connecting:
+		// Wait for the subconn to report success or failure.
 	}
 }
 
@@ -530,7 +523,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// We have finished the first pass, keep re-connecting failing subconns.
 	switch newState.ConnectivityState {
 	case connectivity.TransientFailure:
-		b.numTF++
+		b.numTF = (b.numTF + 1) % b.subConns.Len()
 		sd.lastErr = newState.ConnectionError
 		if b.numTF%b.subConns.Len() == 0 {
 			b.cc.UpdateState(balancer.State{

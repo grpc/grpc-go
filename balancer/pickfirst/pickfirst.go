@@ -39,11 +39,11 @@ import (
 )
 
 func init() {
+	internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 	if envconfig.NewPickFirstEnabled {
 		return
 	}
 	balancer.Register(pickfirstBuilder{})
-	internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 }
 
 var logger = grpclog.Component("pick-first-lb")
