@@ -19,7 +19,6 @@
 package mem
 
 import (
-	"compress/flate"
 	"io"
 )
 
@@ -126,7 +125,8 @@ func (s BufferSlice) Reader() Reader {
 // Remaining(), which returns the number of unread bytes remaining in the slice.
 // Buffers will be freed as they are read.
 type Reader interface {
-	flate.Reader
+	io.Reader
+	io.ByteReader
 	// Close frees the underlying BufferSlice and never returns an error. Subsequent
 	// calls to Read will return (0, io.EOF).
 	Close() error
