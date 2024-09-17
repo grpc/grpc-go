@@ -266,6 +266,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
+	bm.backends[0].S = nil
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -288,6 +289,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	}
 
 	bm.backends[2].S.Stop()
+	bm.backends[2].S = nil
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[2], addrs[3]}})
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[3]); err != nil {
@@ -327,6 +329,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
+	bm.backends[0].S = nil
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -349,6 +352,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 	}
 
 	bm.backends[2].S.Stop()
+	bm.backends[2].S = nil
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[2], addrs[1]}})
 
 	// Verify that the ClientConn stays in READY.
@@ -389,6 +393,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
+	bm.backends[0].S = nil
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -411,6 +416,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 	}
 
 	bm.backends[2].S.Stop()
+	bm.backends[2].S = nil
 	if err := bm.backends[0].StartServer(); err != nil {
 		t.Fatalf("Failed to re-start test backend: %v", err)
 	}
@@ -452,6 +458,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
 	bm.backends[0].S.Stop()
+	bm.backends[0].S = nil
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -549,6 +556,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 
 	// Shut down the connected server.
 	bm.backends[0].S.Stop()
+	bm.backends[0].S = nil
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
@@ -614,6 +622,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 
 	// Shut down the connected server.
 	bm.backends[1].S.Stop()
+	bm.backends[1].S = nil
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
@@ -685,6 +694,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 
 	// Shut down the connected server.
 	bm.backends[1].S.Stop()
+	bm.backends[1].S = nil
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
@@ -755,6 +765,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 
 	// Shut down the connected server.
 	bm.backends[0].S.Stop()
+	bm.backends[0].S = nil
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
@@ -978,6 +989,7 @@ func (b *backendManager) stopAllExcept(index int) {
 	for idx, b := range b.backends {
 		if idx != index {
 			b.S.Stop()
+			b.S = nil
 		}
 	}
 }
