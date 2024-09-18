@@ -351,47 +351,54 @@ func (b *pickfirstBalancer) shutdownRemainingLocked(selected *scData) {
 // requestConnectionLocked starts connecting on the subchannel corresponding to the
 // current address. If no subchannel exists, one is created. If the current
 // subchannel is in TransientFailure, a connection to the next address is
-// attempted.
+// attempted until a subchannel is found.
 func (b *pickfirstBalancer) requestConnectionLocked() {
 	if !b.addressList.isValid() {
 		return
 	}
-	curAddr := b.addressList.currentAddress()
-	sd, ok := b.subConns.Get(curAddr)
-	if !ok {
-		var err error
-		// We want to assign the new scData to sd from the outer scope, hence
-		// we can't use := below.
-		sd, err = b.newSCData(curAddr)
-		if err != nil {
-			// This should never happen, unless the clientConn is being shut
-			// down.
-			b.logger.Warningf("Failed to create a subConn for address %v: %v", curAddr.String(), err)
-			// Do nothing, the LB policy will be closed soon.
-			return
+	var lastErr error
+	for valid := true; valid; valid = b.addressList.increment() {
+		curAddr := b.addressList.currentAddress()
+		sd, ok := b.subConns.Get(curAddr)
+		if !ok {
+			var err error
+			// We want to assign the new scData to sd from the outer scope, hence
+			// we can't use := below.
+			sd, err = b.newSCData(curAddr)
+			if err != nil {
+				// This should never happen, unless the clientConn is being shut
+				// down.
+				if b.logger.V(2) {
+					b.logger.Infof("Failed to create a subConn for address %v: %v", curAddr.String(), err)
+				}
+				// Do nothing, the LB policy will be closed soon.
+				return
+			}
+			b.subConns.Set(curAddr, sd)
 		}
-		b.subConns.Set(curAddr, sd)
-	}
 
-	scd := sd.(*scData)
-	switch scd.state {
-	case connectivity.Idle:
-		scd.subConn.Connect()
-	case connectivity.TransientFailure:
-		if !b.addressList.increment() {
-			b.endFirstPassLocked(scd.lastErr)
-			return
+		scd := sd.(*scData)
+		switch scd.state {
+		case connectivity.Idle:
+			scd.subConn.Connect()
+		case connectivity.TransientFailure:
+			// Try the next address.
+			lastErr = scd.lastErr
+			continue
+		case connectivity.Ready:
+			// Should never happen.
+			b.logger.Errorf("Requesting a connection even though we have a READY subconn")
+		case connectivity.Shutdown:
+			// Should never happen.
+			b.logger.Errorf("SubConn with state SHUTDOWN present in subconns map")
+		case connectivity.Connecting:
+			// Wait for the subconn to report success or failure.
 		}
-		b.requestConnectionLocked()
-	case connectivity.Ready:
-		// Should never happen.
-		b.logger.Errorf("Requesting a connection even though we have a READY subconn")
-	case connectivity.Shutdown:
-		// Should never happen.
-		b.logger.Errorf("SubConn with state SHUTDOWN present in subconns map")
-	case connectivity.Connecting:
-		// Wait for the subconn to report success or failure.
+		return
 	}
+	// All the remaining addresses in the list are in TRANSIENT_FAILURE, end the
+	// first pass.
+	b.endFirstPassLocked(lastErr)
 }
 
 func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.SubConnState) {
