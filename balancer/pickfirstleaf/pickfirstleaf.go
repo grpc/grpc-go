@@ -51,8 +51,7 @@ func init() {
 }
 
 var (
-	logger            = grpclog.Component("pick-first-leaf-lb")
-	errBalancerClosed = fmt.Errorf("pickfirst: LB policy is closed")
+	logger = grpclog.Component("pick-first-leaf-lb")
 	// Name is the name of the pick_first_leaf balancer.
 	// Can be changed in init() if this balancer is to be registered as the default
 	// pickfirst.
