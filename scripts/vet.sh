@@ -70,6 +70,9 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 # - Ensure that no trailing spaces are found.
 not git grep '[[:blank:]]$'
 
+# - Ensure that all files have a terminating newline.
+git grep -l '$' -- '.' | xargs -I {} sh -c '[[ -n "$(tail -c 1 "{}")" ]] && echo "{}"'
+
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
