@@ -226,8 +226,9 @@ func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
 	return sc.credsDialOption
 }
 
-// DialerOption returns the first supported Dialer function that specifies how
-// to dial the xDS server from the configuration, as a dial option.
+// DialerOption returns the Dialer function that specifies how to dial the xDS
+// server determined by the first supported credentials from the configuration,
+// as a dial option.
 func (sc *ServerConfig) DialerOption() grpc.DialOption {
 	return sc.dialerOption
 }
