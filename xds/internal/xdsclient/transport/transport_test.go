@@ -116,6 +116,16 @@ func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error
 }
 
 func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
+	// Override grpc.NewClient with a custom one.
+	doptsLen := 0
+	customGRPCNewClient := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		doptsLen = len(opts)
+		return grpc.NewClient(target, opts...)
+	}
+	oldGRPCNewClient := internal.GRPCNewClient
+	internal.GRPCNewClient = customGRPCNewClient
+	defer func() { internal.GRPCNewClient = oldGRPCNewClient }()
+
 	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
 	serverCfg, err := internalbootstrap.ServerConfigForTesting(internalbootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
@@ -146,5 +156,12 @@ func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
 	}()
 	if err != nil {
 		t.Fatalf("transport.New(%v) failed: %v", opts, err)
+	}
+	// Verify there are three dial options passed to the custom grpc.NewClient.
+	// The first is opts.ServerCfg.CredsDialOption(), the second is
+	// grpc.WithKeepaliveParams(), and the third is opts.ServerCfg.DialerOption()
+	// from the credentials bundle.
+	if doptsLen != 3 {
+		t.Fatalf("transport.New(%v) custom grpc.NewClient called with %d dial options, want 3", opts, doptsLen)
 	}
 }
