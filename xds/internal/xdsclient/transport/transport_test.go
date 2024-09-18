@@ -91,17 +91,13 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 const testDialerCredsBuilderName = "test_dialer_creds"
 
-func init() {
-	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
-}
-
 // testDialerCredsBuilder implements the `Credentials` interface defined in
 // package `xds/bootstrap` and encapsulates an insecure credential with a
 // custom Dialer that specifies how to dial the xDS server.
 type testDialerCredsBuilder struct{}
 
 func (t *testDialerCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
-	return &testDialerCredsBundle{}, func() {}, nil
+	return &testDialerCredsBundle{insecure.NewBundle()}, func() {}, nil
 }
 
 func (t *testDialerCredsBuilder) Name() string {
@@ -111,18 +107,8 @@ func (t *testDialerCredsBuilder) Name() string {
 // testDialerCredsBundle implements the `Bundle` interface defined in package
 // `credentials` and encapsulates an insecure credential with a custom Dialer
 // that specifies how to dial the xDS server.
-type testDialerCredsBundle struct{}
-
-func (t *testDialerCredsBundle) TransportCredentials() credentials.TransportCredentials {
-	return insecure.NewCredentials()
-}
-
-func (t *testDialerCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
-	return nil
-}
-
-func (t *testDialerCredsBundle) NewWithMode(string) (credentials.Bundle, error) {
-	return &testDialerCredsBundle{}, nil
+type testDialerCredsBundle struct {
+	credentials.Bundle
 }
 
 func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error) {
@@ -130,6 +116,7 @@ func (t *testDialerCredsBundle) Dialer(context.Context, string) (net.Conn, error
 }
 
 func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
+	bootstrap.RegisterCredentials(&testDialerCredsBuilder{})
 	serverCfg, err := internalbootstrap.ServerConfigForTesting(internalbootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
 		ChannelCreds: []internalbootstrap.ChannelCreds{{Type: testDialerCredsBuilderName}},

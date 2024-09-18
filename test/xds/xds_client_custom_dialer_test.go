@@ -57,7 +57,7 @@ func (t *testDialerCredsBuilder) Build(config json.RawMessage) (credentials.Bund
 	if err := json.Unmarshal(config, &cfg); err != nil {
 		return nil, func() {}, fmt.Errorf("failed to unmarshal config: %v", err)
 	}
-	return &testDialerCredsBundle{t.dialerCalled, cfg.MgmtServerAddress}, func() {}, nil
+	return &testDialerCredsBundle{insecure.NewBundle(), t.dialerCalled, cfg.MgmtServerAddress}, func() {}, nil
 }
 
 func (t *testDialerCredsBuilder) Name() string {
@@ -68,20 +68,9 @@ func (t *testDialerCredsBuilder) Name() string {
 // `credentials` and encapsulates an insecure credential with a custom Dialer
 // that specifies how to dial the xDS server.
 type testDialerCredsBundle struct {
+	credentials.Bundle
 	dialerCalled      chan struct{}
 	mgmtServerAddress string
-}
-
-func (t *testDialerCredsBundle) TransportCredentials() credentials.TransportCredentials {
-	return insecure.NewCredentials()
-}
-
-func (t *testDialerCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
-	return nil
-}
-
-func (t *testDialerCredsBundle) NewWithMode(string) (credentials.Bundle, error) {
-	return &testDialerCredsBundle{}, nil
 }
 
 // Dialer specifies how to dial the xDS management server.
