@@ -19,6 +19,8 @@
 package pickfirstleaf
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -32,6 +34,8 @@ import (
 )
 
 const (
+	// Default timeout for tests in this package.
+	defaultTestTimeout = 10 * time.Second
 	// Default short timeout, to be used when waiting for events which are not
 	// expected to happen.
 	defaultTestShortTimeout = 100 * time.Millisecond
@@ -207,6 +211,8 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 // for each subconn managed by a pickfirst balancer. It verifies that the picker
 // is updated with the expected frequency.
 func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
 	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
@@ -226,20 +232,16 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
 
-	p := <-cc.NewPickerCh
-	_, err := p.Pick(balancer.PickInfo{})
-	if want, got := balancer.ErrNoSubConnAvailable, err; got != want {
-		t.Fatalf("picker.Pick() = %v, want %v", got, want)
+	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
+		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
 	}
 
 	sc1 := <-cc.NewSubConnCh
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
 
-	p = <-cc.NewPickerCh
-	_, err = p.Pick(balancer.PickInfo{})
-	if want, got := tfErr, err; got != want {
-		t.Fatalf("picker.Pick() = %v, want %v", got, want)
+	if err := cc.WaitForPickerWithErr(ctx, tfErr); err != nil {
+		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
 	}
 
 	// Subsequent TRANSIENT_FAILUREs should be reported only after seeing "# of subconns"
@@ -248,15 +250,43 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
 	select {
 	case <-time.After(defaultTestShortTimeout):
-	case p = <-cc.NewPickerCh:
+	case p := <-cc.NewPickerCh:
 		sc, err := p.Pick(balancer.PickInfo{})
 		t.Fatalf("Unexpected picker update: %v, %v", sc, err)
 	}
 
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
-	p = <-cc.NewPickerCh
-	_, err = p.Pick(balancer.PickInfo{})
-	if want, got := newTfErr, err; got != want {
-		t.Fatalf("picker.Pick() = %v, want %v", got, want)
+	if err := cc.WaitForPickerWithErr(ctx, newTfErr); err != nil {
+		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
+	}
+}
+
+// TestPickFirstLeaf_InitialResolverError sends a resolver error to the balancer
+// before a valid resolver update. It verifies that the clientconn state is
+// updated to TRANSIENT_FAILURE.
+func (s) TestPickFirstLeaf_InitialResolverError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	bal.ResolverError(errors.New("resolution failed: test error"))
+
+	if err := cc.WaitForConnectivityState(ctx, connectivity.TransientFailure); err != nil {
+		t.Fatalf("cc.WaitForConnectivityState(%v) returned error: %v", connectivity.TransientFailure, err)
+	}
+
+	// After sending a valid update, the LB policy should report CONNECTING.
+	bal.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+			},
+		},
+	})
+
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("cc.WaitForConnectivityState(%v) returned error: %v", connectivity.Connecting, err)
 	}
 }

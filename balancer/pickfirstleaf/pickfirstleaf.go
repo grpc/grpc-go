@@ -143,9 +143,6 @@ type pickfirstBalancer struct {
 
 // ResolverError is called by the ClientConn when the name resolver produces
 // an error or when pickfirst determined the resolver update to be invalid.
-// If the resolver returns an error before sending the first update,
-// it is handled by the gracefulswitch balancer (which is always the top-level
-// LB policy on any channel), so we don't need to handle that here.
 func (b *pickfirstBalancer) ResolverError(err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -157,8 +154,9 @@ func (b *pickfirstBalancer) resolverErrorLocked(err error) {
 		b.logger.Infof("Received error from the name resolver: %v", err)
 	}
 	// The picker will not change since the balancer does not currently
-	// report an error.
-	if b.state != connectivity.TransientFailure {
+	// report an error. If the balancer hasn't received a single good resolver
+	// update yet, transition to TRANSIENT_FAILURE.
+	if b.state != connectivity.TransientFailure && b.addressList.size() > 0 {
 		if b.logger.V(2) {
 			b.logger.Infof("Ignoring resolver error because balancer is using a previous good update.")
 		}
