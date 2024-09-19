@@ -41,8 +41,8 @@ type TestMetricsRecorder struct {
 	floatHistoCh *testutils.Channel
 	intGaugeCh   *testutils.Channel
 
-	// Mu protects data.
-	Mu sync.Mutex
+	// mu protects data.
+	mu sync.Mutex
 	// data is the most recent update for each metric name.
 	data map[estats.Metric]float64
 }
@@ -69,8 +69,8 @@ func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 
 // ClearMetrics clears the metrics data store of the test metrics recorder.
 func (r *TestMetricsRecorder) ClearMetrics() {
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.data = make(map[estats.Metric]float64)
 }
 
@@ -113,8 +113,8 @@ func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, 
 		LabelVals: labels,
 	})
 
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.data[handle.Name] = float64(incr)
 }
 
@@ -144,8 +144,8 @@ func (r *TestMetricsRecorder) RecordFloat64Count(handle *estats.Float64CountHand
 		LabelVals: labels,
 	})
 
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.data[handle.Name] = incr
 }
 
@@ -175,8 +175,8 @@ func (r *TestMetricsRecorder) RecordInt64Histo(handle *estats.Int64HistoHandle, 
 		LabelVals: labels,
 	})
 
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.data[handle.Name] = float64(incr)
 }
 
@@ -206,8 +206,8 @@ func (r *TestMetricsRecorder) RecordFloat64Histo(handle *estats.Float64HistoHand
 		LabelVals: labels,
 	})
 
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.data[handle.Name] = incr
 }
 
@@ -236,8 +236,8 @@ func (r *TestMetricsRecorder) RecordInt64Gauge(handle *estats.Int64GaugeHandle, 
 		LabelVals: labels,
 	})
 
-	r.Mu.Lock()
-	defer r.Mu.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.data[handle.Name] = float64(incr)
 }
 

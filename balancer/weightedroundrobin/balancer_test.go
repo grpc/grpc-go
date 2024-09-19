@@ -234,8 +234,6 @@ func (s) TestWRRMetricsBasic(t *testing.T) {
 		t.Fatalf("Error from EmptyCall: %v", err)
 	}
 
-	tmr.Mu.Lock()
-	defer tmr.Mu.Unlock()
 	if got, _ := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
 		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
 	}
