@@ -283,7 +283,6 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 			// ac.getTransport() from unblocking before the LB policy starts
 			// tracking the subchannel as READY.
 			close(acbw.ac.stateReadyChan)
-			acbw.ac.stateReadyChan = make(chan struct{})
 		}
 	})
 }
