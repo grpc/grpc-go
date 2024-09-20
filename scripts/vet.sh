@@ -71,12 +71,8 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 not git grep '[[:blank:]]$'
 
 # - Ensure that all files have a terminating newline.
-for file in $(git ls-files); do
-  if [ -n "$(tail -c 1 "$file" 2>/dev/null)" ]; then
-    echo "$file: No terminating new line found"
-    exit 1
-  fi
-done || (git status; git --no-pager diff; exit 1)
+git ls-files | xargs -r -I {} sh -c '[ -n "$(tail -c 1 "{}" 2>/dev/null)" ] && echo "{}: No terminating new line found" && exit 1' || (git status; git --no-pager diff; exit 1)
+
 
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
