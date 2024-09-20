@@ -82,7 +82,7 @@ func (s) TestConfigUpdate_ControlChannel(t *testing.T) {
 
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -168,7 +168,7 @@ func (s) TestConfigUpdate_ControlChannelWithCreds(t *testing.T) {
 	// subdomain of the same here.
 	cc, err := grpc.NewClient(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -228,7 +228,7 @@ func (s) TestConfigUpdate_ControlChannelServiceConfig(t *testing.T) {
 
 	cc, err := grpc.NewClient(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -265,7 +265,7 @@ func (s) TestConfigUpdate_DefaultTarget(t *testing.T) {
 
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -539,7 +539,7 @@ func (s) TestConfigUpdate_BadChildPolicyConfigs(t *testing.T) {
 
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -868,7 +868,7 @@ func (s) TestDataCachePurging(t *testing.T) {
 
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -959,7 +959,7 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 

@@ -144,7 +144,7 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to NewClient: %v", err)
+		log.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
