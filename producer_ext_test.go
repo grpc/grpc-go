@@ -51,7 +51,7 @@ func (*producerBuilder) Build(cci any) (balancer.Producer, func()) {
 	}
 }
 
-func (p *producer) TestStreamStart(t *testing.T, streamStarted chan<- struct{}) {
+func (p *producer) testStreamStart(t *testing.T, streamStarted chan<- struct{}) {
 	go func() {
 		defer close(p.stopped)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -68,8 +68,11 @@ var producerBuilderSingleton = &producerBuilder{}
 // TestProducerStreamStartsAfterReady ensures producer streams only start after
 // the subchannel reports as READY to the LB policy.
 func (s) TestProducerStreamStartsAfterReady(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	producerCh := make(chan balancer.Producer)
+	var producerClose func()
 	streamStarted := make(chan struct{})
 	done := make(chan struct{})
 	bf := stub.BalancerFuncs{
@@ -90,7 +93,8 @@ func (s) TestProducerStreamStartsAfterReady(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			producer, _ := sc.GetOrBuildProducer(producerBuilderSingleton)
+			var producer balancer.Producer
+			producer, producerClose = sc.GetOrBuildProducer(producerBuilderSingleton)
 			producerCh <- producer
 			sc.Connect()
 			return nil
@@ -119,7 +123,15 @@ func (s) TestProducerStreamStartsAfterReady(t *testing.T) {
 
 	go cc.Connect()
 	p := <-producerCh
-	p.(*producer).TestStreamStart(t, streamStarted)
+	p.(*producer).testStreamStart(t, streamStarted)
 
-	<-done
+	select {
+	case <-done:
+		// Wait for the stream to start before exiting; otherwise the ClientConn
+		// will close and cause stream creation to fail.
+		<-streamStarted
+		producerClose()
+	case <-ctx.Done():
+		t.Error("Timed out waiting for test to complete")
+	}
 }
