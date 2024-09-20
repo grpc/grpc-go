@@ -12,7 +12,7 @@ s := grpc.NewServer()
 pb.RegisterYourOwnServer(s, &server{})
 
 // Register reflection service on gRPC server.
-reflection.Register(s)  
+reflection.Register(s)
 
 s.Serve(lis)
 ```
