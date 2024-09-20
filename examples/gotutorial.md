@@ -151,13 +151,13 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 
 ```go
 func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, error) {
-	for _, feature := range s.savedFeatures {
-		if proto.Equal(feature.Location, point) {
-			return feature, nil
-		}
-	}
-	// No feature was found, return an unnamed feature
-	return &pb.Feature{"", point}, nil
+    for _, feature := range s.savedFeatures {
+        if proto.Equal(feature.Location, point) {
+            return feature, nil
+        }
+    }
+    // No feature was found, return an unnamed feature
+    return &pb.Feature{"", point}, nil
 }
 ```
 
@@ -168,14 +168,14 @@ Now let's look at one of our streaming RPCs. `ListFeatures` is a server-side str
 
 ```go
 func (s *routeGuideServer) ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) error {
-	for _, feature := range s.savedFeatures {
-		if inRange(feature.Location, rect) {
-			if err := stream.Send(feature); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+    for _, feature := range s.savedFeatures {
+        if inRange(feature.Location, rect) {
+            if err := stream.Send(feature); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
 }
 ```
 
@@ -188,34 +188,34 @@ Now let's look at something a little more complicated: the client-side streaming
 
 ```go
 func (s *routeGuideServer) RecordRoute(stream pb.RouteGuide_RecordRouteServer) error {
-	var pointCount, featureCount, distance int32
-	var lastPoint *pb.Point
-	startTime := time.Now()
-	for {
-		point, err := stream.Recv()
-		if err == io.EOF {
-			endTime := time.Now()
-			return stream.SendAndClose(&pb.RouteSummary{
-				PointCount:   pointCount,
-				FeatureCount: featureCount,
-				Distance:     distance,
-				ElapsedTime:  int32(endTime.Sub(startTime).Seconds()),
-			})
-		}
-		if err != nil {
-			return err
-		}
-		pointCount++
-		for _, feature := range s.savedFeatures {
-			if proto.Equal(feature.Location, point) {
-				featureCount++
-			}
-		}
-		if lastPoint != nil {
-			distance += calcDistance(lastPoint, point)
-		}
-		lastPoint = point
-	}
+    var pointCount, featureCount, distance int32
+    var lastPoint *pb.Point
+    startTime := time.Now()
+    for {
+        point, err := stream.Recv()
+        if err == io.EOF {
+            endTime := time.Now()
+            return stream.SendAndClose(&pb.RouteSummary{
+                PointCount:   pointCount,
+                FeatureCount: featureCount,
+                Distance:     distance,
+                ElapsedTime:  int32(endTime.Sub(startTime).Seconds()),
+            })
+        }
+        if err != nil {
+            return err
+        }
+        pointCount++
+        for _, feature := range s.savedFeatures {
+            if proto.Equal(feature.Location, point) {
+                featureCount++
+            }
+        }
+        if lastPoint != nil {
+            distance += calcDistance(lastPoint, point)
+        }
+        lastPoint = point
+    }
 }
 ```
 
@@ -226,22 +226,22 @@ Finally, let's look at our bidirectional streaming RPC `RouteChat()`.
 
 ```go
 func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error {
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		key := serialize(in.Location)
+    for {
+        in, err := stream.Recv()
+        if err == io.EOF {
+            return nil
+        }
+        if err != nil {
+            return err
+        }
+        key := serialize(in.Location)
                 ... // look for notes to be sent to client
-		for _, note := range s.routeNotes[key] {
-			if err := stream.Send(note); err != nil {
-				return err
-			}
-		}
-	}
+        for _, note := range s.routeNotes[key] {
+            if err := stream.Send(note); err != nil {
+                return err
+            }
+        }
+    }
 }
 ```
 
@@ -353,21 +353,21 @@ r := rand.New(rand.NewSource(time.Now().UnixNano()))
 pointCount := int(r.Int31n(100)) + 2 // Traverse at least two points
 var points []*pb.Point
 for i := 0; i < pointCount; i++ {
-	points = append(points, randomPoint(r))
+    points = append(points, randomPoint(r))
 }
 log.Printf("Traversing %d points.", len(points))
 stream, err := client.RecordRoute(ctx)
 if err != nil {
-	log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+    log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 }
 for _, point := range points {
-	if err := stream.Send(point); err != nil {
-		log.Fatalf("%v.Send(%v) = %v", stream, point, err)
-	}
+    if err := stream.Send(point); err != nil {
+        log.Fatalf("%v.Send(%v) = %v", stream, point, err)
+    }
 }
 reply, err := stream.CloseAndRecv()
 if err != nil {
-	log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+    log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 }
 log.Printf("Route summary: %v", reply)
 ```
@@ -382,23 +382,23 @@ Finally, let's look at our bidirectional streaming RPC `RouteChat()`. As in the 
 stream, err := client.RouteChat(ctx)
 waitc := make(chan struct{})
 go func() {
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			// read done.
-			close(waitc)
-			return
-		}
-		if err != nil {
-			log.Fatalf("Failed to receive a note : %v", err)
-		}
-		log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
-	}
+    for {
+        in, err := stream.Recv()
+        if err == io.EOF {
+            // read done.
+            close(waitc)
+            return
+        }
+        if err != nil {
+            log.Fatalf("Failed to receive a note : %v", err)
+        }
+        log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
+    }
 }()
 for _, note := range notes {
-	if err := stream.Send(note); err != nil {
-		log.Fatalf("Failed to send a note: %v", err)
-	}
+    if err := stream.Send(note); err != nil {
+        log.Fatalf("Failed to send a note: %v", err)
+    }
 }
 stream.CloseSend()
 <-waitc
