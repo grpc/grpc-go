@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -64,13 +65,19 @@ func (w *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubCon
 	if len(addrs) != 1 {
 		panic(fmt.Sprintf("got addrs=%v; want len(addrs) == 1", addrs))
 	}
+	var sc balancer.SubConn
+	opts.StateListener = func(scs balancer.SubConnState) {
+		if scs.ConnectivityState != connectivity.Ready {
+			return
+		}
+		l := getListenerInfo(addrs[0])
+		l.listener.cleanup = orca.RegisterOOBListener(sc, l.listener, l.opts)
+		l.sc = sc
+	}
 	sc, err := w.ClientConn.NewSubConn(addrs, opts)
 	if err != nil {
 		return sc, err
 	}
-	l := getListenerInfo(addrs[0])
-	l.listener.cleanup = orca.RegisterOOBListener(sc, l.listener, l.opts)
-	l.sc = sc
 	return sc, nil
 }
 
