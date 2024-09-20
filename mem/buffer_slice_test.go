@@ -20,11 +20,21 @@ package mem_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
 
 	"google.golang.org/grpc/mem"
+)
+
+const (
+	// 1025 is a value above 1024 that is not mem.IsBelowBufferPoolingThreshold().
+	// See https://github.com/grpc/grpc-go/issues/7631.
+	minReadSize = 1025
+	// Should match the constant in buffer_slice.go (another package)
+	readAllBufSize = 32 * 1024 // 32 KiB
 )
 
 func newBuffer(data []byte, pool mem.BufferPool) mem.Buffer {
@@ -156,6 +166,249 @@ func (s) TestBufferSlice_Reader(t *testing.T) {
 	}
 }
 
+func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
+	testcases := []struct {
+		name         string
+		reads        []readStep
+		expectedErr  string
+		expectedBufs int
+	}{
+		{
+			name: "EOF",
+			reads: []readStep{
+				{
+					err: io.EOF,
+				},
+			},
+		},
+		{
+			name: "data,EOF",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "data+EOF",
+			reads: []readStep{
+				{
+					n:   minReadSize,
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "0,data+EOF",
+			reads: []readStep{
+				{},
+				{
+					n:   minReadSize,
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "0,data,EOF",
+			reads: []readStep{
+				{},
+				{
+					n: minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "data,data+EOF",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n:   minReadSize,
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "error",
+			reads: []readStep{
+				{
+					err: errors.New("boom"),
+				},
+			},
+			expectedErr: "boom",
+		},
+		{
+			name: "data+error",
+			reads: []readStep{
+				{
+					n:   minReadSize,
+					err: errors.New("boom"),
+				},
+			},
+			expectedErr:  "boom",
+			expectedBufs: 1,
+		},
+		{
+			name: "data,data+error",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n:   minReadSize,
+					err: errors.New("boom"),
+				},
+			},
+			expectedErr:  "boom",
+			expectedBufs: 1,
+		},
+		{
+			name: "data,data+EOF - whole buf",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n:   readAllBufSize - minReadSize,
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "data,data,EOF - whole buf",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n: readAllBufSize - minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 1,
+		},
+		{
+			name: "data,data,EOF - 2 bufs",
+			reads: []readStep{
+				{
+					n: readAllBufSize,
+				},
+				{
+					n: minReadSize,
+				},
+				{
+					n: readAllBufSize - minReadSize,
+				},
+				{
+					n: minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			expectedBufs: 3,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &testPool{
+				allocated: make(map[*[]byte]struct{}),
+			}
+			r := &stepReader{
+				reads: tc.reads,
+			}
+			data, err := mem.ReadAll(r, pool)
+			if tc.expectedErr != "" {
+				if err == nil || err.Error() != tc.expectedErr {
+					t.Fatalf("ReadAll() expected error %q, got %q", tc.expectedErr, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			actualData := data.Materialize()
+			if !bytes.Equal(r.read, actualData) {
+				t.Fatalf("ReadAll() expected data %q, got %q", r.read, actualData)
+			}
+			if len(data) != tc.expectedBufs {
+				t.Fatalf("ReadAll() expected %d bufs, got %d", tc.expectedBufs, len(data))
+			}
+			for i := 0; i < len(data)-1; i++ { // all but last should be full buffers
+				if data[i].Len() != readAllBufSize {
+					t.Fatalf("ReadAll() expected data length %d, got %d", readAllBufSize, data[i].Len())
+				}
+			}
+			data.Free()
+			if len(pool.allocated) > 0 {
+				t.Fatalf("expected no allocated buffers, got %d", len(pool.allocated))
+			}
+		})
+	}
+}
+
+func (s) TestBufferSlice_ReadAll_WriteTo(t *testing.T) {
+	testcases := []struct {
+		name string
+		size int
+	}{
+		{
+			name: "small",
+			size: minReadSize,
+		},
+		{
+			name: "exact size",
+			size: readAllBufSize,
+		},
+		{
+			name: "big",
+			size: readAllBufSize * 3,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &testPool{
+				allocated: make(map[*[]byte]struct{}),
+			}
+			buf := make([]byte, tc.size)
+			_, err := rand.Read(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := bytes.NewBuffer(buf)
+			data, err := mem.ReadAll(r, pool)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			actualData := data.Materialize()
+			if !bytes.Equal(buf, actualData) {
+				t.Fatalf("ReadAll() expected data %q, got %q", buf, actualData)
+			}
+			data.Free()
+			if len(pool.allocated) > 0 {
+				t.Fatalf("expected no allocated buffers, got %d", len(pool.allocated))
+			}
+		})
+	}
+}
+
 func ExampleNewWriter() {
 	var bs mem.BufferSlice
 	pool := mem.DefaultBufferPool()
@@ -175,4 +428,50 @@ func ExampleNewWriter() {
 	// Wrote 4 bytes, err: <nil>
 	// Wrote 4 bytes, err: <nil>
 	// abcdabcdabcd
+}
+
+var (
+	_ io.Reader      = (*stepReader)(nil)
+	_ mem.BufferPool = (*testPool)(nil)
+)
+
+type readStep struct {
+	n   int
+	err error
+}
+
+type stepReader struct {
+	reads []readStep
+	read  []byte
+}
+
+func (s *stepReader) Read(buf []byte) (int, error) {
+	if len(s.reads) == 0 {
+		panic("unexpected Read() call")
+	}
+	read := s.reads[0]
+	s.reads = s.reads[1:]
+	_, err := rand.Read(buf[:read.n])
+	if err != nil {
+		panic(err)
+	}
+	s.read = append(s.read, buf[:read.n]...)
+	return read.n, read.err
+}
+
+type testPool struct {
+	allocated map[*[]byte]struct{}
+}
+
+func (t *testPool) Get(length int) *[]byte {
+	buf := make([]byte, length)
+	t.allocated[&buf] = struct{}{}
+	return &buf
+}
+
+func (t *testPool) Put(buf *[]byte) {
+	if _, ok := t.allocated[buf]; !ok {
+		panic("unexpected put")
+	}
+	delete(t.allocated, buf)
 }
