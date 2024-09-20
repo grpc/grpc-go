@@ -30,7 +30,7 @@ popd
 
 protoc \
     --go-grpc_out="${TEMPDIR}" \
-    --go-grpc_opt=paths=source_relative, \
+    --go-grpc_opt=paths=source_relative \
     "examples/route_guide/routeguide/route_guide.proto"
 
 GOLDENFILE="examples/route_guide/routeguide/route_guide_grpc.pb.go"
