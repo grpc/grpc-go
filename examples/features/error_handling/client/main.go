@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to handle errors returned by a gRPC server.
 package main
 
 import (

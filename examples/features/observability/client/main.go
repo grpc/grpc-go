@@ -16,7 +16,8 @@
  *
  */
 
-// Package main implements a client for Greeter service.
+// Binary client demonstrates how to instrument RPCs with logging, metrics,
+// and tracing.
 package main
 
 import (

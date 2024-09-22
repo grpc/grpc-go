@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to handle ORCA metrics for load reporting.
 package main
 
 import (

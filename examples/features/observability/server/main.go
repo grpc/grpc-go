@@ -16,7 +16,8 @@
  *
  */
 
-// Package main implements a server for Greeter service.
+// Binary server demonstrates how to instrument RPCs for logging, metrics,
+// and tracing.
 package main
 
 import (

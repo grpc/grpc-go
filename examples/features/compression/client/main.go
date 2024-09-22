@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to specify compression options when performing
+// RPCs.
 package main
 
 import (

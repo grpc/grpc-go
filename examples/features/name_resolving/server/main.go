@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to set up a gRPC server that listens on a
+// specified port for name resolution examples.
 package main
 
 import (

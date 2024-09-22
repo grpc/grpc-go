@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to enable and configure retry policies for
+// gRPC requests.
 package main
 
 import (

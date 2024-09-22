@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how gRPC flow control block sending when the
+// receiver is not ready.
 package main
 
 import (

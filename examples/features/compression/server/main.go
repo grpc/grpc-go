@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to install and support compressors for
+// incoming RPCs.
 package main
 
 import (

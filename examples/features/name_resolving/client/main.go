@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to use different name resolvers to connect
+// to a server.
 package main
 
 import (

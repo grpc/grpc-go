@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstartes how to implement ORCA for reporting out-of-band
+// and per-RPC load metrics.
 package main
 
 import (

@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to use interceptors to observe or control the
+// behavior of gRPC including logging, authentication,metrics collection, etc.
 package main
 
 import (

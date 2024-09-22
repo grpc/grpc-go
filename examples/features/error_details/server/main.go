@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to provide error messages in gRPC responses.
 package main
 
 import (
