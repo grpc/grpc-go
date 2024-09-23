@@ -364,7 +364,6 @@ func (l *listenerWrapper) Close() error {
 		l.cancelWatch()
 	}
 	l.rdsHandler.close()
-	l.conns = nil
 	return nil
 }
 
