@@ -1141,10 +1141,15 @@ func (cc *ClientConn) Close() error {
 
 	<-cc.resolverWrapper.serializer.Done()
 	<-cc.balancerWrapper.serializer.Done()
-
+	var wg sync.WaitGroup
 	for ac := range conns {
-		ac.tearDown(ErrClientConnClosing)
+		wg.Add(1)
+		go func(ac *addrConn) {
+			defer wg.Done()
+			ac.tearDown(ErrClientConnClosing)
+		}(ac)
 	}
+	wg.Wait()
 	cc.addTraceEvent("deleted")
 	// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add
 	// trace reference to the entity being deleted, and thus prevent it from being
