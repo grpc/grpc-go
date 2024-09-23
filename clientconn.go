@@ -1292,7 +1292,7 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.mu.Unlock()
 }
 
-// tryAllAddrs tries to creates a connection to the addresses, and stop when at
+// tryAllAddrs tries to create a connection to the addresses, and stop when at
 // the first successful one. It returns an error if no address was successfully
 // connected, or updates ac appropriately with the new transport.
 func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, connectDeadline time.Time) error {

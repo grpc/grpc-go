@@ -48,7 +48,7 @@ type queue struct {
 	written uint32
 }
 
-// Allocates and returns a new *queue. size needs to be a exponent of two.
+// Allocates and returns a new *queue. size needs to be an exponent of two.
 func newQueue(size uint32) *queue {
 	return &queue{
 		arr:  make([]unsafe.Pointer, size),
@@ -103,7 +103,7 @@ func (qp *queuePair) switchQueues() *queue {
 // by other exponents of two, we use floorCPUCount number of queuePairs within
 // each CircularBuffer.
 //
-// Floor of the number of CPUs (and not the ceiling) was found to the be the
+// Floor of the number of CPUs (and not the ceiling) was found to be the
 // optimal number through experiments.
 func floorCPUCount() uint32 {
 	floorExponent := bits.Len32(uint32(runtime.NumCPU())) - 1
@@ -129,7 +129,7 @@ var numCircularBufferPairs = floorCPUCount()
 type CircularBuffer struct {
 	drainMutex sync.Mutex
 	qp         []*queuePair
-	// qpn is an monotonically incrementing counter that's used to determine
+	// qpn is a monotonically incrementing counter that's used to determine
 	// which queuePair a Push operation should write to. This approach's
 	// performance was found to be better than writing to a random queue.
 	qpn    uint32

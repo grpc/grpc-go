@@ -147,7 +147,7 @@ func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDo
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 
-// writeOnDone attempts to writes the onDone callback on the onDone channel. It
+// writeOnDone attempts to write the onDone callback on the onDone channel. It
 // returns when it can successfully write to the channel or when the test is
 // done, which is signalled by testCtxDone being closed.
 func writeOnDone(testCtxDone <-chan struct{}, onDoneCh chan xdsresource.OnDoneFunc, onDone xdsresource.OnDoneFunc) {
@@ -407,7 +407,7 @@ func (s) TestCSDS(t *testing.T) {
 //
 // This test does a bunch of similar things to the previous test, but has
 // reduced complexity because of having to deal with a single resource type.
-// This makes is possible to test the NACKing a resource (which results in
+// This makes it possible to test the NACKing a resource (which results in
 // continuous resending of the resource by the go-control-plane management
 // server), in an easier and less flaky way.
 func (s) TestCSDS_NACK(t *testing.T) {

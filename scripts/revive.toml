@@ -7,9 +7,13 @@
 [rule.error-return]
 [rule.error-strings]
 [rule.error-naming]
+[rule.exported]
 [rule.increment-decrement]
+[rule.indent-error-flow]
+[rule.package-comments]
 [rule.range]
 [rule.receiver-naming]
+[rule.redefines-builtin-id]
 [rule.superfluous-else]
 [rule.time-naming]
 [rule.var-naming]
@@ -20,16 +24,8 @@
 [rule.use-any]
 
 # Disabled rules
-# https://github.com/grpc/grpc-go/issues/7444 to track TODO(s)
-[rule.empty-block]
+[rule.empty-block] # Disabled to allow intentional no-op blocks (e.g., channel draining).
     Disabled = true
-[rule.import-shadowing]
+[rule.import-shadowing] # Disabled to allow intentional reuse of variable names that are the same as package imports.
     Disabled = true
-[rule.exported]
-    Disabled = true # TODO: Enable after existing issues are fixed
-[rule.redefines-builtin-id]
-    Disabled = true # TODO: Enable after existing issues are fixed
-[rule.package-comments]
-    Disabled = true # TODO: Enable after existing issues are fixed
-[rule.indent-error-flow]
-    Disabled = true # TODO: Enable after existing issues are fixed
+

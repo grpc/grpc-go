@@ -1,5 +1,5 @@
 base_dir      = .
-certificate   = $base_dir/ca_cert.pem   # The CA certifcate
+certificate   = $base_dir/ca_cert.pem   # The CA certificate
 private_key   = $base_dir/ca_key.pem    # The CA private key
 new_certs_dir = $base_dir              # Location for new certs after signing
 database      = $base_dir/index.txt    # Database index file

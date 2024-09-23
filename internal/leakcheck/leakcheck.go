@@ -273,7 +273,7 @@ func CheckGoroutines(logger Logger, timeout time.Duration) {
 	}
 }
 
-// LeakChecker captures an Logger and is returned by NewLeakChecker as a
+// LeakChecker captures a Logger and is returned by NewLeakChecker as a
 // convenient method to set up leak check tests in a unit test.
 type LeakChecker struct {
 	logger Logger

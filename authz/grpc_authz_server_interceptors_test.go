@@ -57,9 +57,9 @@ func (s) TestNewStatic(t *testing.T) {
 			wantErr:     fmt.Errorf(`"name" is not present`),
 		},
 		"ValidPolicyCreatesInterceptor": {
-			authzPolicy: `{		
+			authzPolicy: `{
 				"name": "authz",
-				"allow_rules": 
+				"allow_rules":
 				[
 					{
 						"name": "allow_all"

@@ -561,7 +561,7 @@ type emptyChildConfig struct {
 }
 
 // TestChildBasicOperations tests basic operations of the Outlier Detection
-// Balancer and it's interaction with it's child. The following scenarios are
+// Balancer and its interaction with its child. The following scenarios are
 // tested, in a step by step fashion:
 // 1. The Outlier Detection Balancer receives it's first good configuration. The
 // balancer is expected to create a child and sent the child it's configuration.
@@ -606,7 +606,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	od, tcc, _ := setup(t)
 
 	// This first config update should cause a child to be built and forwarded
-	// it's first update.
+	// its first update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
 			ChildPolicy: &iserviceconfig.BalancerConfig{
@@ -627,7 +627,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	}
 
 	// This Update Client Conn State call should cause the first child balancer
-	// to close, and a new child to be created and also forwarded it's first
+	// to close, and a new child to be created and also forwarded its first
 	// config update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
@@ -654,7 +654,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	if _, err = closeCh.Receive(ctx); err != nil {
 		t.Fatalf("timed out waiting for the first child balancer to be closed: %v", err)
 	}
-	// Verify the second child balancer received it's first config update.
+	// Verify the second child balancer received its first config update.
 	if _, err = ccsCh.Receive(ctx); err != nil {
 		t.Fatalf("timed out waiting for UpdateClientConnState on the second child balancer: %v", err)
 	}

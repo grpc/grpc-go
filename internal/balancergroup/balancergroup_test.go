@@ -168,7 +168,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // The callback will try to hold the same lock again, which will cause a
 // deadlock.
 //
-// This test starts the balancer group with a test balancer, will updates picker
+// This test starts the balancer group with a test balancer, will update picker
 // whenever it gets an address update. It's expected that start() doesn't block
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {

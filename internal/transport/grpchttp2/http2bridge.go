@@ -209,7 +209,7 @@ func (fr *FramerBridge) WritePing(ack bool, data [8]byte) error {
 	return fr.framer.WritePing(ack, data)
 }
 
-// WriteGoAway writes a GoAway Frame to the unerlying writer.
+// WriteGoAway writes a GoAway Frame to the underlying writer.
 func (fr *FramerBridge) WriteGoAway(maxStreamID uint32, code ErrCode, debugData []byte) error {
 	return fr.framer.WriteGoAway(maxStreamID, http2.ErrCode(code), debugData)
 }

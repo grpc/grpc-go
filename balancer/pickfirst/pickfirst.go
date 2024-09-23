@@ -103,10 +103,13 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	})
 }
 
+// Shuffler is an interface for shuffling an address list.
 type Shuffler interface {
 	ShuffleAddressListForTesting(n int, swap func(i, j int))
 }
 
+// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
+// is the number of elements.  swap swaps the elements with indexes i and j.
 func ShuffleAddressListForTesting(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {

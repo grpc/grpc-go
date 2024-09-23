@@ -191,6 +191,8 @@ var (
 	// ExitIdleModeForTesting gets the ClientConn to exit IDLE mode.
 	ExitIdleModeForTesting any // func(*grpc.ClientConn) error
 
+	// ChannelzTurnOffForTesting disables the Channelz service for testing
+	// purposes.
 	ChannelzTurnOffForTesting func()
 
 	// TriggerXDSResourceNotFoundForTesting causes the provided xDS Client to
@@ -235,7 +237,7 @@ var (
 //
 // The implementation is expected to create a health checking RPC stream by
 // calling newStream(), watch for the health status of serviceName, and report
-// it's health back by calling setConnectivityState().
+// its health back by calling setConnectivityState().
 //
 // The health checking protocol is defined at:
 // https://github.com/grpc/grpc/blob/master/doc/health-checking.md

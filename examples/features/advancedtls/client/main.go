@@ -16,6 +16,8 @@
  *
  */
 
+// Binary client is an example client demonstrating use of advancedtls, to set
+// up a secure gRPC client connection with various TLS authentication methods.
 package main
 
 import (
@@ -149,7 +151,7 @@ func makeCRLProvider(crlDirectory string) *advancedtls.FileWatcherCRLProvider {
 }
 
 // --- Custom Verification ---
-func customVerificaitonSucceed(info *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
+func customVerificationSucceed(info *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
 	// Looks at info for what you care about as the custom verification implementer
 	if info.ServerName != "localhost:50051" {
 		return nil, fmt.Errorf("expected servername of localhost:50051, got %v", info.ServerName)
@@ -157,7 +159,7 @@ func customVerificaitonSucceed(info *advancedtls.HandshakeVerificationInfo) (*ad
 	return &advancedtls.PostHandshakeVerificationResults{}, nil
 }
 
-func customVerificaitonFail(info *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
+func customVerificationFail(info *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
 	// Looks at info for what you care about as the custom verification implementer
 	if info.ServerName != "ExampleDesignedToFail" {
 		return nil, fmt.Errorf("expected servername of ExampleDesignedToFail, got %v", info.ServerName)
@@ -189,7 +191,7 @@ func runClientWithCustomVerification(credsDirectory string, port string) {
 			},
 			// Tell the client to verify the server cert
 			VerificationType:           advancedtls.CertVerification,
-			AdditionalPeerVerification: customVerificaitonSucceed,
+			AdditionalPeerVerification: customVerificationSucceed,
 		}
 
 		clientTLSCreds, err := advancedtls.NewClientCreds(options)
@@ -213,7 +215,7 @@ func runClientWithCustomVerification(credsDirectory string, port string) {
 			},
 			// Tell the client to verify the server cert
 			VerificationType:           advancedtls.CertVerification,
-			AdditionalPeerVerification: customVerificaitonFail,
+			AdditionalPeerVerification: customVerificationFail,
 		}
 
 		clientTLSCreds, err := advancedtls.NewClientCreds(options)
