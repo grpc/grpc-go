@@ -52,7 +52,7 @@ type testDialerCredsBuilder struct {
 
 func (t *testDialerCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
 	cfg := &struct {
-		MgmtServerAddress string `json:"mgmtServerAddress"`
+		MgmtServerAddress string `json:"mgmt_server_address"`
 	}{}
 	if err := json.Unmarshal(config, &cfg); err != nil {
 		return nil, func() {}, fmt.Errorf("failed to unmarshal config: %v", err)
@@ -95,7 +95,7 @@ func (s) TestClientCustomDialerFromCredentialsBundle(t *testing.T) {
 			"server_uri": %q,
 			"channel_creds": [{
 				"type": %q,
-				"config": {"mgmtServerAddress": %q}
+				"config": {"mgmt_server_address": %q}
 			}]
 		}]`, mgmtServer.Address, testDialerCredsBuilderName, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
