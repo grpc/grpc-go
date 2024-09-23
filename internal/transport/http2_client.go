@@ -1010,6 +1010,18 @@ func (t *http2Client) Close(err error) {
 	}
 	t.mu.Unlock()
 
+	// Append info about previous goaways if there were any, since this may be important
+	// for understanding the root cause for this connection to be closed.
+	_, goAwayDebugMessage := t.GetGoAwayReason()
+
+	var st *status.Status
+	if len(goAwayDebugMessage) > 0 {
+		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		err = st.Err()
+	} else {
+		st = status.New(codes.Unavailable, err.Error())
+	}
+
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY. It
 	// also waits for loopyWriter to be closed with a timer to avoid the
@@ -1026,17 +1038,6 @@ func (t *http2Client) Close(err error) {
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
-	// Append info about previous goaways if there were any, since this may be important
-	// for understanding the root cause for this connection to be closed.
-	_, goAwayDebugMessage := t.GetGoAwayReason()
-
-	var st *status.Status
-	if len(goAwayDebugMessage) > 0 {
-		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
-		err = st.Err()
-	} else {
-		st = status.New(codes.Unavailable, err.Error())
-	}
 
 	// Notify all active streams.
 	for _, s := range streams {
