@@ -150,7 +150,6 @@ func (c *connWrapper) Drain() {
 		c.draining = true
 	} else {
 		c.st.Drain("draining")
-		c.st = nil
 	}
 }
 
@@ -162,9 +161,7 @@ func (c *connWrapper) Close() error {
 	if c.rootProvider != nil {
 		c.rootProvider.Close()
 	}
-	if c.st != nil {
-		c.st = nil
-	}
+	c.parent.RemoveConn(c)
 	return c.Conn.Close()
 }
 
