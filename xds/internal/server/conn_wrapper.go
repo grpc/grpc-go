@@ -150,6 +150,7 @@ func (c *connWrapper) Drain() {
 		c.draining = true
 	} else {
 		c.st.Drain("draining")
+		c.st = nil
 	}
 }
 
