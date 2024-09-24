@@ -380,8 +380,7 @@ func TestEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotMatch := test.hi1.Equal(test.hi2)
-			if gotMatch != test.wantMatch {
+			if gotMatch := test.hi1.Equal(test.hi2); gotMatch != test.wantMatch {
 				t.Errorf("hi1.Equal(hi2) = %v; wantMatch %v", gotMatch, test.wantMatch)
 			}
 		})
