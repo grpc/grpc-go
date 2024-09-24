@@ -388,7 +388,7 @@ func parseTarget(target, defaultPort string) (host, port string, err error) {
 			return "", "", internal.ErrEndsWithColon
 		}
 		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
-		if host == "" || host == "localhost" {
+		if host == "" {
 			// Keep consistent with net.Dial(): If the host is empty, as in ":80",
 			// the local system is assumed.
 			host = "127.0.0.1"
