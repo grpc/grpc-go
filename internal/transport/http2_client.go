@@ -1699,11 +1699,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 		case *http2.PingFrame:
 			t.handlePing(frame)
 		case *http2.GoAwayFrame:
-			{
-				if err := t.handleGoAway(frame); err != nil {
-					t.Close(err)
-				}
-			}
+			errClose = t.handleGoAway(frame)
 		case *http2.WindowUpdateFrame:
 			t.handleWindowUpdate(frame)
 		default:
