@@ -596,7 +596,7 @@ func (s) TestEDS_ResourceRemoved(t *testing.T) {
 	// notify the test about the following events:
 	// - an EDS requested with the expected resource name is requested
 	// - EDS resource is unrequested, i.e, an EDS request with no resource name
-	//   is received, which indicates that we are not longer interested in that
+	//   is received, which indicates that we are no longer interested in that
 	//   resource.
 	edsResourceRequestedCh := make(chan struct{}, 1)
 	edsResourceCanceledCh := make(chan struct{}, 1)
@@ -847,7 +847,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		t.Fatalf("Timeout when waiting for old EDS watch %q to be canceled and new one %q to be registered", edsServiceName, clusterName)
 	}
 
-	// Make a RPC, and ensure that it gets routed to second backend,
+	// Make an RPC, and ensure that it gets routed to second backend,
 	// corresponding to the cluster_name.
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
