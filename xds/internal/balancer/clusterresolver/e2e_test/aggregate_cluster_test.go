@@ -916,6 +916,7 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 // error, the test verifies that RPCs fail with the error triggered by the DNS
 // Discovery Mechanism (from sending an empty address list down).
 func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
+	dnsTargetCh, dnsR := setupDNS(t)
 	// Start an xDS management server.
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 
@@ -929,6 +930,8 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	const (
 		edsClusterName = clusterName + "-eds"
 		dnsClusterName = clusterName + "-dns"
+		dnsHostName    = "bad.ip.v4.address"
+		dnsPort        = 8080
 	)
 	emptyEndpointResource := e2e.DefaultEndpoint(edsServiceName, "localhost", nil)
 	resources := e2e.UpdateOptions{
@@ -936,7 +939,7 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, edsServiceName, e2e.SecurityLevelNone),
-			makeLogicalDNSClusterResource(dnsClusterName, "bad.ip.v4.address", 8080),
+			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 		},
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{emptyEndpointResource},
 		SkipValidation: true,
@@ -951,6 +954,20 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
+
+	// Ensure that the DNS resolver is started for the expected target.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for DNS resolver to be started")
+	case target := <-dnsTargetCh:
+		got, want := target.Endpoint(), fmt.Sprintf("%s:%d", dnsHostName, dnsPort)
+		if got != want {
+			t.Fatalf("DNS resolution started for target %q, want %q", got, want)
+		}
+	}
+
+	// Produce a bad resolver update from the DNS resolver.
+	dnsR.ReportError(fmt.Errorf("DNS error"))
 
 	// Ensure that the error from the DNS Resolver leads to an empty address
 	// update for both priorities.
