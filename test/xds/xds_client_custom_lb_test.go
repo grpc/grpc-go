@@ -235,7 +235,7 @@ func (s) TestWrrLocality(t *testing.T) {
 				Clusters:  []*v3clusterpb.Cluster{clusterWithLBConfiguration(t, clusterName, endpointsName, e2e.SecurityLevelNone, test.wrrLocalityConfiguration)},
 				Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 					ClusterName: endpointsName,
-					Host:        "localhost",
+					Host:        "127.0.0.1",
 					Localities: []e2e.LocalityOptions{
 						{
 							Backends: []e2e.BackendOptions{{Port: port1}, {Port: port2}},
