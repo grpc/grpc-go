@@ -1646,7 +1646,6 @@ func (t *http2Client) reader(errCh chan<- error) {
 
 	if err := t.readServerPreface(); err != nil {
 		errCh <- err
-		errClose = nil
 		return
 	}
 	close(errCh)
@@ -1714,7 +1713,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 func (t *http2Client) keepalive() {
 	var err error
 	defer func() {
-		close(t.readerDone)
+		close(t.keepAliveDone)
 		if err != nil {
 			t.Close(err)
 		}
@@ -1754,7 +1753,6 @@ func (t *http2Client) keepalive() {
 				// blocking on the condition variable which will never be
 				// signalled again.
 				t.mu.Unlock()
-				err = nil
 				return
 			}
 			if len(t.activeStreams) < 1 && !t.kp.PermitWithoutStream {
@@ -1792,7 +1790,6 @@ func (t *http2Client) keepalive() {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			err = nil
 			return
 		}
 	}
