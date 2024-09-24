@@ -1036,7 +1036,7 @@ func (s) TestCustomAuthority(t *testing.T) {
 		{
 			name:          "no host port and non-default port",
 			authority:     ":123",
-			wantAuthority: "localhost:123",
+			wantAuthority: "127.0.0.1:123",
 		},
 		{
 			name:          "only colon",

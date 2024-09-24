@@ -372,7 +372,7 @@ func formatIP(addr string) (addrIP string, ok bool) {
 // target: "www.google.com" defaultPort: "443" returns host: "www.google.com", port: "443"
 // target: "ipv4-host:80" defaultPort: "443" returns host: "ipv4-host", port: "80"
 // target: "[ipv6-host]" defaultPort: "443" returns host: "ipv6-host", port: "443"
-// target: ":80" defaultPort: "443" returns host: "localhost", port: "80"
+// target: ":80" defaultPort: "443" returns host: "127.0.0.1", port: "80"
 func parseTarget(target, defaultPort string) (host, port string, err error) {
 	if target == "" {
 		return "", "", internal.ErrMissingAddr
@@ -391,7 +391,7 @@ func parseTarget(target, defaultPort string) (host, port string, err error) {
 		if host == "" {
 			// Keep consistent with net.Dial(): If the host is empty, as in ":80",
 			// the local system is assumed.
-			host = "localhost"
+			host = "127.0.0.1"
 		}
 		return host, port, nil
 	}
