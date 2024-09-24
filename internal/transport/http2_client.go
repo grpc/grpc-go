@@ -87,7 +87,7 @@ type http2Client struct {
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
 	goAway chan struct{}
-	//keepAliveDone channel is closed when the keepAlive goroutine exits
+	//keepAliveDone channel is closed when the keepAlive go routine exits
 	keepAliveDone chan struct{}
 	framer        *framer
 	// controlBuf delivers all the control related tasks (e.g., window
