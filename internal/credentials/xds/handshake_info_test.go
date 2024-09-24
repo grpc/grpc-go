@@ -19,7 +19,6 @@
 package xds
 
 import (
-	"context"
 	"crypto/x509"
 	"net"
 	"net/url"
@@ -33,12 +32,6 @@ import (
 type testCertProvider struct {
 	certprovider.Provider
 }
-
-func (p *testCertProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
-	return &certprovider.KeyMaterial{}, nil
-}
-
-func (p *testCertProvider) Close() {}
 
 func TestDNSMatch(t *testing.T) {
 	tests := []struct {
