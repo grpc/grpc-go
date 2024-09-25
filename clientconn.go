@@ -1502,21 +1502,6 @@ func (ac *addrConn) getReadyTransport() transport.ClientTransport {
 	return nil
 }
 
-// getTransport waits until the addrconn is ready and returns the transport.
-// If the context expires first, returns an appropriate status.  If the
-// addrConn is stopped first, returns an Unavailable status error.
-func (ac *addrConn) getTransport() (transport.ClientTransport, error) {
-	ac.mu.Lock()
-	t, state := ac.transport, ac.state
-	ac.mu.Unlock()
-
-	if state != connectivity.Ready {
-		return nil, status.Errorf(codes.Unavailable, "SubConn state is %v; not Ready", state)
-	}
-
-	return t, nil
-}
-
 // tearDown starts to tear down the addrConn.
 //
 // Note that tearDown doesn't remove ac from ac.cc.conns, so the addrConn struct

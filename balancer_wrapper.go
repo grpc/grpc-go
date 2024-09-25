@@ -24,12 +24,14 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 )
 
 var setConnectedAddress = internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
@@ -302,9 +304,10 @@ func (acbw *acBalancerWrapper) Shutdown() {
 // ready, blocks until it is or ctx expires.  Returns an error when the context
 // expires or the addrConn is shut down.
 func (acbw *acBalancerWrapper) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
-	transport, err := acbw.ac.getTransport()
-	if err != nil {
-		return nil, err
+	transport := acbw.ac.getReadyTransport()
+	if transport == nil {
+		return nil, status.Errorf(codes.Unavailable, "SubConn state is not Ready")
+
 	}
 	return newNonRetryClientStream(ctx, desc, method, transport, acbw.ac, opts...)
 }
