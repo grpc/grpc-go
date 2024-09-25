@@ -73,17 +73,8 @@ func (s) TestAddressList_Iteration(t *testing.T) {
 		},
 	}
 
-	endpoints := []resolver.Endpoint{
-		{
-			Addresses: []resolver.Address{addrs[0], addrs[1]},
-		},
-		{
-			Addresses: []resolver.Address{addrs[2]},
-		},
-	}
-
 	addressList := addressList{}
-	addressList.updateEndpointList(endpoints)
+	addressList.updateAddrs(addrs)
 
 	for i := 0; i < len(addrs); i++ {
 		if got, want := addressList.isValid(), true; got != want {
@@ -147,17 +138,8 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 		},
 	}
 
-	endpoints := []resolver.Endpoint{
-		{
-			Addresses: []resolver.Address{addrs[0], addrs[1]},
-		},
-		{
-			Addresses: []resolver.Address{addrs[2]},
-		},
-	}
-
 	addressList := addressList{}
-	addressList.updateEndpointList(endpoints)
+	addressList.updateAddrs(addrs)
 
 	// Try finding an address in the list.
 	key := resolver.Address{
