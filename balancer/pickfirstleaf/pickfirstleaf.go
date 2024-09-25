@@ -53,11 +53,12 @@ func init() {
 var (
 	logger = grpclog.Component("pick-first-leaf-lb")
 	// Name is the name of the pick_first_leaf balancer.
-	// Can be changed in init() if this balancer is to be registered as the
-	// default pickfirst.
+	// It is changed to "pick_first" in init() if this balancer is to be
+	// registered as the default pickfirst.
 	Name = "pick_first_leaf"
 )
 
+// TODO: change to pick-first when this becomes the default pick_first policy.
 const logPrefix = "[pick-first-leaf-lb %p] "
 
 type pickfirstBuilder struct{}
@@ -154,6 +155,7 @@ func (b *pickfirstBalancer) resolverErrorLocked(err error) {
 	if b.logger.V(2) {
 		b.logger.Infof("Received error from the name resolver: %v", err)
 	}
+
 	// The picker will not change since the balancer does not currently
 	// report an error. If the balancer hasn't received a single good resolver
 	// update yet, transition to TRANSIENT_FAILURE.
@@ -164,8 +166,6 @@ func (b *pickfirstBalancer) resolverErrorLocked(err error) {
 		return
 	}
 
-	b.closeSubConnsLocked()
-	b.addressList.updateAddrs(nil)
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &picker{err: fmt.Errorf("name resolver error: %v", err)},
@@ -179,6 +179,8 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// Cleanup state pertaining to the previous resolver state.
 		// Treat an empty address list like an error by calling b.ResolverError.
 		b.state = connectivity.TransientFailure
+		b.closeSubConnsLocked()
+		b.addressList.updateAddrs(nil)
 		b.resolverErrorLocked(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}

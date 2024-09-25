@@ -189,8 +189,8 @@ func (s) TestAddressList_SeekTo(t *testing.T) {
 	}
 }
 
-// TestPickFirstLeaf_TFPickerUpdate sends TRANSIENT_FAILURE subconn state updates
-// for each subconn managed by a pickfirst balancer. It verifies that the picker
+// TestPickFirstLeaf_TFPickerUpdate sends TRANSIENT_FAILURE SubConn state updates
+// for each SubConn managed by a pickfirst balancer. It verifies that the picker
 // is updated with the expected frequency.
 func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -198,38 +198,41 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
-	bal.UpdateClientConnState(balancer.ClientConnState{
+	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 			},
 		},
-	})
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
 
 	// PF should report TRANSIENT_FAILURE only once all the sunbconns have failed
 	// once.
 	tfErr := fmt.Errorf("test err: connection refused")
-	sc0 := <-cc.NewSubConnCh
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+	sc1 := <-cc.NewSubConnCh
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
 
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
 	}
 
-	sc1 := <-cc.NewSubConnCh
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+	sc2 := <-cc.NewSubConnCh
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
 
 	if err := cc.WaitForPickerWithErr(ctx, tfErr); err != nil {
 		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
 	}
 
-	// Subsequent TRANSIENT_FAILUREs should be reported only after seeing "# of subconns"
+	// Subsequent TRANSIENT_FAILUREs should be reported only after seeing "# of SubConns"
 	// TRANSIENT_FAILUREs.
 	newTfErr := fmt.Errorf("test err: unreachable")
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
 	select {
 	case <-time.After(defaultTestShortTimeout):
 	case p := <-cc.NewPickerCh:
@@ -237,7 +240,7 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 		t.Fatalf("Unexpected picker update: %v, %v", sc, err)
 	}
 
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
 	if err := cc.WaitForPickerWithErr(ctx, newTfErr); err != nil {
 		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
 	}
@@ -259,16 +262,69 @@ func (s) TestPickFirstLeaf_InitialResolverError(t *testing.T) {
 	}
 
 	// After sending a valid update, the LB policy should report CONNECTING.
-	bal.UpdateClientConnState(balancer.ClientConnState{
+	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 			},
 		},
-	})
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
 
 	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
 		t.Fatalf("cc.WaitForConnectivityState(%v) returned error: %v", connectivity.Connecting, err)
+	}
+}
+
+// TestPickFirstLeaf_ResolverErrorinTF sends a resolver error to the balancer
+// before when it's attempting to connect to a SubConn TRANSIENT_FAILURE. It
+// verifies that the picker is updated and the SubConn is not closed.
+func (s) TestPickFirstLeaf_ResolverErrorinTF(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+
+	// After sending a valid update, the LB policy should report CONNECTING.
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+			},
+		},
+	}
+
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Connecting); err != nil {
+		t.Fatalf("cc.WaitForConnectivityState(%v) returned error: %v", connectivity.Connecting, err)
+	}
+
+	scErr := fmt.Errorf("test error: connection refused")
+	sc1.UpdateState(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   scErr,
+	})
+
+	if err := cc.WaitForPickerWithErr(ctx, scErr); err != nil {
+		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", scErr, err)
+	}
+
+	bal.ResolverError(errors.New("resolution failed: test error"))
+	if err := cc.WaitForErrPicker(ctx); err != nil {
+		t.Fatalf("cc.WaitForPickerWithErr() returned error: %v", err)
+	}
+
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case sc := <-cc.ShutdownSubConnCh:
+		t.Fatalf("Unexpected SubConn shutdown: %v", sc)
 	}
 }
