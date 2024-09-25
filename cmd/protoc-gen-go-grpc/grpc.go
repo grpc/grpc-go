@@ -180,7 +180,6 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	g.P("// is compatible with the grpc package it is being compiled against.")
 	g.P("// Requires gRPC-Go v1.64.0 or later.")
 	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion9"))
-
 	g.P()
 	for _, service := range file.Services {
 		genService(gen, file, g, service)
@@ -329,9 +328,7 @@ func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 		s += "*" + g.QualifiedGoIdent(method.Output.GoIdent)
 	} else {
-
 		s += clientStreamInterface(g, method)
-
 	}
 	s += ", error)"
 	return s
@@ -400,7 +397,6 @@ func serverSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 	}
 	if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
 		reqArgs = append(reqArgs, serverStreamInterface(g, method))
-
 	}
 	return method.GoName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
 }
