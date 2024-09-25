@@ -322,7 +322,13 @@ func TestEqual(t *testing.T) {
 		{
 			desc:      "one HandshakeInfo is nil",
 			hi1:       nil,
-			hi2:       NewHandshakeInfo(testCertProvider{}, nil, nil, false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc:      "different root providers",
+			hi1:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, nil, nil, false),
 			wantMatch: false,
 		},
 		{
@@ -337,20 +343,20 @@ func TestEqual(t *testing.T) {
 		},
 		{
 			desc: "same providers, different SAN matchers",
-			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
+			hi1: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
-			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
+			hi2: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
 			wantMatch: false,
 		},
 		{
 			desc: "same SAN matchers with different content",
-			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
+			hi1: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
-			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
+			hi2: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
 				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
@@ -358,8 +364,20 @@ func TestEqual(t *testing.T) {
 		},
 		{
 			desc:      "different requireClientCert flags",
-			hi1:       NewHandshakeInfo(testCertProvider{}, testCertProvider{}, nil, true),
-			hi2:       NewHandshakeInfo(testCertProvider{}, testCertProvider{}, nil, false),
+			hi1:       NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, nil, true),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc:      "same identity provider, different root provider",
+			hi1:       NewHandshakeInfo(&testCertProvider{}, testCertProvider{}, nil, false),
+			hi2:       NewHandshakeInfo(&testCertProvider{}, testCertProvider{}, nil, false),
+			wantMatch: false,
+		},
+		{
+			desc:      "different identity provider, same root provider",
+			hi1:       NewHandshakeInfo(testCertProvider{}, &testCertProvider{}, nil, false),
+			hi2:       NewHandshakeInfo(testCertProvider{}, &testCertProvider{}, nil, false),
 			wantMatch: false,
 		},
 	}
