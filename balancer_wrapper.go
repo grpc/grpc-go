@@ -262,7 +262,7 @@ type acBalancerWrapper struct {
 
 // updateState is invoked by grpc to push a subConn state update to the
 // underlying balancer.
-func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolver.Address, err error) {
+func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolver.Address, err error, readyChan chan struct{}) {
 	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
@@ -278,12 +278,11 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 		acbw.ac.mu.Lock()
 		defer acbw.ac.mu.Unlock()
 		if s == connectivity.Ready {
-			// When changing states to READY, reset stateReadyChan.  Wait until
+			// When changing states to READY, close stateReadyChan.  Wait until
 			// after we notify the LB policy's listener(s) in order to prevent
 			// ac.getTransport() from unblocking before the LB policy starts
 			// tracking the subchannel as READY.
-			close(acbw.ac.stateReadyChan)
-			acbw.ac.stateReadyChan = make(chan struct{})
+			close(readyChan)
 		}
 	})
 }
