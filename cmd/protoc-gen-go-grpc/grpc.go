@@ -489,7 +489,6 @@ func genServerMethod(_ *protogen.Plugin, _ *protogen.File, g *protogen.Generated
 		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(&", streamImpl, "{ServerStream: stream})")
 	}
 	g.P("}")
-
 	g.P()
 
 	// Auxiliary types aliases, for backwards compatibility.
