@@ -343,10 +343,10 @@ func TestEqual(t *testing.T) {
 		},
 		{
 			desc: "same providers, different SAN matchers",
-			hi1: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
+			hi1: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("foo.com"), nil, nil, nil, nil, false),
 			}, false),
-			hi2: NewHandshakeInfo(&testCertProvider{}, &testCertProvider{}, []matcher.StringMatcher{
+			hi2: NewHandshakeInfo(testCertProvider{}, testCertProvider{}, []matcher.StringMatcher{
 				matcher.StringMatcherForTesting(newStringP("bar.com"), nil, nil, nil, nil, false),
 			}, false),
 			wantMatch: false,
