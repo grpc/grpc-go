@@ -28,9 +28,9 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	// Importing the gzip encoding registers it as an available compressor.
+	// Installing the gzip encoding registers it as an available compressor.
 	// gRPC will automatically negotiate and use gzip if the client supports it.
-	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
+	_ "google.golang.org/grpc/encoding/gzip"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
