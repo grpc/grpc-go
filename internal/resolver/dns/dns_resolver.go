@@ -315,8 +315,28 @@ func (d *dnsResolver) lookupTXT(ctx context.Context) *serviceconfig.ParseResult 
 func (d *dnsResolver) lookupHost(ctx context.Context) ([]resolver.Address, error) {
 	addrs, err := d.resolver.LookupHost(ctx, d.host)
 	if err != nil {
-		err = handleDNSError(err, "A")
-		return nil, err
+		if d.host == "localhost" {
+			var localAddrs []string
+			// Check for IPv4 and IPv6 support for localhost
+			addLocalAddr := func(ipStr string) {
+				ip := net.ParseIP(ipStr)
+
+				if ip.To4() != nil {
+					localAddrs = append(localAddrs, ipStr)
+				}
+				if ip.To16() != nil {
+					localAddrs = append(localAddrs, ipStr)
+				}
+			}
+
+			addLocalAddr("127.0.0.1")
+			addLocalAddr("::1")
+
+			addrs = localAddrs
+		} else {
+			err = handleDNSError(err, "A")
+			return nil, err
+		}
 	}
 	newAddrs := make([]resolver.Address, 0, len(addrs))
 	for _, a := range addrs {
