@@ -136,7 +136,7 @@ type listenerWrapper struct {
 
 	// mu guards access to the current serving mode and the active filter chain
 	// manager.
-	mu sync.RWMutex
+	mu sync.Mutex
 	// Current serving mode.
 	mode connectivity.ServingMode
 	// Filter chain manager currently serving.
@@ -203,11 +203,8 @@ func (l *listenerWrapper) maybeUpdateFilterChains() {
 	// gracefully shut down with a grace period of 10 minutes for long-lived
 	// RPC's, such that clients will reconnect and have the updated
 	// configuration apply." - A36
-	var connsToClose map[*connWrapper]bool
-	if l.activeFilterChainManager != nil { // If there is a filter chain manager to clean up.
-		connsToClose = l.conns
-		l.conns = make(map[*connWrapper]bool)
-	}
+	connsToClose := l.conns
+	l.conns = make(map[*connWrapper]bool)
 	l.activeFilterChainManager = l.pendingFilterChainManager
 	l.pendingFilterChainManager = nil
 	l.instantiateFilterChainRoutingConfigurationsLocked()
@@ -348,7 +345,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 	}
 }
 
-func (l *listenerWrapper) RemoveConn(conn *connWrapper) {
+func (l *listenerWrapper) removeConn(conn *connWrapper) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.conns, conn)

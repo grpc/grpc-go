@@ -223,12 +223,10 @@ func (s) TestConnsCleanup(t *testing.T) {
 	server := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 	testgrpc.RegisterTestServiceServer(server, &testService{})
 	wg := sync.WaitGroup{}
-	wg.Add(1)
 	go func() {
 		if err := server.Serve(lw); err != nil {
 			t.Errorf("failed to serve: %v", err)
 		}
-		wg.Done()
 	}()
 
 	// Make 100 connections to the server, and make an RPC on each one.
@@ -238,7 +236,7 @@ func (s) TestConnsCleanup(t *testing.T) {
 			t.Fatalf("grpc.NewClient failed with err: %v", err)
 		}
 		client := testgrpc.NewTestServiceClient(cc)
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("client.EmptyCall() failed: %v", err)
 		}
 		cc.Close()
@@ -247,16 +245,13 @@ func (s) TestConnsCleanup(t *testing.T) {
 	lisWrapper := lw.(*listenerWrapper)
 	// Eventually when the server processes the connection shutdowns, the
 	// listener wrapper should clear its references to the wrapped connections.
-	var lenConns int
-	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+	lenConns := 1
+	for ; ctx.Err() == nil && lenConns > 0; <-time.After(time.Millisecond) {
 		lisWrapper.mu.Lock()
-		if lenConns = len(lisWrapper.conns); lenConns == 0 {
-			lisWrapper.mu.Unlock()
-			break
-		}
+		lenConns = len(lisWrapper.conns)
 		lisWrapper.mu.Unlock()
 	}
-	if ctx.Err() != nil {
+	if lenConns > 0 {
 		t.Fatalf("timeout waiting for lis wrapper conns to clear, size: %v", lenConns)
 	}
 
