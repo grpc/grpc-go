@@ -23,12 +23,18 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -151,5 +157,104 @@ func (s) TestListenerWrapper(t *testing.T) {
 			t.Fatalf("mode change received: %v, want: %v", mode, connectivity.ServingModeNotServing)
 		}
 	}
+}
 
+type testService struct {
+	testgrpc.TestServiceServer
+}
+
+func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	return &testpb.Empty{}, nil
+}
+
+// TestConnsCleanup tests that the listener wrapper clears it's connection
+// references when connections close. It sets up a listener wrapper and gRPC
+// Server, and connects to the server 100 times and makes an RPC each time, and
+// then closes the connection. After these 100 connections Close, the listener
+// wrapper should have no more references to any connections.
+func (s) TestConnsCleanup(t *testing.T) {
+	mgmtServer, nodeID, _, _, xdsC := xdsSetupForTests(t)
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create a local TCP listener: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	modeCh := make(chan connectivity.ServingMode, 1)
+	vm := verifyMode{
+		modeCh: modeCh,
+	}
+
+	host, port := hostPortFromListener(t, lis)
+	lisResourceName := fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port))))
+	params := ListenerWrapperParams{
+		Listener:             lis,
+		ListenerResourceName: lisResourceName,
+		XDSClient:            xdsC,
+		ModeCallback:         vm.verifyModeCallback,
+	}
+	lw := NewListenerWrapper(params)
+	if lw == nil {
+		t.Fatalf("NewListenerWrapper(%+v) returned nil", params)
+	}
+	defer lw.Close()
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, route1)},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for Listener Mode to go serving.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for mode change")
+	case mode := <-modeCh:
+		if mode != connectivity.ServingModeServing {
+			t.Fatalf("mode change received: %v, want: %v", mode, connectivity.ServingModeServing)
+		}
+	}
+
+	server := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	testgrpc.RegisterTestServiceServer(server, &testService{})
+	wg := sync.WaitGroup{}
+	go func() {
+		if err := server.Serve(lw); err != nil {
+			t.Errorf("failed to serve: %v", err)
+		}
+	}()
+
+	// Make 100 connections to the server, and make an RPC on each one.
+	for i := 0; i < 100; i++ {
+		cc, err := grpc.NewClient(lw.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("grpc.NewClient failed with err: %v", err)
+		}
+		client := testgrpc.NewTestServiceClient(cc)
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("client.EmptyCall() failed: %v", err)
+		}
+		cc.Close()
+	}
+
+	lisWrapper := lw.(*listenerWrapper)
+	// Eventually when the server processes the connection shutdowns, the
+	// listener wrapper should clear its references to the wrapped connections.
+	lenConns := 1
+	for ; ctx.Err() == nil && lenConns > 0; <-time.After(time.Millisecond) {
+		lisWrapper.mu.Lock()
+		lenConns = len(lisWrapper.conns)
+		lisWrapper.mu.Unlock()
+	}
+	if lenConns > 0 {
+		t.Fatalf("timeout waiting for lis wrapper conns to clear, size: %v", lenConns)
+	}
+
+	server.Stop()
+	wg.Wait()
 }
