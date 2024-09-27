@@ -351,6 +351,9 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 	// count goes to zero.
 	unref := func() {
 		acbw.producersMu.Lock()
+		// If closeProducers has already closed this producer instance, refs is
+		// set to 0, so the check after decrementing will never pass, and the
+		// producer will not be double-closed.
 		pData.refs--
 		if pData.refs == 0 {
 			defer pData.close() // Run outside the acbw mutex
