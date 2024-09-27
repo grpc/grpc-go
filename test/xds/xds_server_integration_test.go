@@ -25,6 +25,7 @@ import (
 	"net"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -32,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -78,6 +80,19 @@ func testModeChangeServerOption(t *testing.T) grpc.ServerOption {
 	})
 }
 
+// acceptNotifyingListener wraps a listener and notifies users when a server
+// calls the Listener.Accept() method. This can be used to ensure that the
+// server is ready before requests are sent to it.
+type acceptNotifyingListener struct {
+	net.Listener
+	serverReady grpcsync.Event
+}
+
+func (l *acceptNotifyingListener) Accept() (net.Conn, error) {
+	l.serverReady.Fire()
+	return l.Listener.Accept()
+}
+
 // setupGRPCServer performs the following:
 //   - spin up an xDS-enabled gRPC server, configure it with xdsCredentials and
 //     register the test service on it
@@ -110,11 +125,23 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
+	readyLis := &acceptNotifyingListener{
+		Listener:    lis,
+		serverReady: *grpcsync.NewEvent(),
+	}
+
 	go func() {
-		if err := server.Serve(lis); err != nil {
+		if err := server.Serve(readyLis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
+
+	// Wait for the server to start running.
+	select {
+	case <-readyLis.serverReady.Done():
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timed out while waiting for the back end server to start")
+	}
 
 	return lis, func() {
 		server.Stop()
