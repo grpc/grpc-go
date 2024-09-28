@@ -13,8 +13,8 @@ simulate your application:
 ```bash
 $ go run google.golang.org/grpc/benchmark/benchmain/main.go \
     -workloads=streaming \
-  	-reqSizeBytes=1024 \
-  	-respSizeBytes=1024 \
+    -reqSizeBytes=1024 \
+    -respSizeBytes=1024 \
   	-compression=gzip
 ```
 
