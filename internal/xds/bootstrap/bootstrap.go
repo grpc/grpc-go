@@ -222,9 +222,6 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 
 // CredsDialOption returns the first supported transport credentials from the
 // configuration, as a dial option.
-func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
-	return sc.credsDialOption
-}
 
 // DialerOption returns the Dialer function that specifies how to dial the xDS
 // server determined by the first supported credentials from the configuration,
@@ -232,8 +229,13 @@ func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
 //
 // TODO(https://github.com/grpc/grpc-go/issues/7661): change ServerConfig type
 // to have a single method that returns all configured dial options.
-func (sc *ServerConfig) DialerOption() grpc.DialOption {
-	return sc.dialerOption
+
+func (sc *ServerConfig) DialOptions() []grpc.DialOption {
+	dopts := []grpc.DialOption{sc.credsDialOption}
+	if sc.dialerOption != nil {
+		dopts = append(dopts, sc.dialerOption)
+	}
+	return dopts
 }
 
 // Cleanups returns a collection of functions to be called when the xDS client
