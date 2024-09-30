@@ -2845,3 +2845,74 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	isGreetingDone.Store(true)
 	ct.Close(errors.New("manually closed by client"))
 }
+
+type readHangingConn struct {
+	net.Conn
+	hangConn chan struct{}
+	// variable needed to only make read hang when conn is closed
+	closed *atomic.Bool
+}
+
+func (hc *readHangingConn) Read(b []byte) (n int, err error) {
+	n, err = hc.Conn.Read(b)
+	if hc.closed.Load() {
+		<-hc.hangConn // hang the read till we want
+	}
+	return n, err
+}
+
+func (hc *readHangingConn) Close() error {
+	hc.closed.Store(true)
+	err := hc.Conn.Close()
+	return err
+}
+
+// Tests that client does not close untine the reader goroutine exits and closes
+// once reader goroutine returns.
+func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
+	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
+	defer server.stop()
+	addr := resolver.Address{Addr: "localhost:" + server.port}
+	isReaderHanging := &atomic.Bool{}
+	hangConn := make(chan struct{})
+	dialer := func(_ context.Context, addr string) (net.Conn, error) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return &readHangingConn{Conn: conn, hangConn: hangConn, closed: isReaderHanging}, nil
+	}
+	copts := ConnectOptions{Dialer: dialer}
+	copts.ChannelzParent = channelzSubChannel(t)
+	// Create client transport with custom dialer
+	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	if connErr != nil {
+		t.Fatalf("failed to create transport: %v", connErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+
+	transportClosedchan := make(chan struct{})
+	go func() {
+		ct.Close(errors.New("manually closed by client"))
+		close(transportClosedchan)
+	}()
+
+	select {
+	case <-transportClosedchan:
+		t.Fatal("Transport closed before reader completed")
+	case <-time.After(defaultTestTimeout):
+	}
+	close(hangConn)
+	select {
+	case <-transportClosedchan:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for transport to close")
+	}
+}
