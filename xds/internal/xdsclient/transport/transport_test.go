@@ -133,6 +133,7 @@ func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
 	oldGRPCNewClient := internal.GRPCNewClient
 	internal.GRPCNewClient = customGRPCNewClient
 	defer func() { internal.GRPCNewClient = oldGRPCNewClient }()
+
 	dialCalled := make(chan struct{})
 	bootstrap.RegisterCredentials(&testDialerCredsBuilder{dialCalled: dialCalled})
 	serverCfg, err := internalbootstrap.ServerConfigForTesting(internalbootstrap.ServerConfigTestingOptions{
@@ -167,9 +168,7 @@ func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
 	case <-dialCalled:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for dialer")
-
 	}
-
 	// Verify there are three dial options passed to the custom grpc.NewClient.
 	// The first is opts.ServerCfg.CredsDialOption(), the second is
 	// grpc.WithKeepaliveParams(), and the third is opts.ServerCfg.DialerOption()
