@@ -55,11 +55,16 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var childLBConfig serviceconfig.LoadBalancingConfig
+var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
 
 var logger = grpclog.Component("endpoint-sharding-test")
 
 func init() {
+	var err error
+	gracefulSwitchPickFirst, err = ParseConfig(json.RawMessage(PickFirstConfig))
+	if err != nil {
+		logger.Fatal(err)
+	}
 	balancer.Register(fakePetioleBuilder{})
 }
 
@@ -100,7 +105,7 @@ func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) err
 	}
 
 	return fp.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: childLBConfig,
+		BalancerConfig: gracefulSwitchPickFirst,
 		ResolverState:  state.ResolverState,
 	})
 }
@@ -125,11 +130,6 @@ func (fp *fakePetiole) UpdateState(state balancer.State) {
 // It also verifies the petiole has access to the raw child state in case it
 // wants to implement a custom picker.
 func (s) TestEndpointShardingBasic(t *testing.T) {
-	var parseErr error
-	childLBConfig, parseErr = ParseConfig(json.RawMessage(PickFirstConfig))
-	if parseErr != nil {
-		t.Fatalf("Failed to parse child LB config: %v", parseErr)
-	}
 	backend1 := stubserver.StartTestService(t, nil)
 	defer backend1.Stop()
 	backend2 := stubserver.StartTestService(t, nil)
@@ -176,25 +176,33 @@ func (s) TestEndpointShardingStuckConnecting(t *testing.T) {
 		},
 	})
 	childLbJSON := json.RawMessage(fmt.Sprintf(`[{%q: {}}]`, childPolicyName))
-	var parseErr error
-	childLBConfig, parseErr = ParseConfig(childLbJSON)
+	childLBConfig, parseErr := ParseConfig(childLbJSON)
 	if parseErr != nil {
 		t.Fatalf("Failed to parse child LB config: %v", parseErr)
 	}
 	backend1 := stubserver.StartTestService(t, nil)
 	defer backend1.Stop()
-	backend2 := stubserver.StartTestService(t, nil)
-	defer backend2.Stop()
 
 	mr := manual.NewBuilderWithScheme("e2e-test")
 	defer mr.Close()
 
-	json := `{"loadBalancingConfig": [{"fake_petiole":{}}]}`
+	petiolePolicyName := t.Name() + "-petiole"
+	stub.Register(petiolePolicyName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = NewBalancer(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, state balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
+				BalancerConfig: childLBConfig,
+				ResolverState:  state.ResolverState,
+			})
+		},
+	})
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, petiolePolicyName)
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
 	mr.InitialState(resolver.State{
 		Endpoints: []resolver.Endpoint{
 			{Addresses: []resolver.Address{{Addr: backend1.Address}}},
-			{Addresses: []resolver.Address{{Addr: backend2.Address}}},
 		},
 		ServiceConfig: sc,
 	})

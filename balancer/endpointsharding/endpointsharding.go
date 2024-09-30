@@ -116,13 +116,7 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			bal = child.(*balancerWrapper)
 		} else {
 			bal = &balancerWrapper{
-				childState: ChildState{
-					Endpoint: endpoint,
-					State: balancer.State{
-						ConnectivityState: connectivity.Connecting,
-						Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
-					},
-				},
+				childState: ChildState{Endpoint: endpoint},
 				ClientConn: es.cc,
 				es:         es,
 			}
@@ -196,6 +190,7 @@ func (es *endpointSharding) updateState() {
 	defer es.mu.Unlock()
 
 	children := es.children.Load()
+	pickerCount := 0
 	childStates := make([]ChildState, 0, children.Len())
 
 	for _, child := range children.Values() {
@@ -203,6 +198,10 @@ func (es *endpointSharding) updateState() {
 		childState := bw.childState
 		childStates = append(childStates, childState)
 		childPicker := childState.State.Picker
+		if childPicker == nil {
+			continue
+		}
+		pickerCount++
 		switch childState.State.ConnectivityState {
 		case connectivity.Ready:
 			readyPickers = append(readyPickers, childPicker)
@@ -214,6 +213,15 @@ func (es *endpointSharding) updateState() {
 			transientFailurePickers = append(transientFailurePickers, childPicker)
 			// connectivity.Shutdown shouldn't appear.
 		}
+	}
+
+	// If there are no pickers available yet, return a queuing picker.
+	if pickerCount == 0 {
+		es.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Connecting,
+			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+		})
+		return
 	}
 
 	// Construct the round robin picker based off the aggregated state. Whatever
