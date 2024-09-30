@@ -81,7 +81,7 @@ type endpointSharding struct {
 // and sends a single synchronous update of the childrens' aggregated state at
 // the end of the UpdateClientConnState operation. If any endpoint has no
 // addresses or there is a duplicate address amongst the endpoints, returns
-// error without forwarding any updates. Otherwise returns first error found
+// error without forwarding any updates. Otherwise, returns first error found
 // from a child, but fully processes the new update.
 func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Endpoints) == 0 {
@@ -89,7 +89,8 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 	}
 
 	addrs := resolver.NewAddressMap()
-	// Check/return early if any endpoints have no addresses, or there is a duplicate address map.
+	// Check/return early if any endpoints have no addresses, or there is a
+	// duplicate address.
 	// TODO: make this configurable if needed.
 	for i, endpoint := range state.ResolverState.Endpoints {
 		if len(endpoint.Addresses) == 0 {
