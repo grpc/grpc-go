@@ -157,3 +157,26 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 		t.Fatalf("error in expected round robin: %v", err)
 	}
 }
+
+// TestEndpointShardingBalancerAPI tests that when endpoint sharding gets a
+// Client Conn update with a duplicate address across endpoints the
+// UpdateClientConnState operation errors.
+func (s) TestEndpointShardingBalancerAPI(t *testing.T) {
+	es := NewBalancer(nil, balancer.BuildOptions{})
+	addr := resolver.Address{Addr: "addr1"}
+	err := es.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{addr}},
+				{Addresses: []resolver.Address{addr}},
+			},
+		},
+	})
+	wantErr := fmt.Sprintf("duplicate addr %v present in endpoints list", addr)
+	if err == nil {
+		t.Fatalf("es.UpdateClientConnState() got: %v, want: %v", err, wantErr)
+	}
+	if err.Error() != wantErr {
+		t.Fatalf("es.UpdateClientConnState() got: %v, want: %v", err, wantErr)
+	}
+}
