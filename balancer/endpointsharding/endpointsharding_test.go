@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -164,13 +165,13 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 }
 
 // TestEndpointShardingStuckConnecting verifies that the endpointsharding policy
-// handles child polcies that haven't given a picker update correctly and doesn't
-// panic.
+// handles child policies that haven't given a picker update correctly and
+// doesn't panic.
 func (s) TestEndpointShardingStuckConnecting(t *testing.T) {
 	childPolicyName := t.Name()
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		UpdateClientConnState: func(_ *stub.BalancerData, ccs balancer.ClientConnState) error {
-			t.Logf("Ignoring resolver update to remain in CONNECTING: %v", ccs)
+			t.Logf("Not sending any picker update for resolver state: %v", ccs)
 			return nil
 		},
 	})
@@ -198,7 +199,7 @@ func (s) TestEndpointShardingStuckConnecting(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to dial: %v", err)
 	}
@@ -207,9 +208,13 @@ func (s) TestEndpointShardingStuckConnecting(t *testing.T) {
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Even though the child LB policy hasn't given an picker updates, it is
-	// assumted that it's in CONNECTING state.
+	// Even though the child LB policy hasn't given a picker update, it is
+	// assumed to be in CONNECTING.
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("EmptyCall() = %s, want %s", status.Code(err), codes.DeadlineExceeded)
+	}
+
+	if got, want := cc.GetState(), connectivity.Connecting; got != want {
+		t.Errorf("ClientConn.GetState() = %v, want = %v", got, want)
 	}
 }
