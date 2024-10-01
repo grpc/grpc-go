@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -158,25 +159,62 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	}
 }
 
-// TestEndpointShardingBalancerAPI tests that when endpoint sharding gets a
-// Client Conn update with a duplicate address across endpoints the
-// UpdateClientConnState operation errors.
-func (s) TestEndpointShardingBalancerAPI(t *testing.T) {
-	es := NewBalancer(nil, balancer.BuildOptions{})
-	addr := resolver.Address{Addr: "addr1"}
-	err := es.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Endpoints: []resolver.Endpoint{
-				{Addresses: []resolver.Address{addr}},
-				{Addresses: []resolver.Address{addr}},
+// TestEndpointShardingBalancerResolverAddresses tests different scenarios of
+// resolver addresses being updated to the endpoint sharding balancer. Some
+// should cause errors and some shouldn't.
+func (s) TestEndpointShardingBalancerResolverAddresses(t *testing.T) {
+	addr1 := resolver.Address{Addr: "addr1"}
+	addr2 := resolver.Address{Addr: "addr2"}
+	addr3 := resolver.Address{Addr: "addr3"}
+	addr4 := resolver.Address{Addr: "addr4"}
+	tests := []struct {
+		name      string
+		endpoints []resolver.Endpoint
+		wantErr   bool
+	}{
+		{
+			name: "duplicate-address-across-endpoints",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{addr1}},
+				{Addresses: []resolver.Address{addr1}},
 			},
+			wantErr: true,
 		},
-	})
-	wantErr := fmt.Sprintf("duplicate addr %v present in endpoints list", addr)
-	if err == nil {
-		t.Fatalf("es.UpdateClientConnState() got: %v, want: %v", err, wantErr)
+		{
+			name: "duplicate-address-across-endpoints-plural-addresses",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{addr1, addr2, addr3}},
+				{Addresses: []resolver.Address{addr3, addr4}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no-shared-addresses",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{addr1, addr2}},
+				{Addresses: []resolver.Address{addr3, addr4}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "endpoint-with-no-addresses",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{addr1, addr2}},
+				{Addresses: []resolver.Address{}},
+			},
+			wantErr: true,
+		},
 	}
-	if err.Error() != wantErr {
-		t.Fatalf("es.UpdateClientConnState() got: %v, want: %v", err, wantErr)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			es := NewBalancer(testutils.NewBalancerClientConn(t), balancer.BuildOptions{})
+			err := es.UpdateClientConnState(balancer.ClientConnState{
+				ResolverState:  resolver.State{Endpoints: test.endpoints},
+				BalancerConfig: gracefulSwitchPickFirst,
+			})
+			if (err != nil) != test.wantErr {
+				t.Fatalf("es.UpdateClientConnState() wantErr: %v, got: %v", test.wantErr, err)
+			}
+		})
 	}
 }
