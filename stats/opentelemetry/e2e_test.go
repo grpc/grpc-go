@@ -19,6 +19,7 @@ package opentelemetry_test
 import (
 	"context"
 	"fmt"
+
 	"io"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
 )
 
-const defaultTestTimeout = 5 * time.Second
+var defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester

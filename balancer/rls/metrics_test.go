@@ -59,7 +59,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 	rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
 	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, empty *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -172,7 +172,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 	// Build RLS service config with a default target.
 	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, empty *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
