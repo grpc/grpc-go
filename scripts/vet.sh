@@ -71,7 +71,7 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 not git grep '[[:blank:]]$'
 
 # - Check for tabs in Markdown files
-not git grep $'\t' -- '*.md' | fail_on_output
+not git grep $'\t' -- '*.md'
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
