@@ -70,7 +70,7 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 # - Ensure that no trailing spaces are found.
 not git grep '[[:blank:]]$'
 
-# - Check for tabs in Markdown files
+# - Ensure that no tabs are found in markdown files.
 not git grep $'\t' -- '*.md'
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
