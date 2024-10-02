@@ -60,14 +60,11 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	streamResponseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			streamRequestCh.Send(req)
+			streamRequestCh.SendContext(ctx, req)
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
-			// The go-control-plane management server continuously resends the
-			// same resource if NACKed by the client. Hence, we need to use
-			// `Replace` here instead of `Send`.
-			streamResponseCh.Replace(resp)
+			streamResponseCh.SendContext(ctx, resp)
 		},
 	})
 
@@ -242,11 +239,11 @@ func (s) TestADS_ACK_NACK_InvalidFirstResponse(t *testing.T) {
 	streamResponseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			streamRequestCh.Send(req)
+			streamRequestCh.SendContext(ctx, req)
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
-			streamResponseCh.Send(resp)
+			streamResponseCh.SendContext(ctx, resp)
 		},
 	})
 
@@ -347,11 +344,11 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	streamResponseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			streamRequestCh.Send(req)
+			streamRequestCh.SendContext(ctx, req)
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
-			streamResponseCh.Send(resp)
+			streamResponseCh.SendContext(ctx, resp)
 		},
 	})
 
