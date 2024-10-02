@@ -26,8 +26,9 @@ const DefaultChanBufferSize = 1
 
 // Channel wraps a generic channel and provides a timed receive operation.
 type Channel struct {
-	// C is the underlying channel on which values sent using the SendXxx() methods are delivered.
-	// Tests which cannot use ReceiveXxx() for whatever reasons can use C to read the values.
+	// C is the underlying channel on which values sent using the SendXxx()
+	// methods are delivered. Tests which cannot use ReceiveXxx() for whatever
+	// reasons can use C to read the values.
 	C chan any
 }
 
