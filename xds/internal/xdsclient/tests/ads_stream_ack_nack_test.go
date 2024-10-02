@@ -246,10 +246,7 @@ func (s) TestADS_ACK_NACK_InvalidFirstResponse(t *testing.T) {
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
-			// The go-control-plane management server continuously resends the
-			// same resource if NACKed by the client. Hence, we need to use
-			// `Replace` here instead of `Send`.
-			streamResponseCh.Replace(resp)
+			streamResponseCh.Send(resp)
 		},
 	})
 
@@ -354,10 +351,7 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
-			// The go-control-plane management server continuously resends the
-			// same resource if NACKed by the client. Hence, we need to use
-			// `Replace` here instead of `Send`.
-			streamResponseCh.Replace(resp)
+			streamResponseCh.Send(resp)
 		},
 	})
 
