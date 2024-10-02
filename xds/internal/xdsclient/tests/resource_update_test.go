@@ -54,15 +54,17 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
-// startFakeManagementServer starts a fake xDS management server and returns a
+// startFakeManagementServer starts a fake xDS management server and registers a
 // cleanup function to close the fake server.
-func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
+func startFakeManagementServer(t *testing.T) *fakeserver.Server {
 	t.Helper()
-	fs, sCleanup, err := fakeserver.StartServer(nil)
+	fs, cleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
-	return fs, sCleanup
+	t.Logf("Started xDS management server on %s", fs.Address)
+	t.Cleanup(cleanup)
+	return fs
 }
 
 func compareUpdateMetadata(ctx context.Context, dumpFunc func() *v3statuspb.ClientStatusResponse, want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
@@ -276,9 +278,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Create a fake xDS management server listening on a local port,
 			// and set it up with the response to send.
-			mgmtServer, cleanup := startFakeManagementServer(t)
-			defer cleanup()
-			t.Logf("Started xDS management server on %s", mgmtServer.Address)
+			mgmtServer := startFakeManagementServer(t)
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -292,7 +292,6 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
-			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// Register a watch, and push the results on to a channel.
 			lw := newListenerWatcher()
@@ -555,9 +554,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Create a fake xDS management server listening on a local port,
 			// and set it up with the response to send.
-			mgmtServer, cleanup := startFakeManagementServer(t)
-			defer cleanup()
-			t.Logf("Started xDS management server on %s", mgmtServer.Address)
+			mgmtServer := startFakeManagementServer(t)
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -571,7 +568,6 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
-			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// Register a watch, and push the results on to a channel.
 			rw := newRouteConfigWatcher()
@@ -795,9 +791,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Create a fake xDS management server listening on a local port,
 			// and set it up with the response to send.
-			mgmtServer, cleanup := startFakeManagementServer(t)
-			defer cleanup()
-			t.Logf("Started xDS management server on %s", mgmtServer.Address)
+			mgmtServer := startFakeManagementServer(t)
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -811,7 +805,6 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
-			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// Register a watch, and push the results on to a channel.
 			cw := newClusterWatcher()
@@ -1147,9 +1140,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			// Create a fake xDS management server listening on a local port,
 			// and set it up with the response to send.
-			mgmtServer, cleanup := startFakeManagementServer(t)
-			defer cleanup()
-			t.Logf("Started xDS management server on %s", mgmtServer.Address)
+			mgmtServer := startFakeManagementServer(t)
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -1163,7 +1154,6 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
 			defer close()
-			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// Register a watch, and push the results on to a channel.
 			ew := newEndpointsWatcher()
