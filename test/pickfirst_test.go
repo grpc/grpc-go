@@ -47,6 +47,8 @@ import (
 
 const pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 
+type shuffler = func(n int, swap func(i, j int))
+
 // setupPickFirst performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, creates a ClientConn to them
 // with service config specifying the use of the pick_first LB policy.
@@ -377,16 +379,17 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
 
 	// Install a shuffler that always reverses two entries.
-	origShuf := internal.ShuffleAddressListForTesting
-	defer func() { internal.ShuffleAddressListForTesting = origShuf }()
-	internal.ShuffleAddressListForTesting = func(n int, f func(int, int)) {
+	newShuffler := func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return
 		}
 		f(0, 1) // reverse the two addresses
 	}
-
+	origShuf := internal.ShuffleAddressListForTesting.(func(sf shuffler) shuffler)(newShuffler)
+	defer func() {
+		internal.ShuffleAddressListForTesting.(func(sf shuffler) shuffler)(origShuf)
+	}()
 	// Set up our backends.
 	cc, r, backends := setupPickFirst(t, 2)
 	addrs := stubBackendsToResolverAddrs(backends)
@@ -434,15 +437,17 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 // Test config parsing with the env var turned on and off for various scenarios.
 func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 	// Install a shuffler that always reverses two entries.
-	origShuf := internal.ShuffleAddressListForTesting
-	defer func() { internal.ShuffleAddressListForTesting = origShuf }()
-	internal.ShuffleAddressListForTesting = func(n int, f func(int, int)) {
+	newShuffler := func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return
 		}
 		f(0, 1) // reverse the two addresses
 	}
+	origShuf := internal.ShuffleAddressListForTesting.(func(sf shuffler) shuffler)(newShuffler)
+	defer func() {
+		internal.ShuffleAddressListForTesting.(func(sf shuffler) shuffler)(origShuf)
+	}()
 
 	tests := []struct {
 		name          string
