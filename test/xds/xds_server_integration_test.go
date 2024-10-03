@@ -140,7 +140,7 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 	select {
 	case <-readyLis.serverReady.Done():
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("Timed out while waiting for the back end server to start")
+		t.Fatalf("Timed out while waiting for the backend server to start serving")
 	}
 
 	return lis, func() {
