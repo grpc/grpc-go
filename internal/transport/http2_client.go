@@ -527,8 +527,9 @@ func (t *http2Client) getPeer() *peer.Peer {
 // to be the last frame loopy writes to the transport.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if err := t.framer.fr.WriteGoAway(t.nextID-2, http2.ErrCodeNo, g.debugData); err != nil {
+	maxStreamID := t.nextID - 2
+	t.mu.Unlock()
+	if err := t.framer.fr.WriteGoAway(maxStreamID, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
 	return false, g.closeConn
@@ -1012,7 +1013,7 @@ func (t *http2Client) Close(err error) {
 
 	// Append info about previous goaways if there were any, since this may be important
 	// for understanding the root cause for this connection to be closed.
-	_, goAwayDebugMessage := t.GetGoAwayReason()
+	goAwayDebugMessage := t.goAwayDebugMessage
 
 	var st *status.Status
 	if len(goAwayDebugMessage) > 0 {
