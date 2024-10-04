@@ -331,7 +331,7 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// Create an xDS management server listening on a local port.
 	l, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("Failed to create a local listener for the xDS management server: %v", err)
+		t.Fatalf("Failed to create a local listener: %v", err)
 	}
 	lis := testutils.NewRestartableListener(l)
 	streamErr := errors.New("ADS stream error")
