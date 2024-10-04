@@ -775,10 +775,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 		}
 	}
 
-	var balCfg serviceconfig.LoadBalancingConfig
-	if cc.sc != nil && cc.sc.lbConfig != nil {
-		balCfg = cc.sc.lbConfig
-	}
+	balCfg := cc.sc.lbConfig
 	bw := cc.balancerWrapper
 	cc.mu.Unlock()
 
