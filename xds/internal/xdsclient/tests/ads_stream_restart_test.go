@@ -173,6 +173,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName}); err != nil {
 		t.Fatal(err)
 	}
+	defer ldsCancel()
 
 	// Create a cluster resource on the management server, in addition to the
 	// existing listener resource.
@@ -232,7 +233,6 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	case names := <-cdsResourcesCh:
 		t.Fatalf("CDS request sent for resource names %v, when expecting no request", names)
 	}
-
 }
 
 // waitForResourceNames waits for the wantNames to be received on namesCh.
