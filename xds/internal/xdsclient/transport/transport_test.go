@@ -96,6 +96,8 @@ const testDialerCredsBuilderName = "test_dialer_creds"
 // package `xds/bootstrap` and encapsulates an insecure credential with a
 // custom Dialer that specifies how to dial the xDS server.
 type testDialerCredsBuilder struct {
+	// Closed with the custom Dialer is invoked.
+	// Needs to be passed in by the test.
 	dialCalled chan struct{}
 }
 
@@ -167,7 +169,7 @@ func (s) TestNewWithDialerFromCredentialsBundle(t *testing.T) {
 	select {
 	case <-dialCalled:
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for dialer")
+		t.Fatal("Timeout when waiting for Dialer() to be invoked")
 	}
 	// Verify there are three dial options passed to the custom grpc.NewClient.
 	// The first is opts.ServerCfg.CredsDialOption(), the second is
