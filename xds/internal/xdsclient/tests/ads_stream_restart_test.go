@@ -230,7 +230,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	select {
 	case <-sCtx.Done():
 	case names := <-cdsResourcesCh:
-		t.Fatalf("LDS request sent for resource names %v, when expecting no request", names)
+		t.Fatalf("CDS request sent for resource names %v, when expecting no request", names)
 	}
 
 }
@@ -240,15 +240,16 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) error {
 	t.Helper()
 
+	var gotNames []string
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		select {
 		case <-ctx.Done():
-		case gotNames := <-namesCh:
+		case gotNames = <-namesCh:
 			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
 				return nil
 			}
 			t.Logf("Received resource names %v, want %v", gotNames, wantNames)
 		}
 	}
-	return fmt.Errorf("timeout waiting for resource to be requested from the management server")
+	return fmt.Errorf("timeout waiting expected resources to be requested. Last requested: %v, want: %v", gotNames, wantNames)
 }
