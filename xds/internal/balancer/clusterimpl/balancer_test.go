@@ -943,8 +943,8 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	}
 }
 
-// TestPickerUpdatedSynchronouslyOnConfigUpdate covers the case picker is updated
-// synchronous on receipt of configuration update.
+// Test verify that the case picker is updated synchronously on receipt of
+// configuration update.
 func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	// Override the newConfigHook to ensure picker was updated.
 	clientConnUpdateDone := make(chan struct{}, 1)

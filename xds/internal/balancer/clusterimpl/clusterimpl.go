@@ -105,9 +105,9 @@ type clusterImplBalancer struct {
 	lrsServer        *bootstrap.ServerConfig
 	loadWrapper      *loadstore.Wrapper
 
-	// Set during UpdateClientConnState when pushing updates to child policies.
-	// Prevents state updates from child policies causing new pickers to be sent
-	// up the channel. Cleared after all child policies have processed the
+	// Set during UpdateClientConnState when pushing updates to child policy.
+	// Prevents state updates from child policy causing new pickers to be sent
+	// up the channel. Cleared after child policy have processed the
 	// updates sent to them, after which a new picker is sent up the channel.
 	inhibitPickerUpdates bool
 
@@ -120,7 +120,7 @@ type clusterImplBalancer struct {
 	// childState/drops/requestCounter keeps the state used by the most recently
 	// generated picker.
 	childState            balancer.State
-	mu                    sync.Mutex
+	mu                    sync.Mutex   // guards childState and inhibitPickerUpdates
 	dropCategories        []DropConfig // The categories for drops.
 	drops                 []*dropper
 	requestCounterCluster string // The cluster name for the request counter.
@@ -348,14 +348,17 @@ func (b *clusterImplBalancer) UpdateState(state balancer.State) {
 		b.mu.Unlock()
 		return
 	}
+	// New picker needs to be generated before we release b.mu as b.newPicker
+	// access b.childState.
+	picker := b.newPicker(&dropConfigs{
+		drops:           b.drops,
+		requestCounter:  b.requestCounter,
+		requestCountMax: b.requestCountMax,
+	})
 	b.mu.Unlock()
 	b.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: state.ConnectivityState,
-		Picker: b.newPicker(&dropConfigs{
-			drops:           b.drops,
-			requestCounter:  b.requestCounter,
-			requestCountMax: b.requestCountMax,
-		}),
+		Picker:            picker,
 	})
 }
 
