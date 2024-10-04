@@ -47,7 +47,7 @@ import (
 //  2. When a subsequent bad response is received, i.e. once is expected to be
 //     NACKed, the test verifies that a NACK is sent matching the previously
 //     ACKed version and current nonce from the response.
-//  3. When a subsequent goos response is received, the test verifies that an
+//  3. When a subsequent good response is received, the test verifies that an
 //     ACK is sent matching the version and nonce from the current response.
 func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -55,7 +55,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 	// Create an xDS management server listening on a local port. Configure the
 	// request and response handlers to push on channels that are inspected by
-	// the test goroutine to verify ack version and nonce.
+	// the test goroutine to verify ACK version and nonce.
 	streamRequestCh := testutils.NewChannel()
 	streamResponseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -161,7 +161,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	}
 	gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
-	var wantNackErr = errors.New("unexpected http connection manager resource type")
+	wantNackErr := errors.New("unexpected http connection manager resource type")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	// We expect the version to not change as this is a NACK.
 	r, err = streamRequestCh.Receive(ctx)
 	if err != nil {
-		t.Fatal("Timeout when waiting for ACK")
+		t.Fatal("Timeout when waiting for NACK")
 	}
 	gotReq = r.(*v3discoverypb.DiscoveryRequest)
 	if gotNonce, wantNonce := gotReq.GetResponseNonce(), gotResp.GetNonce(); gotNonce != wantNonce {
@@ -214,15 +214,16 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	}
 
 	// Verify the update received by the watcher.
+	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
 		if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
-			t.Logf("Failed to verify listener update, err: %v", err)
+			lastErr = err
 			continue
 		}
 		break
 	}
 	if ctx.Err() != nil {
-		t.Fatal("Timeout when waiting for listener update")
+		t.Fatalf("Timeout when waiting for listener update. Last seen error: %v", lastErr)
 	}
 }
 
@@ -234,7 +235,7 @@ func (s) TestADS_ACK_NACK_InvalidFirstResponse(t *testing.T) {
 
 	// Create an xDS management server listening on a local port. Configure the
 	// request and response handlers to push on channels that are inspected by
-	// the test goroutine to verify ack version and nonce.
+	// the test goroutine to verify ACK version and nonce.
 	streamRequestCh := testutils.NewChannel()
 	streamResponseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -339,7 +340,7 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Create an xDS management server listening on a local port. Configure the
 	// request and response handlers to push on channels that are inspected by
-	// the test goroutine to verify ack version and nonce.
+	// the test goroutine to verify ACK version and nonce.
 	streamRequestCh := testutils.NewChannel()
 	streamResponseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
