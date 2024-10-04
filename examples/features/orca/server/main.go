@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server demonstrates how to implement ORCA for reporting out-of-band
+// Binary server demonstrates how to use ORCA for reporting out-of-band
 // and per-RPC load metrics.
 package main
 

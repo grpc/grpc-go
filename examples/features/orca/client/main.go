@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client demonstrates how to handle ORCA metrics for load reporting.
+// Binary client demonstrates the use of a custom LB policy that handles ORCA
+// per-call and out-of-band metrics for load reporting.
 package main
 
 import (

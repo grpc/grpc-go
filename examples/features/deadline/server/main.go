@@ -16,8 +16,8 @@
  *
  */
 
-// Binary server demonstrates how to handle RPCs with deadlines and propagate
-// deadlines in requests.
+// Binary server demonstrates how to handle RPCs with deadlines and how to
+// propagate deadlines in requests.
 package main
 
 import (

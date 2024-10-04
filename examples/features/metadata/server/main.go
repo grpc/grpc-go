@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server demonstrates how to read and set metadata to and from RPCs.
+// Binary server demonstrates how to send and read metadata to and from RPCs.
 package main
 
 import (

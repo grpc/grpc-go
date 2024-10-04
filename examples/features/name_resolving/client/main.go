@@ -16,8 +16,8 @@
  *
  */
 
-// Binary client demonstrates how to use different name resolvers to connect
-// to a server.
+// Binary client demonstrates how to use custom name resolvers to resolve
+// server backend addresses.
 package main
 
 import (
