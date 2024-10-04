@@ -73,6 +73,14 @@ func (wl *wrappedListener) Accept() (net.Conn, error) {
 	return c, err
 }
 
+// Tests a load reporting scenario where the xDS client is reporting loads to
+// multiple servers. Verifies the following:
+//   - calling the load reporting API with different server configuration
+//     results in connections being created to those corresponding servers
+//   - the same load.Store is not returned when the load reporting API called
+//     with different server configurations
+//   - canceling the load reporting from the client results in the LRS stream
+//     being canceled on the server
 func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -107,7 +115,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 
 	// Create an xDS client with a bootstrap configuration that contains both of
 	// the above two servers. The authority name is immaterial here since load
-	// reporting is per-server and not per-authority/
+	// reporting is per-server and not per-authority.
 	nodeID := uuid.New().String()
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
@@ -128,34 +136,34 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 	client := createXDSClient(t, bc)
 
-	// Call the load reporting API to report load to the first management
-	// server, and ensure that a connection to the server is created.
 	serverCfg1, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer1.Address})
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
+	// Call the load reporting API to report load to the first management
+	// server, and ensure that a connection to the server is created.
 	store1, lrsCancel1 := client.ReportLoad(serverCfg1)
 	defer lrsCancel1()
 	if _, err := newConnChan1.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for a connection to the first management server, after starting load reporting")
 	}
 	if _, err := mgmtServer1.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
+		t.Fatal("Timeout when waiting for LRS stream to be created")
 	}
 
-	// Call the load reporting API to report load to the second management
-	// server, and ensure that a connection to the server is created.
 	serverCfg2, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer2.Address})
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
+	// Call the load reporting API to report load to the second management
+	// server, and ensure that a connection to the server is created.
 	store2, lrsCancel2 := client.ReportLoad(serverCfg2)
 	defer lrsCancel2()
 	if _, err := newConnChan2.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for a connection to the second management server, after starting load reporting")
 	}
 	if _, err := mgmtServer2.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
+		t.Fatal("Timeout when waiting for LRS stream to be created")
 	}
 
 	if store1 == store2 {
@@ -223,21 +231,31 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	// Server should receive a stream canceled error. There may be additional
 	// load reports from the client in the channel.
 	for {
+		if ctx.Err() != nil {
+			t.Fatal("Timeout when waiting for the LRS stream to be canceled on the server")
+		}
 		u, err := lrsServer.LRSRequestChan.Receive(ctx)
 		if err != nil {
-			t.Fatalf("Timeout when reading LRS request: %v", err)
+			continue
 		}
 		// Ignore load reports sent before the stream was cancelled.
 		if u.(*fakeserver.Request).Err == nil {
 			continue
 		}
 		if status.Code(u.(*fakeserver.Request).Err) != codes.Canceled {
-			t.Errorf("Unexpected LRS request: %v, want error canceled", u)
+			t.Fatalf("Unexpected LRS request: %v, want error canceled", u)
 		}
 		break
 	}
 }
 
+// Tests a load reporting scenario where the load reporting API is called
+// multiple times for the same server. The test verifies the following:
+//   - calling the load reporting API the second time for the same server
+//     configuration does not create a new LRS stream
+//   - the LRS stream is closed *only* after all the API calls invoke their
+//     cancel functions
+//   - creating new streams after the previous one was closed works
 func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -300,7 +318,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	// Ensure that loads are seen on the server.
 	req, err = lrsServer.LRSRequestChan.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Timeout when waiting for LRS request with loads: %v", err)
+		t.Fatal("Timeout when waiting for LRS request with loads")
 	}
 	gotLoad := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
 	if l := len(gotLoad); l != 1 {
