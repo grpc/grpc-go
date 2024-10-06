@@ -142,7 +142,7 @@ func (s) TestSet(t *testing.T) {
 			if !sameElements(gotKeys, tt.wantKeys) {
 				t.Fatalf("got keys %v, want %v", gotKeys, tt.wantKeys)
 			}
-			gotMD, _ := metadata.FromOutgoingContext(*c.Ctx)
+			gotMD, _ := metadata.FromOutgoingContext(*c.Context())
 			if gotMD.Get(tt.setKey)[0] != tt.setValue {
 				t.Fatalf("got value %s, want %s, for key %s", gotMD.Get(tt.setKey)[0], tt.setValue, tt.setKey)
 			}
@@ -156,9 +156,9 @@ func (s) TestGetBinary(t *testing.T) {
 		want := []byte{0x01, 0x02, 0x03}
 		ctx, cancel := context.WithCancel(context.Background())
 		c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
-		got, err := c.GetBinary()
-		if err != nil {
-			t.Fatalf("got error %v, want nil", err)
+		got := c.GetBinary()
+		if got == nil {
+			t.Fatalf("got nil, want %v", got)
 		}
 		if string(got) != string(want) {
 			t.Fatalf("got %s, want %s", got, want)
@@ -169,9 +169,9 @@ func (s) TestGetBinary(t *testing.T) {
 	t.Run("get non grpc-trace-bin header", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		c := NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.Pairs("non-trace-bin", "\x01\x02\x03")))
-		_, err := c.GetBinary()
-		if err == nil {
-			t.Fatalf("got nil error, want error")
+		got := c.GetBinary()
+		if got != nil {
+			t.Fatalf("got %v, want nil", got)
 		}
 		cancel()
 	})
@@ -183,7 +183,7 @@ func (s) TestSetBinary(t *testing.T) {
 		want := []byte{0x01, 0x02, 0x03}
 		c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
 		c.SetBinary(want)
-		got := stats.OutgoingTrace(*c.Ctx)
+		got := stats.OutgoingTrace(*c.Context())
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("got %v, want %v", got, want)
 		}
@@ -193,7 +193,7 @@ func (s) TestSetBinary(t *testing.T) {
 	t.Run("set non grpc-trace-bin header", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{"non-trace-bin": []string{"value"}}))
-		got := stats.OutgoingTrace(*c.Ctx)
+		got := stats.OutgoingTrace(*c.Context())
 		if got != nil {
 			t.Fatalf("got %v, want nil", got)
 		}
