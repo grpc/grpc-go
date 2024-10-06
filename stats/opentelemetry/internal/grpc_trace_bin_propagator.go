@@ -22,111 +22,117 @@ import (
 	"context"
 	"encoding/base64"
 
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
-	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
+	otelpropagation "go.opentelemetry.io/otel/propagation"
+	oteltrace "go.opentelemetry.io/otel/trace"
+	internaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
 // TODO: Move out of internal as part of open telemetry API
 
-// GRPCTraceBinPropagator is TextMapPropagator to propagate cross-cutting
-// concerns as both text and binary key-value pairs within a carrier that
-// travels in-band across process boundaries.
+// GRPCTraceBinPropagator is an OpenTelemetry TextMapPropagator which is used
+// to extract and inject trace context data from and into messages exchanged by
+// gRPC applications. It propagates trace data in binary format using the
+// 'grpc-trace-bin' header.
 type GRPCTraceBinPropagator struct{}
 
-// Inject set cross-cutting concerns from the Context into the carrier.
+// Inject sets OpenTelemetry trace context information from the Context into
+// the carrier.
 //
-// If carrier is carrier.CustomMapCarrier then SetBinary (fast path) is used,
-// otherwise Set (slow path) with encoding is used.
-func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier propagation.TextMapCarrier) {
-	span := trace.SpanFromContext(ctx)
+// If the carrier is a CustomCarrier, trace data is directly injected in a
+// binary format using the 'grpc-trace-bin' header (fast path). Otherwise,
+// the trace data is base64 encoded and injected using the same header in
+// text format (slow path).
+func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagation.TextMapCarrier) {
+	span := oteltrace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
 		return
 	}
 
-	binaryData := Binary(span.SpanContext())
-	if binaryData == nil {
+	bd := Binary(span.SpanContext())
+	if bd == nil {
 		return
 	}
 
-	if customCarrier, ok := carrier.(otelinternaltracing.CustomCarrier); ok {
-		customCarrier.SetBinary(binaryData) // fast path: set the binary data without encoding
-	} else {
-		carrier.Set(otelinternaltracing.GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(binaryData)) // slow path: set the binary data with encoding
+	if cc, ok := carrier.(internaltracing.CustomCarrier); ok {
+		cc.SetBinary(bd)
+		return
 	}
+	carrier.Set(internaltracing.GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(bd))
 }
 
-// Extract reads cross-cutting concerns from the carrier into a Context.
+// Extract reads OpenTelemetry trace context information from the carrier into a
+// Context.
 //
-// If carrier is carrier.CustomCarrier then GetBinary (fast path) is used,
-// otherwise Get (slow path) with decoding is used.
-func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
-	var binaryData []byte
+// If the carrier is a CustomCarrier, trace data is read directly in a binary
+// format from the 'grpc-trace-bin' header (fast path). Otherwise, the trace
+// data is base64 decoded from the same header in text format (slow path).
+func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
+	var bd []byte
 
-	if customCarrier, ok := carrier.(otelinternaltracing.CustomCarrier); ok {
-		binaryData, _ = customCarrier.GetBinary()
+	if cc, ok := carrier.(internaltracing.CustomCarrier); ok {
+		bd = cc.GetBinary()
 	} else {
-		binaryData, _ = base64.StdEncoding.DecodeString(carrier.Get(otelinternaltracing.GRPCTraceBinHeaderKey))
+		bd, _ = base64.StdEncoding.DecodeString(carrier.Get(internaltracing.GRPCTraceBinHeaderKey))
 	}
-	if binaryData == nil {
+	if bd == nil {
 		return ctx
 	}
 
-	spanContext, ok := FromBinary([]byte(binaryData))
+	spanContext, ok := FromBinary([]byte(bd))
 	if !ok {
 		return ctx
 	}
 
-	return trace.ContextWithRemoteSpanContext(ctx, spanContext)
+	return oteltrace.ContextWithRemoteSpanContext(ctx, spanContext)
 }
 
-// Fields returns the keys whose values are set with Inject.
-//
-// GRPCTraceBinPropagator will only have `grpc-trace-bin` field.
+// Fields always returns a slice containing only `grpc-trace-bin` header key
+// because the GRPCTraceBinPropagator only uses the 'grpc-trace-bin' header for
+// propagating trace context.
 func (p GRPCTraceBinPropagator) Fields() []string {
-	return []string{otelinternaltracing.GRPCTraceBinHeaderKey}
+	return []string{internaltracing.GRPCTraceBinHeaderKey}
 }
 
 // Binary returns the binary format representation of a SpanContext.
 //
-// If sc is the zero value, Binary returns nil.
-func Binary(sc trace.SpanContext) []byte {
-	if sc.Equal(trace.SpanContext{}) {
+// If sc is the zero value, returns nil.
+func Binary(sc oteltrace.SpanContext) []byte {
+	if sc.Equal(oteltrace.SpanContext{}) {
 		return nil
 	}
 	var b [29]byte
-	traceID := trace.TraceID(sc.TraceID())
+	traceID := oteltrace.TraceID(sc.TraceID())
 	copy(b[2:18], traceID[:])
 	b[18] = 1
-	spanID := trace.SpanID(sc.SpanID())
+	spanID := oteltrace.SpanID(sc.SpanID())
 	copy(b[19:27], spanID[:])
 	b[27] = 2
-	b[28] = uint8(trace.TraceFlags(sc.TraceFlags()))
+	b[28] = uint8(oteltrace.TraceFlags(sc.TraceFlags()))
 	return b[:]
 }
 
 // FromBinary returns the SpanContext represented by b.
 //
 // If b has an unsupported version ID or contains no TraceID, FromBinary
-// returns with ok==false.
-func FromBinary(b []byte) (sc trace.SpanContext, ok bool) {
+// returns with zero value SpanContext and false.
+func FromBinary(b []byte) (oteltrace.SpanContext, bool) {
 	if len(b) == 0 || b[0] != 0 {
-		return trace.SpanContext{}, false
+		return oteltrace.SpanContext{}, false
 	}
 	b = b[1:]
-
-	if len(b) >= 17 && b[0] == 0 {
-		sc = sc.WithTraceID(trace.TraceID(b[1:17]))
-		b = b[17:]
-	} else {
-		return trace.SpanContext{}, false
+	if len(b) < 17 || b[0] != 0 {
+		return oteltrace.SpanContext{}, false
 	}
+
+	sc := oteltrace.SpanContext{}
+	sc = sc.WithTraceID(oteltrace.TraceID(b[1:17]))
+	b = b[17:]
 	if len(b) >= 9 && b[0] == 1 {
-		sc = sc.WithSpanID(trace.SpanID(b[1:9]))
+		sc = sc.WithSpanID(oteltrace.SpanID(b[1:9]))
 		b = b[9:]
 	}
 	if len(b) >= 2 && b[0] == 2 {
-		sc = sc.WithTraceFlags(trace.TraceFlags(b[1]))
+		sc = sc.WithTraceFlags(oteltrace.TraceFlags(b[1]))
 	}
 	return sc, true
 }
