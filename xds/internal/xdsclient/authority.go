@@ -247,9 +247,12 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				state.deletionIgnored = false
 				a.logger.Infof("A valid update was received for resource %q of type %q after previously ignoring a deletion", name, rType.TypeName())
 			}
-			// Notify watchers only if this is a first time update or it is different
-			// from the one currently cached.
-			if state.cache == nil || !state.cache.Equal(uErr.resource) {
+			// Notify watchers if any of these conditions are met:
+			//   - this is the first update for this resource
+			//   - this update is different from the one currently cached
+			//   - the previous update for this resource was NACKed, but the update
+			//     before that was the same as this update.
+			if state.cache == nil || !state.cache.Equal(uErr.resource) || state.md.ErrState != nil {
 				for watcher := range state.watchers {
 					watcher := watcher
 					resource := uErr.resource
