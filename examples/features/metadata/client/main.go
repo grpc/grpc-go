@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client demonstrates how to send and receive metadata to and from RPC.
+// Binary client demonstrates how to send and receive metadata to and from an RPC.
 package main
 
 import (
