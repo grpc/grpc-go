@@ -146,8 +146,8 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	// Create two stats.Handlers which also implement MetricsRecorder, configure
 	// one as a global dial option and one as a local dial option.
-	mr1 := stats.NewTestMetricsRecorder(t)
-	mr2 := stats.NewTestMetricsRecorder(t)
+	mr1 := stats.NewTestMetricsRecorder()
+	mr2 := stats.NewTestMetricsRecorder()
 
 	defer internal.ClearGlobalDialOptions()
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(mr1))
@@ -172,8 +172,12 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		LabelKeys: []string{"int counter label", "int counter optional label"},
 		LabelVals: []string{"int counter label val", "int counter optional label val"},
 	}
-	mr1.WaitForInt64Count(ctx, mdWant)
-	mr2.WaitForInt64Count(ctx, mdWant)
+	if err := mr1.WaitForInt64Count(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := mr2.WaitForInt64Count(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	mdWant = stats.MetricsData{
 		Handle:    floatCountHandle.Descriptor(),
@@ -181,8 +185,12 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		LabelKeys: []string{"float counter label", "float counter optional label"},
 		LabelVals: []string{"float counter label val", "float counter optional label val"},
 	}
-	mr1.WaitForFloat64Count(ctx, mdWant)
-	mr2.WaitForFloat64Count(ctx, mdWant)
+	if err := mr1.WaitForFloat64Count(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := mr2.WaitForFloat64Count(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	mdWant = stats.MetricsData{
 		Handle:    intHistoHandle.Descriptor(),
@@ -190,8 +198,12 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		LabelKeys: []string{"int histo label", "int histo optional label"},
 		LabelVals: []string{"int histo label val", "int histo optional label val"},
 	}
-	mr1.WaitForInt64Histo(ctx, mdWant)
-	mr2.WaitForInt64Histo(ctx, mdWant)
+	if err := mr1.WaitForInt64Histo(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := mr2.WaitForInt64Histo(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	mdWant = stats.MetricsData{
 		Handle:    floatHistoHandle.Descriptor(),
@@ -199,16 +211,24 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		LabelKeys: []string{"float histo label", "float histo optional label"},
 		LabelVals: []string{"float histo label val", "float histo optional label val"},
 	}
-	mr1.WaitForFloat64Histo(ctx, mdWant)
-	mr2.WaitForFloat64Histo(ctx, mdWant)
+	if err := mr1.WaitForFloat64Histo(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := mr2.WaitForFloat64Histo(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
 	mdWant = stats.MetricsData{
 		Handle:    intGaugeHandle.Descriptor(),
 		IntIncr:   5,
 		LabelKeys: []string{"int gauge label", "int gauge optional label"},
 		LabelVals: []string{"int gauge label val", "int gauge optional label val"},
 	}
-	mr1.WaitForInt64Gauge(ctx, mdWant)
-	mr2.WaitForInt64Gauge(ctx, mdWant)
+	if err := mr1.WaitForInt64Gauge(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := mr2.WaitForInt64Gauge(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
 }
 
 // TestMetricRecorderListPanic tests that the metrics recorder list panics if

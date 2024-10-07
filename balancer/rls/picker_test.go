@@ -26,11 +26,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -56,10 +58,10 @@ func (s) TestNoNonEmptyTargetsReturnsError(t *testing.T) {
 	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Create new client.
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -89,9 +91,9 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithDefaultTarget(t *tes
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -119,10 +121,10 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithoutDefaultTarget(t *
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Create new client.
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -150,10 +152,10 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_NotThrottled(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Create new client.
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -214,10 +216,10 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 			// through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
-			// Dial the backend.
-			cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			// Create new client.
+			cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial() failed: %v", err)
+				t.Fatalf("Failed to create gRPC client: %v", err)
 			}
 			defer cc.Close()
 
@@ -246,12 +248,55 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 	}
 }
 
-// Test verifies the scenario where there is a matching entry in the data cache
-// which is valid and there is no pending request. The pick is expected to be
-// delegated to the child policy.
-func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
+// Test_RLSDefaultTargetPicksMetric tests the default target picks metric. It
+// configures an RLS Balancer which specifies to route to the default target in
+// the RLS Configuration, and makes an RPC on a Channel containing this RLS
+// Balancer. This test then asserts a default target picks metric is emitted,
+// and target pick or failed pick metric is not emitted.
+func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
+	// Start an RLS server and set the throttler to always throttle requests.
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+	overrideAdaptiveThrottler(t, alwaysThrottlingThrottler())
+
+	// Build RLS service config with a default target.
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+	defBackendCh, defBackendAddress := startBackend(t)
+	rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := startManualResolverWithConfig(t, rlsConfig)
+
+	tmr := stats.NewTestMetricsRecorder()
+	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and ensure it gets routed to the default target.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
+
+	if got, _ := tmr.Metric("grpc.lb.rls.default_target_picks"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.default_target_picks", got, 1)
+	}
+	if _, ok := tmr.Metric("grpc.lb.rls.target_picks"); ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.target_picks")
+	}
+	if _, ok := tmr.Metric("grpc.lb.rls.failed_picks"); ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.failed_picks")
+	}
+}
+
+// Test_RLSTargetPicksMetric tests the target picks metric. It configures an RLS
+// Balancer which specifies to route to a target through a RouteLookupResponse,
+// and makes an RPC on a Channel containing this RLS Balancer. This test then
+// asserts a target picks metric is emitted, and default target pick or failed
+// pick metric is not emitted.
+func (s) Test_RLSTargetPicksMetric(t *testing.T) {
 	// Start an RLS server and set the throttler to never throttle requests.
-	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Build the RLS config without a default target.
@@ -267,10 +312,93 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
+	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and ensure it gets routed to the test backend.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
+	if got, _ := tmr.Metric("grpc.lb.rls.target_picks"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.target_picks", got, 1)
+	}
+	if _, ok := tmr.Metric("grpc.lb.rls.default_target_picks"); ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.default_target_picks")
+	}
+	if _, ok := tmr.Metric("grpc.lb.rls.failed_picks"); ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.failed_picks")
+	}
+}
+
+// Test_RLSFailedPicksMetric tests the failed picks metric. It configures an RLS
+// Balancer to fail a pick with unavailable, and makes an RPC on a Channel
+// containing this RLS Balancer. This test then asserts a failed picks metric is
+// emitted, and default target pick or target pick metric is not emitted.
+func (s) Test_RLSFailedPicksMetric(t *testing.T) {
+	// Start an RLS server and set the throttler to never throttle requests.
+	rlsServer, _ := rlstest.SetupFakeRLSServer(t, nil)
+	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Build an RLS config without a default target.
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := startManualResolverWithConfig(t, rlsConfig)
+
+	tmr := stats.NewTestMetricsRecorder()
+	// Dial the backend.
+	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and expect it to fail with deadline exceeded error. We use a
+	// smaller timeout to ensure that the test doesn't run very long.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errors.New("RLS response's target list does not contain any entries for key"))
+
+	if got, _ := tmr.Metric("grpc.lb.rls.failed_picks"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.rls.failed_picks", got, 1)
+	}
+	if _, ok := tmr.Metric("grpc.lb.rls.target_picks"); ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.target_picks")
+	}
+	if _, ok := tmr.Metric("grpc.lb.rls.default_target_picks"); ok {
+		t.Fatalf("Data is present for metric %v", "grpc.lb.rls.default_target_picks")
+	}
+}
+
+// Test verifies the scenario where there is a matching entry in the data cache
+// which is valid and there is no pending request. The pick is expected to be
+// delegated to the child policy.
+func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
+	// Start an RLS server and set the throttler to never throttle requests.
+	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
+	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Build the RLS config without a default target.
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+	// Start a test backend, and setup the fake RLS server to return this as a
+	// target in the RLS response.
+	testBackendCh, testBackendAddress := startBackend(t)
+	rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+	})
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := startManualResolverWithConfig(t, rlsConfig)
+
+	// Create new client.
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -330,10 +458,10 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry_WithHeaderData(t *testi
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Create new client.
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -397,10 +525,10 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 			// through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
-			// Dial the backend.
-			cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			// Create new client.
+			cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial() failed: %v", err)
+				t.Fatalf("Failed to create gRPC client: %v", err)
 			}
 			defer cc.Close()
 
@@ -506,10 +634,10 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
-			// Dial the backend.
-			cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			// Create new client.
+			cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial() failed: %v", err)
+				t.Fatalf("Failed to create gRPC client: %v", err)
 			}
 			defer cc.Close()
 
@@ -604,10 +732,10 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			// Register a manual resolver and push the RLS service config through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
-			// Dial the backend.
-			cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			// Create new client.
+			cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial() failed: %v", err)
+				t.Fatalf("Failed to create gRPC client: %v", err)
 			}
 			defer cc.Close()
 
@@ -706,10 +834,10 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
-			// Dial the backend.
-			cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			// Create new client.
+			cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial() failed: %v", err)
+				t.Fatalf("Failed to create gRPC client: %v", err)
 			}
 			defer cc.Close()
 
@@ -804,10 +932,10 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
-			// Dial the backend.
-			cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			// Create new client.
+			cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial() failed: %v", err)
+				t.Fatalf("Failed to create gRPC client: %v", err)
 			}
 			defer cc.Close()
 
@@ -877,6 +1005,44 @@ func TestIsFullMethodNameValid(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			if got := isFullMethodNameValid(test.methodName); got != test.want {
 				t.Fatalf("isFullMethodNameValid(%q) = %v, want %v", test.methodName, got, test.want)
+			}
+		})
+	}
+}
+
+// Tests the conversion of the child pickers error to the pick result attribute.
+func (s) TestChildPickResultError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "nil",
+			err:  nil,
+			want: "complete",
+		},
+		{
+			name: "errNoSubConnAvailable",
+			err:  balancer.ErrNoSubConnAvailable,
+			want: "queue",
+		},
+		{
+			name: "status error",
+			err:  status.Error(codes.Unimplemented, "unimplemented"),
+			want: "drop",
+		},
+		{
+			name: "other error",
+			err:  errors.New("some error"),
+			want: "fail",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := errToPickResult(test.err); got != test.want {
+				t.Fatalf("errToPickResult(%q) = %v, want %v", test.err, got, test.want)
 			}
 		})
 	}

@@ -72,6 +72,8 @@ not git grep '[[:blank:]]$'
 
 # - Ensure that all files have a terminating newline.
 git ls-files | not xargs -I {} sh -c '[ -n "$(tail -c 1 "{}" 2>/dev/null)" ] && echo "{}: No terminating new line found"' | fail_on_output
+# - Ensure that no tabs are found in markdown files.
+not git grep $'\t' -- '*.md'
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
