@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -287,7 +288,7 @@ func (b *pickfirstBalancer) Close() {
 func (b *pickfirstBalancer) ExitIdle() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.state == connectivity.Idle {
+	if b.state == connectivity.Idle && b.addressList.currentAddress() == b.addressList.first() {
 		b.firstPass = true
 		b.requestConnectionLocked()
 	}
@@ -546,11 +547,14 @@ func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 // idlePicker is used when the SubConn is IDLE and kicks the SubConn into
 // CONNECTING when Pick is called.
 type idlePicker struct {
-	exitIdle func()
+	connectionRequested atomic.Bool
+	exitIdle            func()
 }
 
 func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	i.exitIdle()
+	if i.connectionRequested.CompareAndSwap(false, true) {
+		i.exitIdle()
+	}
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
@@ -588,6 +592,15 @@ func (al *addressList) currentAddress() resolver.Address {
 		return resolver.Address{}
 	}
 	return al.addresses[al.idx]
+}
+
+// first returns the first address in the list. If the list is empty, it returns
+// an empty address instead.
+func (al *addressList) first() resolver.Address {
+	if len(al.addresses) == 0 {
+		return resolver.Address{}
+	}
+	return al.addresses[0]
 }
 
 func (al *addressList) reset() {
