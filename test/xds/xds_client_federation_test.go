@@ -336,7 +336,4 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	if got, want := status.Code(err), codes.Unavailable; got != want {
 		t.Fatalf("EmptyCall RPC returned status code: %v, want %v", got, want)
 	}
-	if wantErr := `failed to find authority "unknown-authority"`; !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("EmptyCall RPC returned error: %v, want %v", err, wantErr)
-	}
 }

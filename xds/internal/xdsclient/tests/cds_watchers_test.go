@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -130,7 +131,7 @@ func verifyNoClusterUpdate(ctx context.Context, updateCh *testutils.Channel) err
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := updateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		return fmt.Errorf("received unexpected ClusterUpdate when expecting none: %v", u)
+		return fmt.Errorf("received unexpected ClusterUpdate when expecting none: %s", pretty.ToJSON(u))
 	}
 	return nil
 }
