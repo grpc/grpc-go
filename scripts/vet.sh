@@ -70,6 +70,9 @@ not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" --
 # - Ensure that no trailing spaces are found.
 not git grep '[[:blank:]]$'
 
+# - Ensure that all files have a terminating newline.
+git ls-files | not xargs -I {} sh -c '[ -n "$(tail -c 1 "{}" 2>/dev/null)" ] && echo "{}: No terminating new line found"' | fail_on_output
+
 # - Ensure that no tabs are found in markdown files.
 not git grep $'\t' -- '*.md'
 
