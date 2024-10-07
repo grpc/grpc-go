@@ -80,7 +80,7 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 				t.Logf("Received LDS request for resources: %v", req.GetResourceNames())
 				select {
 				case ldsResourcesCh <- req.GetResourceNames():
-				default:
+				case <-ctx.Done():
 				}
 			}
 			// Return an error everytime a request is sent on the stream. This
@@ -92,7 +92,7 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 		OnStreamClosed: func(int64, *v3corepb.Node) {
 			select {
 			case streamCloseCh <- struct{}{}:
-			default:
+			case <-ctx.Done():
 			}
 		},
 	})
@@ -102,7 +102,7 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	streamBackoff := func(v int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
-		default:
+		case <-ctx.Done():
 		}
 		return 0
 	}
@@ -179,7 +179,7 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			select {
 			case streamRequestCh <- req:
-			default:
+			case <-ctx.Done():
 			}
 			return nil
 		},
@@ -189,7 +189,7 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
 			select {
 			case streamResponseCh <- resp:
-			default:
+			case <-ctx.Done():
 			}
 		},
 	})
@@ -210,14 +210,12 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 	// Override the backoff implementation to always return 0, to reduce test
 	// run time. Instead control when the backoff returns by blocking on a
 	// channel, that the test closes.
-	backoffCh := make(chan struct{}, 1)
-	unblockBackoffCh := make(chan struct{})
+	backoffCh := make(chan struct{})
 	streamBackoff := func(v int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
-		default:
+		case <-ctx.Done():
 		}
-		<-unblockBackoffCh
 		return 0
 	}
 
@@ -293,17 +291,29 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 	// Verify that the error callback on the watcher is not invoked.
 	verifyNoListenerUpdate(ctx, lw.updateCh)
 
-	// Wait for backoff to kick in.
+	// Wait for backoff to kick in, and unblock the first backoff attempt.
 	select {
 	case <-backoffCh:
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for stream backoff")
 	}
 
-	// Bring up the connection to the management server, and unblock the backoff
+	// Bring up the management server. The test does not have prcecise control
+	// over when new streams to the management server will start succeeding. The
+	// ADS stream implementation will backoff as many times as required before
+	// it can successfully create a new stream. Therefore, we need to receive on
+	// the backoffCh as many times as required, and unblock the backoff
 	// implementation.
 	lis.Restart()
-	close(unblockBackoffCh)
+	go func() {
+		for {
+			select {
+			case <-backoffCh:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	// Verify that the transport creates a new stream and sends out a new
 	// request which contains the previously acked version, but an empty nonce.
