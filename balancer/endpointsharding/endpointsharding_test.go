@@ -181,6 +181,13 @@ func (s) TestEndpointShardingBalancerResolverAddresses(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "duplicate-address-same-endpoint",
+			endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{addr1, addr1}},
+			},
+			wantErr: true,
+		},
+		{
 			name: "duplicate-address-across-endpoints-plural-addresses",
 			endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{addr1, addr2, addr3}},
