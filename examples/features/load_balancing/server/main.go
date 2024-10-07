@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to spin up multiple server backends
+// to enable client-side load balancing.
 package main
 
 import (

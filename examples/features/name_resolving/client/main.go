@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to use custom name resolvers to resolve
+// server backend addresses.
 package main
 
 import (

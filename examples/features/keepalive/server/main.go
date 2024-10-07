@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to enforce keepalive settings and manage idle
+// connections to maintain active client connections.
 package main
 
 import (

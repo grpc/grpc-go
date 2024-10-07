@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to send and read metadata to and from RPC.
 package main
 
 import (

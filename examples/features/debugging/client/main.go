@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to use logging and Channelz for debugging
+// gRPC operations.
 package main
 
 import (
