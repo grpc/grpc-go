@@ -2867,7 +2867,7 @@ func (hc *readHangingConn) Close() error {
 	return err
 }
 
-// Tests that client does not close untine the reader goroutine exits and closes
+// Tests that client does not close until the reader goroutine exits and closes
 // once reader goroutine returns.
 func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2898,20 +2898,20 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
 
-	transportClosedchan := make(chan struct{})
+	transportClosed := make(chan struct{})
 	go func() {
 		ct.Close(errors.New("manually closed by client"))
-		close(transportClosedchan)
+		close(transportClosed)
 	}()
 
 	select {
-	case <-transportClosedchan:
+	case <-transportClosed:
 		t.Fatal("Transport closed before reader completed")
-	case <-time.After(defaultTestTimeout):
+	case <-time.After(defaultTestShortTimeout):
 	}
 	close(hangConn)
 	select {
-	case <-transportClosedchan:
+	case <-transportClosed:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for transport to close")
 	}
