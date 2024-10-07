@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -43,11 +42,6 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
-
-const (
-	defaultTestTimeout      = 5 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-)
 
 var noopRecvHandler = func(_ transport.ResourceUpdate, onDone func()) error {
 	onDone()
