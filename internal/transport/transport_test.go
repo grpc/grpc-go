@@ -2914,6 +2914,9 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	case <-transportClosed:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for transport to close")
+	}
+}
+
 // TestReadHeaderMultipleBuffers tests the stream when the gRPC headers are
 // split across multiple buffers. It verifies that the reporting of the
 // number of bytes read for flow control is correct.
