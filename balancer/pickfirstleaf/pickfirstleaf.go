@@ -408,6 +408,7 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.SubConnState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	oldState := sd.state
 	sd.state = newState.ConnectivityState
 	// Previously relevant SubConns can still callback with state updates.
 	// To prevent pickers from returning these obsolete SubConns, this logic
@@ -449,6 +450,19 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		})
 		return
 	}
+	if oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle {
+		// A SubConn can transition from CONNECTING directly to IDLE when
+		// a transport is successfully created, but the connection fails
+		// before the SubConn can send the notification for READY. We treat
+		// this as a successful connection and transition to IDLE.
+		b.shutdownRemainingLocked(sd)
+		b.state = connectivity.Idle
+		b.addressList.reset()
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Idle,
+			Picker:            &idlePicker{exitIdle: b.ExitIdle},
+		})
+	}
 
 	if b.firstPass {
 		switch newState.ConnectivityState {
@@ -479,20 +493,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 			}
 			// End of the first pass.
 			b.endFirstPassLocked(newState.ConnectionError)
-		case connectivity.Idle:
-			// A SubConn can transition from CONNECTING directly to IDLE when
-			// a transport is successfully created, but the connection fails
-			// before the SubConn can send the notification for READY. We treat
-			// this as a successful connection and transition to IDLE.
-			if curAddr := b.addressList.currentAddress(); !equalAddressIgnoringBalAttributes(&sd.addr, &curAddr) {
-				return
-			}
-			b.state = connectivity.Idle
-			b.addressList.reset()
-			b.cc.UpdateState(balancer.State{
-				ConnectivityState: connectivity.Idle,
-				Picker:            &idlePicker{exitIdle: b.ExitIdle},
-			})
 		}
 		return
 	}
