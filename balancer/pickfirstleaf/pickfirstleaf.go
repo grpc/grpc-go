@@ -288,6 +288,7 @@ func (b *pickfirstBalancer) ExitIdle() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.state == connectivity.Idle {
+		b.firstPass = true
 		b.requestConnectionLocked()
 	}
 }
