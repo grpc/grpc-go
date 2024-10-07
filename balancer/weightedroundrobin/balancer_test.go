@@ -87,7 +87,7 @@ var (
 		OOBReportingPeriod:      stringp("0.005s"),
 		BlackoutPeriod:          stringp("0s"),
 		WeightExpirationPeriod:  stringp("60s"),
-		WeightUpdatePeriod:      stringp(".050s"),
+		WeightUpdatePeriod:      stringp("30s"),
 		ErrorUtilizationPenalty: float64p(0),
 	}
 )
@@ -224,8 +224,8 @@ func (s) TestWRRMetricsBasic(t *testing.T) {
 	srv := startServer(t, reportCall)
 	sc := svcConfig(t, testMetricsConfig)
 
-	mr := stats.NewTestMetricsRecorder(t)
-	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(mr)); err != nil {
+	tmr := stats.NewTestMetricsRecorder()
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(tmr)); err != nil {
 		t.Fatalf("Error starting client: %v", err)
 	}
 	srv.callMetrics.SetQPS(float64(1))
@@ -234,12 +234,20 @@ func (s) TestWRRMetricsBasic(t *testing.T) {
 		t.Fatalf("Error from EmptyCall: %v", err)
 	}
 
-	mr.AssertDataForMetric("grpc.lb.wrr.rr_fallback", 1)           // Falls back because only one SubConn.
-	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_stale", 0) // The endpoint weight has not expired so this is 0 (never emitted).
-	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weight_not_yet_usable", 1)
+	if got, _ := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_not_yet_usable", got, 1)
+	}
 	// Unusable, so no endpoint weight. Due to only one SubConn, this will never
 	// update the weight. Thus, this will stay 0.
-	mr.AssertDataForMetric("grpc.lb.wrr.endpoint_weights", 0)
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, 0)
+	}
 }
 
 // Tests two addresses with ORCA reporting disabled (should fall back to pure

@@ -825,14 +825,13 @@ func (cc *ClientConn) newAddrConnLocked(addrs []resolver.Address, opts balancer.
 	}
 
 	ac := &addrConn{
-		state:          connectivity.Idle,
-		cc:             cc,
-		addrs:          copyAddresses(addrs),
-		scopts:         opts,
-		dopts:          cc.dopts,
-		channelz:       channelz.RegisterSubChannel(cc.channelz, ""),
-		resetBackoff:   make(chan struct{}),
-		stateReadyChan: make(chan struct{}),
+		state:        connectivity.Idle,
+		cc:           cc,
+		addrs:        copyAddresses(addrs),
+		scopts:       opts,
+		dopts:        cc.dopts,
+		channelz:     channelz.RegisterSubChannel(cc.channelz, ""),
+		resetBackoff: make(chan struct{}),
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Start with our address set to the first address; this may be updated if
@@ -1184,8 +1183,7 @@ type addrConn struct {
 	addrs   []resolver.Address // All addresses that the resolver resolved to.
 
 	// Use updateConnectivityState for updating addrConn's connectivity state.
-	state          connectivity.State
-	stateReadyChan chan struct{} // closed and recreated on every READY state change.
+	state connectivity.State
 
 	backoffIdx   int // Needs to be stateful for resetConnectBackoff.
 	resetBackoff chan struct{}
@@ -1198,14 +1196,6 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	if ac.state == s {
 		return
 	}
-	if ac.state == connectivity.Ready {
-		// When leaving ready, re-create the ready channel.
-		ac.stateReadyChan = make(chan struct{})
-	}
-	if s == connectivity.Shutdown {
-		// Wake any producer waiting to create a stream on the transport.
-		close(ac.stateReadyChan)
-	}
 	ac.state = s
 	ac.channelz.ChannelMetrics.State.Store(&s)
 	if lastErr == nil {
@@ -1213,7 +1203,7 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 	} else {
 		channelz.Infof(logger, ac.channelz, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
 	}
-	ac.acbw.updateState(s, ac.curAddr, lastErr, ac.stateReadyChan)
+	ac.acbw.updateState(s, ac.curAddr, lastErr)
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -1515,31 +1505,6 @@ func (ac *addrConn) getReadyTransport() transport.ClientTransport {
 		return ac.transport
 	}
 	return nil
-}
-
-// getTransport waits until the addrconn is ready and returns the transport.
-// If the context expires first, returns an appropriate status.  If the
-// addrConn is stopped first, returns an Unavailable status error.
-func (ac *addrConn) getTransport(ctx context.Context) (transport.ClientTransport, error) {
-	for ctx.Err() == nil {
-		ac.mu.Lock()
-		t, state, readyChan := ac.transport, ac.state, ac.stateReadyChan
-		ac.mu.Unlock()
-		if state == connectivity.Shutdown {
-			// Return an error immediately in only this case since a connection
-			// will never occur.
-			return nil, status.Errorf(codes.Unavailable, "SubConn shutting down")
-		}
-
-		select {
-		case <-ctx.Done():
-		case <-readyChan:
-			if state == connectivity.Ready {
-				return t, nil
-			}
-		}
-	}
-	return nil, status.FromContextError(ctx.Err()).Err()
 }
 
 // tearDown starts to tear down the addrConn.

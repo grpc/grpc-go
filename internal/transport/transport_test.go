@@ -2914,5 +2914,33 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	case <-transportClosed:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for transport to close")
+// TestReadHeaderMultipleBuffers tests the stream when the gRPC headers are
+// split across multiple buffers. It verifies that the reporting of the
+// number of bytes read for flow control is correct.
+func (s) TestReadHeaderMultipleBuffers(t *testing.T) {
+	headerLen := 5
+	recvBuffer := newRecvBuffer()
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
+	bytesRead := 0
+	s := Stream{
+		requestRead: func(int) {},
+		trReader: &transportReader{
+			reader: &recvBufferReader{
+				recv: recvBuffer,
+			},
+			windowHandler: func(i int) {
+				bytesRead += i
+			},
+		},
+	}
+
+	header := make([]byte, headerLen)
+	err := s.ReadHeader(header)
+	if err != nil {
+		t.Fatalf("ReadHeader(%v) = %v", header, err)
+	}
+	if bytesRead != headerLen {
+		t.Errorf("bytesRead = %d, want = %d", bytesRead, headerLen)
 	}
 }
