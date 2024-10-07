@@ -104,6 +104,7 @@ type authorityArgs struct {
 	serializer         *grpcsync.CallbackSerializer
 	resourceTypeGetter func(string) xdsresource.Type
 	watchExpiryTimeout time.Duration
+	backoff            func(int) time.Duration // Backoff for ADS and LRS stream failures.
 	logger             *grpclog.PrefixLogger
 }
 
@@ -123,6 +124,7 @@ func newAuthority(args authorityArgs) (*authority, error) {
 		OnRecvHandler:  ret.handleResourceUpdate,
 		OnErrorHandler: ret.newConnectionError,
 		OnSendHandler:  ret.transportOnSendHandler,
+		Backoff:        args.backoff,
 		Logger:         args.logger,
 		NodeProto:      args.bootstrapCfg.Node(),
 	})

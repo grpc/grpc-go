@@ -22,10 +22,12 @@ import (
 	"encoding/json"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpctest"
 	internalbootstrap "google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
@@ -33,6 +35,24 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+const (
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
+)
+
+var noopRecvHandler = func(_ transport.ResourceUpdate, onDone func()) error {
+	onDone()
+	return nil
+}
 
 func (s) TestNewWithGRPCDial(t *testing.T) {
 	// Override the dialer with a custom one.

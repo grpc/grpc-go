@@ -52,6 +52,17 @@ var (
 	)
 )
 
+// startFakeManagementServer starts a fake xDS management server and returns a
+// cleanup function to close the fake server.
+func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
+	t.Helper()
+	fs, sCleanup, err := fakeserver.StartServer(nil)
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	return fs, sCleanup
+}
+
 func (s) TestReportLoad(t *testing.T) {
 	// Create a fake xDS management server listening on a local port.
 	mgmtServer, cleanup := startFakeManagementServer(t)
