@@ -21,6 +21,7 @@ package xdsclient_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -117,7 +118,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	// Capture the version and nonce from the response.
 	r, err = streamResponseCh.Receive(ctx)
 	if err != nil {
-		t.Fatal("Timeout when waiting for the discovery response from client")
+		t.Fatal("Timeout when waiting for a discovery response from the server")
 	}
 	gotResp := r.(*v3discoverypb.DiscoveryResponse)
 
@@ -157,7 +158,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 	r, err = streamResponseCh.Receive(ctx)
 	if err != nil {
-		t.Fatal("Timeout when waiting for the discovery response from client")
+		t.Fatal("Timeout when waiting for a discovery response from the server")
 	}
 	gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
@@ -190,10 +191,15 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	// The envoy-go-control-plane management server keeps resending the same
 	// resource as long as we keep NACK'ing it. So, we will see the bad resource
 	// sent to us a few times here, before receiving the good resource.
+	var lastErr error
 	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timeout when waiting for an ACK from the xDS client. Last seen error: %v", lastErr)
+		}
+
 		r, err = streamResponseCh.Receive(ctx)
 		if err != nil {
-			t.Fatal("Timeout when waiting for the discovery response from client")
+			t.Fatal("Timeout when waiting for a discovery response from the server")
 		}
 		gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
@@ -208,13 +214,13 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 		wantReq.ErrorDetail = nil
 		diff := cmp.Diff(gotReq, wantReq, protocmp.Transform())
 		if diff == "" {
+			lastErr = nil
 			break
 		}
-		t.Logf("Unexpected diff in received discovery request, diff (-got, +want):\n%s", diff)
+		lastErr = fmt.Errorf("unexpected diff in discovery request, diff (-got, +want):\n%s", diff)
 	}
 
 	// Verify the update received by the watcher.
-	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
 		if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
 			lastErr = err
@@ -229,7 +235,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 // Tests the case where the first response is invalid. The test verifies that
 // the NACK contains an empty version string.
-func (s) TestADS_ACK_NACK_InvalidFirstResponse(t *testing.T) {
+func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
