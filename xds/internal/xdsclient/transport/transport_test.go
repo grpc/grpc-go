@@ -49,8 +49,6 @@ const (
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
-var strSort = func(s1, s2 string) bool { return s1 < s2 }
-
 var noopRecvHandler = func(_ transport.ResourceUpdate, onDone func()) error {
 	onDone()
 	return nil
