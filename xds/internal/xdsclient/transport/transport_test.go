@@ -44,6 +44,8 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+const defaultTestTimeout = 10 * time.Second
+
 var noopRecvHandler = func(_ transport.ResourceUpdate, onDone func()) error {
 	onDone()
 	return nil
