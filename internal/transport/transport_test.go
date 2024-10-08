@@ -2785,14 +2785,14 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 // Close() is called.
 type readHangingConn struct {
 	net.Conn
-	hangConn chan struct{} // Read() hangs until this channel is closed by Close().
-	closed   *atomic.Bool  // Set to true when Close() is called.
+	readHangConn chan struct{} // Read() hangs until this channel is closed by Close().
+	closed       *atomic.Bool  // Set to true when Close() is called.
 }
 
 func (hc *readHangingConn) Read(b []byte) (n int, err error) {
 	n, err = hc.Conn.Read(b)
 	if hc.closed.Load() {
-		<-hc.hangConn // hang the read till we want
+		<-hc.readHangConn // hang the read till we want
 	}
 	return n, err
 }
@@ -2814,14 +2814,14 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	addr := resolver.Address{Addr: "localhost:" + server.port}
 
 	isReaderHanging := &atomic.Bool{}
-	hangConn := make(chan struct{})
+	readHangConn := make(chan struct{})
 	copts := ConnectOptions{
 		Dialer: func(_ context.Context, addr string) (net.Conn, error) {
 			conn, err := net.Dial("tcp", addr)
 			if err != nil {
 				return nil, err
 			}
-			return &readHangingConn{Conn: conn, hangConn: hangConn, closed: isReaderHanging}, nil
+			return &readHangingConn{Conn: conn, readHangConn: readHangConn, closed: isReaderHanging}, nil
 		},
 		ChannelzParent: channelzSubChannel(t),
 	}
@@ -2857,7 +2857,7 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 
 	// Closing the channel will unblock the reader goroutine and will ensure
 	// that the client transport's Close() returns.
-	close(hangConn)
+	close(readHangConn)
 	select {
 	case <-ctx.Done():
 	case <-time.After(defaultTestTimeout):
