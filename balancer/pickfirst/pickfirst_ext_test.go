@@ -410,14 +410,15 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
 
 	// Install a shuffler that always reverses two entries.
-	pfinternal.SetRandShuffleForTesting(func(n int, f func(int, int)) {
+	origShuf := pfinternal.RandShuffle
+	defer func() { pfinternal.RandShuffle = origShuf }()
+	pfinternal.RandShuffle = func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return
 		}
 		f(0, 1) // reverse the two addresses
-	})
-	defer pfinternal.RevertRandShuffleFuncForTesting()
+	}
 	// Set up our backends.
 	cc, r, backends := setupPickFirst(t, 2)
 	addrs := stubBackendsToResolverAddrs(backends)
@@ -465,14 +466,15 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 // Test config parsing with the env var turned on and off for various scenarios.
 func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 	// Install a shuffler that always reverses two entries.
-	pfinternal.SetRandShuffleForTesting(func(n int, f func(int, int)) {
+	origShuf := pfinternal.RandShuffle
+	defer func() { pfinternal.RandShuffle = origShuf }()
+	pfinternal.RandShuffle = func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return
 		}
 		f(0, 1) // reverse the two addresses
-	})
-	defer pfinternal.RevertRandShuffleFuncForTesting()
+	}
 
 	tests := []struct {
 		name          string

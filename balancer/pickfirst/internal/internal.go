@@ -18,11 +18,7 @@
 // Package internal contains code internal to the pickfirst package.
 package internal
 
-var (
-	// SetRandShuffleForTesting pseudo-randomizes the order of addresses. "n"
-	// is the number of elements. "swap" swaps the elements with indexes i and j.
-	SetRandShuffleForTesting func(sf func(n int, swap func(i, j int)))
+import "math/rand"
 
-	// RevertRandShuffleFuncForTesting sets the real shuffle function back after testing.
-	RevertRandShuffleFuncForTesting func()
-)
+// RandShuffle pseudo-randomizes the order of addresses.
+var RandShuffle = rand.Shuffle
