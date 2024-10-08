@@ -28,7 +28,6 @@ package endpointsharding
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -76,33 +75,26 @@ type endpointSharding struct {
 	mu sync.Mutex // Sync updateState callouts and childState recent state updates
 }
 
-// ValidateEndpoints returns an error if the endpoints list is empty, an
-// endpoint has no addresses, or there is a duplicate address present.
+// ValidateEndpoints returns an error if the endpoints list is empty, or no
+// addresses are present in endpoint list.
 func ValidateEndpoints(endpoints []resolver.Endpoint) error {
 	if len(endpoints) == 0 {
 		return errors.New("endpoints list is empty")
 	}
-	addrs := resolver.NewAddressMap()
-	for i, endpoint := range endpoints {
-		if len(endpoint.Addresses) == 0 {
-			return fmt.Errorf("endpoint %d has empty addresses", i)
-		}
-		for _, addr := range endpoint.Addresses {
-			if _, ok := addrs.Get(addr); ok {
-				return fmt.Errorf("duplicate addr %v present in endpoints list", addr)
-			}
-			addrs.Set(addr, struct{}{})
+
+	for _, endpoint := range endpoints {
+		for range endpoint.Addresses {
+			return nil
 		}
 	}
-	return nil
+	return errors.New("endpoints list contains no addresses")
 }
 
 // UpdateClientConnState creates a child for new endpoints and deletes children
 // for endpoints that are no longer present. It also updates all the children,
 // and sends a single synchronous update of the childrens' aggregated state at
 // the end of the UpdateClientConnState operation. If any endpoint has no
-// addresses or there is a duplicate address amongst the endpoints, returns
-// error without forwarding any updates. Otherwise, returns first error found
+// addresses it will ignore that endpoint. Otherwise, returns first error found
 // from a child, but fully processes the new update.
 func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
 	es.inhibitChildUpdates.Store(true)
@@ -117,6 +109,9 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
+		if len(endpoint.Addresses) == 0 {
+			continue
+		}
 		if _, ok := newChildren.Get(endpoint); ok {
 			// Endpoint child was already created, continue to avoid duplicate
 			// update.

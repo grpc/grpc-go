@@ -176,14 +176,14 @@ func (s) TestEndpointShardingValidateEndpoints(t *testing.T) {
 				{Addresses: []resolver.Address{addr1}},
 				{Addresses: []resolver.Address{addr1}},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "duplicate-address-same-endpoint",
 			endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{addr1, addr1}},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "duplicate-address-across-endpoints-plural-addresses",
@@ -191,7 +191,7 @@ func (s) TestEndpointShardingValidateEndpoints(t *testing.T) {
 				{Addresses: []resolver.Address{addr1, addr2, addr3}},
 				{Addresses: []resolver.Address{addr3, addr4}},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "no-shared-addresses",
@@ -207,7 +207,17 @@ func (s) TestEndpointShardingValidateEndpoints(t *testing.T) {
 				{Addresses: []resolver.Address{addr1, addr2}},
 				{Addresses: []resolver.Address{}},
 			},
-			wantErr: true,
+			wantErr: false,
+		},
+		{
+			name:      "empty-endpoints-list",
+			endpoints: []resolver.Endpoint{},
+			wantErr:   true,
+		},
+		{
+			name:      "endpoint-list-with-no-addresses",
+			endpoints: []resolver.Endpoint{{}, {}},
+			wantErr:   true,
 		},
 	}
 	for _, test := range tests {
