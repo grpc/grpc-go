@@ -76,23 +76,14 @@ type endpointSharding struct {
 	mu sync.Mutex // Sync updateState callouts and childState recent state updates
 }
 
-// UpdateClientConnState creates a child for new endpoints and deletes children
-// for endpoints that are no longer present. It also updates all the children,
-// and sends a single synchronous update of the childrens' aggregated state at
-// the end of the UpdateClientConnState operation. If any endpoint has no
-// addresses or there is a duplicate address amongst the endpoints, returns
-// error without forwarding any updates. Otherwise, returns first error found
-// from a child, but fully processes the new update.
-func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
-	if len(state.ResolverState.Endpoints) == 0 {
+// ValidateEndpoints returns an error if the endpoints list is empty, an
+// endpoint has no addresses, or there is a duplicate address present.
+func ValidateEndpoints(endpoints []resolver.Endpoint) error {
+	if len(endpoints) == 0 {
 		return errors.New("endpoints list is empty")
 	}
-
 	addrs := resolver.NewAddressMap()
-	// Check/return early if any endpoints have no addresses, or there is a
-	// duplicate address.
-	// TODO: make this configurable if needed.
-	for i, endpoint := range state.ResolverState.Endpoints {
+	for i, endpoint := range endpoints {
 		if len(endpoint.Addresses) == 0 {
 			return fmt.Errorf("endpoint %d has empty addresses", i)
 		}
@@ -103,7 +94,17 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			addrs.Set(addr, struct{}{})
 		}
 	}
+	return nil
+}
 
+// UpdateClientConnState creates a child for new endpoints and deletes children
+// for endpoints that are no longer present. It also updates all the children,
+// and sends a single synchronous update of the childrens' aggregated state at
+// the end of the UpdateClientConnState operation. If any endpoint has no
+// addresses or there is a duplicate address amongst the endpoints, returns
+// error without forwarding any updates. Otherwise, returns first error found
+// from a child, but fully processes the new update.
+func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
 	es.inhibitChildUpdates.Store(true)
 	defer func() {
 		es.inhibitChildUpdates.Store(false)

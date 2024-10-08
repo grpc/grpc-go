@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -159,10 +158,9 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	}
 }
 
-// TestEndpointShardingBalancerResolverAddresses tests different scenarios of
-// resolver addresses being updated to the endpoint sharding balancer. Some
-// should cause errors and some shouldn't.
-func (s) TestEndpointShardingBalancerResolverAddresses(t *testing.T) {
+// TestEndpointShardingValidateEndpoints tests different scenarios of
+// resolver addresses being validated by the ValidateEndpoint helper.
+func (s) TestEndpointShardingValidateEndpoints(t *testing.T) {
 	addr1 := resolver.Address{Addr: "addr1"}
 	addr2 := resolver.Address{Addr: "addr2"}
 	addr3 := resolver.Address{Addr: "addr3"}
@@ -214,11 +212,7 @@ func (s) TestEndpointShardingBalancerResolverAddresses(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			es := NewBalancer(testutils.NewBalancerClientConn(t), balancer.BuildOptions{})
-			err := es.UpdateClientConnState(balancer.ClientConnState{
-				ResolverState:  resolver.State{Endpoints: test.endpoints},
-				BalancerConfig: gracefulSwitchPickFirst,
-			})
+			err := ValidateEndpoints(test.endpoints)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("es.UpdateClientConnState() wantErr: %v, got: %v", test.wantErr, err)
 			}
