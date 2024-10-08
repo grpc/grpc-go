@@ -1026,7 +1026,7 @@ func (t *http2Client) Close(err error) {
 	}
 	t.cancel()
 	t.conn.Close()
-	// Waiting for the reader and keepalive goroutines to exit before returning to
+	// Waits for the reader and keepalive goroutines to exit before returning to
 	// ensure all resources are cleaned up before Close can return.
 	<-t.readerDone
 	if t.keepaliveEnabled {
