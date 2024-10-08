@@ -230,7 +230,7 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
 
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
-		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
+		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", balancer.ErrNoSubConnAvailable, err)
 	}
 
 	sc2 := <-cc.NewSubConnCh
@@ -254,6 +254,6 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
 	if err := cc.WaitForPickerWithErr(ctx, newTfErr); err != nil {
-		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", tfErr, err)
+		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", newTfErr, err)
 	}
 }
