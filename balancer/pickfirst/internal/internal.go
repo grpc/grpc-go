@@ -15,16 +15,14 @@
  *
  */
 
-// Package internal contains gRPC-internal code, to avoid polluting
-// the godoc of the top-level grpc package.
+// Package internal contains code internal to the pickfirst package.
 package internal
 
 var (
-	// SetRandShuffleForTesting pseudo-randomizes the order of addresses. n
-	// is the number of elements.  swap swaps the elements with indexes i and j.
-	// It returns the shuffle func before it was replaced.
+	// SetRandShuffleForTesting pseudo-randomizes the order of addresses. "n"
+	// is the number of elements. "swap" swaps the elements with indexes i and j.
 	SetRandShuffleForTesting func(sf func(n int, swap func(i, j int)))
 
-	// RevertRandShuffleFunc sets the real shuffle function back after testing.
-	RevertRandShuffleFunc func()
+	// RevertRandShuffleFuncForTesting sets the real shuffle function back after testing.
+	RevertRandShuffleFuncForTesting func()
 )

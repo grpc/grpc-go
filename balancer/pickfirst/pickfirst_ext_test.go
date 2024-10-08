@@ -417,7 +417,7 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 		}
 		f(0, 1) // reverse the two addresses
 	})
-	defer pfinternal.RevertRandShuffleFunc()
+	defer pfinternal.RevertRandShuffleFuncForTesting()
 	// Set up our backends.
 	cc, r, backends := setupPickFirst(t, 2)
 	addrs := stubBackendsToResolverAddrs(backends)
@@ -472,7 +472,7 @@ func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 		}
 		f(0, 1) // reverse the two addresses
 	})
-	defer pfinternal.RevertRandShuffleFunc()
+	defer pfinternal.RevertRandShuffleFuncForTesting()
 
 	tests := []struct {
 		name          string

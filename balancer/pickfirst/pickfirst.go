@@ -51,7 +51,7 @@ func init() {
 	internal.SetRandShuffleForTesting = func(sf func(n int, swap func(i, j int))) {
 		randShuffle = sf
 	}
-	internal.RevertRandShuffleFunc = func() {
+	internal.RevertRandShuffleFuncForTesting = func() {
 		randShuffle = rand.Shuffle
 	}
 }
