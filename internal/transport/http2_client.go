@@ -86,9 +86,8 @@ type http2Client struct {
 	writerDone chan struct{} // sync point to enable testing.
 	// goAway is closed to notify the upper layer (i.e., addrConn.transportMonitor)
 	// that the server sent GoAway on this transport.
-	goAway chan struct{}
-	// This channel is closed when the keepAlive goroutine exits.
-	keepAliveDone chan struct{}
+	goAway        chan struct{}
+	keepaliveDone chan struct{} // Closed when the keepalive goroutine exits.
 	framer        *framer
 	// controlBuf delivers all the control related tasks (e.g., window
 	// updates, reset streams, and various settings) to the controller.
@@ -336,7 +335,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		readerDone:            make(chan struct{}),
 		writerDone:            make(chan struct{}),
 		goAway:                make(chan struct{}),
-		keepAliveDone:         make(chan struct{}),
+		keepaliveDone:         make(chan struct{}),
 		framer:                newFramer(conn, writeBufSize, readBufSize, opts.SharedWriteBuffer, maxHeaderListSize),
 		fc:                    &trInFlow{limit: uint32(icwz)},
 		scheme:                scheme,
@@ -1027,13 +1026,11 @@ func (t *http2Client) Close(err error) {
 	}
 	t.cancel()
 	t.conn.Close()
-	// Wait for the reader goroutine to exit to ensure all resources are cleaned
-	// up before Close can return.
+	// Wait for the reader and keepalive goroutines to exit before returning to
+	// ensure all resources are cleaned up before Close can return.
 	<-t.readerDone
 	if t.keepaliveEnabled {
-		// Wait for the keepAlive goroutine to exit to ensure all resources are cleaned
-		// up before Close can return.
-		<-t.keepAliveDone
+		<-t.keepaliveDone
 	}
 	channelz.RemoveEntry(t.channelz.ID)
 	// Append info about previous goaways if there were any, since this may be important
@@ -1713,7 +1710,7 @@ func (t *http2Client) reader(errCh chan<- error) {
 func (t *http2Client) keepalive() {
 	var err error
 	defer func() {
-		close(t.keepAliveDone)
+		close(t.keepaliveDone)
 		if err != nil {
 			t.Close(err)
 		}
