@@ -2859,7 +2859,7 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	// that the client transport's Close() returns.
 	close(readHangConn)
 	select {
-	case <-ctx.Done():
+	case <-transportClosed:
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for transport to close")
 	}
