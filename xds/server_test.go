@@ -697,17 +697,16 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	}
 
 	wg := sync.WaitGroup{}
+	wg.Add(200)
 	for i := 0; i < 100; i++ {
 		server, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)))
 		if err != nil {
 			t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 		}
-		wg.Add(1)
 		go func() {
 			server.Serve(lis)
 			wg.Done()
 		}()
-		wg.Add(1)
 		go func() {
 			server.Stop()
 			wg.Done()

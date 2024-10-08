@@ -13,9 +13,9 @@ simulate your application:
 ```bash
 $ go run google.golang.org/grpc/benchmark/benchmain/main.go \
     -workloads=streaming \
-  	-reqSizeBytes=1024 \
-  	-respSizeBytes=1024 \
-  	-compression=gzip
+    -reqSizeBytes=1024 \
+    -respSizeBytes=1024 \
+    -compression=gzip
 ```
 
 Pass the `-h` flag to the `benchmain` utility to see other flags and workloads
@@ -45,8 +45,8 @@ Assume that `benchmain` is invoked like so:
 ```bash
 $ go run google.golang.org/grpc/benchmark/benchmain/main.go \
     -workloads=unary \
-  	-reqPayloadCurveFiles=/path/to/csv \
-  	-respPayloadCurveFiles=/path/to/csv
+    -reqPayloadCurveFiles=/path/to/csv \
+    -respPayloadCurveFiles=/path/to/csv
 ```
 
 This tells the `benchmain` utility to generate unary RPC requests with a 25%
@@ -61,8 +61,8 @@ following command will execute four benchmarks:
 ```bash
 $ go run google.golang.org/grpc/benchmark/benchmain/main.go \
     -workloads=unary \
-  	-reqPayloadCurveFiles=/path/to/csv1,/path/to/csv2 \
-  	-respPayloadCurveFiles=/path/to/csv3,/path/to/csv4
+    -reqPayloadCurveFiles=/path/to/csv1,/path/to/csv2 \
+    -respPayloadCurveFiles=/path/to/csv3,/path/to/csv4
 ```
 
 You may also combine `PayloadCurveFiles` with `SizeBytes` options. For example:
@@ -70,6 +70,6 @@ You may also combine `PayloadCurveFiles` with `SizeBytes` options. For example:
 ```
 $ go run google.golang.org/grpc/benchmark/benchmain/main.go \
     -workloads=unary \
-  	-reqPayloadCurveFiles=/path/to/csv \
-  	-respSizeBytes=1
+    -reqPayloadCurveFiles=/path/to/csv \
+    -respSizeBytes=1
 ```
