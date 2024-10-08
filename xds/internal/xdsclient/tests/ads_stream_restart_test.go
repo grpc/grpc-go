@@ -20,12 +20,8 @@ package xdsclient_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -233,23 +229,4 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	case names := <-cdsResourcesCh:
 		t.Fatalf("CDS request sent for resource names %v, when expecting no request", names)
 	}
-}
-
-// waitForResourceNames waits for the wantNames to be received on namesCh.
-// Returns a non-nil error if the context expires before that.
-func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) error {
-	t.Helper()
-
-	var gotNames []string
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		select {
-		case <-ctx.Done():
-		case gotNames = <-namesCh:
-			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
-				return nil
-			}
-			t.Logf("Received resource names %v, want %v", gotNames, wantNames)
-		}
-	}
-	return fmt.Errorf("timeout waiting expected resources to be requested. Last requested: %v, want: %v", gotNames, wantNames)
 }
