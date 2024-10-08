@@ -97,7 +97,8 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 
 	// Register the test service implementation on the same grpc server, and start serving.
-	testgrpc.RegisterTestServiceServer(s, stub)
+	stub.S = s
+	stubserver.StartTestService(t, stub)
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
