@@ -75,21 +75,6 @@ type endpointSharding struct {
 	mu sync.Mutex // Sync updateState callouts and childState recent state updates
 }
 
-// ValidateEndpoints returns an error if the endpoints list is empty, or no
-// addresses are present in endpoint list.
-func ValidateEndpoints(endpoints []resolver.Endpoint) error {
-	if len(endpoints) == 0 {
-		return errors.New("endpoints list is empty")
-	}
-
-	for _, endpoint := range endpoints {
-		for range endpoint.Addresses {
-			return nil
-		}
-	}
-	return errors.New("endpoints list contains no addresses")
-}
-
 // UpdateClientConnState creates a child for new endpoints and deletes children
 // for endpoints that are no longer present. It also updates all the children,
 // and sends a single synchronous update of the childrens' aggregated state at
