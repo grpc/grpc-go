@@ -27,7 +27,7 @@ import (
 	"flag"
 	"io"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"google.golang.org/grpc"
@@ -81,8 +81,9 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 // runRecordRoute sends a sequence of points to server and expects to get a RouteSummary from server.
 func runRecordRoute(client pb.RouteGuideClient) {
 	// Create a random number of random points
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	pointCount := int(r.Int31n(100)) + 2 // Traverse at least two points
+	seed := uint64(time.Now().UnixNano())
+	r := rand.New(rand.NewPCG(seed, seed))
+	pointCount := int(r.Int32N(100)) + 2 // Traverse at least two points
 	var points []*pb.Point
 	for i := 0; i < pointCount; i++ {
 		points = append(points, randomPoint(r))
@@ -147,8 +148,8 @@ func runRouteChat(client pb.RouteGuideClient) {
 }
 
 func randomPoint(r *rand.Rand) *pb.Point {
-	lat := (r.Int31n(180) - 90) * 1e7
-	long := (r.Int31n(360) - 180) * 1e7
+	lat := (r.Int32N(180) - 90) * 1e7
+	long := (r.Int32N(360) - 180) * 1e7
 	return &pb.Point{Latitude: lat, Longitude: long}
 }
 

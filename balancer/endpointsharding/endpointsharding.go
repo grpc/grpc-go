@@ -29,7 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 
@@ -234,7 +234,7 @@ func (es *endpointSharding) updateState() {
 	p := &pickerWithChildStates{
 		pickers:     pickers,
 		childStates: childStates,
-		next:        uint32(rand.Intn(len(pickers))),
+		next:        uint32(rand.IntN(len(pickers))),
 	}
 	es.cc.UpdateState(balancer.State{
 		ConnectivityState: aggState,

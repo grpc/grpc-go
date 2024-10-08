@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"

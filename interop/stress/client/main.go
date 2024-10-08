@@ -23,7 +23,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strconv"
@@ -130,7 +130,7 @@ func newWeightedRandomTestSelector(tests []testCaseWithWeight) *weightedRandomTe
 }
 
 func (selector weightedRandomTestSelector) getNextTest() string {
-	random := rand.Intn(selector.totalWeight)
+	random := rand.IntN(selector.totalWeight)
 	var weightSofar int
 	for _, test := range selector.tests {
 		weightSofar += test.weight

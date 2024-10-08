@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strconv"
 	"time"
@@ -187,7 +187,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 	go func() {
 		for {
 			if maxSleep > 0 {
-				time.Sleep(time.Duration(rand.Intn(maxSleep)))
+				time.Sleep(time.Duration(rand.IntN(maxSleep)))
 			}
 			var err error
 			if preloadMsgSize > 0 {

@@ -28,7 +28,7 @@ package googledirectpath
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/url"
 	"time"
 

@@ -47,7 +47,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"reflect"
@@ -283,7 +283,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 				defer wg.Done()
 				for {
 					if maxSleep > 0 {
-						time.Sleep(time.Duration(rand.Intn(maxSleep)))
+						time.Sleep(time.Duration(rand.IntN(maxSleep)))
 					}
 					t := time.Now()
 					if t.After(bmEnd) {
@@ -574,7 +574,7 @@ func runBenchmark(caller rpcCallFunc, start startFunc, stop stopFunc, bf stats.F
 				defer wg.Done()
 				for {
 					if maxSleep > 0 {
-						time.Sleep(time.Duration(rand.Intn(maxSleep)))
+						time.Sleep(time.Duration(rand.IntN(maxSleep)))
 					}
 					t := time.Now()
 					if t.After(bmEnd) {
