@@ -2781,71 +2781,6 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	}
 }
 
-// hangingConn is a net.Conn wrapper for testing, simulating hanging connections
-// after a GOAWAY frame is sent, of which Write operations pause until explicitly
-// signaled or a timeout occurs.
-type hangingConn struct {
-	net.Conn
-	hangConn     chan struct{}
-	startHanging *atomic.Bool
-}
-
-func (hc *hangingConn) Write(b []byte) (n int, err error) {
-	n, err = hc.Conn.Write(b)
-	if hc.startHanging.Load() {
-		<-hc.hangConn
-	}
-	return n, err
-}
-
-// Tests the scenario where a client transport is closed and writing of the
-// GOAWAY frame as part of the close does not complete because of a network
-// hang. The test verifies that the client transport is closed without waiting
-// for too long.
-func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
-	// Override timer for writing GOAWAY to 0 so that the connection write
-	// always times out. It is equivalent of real network hang when conn
-	// write for goaway doesn't finish in specified deadline
-	origGoAwayLoopyTimeout := goAwayLoopyWriterTimeout
-	goAwayLoopyWriterTimeout = time.Millisecond
-	defer func() {
-		goAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
-	}()
-
-	// Create the server set up.
-	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
-	defer server.stop()
-	addr := resolver.Address{Addr: "localhost:" + server.port}
-	isGreetingDone := &atomic.Bool{}
-	hangConn := make(chan struct{})
-	defer close(hangConn)
-	dialer := func(_ context.Context, addr string) (net.Conn, error) {
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			return nil, err
-		}
-		return &hangingConn{Conn: conn, hangConn: hangConn, startHanging: isGreetingDone}, nil
-	}
-	copts := ConnectOptions{Dialer: dialer}
-	copts.ChannelzParent = channelzSubChannel(t)
-	// Create client transport with custom dialer
-	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
-	if connErr != nil {
-		t.Fatalf("failed to create transport: %v", connErr)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("Failed to open stream: %v", err)
-	}
-
-	isGreetingDone.Store(true)
-	ct.Close(errors.New("manually closed by client"))
-}
-
 // readHangingConn is a wrapper around net.Conn that makes the Read() hang when
 // Close() is called.
 type readHangingConn struct {
@@ -2928,6 +2863,71 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for transport to close")
 	}
+}
+
+// hangingConn is a net.Conn wrapper for testing, simulating hanging connections
+// after a GOAWAY frame is sent, of which Write operations pause until explicitly
+// signaled or a timeout occurs.
+type hangingConn struct {
+	net.Conn
+	hangConn     chan struct{}
+	startHanging *atomic.Bool
+}
+
+func (hc *hangingConn) Write(b []byte) (n int, err error) {
+	n, err = hc.Conn.Write(b)
+	if hc.startHanging.Load() {
+		<-hc.hangConn
+	}
+	return n, err
+}
+
+// Tests the scenario where a client transport is closed and writing of the
+// GOAWAY frame as part of the close does not complete because of a network
+// hang. The test verifies that the client transport is closed without waiting
+// for too long.
+func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
+	// Override timer for writing GOAWAY to 0 so that the connection write
+	// always times out. It is equivalent of real network hang when conn
+	// write for goaway doesn't finish in specified deadline
+	origGoAwayLoopyTimeout := goAwayLoopyWriterTimeout
+	goAwayLoopyWriterTimeout = time.Millisecond
+	defer func() {
+		goAwayLoopyWriterTimeout = origGoAwayLoopyTimeout
+	}()
+
+	// Create the server set up.
+	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
+	defer server.stop()
+	addr := resolver.Address{Addr: "localhost:" + server.port}
+	isGreetingDone := &atomic.Bool{}
+	hangConn := make(chan struct{})
+	defer close(hangConn)
+	dialer := func(_ context.Context, addr string) (net.Conn, error) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return &hangingConn{Conn: conn, hangConn: hangConn, startHanging: isGreetingDone}, nil
+	}
+	copts := ConnectOptions{Dialer: dialer}
+	copts.ChannelzParent = channelzSubChannel(t)
+	// Create client transport with custom dialer
+	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	if connErr != nil {
+		t.Fatalf("failed to create transport: %v", connErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+
+	isGreetingDone.Store(true)
+	ct.Close(errors.New("manually closed by client"))
 }
 
 // TestReadHeaderMultipleBuffers tests the stream when the gRPC headers are
