@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/orca/internal"
@@ -43,37 +44,6 @@ import (
 )
 
 const requestsMetricKey = "test-service-requests"
-
-// An implementation of grpc_testing.TestService for the purpose of this test.
-// We cannot use the StubServer approach here because we need to register the
-// OpenRCAService as well on the same gRPC server.
-type testServiceImpl struct {
-	mu       sync.Mutex
-	requests int64
-
-	testgrpc.TestServiceServer
-	smr orca.ServerMetricsRecorder
-}
-
-func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	t.mu.Lock()
-	t.requests++
-	t.mu.Unlock()
-
-	t.smr.SetNamedUtilization(requestsMetricKey, float64(t.requests)*0.01)
-	t.smr.SetCPUUtilization(50.0)
-	t.smr.SetMemoryUtilization(0.9)
-	t.smr.SetApplicationUtilization(1.2)
-	return &testpb.SimpleResponse{}, nil
-}
-
-func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	t.smr.DeleteNamedUtilization(requestsMetricKey)
-	t.smr.SetCPUUtilization(0)
-	t.smr.SetMemoryUtilization(0)
-	t.smr.DeleteApplicationUtilization()
-	return &testpb.Empty{}, nil
-}
 
 // TestE2E_CustomBackendMetrics_OutOfBand tests the injection of out-of-band
 // custom backend metrics from the server application, and verifies that
@@ -94,13 +64,36 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 
 	// Register the OpenRCAService with a very short metrics reporting interval.
+	var mu sync.Mutex
+	var requests int
+
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			smr.DeleteNamedUtilization(requestsMetricKey)
+			smr.SetCPUUtilization(0)
+			smr.SetMemoryUtilization(0)
+			smr.DeleteApplicationUtilization()
+			return &testpb.Empty{}, nil
+		},
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			mu.Lock()
+			requests++
+			smr.SetNamedUtilization(requestsMetricKey, float64(requests)*0.01)
+			smr.SetCPUUtilization(50.0)
+			smr.SetMemoryUtilization(0.9)
+			smr.SetApplicationUtilization(1.2)
+			mu.Unlock()
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
 	s := grpc.NewServer()
 	if err := orca.Register(s, opts); err != nil {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}
 
 	// Register the test service implementation on the same grpc server, and start serving.
-	testgrpc.RegisterTestServiceServer(s, &testServiceImpl{smr: smr})
+	testgrpc.RegisterTestServiceServer(s, stub)
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
@@ -112,11 +105,11 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Spawn a goroutine which sends 20 unary RPCs to the test server. This
+	// Spawn a goroutine which sends 20 unary RPCs to the stub server. This
 	// will trigger the injection of custom backend metrics from the
-	// testServiceImpl.
+	// stubserver.
 	const numRequests = 20
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
 	errCh := make(chan error, 1)
@@ -126,7 +119,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 				errCh <- fmt.Errorf("UnaryCall failed: %v", err)
 				return
 			}
-			time.Sleep(time.Millisecond)
+			time.Sleep(shortReportingInterval)
 		}
 		errCh <- nil
 	}()
@@ -151,11 +144,18 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		default:
 		}
 
+		mu.Lock()
+		if requests == numRequests {
+			mu.Unlock()
+			break
+		}
+		mu.Unlock()
+
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: numRequests * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: float64(requests) * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {

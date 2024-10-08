@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -42,27 +43,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-type testService struct {
-	testgrpc.TestServiceServer
-}
-
-func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return &testpb.Empty{}, nil
-}
-
-func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{}, nil
-}
-
-func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
-	for {
-		_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
-		if err == io.EOF {
-			return nil
-		}
-	}
-}
 
 func testModeChangeServerOption(t *testing.T) grpc.ServerOption {
 	// Create a server option to get notified about serving mode changes. We don't
@@ -96,13 +76,31 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	testgrpc.RegisterTestServiceServer(server, &testService{})
+
+	// Set the server in the stub and start the test service.
+	stub.S = server
+	stubserver.StartTestService(t, stub)
 
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()

@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -62,13 +63,22 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 		updateCh <- args.Mode
 	})
 
-	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	// Initialize an xDS-enabled gRPC server.
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+
+	// Set the server in the stub and start the test service.
+	stub.S = server
+	stubserver.StartTestService(t, stub)
+
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
 
 	// Setup the management server to respond with the listener resources.
 	host, port, err := hostPortFromListener(lis)
@@ -206,13 +216,22 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		}
 	})
 
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+
+	// Set the server in the stub and start the test service.
+	stub.S = server
+	stubserver.StartTestService(t, stub)
+
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
 
 	// Setup the management server to respond with server-side Listener
 	// resources for both listeners.
