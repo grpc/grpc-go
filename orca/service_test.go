@@ -109,7 +109,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	// will trigger the injection of custom backend metrics from the
 	// stubserver.
 	const numRequests = 20
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
 	errCh := make(chan error, 1)
@@ -119,7 +119,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 				errCh <- fmt.Errorf("UnaryCall failed: %v", err)
 				return
 			}
-			time.Sleep(time.Millisecond)
+			time.Sleep(shortReportingInterval)
 		}
 		errCh <- nil
 	}()
