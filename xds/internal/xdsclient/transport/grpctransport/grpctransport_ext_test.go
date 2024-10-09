@@ -19,7 +19,6 @@ package grpctransport_test
 
 import (
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
@@ -36,8 +35,6 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
-
-const defaultTestTimeout = 10 * time.Second
 
 // Tests that the grpctransport.Builder creates a new grpc.ClientConn every time
 // Build() is called.
