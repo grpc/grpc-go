@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to configure keepalive pings to maintain
+// connectivity and detect stale connections.
 package main
 
 import (

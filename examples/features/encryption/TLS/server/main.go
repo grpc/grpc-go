@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to use TLS credentials to secure gRPC services.
 package main
 
 import (

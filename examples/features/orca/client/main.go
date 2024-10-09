@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates the use of a custom LB policy that handles ORCA
+// per-call and out-of-band metrics for load reporting.
 package main
 
 import (

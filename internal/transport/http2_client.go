@@ -527,8 +527,9 @@ func (t *http2Client) getPeer() *peer.Peer {
 // to be the last frame loopy writes to the transport.
 func (t *http2Client) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if err := t.framer.fr.WriteGoAway(t.nextID-2, http2.ErrCodeNo, g.debugData); err != nil {
+	maxStreamID := t.nextID - 2
+	t.mu.Unlock()
+	if err := t.framer.fr.WriteGoAway(maxStreamID, http2.ErrCodeNo, g.debugData); err != nil {
 		return false, err
 	}
 	return false, g.closeConn
@@ -1008,6 +1009,9 @@ func (t *http2Client) Close(err error) {
 		// should unblock it so that the goroutine eventually exits.
 		t.kpDormancyCond.Signal()
 	}
+	// Append info about previous goaways if there were any, since this may be important
+	// for understanding the root cause for this connection to be closed.
+	goAwayDebugMessage := t.goAwayDebugMessage
 	t.mu.Unlock()
 
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
@@ -1026,10 +1030,6 @@ func (t *http2Client) Close(err error) {
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
-	// Append info about previous goaways if there were any, since this may be important
-	// for understanding the root cause for this connection to be closed.
-	_, goAwayDebugMessage := t.GetGoAwayReason()
-
 	var st *status.Status
 	if len(goAwayDebugMessage) > 0 {
 		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)

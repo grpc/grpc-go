@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates to enforce retries on client side.
 package main
 
 import (
