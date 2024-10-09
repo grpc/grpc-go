@@ -28,7 +28,7 @@ import (
 // Builder is an interface for building a new xDS transport.
 type Builder interface {
 	// Build creates a new xDS transport with the provided options.
-	Build(opts BuildOptions) (Transport, error)
+	Build(opts BuildOptions) (Interface, error)
 }
 
 // BuildOptions contains the options for building a new xDS transport.

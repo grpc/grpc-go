@@ -25,4 +25,10 @@ var (
 
 	// NewADSStream returns a new ADS stream.
 	NewADSStream any // func(context.Context, *grpc.ClientConn) (v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient, error)
+
+	// ResourceWatchStateForTesting gets the watch state for the resource
+	// identified by the given resource type and resource name. Returns a
+	// non-nil error if there is no such resource being watched.
+	ResourceWatchStateForTesting any // func(xdsclient.XDSClient, xdsresource.Type, string) error
+
 )
