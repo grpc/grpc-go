@@ -65,11 +65,7 @@ func (b *Builder) Build(opts transport.BuildOptions) (transport.Interface, error
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	dopts := append([]grpc.DialOption{kpCfg}, opts.ServerConfig.CredsDialOption())
-	if opt := opts.ServerConfig.DialerOption(); opt != nil {
-		dopts = append(dopts, opt)
-	}
-
+	dopts := append(opts.ServerConfig.DialOptions(), kpCfg)
 	dialer := internal.GRPCNewClient.(func(string, ...grpc.DialOption) (*grpc.ClientConn, error))
 	cc, err := dialer(opts.ServerConfig.ServerURI(), dopts...)
 	if err != nil {
