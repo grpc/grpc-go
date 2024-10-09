@@ -54,10 +54,10 @@ type Stream struct {
 	// The following fields are initialized from arguments passed to the
 	// constructor and are read-only afterwards, and hence can be accessed
 	// without a mutex.
-	transport transport.TransportInterface // Transport to use for LRS stream.
-	backoff   func(int) time.Duration      // Backoff after stream failures.
-	nodeProto *v3corepb.Node               // Identifies the gRPC application.
-	doneCh    chan struct{}                // To notify exit of LRS goroutine.
+	transport transport.Interface     // Transport to use for LRS stream.
+	backoff   func(int) time.Duration // Backoff after stream failures.
+	nodeProto *v3corepb.Node          // Identifies the gRPC application.
+	doneCh    chan struct{}           // To notify exit of LRS goroutine.
 	logger    *igrpclog.PrefixLogger
 
 	// Guards access to the below fields.
@@ -69,10 +69,10 @@ type Stream struct {
 
 // StreamOpts holds the options for creating an lrsStream.
 type StreamOpts struct {
-	Transport transport.TransportInterface // xDS transport to create the stream on.
-	Backoff   func(int) time.Duration      // Backoff after stream failures.
-	NodeProto *v3corepb.Node               // Node proto to identify the gRPC application.
-	LogPrefix string                       // Prefix to be used for log messages.
+	Transport transport.Interface     // xDS transport to create the stream on.
+	Backoff   func(int) time.Duration // Backoff after stream failures.
+	NodeProto *v3corepb.Node          // Node proto to identify the gRPC application.
+	LogPrefix string                  // Prefix to be used for log messages.
 }
 
 // NewStream creates a new LRS Stream with the provided options.

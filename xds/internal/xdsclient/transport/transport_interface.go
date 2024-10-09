@@ -39,12 +39,12 @@ type BuildOptions struct {
 	ServerConfig *bootstrap.ServerConfig
 }
 
-// TransportInterface provides the functionality to communicate with an XDS
-// server using streaming calls.
+// Interface provides the functionality to communicate with an XDS server using
+// streaming calls.
 //
 // TODO(easwars): Rename this to Transport once the existing Transport type is
 // removed.
-type TransportInterface interface {
+type Interface interface {
 	// CreateStreamingCall creates a new streaming call to the XDS server for the
 	// specified method name. The returned StreamingCall interface can be used to
 	// send and receive messages on the stream.

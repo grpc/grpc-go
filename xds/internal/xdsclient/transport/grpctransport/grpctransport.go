@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
@@ -49,7 +48,7 @@ type Builder struct{}
 // Build creates a new gRPC-based transport to an XDS server using the provided
 // options. It establishes a gRPC client connection using the server URI and
 // credentials specified in the provided options.
-func (b *Builder) Build(opts transport.BuildOptions) (transport.TransportInterface, error) {
+func (b *Builder) Build(opts transport.BuildOptions) (transport.Interface, error) {
 	if opts.ServerConfig == nil {
 		return nil, fmt.Errorf("ServerConfig field in opts cannot be nil")
 	}
@@ -115,7 +114,6 @@ func (g *grpcTransport) newLRSStreamingCall(ctx context.Context) (transport.Stre
 }
 
 func (g *grpcTransport) Close() error {
-	grpclog.Infof("Shutdown")
 	return g.cc.Close()
 }
 
