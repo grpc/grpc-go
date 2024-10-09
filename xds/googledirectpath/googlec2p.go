@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -46,7 +47,7 @@ const (
 	c2pScheme    = "google-c2p"
 	c2pAuthority = "traffic-director-c2p.xds.googleapis.com"
 
-	tdURL                   = "dns:///directpath-pa.googleapis.com"
+	defaultUniverseDomain   = "googleapis.com"
 	zoneURL                 = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
 	ipv6URL                 = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
 	ipv6CapableMetadataName = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
@@ -58,13 +59,45 @@ const (
 
 // For overriding in unittests.
 var (
-	onGCE   = googlecloud.OnGCE
-	randInt = rand.Int
-	logger  = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
+	onGCE            = googlecloud.OnGCE
+	randInt          = rand.Int
+	logger           = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
+	universeDomainMu sync.Mutex
+	universeDomain   = ""
 )
 
 func init() {
 	resolver.Register(c2pResolverBuilder{})
+}
+
+func SetUniverseDomain(d string) error {
+	universeDomainMu.Lock()
+	defer universeDomainMu.Unlock()
+	if d == "" {
+		return fmt.Errorf("universe domain cannot be empty")
+	}
+	if universeDomain == "" {
+		universeDomain = d
+		return nil
+	}
+	if universeDomain != d {
+		return fmt.Errorf("universe domain cannot be set to %s, already set to different value: %s", d, universeDomain)
+	}
+	return nil
+}
+
+func getXdsServerURI() string {
+	universeDomainMu.Lock()
+	defer universeDomainMu.Unlock()
+	if universeDomain == "" {
+		universeDomain = defaultUniverseDomain
+	}
+	// Put env var override logic after default value logic so
+	// that tests still run the default value logic.
+	if envconfig.C2PResolverTestOnlyTrafficDirectorURI != "" {
+		return envconfig.C2PResolverTestOnlyTrafficDirectorURI
+	}
+	return fmt.Sprintf("dns:///directpath-pa.%s", universeDomain)
 }
 
 type c2pResolverBuilder struct{}
@@ -90,11 +123,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	go func() { zoneCh <- getZone(httpReqTimeout) }()
 	go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
 
-	xdsServerURI := envconfig.C2PResolverTestOnlyTrafficDirectorURI
-	if xdsServerURI == "" {
-		xdsServerURI = tdURL
-	}
-
+	xdsServerURI := getXdsServerURI()
 	nodeCfg := newNodeConfig(<-zoneCh, <-ipv6CapableCh)
 	xdsServerCfg := newXdsServerConfig(xdsServerURI)
 	authoritiesCfg := newAuthoritiesConfig(xdsServerCfg)
