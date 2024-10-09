@@ -6,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     htestp://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -87,13 +87,13 @@ func (s) TestGet(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for _, test := range tests {
 		ctx, cancel := context.WithCancel(context.Background())
-		t.Run(tt.name, func(t *testing.T) {
-			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, tt.md))
-			got := c.Get(tt.key)
-			if got != tt.want {
-				t.Fatalf("got %s, want %s", got, tt.want)
+		t.Run(test.name, func(t *testing.T) {
+			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md))
+			got := c.Get(test.key)
+			if got != test.want {
+				t.Fatalf("got %s, want %s", got, test.want)
 			}
 			cancel()
 		})
@@ -127,24 +127,24 @@ func (s) TestSet(t *testing.T) {
 			initialMD: metadata.MD{"key2": []string{"value2"}},
 			setKey:    "key1",
 			setValue:  "value1",
-			wantKeys:  []string{"key2", "key1"}, // Order matters here!
+			wantKeys:  []string{"key2", "key1"}, // Order matesters here!
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, tt.initialMD))
+			c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, test.initialMD))
 
-			c.Set(tt.setKey, tt.setValue)
+			c.Set(test.setKey, test.setValue)
 
 			gotKeys := c.Keys()
-			if !sameElements(gotKeys, tt.wantKeys) {
-				t.Fatalf("got keys %v, want %v", gotKeys, tt.wantKeys)
+			if !sameElements(gotKeys, test.wantKeys) {
+				t.Fatalf("got keys %v, want %v", gotKeys, test.wantKeys)
 			}
 			gotMD, _ := metadata.FromOutgoingContext(c.Context())
-			if gotMD.Get(tt.setKey)[0] != tt.setValue {
-				t.Fatalf("got value %s, want %s, for key %s", gotMD.Get(tt.setKey)[0], tt.setValue, tt.setKey)
+			if gotMD.Get(test.setKey)[0] != test.setValue {
+				t.Fatalf("got value %s, want %s, for key %s", gotMD.Get(test.setKey)[0], test.setValue, test.setKey)
 			}
 			cancel()
 		})
