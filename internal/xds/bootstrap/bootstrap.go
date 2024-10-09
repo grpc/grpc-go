@@ -220,7 +220,7 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 	return false
 }
 
-// DialOptions returns a slice of all the configured dial options for this
+// DialOptions returns a slice of all the configured dial options for the
 // server.
 func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 	dopts := []grpc.DialOption{sc.credsDialOption}
