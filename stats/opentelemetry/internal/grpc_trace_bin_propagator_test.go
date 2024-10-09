@@ -56,7 +56,7 @@ func (s) TestInject(t *testing.T) {
 		carrier := internaltracing.NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{}))
 		propagator.Inject(traceCtx, carrier)
 
-		got := stats.OutgoingTrace(*carrier.Context())
+		got := stats.OutgoingTrace(carrier.Context())
 		want := Binary(spanContext)
 		if string(got) != string(want) {
 			t.Fatalf("got = %v, want %v", got, want)

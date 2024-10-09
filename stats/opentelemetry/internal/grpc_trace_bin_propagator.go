@@ -53,7 +53,7 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 		return
 	}
 
-	if cc, ok := carrier.(internaltracing.CustomCarrier); ok {
+	if cc, ok := carrier.(*internaltracing.CustomCarrier); ok {
 		cc.SetBinary(bd)
 		return
 	}
@@ -69,7 +69,7 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
 	var bd []byte
 
-	if cc, ok := carrier.(internaltracing.CustomCarrier); ok {
+	if cc, ok := carrier.(*internaltracing.CustomCarrier); ok {
 		bd = cc.GetBinary()
 	} else {
 		bd, _ = base64.StdEncoding.DecodeString(carrier.Get(internaltracing.GRPCTraceBinHeaderKey))
