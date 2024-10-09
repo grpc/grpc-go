@@ -28,10 +28,9 @@ package endpointsharding
 import (
 	"encoding/json"
 	"errors"
+	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
-
-	rand "math/rand/v2"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -308,4 +307,4 @@ func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 }
 
 // PickFirstConfig is a pick first config without shuffling enabled.
-const PickFirstConfig = "[{\"pick_first\": {}}]"
+const PickFirstConfig = "[{\"pick_first_leaf\": {}}]"
