@@ -207,10 +207,6 @@ var (
 	// default resolver scheme.
 	UserSetDefaultScheme = false
 
-	// ShuffleAddressListForTesting pseudo-randomizes the order of addresses.  n
-	// is the number of elements.  swap swaps the elements with indexes i and j.
-	ShuffleAddressListForTesting any // func(n int, swap func(i, j int))
-
 	// ConnectedAddress returns the connected address for a SubConnState. The
 	// address is only valid if the state is READY.
 	ConnectedAddress any // func (scs SubConnState) resolver.Address

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,10 @@
  *
  */
 
-syntax = "proto3";
+// Package internal contains code internal to the pickfirst package.
+package internal
 
-option go_package = "google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate";
+import "math/rand"
 
-package grpc.testing;
-
-message DynamicRes {}
-
-message DynamicReq {}
-
-// DynamicService is used to test reflection on dynamically constructed protocol
-// buffer messages.
-service DynamicService {
-  // DynamicMessage1 is a test RPC for dynamically constructed protobufs.
-  rpc DynamicMessage1(DynamicReq) returns (DynamicRes);
-}
+// RandShuffle pseudo-randomizes the order of addresses.
+var RandShuffle = rand.Shuffle

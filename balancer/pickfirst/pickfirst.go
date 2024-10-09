@@ -26,9 +26,9 @@ import (
 	"math/rand"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
@@ -39,7 +39,6 @@ import (
 )
 
 func init() {
-	internal.ShuffleAddressListForTesting = func(n int, swap func(i, j int)) { rand.Shuffle(n, swap) }
 	if envconfig.NewPickFirstEnabled {
 		return
 	}
@@ -149,7 +148,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// within each endpoint. - A61
 		if cfg.ShuffleAddressList {
 			endpoints = append([]resolver.Endpoint{}, endpoints...)
-			internal.ShuffleAddressListForTesting.(func(int, func(int, int)))(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
+			internal.RandShuffle(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
 		}
 
 		// "Flatten the list by concatenating the ordered list of addresses for each

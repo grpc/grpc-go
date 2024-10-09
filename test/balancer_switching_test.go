@@ -46,12 +46,23 @@ const (
 	loadBalancedServicePort = 443
 	wantGRPCLBTraceDesc     = `Channel switches to new LB policy "grpclb"`
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
+	pickFirstServiceConfig  = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 
 	// This is the number of stub backends set up at the start of each test. The
 	// first backend is used for the "grpclb" policy and the rest are used for
 	// other LB policies to test balancer switching.
 	backendCount = 3
 )
+
+// stubBackendsToResolverAddrs converts from a set of stub server backends to
+// resolver addresses. Useful when pushing addresses to the manual resolver.
+func stubBackendsToResolverAddrs(backends []*stubserver.StubServer) []resolver.Address {
+	addrs := make([]resolver.Address, len(backends))
+	for i, backend := range backends {
+		addrs[i] = resolver.Address{Addr: backend.Address}
+	}
+	return addrs
+}
 
 // setupBackendsAndFakeGRPCLB sets up backendCount number of stub server
 // backends and a fake grpclb server for tests which exercise balancer switch

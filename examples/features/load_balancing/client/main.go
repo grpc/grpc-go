@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to configure load balancing policies to
+// distribute RPCs across backend servers.
 package main
 
 import (

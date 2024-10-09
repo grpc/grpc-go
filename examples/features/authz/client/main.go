@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to include authorization credentials in the
+// form of metadata in every RPC for server side validation.
 package main
 
 import (

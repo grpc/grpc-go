@@ -21,8 +21,8 @@ package grpc_test
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -30,68 +30,41 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
-type producerBuilder struct{}
+// TestProducerStopsBeforeStateChange confirms that producers are stopped before
+// any state change notification is delivered to the LB policy.
+func (s) TestProducerStopsBeforeStateChange(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-type producer struct {
-	client  testgrpc.TestServiceClient
-	stopped chan struct{}
-}
-
-// Build constructs and returns a producer and its cleanup function
-func (*producerBuilder) Build(cci any) (balancer.Producer, func()) {
-	p := &producer{
-		client:  testgrpc.NewTestServiceClient(cci.(grpc.ClientConnInterface)),
-		stopped: make(chan struct{}),
-	}
-	return p, func() {
-		<-p.stopped
-	}
-}
-
-func (p *producer) TestStreamStart(t *testing.T, streamStarted chan<- struct{}) {
-	go func() {
-		defer close(p.stopped)
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-		defer cancel()
-		if _, err := p.client.FullDuplexCall(ctx); err != nil {
-			t.Errorf("Unexpected error starting stream: %v", err)
-		}
-		close(streamStarted)
-	}()
-}
-
-var producerBuilderSingleton = &producerBuilder{}
-
-// TestProducerStreamStartsAfterReady ensures producer streams only start after
-// the subchannel reports as READY to the LB policy.
-func (s) TestProducerStreamStartsAfterReady(t *testing.T) {
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
-	producerCh := make(chan balancer.Producer)
-	streamStarted := make(chan struct{})
-	done := make(chan struct{})
+	var lastProducer *testProducer
 	bf := stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			var sc balancer.SubConn
 			sc, err := bd.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{
 				StateListener: func(scs balancer.SubConnState) {
-					if scs.ConnectivityState == connectivity.Ready {
-						timer := time.NewTimer(5 * time.Millisecond)
-						select {
-						case <-streamStarted:
-							t.Errorf("Producer stream started before Ready listener returned")
-						case <-timer.C:
-						}
-						close(done)
+					bd.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: scs.ConnectivityState,
+						// We do not pass a picker, but since we don't perform
+						// RPCs, that's okay.
+					})
+					if !lastProducer.stopped.Load() {
+						t.Errorf("lastProducer not stopped before state change notification")
 					}
+					t.Logf("State is now %v; recreating producer", scs.ConnectivityState)
+					p, _ := sc.GetOrBuildProducer(producerBuilderSingleton)
+					lastProducer = p.(*testProducer)
 				},
 			})
 			if err != nil {
 				return err
 			}
-			producer, _ := sc.GetOrBuildProducer(producerBuilderSingleton)
-			producerCh <- producer
+			p, _ := sc.GetOrBuildProducer(producerBuilderSingleton)
+			lastProducer = p.(*testProducer)
 			sc.Connect()
 			return nil
 		},
@@ -118,8 +91,26 @@ func (s) TestProducerStreamStartsAfterReady(t *testing.T) {
 	defer cc.Close()
 
 	go cc.Connect()
-	p := <-producerCh
-	p.(*producer).TestStreamStart(t, streamStarted)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
-	<-done
+	cc.Close()
+	testutils.AwaitState(ctx, t, cc, connectivity.Shutdown)
 }
+
+type producerBuilder struct{}
+
+type testProducer struct {
+	// There should be no race accessing this field, but use an atomic since
+	// the race checker probably can't detect that.
+	stopped atomic.Bool
+}
+
+// Build constructs and returns a producer and its cleanup function
+func (*producerBuilder) Build(cci any) (balancer.Producer, func()) {
+	p := &testProducer{}
+	return p, func() {
+		p.stopped.Store(true)
+	}
+}
+
+var producerBuilderSingleton = &producerBuilder{}

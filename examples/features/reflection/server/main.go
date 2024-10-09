@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to register multiple services and enable
+// client discovery.
 package main
 
 import (
