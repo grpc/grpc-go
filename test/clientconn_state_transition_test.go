@@ -326,7 +326,7 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			// Set a really long back-off delay to ensure the first subConn does
-			// not enter ready before the second subConn connects.
+			// not enter IDLE before the second subConn connects.
 			Backoff: backoff.Config{
 				BaseDelay: 1 * time.Hour,
 			},

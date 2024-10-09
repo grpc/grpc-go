@@ -229,7 +229,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	// multiple times, we keep it only once. We will create only one SubConn
 	// for the address because an AddressMap is used to store SubConns.
 	// Not de-duplicating would result in attempting to connect to the same
-	// SubConn multiple times in the same pass. We don't want this
+	// SubConn multiple times in the same pass. We don't want this.
 	newAddrs = deDupAddresses(newAddrs)
 
 	// Since we have a new set of addresses, we are again at first pass.
