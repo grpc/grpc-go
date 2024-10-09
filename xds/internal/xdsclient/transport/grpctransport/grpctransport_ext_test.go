@@ -15,18 +15,18 @@
  * limitations under the License.
  */
 
-package transport_test
+package grpctransport_test
 
 import (
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
 	internalbootstrap "google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
-	"google.golang.org/grpc/xds/internal/xdsclient/transport/internal"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport/grpctransport"
 )
 
 type s struct {
@@ -37,62 +37,60 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var noopRecvHandler = func(_ transport.ResourceUpdate, onDone func()) error {
-	onDone()
-	return nil
-}
+const defaultTestTimeout = 10 * time.Second
 
-func (s) TestNewWithGRPCDial(t *testing.T) {
+// Tests that the grpctransport.Builder creates a new grpc.ClientConn every time
+// Build() is called.
+func (s) TestBuild_CustomDialer(t *testing.T) {
 	// Override the dialer with a custom one.
 	customDialerCalled := false
-	customDialer := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	origDialer := internal.GRPCNewClient
+	internal.GRPCNewClient = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 		customDialerCalled = true
 		return grpc.NewClient(target, opts...)
 	}
-	oldDial := internal.GRPCNewClient
-	internal.GRPCNewClient = customDialer
-	defer func() { internal.GRPCNewClient = oldDial }()
+	defer func() { internal.GRPCNewClient = origDialer }()
 
 	serverCfg, err := internalbootstrap.ServerConfigForTesting(internalbootstrap.ServerConfigTestingOptions{URI: "server-address"})
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
+
 	// Create a new transport and ensure that the custom dialer was called.
-	opts := transport.Options{
-		ServerCfg: serverCfg,
-		NodeProto: &v3corepb.Node{},
-		OnRecvHandler: func(update transport.ResourceUpdate, onDone func()) error {
-			onDone()
-			return nil
-		},
-		OnErrorHandler: func(error) {},
-		OnSendHandler:  func(*transport.ResourceSendInfo) {},
-	}
-	c, err := transport.New(opts)
+	opts := transport.BuildOptions{ServerConfig: serverCfg}
+	builder := &grpctransport.Builder{}
+	tr, err := builder.Build(opts)
 	if err != nil {
-		t.Fatalf("transport.New(%v) failed: %v", opts, err)
+		t.Fatalf("Builder.Build(%+v) failed: %v", opts, err)
 	}
-	defer c.Close()
+	defer tr.Close()
 
 	if !customDialerCalled {
-		t.Fatalf("transport.New(%+v) custom dialer called = false, want true", opts)
+		t.Fatalf("Builder.Build(%+v): custom dialer called = false, want true", opts)
 	}
 	customDialerCalled = false
 
 	// Reset the dialer, create a new transport and ensure that our custom
 	// dialer is no longer called.
-	internal.GRPCNewClient = grpc.NewClient
-	c, err = transport.New(opts)
-	defer func() {
-		if c != nil {
-			c.Close()
-		}
-	}()
+	internal.GRPCNewClient = origDialer
+	tr, err = builder.Build(opts)
 	if err != nil {
-		t.Fatalf("transport.New(%v) failed: %v", opts, err)
+		t.Fatalf("Builder.Build(%+v) failed: %v", opts, err)
 	}
+	defer tr.Close()
 
 	if customDialerCalled {
-		t.Fatalf("transport.New(%+v) custom dialer called = true, want false", opts)
+		t.Fatalf("Builder.Build(%+v): custom dialer called = true, want false", opts)
+	}
+}
+
+// Tests that the grpctransport.Builder fails to build a transport when the
+// provided BuildOptions do not contain a ServerConfig.
+func (s) TestBuild_EmptyServerConfig(t *testing.T) {
+	builder := &grpctransport.Builder{}
+	tr, err := builder.Build(transport.BuildOptions{})
+	if err == nil {
+		tr.Close()
+		t.Fatalf("Builder.Build(%+v) succeeded when expected to fail", transport.BuildOptions{})
 	}
 }

@@ -81,6 +81,7 @@ func (l *RestartableListener) Addr() net.Addr {
 // Stop closes existing connections on the listener and prevents new connections
 // from being accepted.
 func (l *RestartableListener) Stop() {
+	logger.Infof("Stopping restartable listener %q", l.Addr())
 	l.mu.Lock()
 	l.stopped = true
 	for _, conn := range l.conns {
@@ -92,6 +93,7 @@ func (l *RestartableListener) Stop() {
 
 // Restart gets a previously stopped listener to start accepting connections.
 func (l *RestartableListener) Restart() {
+	logger.Infof("Restarting listener %q", l.Addr())
 	l.mu.Lock()
 	l.stopped = false
 	l.mu.Unlock()
