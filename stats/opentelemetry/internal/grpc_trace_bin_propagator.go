@@ -24,7 +24,7 @@ import (
 
 	otelpropagation "go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	internaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
+	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
 // TODO: Move out of internal as part of open telemetry API
@@ -53,11 +53,11 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 		return
 	}
 
-	if cc, ok := carrier.(*internaltracing.CustomCarrier); ok {
+	if cc, ok := carrier.(*itracing.CustomCarrier); ok {
 		cc.SetBinary(bd)
 		return
 	}
-	carrier.Set(internaltracing.GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(bd))
+	carrier.Set(itracing.GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(bd))
 }
 
 // Extract reads OpenTelemetry trace context information from the carrier into a
@@ -69,28 +69,30 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
 	var bd []byte
 
-	if cc, ok := carrier.(*internaltracing.CustomCarrier); ok {
+	if cc, ok := carrier.(*itracing.CustomCarrier); ok {
 		bd = cc.GetBinary()
 	} else {
-		bd, _ = base64.StdEncoding.DecodeString(carrier.Get(internaltracing.GRPCTraceBinHeaderKey))
+		bd, _ = base64.StdEncoding.DecodeString(carrier.Get(itracing.GRPCTraceBinHeaderKey))
 	}
 	if bd == nil {
 		return ctx
 	}
 
-	spanContext, ok := FromBinary([]byte(bd))
+	sc, ok := FromBinary([]byte(bd))
 	if !ok {
 		return ctx
 	}
 
-	return oteltrace.ContextWithRemoteSpanContext(ctx, spanContext)
+	return oteltrace.ContextWithRemoteSpanContext(ctx, sc)
 }
 
-// Fields always returns a slice containing only `grpc-trace-bin` header key
-// because the GRPCTraceBinPropagator only uses the 'grpc-trace-bin' header for
+// Fields returns the keys whose values are set with Inject.
+//
+// GRPCTraceBinPropagator always returns a slice containing only
+// `grpc-trace-bin` key because it only sets the 'grpc-trace-bin' header for
 // propagating trace context.
 func (p GRPCTraceBinPropagator) Fields() []string {
-	return []string{internaltracing.GRPCTraceBinHeaderKey}
+	return []string{itracing.GRPCTraceBinHeaderKey}
 }
 
 // Binary returns the binary format representation of a SpanContext.
