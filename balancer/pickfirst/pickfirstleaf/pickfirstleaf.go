@@ -30,7 +30,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/internal"
@@ -439,29 +438,21 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 
 	// If the LB policy is READY, and it receives a subchannel state change,
 	// it means that the READY subchannel has failed.
-	if b.state == connectivity.Ready && newState.ConnectivityState != connectivity.Ready {
+	// A SubConn can also transition from CONNECTING directly to IDLE when
+	// a transport is successfully created, but the connection fails
+	// before the SubConn can send the notification for READY. We treat
+	// this as a successful connection and transition to IDLE.
+	if (b.state == connectivity.Ready && newState.ConnectivityState != connectivity.Ready) || (oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle) {
 		// Once a transport fails, the balancer enters IDLE and starts from
 		// the first address when the picker is used.
-		b.state = connectivity.Idle
-		b.addressList.reset()
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.Idle,
-			Picker:            &idlePicker{exitIdle: b.ExitIdle},
-		})
-		return
-	}
-	if oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle {
-		// A SubConn can transition from CONNECTING directly to IDLE when
-		// a transport is successfully created, but the connection fails
-		// before the SubConn can send the notification for READY. We treat
-		// this as a successful connection and transition to IDLE.
 		b.shutdownRemainingLocked(sd)
 		b.state = connectivity.Idle
 		b.addressList.reset()
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
-			Picker:            &idlePicker{exitIdle: b.ExitIdle},
+			Picker:            &idlePicker{exitIdle: sync.OnceFunc(b.ExitIdle)},
 		})
+		return
 	}
 
 	if b.firstPass {
@@ -547,14 +538,11 @@ func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 // idlePicker is used when the SubConn is IDLE and kicks the SubConn into
 // CONNECTING when Pick is called.
 type idlePicker struct {
-	connectionRequested atomic.Bool
-	exitIdle            func()
+	exitIdle func()
 }
 
 func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	if i.connectionRequested.CompareAndSwap(false, true) {
-		i.exitIdle()
-	}
+	i.exitIdle()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
