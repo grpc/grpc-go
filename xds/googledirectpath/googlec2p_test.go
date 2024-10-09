@@ -500,3 +500,14 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 		t.Fatalf("googlec2p.SetUniverseDomain(%s) failed: %v", domain, err)
 	}
 }
+
+func (s) TestSetUniverseDomainEmptyString(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
+	wantErr := "cannot be empty"
+	err := SetUniverseDomain("")
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("googlec2p.SetUniverseDomain(\"\") returned error: %v, want: %v", err, wantErr)
+	}
+}
