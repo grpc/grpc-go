@@ -16,7 +16,7 @@
  *
  */
 
-package test
+package pickfirstleaf_test
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirstleaf"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
