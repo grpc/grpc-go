@@ -55,6 +55,11 @@ var (
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
 	// to "true".
 	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", false)
+	// PickFirstHappyEyeballsEnabled is set if the happy eyeballs algorithm is
+	// used by the new pickfirst LB policy. This option may be overridden
+	// by setting the environment variable
+	// "GRPC_EXPERIMENTAL_ENABLE_PICK_FIRST_HAPPY_EYEBALLS" to "true" or "false".
+	PickFirstHappyEyeballsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_PICK_FIRST_HAPPY_EYEBALLS", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
