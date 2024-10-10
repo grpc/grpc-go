@@ -56,6 +56,9 @@ const (
 var (
 	connectedAddress  = internal.ConnectedAddress.(func(balancer.SubConnState) resolver.Address)
 	errBalancerClosed = fmt.Errorf("%s LB policy is closed", Name)
+	// Below function is no-op in actual code, but can be overridden in
+	// tests to give tests visibility into exactly when certain events happen.
+	clientConnUpdateHook = func() {}
 )
 
 func init() {
@@ -102,6 +105,12 @@ type clusterImplBalancer struct {
 	lrsServer        *bootstrap.ServerConfig
 	loadWrapper      *loadstore.Wrapper
 
+	// Set during UpdateClientConnState when pushing updates to child policy.
+	// Prevents state updates from child policy causing new pickers to be sent
+	// up the channel. Cleared after child policy have processed the
+	// updates sent to them, after which a new picker is sent up the channel.
+	inhibitPickerUpdates bool
+
 	clusterNameMu sync.Mutex
 	clusterName   string
 
@@ -111,6 +120,7 @@ type clusterImplBalancer struct {
 	// childState/drops/requestCounter keeps the state used by the most recently
 	// generated picker.
 	childState            balancer.State
+	mu                    sync.Mutex   // guards childState and inhibitPickerUpdates
 	dropCategories        []DropConfig // The categories for drops.
 	drops                 []*dropper
 	requestCounterCluster string // The cluster name for the request counter.
@@ -199,6 +209,8 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 }
 
 func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) error {
+	defer clientConnUpdateHook()
+
 	if b.logger.V(2) {
 		b.logger.Infof("Received configuration: %s", pretty.ToJSON(s.BalancerConfig))
 	}
@@ -243,6 +255,8 @@ func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) 
 
 	b.config = newConfig
 
+	b.mu.Lock()
+	b.inhibitPickerUpdates = true
 	b.telemetryLabels = newConfig.TelemetryLabels
 	dc := b.handleDropAndRequestCount(newConfig)
 	if dc != nil && b.childState.Picker != nil {
@@ -251,6 +265,8 @@ func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) 
 			Picker:            b.newPicker(dc),
 		})
 	}
+	b.inhibitPickerUpdates = false
+	b.mu.Unlock()
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
@@ -304,8 +320,9 @@ func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer
 func (b *clusterImplBalancer) Close() {
 	b.serializer.TrySchedule(func(_ context.Context) {
 		b.child.Close()
+		b.mu.Lock()
 		b.childState = balancer.State{}
-
+		b.mu.Unlock()
 		if b.cancelLoadReport != nil {
 			b.cancelLoadReport()
 			b.cancelLoadReport = nil
@@ -325,16 +342,23 @@ func (b *clusterImplBalancer) ExitIdle() {
 // Override methods to accept updates from the child LB.
 
 func (b *clusterImplBalancer) UpdateState(state balancer.State) {
-	b.serializer.TrySchedule(func(context.Context) {
-		b.childState = state
-		b.ClientConn.UpdateState(balancer.State{
-			ConnectivityState: b.childState.ConnectivityState,
-			Picker: b.newPicker(&dropConfigs{
-				drops:           b.drops,
-				requestCounter:  b.requestCounter,
-				requestCountMax: b.requestCountMax,
-			}),
-		})
+	b.mu.Lock()
+	b.childState = state
+	if b.inhibitPickerUpdates {
+		b.mu.Unlock()
+		return
+	}
+	// New picker needs to be generated before we release b.mu as b.newPicker
+	// access b.childState.
+	picker := b.newPicker(&dropConfigs{
+		drops:           b.drops,
+		requestCounter:  b.requestCounter,
+		requestCountMax: b.requestCountMax,
+	})
+	b.mu.Unlock()
+	b.ClientConn.UpdateState(balancer.State{
+		ConnectivityState: state.ConnectivityState,
+		Picker:            picker,
 	})
 }
 
