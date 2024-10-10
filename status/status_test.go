@@ -31,12 +31,14 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/status"
+	tpb "google.golang.org/grpc/status/test/grpc_testing_not_regenerate"
 )
 
 type s struct {
@@ -359,6 +361,34 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 				t.Fatalf("(%v).Details()[%d] = %+v, want %+v", str(s), i, details[i], tc.details[i])
 			}
 		}
+	}
+}
+
+// TestStatus_ErrorDetailsMessageV1 verifies backward compatibility of the
+// status.Details() method when using protobuf code generated with only the
+// MessageV1 API implementation.
+func (s) TestStatus_ErrorDetailsMessageV1(t *testing.T) {
+	details := []protoadapt.MessageV1{
+		&tpb.SimpleMessage{
+			Data: "abc",
+		},
+	}
+	s, err := New(codes.Aborted, "").WithDetails(details...)
+	if err != nil {
+		t.Fatalf("(%v).WithDetails(%+v) failed: %v", str(s), details, err)
+	}
+	got := s.Details()
+	gotDetails := []protoadapt.MessageV1{}
+	for i := range got {
+		msg, ok := got[i].(protoadapt.MessageV1)
+		if !ok {
+			t.Fatalf("(%v).Details() returned message that doesn't implement protoadapt.MessageV1: %v", s, got[i])
+		}
+		gotDetails = append(gotDetails, msg)
+	}
+
+	if diff := cmp.Diff(details, gotDetails, protocmp.Transform()); diff != "" {
+		t.Errorf("(%v).Details got unexpected output, diff (-got +want):\n%s", s, diff)
 	}
 }
 
