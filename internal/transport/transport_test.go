@@ -2799,8 +2799,7 @@ func (hc *readHangingConn) Read(b []byte) (n int, err error) {
 
 func (hc *readHangingConn) Close() error {
 	hc.closed.Store(true)
-	err := hc.Conn.Close()
-	return err
+	return hc.Conn.Close()
 }
 
 // Tests that closing a client transport does not return until the reader
