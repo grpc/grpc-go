@@ -186,6 +186,13 @@ func (s *Status) Details() []any {
 		//   that the type is wrapped in a MessageV1 wrapper again before
 		//   returning. Note that protoc-gen-go doesn't generate code which
 		//   implements ONLY MessageV2 at the time of writing.
+		//
+		// NOTE: Status details can also be added using the FromProto method.
+		// This could theoretically allow passing a Detail message that only
+		// implements the V2 API. In such a case the message will be wrapped in
+		// a MessageV1 wrapper when fetched using Details().
+		// Since protoc-gen-go generates only code that implements both V1 and
+		// V2 APIs for backward compatibility, this is not a concern.
 		details = append(details, protoadapt.MessageV1Of(detail))
 	}
 	return details
