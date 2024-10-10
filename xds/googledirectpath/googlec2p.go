@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -46,7 +47,7 @@ const (
 	c2pScheme    = "google-c2p"
 	c2pAuthority = "traffic-director-c2p.xds.googleapis.com"
 
-	tdURL                   = "dns:///directpath-pa.googleapis.com"
+	defaultUniverseDomain   = "googleapis.com"
 	zoneURL                 = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
 	ipv6URL                 = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
 	ipv6CapableMetadataName = "TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE"
@@ -58,13 +59,66 @@ const (
 
 // For overriding in unittests.
 var (
-	onGCE   = googlecloud.OnGCE
-	randInt = rand.Int
-	logger  = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
+	onGCE            = googlecloud.OnGCE
+	randInt          = rand.Int
+	logger           = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
+	universeDomainMu sync.Mutex
+	universeDomain   = ""
 )
 
 func init() {
 	resolver.Register(c2pResolverBuilder{})
+}
+
+// SetUniverseDomain informs the gRPC library of the TPC universe domain
+// in which the process is running. It is the caller's responsibility to
+// ensure that this is correct. This setting is used by the "google-c2p"
+// resolver (the resolver used for URIs with the "google-c2p" scheme) to
+// configure its dependencies.
+//
+// If a gRPC channel is created with the "google-c2p" URI scheme and this
+// function has not been called, gRPC configures the universe domain as
+// "googleapis.com".
+//
+// Arguments:
+//
+//	d: The DNS domain for Google APIs in the current TPC universe
+//	   (for example, "googleapis.com" or "apis-s3ns.fr").
+//
+// Returns nil if either:
+//
+//	a) The universe domain has not yet been configured.
+//	b) The universe domain has been configured and matches the provided value.
+//
+// Otherwise, returns an error.
+func SetUniverseDomain(d string) error {
+	universeDomainMu.Lock()
+	defer universeDomainMu.Unlock()
+	if d == "" {
+		return fmt.Errorf("universe domain cannot be empty")
+	}
+	if universeDomain == "" {
+		universeDomain = d
+		return nil
+	}
+	if universeDomain != d {
+		return fmt.Errorf("universe domain cannot be set to %s, already set to different value: %s", d, universeDomain)
+	}
+	return nil
+}
+
+func getXdsServerURI() string {
+	universeDomainMu.Lock()
+	defer universeDomainMu.Unlock()
+	if universeDomain == "" {
+		universeDomain = defaultUniverseDomain
+	}
+	// Put env var override logic after default value logic so
+	// that tests still run the default value logic.
+	if envconfig.C2PResolverTestOnlyTrafficDirectorURI != "" {
+		return envconfig.C2PResolverTestOnlyTrafficDirectorURI
+	}
+	return fmt.Sprintf("dns:///directpath-pa.%s", universeDomain)
 }
 
 type c2pResolverBuilder struct{}
@@ -90,11 +144,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	go func() { zoneCh <- getZone(httpReqTimeout) }()
 	go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
 
-	xdsServerURI := envconfig.C2PResolverTestOnlyTrafficDirectorURI
-	if xdsServerURI == "" {
-		xdsServerURI = tdURL
-	}
-
+	xdsServerURI := getXdsServerURI()
 	nodeCfg := newNodeConfig(<-zoneCh, <-ipv6CapableCh)
 	xdsServerCfg := newXdsServerConfig(xdsServerURI)
 	authoritiesCfg := newAuthoritiesConfig(xdsServerCfg)
