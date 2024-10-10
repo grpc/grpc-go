@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
@@ -62,10 +63,13 @@ var (
 	numStubsPerChannel    = flag.Int("num_stubs_per_channel", 1, "Number of client stubs per each connection to server")
 	metricsPort           = flag.Int("metrics_port", 8081, "The port at which the stress client exposes QPS metrics")
 	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true, else plain TCP")
+	useALTS                                = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
 	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
 	tlsServerName         = flag.String("server_host_override", "foo.test.google.fr", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	caFile                = flag.String("ca_file", "", "The file containing the CA root cert file")
 	customCredentialsType = flag.String("custom_credentials_type", "", "Custom credentials type to use")
+	altsHSAddr            = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
+
 
 	totalNumCalls int64
 	logger        = grpclog.Component("stress")
@@ -287,7 +291,7 @@ func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
 	}
 }
 
-func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.ClientConn, error) {
+func newConn(address string, useTLS, useALTS, testCA bool, tlsServerName, altsHSAddr string) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	if *customCredentialsType != "" {
 		if *customCredentialsType == googleDefaultCredsName {
@@ -316,6 +320,13 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 			creds = credentials.NewClientTLSFromCert(nil, sn)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else if useALTS {
+		altsOpts := alts.DefaultClientOptions()
+		if altsHSAddr != "" {
+			altsOpts.HandshakerServiceAddress = altsHSAddr
+		}
+		altsTC := alts.NewClientCreds(altsOpts)
+		opts = append(opts, grpc.WithTransportCredentials(altsTC))
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
@@ -331,13 +342,17 @@ func main() {
 	testSelector := newWeightedRandomTestSelector(tests)
 	metricsServer := newMetricsServer()
 
+	if (*useTLS && *useALTS) {
+		logger.Fatalf("only one of TLS or ALTS can be used")
+	}
+	
 	var wg sync.WaitGroup
 	wg.Add(len(addresses) * *numChannelsPerServer * *numStubsPerChannel)
 	stop := make(chan bool)
 
 	for serverIndex, address := range addresses {
 		for connIndex := 0; connIndex < *numChannelsPerServer; connIndex++ {
-			conn, err := newConn(address, *useTLS, *testCA, *tlsServerName)
+			conn, err := newConn(address, *useTLS, *useALTS, *testCA, *tlsServerName, *altsHSAddr)
 			if err != nil {
 				logger.Fatalf("Fail to dial: %v", err)
 			}
