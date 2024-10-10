@@ -607,6 +607,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
 
 	configJSON1 := `{
 "children": {
@@ -643,6 +644,9 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bal := bd.Data.(balancer.Balancer)
@@ -730,6 +734,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
 
 	configJSON1 := `{
 "children": {

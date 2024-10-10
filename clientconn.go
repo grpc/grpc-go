@@ -1249,6 +1249,8 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
+		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
+		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		ac.mu.Lock()
 		if acCtx.Err() != nil {

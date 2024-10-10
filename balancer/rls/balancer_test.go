@@ -1096,6 +1096,9 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &childPolicyConfig{}
 			if err := json.Unmarshal(sc, cfg); err != nil {
