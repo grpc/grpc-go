@@ -112,7 +112,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	// Spawn a goroutine which sends 20 unary RPCs to the stub server. This
 	// will trigger the injection of custom backend metrics from the
-	// StubServer.
+	// stubServer.
 	const numRequests = 20
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -154,7 +154,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: float64(numRequests) * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: numRequests * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
