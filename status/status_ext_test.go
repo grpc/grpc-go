@@ -214,6 +214,7 @@ func (s) TestStatus_ErrorDetailsMessageV1(t *testing.T) {
 		&tpb.SimpleMessage{
 			Data: "abc",
 		},
+		&testpb.Empty{},
 	}
 	s, err := status.New(codes.Aborted, "").WithDetails(details...)
 	if err != nil {
