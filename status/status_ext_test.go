@@ -35,8 +35,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	tpb "google.golang.org/grpc/testdata/grpc_testing_not_regenerate"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -201,5 +203,33 @@ func (s) TestStatusDetails(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// TestStatus_ErrorDetailsMessageV1 verifies backward compatibility of the
+// status.Details() method when using protobuf code generated with only the
+// MessageV1 API implementation.
+func (s) TestStatus_ErrorDetailsMessageV1(t *testing.T) {
+	details := []protoadapt.MessageV1{
+		&tpb.SimpleMessage{
+			Data: "abc",
+		},
+	}
+	s, err := status.New(codes.Aborted, "").WithDetails(details...)
+	if err != nil {
+		t.Fatalf("(%v).WithDetails(%+v) failed: %v", s, details, err)
+	}
+	got := s.Details()
+	gotDetails := []protoadapt.MessageV1{}
+	for i := range got {
+		msg, ok := got[i].(protoadapt.MessageV1)
+		if !ok {
+			t.Fatalf("(%v).Details() returned message that doesn't implement protoadapt.MessageV1: %v", s, got[i])
+		}
+		gotDetails = append(gotDetails, msg)
+	}
+
+	if diff := cmp.Diff(details, gotDetails, protocmp.Transform()); diff != "" {
+		t.Errorf("(%v).Details got unexpected output, diff (-got +want):\n%s", s, diff)
 	}
 }

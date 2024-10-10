@@ -19,9 +19,15 @@ syntax = "proto3";
 
 package grpc.testing;
 
-option go_package = "google.golang.org/grpc/status/test/grpc_testing_not_regenerate";
+option go_package = "google.golang.org/grpc/testdata/grpc_testing_not_regenerate";
 
-// SimpleMessage is used to hold string data.
-message SimpleMessage {
-  string data = 1;
+message DynamicRes {}
+
+message DynamicReq {}
+
+// DynamicService is used to test reflection on dynamically constructed protocol
+// buffer messages.
+service DynamicService {
+  // DynamicMessage1 is a test RPC for dynamically constructed protobufs.
+  rpc DynamicMessage1(DynamicReq) returns (DynamicRes);
 }

@@ -62,7 +62,7 @@ git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-
 git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go\|^internal/grpclog/prefix_logger.go'
 
 # - Ensure that the deprecated protobuf dependency is not used.
-not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*' ':(exclude)status/test/grpc_testing_not_regenerate/*'
+not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)testdata/grpc_testing_not_regenerate/*'
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
 not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
@@ -188,8 +188,7 @@ done
 # Error for violation of enabled lint rules in config excluding generated code.
 revive \
   -set_exit_status=1 \
-  -exclude "reflection/test/grpc_testing_not_regenerate/" \
-  -exclude "status/test/grpc_testing_not_regenerate/" \
+  -exclude "testdata/grpc_testing_not_regenerate/" \
   -exclude "**/*.pb.go" \
   -formatter plain \
   -config "$(dirname "$0")/revive.toml" \
