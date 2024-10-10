@@ -832,11 +832,12 @@ func (s) TestGRPCLB_Fallback(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
 
 	// Push an update to the resolver with fallback backend address stored in
@@ -1008,11 +1009,12 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1102,12 +1104,12 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Push a service config with grpclb as the load balancing policy and
 	// configure pick_first as its child policy.
 	rs := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(`{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`)}
@@ -1187,14 +1189,15 @@ func (s) TestGRPCLB_BackendConnectionErrorPropagation(t *testing.T) {
 	standaloneBEs := startBackends(t, "arbitrary.invalid.name", true, beLis)
 	defer stopBackends(standaloneBEs)
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName,
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
 
 	rs := resolver.State{
@@ -1312,15 +1315,16 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push the backend address to the remote balancer.
 	tss.ls.sls <- sl
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName,
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 		grpc.WithUserAgent(testUserAgent))
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
 
 	// Push a resolver update with grpclb configuration which does not contain the
