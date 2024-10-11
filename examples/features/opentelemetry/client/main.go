@@ -31,10 +31,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
+	"google.golang.org/grpc/stats/opentelemetry/tracing"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 var (
@@ -48,10 +52,22 @@ func main() {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
+
+	spanExporter := tracetest.NewInMemoryExporter()
+	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
+	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
+	textMapPropagator := propagation.NewCompositeTextMapPropagator(tracing.GRPCTraceBinPropagator{})
+	traceOptions := opentelemetry.TraceOptions{
+		TracerProvider:    tracerProvider,
+		TextMapPropagator: textMapPropagator,
+	}
+
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
 	ctx := context.Background()
-	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
+	do := opentelemetry.DialOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
+		TraceOptions:   traceOptions})
 
 	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
 	if err != nil {
@@ -60,7 +76,8 @@ func main() {
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make an RPC every second. This should trigger telemetry to be emitted from
+	// Make an RPC every second. This should trigger telemetry on prometheous
+	// server along with traces in the in memory exporter to be emitted from
 	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
@@ -68,6 +85,11 @@ func main() {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
 		fmt.Println(r)
+
+		for _, span := range spanExporter.GetSpans() {
+			fmt.Printf("span: %v, %v\n", span.Name, span.SpanKind)
+		}
+
 		time.Sleep(time.Second)
 	}
 }
