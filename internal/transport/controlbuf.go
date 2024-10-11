@@ -958,17 +958,17 @@ func (l *loopyWriter) processData() (bool, error) {
 		return false, nil
 	}
 
-	// Figure out the maximum size we can send
-	maxSize := http2MaxFrameLen
-	if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota <= 0 { // stream-level flow control.
+	strQuota := int(l.oiws) - str.bytesOutStanding
+	if strQuota <= 0 { // stream-level flow control.
 		str.state = waitingOnStreamQuota
 		return false, nil
-	} else if maxSize > strQuota {
-		maxSize = strQuota
 	}
-	if maxSize > int(l.sendQuota) { // connection-level flow control.
-		maxSize = int(l.sendQuota)
-	}
+	// Figure out the maximum size we can send (guaranteed to be bigger than 0)
+	// Shall be the smallest one among the following values:
+	// - http2MaxFrameLen
+	// - strQuota(stream-level flow control)
+	// - l.sendQuota(connection-level flow control)
+	maxSize := min(http2MaxFrameLen, strQuota, int(l.sendQuota))
 	// Compute how much of the header and data we can send within quota and max frame length
 	hSize := min(maxSize, len(dataItem.h))
 	dSize := min(maxSize-hSize, dataItem.reader.Remaining())
