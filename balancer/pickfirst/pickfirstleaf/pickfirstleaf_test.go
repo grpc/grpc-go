@@ -75,20 +75,7 @@ func (s) TestAddressList_Iteration(t *testing.T) {
 	}
 
 	addressList := addressList{}
-	emptyAddress := resolver.Address{}
-	if got, want := addressList.first(), emptyAddress; got != want {
-		t.Fatalf("addressList.first() = %v, want %v", got, want)
-	}
-
 	addressList.updateAddrs(addrs)
-
-	if got, want := addressList.first(), addressList.currentAddress(); got != want {
-		t.Fatalf("addressList.first() = %v, want %v", got, want)
-	}
-
-	if got, want := addressList.first(), addrs[0]; got != want {
-		t.Fatalf("addressList.first() = %v, want %v", got, want)
-	}
 
 	for i := 0; i < len(addrs); i++ {
 		if got, want := addressList.isValid(), true; got != want {
@@ -274,8 +261,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	}()
 
 	timerCh := make(chan struct{})
-	originalTimer := timerFunc
-	timerFunc = func(_ time.Duration, f func()) *time.Timer {
+	originalTimer := timerAfterFunc
+	timerAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		ret := time.AfterFunc(time.Hour, f)
@@ -290,7 +277,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	}
 
 	defer func() {
-		timerFunc = originalTimer
+		timerAfterFunc = originalTimer
 	}()
 
 	cc := testutils.NewBalancerClientConn(t)
@@ -371,8 +358,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	}()
 
 	timerCh := make(chan struct{})
-	originalTimer := timerFunc
-	timerFunc = func(_ time.Duration, f func()) *time.Timer {
+	originalTimer := timerAfterFunc
+	timerAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		ret := time.AfterFunc(time.Hour, f)
@@ -387,11 +374,11 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	}
 
 	defer func() {
-		timerFunc = originalTimer
+		timerAfterFunc = originalTimer
 	}()
 
 	defer func() {
-		timerFunc = originalTimer
+		timerAfterFunc = originalTimer
 	}()
 
 	cc := testutils.NewBalancerClientConn(t)
@@ -518,8 +505,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 
 	timerMu := sync.Mutex{}
 	timerCh := make(chan struct{})
-	originalTimer := timerFunc
-	timerFunc = func(_ time.Duration, f func()) *time.Timer {
+	originalTimer := timerAfterFunc
+	timerAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		ret := time.AfterFunc(time.Hour, f)
@@ -537,7 +524,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	}
 
 	defer func() {
-		timerFunc = originalTimer
+		timerAfterFunc = originalTimer
 	}()
 
 	cc := testutils.NewBalancerClientConn(t)

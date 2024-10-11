@@ -43,8 +43,7 @@ var (
 	// EnforceALPNEnabled is set if TLS connections to servers with ALPN disabled
 	// should be rejected. The HTTP/2 protocol requires ALPN to be enabled, this
 	// option is present for backward compatibility. This option may be overridden
-	// by setting the environment variable "GRPC_ENFORCE_ALPN_ENABLED" to "true"
-	// or "false".
+	// by setting the environment variable "GRPC_ENFORCE_ALPN_ENABLED" to "false".
 	EnforceALPNEnabled = boolFromEnv("GRPC_ENFORCE_ALPN_ENABLED", true)
 	// XDSFallbackSupport is the env variable that controls whether support for
 	// xDS fallback is turned on. If this is unset or is false, only the first
@@ -58,7 +57,7 @@ var (
 	// PickFirstHappyEyeballsEnabled is set if the happy eyeballs algorithm is
 	// used by the new pickfirst LB policy. This option may be overridden
 	// by setting the environment variable
-	// "GRPC_EXPERIMENTAL_ENABLE_PICK_FIRST_HAPPY_EYEBALLS" to "true" or "false".
+	// "GRPC_EXPERIMENTAL_ENABLE_PICK_FIRST_HAPPY_EYEBALLS" to "true".
 	PickFirstHappyEyeballsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_PICK_FIRST_HAPPY_EYEBALLS", false)
 )
 

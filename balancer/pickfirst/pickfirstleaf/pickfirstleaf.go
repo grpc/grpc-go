@@ -115,9 +115,9 @@ type scData struct {
 	subConn balancer.SubConn
 	addr    resolver.Address
 
-	state               connectivity.State
-	lastErr             error
-	connectionAttempted bool
+	state            connectivity.State
+	lastErr          error
+	connectionFailed bool
 }
 
 func (b *pickfirstBalancer) newSCData(addr resolver.Address) (*scData, error) {
@@ -298,7 +298,7 @@ func (b *pickfirstBalancer) Close() {
 func (b *pickfirstBalancer) ExitIdle() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.state == connectivity.Idle && b.addressList.currentAddress() == b.addressList.first() {
+	if b.state == connectivity.Idle {
 		b.startFirstPassLocked()
 	}
 }
@@ -308,7 +308,7 @@ func (b *pickfirstBalancer) startFirstPassLocked() {
 	b.numTF = 0
 	// Reset the connection attempt record for existing SubConns.
 	for _, sd := range b.subConns.Values() {
-		sd.(*scData).connectionAttempted = false
+		sd.(*scData).connectionFailed = false
 	}
 	b.requestConnectionLocked()
 }
@@ -406,22 +406,27 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 		case connectivity.Idle:
 			scd.subConn.Connect()
 			b.scheduleNextConnectionLocked()
+			return
 		case connectivity.TransientFailure:
-			// Try the next address.
-			scd.connectionAttempted = true
+			// The SubConn is being re-used and failed during a previous pass
+			// over the addressList. It has not completed backoff yet.
+			// Mark it as having failed and try the next address.
+			scd.connectionFailed = true
 			lastErr = scd.lastErr
 			continue
 		case connectivity.Ready:
 			// Should never happen.
 			b.logger.Errorf("Requesting a connection even though we have a READY SubConn")
+			return
 		case connectivity.Shutdown:
 			// Should never happen.
 			b.logger.Errorf("SubConn with state SHUTDOWN present in SubConns map")
+			return
 		case connectivity.Connecting:
 			// Wait for the SubConn to report success or failure.
 			b.scheduleNextConnectionLocked()
+			return
 		}
-		return
 	}
 
 	// All the remaining addresses in the list are in TRANSIENT_FAILURE, end the
@@ -459,9 +464,9 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	oldState := sd.state
-	// Record a connection attempt when existing CONNECTING.
+	// Record a connection attempt when exiting CONNECTING.
 	if newState.ConnectivityState == connectivity.TransientFailure {
-		sd.connectionAttempted = true
+		sd.connectionFailed = true
 	}
 	sd.state = newState.ConnectivityState
 	// Previously relevant SubConns can still callback with state updates.
@@ -572,7 +577,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 	}
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
-		if !sd.connectionAttempted {
+		if !sd.connectionFailed {
 			return
 		}
 	}
@@ -646,15 +651,6 @@ func (al *addressList) currentAddress() resolver.Address {
 		return resolver.Address{}
 	}
 	return al.addresses[al.idx]
-}
-
-// first returns the first address in the list. If the list is empty, it returns
-// an empty address instead.
-func (al *addressList) first() resolver.Address {
-	if len(al.addresses) == 0 {
-		return resolver.Address{}
-	}
-	return al.addresses[0]
 }
 
 func (al *addressList) reset() {
