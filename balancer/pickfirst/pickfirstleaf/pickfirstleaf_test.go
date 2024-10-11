@@ -275,14 +275,16 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 
 	timerCh := make(chan struct{})
 	originalTimer := timerFunc
-	timerFunc = func(_ time.Duration) <-chan time.Time {
-		ret := make(chan time.Time)
+	timerFunc = func(_ time.Duration, f func()) *time.Timer {
+		// Set a really long expiration to prevent it from triggering
+		// automatically.
+		ret := time.AfterFunc(time.Hour, f)
 		go func() {
 			select {
 			case <-ctx.Done():
 			case <-timerCh:
 			}
-			close(ret)
+			ret.Reset(0)
 		}()
 		return ret
 	}
@@ -370,17 +372,23 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 
 	timerCh := make(chan struct{})
 	originalTimer := timerFunc
-	timerFunc = func(_ time.Duration) <-chan time.Time {
-		ret := make(chan time.Time)
+	timerFunc = func(_ time.Duration, f func()) *time.Timer {
+		// Set a really long expiration to prevent it from triggering
+		// automatically.
+		ret := time.AfterFunc(time.Hour, f)
 		go func() {
 			select {
 			case <-ctx.Done():
 			case <-timerCh:
 			}
-			close(ret)
+			ret.Reset(0)
 		}()
 		return ret
 	}
+
+	defer func() {
+		timerFunc = originalTimer
+	}()
 
 	defer func() {
 		timerFunc = originalTimer
@@ -511,17 +519,19 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	timerMu := sync.Mutex{}
 	timerCh := make(chan struct{})
 	originalTimer := timerFunc
-	timerFunc = func(_ time.Duration) <-chan time.Time {
-		ret := make(chan time.Time)
-		timerMu.Lock()
-		ch := timerCh
-		timerMu.Unlock()
+	timerFunc = func(_ time.Duration, f func()) *time.Timer {
+		// Set a really long expiration to prevent it from triggering
+		// automatically.
+		ret := time.AfterFunc(time.Hour, f)
 		go func() {
+			timerMu.Lock()
+			ch := timerCh
+			timerMu.Unlock()
 			select {
 			case <-ctx.Done():
 			case <-ch:
 			}
-			close(ret)
+			ret.Reset(0)
 		}()
 		return ret
 	}

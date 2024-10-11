@@ -58,9 +58,9 @@ var (
 	// It is changed to "pick_first" in init() if this balancer is to be
 	// registered as the default pickfirst.
 	Name = "pick_first_leaf"
-	// timerFunc allows mocking the timer for testing connection delay related
-	// functionality.
-	timerFunc = time.After
+	// timerAfterFunc allows mocking the timer for testing connection delay
+	// related functionality.
+	timerAfterFunc = time.AfterFunc
 )
 
 const (
@@ -75,12 +75,12 @@ type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
-		cc:                cc,
-		addressList:       addressList{},
-		subConns:          resolver.NewAddressMap(),
-		state:             connectivity.Connecting,
-		mu:                sync.Mutex{},
-		callbackScheduler: callbackScheduler{},
+		cc:              cc,
+		addressList:     addressList{},
+		subConns:        resolver.NewAddressMap(),
+		state:           connectivity.Connecting,
+		mu:              sync.Mutex{},
+		cancelScheduled: func() {},
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
@@ -149,11 +149,11 @@ type pickfirstBalancer struct {
 	mu    sync.Mutex
 	state connectivity.State
 	// scData for active subonns mapped by address.
-	subConns          *resolver.AddressMap
-	addressList       addressList
-	firstPass         bool
-	numTF             int
-	callbackScheduler callbackScheduler
+	subConns        *resolver.AddressMap
+	addressList     addressList
+	firstPass       bool
+	numTF           int
+	cancelScheduled func()
 }
 
 // ResolverError is called by the ClientConn when the name resolver produces
@@ -288,7 +288,7 @@ func (b *pickfirstBalancer) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.closeSubConnsLocked()
-	b.callbackScheduler.close()
+	b.cancelScheduled()
 	b.state = connectivity.Shutdown
 }
 
@@ -361,7 +361,7 @@ func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address)
 // shutdownRemainingLocked shuts down remaining subConns. Called when a subConn
 // becomes ready, which means that all other subConn must be shutdown.
 func (b *pickfirstBalancer) shutdownRemainingLocked(selected *scData) {
-	b.callbackScheduler.cancel()
+	b.cancelScheduled()
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
 		if sd.subConn != selected.subConn {
@@ -433,7 +433,9 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 	if !envconfig.PickFirstHappyEyeballsEnabled {
 		return
 	}
-	b.callbackScheduler.schedule(func(ctx context.Context) {
+	b.cancelScheduled()
+	ctx, cancel := context.WithCancel(context.Background())
+	closeFn := timerAfterFunc(connectionDelayInterval, func() {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		// If the scheduled task is cancelled while acquiring the mutex, return.
@@ -446,7 +448,11 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 		if b.addressList.increment() {
 			b.requestConnectionLocked()
 		}
-	}, connectionDelayInterval)
+	}).Stop
+	b.cancelScheduled = sync.OnceFunc(func() {
+		closeFn()
+		cancel()
+	})
 }
 
 func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.SubConnState) {
@@ -526,7 +532,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 			// cause out of order updates to arrive.
 
 			if curAddr := b.addressList.currentAddress(); equalAddressIgnoringBalAttributes(&curAddr, &sd.addr) {
-				b.callbackScheduler.cancel()
+				b.cancelScheduled()
 				if b.addressList.increment() {
 					b.requestConnectionLocked()
 					return
@@ -681,58 +687,4 @@ func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
 		a.Attributes.Equal(b.Attributes) &&
 		a.Metadata == b.Metadata
-}
-
-// callbackScheduleris used to schedule the execution of a callback after a
-// a specified delay. It is not safe for concurrent access.
-type callbackScheduler struct {
-	cancelScheduled func()
-	closed          bool
-	wg              sync.WaitGroup
-}
-
-// schedule schedules the execution of a callback. It cancels any previously
-// scheduled callbacks.
-func (c *callbackScheduler) schedule(f func(context.Context), after time.Duration) {
-	if c.closed {
-		return
-	}
-	c.cancel()
-	ctx, cancel := context.WithCancel(context.Background())
-	c.cancelScheduled = sync.OnceFunc(cancel)
-	c.wg.Add(1)
-
-	go func() {
-		select {
-		case <-timerFunc(after):
-			c.wg.Done()
-			// f() may try to acquire the balancer mutex. Calling wg.Done()
-			// after f() finishes may cause a dedlock because balancer.Close()
-			// would be holding the mutex when calling callbackScheduler.close()
-			// which waits for wg.Done().
-			f(ctx)
-		case <-ctx.Done():
-			c.wg.Done()
-		}
-	}()
-}
-
-// cancel prevents the execution of the scheduled callback if a callback is
-// awaiting execution. If a callback is a callback is already being executed,
-// it cancels the context passed to it.
-func (c *callbackScheduler) cancel() {
-	if c.cancelScheduled != nil {
-		c.cancelScheduled()
-	}
-}
-
-// close closes the callbackScheduler and waits for all spawned goroutines to
-// exit. No callbacks are scheduled after this method returns.
-func (c *callbackScheduler) close() {
-	if c.closed {
-		return
-	}
-	c.cancel()
-	c.closed = true
-	c.wg.Wait()
 }
