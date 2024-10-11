@@ -1011,7 +1011,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	}
 	str.bytesOutStanding += size
 	l.sendQuota -= uint32(size)
-	dataItem.h = dataItem.h[hSize:]
+	dataItem.h = nil
 
 	if remainingBytes == 0 { // All the data from that message was written out.
 		_ = dataItem.reader.Close()
