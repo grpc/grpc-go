@@ -60,6 +60,7 @@ func (s) TestInject(t *testing.T) {
 
 	t.Run("Fast path with CustomCarrier", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		c := itracing.NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{}))
 		p.Inject(tCtx, c)
 
@@ -68,7 +69,6 @@ func (s) TestInject(t *testing.T) {
 		if string(got) != string(want) {
 			t.Fatalf("got = %v, want %v", got, want)
 		}
-		cancel()
 	})
 
 	t.Run("Slow path with any Text Carrier", func(t *testing.T) {
@@ -102,6 +102,7 @@ func (s) TestExtract(t *testing.T) {
 
 	t.Run("Fast path with CustomCarrier", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		c := itracing.NewCustomCarrier(stats.SetIncomingTrace(ctx, bd))
 		tCtx := p.Extract(ctx, c)
 		got := oteltrace.SpanContextFromContext(tCtx)
@@ -109,7 +110,6 @@ func (s) TestExtract(t *testing.T) {
 		if !got.Equal(sc) {
 			t.Fatalf("got = %v, want %v", got, sc)
 		}
-		cancel()
 	})
 
 	t.Run("Slow path with any Text Carrier", func(t *testing.T) {
@@ -117,12 +117,12 @@ func (s) TestExtract(t *testing.T) {
 			itracing.GRPCTraceBinHeaderKey: base64.StdEncoding.EncodeToString(bd),
 		}
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		tCtx := p.Extract(ctx, c)
 		got := oteltrace.SpanContextFromContext(tCtx)
 
 		if !got.Equal(sc) {
 			t.Fatalf("got = %v, want %v", got, sc)
 		}
-		cancel()
 	})
 }
