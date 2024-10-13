@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -34,30 +36,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-// sameElements checks if two string slices have the same elements,
-// ignoring order.
-func sameElements(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	countA := make(map[string]int)
-	countB := make(map[string]int)
-	for _, s := range a {
-		countA[s]++
-	}
-	for _, s := range b {
-		countB[s]++
-	}
-
-	for k, v := range countA {
-		if countB[k] != v {
-			return false
-		}
-	}
-	return true
 }
 
 func (s) TestGet(t *testing.T) {
@@ -139,7 +117,10 @@ func (s) TestSet(t *testing.T) {
 			c.Set(test.setKey, test.setValue)
 
 			gotKeys := c.Keys()
-			if !sameElements(gotKeys, test.wantKeys) {
+			equalKeys := cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool {
+				return a < b
+			}))
+			if !equalKeys {
 				t.Fatalf("got keys %v, want %v", gotKeys, test.wantKeys)
 			}
 			gotMD, _ := metadata.FromOutgoingContext(c.Context())
