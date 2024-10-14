@@ -314,21 +314,22 @@ func deDupAddresses(addrs []resolver.Address) []resolver.Address {
 	return retAddrs
 }
 
+// reconcileSubConnsLocked updates the active subchannels based on a new address
+// list from the resolver. It does this by:
+//   - closing subchannels: any existing subchannels associated with addresses
+//     that are no longer in the updated list are shut down.
+//   - removing subchannels: entries for these closed subchannels are removed
+//     from the subchannel map.
+//
+// This ensures that the subchannel map accurately reflects the current set of
+// addresses received from the name resolver.
 func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address) {
-	// Remove old subConns that were not in new address list.
-	oldAddrsMap := resolver.NewAddressMap()
-	for _, k := range b.subConns.Keys() {
-		oldAddrsMap.Set(k, true)
-	}
-
-	// Flatten the new endpoint addresses.
 	newAddrsMap := resolver.NewAddressMap()
 	for _, addr := range newAddrs {
 		newAddrsMap.Set(addr, true)
 	}
 
-	// Shut them down and remove them.
-	for _, oldAddr := range oldAddrsMap.Keys() {
+	for _, oldAddr := range b.subConns.Keys() {
 		if _, ok := newAddrsMap.Get(oldAddr); ok {
 			continue
 		}
