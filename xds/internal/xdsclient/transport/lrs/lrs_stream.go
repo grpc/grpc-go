@@ -51,9 +51,8 @@ const perRPCVerbosityLevel = 9
 // Stream provides all the functionality associated with an LRS (Load Reporting
 // Service) stream on the client-side.
 type Stream struct {
-	// The following fields are initialized from arguments passed to the
-	// constructor and are read-only afterwards, and hence can be accessed
-	// without a mutex.
+	// The following fields are initialized when a Stream instance is created
+	// and are read-only afterwards, and hence can be accessed without a mutex.
 	transport transport.Interface     // Transport to use for LRS stream.
 	backoff   func(int) time.Duration // Backoff after stream failures.
 	nodeProto *v3corepb.Node          // Identifies the gRPC application.
@@ -96,9 +95,12 @@ func NewStream(opts StreamOpts) *Stream {
 // cleanup function that should be called when the load reporting is no longer
 // needed.
 //
-// The first call to ReportLoad will start the LRS streaming call. Subsequent
-// calls will increment the reference count and return the same load.Store. The
-// cleanup function will stop the LRS stream when the last reference is removed.
+// The first call to ReportLoad sets the reference count to one, and starts the
+// LRS streaming call. Subsequent calls increment the reference count and return
+// the same load.Store.
+//
+// The cleanup function decrements the reference count and stops the LRS stream
+// when the last reference is removed.
 func (lrs *Stream) ReportLoad() (*load.Store, func()) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
@@ -181,6 +183,9 @@ func (lrs *Stream) runner(ctx context.Context) {
 	backoff.RunF(ctx, runLoadReportStream, lrs.backoff)
 }
 
+// sendLoads is responsible for periodically sending load reports to the LRS
+// server at the specified interval for the specified clusters, until the passed
+// in context is canceled.
 func (lrs *Stream) sendLoads(ctx context.Context, stream transport.StreamingCall, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
@@ -209,15 +214,23 @@ func (lrs *Stream) sendFirstLoadStatsRequest(stream transport.StreamingCall, nod
 	return err
 }
 
+// recvFirstLoadStatsResponse receives the first LoadStatsResponse from the LRS
+// server.  Returns the following:
+//   - a list of cluster names requested by the server or an empty slice if the
+//     server requested for load from all clusters
+//   - the load reporting interval, and
+//   - any error encountered
+//
+// If the server requests for endpoint-level load reporting, an error is
+// returned, since this is not yet supported.
 func (lrs *Stream) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([]string, time.Duration, error) {
 	r, err := stream.Recv()
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to receive first LoadStatsResponse: %v", err)
+		return nil, 0, fmt.Errorf("lrs: failed to receive first LoadStatsResponse: %v", err)
 	}
 	resp, ok := r.(*v3lrspb.LoadStatsResponse)
 	if !ok {
-		lrs.logger.Infof("Message received on ADS stream of unexpected type: %T", r)
-		return nil, time.Duration(0), fmt.Errorf("unexpected message type %T", r)
+		return nil, time.Duration(0), fmt.Errorf("lrs: unexpected message type %T", r)
 	}
 	if lrs.logger.V(perRPCVerbosityLevel) {
 		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(resp))
@@ -225,7 +238,7 @@ func (lrs *Stream) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([
 
 	rInterval := resp.GetLoadReportingInterval()
 	if rInterval.CheckValid() != nil {
-		return nil, 0, fmt.Errorf("invalid load_reporting_interval: %v", err)
+		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
 	interval := rInterval.AsDuration()
 
