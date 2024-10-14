@@ -102,7 +102,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 			}
 		},
 	}
-	// Initialize a gRPC server and register the stubServer on it.
 	server := grpc.NewServer()
 
 	// Set the server in the stub and start the test service.
