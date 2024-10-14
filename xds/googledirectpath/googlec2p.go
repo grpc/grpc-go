@@ -57,13 +57,13 @@ const (
 	dnsName, xdsName = "dns", "xds"
 )
 
-// For overriding in unittests.
 var (
-	onGCE            = googlecloud.OnGCE
-	randInt          = rand.Int
 	logger           = internalgrpclog.NewPrefixLogger(grpclog.Component("directpath"), logPrefix)
 	universeDomainMu sync.Mutex
 	universeDomain   = ""
+	// For overriding in unittests.
+	onGCE   = googlecloud.OnGCE
+	randInt = rand.Int
 )
 
 func init() {
