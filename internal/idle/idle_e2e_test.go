@@ -133,7 +133,7 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -179,7 +179,7 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -267,7 +267,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 			}
 			cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 			if err != nil {
-				t.Fatalf("Failed to create gRPC client: %v", err)
+				t.Fatalf("Failed to create new client: %v", err)
 			}
 			defer cc.Close()
 			cc.Connect()
@@ -356,7 +356,7 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -425,7 +425,7 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()

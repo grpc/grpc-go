@@ -255,7 +255,7 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client local test server: %v", err)
+		t.Fatalf("Failed to create new client for local test server: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
@@ -387,7 +387,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Create a ClientConn with the above manual resolver.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
@@ -425,7 +425,7 @@ func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
 	// Create a ClientConn with the above manual resolver.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })

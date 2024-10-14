@@ -63,7 +63,7 @@ func TestResolver(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithResolvers(r))
 		if err != nil {
-			t.Errorf("new client setup error: %v", err)
+			t.Errorf("new client creation error: %v", err)
 		}
 		cc.Connect()
 		r.UpdateState(resolver.State{Addresses: []resolver.Address{
