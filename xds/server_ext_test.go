@@ -144,7 +144,6 @@ func (s) TestServingModeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-
 	defer server.Stop()
 
 	// Set the server in the stub and start the test service.
