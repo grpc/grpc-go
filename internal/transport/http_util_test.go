@@ -210,6 +210,7 @@ func (s) TestParseDialTarget(t *testing.T) {
 		{"https://google.com:443", "tcp", "https://google.com:443"},
 		{"dns:///google.com", "tcp", "dns:///google.com"},
 		{"/unix/socket/address", "tcp", "/unix/socket/address"},
+		{"npipe:////./pipe/pipe-name", "npipe", "//./pipe/pipe-name"},
 	} {
 		gotNet, gotAddr := parseDialTarget(test.target)
 		if gotNet != test.wantNet || gotAddr != test.wantAddr {
