@@ -91,7 +91,7 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // populateSpan populates span information based on stats passed in (invariants
 // of the RPC lifecycle), and also ends span which triggers the span to be
 // exported.
-func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
+func populateSpan(_ context.Context, rs stats.RPCStats, ti *traceInfo) {
 	if ti == nil || ti.span == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.
@@ -122,7 +122,6 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 		span.AddEvent("Inbound compressed message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(mi)),
 			attribute.Int64("message-size", int64(rs.Length)),
-			attribute.Int64("message-size", int64(rs.CompressedLength)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
 	case *stats.OutPayload:
@@ -130,7 +129,6 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 		span.AddEvent("Outbound compressed message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(mi)),
 			attribute.Int64("message-size", int64(rs.Length)),
-			attribute.Int64("message-size", int64(rs.CompressedLength)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
 	case *stats.End:

@@ -210,16 +210,20 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
+	startTime := time.Now()
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
 	if err := cc.waitForResolvedAddrs(ctx); err != nil {
 		return nil, err
 	}
-
+	nameResolutionDelayed := false
+	if time.Since(startTime) > time.Nanosecond*10 {
+		nameResolutionDelayed = true
+	}
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
 	var newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
@@ -257,7 +261,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return newStream(ctx, func() {})
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), opts ...CallOption) (_ iresolver.ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), nameResolutionDelayed bool, opts ...CallOption) (_ iresolver.ClientStream, err error) {
 	c := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
@@ -362,6 +366,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		cs.attempt = a
 		return nil
 	}
+	cs.attempt.nameResolutionDelayed = nameResolutionDelayed
 	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op, nil) }); err != nil {
 		return nil, err
 	}
@@ -417,7 +422,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: cs.attempt.nameResolutionDelayed})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,
@@ -600,6 +605,8 @@ type csAttempt struct {
 	// trInfo.tr is set when created (if EnableTracing is true),
 	// and cleared when the finish method is called.
 	trInfo *traceInfo
+	// nameResolutionDelayed is true if name resolution is delayed.
+	nameResolutionDelayed bool
 
 	statsHandlers []stats.Handler
 	beginTime     time.Time
