@@ -75,7 +75,7 @@ const (
 	// ResourceWatchStateRequested is the state when a request has been sent for
 	// the resource being watched.
 	ResourceWatchStateRequested
-	// ResourceWatchStateReceived is the state when a sesponse has been received
+	// ResourceWatchStateReceived is the state when a response has been received
 	// for the resource being watched.
 	ResourceWatchStateReceived
 	// ResourceWatchStateTimeout is the state when the watch timer associated
@@ -114,10 +114,10 @@ type Stream struct {
 	// written to afterwards, and hence can be accessed without a mutex.
 	streamCh     chan transport.StreamingCall // New ADS streams are pushed here.
 	requestCh    *buffer.Unbounded            // Subscriptions and unsubscriptions are pushed here.
-	runnerDoneCh chan struct{}                // To notify exit of runner goroutine.
+	runnerDoneCh chan struct{}                // Notify completion of runner goroutine.
 	cancel       context.CancelFunc           // To cancel the context passed to the runner goroutine.
 
-	// Guards access to the below fields.
+	// Guards access to the below fields (and to the contents of the map).
 	mu                sync.Mutex
 	resourceTypeState map[xdsresource.Type]*resourceTypeState // Map of resource types to their state.
 	fc                *adsFlowControl                         // Flow control for ADS stream.
@@ -135,8 +135,8 @@ type StreamOpts struct {
 }
 
 // NewStream initializes a new ADS Stream instance using the given parameters.
-// It also launches goroutines responsible for managing reads and writes of
-// messages with the underlying stream.
+// It also launches goroutines responsible for managing reads and writes for
+// messages of the underlying stream.
 func NewStream(opts StreamOpts) *Stream {
 	s := &Stream{
 		transport:          opts.Transport,
@@ -213,13 +213,11 @@ func (s *Stream) Unsubscribe(typ xdsresource.Type, name string) {
 
 	state, ok := s.resourceTypeState[typ]
 	if !ok {
-		s.logger.Infof("easwars: returning early while Unsubscribing to resource %q of type %q", name, typ.TypeName())
 		return
 	}
 
 	rs, ok := state.subscribedResources[name]
 	if !ok {
-		s.logger.Infof("easwars: returning early while Unsubscribing to resource %q of type %q", name, typ.TypeName())
 		return
 	}
 	if rs.ExpiryTimer != nil {
@@ -232,9 +230,10 @@ func (s *Stream) Unsubscribe(typ xdsresource.Type, name string) {
 }
 
 // runner is a long-running goroutine that handles the lifecycle of the ADS
-// stream. It creates a new stream when the previous one fails, and sends
-// discovery requests on the stream. It backs off before creating new streams
-// following stream failures.
+// stream. It spwans another goroutine to handle writes of discovery request
+// messages on the stream. Whenever an existing stream fails, it performs
+// exponential backoff (if no messages were received on that stream) before
+// creating a new stream.
 func (s *Stream) runner(ctx context.Context) {
 	defer close(s.runnerDoneCh)
 
@@ -254,20 +253,21 @@ func (s *Stream) runner(ctx context.Context) {
 		s.mu.Lock()
 		// Flow control is a property of the underlying stream and needs to be
 		// initialized everytime a new stream is created.
-		s.fc = newADSFlowControl()
+		s.fc = newADSFlowControl(s.logger)
 		s.firstRequest = true
 		s.mu.Unlock()
 
+		// Ensure that the most recently created stream is pushed on the
+		// channel for the `send` goroutine to consume.
 		select {
 		case <-s.streamCh:
 		default:
 		}
 		s.streamCh <- stream
 
-		// Backoff state is reset upon successful receipt at least one
+		// Backoff state is reset upon successful receipt of at least one
 		// message from the server.
-		msgReceived := s.recv(ctx, stream)
-		if msgReceived {
+		if s.recv(ctx, stream) {
 			return backoff.ErrResetBackoff
 		}
 		return nil
@@ -280,6 +280,7 @@ func (s *Stream) runner(ctx context.Context) {
 // - a new subscription or unsubscription request is received
 // - a new stream is created after the previous one failed
 func (s *Stream) send(ctx context.Context) {
+	// Stores the most recent stream instance received on streamCh.
 	var stream transport.StreamingCall
 	for {
 		select {
@@ -293,7 +294,6 @@ func (s *Stream) send(ctx context.Context) {
 				continue
 			}
 		case req, ok := <-s.requestCh.Get():
-			s.logger.Infof("easwars: handling request in send goroutine")
 			if !ok {
 				return
 			}
@@ -314,7 +314,6 @@ func (s *Stream) send(ctx context.Context) {
 // resources that were sent in the request for the first time, i.e. their watch
 // state is `watchStateStarted`.
 func (s *Stream) sendNew(stream transport.StreamingCall, typ xdsresource.Type) error {
-	s.logger.Infof("easwars: sendNew for resource type %q", typ.TypeName())
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -335,12 +334,10 @@ func (s *Stream) sendNew(stream transport.StreamingCall, typ xdsresource.Type) e
 		case state.bufferedRequests <- struct{}{}:
 		default:
 		}
-		s.logger.Infof("easwars: buffered type %q", typ.TypeName())
 		return nil
 	}
 
 	names := resourceNames(state.subscribedResources)
-	s.logger.Infof("easwars: sendNew for resource type %q, names: %v", typ.TypeName(), names)
 	if err := s.sendMessageLocked(stream, names, typ.TypeURL(), state.version, state.nonce, nil); err != nil {
 		return err
 
@@ -404,13 +401,6 @@ func (s *Stream) sendBuffered(stream transport.StreamingCall) error {
 	defer s.mu.Unlock()
 
 	for typ, state := range s.resourceTypeState {
-		/*
-			if len(state.subscribedResources) == 0 {
-				s.logger.Infof("easwars: sendBuffered returning early for resource type %q", typ.TypeName())
-				continue
-			}
-		*/
-
 		select {
 		case <-state.bufferedRequests:
 			names := resourceNames(state.subscribedResources)
@@ -446,7 +436,6 @@ func (s *Stream) sendMessageLocked(stream transport.StreamingCall, names []strin
 		req.Node = s.nodeProto
 	}
 
-	// If this is a NACK, populate the error_detail field.
 	if nackErr != nil {
 		req.ErrorDetail = &statuspb.Status{
 			Code: int32(codes.InvalidArgument), Message: nackErr.Error(),
@@ -461,41 +450,41 @@ func (s *Stream) sendMessageLocked(stream transport.StreamingCall, names []strin
 
 	if s.logger.V(perRPCVerbosityLevel) {
 		s.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
-	} else {
-		if s.logger.V(2) {
-			s.logger.Warningf("ADS request sent for type %q, resources: %v, version: %q, nonce: %q", url, names, version, nonce)
-		}
+	} else if s.logger.V(2) {
+		s.logger.Warningf("ADS request sent for type %q, resources: %v, version: %q, nonce: %q", url, names, version, nonce)
 	}
 	return nil
 }
 
-// Return value indicates if at least one message was received from the server.
+// recv is responsible for receiving messages from the ADS stream.
+//
+// It performs the following actions:
+//   - Waits for local flow control to be available before sending buffered
+//     requests, if any.
+//   - Receives a message from the ADS stream. If an error is encountered here,
+//     it is handled by the onError method which propagates the error to all
+//     watchers.
+//   - Invokes the event handler's OnADSResponse method to process the message.
+//   - Sends an ACK or NACK to the server based on the response.
+//
+// It returns a boolean indicating whether at least one message was received
+// from the server.
 func (s *Stream) recv(ctx context.Context, stream transport.StreamingCall) bool {
 	msgReceived := false
 	for {
-		// Wait for ADS stream level flow control to be available.
+		// Wait for ADS stream level flow control to be available, and send out
+		// a request if anything was buffered while we were waiting for local
+		// processing of the previous response to complete.
 		if !s.fc.wait(ctx) {
 			if s.logger.V(2) {
 				s.logger.Infof("ADS stream context canceled")
 			}
 			return msgReceived
 		}
-
-		// Send out a request if anything was buffered while we were waiting for
-		// local processing of the previous response to complete.
 		s.sendBuffered(stream)
 
 		resources, url, version, nonce, err := s.recvMessage(stream)
 		if err != nil {
-			// Note that we do not consider it an error if the ADS stream was closed
-			// after having received a response on the stream. This is because there
-			// are legitimate reasons why the server may need to close the stream during
-			// normal operations, such as needing to rebalance load or the underlying
-			// connection hitting its max connection age limit.
-			// (see [gRFC A9](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md)).
-			if msgReceived {
-				err = xdsresource.NewErrorf(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
-			}
 			s.onError(err, msgReceived)
 			s.logger.Warningf("ADS stream closed: %v", err)
 			return msgReceived
@@ -514,6 +503,15 @@ func (s *Stream) recv(ctx context.Context, stream transport.StreamingCall) bool 
 		s.fc.setPending()
 		resourceNames, nackErr = s.eventHandler.OnADSResponse(resp, s.fc.onDone)
 		if xdsresource.ErrType(nackErr) == xdsresource.ErrorTypeResourceTypeUnsupported {
+			// Based on gRFC A27, a general guiding principle is that if the
+			// server sends something the client didn't actually subscribe to,
+			// then the client ignores it. Here, we have received a response
+			// with resources of a type that we don't know about.
+			//
+			// Sending a NACK doesn't really seem appropriate here, since we're
+			// not actually validating what the server sent and therefore don't
+			// know that it's invalid.  But we shouldn't ACK either, because we
+			// don't know that it is valid.
 			s.logger.Warningf("%v", nackErr)
 			continue
 		}
@@ -600,19 +598,26 @@ func (s *Stream) onRecv(stream transport.StreamingCall, names []string, url, ver
 	if nackErr != nil {
 		s.logger.Warningf("Sending NACK for resource type: %q, version: %q, nonce: %q, reason: %v", url, version, nonce, nackErr)
 		s.sendMessageLocked(stream, subscribedResourceNames, url, previousVersion, nonce, nackErr)
-	} else {
-		if s.logger.V(2) {
-			s.logger.Infof("Sending ACK for resource type: %q, version: %q, nonce: %q", url, version, nonce)
-		}
-		s.sendMessageLocked(stream, subscribedResourceNames, url, version, nonce, nil)
+		return
 	}
+
+	if s.logger.V(2) {
+		s.logger.Infof("Sending ACK for resource type: %q, version: %q, nonce: %q", url, version, nonce)
+	}
+	s.sendMessageLocked(stream, subscribedResourceNames, url, version, nonce, nil)
 }
 
+// onError is called when an error occurs on the ADS stream. It stops any
+// outstanding resource timers and resets the watch state to started for any
+// resources that were in the requested state. It also handles the case where
+// the ADS stream was closed after receiving a response, which is not
+// considered an error.
 func (s *Stream) onError(err error, msgReceived bool) {
-	s.mu.Lock()
 	// For resources that been requested but not yet responded to by the
 	// management server, stop the resource timers and reset the watch state to
-	// watchStateStarted.
+	// watchStateStarted. This is because we don't want the expiry timer to be
+	// running when we don't have a stream open to the management server.
+	s.mu.Lock()
 	for _, state := range s.resourceTypeState {
 		for _, rs := range state.subscribedResources {
 			if rs.State != ResourceWatchStateRequested {
@@ -625,17 +630,28 @@ func (s *Stream) onError(err error, msgReceived bool) {
 			rs.State = ResourceWatchStateStarted
 		}
 	}
+	s.mu.Unlock()
 
-	// Forward the error to the channel.
+	// Note that we do not consider it an error if the ADS stream was closed
+	// after having received a response on the stream. This is because there
+	// are legitimate reasons why the server may need to close the stream during
+	// normal operations, such as needing to rebalance load or the underlying
+	// connection hitting its max connection age limit.
+	// (see [gRFC A9](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md)).
 	if msgReceived {
 		err = xdsresource.NewErrorf(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
 	}
-	s.mu.Unlock()
 
 	s.eventHandler.OnADSStreamError(err)
 }
 
-// Caller must hold s.mu.
+// startWatchTimersLocked starts the expiry timers for the given resource names
+// of the specified resource type.  For each resource name, if the resource
+// watch state is in the "started" state, it transitions the state to
+// "requested" and starts an expiry timer. When the timer expires, the resource
+// watch state is set to "timeout" and the event handler callback is called.
+//
+// The caller must hold the s.mu lock.
 func (s *Stream) startWatchTimersLocked(typ xdsresource.Type, names []string) {
 	typeState := s.resourceTypeState[typ]
 	for _, name := range names {
@@ -660,9 +676,11 @@ func (s *Stream) startWatchTimersLocked(typ xdsresource.Type, names []string) {
 }
 
 func resourceNames(m map[string]*ResourceWatchState) []string {
-	ret := make([]string, 0, len(m))
-	for i := range m {
-		ret = append(ret, i)
+	ret := make([]string, len(m))
+	idx := 0
+	for name := range m {
+		ret[idx] = name
+		idx++
 	}
 	return ret
 }
@@ -730,8 +748,11 @@ type adsFlowControl struct {
 }
 
 // newADSFlowControl returns a new adsFlowControl.
-func newADSFlowControl() *adsFlowControl {
-	return &adsFlowControl{readyCh: make(chan struct{}, 1)}
+func newADSFlowControl(logger *igrpclog.PrefixLogger) *adsFlowControl {
+	return &adsFlowControl{
+		logger:  logger,
+		readyCh: make(chan struct{}, 1),
+	}
 }
 
 // setPending changes the internal state to indicate that there is an update
