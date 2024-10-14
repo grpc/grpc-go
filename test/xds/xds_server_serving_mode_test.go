@@ -73,12 +73,11 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	defer server.Stop()
 
 	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
-
-	defer server.Stop()
 
 	// Setup the management server to respond with the listener resources.
 	host, port, err := hostPortFromListener(lis)
@@ -226,12 +225,11 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	defer server.Stop()
 
 	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
-
-	defer server.Stop()
 
 	// Setup the management server to respond with server-side Listener
 	// resources for both listeners.
