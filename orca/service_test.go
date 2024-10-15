@@ -138,11 +138,11 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for out-of-band custom backend metrics to match expected values")
-		default:
 		case err := <-errCh:
 			if err != nil {
 				t.Fatal(err)
 			}
+		default:
 		}
 
 		mu.Lock()
