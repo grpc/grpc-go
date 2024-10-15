@@ -110,7 +110,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	// will trigger the injection of custom backend metrics from the
 	// stubServer.
 	const numRequests = 20
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
 	errCh := make(chan error, 1)
@@ -132,11 +132,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		t.Fatalf("Failed to create a stream for out-of-band metrics")
 	}
 
-	// Wait for the goroutine to finish before processing metrics.
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
-	}
-
 	// Wait for the server to push metrics which indicate the completion of all
 	// the unary RPCs made from the above goroutine.
 	for {
@@ -144,6 +139,10 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for out-of-band custom backend metrics to match expected values")
 		default:
+		case err := <-errCh:
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		mu.Lock()
