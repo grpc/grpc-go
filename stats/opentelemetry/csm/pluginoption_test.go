@@ -29,8 +29,6 @@ import (
 
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/google/go-cmp/cmp"
@@ -304,51 +302,6 @@ func (s) TestDetermineTargetCSM(t *testing.T) {
 	}
 }
 
-func (s) TestBootstrap(t *testing.T) {
-	tests := []struct {
-		name       string
-		nodeID     string
-		meshIDWant string
-	}{
-		{
-			name:       "malformed-node-id-unknown",
-			nodeID:     "malformed",
-			meshIDWant: "unknown",
-		},
-		{
-			name:       "node-id-parsed",
-			nodeID:     "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa",
-			meshIDWant: "mesh_id",
-		},
-		{
-			name:       "wrong-syntax-unknown",
-			nodeID:     "wrong-syntax/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa",
-			meshIDWant: "unknown",
-		},
-		{
-			name:       "node-id-parsed",
-			nodeID:     "projects/12345/networks/mesh:/nodes/aaaa-aaaa-aaaa-aaaa",
-			meshIDWant: "",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			bootstrapContents := e2e.DefaultBootstrapContents(t, test.nodeID, "xds_server_uri")
-			testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
-			nodeIDGot := getNodeID() // this should return the node ID plumbed into bootstrap above
-			if nodeIDGot != test.nodeID {
-				t.Fatalf("getNodeID: got %v, want %v", nodeIDGot, test.nodeID)
-			}
-
-			meshIDGot := parseMeshIDFromNodeID(nodeIDGot)
-			if meshIDGot != test.meshIDWant {
-				t.Fatalf("parseMeshIDFromNodeID(%v): got %v, want %v", nodeIDGot, meshIDGot, test.meshIDWant)
-			}
-		})
-	}
-}
-
 // TestSetLabels tests the setting of labels, which snapshots the resource and
 // environment. It mocks the resource and environment, and then calls into
 // labels creation. It verifies to local labels created and metadata exchange
@@ -360,14 +313,14 @@ func (s) TestSetLabels(t *testing.T) {
 		resourceKeyValues                map[string]string
 		csmCanonicalServiceNamePopulated bool
 		csmWorkloadNamePopulated         bool
-		bootstrapGeneratorPopulated      bool
+		meshIDPopulated                  bool
 		localLabelsWant                  map[string]string
 		metadataExchangeLabelsWant       map[string]string
 	}{
 		{
 			name:                             "no-type",
 			csmCanonicalServiceNamePopulated: true,
-			bootstrapGeneratorPopulated:      true,
+			meshIDPopulated:                  true,
 			resourceKeyValues:                map[string]string{},
 			localLabelsWant: map[string]string{
 				"csm.workload_canonical_service": "canonical_service_name_val", // env var populated so should be set.
@@ -480,9 +433,9 @@ func (s) TestSetLabels(t *testing.T) {
 					os.Setenv("CSM_WORKLOAD_NAME", "workload_name_val")
 					defer os.Unsetenv("CSM_WORKLOAD_NAME")
 				}
-				if test.bootstrapGeneratorPopulated {
-					bootstrapContents := e2e.DefaultBootstrapContents(t, "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa", "xds_server_uri")
-					testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
+				if test.meshIDPopulated {
+					os.Setenv("CSM_MESH_ID", "mesh_id")
+					defer os.Unsetenv("CSM_MESH_ID")
 				}
 				var attributes []attribute.KeyValue
 				for k, v := range test.resourceKeyValues {
