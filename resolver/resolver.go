@@ -237,8 +237,7 @@ type ClientConn interface {
 	// UpdateState can be omitted.
 	UpdateState(State) error
 	// ReportError notifies the ClientConn that the Resolver encountered an
-	// error. The Resolver should handle retrying the resolution, using a
-	// backoff timer to prevent overloading the server with requests.
+	// error.
 	ReportError(error)
 	// NewAddress is called by resolver to notify ClientConn a new list
 	// of resolved addresses.
