@@ -63,20 +63,15 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 
-	var (
-		requests int64
-		mu       sync.Mutex
-	)
-
+	var requests int
+	var mu sync.Mutex
 	stub := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			mu.Lock()
-			currentRequests := requests + 1
-			requests = currentRequests
+			requests++
 			mu.Unlock()
 
-			utilizationValue := float64(currentRequests) * 0.01
-			smr.SetNamedUtilization(requestsMetricKey, utilizationValue)
+			smr.SetNamedUtilization(requestsMetricKey, float64(requests)*0.01)
 			smr.SetCPUUtilization(50.0)
 			smr.SetMemoryUtilization(0.9)
 			smr.SetApplicationUtilization(1.2)
@@ -124,7 +119,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 				errCh <- fmt.Errorf("UnaryCall failed: %v", err)
 				return
 			}
-			time.Sleep(shortReportingInterval)
+			time.Sleep(time.Millisecond)
 		}
 		errCh <- nil
 	}()
@@ -136,16 +131,16 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		t.Fatalf("Failed to create a stream for out-of-band metrics")
 	}
 
+	// Wait for the goroutine to finish before processing metrics.
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
 	// Wait for the server to push metrics which indicate the completion of all
 	// the unary RPCs made from the above goroutine.
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for out-of-band custom backend metrics to match expected values")
-		case err := <-errCh:
-			if err != nil {
-				t.Fatal(err)
-			}
 		default:
 		}
 
@@ -153,7 +148,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: float64(requests) * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: float64(numRequests) * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
