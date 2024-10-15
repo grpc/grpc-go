@@ -63,16 +63,20 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 
-	var requests int
-	var mu sync.Mutex
+	var (
+		requests int64
+		mu       sync.Mutex
+	)
 
 	stub := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			mu.Lock()
-			requests++
+			currentRequests := requests + 1
+			requests = currentRequests
 			mu.Unlock()
 
-			smr.SetNamedUtilization(requestsMetricKey, float64(requests)*0.01)
+			utilizationValue := float64(currentRequests) * 0.01
+			smr.SetNamedUtilization(requestsMetricKey, utilizationValue)
 			smr.SetCPUUtilization(50.0)
 			smr.SetMemoryUtilization(0.9)
 			smr.SetApplicationUtilization(1.2)
@@ -146,17 +150,18 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		}
 
 		mu.Lock()
-		if requests == numRequests {
-			mu.Unlock()
+		currentRequests := requests
+		mu.Unlock()
+
+		if currentRequests == numRequests {
 			break
 		}
-		mu.Unlock()
 
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: float64(requests) * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: float64(currentRequests) * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
