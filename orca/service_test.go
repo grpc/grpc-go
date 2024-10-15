@@ -172,9 +172,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 
-	// A short delay to ensure the metrics deletion is processed.
-	time.Sleep(shortReportingInterval * 2)
-
 	// Wait for the server to push empty metrics which indicate the processing
 	// of the above EmptyCall RPC.
 	for {
