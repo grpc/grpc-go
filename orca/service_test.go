@@ -45,10 +45,6 @@ import (
 
 const requestsMetricKey = "test-service-requests"
 
-// An implementation of grpc_testing.TestService for the purpose of this test.
-// We cannot use the StubServer approach here because we need to register the
-// OpenRCAService as well on the same gRPC server.
-
 // TestE2E_CustomBackendMetrics_OutOfBand tests the injection of out-of-band
 // custom backend metrics from the server application, and verifies that
 // expected load reports are received at the client.
@@ -69,6 +65,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	var requests int
 	var mu sync.Mutex
+
 	stub := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			mu.Lock()
@@ -96,7 +93,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}
 
-	// Register the test service implementation on the same grpc server, and start serving.
 	stub.S = s
 	stubserver.StartTestService(t, stub)
 	go s.Serve(lis)
@@ -124,7 +120,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 				errCh <- fmt.Errorf("UnaryCall failed: %v", err)
 				return
 			}
-			time.Sleep(time.Millisecond)
+			time.Sleep(shortReportingInterval)
 		}
 		errCh <- nil
 	}()
@@ -150,11 +146,18 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		default:
 		}
 
+		mu.Lock()
+		if requests == numRequests {
+			mu.Unlock()
+			break
+		}
+		mu.Unlock()
+
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: numRequests * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: float64(requests) * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
