@@ -54,7 +54,7 @@ type Stream struct {
 	// The following fields are initialized when a Stream instance is created
 	// and are read-only afterwards, and hence can be accessed without a mutex.
 	transport transport.Interface     // Transport to use for LRS stream.
-	backoff   func(int) time.Duration // Backoff after stream failures.
+	backoff   func(int) time.Duration // Backoff for retries after stream failures.
 	nodeProto *v3corepb.Node          // Identifies the gRPC application.
 	doneCh    chan struct{}           // To notify exit of LRS goroutine.
 	logger    *igrpclog.PrefixLogger
@@ -155,7 +155,7 @@ func (lrs *Stream) runner(ctx context.Context) {
 		streamCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		stream, err := lrs.transport.CreateStreamingCall(ctx, "/envoy.service.load_stats.v3.LoadReportingService/StreamLoadStats")
+		stream, err := lrs.transport.CreateStreamingCall(streamCtx, "/envoy.service.load_stats.v3.LoadReportingService/StreamLoadStats")
 		if err != nil {
 			lrs.logger.Warningf("Creating new LRS stream failed: %v", err)
 			return nil
@@ -249,8 +249,8 @@ func (lrs *Stream) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([
 
 	clusters := resp.Clusters
 	if resp.SendAllClusters {
-		// Return nil to send stats for all clusters.
-		clusters = nil
+		// Return an empty slice to send stats for all clusters.
+		clusters = []string{}
 	}
 
 	return clusters, interval, nil

@@ -42,12 +42,12 @@ func init() {
 	}
 }
 
-// Builder provides a way to build a gRPC-based transport to an XDS server.
+// Builder provides a way to build a gRPC-based transport to an xDS server.
 type Builder struct{}
 
-// Build creates a new gRPC-based transport to an XDS server using the provided
-// options. It establishes a gRPC client connection using the server URI and
-// credentials specified in the provided options.
+// Build creates a new gRPC-based transport to an xDS server using the provided
+// options. This involves creating a grpc.ClientConn to the server identified by
+// the server URI in the provided options.
 func (b *Builder) Build(opts transport.BuildOptions) (transport.Interface, error) {
 	if opts.ServerConfig == nil {
 		return nil, fmt.Errorf("ServerConfig field in opts cannot be nil")

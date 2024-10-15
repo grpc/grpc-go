@@ -67,17 +67,15 @@ func (s) TestBuild_CustomDialer(t *testing.T) {
 	}
 	customDialerCalled = false
 
-	// Reset the dialer, create a new transport and ensure that our custom
-	// dialer is no longer called.
-	internal.GRPCNewClient = origDialer
+	// Create another transport and ensure that the custom dialer was called.
 	tr, err = builder.Build(opts)
 	if err != nil {
 		t.Fatalf("Builder.Build(%+v) failed: %v", opts, err)
 	}
 	defer tr.Close()
 
-	if customDialerCalled {
-		t.Fatalf("Builder.Build(%+v): custom dialer called = true, want false", opts)
+	if !customDialerCalled {
+		t.Fatalf("Builder.Build(%+v): custom dialer called = false, want true", opts)
 	}
 }
 
@@ -85,9 +83,9 @@ func (s) TestBuild_CustomDialer(t *testing.T) {
 // provided BuildOptions do not contain a ServerConfig.
 func (s) TestBuild_EmptyServerConfig(t *testing.T) {
 	builder := &grpctransport.Builder{}
-	tr, err := builder.Build(transport.BuildOptions{})
-	if err == nil {
+	opts := transport.BuildOptions{}
+	if tr, err := builder.Build(opts); err == nil {
 		tr.Close()
-		t.Fatalf("Builder.Build(%+v) succeeded when expected to fail", transport.BuildOptions{})
+		t.Fatalf("Builder.Build(%+v) succeeded when expected to fail", opts)
 	}
 }
