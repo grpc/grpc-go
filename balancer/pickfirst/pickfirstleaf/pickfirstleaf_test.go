@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -256,4 +257,112 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	if err := cc.WaitForPickerWithErr(ctx, newTfErr); err != nil {
 		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", newTfErr, err)
 	}
+}
+
+func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}, // no port
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
+				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
+				{Addresses: []resolver.Address{{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"}}},
+				{Addresses: []resolver.Address{{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"}}},
+				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	wantAddrs := []resolver.Address{
+		{Addr: "1.1.1.1"},
+		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
+		{Addr: "grpc.io:80"},
+		{Addr: "2.2.2.2:2"},
+		{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"},
+		{Addr: "3.3.3.3:3"},
+		{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"},
+		{Addr: "4.4.4.4:4"},
+	}
+
+	gotAddrs, err := subConnAddresses(ctx, cc, 8)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
+		t.Errorf("subconn creation order mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}},                                        // no port
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
+				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
+				{Addresses: []resolver.Address{{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"}}},
+				{Addresses: []resolver.Address{{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"}}},
+				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	wantAddrs := []resolver.Address{
+		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
+		{Addr: "1.1.1.1"},
+		{Addr: "grpc.io:80"},
+		{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"},
+		{Addr: "2.2.2.2:2"},
+		{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"},
+		{Addr: "3.3.3.3:3"},
+		{Addr: "4.4.4.4:4"},
+	}
+
+	gotAddrs, err := subConnAddresses(ctx, cc, 8)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
+		t.Errorf("subconn creation order mismatch (-want +got):\n%s", diff)
+	}
+}
+func subConnAddresses(ctx context.Context, cc *testutils.BalancerClientConn, subConnCount int) ([]resolver.Address, error) {
+	addresses := []resolver.Address{}
+	for i := 0; i < subConnCount; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("Context timed out waiting for SubConn")
+		case sc := <-cc.NewSubConnCh:
+			if len(sc.Addresses) != 1 {
+				return nil, fmt.Errorf("len(SubConn.Addresses) = %d, want 1", len(sc.Addresses))
+			}
+			addresses = append(addresses, sc.Addresses[0])
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+			sc.UpdateState(balancer.SubConnState{
+				ConnectivityState: connectivity.TransientFailure,
+				ConnectionError:   fmt.Errorf("test error"),
+			})
+		}
+	}
+	return addresses, nil
 }
