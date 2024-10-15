@@ -153,10 +153,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		currentRequests := requests
 		mu.Unlock()
 
-		if currentRequests == numRequests {
-			break
-		}
-
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
@@ -179,6 +175,10 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	if _, err := testStub.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
+
+	// A short delay to ensure the metrics deletion is processed.
+	time.Sleep(shortReportingInterval * 2)
+
 	// Wait for the server to push empty metrics which indicate the processing
 	// of the above EmptyCall RPC.
 	for {
