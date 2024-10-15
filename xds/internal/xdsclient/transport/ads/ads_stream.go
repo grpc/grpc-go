@@ -317,7 +317,7 @@ func (s *Stream) sendNew(stream transport.StreamingCall, typ xdsresource.Type) e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Ig there's no stream yet, skip the request. This request will be resent
+	// If there's no stream yet, skip the request. This request will be resent
 	// when a new stream is created. If no stream is created, the watcher will
 	// timeout (same as server not sending response back).
 	if stream == nil {
