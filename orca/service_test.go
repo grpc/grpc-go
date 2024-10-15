@@ -149,15 +149,11 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		default:
 		}
 
-		mu.Lock()
-		currentRequests := requests
-		mu.Unlock()
-
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: float64(currentRequests) * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: float64(requests) * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
