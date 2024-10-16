@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -255,12 +254,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	originalCfg := envconfig.PickFirstHappyEyeballsEnabled
-	envconfig.PickFirstHappyEyeballsEnabled = true
-	defer func() {
-		envconfig.PickFirstHappyEyeballsEnabled = originalCfg
-	}()
-
 	timerCh := make(chan struct{})
 	originalTimer := internal.TimeAfterFunc
 	internal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
@@ -351,12 +344,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	originalCfg := envconfig.PickFirstHappyEyeballsEnabled
-	envconfig.PickFirstHappyEyeballsEnabled = true
-	defer func() {
-		envconfig.PickFirstHappyEyeballsEnabled = originalCfg
-	}()
 
 	timerCh := make(chan struct{})
 	originalTimer := internal.TimeAfterFunc
@@ -497,12 +484,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	originalCfg := envconfig.PickFirstHappyEyeballsEnabled
-	envconfig.PickFirstHappyEyeballsEnabled = true
-	defer func() {
-		envconfig.PickFirstHappyEyeballsEnabled = originalCfg
-	}()
 
 	timerMu := sync.Mutex{}
 	timerCh := make(chan struct{})

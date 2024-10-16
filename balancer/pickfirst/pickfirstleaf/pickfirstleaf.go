@@ -432,9 +432,6 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 }
 
 func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
-	if !envconfig.PickFirstHappyEyeballsEnabled {
-		return
-	}
 	curAddr := b.addressList.currentAddress()
 	b.cancelScheduled()
 	ctx, cancel := context.WithCancel(context.Background())
