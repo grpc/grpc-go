@@ -16,81 +16,94 @@
  *
  */
 
-// Package tracing implements the OpenTelemetry context propagators for
-// gRPC tracing.
+// Package tracing implements the OpenTelemetry carrier for context propagation
+// in gRPC tracing.
 package tracing
 
 import (
-	"errors"
+	"context"
 
-	"go.opentelemetry.io/otel/propagation"
+	otelpropagation "go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 )
 
+// GRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
+// to propagate trace context in binary format.
 const GRPCTraceBinHeaderKey = "grpc-trace-bin"
 
-// CustomMapCarrier is a TextMapCarrier that uses metadata.MD held in memory
-// as a storage medium for propagated key-value pairs in both text and binary.
-type CustomMapCarrier struct {
-	propagation.TextMapCarrier
-	// MD is metadata.MD to store values in both string and binary format.
-	MD metadata.MD
+// CustomCarrier is a TextMapCarrier that uses gRPC context to store and
+// retrieve any propagated key-value pairs in text format along with binary
+// format for `grpc-trace-bin` header
+type CustomCarrier struct {
+	otelpropagation.TextMapCarrier
+
+	ctx context.Context
 }
 
 // NewCustomCarrier creates a new CustomMapCarrier with
-// embedded metadata.MD.
-func NewCustomCarrier(md metadata.MD) CustomMapCarrier {
-	return CustomMapCarrier{
-		MD: md,
+// the given context.
+func NewCustomCarrier(ctx context.Context) *CustomCarrier {
+	return &CustomCarrier{
+		ctx: ctx,
 	}
 }
 
-// Get returns the string value associated with the passed key.
-func (c CustomMapCarrier) Get(key string) string {
-	values := c.MD[key]
+// Get returns the string value associated with the passed key from the gRPC
+// context. It returns an empty string if the key is not present in the
+// context.
+func (c *CustomCarrier) Get(key string) string {
+	md, ok := metadata.FromIncomingContext(c.ctx)
+	if !ok {
+		return ""
+	}
+	values := md.Get(key)
 	if len(values) == 0 {
 		return ""
 	}
-
 	return values[0]
 }
 
-// Set stores the key-value pair in string format.
-func (c CustomMapCarrier) Set(key, value string) {
-	c.MD.Set(key, value)
+// Set stores the key-value pair in string format in the gRPC context.
+// If the key already exists, its value will be overwritten.
+func (c *CustomCarrier) Set(key, value string) {
+	md, ok := metadata.FromOutgoingContext(c.ctx)
+	if !ok {
+		md = metadata.MD{}
+	}
+	md.Set(key, value)
+	c.ctx = metadata.NewOutgoingContext(c.ctx, md)
 }
 
-// GetBinary returns the string value associated with the passed key,
-// only if the passed key is `grpc-trace-bin`.
-func (c CustomMapCarrier) GetBinary(key string) ([]byte, error) {
-	if key != GRPCTraceBinHeaderKey {
-		return nil, errors.New("only support 'grpc-trace-bin' binary header")
-	}
-
-	// Retrieve the binary data directly from metadata
-	values := c.MD[key]
+// GetBinary returns the binary value from the gRPC context in the incoming RPC,
+// associated with the header `grpc-trace-bin`.
+func (c CustomCarrier) GetBinary() []byte {
+	values := stats.Trace(c.ctx)
 	if len(values) == 0 {
-		return nil, errors.New("key not found")
+		return nil
 	}
 
-	return []byte(values[0]), nil
+	return values
 }
 
-// SetBinary sets the binary value for the given key in the metadata,
-// only if passed key is `grpc-trace-bin`.
-func (c CustomMapCarrier) SetBinary(key string, value []byte) {
-	// Only support 'grpc-trace-bin' binary header.
-	if key == GRPCTraceBinHeaderKey {
-		// Set the raw binary value in the metadata
-		c.MD[key] = []string{string(value)}
-	}
+// SetBinary sets the binary value to the gRPC context, which will be sent in
+// the outgoing RPC with the header `grpc-trace-bin`.
+func (c *CustomCarrier) SetBinary(value []byte) {
+	c.ctx = stats.SetTrace(c.ctx, value)
 }
 
-// Keys lists the keys stored in carriers metadata.MD.
-func (c CustomMapCarrier) Keys() []string {
-	keys := make([]string, 0, len(c.MD))
-	for k := range c.MD {
+// Keys returns the keys stored in the gRPC context for the outgoing RPC.
+func (c *CustomCarrier) Keys() []string {
+	md, _ := metadata.FromOutgoingContext(c.ctx)
+	keys := make([]string, 0, len(md))
+	for k := range md {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// Context returns the underlying *context.Context associated with the
+// CustomCarrier.
+func (c *CustomCarrier) Context() context.Context {
+	return c.ctx
 }
