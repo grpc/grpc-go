@@ -216,7 +216,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	if err := cc.waitForResolvedAddrs(ctx); err != nil {
 		return nil, err
 	}
-	nameResolutionDelayed := false
+	var nameResolutionDelayed = false
 	if time.Since(startTime) > time.Nanosecond*10 {
 		nameResolutionDelayed = true
 	}
@@ -364,9 +364,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		// the clientStream) or by the retry code while locked when replaying
 		// the operation, it is safe to access cs.attempt directly.
 		cs.attempt = a
+		cs.attempt.nameResolutionDelayed = nameResolutionDelayed
 		return nil
 	}
-	cs.attempt.nameResolutionDelayed = nameResolutionDelayed
 	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op, nil) }); err != nil {
 		return nil, err
 	}
@@ -421,8 +421,12 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	method := cs.callHdr.Method
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
+	nameResolutionDelayed := false
+	if cs.attempt != nil {
+		nameResolutionDelayed = cs.attempt.nameResolutionDelayed
+	}
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: cs.attempt.nameResolutionDelayed})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: nameResolutionDelayed})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,
