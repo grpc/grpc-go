@@ -130,7 +130,7 @@ type StreamImpl struct {
 type StreamOpts struct {
 	Transport          transport.Interface     // xDS transport to create the stream on.
 	EventHandler       StreamEventHandler      // Callbacks for stream events.
-	Backoff            func(int) time.Duration // Backoff after stream failures.
+	Backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	NodeProto          *v3corepb.Node          // Node proto to identify the gRPC application.
 	WatchExpiryTimeout time.Duration           // Resource watch expiry timeout.
 	LogPrefix          string                  // Prefix to be used for log messages.
