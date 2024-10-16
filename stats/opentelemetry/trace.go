@@ -44,10 +44,10 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 		span.AddEvent("Delayed name resolution complete")
 	}
 
-	carrier := otelinternaltracing.NewCustomCarrier(md) // Use internal custom carrier to inject
+	carrier := otelinternaltracing.NewCustomCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
-	return metadata.NewOutgoingContext(ctx, carrier.MD), // Return a new context with the updated metadata
+	return metadata.NewOutgoingContext(ctx, md), // Return a new context with the updated metadata
 		&traceInfo{
 			span:         span,
 			countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
@@ -63,19 +63,10 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 		return ctx, nil
 	}
 
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ctx, nil
-	}
-
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
-
 	var span trace.Span
-
 	tracer := otel.Tracer("grpc-open-telemetry")
-
-	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewCustomCarrier(md))
-
+	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewCustomCarrier(ctx))
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// Span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.

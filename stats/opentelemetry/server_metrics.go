@@ -194,7 +194,7 @@ func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	fmt.Println("Inside server stats handler") // TODO(aranjans): Remove once e2e tests are written.
+	fmt.Println("Inside server TagRPC") // TODO(aranjans): Remove once e2e tests are written.
 	method := info.FullMethodName
 	if h.options.MetricsOptions.MethodAttributeFilter != nil {
 		if !h.options.MetricsOptions.MethodAttributeFilter(method) {

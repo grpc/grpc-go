@@ -23,12 +23,15 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
+	otelpropagation "go.opentelemetry.io/otel/propagation"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
-	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
+	"google.golang.org/grpc/stats"
+	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
+
+// TODO: Move out of internal as part of open telemetry API
 
 type s struct {
 	grpctest.Tester
@@ -38,73 +41,110 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestInject(t *testing.T) {
-	propagator := GRPCTraceBinPropagator{}
-	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+// TestInject_FastPath verifies that the GRPCTraceBinPropagator correctly
+// injects OpenTelemetry trace context data using the CustomCarrier.
+//
+// It is called the fast path because it injects the trace context directly in
+// binary format.
+func (s) TestInject_FastPath(t *testing.T) {
+	p := GRPCTraceBinPropagator{}
+	sc := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
 		TraceID:    [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		SpanID:     [8]byte{17, 18, 19, 20, 21, 22, 23, 24},
-		TraceFlags: trace.FlagsSampled,
+		TraceFlags: oteltrace.FlagsSampled,
 	})
-	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
+	tCtx, tCancel := context.WithCancel(context.Background())
+	tCtx = oteltrace.ContextWithSpanContext(tCtx, sc)
+	defer tCancel()
 
-	t.Run("fast path with CustomMapCarrier", func(t *testing.T) {
-		carrier := otelinternaltracing.CustomMapCarrier{MD: metadata.MD{}}
-		propagator.Inject(ctx, carrier)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := itracing.NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{}))
+	p.Inject(tCtx, c)
 
-		got, error := carrier.GetBinary(otelinternaltracing.GRPCTraceBinHeaderKey)
-		if error != nil {
-			t.Fatalf("got non-nil error, want no error")
-		}
-
-		want := Binary(spanContext)
-		if string(got) != string(want) {
-			t.Errorf("got = %v, want %v", got, want)
-		}
-	})
-
-	t.Run("slow path with TextMapCarrier", func(t *testing.T) {
-		carrier := propagation.MapCarrier{}
-		propagator.Inject(ctx, carrier)
-
-		got := carrier.Get(otelinternaltracing.GRPCTraceBinHeaderKey)
-		want := base64.StdEncoding.EncodeToString(Binary(spanContext))
-		if got != want {
-			t.Errorf("got = %v, want %v", got, want)
-		}
-	})
+	got := stats.OutgoingTrace(c.Context())
+	want := Binary(sc)
+	if string(got) != string(want) {
+		t.Fatalf("got = %v, want %v", got, want)
+	}
 }
 
-func (s) TestExtract(t *testing.T) {
-	propagator := GRPCTraceBinPropagator{}
-	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+// TestInject_SlowPath verifies that the GRPCTraceBinPropagator correctly
+// injects OpenTelemetry trace context data using any other text based carrier.
+//
+// It is called the slow path because it base64 encodes the binary trace
+// context before injecting it.
+func (s) TestInject_SlowPath(t *testing.T) {
+	p := GRPCTraceBinPropagator{}
+	sc := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
 		TraceID:    [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		SpanID:     [8]byte{17, 18, 19, 20, 21, 22, 23, 24},
-		TraceFlags: trace.FlagsSampled,
+		TraceFlags: oteltrace.FlagsSampled,
+	})
+	tCtx, tCancel := context.WithCancel(context.Background())
+	tCtx = oteltrace.ContextWithSpanContext(tCtx, sc)
+	defer tCancel()
+
+	c := otelpropagation.MapCarrier{}
+	p.Inject(tCtx, c)
+
+	got := c.Get(itracing.GRPCTraceBinHeaderKey)
+	want := base64.StdEncoding.EncodeToString(Binary(sc))
+	if got != want {
+		t.Fatalf("got = %v, want %v", got, want)
+	}
+}
+
+// TestExtract_FastPath verifies that the GRPCTraceBinPropagator correctly
+// extracts OpenTelemetry trace context data using the CustomCarrier.
+//
+// It is called the fast path because it extracts the trace context directly
+// in the binary format.
+func (s) TestExtract_FastPath(t *testing.T) {
+	p := GRPCTraceBinPropagator{}
+	sc := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
+		TraceID:    [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		SpanID:     [8]byte{17, 18, 19, 20, 21, 22, 23, 24},
+		TraceFlags: oteltrace.FlagsSampled,
 		Remote:     true,
 	})
-	binaryData := Binary(spanContext)
+	bd := Binary(sc)
 
-	t.Run("fast path with CustomMapCarrier", func(t *testing.T) {
-		carrier := otelinternaltracing.CustomMapCarrier{MD: metadata.MD{
-			otelinternaltracing.GRPCTraceBinHeaderKey: []string{string(binaryData)},
-		}}
-		ctx := propagator.Extract(context.Background(), carrier)
-		got := trace.SpanContextFromContext(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := itracing.NewCustomCarrier(stats.SetIncomingTrace(ctx, bd))
+	tCtx := p.Extract(ctx, c)
+	got := oteltrace.SpanContextFromContext(tCtx)
 
-		if !got.Equal(spanContext) {
-			t.Errorf("got = %v, want %v", got, spanContext)
-		}
+	if !got.Equal(sc) {
+		t.Fatalf("got = %v, want %v", got, sc)
+	}
+}
+
+// TestExtract_SlowPath verifies that the GRPCTraceBinPropagator correctly
+// extracts OpenTelemetry trace context data using any other text based carrier.
+//
+// It is called the slow path because it base64 decodes the binary trace
+// context before extracting it.
+func (s) TestExtract_SlowPath(t *testing.T) {
+	p := GRPCTraceBinPropagator{}
+	sc := oteltrace.NewSpanContext(oteltrace.SpanContextConfig{
+		TraceID:    [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		SpanID:     [8]byte{17, 18, 19, 20, 21, 22, 23, 24},
+		TraceFlags: oteltrace.FlagsSampled,
+		Remote:     true,
 	})
+	bd := Binary(sc)
 
-	t.Run("slow path with TextMapCarrier", func(t *testing.T) {
-		carrier := propagation.MapCarrier{
-			otelinternaltracing.GRPCTraceBinHeaderKey: base64.StdEncoding.EncodeToString(binaryData),
-		}
-		ctx := propagator.Extract(context.Background(), carrier)
-		got := trace.SpanContextFromContext(ctx)
+	c := otelpropagation.MapCarrier{
+		itracing.GRPCTraceBinHeaderKey: base64.StdEncoding.EncodeToString(bd),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tCtx := p.Extract(ctx, c)
+	got := oteltrace.SpanContextFromContext(tCtx)
 
-		if !got.Equal(spanContext) {
-			t.Errorf("got = %v, want %v", got, spanContext)
-		}
-	})
+	if !got.Equal(sc) {
+		t.Fatalf("got = %v, want %v", got, sc)
+	}
 }
