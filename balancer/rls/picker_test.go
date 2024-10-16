@@ -269,7 +269,7 @@ func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
 	tmr := stats.NewTestMetricsRecorder()
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
-		t.Fatalf("grpc.Connect() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
