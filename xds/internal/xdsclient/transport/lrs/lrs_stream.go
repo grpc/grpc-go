@@ -48,9 +48,12 @@ import (
 // terse output should be at `INFO` and verbosity 2.
 const perRPCVerbosityLevel = 9
 
-// Stream provides all the functionality associated with an LRS (Load Reporting
-// Service) stream on the client-side.
-type Stream struct {
+// StreamImpl provides all the functionality associated with an LRS (Load Reporting
+// Service) stream on the client-side. It manages the lifecycle of the LRS stream,
+// including starting, stopping, and retrying the stream. It also provides a
+// load.Store that can be used to report load, and a cleanup function that should
+// be called when the load reporting is no longer needed.
+type StreamImpl struct {
 	// The following fields are initialized when a Stream instance is created
 	// and are read-only afterwards, and hence can be accessed without a mutex.
 	transport transport.Interface     // Transport to use for LRS stream.
@@ -69,17 +72,17 @@ type Stream struct {
 // StreamOpts holds the options for creating an lrsStream.
 type StreamOpts struct {
 	Transport transport.Interface     // xDS transport to create the stream on.
-	Backoff   func(int) time.Duration // Backoff after stream failures.
+	Backoff   func(int) time.Duration // Backoff for retries after stream failures.
 	NodeProto *v3corepb.Node          // Node proto to identify the gRPC application.
 	LogPrefix string                  // Prefix to be used for log messages.
 }
 
-// NewStream creates a new LRS Stream with the provided options.
+// NewStreamImpl creates a new StreamImpl with the provided options.
 //
 // The actual streaming RPC call is initiated when the first call to ReportLoad
 // is made, and is terminated when the last call to ReportLoad is canceled.
-func NewStream(opts StreamOpts) *Stream {
-	lrs := &Stream{
+func NewStreamImpl(opts StreamOpts) *StreamImpl {
+	lrs := &StreamImpl{
 		transport: opts.Transport,
 		backoff:   opts.Backoff,
 		nodeProto: opts.NodeProto,
@@ -101,7 +104,7 @@ func NewStream(opts StreamOpts) *Stream {
 //
 // The cleanup function decrements the reference count and stops the LRS stream
 // when the last reference is removed.
-func (lrs *Stream) ReportLoad() (*load.Store, func()) {
+func (lrs *StreamImpl) ReportLoad() (*load.Store, func()) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
 
@@ -110,7 +113,7 @@ func (lrs *Stream) ReportLoad() (*load.Store, func()) {
 		defer lrs.mu.Unlock()
 
 		if lrs.refCount == 0 {
-			lrs.logger.Errorf("Attempting to stop an LRS stream that has already been stopped.")
+			lrs.logger.Errorf("Attempting to stop already stopped StreamImpl")
 			return
 		}
 		lrs.refCount--
@@ -119,7 +122,7 @@ func (lrs *Stream) ReportLoad() (*load.Store, func()) {
 		}
 		lrs.cancelStream()
 		lrs.cancelStream = nil
-		lrs.logger.Infof("Stopping LRS stream")
+		lrs.logger.Infof("Stopping StreamImpl")
 	})
 
 	if lrs.refCount != 0 {
@@ -140,7 +143,7 @@ func (lrs *Stream) ReportLoad() (*load.Store, func()) {
 // LoadStatsResponse, and then starts a goroutine to periodically send
 // LoadStatsRequests. The runner will restart the stream if it encounters any
 // errors.
-func (lrs *Stream) runner(ctx context.Context) {
+func (lrs *StreamImpl) runner(ctx context.Context) {
 	defer close(lrs.doneCh)
 
 	// This feature indicates that the client supports the
@@ -157,7 +160,7 @@ func (lrs *Stream) runner(ctx context.Context) {
 
 		stream, err := lrs.transport.CreateStreamingCall(streamCtx, "/envoy.service.load_stats.v3.LoadReportingService/StreamLoadStats")
 		if err != nil {
-			lrs.logger.Warningf("Creating new LRS stream failed: %v", err)
+			lrs.logger.Warningf("Failed to create new LRS streaming RPC: %v", err)
 			return nil
 		}
 		if lrs.logger.V(2) {
@@ -171,7 +174,7 @@ func (lrs *Stream) runner(ctx context.Context) {
 
 		clusters, interval, err := lrs.recvFirstLoadStatsResponse(stream)
 		if err != nil {
-			lrs.logger.Warningf("Reading from LRS stream failed: %v", err)
+			lrs.logger.Warningf("Reading from LRS streaming RPC failed: %v", err)
 			return nil
 		}
 
@@ -186,7 +189,7 @@ func (lrs *Stream) runner(ctx context.Context) {
 // sendLoads is responsible for periodically sending load reports to the LRS
 // server at the specified interval for the specified clusters, until the passed
 // in context is canceled.
-func (lrs *Stream) sendLoads(ctx context.Context, stream transport.StreamingCall, clusterNames []string, interval time.Duration) {
+func (lrs *StreamImpl) sendLoads(ctx context.Context, stream transport.StreamingCall, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -202,7 +205,7 @@ func (lrs *Stream) sendLoads(ctx context.Context, stream transport.StreamingCall
 	}
 }
 
-func (lrs *Stream) sendFirstLoadStatsRequest(stream transport.StreamingCall, node *v3corepb.Node) error {
+func (lrs *StreamImpl) sendFirstLoadStatsRequest(stream transport.StreamingCall, node *v3corepb.Node) error {
 	req := &v3lrspb.LoadStatsRequest{Node: node}
 	if lrs.logger.V(perRPCVerbosityLevel) {
 		lrs.logger.Infof("Sending initial LoadStatsRequest: %s", pretty.ToJSON(req))
@@ -223,7 +226,7 @@ func (lrs *Stream) sendFirstLoadStatsRequest(stream transport.StreamingCall, nod
 //
 // If the server requests for endpoint-level load reporting, an error is
 // returned, since this is not yet supported.
-func (lrs *Stream) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([]string, time.Duration, error) {
+func (lrs *StreamImpl) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([]string, time.Duration, error) {
 	r, err := stream.Recv()
 	if err != nil {
 		return nil, 0, fmt.Errorf("lrs: failed to receive first LoadStatsResponse: %v", err)
@@ -236,11 +239,11 @@ func (lrs *Stream) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([
 		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(resp))
 	}
 
-	rInterval := resp.GetLoadReportingInterval()
-	if rInterval.CheckValid() != nil {
+	internal := resp.GetLoadReportingInterval()
+	if internal.CheckValid() != nil {
 		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
-	interval := rInterval.AsDuration()
+	loadReportingInterval := internal.AsDuration()
 
 	if resp.ReportEndpointGranularity {
 		// TODO(easwars): Support per endpoint loads.
@@ -253,10 +256,10 @@ func (lrs *Stream) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([
 		clusters = []string{}
 	}
 
-	return clusters, interval, nil
+	return clusters, loadReportingInterval, nil
 }
 
-func (lrs *Stream) sendLoadStatsRequest(stream transport.StreamingCall, loads []*load.Data) error {
+func (lrs *StreamImpl) sendLoadStatsRequest(stream transport.StreamingCall, loads []*load.Data) error {
 	clusterStats := make([]*v3endpointpb.ClusterStats, 0, len(loads))
 	for _, sd := range loads {
 		droppedReqs := make([]*v3endpointpb.ClusterStats_DroppedRequests, 0, len(sd.Drops))
@@ -325,7 +328,7 @@ func getStreamError(stream transport.StreamingCall) error {
 }
 
 // Stop blocks until the stream is closed and all spawned goroutines exit.
-func (lrs *Stream) Stop() {
+func (lrs *StreamImpl) Stop() {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
 
