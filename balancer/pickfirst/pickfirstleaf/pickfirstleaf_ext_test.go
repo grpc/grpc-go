@@ -1255,11 +1255,11 @@ func newHangingServerGroup(t *testing.T, count int) *handingServerGroup {
 
 		go func() {
 			conn, err := lis.Accept()
-			defer conn.Close()
 			if err != nil {
 				t.Error(err)
 				return
 			}
+			defer conn.Close()
 
 			contacted.Fire()
 
@@ -1270,7 +1270,7 @@ func newHangingServerGroup(t *testing.T, count int) *handingServerGroup {
 				case <-readyChan:
 					framer := http2.NewFramer(conn, conn)
 					if err := framer.WriteSettings(http2.Setting{}); err != nil {
-						t.Fatalf("Error while writing settings frame. %v", err)
+						t.Errorf("Error while writing settings frame. %v", err)
 						return
 					}
 
