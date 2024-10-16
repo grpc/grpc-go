@@ -26,7 +26,6 @@
 package pickfirstleaf
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -434,12 +433,12 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 	curAddr := b.addressList.currentAddress()
 	b.cancelScheduled()
-	ctx, cancel := context.WithCancel(context.Background())
+	cancelled := false // Access to this is protected by the balancer's mutex.
 	closeFn := internal.TimeAfterFunc(connectionDelayInterval, func() {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		// If the scheduled task is cancelled while acquiring the mutex, return.
-		if ctx.Err() != nil {
+		if cancelled {
 			return
 		}
 		if b.logger.V(2) {
@@ -450,7 +449,7 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 		}
 	}).Stop
 	b.cancelScheduled = sync.OnceFunc(func() {
-		cancel()
+		cancelled = true
 		closeFn()
 	})
 }
