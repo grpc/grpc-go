@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -103,6 +104,7 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 }
 
 func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	fmt.Println("Inside server unary interceptor.") // TODO(aranjans): Remove once e2e tests are written.
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
 		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -192,6 +194,7 @@ func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	fmt.Println("Inside server stats handler") // TODO(aranjans): Remove once e2e tests are written.
 	method := info.FullMethodName
 	if h.options.MetricsOptions.MethodAttributeFilter != nil {
 		if !h.options.MetricsOptions.MethodAttributeFilter(method) {

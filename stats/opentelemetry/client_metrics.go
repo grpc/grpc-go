@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -85,6 +86,7 @@ func (h *clientStatsHandler) initializeTracing() {
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	fmt.Println("Inside client unary interceptor") // TODO(aranjans): Remove once e2e tests are written.
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
@@ -120,6 +122,7 @@ func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOpt
 }
 
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	fmt.Println("Inside client stream interceptor") // TODO(aranjans): Remove once e2e tests are written.
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
@@ -189,6 +192,7 @@ func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management.
 func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	fmt.Println("Inside Tag RPC client.") // TODO(aranjans): Remove once e2e tests are written.
 	// Numerous stats handlers can be used for the same channel. The cluster
 	// impl balancer which writes to this will only write once, thus have this
 	// stats handler's per attempt scoped context point to the same optional
