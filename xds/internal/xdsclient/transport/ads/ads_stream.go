@@ -97,15 +97,17 @@ type resourceTypeState struct {
 	subscribedResources map[string]*ResourceWatchState // Map of subscribed resource names to their state.
 }
 
-// Stream provides the functionality associated with an ADS (Aggregated
-// Discovery Service) stream on the client side.
-type Stream struct {
+// StreamImpl provides the functionality associated with an ADS (Aggregated
+// Discovery Service) stream on the client side. It manages the lifecycle of the
+// ADS stream, including creating the stream, sending requests, and handling
+// responses. It also handles flow control and retries for the stream.
+type StreamImpl struct {
 	// The following fields are initialized from arguments passed to the
 	// constructor and are read-only afterwards, and hence can be accessed
 	// without a mutex.
 	transport          transport.Interface     // Transport to use for ADS stream.
 	eventHandler       StreamEventHandler      // Callbacks into the xdsChannel.
-	backoff            func(int) time.Duration // Backoff after stream failures.
+	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto          *v3corepb.Node          // Identifies the gRPC application.
 	watchExpiryTimeout time.Duration           // Resource watch expiry timeout
 	logger             *igrpclog.PrefixLogger
@@ -134,11 +136,11 @@ type StreamOpts struct {
 	LogPrefix          string                  // Prefix to be used for log messages.
 }
 
-// NewStream initializes a new ADS Stream instance using the given parameters.
-// It also launches goroutines responsible for managing reads and writes for
-// messages of the underlying stream.
-func NewStream(opts StreamOpts) *Stream {
-	s := &Stream{
+// NewStreamImpl initializes a new StreamImpl instance using the given
+// parameters.  It also launches goroutines responsible for managing reads and
+// writes for messages of the underlying stream.
+func NewStreamImpl(opts StreamOpts) *StreamImpl {
+	s := &StreamImpl{
 		transport:          opts.Transport,
 		eventHandler:       opts.EventHandler,
 		backoff:            opts.Backoff,
@@ -161,7 +163,7 @@ func NewStream(opts StreamOpts) *Stream {
 }
 
 // Stop blocks until the stream is closed and all spawned goroutines exit.
-func (s *Stream) Stop() {
+func (s *StreamImpl) Stop() {
 	s.cancel()
 	s.requestCh.Close()
 	<-s.runnerDoneCh
@@ -172,7 +174,7 @@ func (s *Stream) Stop() {
 // subscriptions for the same resource is deduped at the caller. A discovery
 // request is sent out on the underlying stream for the resource type when there
 // is sufficient flow control quota.
-func (s *Stream) Subscribe(typ xdsresource.Type, name string) {
+func (s *StreamImpl) Subscribe(typ xdsresource.Type, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Subscribing to resource %q of type %q", name, typ.TypeName())
 	}
@@ -203,7 +205,7 @@ func (s *Stream) Subscribe(typ xdsresource.Type, name string) {
 // the given resource does not exist. The watch expiry timer associated with the
 // resource is stopped if one is active. A discovery request is sent out on the
 // stream for the resource type when there is sufficient flow control quota.
-func (s *Stream) Unsubscribe(typ xdsresource.Type, name string) {
+func (s *StreamImpl) Unsubscribe(typ xdsresource.Type, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Unsubscribing to resource %q of type %q", name, typ.TypeName())
 	}
@@ -234,7 +236,7 @@ func (s *Stream) Unsubscribe(typ xdsresource.Type, name string) {
 // messages on the stream. Whenever an existing stream fails, it performs
 // exponential backoff (if no messages were received on that stream) before
 // creating a new stream.
-func (s *Stream) runner(ctx context.Context) {
+func (s *StreamImpl) runner(ctx context.Context) {
 	defer close(s.runnerDoneCh)
 
 	go s.send(ctx)
@@ -242,7 +244,7 @@ func (s *Stream) runner(ctx context.Context) {
 	runStreamWithBackoff := func() error {
 		stream, err := s.transport.CreateStreamingCall(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 		if err != nil {
-			s.logger.Warningf("Creating new ADS stream failed: %v", err)
+			s.logger.Warningf("Failed to create a new ADS streaming RPC: %v", err)
 			s.onError(err, false)
 			return nil
 		}
@@ -251,8 +253,8 @@ func (s *Stream) runner(ctx context.Context) {
 		}
 
 		s.mu.Lock()
-		// Flow control is a property of the underlying stream and needs to be
-		// initialized everytime a new stream is created.
+		// Flow control is a property of the underlying streaming RPC call and
+		// needs to be initialized everytime a new one is created.
 		s.fc = newADSFlowControl(s.logger)
 		s.firstRequest = true
 		s.mu.Unlock()
@@ -279,7 +281,7 @@ func (s *Stream) runner(ctx context.Context) {
 // two scenarios:
 // - a new subscription or unsubscription request is received
 // - a new stream is created after the previous one failed
-func (s *Stream) send(ctx context.Context) {
+func (s *StreamImpl) send(ctx context.Context) {
 	// Stores the most recent stream instance received on streamCh.
 	var stream transport.StreamingCall
 	for {
@@ -313,7 +315,7 @@ func (s *Stream) send(ctx context.Context) {
 // and will be sent later. This method also starts the watch expiry timer for
 // resources that were sent in the request for the first time, i.e. their watch
 // state is `watchStateStarted`.
-func (s *Stream) sendNew(stream transport.StreamingCall, typ xdsresource.Type) error {
+func (s *StreamImpl) sendNew(stream transport.StreamingCall, typ xdsresource.Type) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -354,7 +356,7 @@ func (s *Stream) sendNew(stream transport.StreamingCall, typ xdsresource.Type) e
 // recovering from a broken stream.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *Stream) sendExisting(stream transport.StreamingCall) error {
+func (s *StreamImpl) sendExisting(stream transport.StreamingCall) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -393,10 +395,11 @@ func (s *Stream) sendExisting(stream transport.StreamingCall) error {
 }
 
 // sendBuffered sends out discovery requests for resources that were buffered
-// (when they were subscribed to) because of lack of flow control quota.
+// when they were subscribed to, because local processing of the previously
+// received response was not yet complete.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *Stream) sendBuffered(stream transport.StreamingCall) error {
+func (s *StreamImpl) sendBuffered(stream transport.StreamingCall) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -421,7 +424,7 @@ func (s *Stream) sendBuffered(stream transport.StreamingCall) error {
 // error if the request could not be sent.
 //
 // Caller needs to hold c.mu.
-func (s *Stream) sendMessageLocked(stream transport.StreamingCall, names []string, url, version, nonce string, nackErr error) error {
+func (s *StreamImpl) sendMessageLocked(stream transport.StreamingCall, names []string, url, version, nonce string, nackErr error) error {
 	req := &v3discoverypb.DiscoveryRequest{
 		ResourceNames: names,
 		TypeUrl:       url,
@@ -469,7 +472,7 @@ func (s *Stream) sendMessageLocked(stream transport.StreamingCall, names []strin
 //
 // It returns a boolean indicating whether at least one message was received
 // from the server.
-func (s *Stream) recv(ctx context.Context, stream transport.StreamingCall) bool {
+func (s *StreamImpl) recv(ctx context.Context, stream transport.StreamingCall) bool {
 	msgReceived := false
 	for {
 		// Wait for ADS stream level flow control to be available, and send out
@@ -520,7 +523,7 @@ func (s *Stream) recv(ctx context.Context, stream transport.StreamingCall) bool 
 	}
 }
 
-func (s *Stream) recvMessage(stream transport.StreamingCall) (resources []*anypb.Any, url, version, nonce string, err error) {
+func (s *StreamImpl) recvMessage(stream transport.StreamingCall) (resources []*anypb.Any, url, version, nonce string, err error) {
 	r, err := stream.Recv()
 	if err != nil {
 		return nil, "", "", "", err
@@ -546,7 +549,7 @@ func (s *Stream) recvMessage(stream transport.StreamingCall) (resources []*anypb
 //   - updates resource type specific state
 //   - updates resource specific state for resources in the response
 //   - sends an ACK or NACK to the server based on the response
-func (s *Stream) onRecv(stream transport.StreamingCall, names []string, url, version, nonce string, nackErr error) {
+func (s *StreamImpl) onRecv(stream transport.StreamingCall, names []string, url, version, nonce string, nackErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -612,7 +615,7 @@ func (s *Stream) onRecv(stream transport.StreamingCall, names []string, url, ver
 // resources that were in the requested state. It also handles the case where
 // the ADS stream was closed after receiving a response, which is not
 // considered an error.
-func (s *Stream) onError(err error, msgReceived bool) {
+func (s *StreamImpl) onError(err error, msgReceived bool) {
 	// For resources that been requested but not yet responded to by the
 	// management server, stop the resource timers and reset the watch state to
 	// watchStateStarted. This is because we don't want the expiry timer to be
@@ -652,7 +655,7 @@ func (s *Stream) onError(err error, msgReceived bool) {
 // watch state is set to "timeout" and the event handler callback is called.
 //
 // The caller must hold the s.mu lock.
-func (s *Stream) startWatchTimersLocked(typ xdsresource.Type, names []string) {
+func (s *StreamImpl) startWatchTimersLocked(typ xdsresource.Type, names []string) {
 	typeState := s.resourceTypeState[typ]
 	for _, name := range names {
 		resourceState, ok := typeState.subscribedResources[name]
@@ -688,7 +691,7 @@ func resourceNames(m map[string]*ResourceWatchState) []string {
 // TriggerResourceNotFoundForTesting triggers a resource not found event for the
 // given resource type and name.  This is intended for testing purposes only, to
 // simulate a resource not found scenario.
-func (s *Stream) TriggerResourceNotFoundForTesting(typ xdsresource.Type, resourceName string) {
+func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsresource.Type, resourceName string) {
 	s.mu.Lock()
 
 	state, ok := s.resourceTypeState[typ]
@@ -717,7 +720,7 @@ func (s *Stream) TriggerResourceNotFoundForTesting(typ xdsresource.Type, resourc
 // ResourceWatchStateForTesting returns the ResourceWatchState for the given
 // resource type and name.  This is intended for testing purposes only, to
 // inspect the internal state of the ADS stream.
-func (s *Stream) ResourceWatchStateForTesting(typ xdsresource.Type, resourceName string) (ResourceWatchState, error) {
+func (s *StreamImpl) ResourceWatchStateForTesting(typ xdsresource.Type, resourceName string) (ResourceWatchState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
