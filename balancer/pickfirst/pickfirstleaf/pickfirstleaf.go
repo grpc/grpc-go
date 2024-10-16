@@ -58,9 +58,6 @@ var (
 	// It is changed to "pick_first" in init() if this balancer is to be
 	// registered as the default pickfirst.
 	Name = "pick_first_leaf"
-	// timerAfterFunc allows mocking the timer for testing connection delay
-	// related functionality.
-	timerAfterFunc = time.AfterFunc
 )
 
 const (
@@ -438,9 +435,10 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 	if !envconfig.PickFirstHappyEyeballsEnabled {
 		return
 	}
+	curAddr := b.addressList.currentAddress()
 	b.cancelScheduled()
 	ctx, cancel := context.WithCancel(context.Background())
-	closeFn := timerAfterFunc(connectionDelayInterval, func() {
+	closeFn := internal.TimeAfterFunc(connectionDelayInterval, func() {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		// If the scheduled task is cancelled while acquiring the mutex, return.
@@ -448,15 +446,15 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 			return
 		}
 		if b.logger.V(2) {
-			b.logger.Infof("Happy Eyeballs timer expired.")
+			b.logger.Infof("Happy Eyeballs timer expired while waiting for connection to %q.", curAddr.Addr)
 		}
 		if b.addressList.increment() {
 			b.requestConnectionLocked()
 		}
 	}).Stop
 	b.cancelScheduled = sync.OnceFunc(func() {
-		closeFn()
 		cancel()
+		closeFn()
 	})
 }
 

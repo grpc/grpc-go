@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
@@ -261,8 +262,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	}()
 
 	timerCh := make(chan struct{})
-	originalTimer := timerAfterFunc
-	timerAfterFunc = func(_ time.Duration, f func()) *time.Timer {
+	originalTimer := internal.TimeAfterFunc
+	internal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		ret := time.AfterFunc(time.Hour, f)
@@ -277,7 +278,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	}
 
 	defer func() {
-		timerAfterFunc = originalTimer
+		internal.TimeAfterFunc = originalTimer
 	}()
 
 	cc := testutils.NewBalancerClientConn(t)
@@ -358,8 +359,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	}()
 
 	timerCh := make(chan struct{})
-	originalTimer := timerAfterFunc
-	timerAfterFunc = func(_ time.Duration, f func()) *time.Timer {
+	originalTimer := internal.TimeAfterFunc
+	internal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		ret := time.AfterFunc(time.Hour, f)
@@ -374,11 +375,11 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	}
 
 	defer func() {
-		timerAfterFunc = originalTimer
+		internal.TimeAfterFunc = originalTimer
 	}()
 
 	defer func() {
-		timerAfterFunc = originalTimer
+		internal.TimeAfterFunc = originalTimer
 	}()
 
 	cc := testutils.NewBalancerClientConn(t)
@@ -505,8 +506,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 
 	timerMu := sync.Mutex{}
 	timerCh := make(chan struct{})
-	originalTimer := timerAfterFunc
-	timerAfterFunc = func(_ time.Duration, f func()) *time.Timer {
+	originalTimer := internal.TimeAfterFunc
+	internal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		ret := time.AfterFunc(time.Hour, f)
@@ -524,7 +525,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	}
 
 	defer func() {
-		timerAfterFunc = originalTimer
+		internal.TimeAfterFunc = originalTimer
 	}()
 
 	cc := testutils.NewBalancerClientConn(t)
