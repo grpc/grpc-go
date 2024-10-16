@@ -296,12 +296,11 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	defer server.Stop()
 
 	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
-
-	defer server.Stop()
 
 	go func() {
 		if err := server.Serve(lis1); err != nil {
