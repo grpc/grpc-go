@@ -22,6 +22,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -329,4 +330,20 @@ type AuthorityOverrider interface {
 	// given target. The implementation must generate it without blocking,
 	// typically in line, and must keep it unchanged.
 	OverrideAuthority(Target) string
+}
+
+// ValidateEndpoints validates endpoints are valid from a petiole policies
+// perspective. Petiole policies should call this before calling into their
+// children.
+func ValidateEndpoints(endpoints []Endpoint) error {
+	if len(endpoints) == 0 {
+		return errors.New("endpoints list is empty")
+	}
+
+	for _, endpoint := range endpoints {
+		for range endpoint.Addresses {
+			return nil
+		}
+	}
+	return errors.New("endpoints list contains no addresses")
 }
