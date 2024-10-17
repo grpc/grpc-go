@@ -293,33 +293,39 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
 }
 
-type mockCompressor struct {
-	DecompressedData []byte
-	ErrDecompress    error
-	Size             int
-	CustomReader     io.Reader
+// testCompressor is a mock implementation of an encoding.Compressor interface
+// used for testing compression and decompression functionality.
+// Compress is a placeholder for the compression logic.
+// It currently returns a nil WriteCloser and no error, as the actual compression is not implemented.
+// DecompressedSize returns the pre-configured size of the decompressed data.
+// This is used in testing to simulate the size calculation of the decompressed output
+type testCompressor struct {
+	decompressedData   []byte
+	errDecompress      error
+	decompressDataSize int
+	customReader       io.Reader
 }
 
-func (m *mockCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+func (m *testCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
 	return nil, nil
 }
 
-func (m *mockCompressor) Decompress(r io.Reader) (io.Reader, error) {
-	if m.ErrDecompress != nil {
-		return nil, m.ErrDecompress
+func (m *testCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	if m.errDecompress != nil {
+		return nil, m.errDecompress
 	}
-	if m.CustomReader != nil {
-		return m.CustomReader, nil
+	if m.customReader != nil {
+		return m.customReader, nil
 	}
-	return bytes.NewReader(m.DecompressedData), nil
+	return bytes.NewReader(m.decompressedData), nil
 }
 
-func (m *mockCompressor) DecompressedSize(compressedBytes mem.BufferSlice) int {
-	return m.Size
+func (m *testCompressor) DecompresseddecompressDataSoze(compressedBytes mem.BufferSlice) int {
+	return m.decompressDataSize
 }
 
-func (m *mockCompressor) Name() string {
-	return "mockCompressor"
+func (m *testCompressor) Name() string {
+	return "testCompressor"
 }
 
 type ErrorReader struct{}
@@ -328,6 +334,9 @@ func (e *ErrorReader) Read(p []byte) (n int, err error) {
 	return 0, errors.New("simulated io.Copy read error")
 }
 
+// TestDecompress tests the decompression logic using different scenarios, such as successful decompression,
+// decompression errors, buffer overflows, and io.Copy errors. The test cases ensure that the decompressor
+// correctly handles various inputs and error conditions.
 func TestDecompress(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -340,9 +349,9 @@ func TestDecompress(t *testing.T) {
 	}{
 		{
 			name: "Successful decompression",
-			compressor: &mockCompressor{
-				DecompressedData: []byte("decompressed data"),
-				Size:             17,
+			compressor: &testCompressor{
+				decompressedData:   []byte("decompressed data"),
+				decompressDataSize: 17,
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 100,
@@ -350,13 +359,13 @@ func TestDecompress(t *testing.T) {
 				decompressed := []byte("decompressed data")
 				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
 			}(),
-			size:  1,
+			size:  17,
 			error: nil,
 		},
 		{
 			name: "Error during decompression",
-			compressor: &mockCompressor{
-				ErrDecompress: errors.New("decompression error"),
+			compressor: &testCompressor{
+				errDecompress: errors.New("decompression error"),
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 100,
@@ -366,21 +375,22 @@ func TestDecompress(t *testing.T) {
 		},
 		{
 			name: "Buffer overflow",
-			compressor: &mockCompressor{
-				DecompressedData: []byte("overflow data"),
-				Size:             100,
+			compressor: &testCompressor{
+				decompressedData:   []byte("overflow data"),
+				decompressDataSize: 100,
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 5,
 			want:                  nil,
 			size:                  6,
-			error:                 errors.New("overflow: message larger than max size receivable by client (5 bytes)"),
+
+			error: errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)."),
 		},
 		{
 			name: "MaxInt64 receive size with small data",
-			compressor: &mockCompressor{
-				DecompressedData: []byte("small data"),
-				Size:             10,
+			compressor: &testCompressor{
+				decompressedData:   []byte("small data"),
+				decompressDataSize: 10,
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: math.MaxInt64,
@@ -388,12 +398,12 @@ func TestDecompress(t *testing.T) {
 				smallDecompressed := []byte("small data, small data ")
 				return mem.BufferSlice{mem.NewBuffer(&smallDecompressed, nil)}
 			}(),
-			size:  1,
+			size:  10,
 			error: nil,
 		}, {
 			name: "Error during io.Copy",
-			compressor: &mockCompressor{
-				CustomReader: &ErrorReader{},
+			compressor: &testCompressor{
+				customReader: &ErrorReader{},
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 100,
@@ -408,13 +418,13 @@ func TestDecompress(t *testing.T) {
 			output, size, err := decompress(tt.compressor, tt.input, tt.maxReceiveMessageSize, nil)
 			// check both err and tt.error are either nil or non-nil, the condition will be false
 			if (err != nil) != (tt.error != nil) {
-				t.Errorf("unexpected error state: got err=%v, want err=%v", err, tt.error)
+				t.Errorf("decompress() error, got err=%v, want err=%v", err, tt.error)
 			}
 			if size != tt.size {
-				t.Errorf("decompress() size = %d, want %d", size, tt.size)
+				t.Errorf("decompress() size, got = %d, want = %d", size, tt.size)
 			}
 			if len(tt.want) != len(output) {
-				t.Errorf("decompress() output length = %d, want %d", output, tt.want)
+				t.Errorf("decompress() output length, got = %d, want = %d", output, tt.want)
 			}
 		})
 	}

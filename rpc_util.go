@@ -877,6 +877,27 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 		return nil, 0, err
 	}
 	// TODO: Can/should this still be preserved with the new BufferSlice API? Are
+	//  there any actual benefits to allocating a single large buffer instead of
+	//  multiple smaller ones?
+	//if sizer, ok := compressor.(interface {
+	//	DecompressedSize(compressedBytes []byte) int
+	//}); ok {
+	//	if size := sizer.DecompressedSize(d); size >= 0 {
+	//		if size > maxReceiveMessageSize {
+	//			return nil, size, nil
+	//		}
+	//		// size is used as an estimate to size the buffer, but we
+	//		// will read more data if available.
+	//		// +MinRead so ReadFrom will not reallocate if size is correct.
+	//		//
+	//		// TODO: If we ensure that the buffer size is the same as the DecompressedSize,
+	//		// we can also utilize the recv buffer pool here.
+	//		buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
+	//		bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	//		return buf.Bytes(), int(bytesRead), err
+	//	}
+	//}
+
 	var out mem.BufferSlice
 	_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
 	if err != nil {
@@ -886,7 +907,8 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	if err = checkReceiveMessageOverflow(int64(out.Len()), int64(maxReceiveMessageSize), dcReader); err != nil {
 		return nil, out.Len() + 1, err
 	}
-	return out, len(out), err
+	return out, out.Len(), err
+
 }
 
 // checkReceiveMessageOverflow checks if the number of bytes read from the stream exceeds
@@ -900,7 +922,7 @@ func checkReceiveMessageOverflow(readBytes, maxReceiveMessageSize int64, dcReade
 	if readBytes == maxReceiveMessageSize {
 		b := make([]byte, 1)
 		if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
-			return fmt.Errorf("overflow: message larger than max size receivable by client (%d bytes)", maxReceiveMessageSize)
+			return fmt.Errorf("overflow: received message size is larger than the allowed maxReceiveMessageSize (%d bytes).", maxReceiveMessageSize)
 		}
 	}
 	return nil
