@@ -52,9 +52,9 @@ var (
 // configs are received by the resolver, and the result will be provided to the
 // Balancer in UpdateClientConnState.
 //
-// NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple Balancers are
-// registered with the same name, the one registered last will take effect.
+// NOTE: this function is intended to be called during initialization time (i.e.
+// in an init() function). If multiple Balancers are registered with the same
+// name, the one registered last will take effect.
 func Register(b Builder) {
 	name := strings.ToLower(b.Name())
 	if name != b.Name() {
