@@ -376,12 +376,12 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 			},
 		}),
 	}
-	cc, err := grpc.Dial(lis.Addr().String(), dopts...)
+	cc, err := grpc.NewClient(lis.Addr().String(), dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial server at %q: %v", lis.Addr(), err)
+		t.Fatalf("Failed to create new client server at %q: %v", lis.Addr(), err)
 	}
 	t.Cleanup(func() { cc.Close() })
-
+	cc.Connect()
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Spawn a goroutine to ensure that the channel stays in TransientFailure.
@@ -837,12 +837,12 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_Connecting(t *testing.T)
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(pickFirstServiceConfig),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
-
+	cc.Connect()
 	addrs := []resolver.Address{{Addr: lis.Addr().String()}}
 	r.UpdateState(resolver.State{Addresses: addrs})
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
@@ -892,12 +892,12 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_TransientFailure(t *test
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(pickFirstServiceConfig),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
-
+	cc.Connect()
 	addrs := []resolver.Address{{Addr: lis.Addr().String()}}
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

@@ -66,11 +66,12 @@ func (s) TestResolverBalancerInteraction(t *testing.T) {
 	rb.ResolveNowCallback = func(resolver.ResolveNowOptions) { close(rnCh) }
 	resolver.Register(rb)
 
-	cc, err := grpc.Dial(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	select {
 	case <-rnCh:
 	case <-time.After(defaultTestTimeout):
@@ -109,11 +110,12 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 	resolver.Register(&resolverBuilderWithErr{errCh: resErrCh, scheme: name})
 
 	resErrCh <- nil
-	cc, err := grpc.Dial(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	enterIdle(cc)
 	const errStr = "test error from resolver builder"
 	t.Log("pushing res err")
@@ -151,7 +153,7 @@ func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 
 	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 
@@ -200,7 +202,7 @@ func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 
@@ -245,7 +247,7 @@ func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 

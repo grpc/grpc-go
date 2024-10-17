@@ -267,12 +267,12 @@ func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
 	r := startManualResolverWithConfig(t, rlsConfig)
 
 	tmr := stats.NewTestMetricsRecorder()
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Make an RPC and ensure it gets routed to the default target.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -314,12 +314,12 @@ func (s) Test_RLSTargetPicksMetric(t *testing.T) {
 
 	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Make an RPC and ensure it gets routed to the test backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -352,12 +352,12 @@ func (s) Test_RLSFailedPicksMetric(t *testing.T) {
 
 	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Make an RPC and expect it to fail with deadline exceeded error. We use a
 	// smaller timeout to ensure that the test doesn't run very long.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
