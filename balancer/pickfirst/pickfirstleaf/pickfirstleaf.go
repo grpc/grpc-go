@@ -71,12 +71,12 @@ type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
-		cc:              cc,
-		addressList:     addressList{},
-		subConns:        resolver.NewAddressMap(),
-		state:           connectivity.Connecting,
-		mu:              sync.Mutex{},
-		cancelScheduled: func() {},
+		cc:                    cc,
+		addressList:           addressList{},
+		subConns:              resolver.NewAddressMap(),
+		state:                 connectivity.Connecting,
+		mu:                    sync.Mutex{},
+		cancelConnectionTimer: func() {},
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	return b
@@ -145,11 +145,11 @@ type pickfirstBalancer struct {
 	mu    sync.Mutex
 	state connectivity.State
 	// scData for active subonns mapped by address.
-	subConns        *resolver.AddressMap
-	addressList     addressList
-	firstPass       bool
-	numTF           int
-	cancelScheduled func()
+	subConns              *resolver.AddressMap
+	addressList           addressList
+	firstPass             bool
+	numTF                 int
+	cancelConnectionTimer func()
 }
 
 // ResolverError is called by the ClientConn when the name resolver produces
@@ -284,7 +284,7 @@ func (b *pickfirstBalancer) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.closeSubConnsLocked()
-	b.cancelScheduled()
+	b.cancelConnectionTimer()
 	b.state = connectivity.Shutdown
 }
 
@@ -357,7 +357,7 @@ func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address)
 // shutdownRemainingLocked shuts down remaining subConns. Called when a subConn
 // becomes ready, which means that all other subConn must be shutdown.
 func (b *pickfirstBalancer) shutdownRemainingLocked(selected *scData) {
-	b.cancelScheduled()
+	b.cancelConnectionTimer()
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
 		if sd.subConn != selected.subConn {
@@ -419,7 +419,8 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 			b.logger.Errorf("SubConn with state SHUTDOWN present in SubConns map")
 			return
 		case connectivity.Connecting:
-			// Wait for the SubConn to report success or failure.
+			// Wait for the connection attempt to complete or the timer to fire
+			// before attempting the next address.
 			b.scheduleNextConnectionLocked()
 			return
 		}
@@ -431,8 +432,11 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 }
 
 func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
+	b.cancelConnectionTimer()
+	if !b.addressList.hasNext() {
+		return
+	}
 	curAddr := b.addressList.currentAddress()
-	b.cancelScheduled()
 	cancelled := false // Access to this is protected by the balancer's mutex.
 	closeFn := internal.TimeAfterFunc(connectionDelayInterval, func() {
 		b.mu.Lock()
@@ -448,7 +452,9 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 			b.requestConnectionLocked()
 		}
 	}).Stop
-	b.cancelScheduled = sync.OnceFunc(func() {
+	// Access to the cancellation callback held by the balancer is guarded by
+	// the balancer's mutex, so it's safe to set the boolean from the callback.
+	b.cancelConnectionTimer = sync.OnceFunc(func() {
 		cancelled = true
 		closeFn()
 	})
@@ -531,7 +537,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 			// cause out of order updates to arrive.
 
 			if curAddr := b.addressList.currentAddress(); equalAddressIgnoringBalAttributes(&curAddr, &sd.addr) {
-				b.cancelScheduled()
+				b.cancelConnectionTimer()
 				if b.addressList.increment() {
 					b.requestConnectionLocked()
 					return
@@ -667,6 +673,16 @@ func (al *addressList) seekTo(needle resolver.Address) bool {
 		return true
 	}
 	return false
+}
+
+// hasNext returns whether incrementing the addressList will result in moving
+// past the end of the list. If the list has already moved past the end, it
+// returns false.
+func (al *addressList) hasNext() bool {
+	if !al.isValid() {
+		return false
+	}
+	return al.idx+1 < len(al.addresses)
 }
 
 // equalAddressIgnoringBalAttributes returns true is a and b are considered

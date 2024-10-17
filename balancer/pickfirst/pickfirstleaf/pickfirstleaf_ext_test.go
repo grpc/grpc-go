@@ -867,15 +867,15 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	pfinternal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
-		ret := time.AfterFunc(time.Hour, f)
+		timer := time.AfterFunc(time.Hour, f)
 		go func() {
 			select {
 			case <-ctx.Done():
 			case <-timerCh:
 			}
-			ret.Reset(0)
+			timer.Reset(0)
 		}()
-		return ret
+		return timer
 	}
 
 	defer func() {
@@ -942,10 +942,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 
 	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
 
-	// Move off the end of the list, pickfirst should still be waiting for TFs
-	// to be reported.
-	timerCh <- struct{}{}
-
 	// Third SubConn fails.
 	servers[2].closeConn()
 
@@ -968,15 +964,15 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	pfinternal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
-		ret := time.AfterFunc(time.Hour, f)
+		timer := time.AfterFunc(time.Hour, f)
 		go func() {
 			select {
 			case <-ctx.Done():
 			case <-timerCh:
 			}
-			ret.Reset(0)
+			timer.Reset(0)
 		}()
-		return ret
+		return timer
 	}
 
 	defer func() {
@@ -1036,7 +1032,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	pfinternal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
-		ret := time.AfterFunc(time.Hour, f)
+		timer := time.AfterFunc(time.Hour, f)
 		go func() {
 			timerMu.Lock()
 			ch := timerCh
@@ -1045,9 +1041,9 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 			case <-ctx.Done():
 			case <-ch:
 			}
-			ret.Reset(0)
+			timer.Reset(0)
 		}()
-		return ret
+		return timer
 	}
 
 	defer func() {
@@ -1092,8 +1088,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	timerMu.Unlock()
 	servers[0].closeConn()
 
-	// The second server is contacted.
-	// Verify that only the first server is contacted.
+	// Verify that only the second server is contacted.
 	if err := servers[1].awaitContacted(ctx); err != nil {
 		t.Fatalf("Server with address %q not contacted: %v", addrs[1], err)
 	}
