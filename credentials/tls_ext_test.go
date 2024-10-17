@@ -83,6 +83,11 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 		// MinVersion should be set to 1.2 by gRPC by default.
 		Certificates: []tls.Certificate{serverCert},
 	}
+	noOpGetCfgForClient := serverTLS.Clone()
+	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		return nil, nil
+	}
+
 	testCases := []struct {
 		name      string
 		serverTLS *tls.Config
@@ -90,6 +95,10 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 		{
 			name:      "base_case",
 			serverTLS: serverTLS,
+		},
+		{
+			name:      "fallback_to_base",
+			serverTLS: noOpGetCfgForClient,
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
@@ -159,6 +168,11 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 		CipherSuites: allCipherSuites,
 	}
 
+	noOpGetCfgForClient := serverTLS.Clone()
+	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		return nil, nil
+	}
+
 	testCases := []struct {
 		name      string
 		serverTLS *tls.Config
@@ -166,6 +180,10 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 		{
 			name:      "base_case",
 			serverTLS: serverTLS,
+		},
+		{
+			name:      "fallback_to_base",
+			serverTLS: noOpGetCfgForClient,
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
@@ -215,6 +233,10 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 	serverTLS := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
 	}
+	noOpGetCfgForClient := serverTLS.Clone()
+	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		return nil, nil
+	}
 
 	testCases := []struct {
 		name      string
@@ -223,6 +245,10 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 		{
 			name:      "base_case",
 			serverTLS: serverTLS,
+		},
+		{
+			name:      "fallback_to_base",
+			serverTLS: noOpGetCfgForClient,
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
@@ -284,6 +310,10 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 		Certificates: []tls.Certificate{serverCert},
 		CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
 	}
+	noOpGetCfgForClient := serverTLS.Clone()
+	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		return nil, nil
+	}
 
 	testCases := []struct {
 		name      string
@@ -292,6 +322,10 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 		{
 			name:      "base_case",
 			serverTLS: serverTLS,
+		},
+		{
+			name:      "fallback_to_base",
+			serverTLS: noOpGetCfgForClient,
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
