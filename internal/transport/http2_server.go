@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"strconv"
@@ -1455,7 +1455,7 @@ func getJitter(v time.Duration) time.Duration {
 	}
 	// Generate a jitter between +/- 10% of the value.
 	r := int64(v / 10)
-	j := rand.Int63n(2*r) - r
+	j := rand.Int64N(2*r) - r
 	return time.Duration(j)
 }
 

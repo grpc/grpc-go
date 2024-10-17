@@ -21,7 +21,7 @@ package serviceconfig
 import (
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"

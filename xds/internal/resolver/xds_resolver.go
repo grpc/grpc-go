@@ -22,7 +22,7 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync/atomic"
 
 	"google.golang.org/grpc/internal"
