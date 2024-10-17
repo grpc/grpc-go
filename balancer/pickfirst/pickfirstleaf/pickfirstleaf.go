@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -60,6 +61,14 @@ var (
 
 // TODO: change to pick-first when this becomes the default pick_first policy.
 const logPrefix = "[pick-first-leaf-lb %p] "
+
+type ipAddrType int
+
+const (
+	ipTypeUnknown ipAddrType = iota
+	ipv4
+	ipv6
+)
 
 type pickfirstBuilder struct{}
 
@@ -206,9 +215,6 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// "Flatten the list by concatenating the ordered list of addresses for
 		// each of the endpoints, in order." - A61
 		for _, endpoint := range endpoints {
-			// "In the flattened list, interleave addresses from the two address
-			// families, as per RFC-8305 section 4." - A61
-			// TODO: support the above language.
 			newAddrs = append(newAddrs, endpoint.Addresses...)
 		}
 	} else {
@@ -231,6 +237,10 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	// Not de-duplicating would result in attempting to connect to the same
 	// SubConn multiple times in the same pass. We don't want this.
 	newAddrs = deDupAddresses(newAddrs)
+
+	// Interleave addresses of both families (IPv4 and IPv6) as per RFC-8305
+	// section 4.
+	newAddrs = interleaveAddresses(newAddrs)
 
 	// Since we have a new set of addresses, we are again at first pass.
 	b.firstPass = true
@@ -312,6 +322,71 @@ func deDupAddresses(addrs []resolver.Address) []resolver.Address {
 		retAddrs = append(retAddrs, addr)
 	}
 	return retAddrs
+}
+
+func interleaveAddresses(addrs []resolver.Address) []resolver.Address {
+	// Group the addresses by their type and determine the order in which to
+	// interleave the address families. The order of interleaving the families
+	// is the order in which the first address of a particular type appears in
+	// the address list.
+	familyAddrsMap := map[ipAddrType][]resolver.Address{}
+	interleavingOrder := []ipAddrType{}
+	for _, addr := range addrs {
+		typ := addressType(addr.Addr)
+		if _, found := familyAddrsMap[typ]; !found {
+			interleavingOrder = append(interleavingOrder, typ)
+		}
+		familyAddrsMap[typ] = append(familyAddrsMap[typ], addr)
+	}
+
+	interleavedAddrs := make([]resolver.Address, 0, len(addrs))
+	curTypeIndex := 0
+	for i := 0; i < len(addrs); i++ {
+		// Some IP types may have fewer addresses than others, so we look for
+		// the next type that has a remaining member to add to the interleaved
+		// list.
+		for {
+			curType := interleavingOrder[curTypeIndex]
+			remainingMembers := familyAddrsMap[curType]
+			if len(remainingMembers) > 0 {
+				break
+			}
+			curTypeIndex = (curTypeIndex + 1) % len(interleavingOrder)
+		}
+		curType := interleavingOrder[curTypeIndex]
+		remainingMembers := familyAddrsMap[curType]
+		interleavedAddrs = append(interleavedAddrs, remainingMembers[0])
+		familyAddrsMap[curType] = remainingMembers[1:]
+		curTypeIndex = (curTypeIndex + 1) % len(interleavingOrder)
+	}
+
+	return interleavedAddrs
+}
+
+func addressType(address string) ipAddrType {
+	// Try parsing addresses without a port specified.
+	ip := net.ParseIP(address)
+	if ip == nil {
+		// Try to parse the IP after removing the port.
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return ipTypeUnknown
+		}
+		ip = net.ParseIP(host)
+	}
+
+	// If using the passthrough resolver, the hostnames would be unresolved
+	// and therefore not valid IP addresses.
+	if ip == nil {
+		return ipTypeUnknown
+	}
+
+	if ip.To4() != nil {
+		return ipv4
+	} else if ip.To16() != nil {
+		return ipv6
+	}
+	return ipTypeUnknown
 }
 
 // reconcileSubConnsLocked updates the active subchannels based on a new address
