@@ -300,10 +300,9 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 // DecompressedSize returns the pre-configured size of the decompressed data.
 // This is used in testing to simulate the size calculation of the decompressed output
 type testCompressor struct {
-	decompressedData   []byte
-	errDecompress      error
-	decompressDataSize int
-	customReader       io.Reader
+	decompressedData []byte
+	errDecompress    error
+	customReader     io.Reader
 }
 
 func (m *testCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
@@ -320,10 +319,11 @@ func (m *testCompressor) Decompress(r io.Reader) (io.Reader, error) {
 	return bytes.NewReader(m.decompressedData), nil
 }
 
-func (m *testCompressor) DecompresseddecompressDataSoze(compressedBytes mem.BufferSlice) int {
-	return m.decompressDataSize
+// DecompressedSize calculates and returns the size of the decompressed data dynamically,
+// by returning the length of the decompressedData slice.
+func (m *testCompressor) DecompressedSize(compressedBytes mem.BufferSlice) int {
+	return len(m.decompressedData) // Calculate size dynamically
 }
-
 func (m *testCompressor) Name() string {
 	return "testCompressor"
 }
@@ -350,8 +350,7 @@ func TestDecompress(t *testing.T) {
 		{
 			name: "Successful decompression",
 			compressor: &testCompressor{
-				decompressedData:   []byte("decompressed data"),
-				decompressDataSize: 17,
+				decompressedData: []byte("decompressed data"),
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 100,
@@ -376,8 +375,7 @@ func TestDecompress(t *testing.T) {
 		{
 			name: "Buffer overflow",
 			compressor: &testCompressor{
-				decompressedData:   []byte("overflow data"),
-				decompressDataSize: 100,
+				decompressedData: []byte("overflow data"),
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 5,
@@ -389,8 +387,7 @@ func TestDecompress(t *testing.T) {
 		{
 			name: "MaxInt64 receive size with small data",
 			compressor: &testCompressor{
-				decompressedData:   []byte("small data"),
-				decompressDataSize: 10,
+				decompressedData: []byte("small data"),
 			},
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: math.MaxInt64,
@@ -426,25 +423,5 @@ func TestDecompress(t *testing.T) {
 				t.Errorf("decompress() output length, got = %d, want = %d", output, tt.want)
 			}
 		})
-	}
-}
-func TestDecompressor_Integration(t *testing.T) {
-	compressor := gzip.NewCompressor() // Use regular compressor like gzip
-	originalData := []byte("test data")
-
-	// Compress
-	compressedData, err := compressor.Compress(originalData)
-	if err != nil {
-		t.Fatalf("Failed to compress data: %v", err)
-	}
-
-	// Decompress
-	decompressedData, err := compressor.Decompress(compressedData)
-	if err != nil {
-		t.Fatalf("Failed to decompress data: %v", err)
-	}
-
-	if !bytes.Equal(decompressedData, originalData) {
-		t.Errorf("Decompressed data does not match original")
 	}
 }

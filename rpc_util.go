@@ -897,7 +897,6 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	//		return buf.Bytes(), int(bytesRead), err
 	//	}
 	//}
-
 	var out mem.BufferSlice
 	_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
 	if err != nil {
