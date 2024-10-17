@@ -1022,10 +1022,10 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
 		timer := time.AfterFunc(time.Hour, f)
+		timerMu.Lock()
+		ch := timerCh
+		timerMu.Unlock()
 		go func() {
-			timerMu.Lock()
-			ch := timerCh
-			timerMu.Unlock()
 			select {
 			case <-ctx.Done():
 			case <-ch:
@@ -1065,12 +1065,13 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[2], got, want)
 	}
 
-	// First SubConn Fails.
 	// Replace the timer channel so that the old timers don't attempt to read
 	// messages pushed next.
 	timerMu.Lock()
 	timerCh = make(chan struct{})
 	timerMu.Unlock()
+
+	// First SubConn Fails.
 	holds[0].Fail(fmt.Errorf("test error"))
 
 	// Verify that only the second server is contacted.
