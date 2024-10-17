@@ -65,8 +65,15 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	var requests int
 	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	const numRequests = 20
+	wg.Add(numRequests)
+
 	stub := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			defer wg.Done()
+
 			mu.Lock()
 			requests++
 			mu.Unlock()
@@ -108,8 +115,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	// Spawn a goroutine which sends 20 unary RPCs to the stub server. This
 	// will trigger the injection of custom backend metrics from the
 	// stubServer.
-	const numRequests = 20
-	ctx, cancel := context.WithTimeout(context.Background(), 2*defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
 	errCh := make(chan error, 1)
@@ -124,6 +130,8 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		errCh <- nil
 	}()
 
+	wg.Wait()
+
 	// Start the server streaming RPC to receive custom backend metrics.
 	oobStub := v3orcaservicegrpc.NewOpenRcaServiceClient(cc)
 	stream, err := oobStub.StreamCoreMetrics(ctx, &v3orcaservicepb.OrcaLoadReportRequest{ReportInterval: durationpb.New(shortReportingInterval)})
@@ -131,16 +139,16 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		t.Fatalf("Failed to create a stream for out-of-band metrics")
 	}
 
-	// Wait for the goroutine to finish before processing metrics.
-	if err := <-errCh; err != nil {
-		t.Fatal(err)
-	}
 	// Wait for the server to push metrics which indicate the completion of all
 	// the unary RPCs made from the above goroutine.
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for out-of-band custom backend metrics to match expected values")
+		case err := <-errCh:
+			if err != nil {
+				t.Fatal(err)
+			}
 		default:
 		}
 
@@ -148,7 +156,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: float64(numRequests) * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: numRequests * 0.01},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
