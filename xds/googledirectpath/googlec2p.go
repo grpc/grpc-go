@@ -70,16 +70,15 @@ func init() {
 	resolver.Register(c2pResolverBuilder{})
 }
 
-// SetUniverseDomain informs the gRPC library of the TPC universe domain
-// in which the process is running (for example, "googleapis.com" or
-// "apis-s3ns.fr"). It is the caller's responsibility to ensure that the
-// domain is correct.
+// SetUniverseDomain informs the gRPC library of the universe domain
+// in which the process is running (for example, "googleapis.com").
+// It is the caller's responsibility to ensure that the domain is correct.
 //
 // This setting is used by the "google-c2p" resolver (the resolver used
 // for URIs with the "google-c2p" scheme) to configure its dependencies.
 //
 // If a gRPC channel is created with the "google-c2p" URI scheme and this
-// function has not been called, gRPC configures the universe domain as
+// function has NOT been called, then gRPC configures the universe domain as
 // "googleapis.com".
 //
 // Returns nil if either:
