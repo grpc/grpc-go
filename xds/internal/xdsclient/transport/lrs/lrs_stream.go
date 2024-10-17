@@ -21,7 +21,6 @@ package lrs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -223,9 +222,6 @@ func (lrs *StreamImpl) sendFirstLoadStatsRequest(stream transport.StreamingCall,
 //     server requested for load from all clusters
 //   - the load reporting interval, and
 //   - any error encountered
-//
-// If the server requests for endpoint-level load reporting, an error is
-// returned, since this is not yet supported.
 func (lrs *StreamImpl) recvFirstLoadStatsResponse(stream transport.StreamingCall) ([]string, time.Duration, error) {
 	r, err := stream.Recv()
 	if err != nil {
@@ -244,11 +240,6 @@ func (lrs *StreamImpl) recvFirstLoadStatsResponse(stream transport.StreamingCall
 		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
 	loadReportingInterval := internal.AsDuration()
-
-	if resp.ReportEndpointGranularity {
-		// TODO(easwars): Support per endpoint loads.
-		return nil, 0, errors.New("lrs: endpoint loads requested, but not supported by current implementation")
-	}
 
 	clusters := resp.Clusters
 	if resp.SendAllClusters {
