@@ -200,10 +200,10 @@ var tls12ForbiddenCipherSuites = map[uint16]struct{}{
 
 // NewTLS uses c to construct a TransportCredentials based on TLS.
 func NewTLS(c *tls.Config) TransportCredentials {
-	cfg := applyDefaults(c)
-	if cfg.GetConfigForClient != nil {
-		oldFn := cfg.GetConfigForClient
-		cfg.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+	config := applyDefaults(c)
+	if config.GetConfigForClient != nil {
+		oldFn := config.GetConfigForClient
+		config.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 			cfgForClient, err := oldFn(hello)
 			if err != nil || cfgForClient == nil {
 				return cfgForClient, err
@@ -211,8 +211,7 @@ func NewTLS(c *tls.Config) TransportCredentials {
 			return applyDefaults(cfgForClient), nil
 		}
 	}
-	tc := &tlsCreds{config: cfg}
-	return tc
+	return &tlsCreds{config: config}
 }
 
 func applyDefaults(c *tls.Config) *tls.Config {
