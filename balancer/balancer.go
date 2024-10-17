@@ -26,6 +26,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/connectivity"
@@ -40,7 +41,7 @@ import (
 
 var (
 	// m is a map from name to balancer builder.
-	m = make(map[string]Builder)
+	m sync.Map
 
 	logger = grpclog.Component("balancer")
 )
@@ -51,9 +52,9 @@ var (
 // configs are received by the resolver, and the result will be provided to the
 // Balancer in UpdateClientConnState.
 //
-// NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple Balancers are
-// registered with the same name, the one registered last will take effect.
+// NOTE: this function is intended to be called during initialization time (i.e.
+// in an init() function). If multiple Balancers are registered with the same
+// name, the one registered last will take effect.
 func Register(b Builder) {
 	name := strings.ToLower(b.Name())
 	if name != b.Name() {
@@ -62,7 +63,7 @@ func Register(b Builder) {
 		// remove this warning and update the docstrings for Register and Get.
 		logger.Warningf("Balancer registered with name %q. grpc-go will be switching to case sensitive balancer registries soon", b.Name())
 	}
-	m[name] = b
+	m.Store(name, b)
 }
 
 // unregisterForTesting deletes the balancer with the given name from the
@@ -70,7 +71,7 @@ func Register(b Builder) {
 //
 // This function is not thread-safe.
 func unregisterForTesting(name string) {
-	delete(m, name)
+	m.Delete(name)
 }
 
 // connectedAddress returns the connected address for a SubConnState. The
@@ -100,8 +101,8 @@ func Get(name string) Builder {
 		// remove this warning and update the docstrings for Register and Get.
 		logger.Warningf("Balancer retrieved for name %q. grpc-go will be switching to case sensitive balancer registries soon", name)
 	}
-	if b, ok := m[strings.ToLower(name)]; ok {
-		return b
+	if b, ok := m.Load(strings.ToLower(name)); ok {
+		return b.(Builder)
 	}
 	return nil
 }
