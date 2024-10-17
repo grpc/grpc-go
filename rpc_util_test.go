@@ -344,7 +344,7 @@ func TestDecompress(t *testing.T) {
 		input                 mem.BufferSlice
 		maxReceiveMessageSize int
 		want                  mem.BufferSlice
-		size                  int
+		compressedsize        int
 		error                 error
 	}{
 		{
@@ -359,8 +359,8 @@ func TestDecompress(t *testing.T) {
 				decompressed := []byte("decompressed data")
 				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
 			}(),
-			size:  17,
-			error: nil,
+			compressedsize: 17,
+			error:          nil,
 		},
 		{
 			name: "Error during decompression",
@@ -370,7 +370,7 @@ func TestDecompress(t *testing.T) {
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 100,
 			want:                  nil,
-			size:                  0,
+			compressedsize:        0,
 			error:                 errors.New("decompression error"),
 		},
 		{
@@ -382,7 +382,7 @@ func TestDecompress(t *testing.T) {
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 5,
 			want:                  nil,
-			size:                  6,
+			compressedsize:        6,
 
 			error: errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)."),
 		},
@@ -398,8 +398,8 @@ func TestDecompress(t *testing.T) {
 				smallDecompressed := []byte("small data, small data ")
 				return mem.BufferSlice{mem.NewBuffer(&smallDecompressed, nil)}
 			}(),
-			size:  10,
-			error: nil,
+			compressedsize: 10,
+			error:          nil,
 		}, {
 			name: "Error during io.Copy",
 			compressor: &testCompressor{
@@ -408,11 +408,10 @@ func TestDecompress(t *testing.T) {
 			input:                 mem.BufferSlice{},
 			maxReceiveMessageSize: 100,
 			want:                  nil,
-			size:                  0,
+			compressedsize:        0,
 			error:                 errors.New("simulated io.Copy read error"),
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, size, err := decompress(tt.compressor, tt.input, tt.maxReceiveMessageSize, nil)
@@ -420,12 +419,32 @@ func TestDecompress(t *testing.T) {
 			if (err != nil) != (tt.error != nil) {
 				t.Errorf("decompress() error, got err=%v, want err=%v", err, tt.error)
 			}
-			if size != tt.size {
-				t.Errorf("decompress() size, got = %d, want = %d", size, tt.size)
+			if size != tt.compressedsize {
+				t.Errorf("decompress() size, got = %d, want = %d", size, tt.compressedsize)
 			}
 			if len(tt.want) != len(output) {
 				t.Errorf("decompress() output length, got = %d, want = %d", output, tt.want)
 			}
 		})
+	}
+}
+func TestDecompressor_Integration(t *testing.T) {
+	compressor := gzip.NewCompressor() // Use regular compressor like gzip
+	originalData := []byte("test data")
+
+	// Compress
+	compressedData, err := compressor.Compress(originalData)
+	if err != nil {
+		t.Fatalf("Failed to compress data: %v", err)
+	}
+
+	// Decompress
+	decompressedData, err := compressor.Decompress(compressedData)
+	if err != nil {
+		t.Fatalf("Failed to decompress data: %v", err)
+	}
+
+	if !bytes.Equal(decompressedData, originalData) {
+		t.Errorf("Decompressed data does not match original")
 	}
 }
