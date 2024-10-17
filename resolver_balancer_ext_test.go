@@ -68,7 +68,7 @@ func (s) TestResolverBalancerInteraction(t *testing.T) {
 
 	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -112,7 +112,7 @@ func (s) TestResolverBuildFailure(t *testing.T) {
 	resErrCh <- nil
 	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -153,7 +153,7 @@ func (s) TestEnterIdleDuringResolverUpdateState(t *testing.T) {
 
 	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 
@@ -202,7 +202,7 @@ func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 
@@ -247,7 +247,7 @@ func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 
