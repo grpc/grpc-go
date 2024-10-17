@@ -237,7 +237,8 @@ type ClientConn interface {
 	// UpdateState can be omitted.
 	UpdateState(State) error
 	// ReportError notifies the ClientConn that the Resolver encountered an
-	// error. Error is forwarded to the LB policy by the ClientConn.
+	// error. The ClientConn then forwards this error to the load balancing
+	// policy.
 	ReportError(error)
 	// NewAddress is called by resolver to notify ClientConn a new list
 	// of resolved addresses.
