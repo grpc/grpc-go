@@ -49,6 +49,7 @@ import (
 )
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
+var NameResolutionDelayDuration = time.Nanosecond * 10
 
 // StreamHandler defines the handler called by gRPC server to complete the
 // execution of a streaming RPC.
@@ -217,7 +218,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		return nil, err
 	}
 	var nameResolutionDelayed = false
-	if time.Since(startTime) > time.Nanosecond*10 {
+	if time.Since(startTime) > NameResolutionDelayDuration {
 		nameResolutionDelayed = true
 	}
 	var mc serviceconfig.MethodConfig
@@ -325,19 +326,20 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	cs := &clientStream{
-		callHdr:      callHdr,
-		ctx:          ctx,
-		methodConfig: &mc,
-		opts:         opts,
-		callInfo:     c,
-		cc:           cc,
-		desc:         desc,
-		codec:        c.codec,
-		cp:           cp,
-		comp:         comp,
-		cancel:       cancel,
-		firstAttempt: true,
-		onCommit:     onCommit,
+		callHdr:               callHdr,
+		ctx:                   ctx,
+		methodConfig:          &mc,
+		opts:                  opts,
+		callInfo:              c,
+		cc:                    cc,
+		desc:                  desc,
+		codec:                 c.codec,
+		cp:                    cp,
+		comp:                  comp,
+		cancel:                cancel,
+		firstAttempt:          true,
+		onCommit:              onCommit,
+		nameResolutionDelayed: nameResolutionDelayed,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -364,7 +366,6 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		// the clientStream) or by the retry code while locked when replaying
 		// the operation, it is safe to access cs.attempt directly.
 		cs.attempt = a
-		cs.attempt.nameResolutionDelayed = nameResolutionDelayed
 		return nil
 	}
 	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op, nil) }); err != nil {
@@ -422,9 +423,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
 	nameResolutionDelayed := false
-	if cs.attempt != nil {
-		nameResolutionDelayed = cs.attempt.nameResolutionDelayed
-	}
+	nameResolutionDelayed = cs.nameResolutionDelayed
 	for _, sh := range shs {
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: nameResolutionDelayed})
 		beginTime = time.Now()
@@ -563,6 +562,8 @@ type clientStream struct {
 	// It's only read and used by Recv() and Header(), so it doesn't need to be
 	// synchronized.
 	serverHeaderBinlogged bool
+
+	nameResolutionDelayed bool
 
 	mu                      sync.Mutex
 	firstAttempt            bool // if true, transparent retry is valid

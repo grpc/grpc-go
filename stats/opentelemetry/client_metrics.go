@@ -176,7 +176,7 @@ func (h *clientStatsHandler) createCallSpan(ctx context.Context, method string) 
 	if !isTracingDisabled(h.options.TraceOptions) {
 		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 		tracer := otel.Tracer("grpc-open-telemetry")
-
+		fmt.Println("Creating call span") // TODO(aranjans): Remove this once e2e tests are written.
 		ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	}
 	return ctx, span
@@ -211,6 +211,11 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	}
 	var ti *traceInfo
 	if !isTracingDisabled(h.options.TraceOptions) {
+		callSpan := trace.SpanFromContext(ctx)
+		if info.NameResolutionDelay {
+			fmt.Println("Adding event for name resolution delay in call span, ", callSpan) // TODO(aranjans): Remove this.
+			callSpan.AddEvent("Delayed name resolution complete")
+		}
 		ctx, ti = h.traceTagRPC(ctx, info)
 	}
 	ai := &attemptInfo{ // populates information about RPC start.

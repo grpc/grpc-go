@@ -40,9 +40,6 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 
 	tracer := otel.Tracer("grpc-open-telemetry")
 	_, span := tracer.Start(ctx, mn)
-	if rti.NameResolutionDelay {
-		span.AddEvent("Delayed name resolution complete")
-	}
 
 	carrier := otelinternaltracing.NewCustomCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
