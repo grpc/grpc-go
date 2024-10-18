@@ -88,6 +88,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -104,7 +105,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 	server := grpc.NewServer()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 
