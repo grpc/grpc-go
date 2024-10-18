@@ -878,15 +878,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 		pfinternal.TimeAfterFunc = originalTimer
 	}()
 
-	defer func() {
-		pfinternal.TimeAfterFunc = originalTimer
-	}()
-
 	dialer := testutils.NewBlockingDialer()
-	cc, rb, bm := setupPickFirstLeaf(t, 3,
+	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
-	)
+	}
+	cc, rb, bm := setupPickFirstLeaf(t, 3, opts...)
 	addrs := bm.resolverAddrs()
 	holds := bm.holds(dialer)
 	rb.UpdateState(resolver.State{Addresses: addrs})
@@ -895,36 +892,35 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	// Verify that only the first server is contacted.
-	if got, want := holds[0].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[0], got, want)
+	if holds[0].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
 	}
 
 	// Ensure no other servers are contacted.
-	if got, want := holds[1].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[1], got, want)
+	if holds[1].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
+	}
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
 
-	if got, want := holds[2].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[2], got, want)
-	}
-
-	// Make the happy eyeballs timer fire twice so that pickfirst reaches the
-	// last address in the list.
+	// Make the happy eyeballs timer fire once and verify that the
+	// second server is contacted, but the third isn't.
 	timerCh <- struct{}{}
 
 	// Verify that the second server is contacted and 3rd isn't.
-	if got, want := holds[1].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[1], got, want)
+	if holds[1].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
+	}
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
 
-	if got, want := holds[2].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[2], got, want)
-	}
-
+	// Make the happy eyeballs timer fire once more and verify that the
+	// third server is contacted.
 	timerCh <- struct{}{}
-	// Verify that the second server is contacted and 3rd isn't.
-	if got, want := holds[1].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[1], got, want)
+	if holds[2].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
 	}
 
 	// First SubConn Fails.
@@ -973,15 +969,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 		pfinternal.TimeAfterFunc = originalTimer
 	}()
 
-	defer func() {
-		pfinternal.TimeAfterFunc = originalTimer
-	}()
-
 	dialer := testutils.NewBlockingDialer()
-	cc, rb, bm := setupPickFirstLeaf(t, 2,
+	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
-	)
+	}
+	cc, rb, bm := setupPickFirstLeaf(t, 2, opts...)
 	addrs := bm.resolverAddrs()
 	holds := bm.holds(dialer)
 	rb.UpdateState(resolver.State{Addresses: addrs})
@@ -989,20 +982,19 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
-	// Verify that the first server is contacted.
-	if got, want := holds[0].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[0], got, want)
+	// Verify that the first server is contacted and the second is not.
+	if holds[0].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
 	}
-
-	if got, want := holds[1].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[1], got, want)
+	if holds[1].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
 	}
 
 	timerCh <- struct{}{}
 
 	// Second connection attempt is successful.
-	if got, want := holds[1].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[1], got, want)
+	if holds[1].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
 	holds[1].Resume()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
@@ -1040,10 +1032,11 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	}()
 
 	dialer := testutils.NewBlockingDialer()
-	cc, rb, bm := setupPickFirstLeaf(t, 3,
+	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
-	)
+	}
+	cc, rb, bm := setupPickFirstLeaf(t, 3, opts...)
 	addrs := bm.resolverAddrs()
 	holds := bm.holds(dialer)
 	rb.UpdateState(resolver.State{Addresses: addrs})
@@ -1052,17 +1045,16 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	// Verify that only the first server is contacted.
-	if got, want := holds[0].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[0], got, want)
+	if holds[0].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
 	}
 
 	// Ensure no other servers are contacted.
-	if got, want := holds[1].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[1], got, want)
+	if holds[1].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
 	}
-
-	if got, want := holds[2].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[2], got, want)
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
 
 	// Replace the timer channel so that the old timers don't attempt to read
@@ -1075,21 +1067,21 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	holds[0].Fail(fmt.Errorf("test error"))
 
 	// Verify that only the second server is contacted.
-	if got, want := holds[1].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[1], got, want)
+	if holds[1].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
 
 	// Ensure no other servers are contacted.
-	if got, want := holds[2].IsStarted(), false; got != want {
-		t.Fatalf("holds[%q].IsStarted() = %t, want %t", addrs[2], got, want)
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
 
 	// The happy eyeballs timer expires, skipping server[1] and requesting the creation
 	// of a third SubConn.
 	timerCh <- struct{}{}
 
-	if got, want := holds[2].Wait(ctx), true; got != want {
-		t.Fatalf("hold[%q].Wait() = %t, want %t", addrs[2], got, want)
+	if holds[2].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
 	}
 
 	// Second SubConn connects.
