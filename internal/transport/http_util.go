@@ -457,7 +457,7 @@ func parseDialTarget(target string) (string, string) {
 		}
 		scheme := t.Scheme
 		addr := t.Path
-		if scheme == "unix" {
+		if scheme == "unix" || scheme == "npipe" {
 			if addr == "" {
 				addr = t.Host
 			}
