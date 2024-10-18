@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
+	trace2 "go.opentelemetry.io/otel/trace"
 	"io"
 	"testing"
 	"time"
@@ -644,6 +645,20 @@ func (s) TestTraceSpan(t *testing.T) {
 	}
 }
 
+// spanInformation is the information received about the span. This is a subset
+// of information that is important to verify that gRPC has knobs over, which
+// goes through a stable OpenTelemetry API with well-defined behavior. This keeps
+// the robustness of assertions over time.
+type spanInformation struct {
+	// SpanContext either gets pulled off the wire in certain cases server side
+	// or created.
+	sc         trace2.SpanContext
+	spanKind   string
+	name       string
+	events     []trace.Event
+	attributes []attribute.KeyValue
+}
+
 func (s) TestClientInterceptor(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
@@ -671,29 +686,151 @@ func (s) TestClientInterceptor(t *testing.T) {
 		t.Fatalf("Got %d spans, want %d", got, want)
 	}
 
-	// Check span names and parent-child relationship
-	if got, want := spans[0].Name, "grpc.testing.TestService.UnaryCall"; got != want {
-		t.Errorf("Span name is %q, want %q", got, want)
+	wantSI := []spanInformation{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: trace2.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key: "Client",
+				},
+				{
+					Key: "FailFast",
+				},
+				{
+					Key: "previous-rpc-attempts",
+				},
+				{
+					Key: "transparent-retry",
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key: "sequence-number",
+						},
+						{
+							Key: "message-size",
+						},
+						{
+							Key: "message-size-compressed",
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key: "sequence-number",
+						},
+						{
+							Key: "message-size",
+						},
+						{
+							Key: "message-size-compressed",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: trace2.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key: "Client",
+				},
+				{
+					Key: "FailFast",
+				},
+				{
+					Key: "previous-rpc-attempts",
+				},
+				{
+					Key: "transparent-retry",
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key: "sequence-number",
+						},
+						{
+							Key: "message-size",
+						},
+						{
+							Key: "message-size-compressed",
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key: "sequence-number",
+						},
+						{
+							Key: "message-size",
+						},
+						{
+							Key: "message-size-compressed",
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "grpc.testing.TestService.UnaryCall",
+			spanKind:   trace2.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
 	}
 
-	// Check that the attempt span has the correct events
-	if got, want := len(spans[0].Events), 2; got != want {
-		t.Fatalf("Got %d events in attempt span, want %d", got, want)
-	}
-	if got, want := spans[0].Events[1].Name, "Outbound compressed message"; got != want {
-		t.Errorf("Event name is %q, want %q", got, want)
-	}
-	if got, want := spans[0].Events[0].Name, "Inbound compressed message"; got != want {
-		t.Errorf("Event name is %q, want %q", got, want)
-	}
-
-	// Check that the attempt span has the correct status
-	if got, want := spans[0].Status.Code, otelcodes.Ok; got != want {
-		t.Errorf("Got status code %v, want %v", got, want)
+	for index, span := range spans {
+		// Check that the attempt span has the correct status
+		if got, want := spans[index].Status.Code, otelcodes.Ok; got != want {
+			t.Errorf("Got status code %v, want %v", got, want)
+		}
+		// name
+		if got, want := span.Name, wantSI[index].name; got != want {
+			t.Errorf("Span name is %q, want %q", got, want)
+		}
+		// spanKind
+		if got, want := span.SpanKind.String(), wantSI[index].spanKind; got != want {
+			t.Errorf("Got span kind %q, want %q", got, want)
+		}
+		// attributes
+		if got, want := len(span.Attributes), len(wantSI[index].attributes); got != want {
+			t.Errorf("Got attributes list of size %q, want %q", got, want)
+		}
+		for idx, att := range span.Attributes {
+			if got, want := att.Key, wantSI[index].attributes[idx].Key; got != want {
+				t.Errorf("Got attribute key for span name %q as %q, want %q", span.Name, got, want)
+			}
+		}
+		// events
+		if got, want := len(span.Events), len(wantSI[index].events); got != want {
+			t.Errorf("Event length is %q, want %q", got, want)
+		}
+		for eventIdx, event := range span.Events {
+			if got, want := event.Name, wantSI[index].events[eventIdx].Name; got != want {
+				t.Errorf("Got event name for span name %q as %q, want %q", span.Name, got, want)
+			}
+			for idx, att := range span.Attributes {
+				if got, want := att.Key, wantSI[eventIdx].attributes[idx].Key; got != want {
+					t.Errorf("Got attribute key for span name %q with event name %q, as %q, want %q", span.Name, event.Name, got, want)
+				}
+			}
+		}
 	}
 }
 
-func (s) TestGrpcTraceBinPropagator(t *testing.T) {
+func TestGrpcTraceBinPropagator(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 
