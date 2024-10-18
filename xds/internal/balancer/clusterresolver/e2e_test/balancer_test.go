@@ -97,11 +97,13 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		xdsClose()
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("Failed to create new client for local test server: %v", err)
 	}
+
+	cc.Connect()
 	return cc, func() {
 		xdsClose()
 		cc.Close()

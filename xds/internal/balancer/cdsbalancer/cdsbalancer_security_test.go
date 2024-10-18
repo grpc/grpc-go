@@ -162,10 +162,11 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 	r.InitialState(state)
 
 	// Create a ClientConn with the specified transport credentials.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("Failed to create new client for local test server: %v", err)
 	}
+	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 
 	// Start a test service backend with the specified transport credentials.
