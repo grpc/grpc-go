@@ -24,7 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strconv"
@@ -425,7 +425,7 @@ func chosenByPercentage(a *int) bool {
 	if a == nil {
 		return true
 	}
-	return rand.Intn(100)+1 <= *a
+	return rand.IntN(100)+1 <= *a
 }
 
 func canaryingSC(js string) string {
