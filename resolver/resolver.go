@@ -332,9 +332,10 @@ type AuthorityOverrider interface {
 	OverrideAuthority(Target) string
 }
 
-// ValidateEndpoints validates endpoints are valid from a petiole policies
-// perspective. Petiole policies should call this before calling into their
-// children.
+// ValidateEndpoints validates endpoints from a petiole policy's perspective.
+// Petiole policies should call this before calling into their children. See
+// [gRPC A61](https://github.com/grpc/proposal/blob/master/A61-IPv4-IPv6-dualstack-backends.md)
+// for details.
 func ValidateEndpoints(endpoints []Endpoint) error {
 	if len(endpoints) == 0 {
 		return errors.New("endpoints list is empty")
