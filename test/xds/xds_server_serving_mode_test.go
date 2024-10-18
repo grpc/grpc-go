@@ -62,13 +62,13 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		updateCh <- args.Mode
 	})
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
@@ -213,13 +213,13 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 			t.Errorf("serving mode callback invoked for unknown listener address: %q", addr.String())
 		}
 	})
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)

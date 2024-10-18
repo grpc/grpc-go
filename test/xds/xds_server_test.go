@@ -93,12 +93,13 @@ func (s) TestServeLDSRDS(t *testing.T) {
 			serving.Fire()
 		}
 	})
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
@@ -276,7 +277,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -290,6 +291,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 			}
 		},
 	}
+
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
