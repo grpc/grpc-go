@@ -12,7 +12,6 @@ require (
 	google.golang.org/grpc v1.67.1
 	google.golang.org/grpc/gcp/observability v1.0.1
 	google.golang.org/grpc/security/advancedtls v1.0.0
-	google.golang.org/grpc/stats/opentelemetry v0.0.0-20241017035653-830135e6c5a3
 	google.golang.org/protobuf v1.35.1
 )
 
