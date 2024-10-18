@@ -703,6 +703,7 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 		}
+
 		go func() {
 			server.Serve(lis)
 			wg.Done()
