@@ -32,6 +32,7 @@ import (
 
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
+	balancer.SubConn
 	tcc           *BalancerClientConn // the CC that owns this SubConn
 	id            string
 	ConnectCh     chan struct{}
