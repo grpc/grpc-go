@@ -83,29 +83,33 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 		// MinVersion should be set to 1.2 by gRPC by default.
 		Certificates: []tls.Certificate{serverCert},
 	}
-	noOpGetCfgForClient := serverTLS.Clone()
-	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
-		return nil, nil
-	}
 
 	testCases := []struct {
 		name      string
-		serverTLS *tls.Config
+		serverTLS func() *tls.Config
 	}{
 		{
 			name:      "base_case",
-			serverTLS: serverTLS,
+			serverTLS: func() *tls.Config { return serverTLS },
 		},
 		{
-			name:      "fallback_to_base",
-			serverTLS: noOpGetCfgForClient,
+			name: "fallback_to_base",
+			serverTLS: func() *tls.Config {
+				config := serverTLS.Clone()
+				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+					return nil, nil
+				}
+				return config
+			},
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
-			serverTLS: &tls.Config{
-				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-					return serverTLS, nil
-				},
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+						return serverTLS, nil
+					},
+				}
 			},
 		},
 	}
@@ -113,7 +117,7 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create server creds without a minimum version.
-			serverCreds := credentials.NewTLS(tc.serverTLS)
+			serverCreds := credentials.NewTLS(tc.serverTLS())
 			ss := stubserver.StubServer{
 				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
@@ -168,29 +172,32 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 		CipherSuites: allCipherSuites,
 	}
 
-	noOpGetCfgForClient := serverTLS.Clone()
-	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
-		return nil, nil
-	}
-
 	testCases := []struct {
 		name      string
-		serverTLS *tls.Config
+		serverTLS func() *tls.Config
 	}{
 		{
 			name:      "base_case",
-			serverTLS: serverTLS,
+			serverTLS: func() *tls.Config { return serverTLS },
 		},
 		{
-			name:      "fallback_to_base",
-			serverTLS: noOpGetCfgForClient,
+			name: "fallback_to_base",
+			serverTLS: func() *tls.Config {
+				config := serverTLS.Clone()
+				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+					return nil, nil
+				}
+				return config
+			},
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
-			serverTLS: &tls.Config{
-				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-					return serverTLS, nil
-				},
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+						return serverTLS, nil
+					},
+				}
 			},
 		},
 	}
@@ -198,7 +205,7 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create server creds that allow v1.0.
-			serverCreds := credentials.NewTLS(tc.serverTLS)
+			serverCreds := credentials.NewTLS(tc.serverTLS())
 			ss := stubserver.StubServer{
 				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
@@ -233,29 +240,32 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 	serverTLS := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
 	}
-	noOpGetCfgForClient := serverTLS.Clone()
-	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
-		return nil, nil
-	}
-
 	testCases := []struct {
 		name      string
-		serverTLS *tls.Config
+		serverTLS func() *tls.Config
 	}{
 		{
 			name:      "base_case",
-			serverTLS: serverTLS,
+			serverTLS: func() *tls.Config { return serverTLS },
 		},
 		{
-			name:      "fallback_to_base",
-			serverTLS: noOpGetCfgForClient,
+			name: "fallback_to_base",
+			serverTLS: func() *tls.Config {
+				config := serverTLS.Clone()
+				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+					return nil, nil
+				}
+				return config
+			},
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
-			serverTLS: &tls.Config{
-				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-					return serverTLS, nil
-				},
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+						return serverTLS, nil
+					},
+				}
 			},
 		},
 	}
@@ -263,7 +273,7 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create server creds without cipher suites.
-			serverCreds := credentials.NewTLS(tc.serverTLS)
+			serverCreds := credentials.NewTLS(tc.serverTLS())
 			ss := stubserver.StubServer{
 				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
@@ -310,29 +320,32 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 		Certificates: []tls.Certificate{serverCert},
 		CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
 	}
-	noOpGetCfgForClient := serverTLS.Clone()
-	noOpGetCfgForClient.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
-		return nil, nil
-	}
-
 	testCases := []struct {
 		name      string
-		serverTLS *tls.Config
+		serverTLS func() *tls.Config
 	}{
 		{
 			name:      "base_case",
-			serverTLS: serverTLS,
+			serverTLS: func() *tls.Config { return serverTLS },
 		},
 		{
-			name:      "fallback_to_base",
-			serverTLS: noOpGetCfgForClient,
+			name: "fallback_to_base",
+			serverTLS: func() *tls.Config {
+				config := serverTLS.Clone()
+				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+					return nil, nil
+				}
+				return config
+			},
 		},
 		{
 			name: "dynamic_using_get_config_for_client",
-			serverTLS: &tls.Config{
-				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-					return serverTLS, nil
-				},
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+						return serverTLS, nil
+					},
+				}
 			},
 		},
 	}
@@ -340,7 +353,7 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create server that allows only a forbidden cipher suite.
-			serverCreds := credentials.NewTLS(tc.serverTLS)
+			serverCreds := credentials.NewTLS(tc.serverTLS())
 			ss := stubserver.StubServer{
 				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
@@ -367,7 +380,7 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 	}
 }
 
-// TestTLS_ServerConfiguresALPNByDefault verifies that ALPN is configures
+// TestTLS_ServerConfiguresALPNByDefault verifies that ALPN is configured
 // correctly for a server that doesn't specify the NextProtos field and uses
 // GetConfigForClient to provide the TLS config during the handshake.
 func (s) TestTLS_ServerConfiguresALPNByDefault(t *testing.T) {
