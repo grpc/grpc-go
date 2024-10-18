@@ -324,7 +324,6 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 	}
 	t.Cleanup(server.Stop)
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 

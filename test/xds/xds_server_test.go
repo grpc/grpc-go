@@ -93,7 +93,7 @@ func (s) TestServeLDSRDS(t *testing.T) {
 			serving.Fire()
 		}
 	})
-
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -105,7 +105,6 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	}
 	defer server.Stop()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 
@@ -222,7 +221,6 @@ func (s) TestRDSNack(t *testing.T) {
 	}
 	defer server.Stop()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 
@@ -278,6 +276,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -297,7 +296,6 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	}
 	defer server.Stop()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 

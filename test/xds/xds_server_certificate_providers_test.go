@@ -272,9 +272,9 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
-	// Create an xDS-enabled grpc server that is configured to use xDS
-	// credentials, and configure a mode change option that closes a channel
-	// when listener2 enters serving mode.
+	// Create an xDS-enabled gRPC server that is configured to use xDS
+	// credentials and sets it on a stub server, configuring a mode change
+	// option that closes a channel when listener2 enters serving mode.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatal(err)
@@ -298,7 +298,6 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 	defer server.Stop()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 

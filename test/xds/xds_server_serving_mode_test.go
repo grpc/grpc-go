@@ -62,7 +62,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		updateCh <- args.Mode
 	})
-
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -75,7 +75,6 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	}
 	defer server.Stop()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 
@@ -214,7 +213,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 			t.Errorf("serving mode callback invoked for unknown listener address: %q", addr.String())
 		}
 	})
-
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -227,7 +226,6 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 	defer server.Stop()
 
-	// Set the server in the stub and start the test service.
 	stub.S = server
 	stubserver.StartTestService(t, stub)
 
