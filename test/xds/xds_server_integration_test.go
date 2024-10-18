@@ -91,6 +91,8 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -107,7 +109,7 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 			}
 		},
 	}
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)

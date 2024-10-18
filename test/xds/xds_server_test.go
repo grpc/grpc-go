@@ -99,7 +99,6 @@ func (s) TestServeLDSRDS(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
