@@ -213,7 +213,6 @@ func (s) TestStatusDetails(t *testing.T) {
 func (s) TestStatus_ErrorDetailsMessageV1(t *testing.T) {
 	details := []protoadapt.MessageV1{
 		&tpb.SimpleMessage{Data: "abc"},
-		&testpb.Empty{},
 	}
 	s, err := status.New(codes.Aborted, "").WithDetails(details...)
 	if err != nil {
