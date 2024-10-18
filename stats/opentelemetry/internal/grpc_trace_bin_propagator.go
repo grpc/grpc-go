@@ -30,18 +30,19 @@ import (
 // TODO: Move out of internal as part of open telemetry API
 
 // GRPCTraceBinPropagator is an OpenTelemetry TextMapPropagator which is used
-// to extract and inject trace context data from and into messages exchanged by
+// to extract and inject trace context data from and into headers exchanged by
 // gRPC applications. It propagates trace data in binary format using the
-// 'grpc-trace-bin' header.
+// `grpc-trace-bin` header.
 type GRPCTraceBinPropagator struct{}
 
 // Inject sets OpenTelemetry trace context information from the Context into
 // the carrier.
 //
 // If the carrier is a CustomCarrier, trace data is directly injected in a
-// binary format using the 'grpc-trace-bin' header (fast path). Otherwise,
+// binary format using the `grpc-trace-bin` header (fast path). Otherwise,
 // the trace data is base64 encoded and injected using the same header in
-// text format (slow path).
+// text format (slow path). If span context is not valid or emptu, no data is
+// injected.
 func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagation.TextMapCarrier) {
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
@@ -64,11 +65,16 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 // Context.
 //
 // If the carrier is a CustomCarrier, trace data is read directly in a binary
-// format from the 'grpc-trace-bin' header (fast path). Otherwise, the trace
+// format from the `grpc-trace-bin` header (fast path). Otherwise, the trace
 // data is base64 decoded from the same header in text format (slow path).
+//
+// If a valid trace context is found, this function returns a new context
+// derived from the input `ctx` containing the extracted span context. The
+// extracted span context is marked as "remote", indicating that the trace
+// originated from a different process or service. If trace context is invalid
+// or not present, input `ctx` is returned as is.
 func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
 	var bd []byte
-
 	if cc, ok := carrier.(*itracing.CustomCarrier); ok {
 		bd = cc.GetBinary()
 	} else {
@@ -82,14 +88,13 @@ func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropaga
 	if !ok {
 		return ctx
 	}
-
 	return oteltrace.ContextWithRemoteSpanContext(ctx, sc)
 }
 
 // Fields returns the keys whose values are set with Inject.
 //
 // GRPCTraceBinPropagator always returns a slice containing only
-// `grpc-trace-bin` key because it only sets the 'grpc-trace-bin' header for
+// `grpc-trace-bin` key because it only sets the `grpc-trace-bin` header for
 // propagating trace context.
 func (p GRPCTraceBinPropagator) Fields() []string {
 	return []string{itracing.GRPCTraceBinHeaderKey}
@@ -109,7 +114,7 @@ func Binary(sc oteltrace.SpanContext) []byte {
 	spanID := oteltrace.SpanID(sc.SpanID())
 	copy(b[19:27], spanID[:])
 	b[27] = 2
-	b[28] = uint8(oteltrace.TraceFlags(sc.TraceFlags()))
+	b[28] = byte(oteltrace.TraceFlags(sc.TraceFlags()))
 	return b[:]
 }
 

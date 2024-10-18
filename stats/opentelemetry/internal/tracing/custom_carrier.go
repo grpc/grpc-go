@@ -23,7 +23,6 @@ package tracing
 import (
 	"context"
 
-	otelpropagation "go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 )
@@ -34,24 +33,20 @@ const GRPCTraceBinHeaderKey = "grpc-trace-bin"
 
 // CustomCarrier is a TextMapCarrier that uses gRPC context to store and
 // retrieve any propagated key-value pairs in text format along with binary
-// format for `grpc-trace-bin` header
+// format for `grpc-trace-bin` header.
 type CustomCarrier struct {
-	otelpropagation.TextMapCarrier
-
 	ctx context.Context
 }
 
 // NewCustomCarrier creates a new CustomMapCarrier with
 // the given context.
 func NewCustomCarrier(ctx context.Context) *CustomCarrier {
-	return &CustomCarrier{
-		ctx: ctx,
-	}
+	return &CustomCarrier{ctx: ctx}
 }
 
 // Get returns the string value associated with the passed key from the gRPC
 // context. It returns an empty string if the key is not present in the
-// context.
+// context or if the value associated with the key is empty.
 func (c *CustomCarrier) Get(key string) string {
 	md, ok := metadata.FromIncomingContext(c.ctx)
 	if !ok {
@@ -64,8 +59,8 @@ func (c *CustomCarrier) Get(key string) string {
 	return values[0]
 }
 
-// Set stores the key-value pair in string format in the gRPC context.
-// If the key already exists, its value will be overwritten.
+// Set stores the key-value pair in string format in the gRPC context. If the
+// key already exists, its value will be overwritten.
 func (c *CustomCarrier) Set(key, value string) {
 	md, ok := metadata.FromOutgoingContext(c.ctx)
 	if !ok {
@@ -75,24 +70,24 @@ func (c *CustomCarrier) Set(key, value string) {
 	c.ctx = metadata.NewOutgoingContext(c.ctx, md)
 }
 
-// GetBinary returns the binary value from the gRPC context in the incoming RPC,
-// associated with the header `grpc-trace-bin`.
+// GetBinary returns the binary value from the gRPC context in the incoming
+// RPC, associated with the header `grpc-trace-bin`. If header is not found or
+// is empty, it returns nil.
 func (c CustomCarrier) GetBinary() []byte {
 	values := stats.Trace(c.ctx)
 	if len(values) == 0 {
 		return nil
 	}
-
 	return values
 }
 
-// SetBinary sets the binary value to the gRPC context, which will be sent in
-// the outgoing RPC with the header `grpc-trace-bin`.
+// SetBinary sets the binary value in the carrier's context, which will be sent
+// in the outgoing RPC with the header `grpc-trace-bin`.
 func (c *CustomCarrier) SetBinary(value []byte) {
 	c.ctx = stats.SetTrace(c.ctx, value)
 }
 
-// Keys returns the keys stored in the gRPC context for the outgoing RPC.
+// Keys returns the keys stored in the carrier's context.
 func (c *CustomCarrier) Keys() []string {
 	md, _ := metadata.FromOutgoingContext(c.ctx)
 	keys := make([]string, 0, len(md))
@@ -102,8 +97,7 @@ func (c *CustomCarrier) Keys() []string {
 	return keys
 }
 
-// Context returns the underlying *context.Context associated with the
-// CustomCarrier.
+// Context returns the underlying context associated with the CustomCarrier.
 func (c *CustomCarrier) Context() context.Context {
 	return c.ctx
 }
