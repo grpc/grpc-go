@@ -286,7 +286,6 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 			}
 		},
 	}
-
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
