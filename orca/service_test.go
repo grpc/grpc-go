@@ -65,20 +65,17 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	var requests int
 	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	const numRequests = 20
-	wg.Add(numRequests)
 
 	stub := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			defer wg.Done()
-
 			mu.Lock()
 			requests++
+			currRequests := requests
 			mu.Unlock()
 
-			smr.SetNamedUtilization(requestsMetricKey, float64(requests)*0.01)
+			smr.SetNamedUtilization(requestsMetricKey, float64(currRequests)*0.01)
 			smr.SetCPUUtilization(50.0)
 			smr.SetMemoryUtilization(0.9)
 			smr.SetApplicationUtilization(1.2)
@@ -130,8 +127,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		errCh <- nil
 	}()
 
-	wg.Wait()
-
 	// Start the server streaming RPC to receive custom backend metrics.
 	oobStub := v3orcaservicegrpc.NewOpenRcaServiceClient(cc)
 	stream, err := oobStub.StreamCoreMetrics(ctx, &v3orcaservicepb.OrcaLoadReportRequest{ReportInterval: durationpb.New(shortReportingInterval)})
@@ -152,11 +147,15 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		default:
 		}
 
+		mu.Lock()
+		expectedUtilization := float64(requests) * 0.01
+		mu.Unlock()
+
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization:         50.0,
 			MemUtilization:         0.9,
 			ApplicationUtilization: 1.2,
-			Utilization:            map[string]float64{requestsMetricKey: numRequests * 0.01},
+			Utilization:            map[string]float64{requestsMetricKey: expectedUtilization},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
