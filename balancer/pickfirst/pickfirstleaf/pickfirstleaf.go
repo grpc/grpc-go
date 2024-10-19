@@ -340,24 +340,17 @@ func interleaveAddresses(addrs []resolver.Address) []resolver.Address {
 	}
 
 	interleavedAddrs := make([]resolver.Address, 0, len(addrs))
-	curTypeIndex := 0
-	for i := 0; i < len(addrs); i++ {
+
+	for curTypeIndex := 0; len(interleavedAddrs) < len(addrs); curTypeIndex = (curTypeIndex + 1) % len(interleavingOrder) {
 		// Some IP types may have fewer addresses than others, so we look for
 		// the next type that has a remaining member to add to the interleaved
 		// list.
-		for {
-			curType := interleavingOrder[curTypeIndex]
-			remainingMembers := familyAddrsMap[curType]
-			if len(remainingMembers) > 0 {
-				break
-			}
-			curTypeIndex = (curTypeIndex + 1) % len(interleavingOrder)
+		typ := interleavingOrder[curTypeIndex]
+		remainingMembers := familyAddrsMap[typ]
+		if len(remainingMembers) > 0 {
+			interleavedAddrs = append(interleavedAddrs, remainingMembers[0])
+			familyAddrsMap[typ] = remainingMembers[1:]
 		}
-		curType := interleavingOrder[curTypeIndex]
-		remainingMembers := familyAddrsMap[curType]
-		interleavedAddrs = append(interleavedAddrs, remainingMembers[0])
-		familyAddrsMap[curType] = remainingMembers[1:]
-		curTypeIndex = (curTypeIndex + 1) % len(interleavingOrder)
 	}
 
 	return interleavedAddrs
