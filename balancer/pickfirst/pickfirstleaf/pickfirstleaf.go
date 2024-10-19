@@ -184,6 +184,7 @@ func (b *pickfirstBalancer) resolverErrorLocked(err error) {
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.cancelConnectionTimer()
 	if len(state.ResolverState.Addresses) == 0 && len(state.ResolverState.Endpoints) == 0 {
 		// Cleanup state pertaining to the previous resolver state.
 		// Treat an empty address list like an error by calling b.ResolverError.
