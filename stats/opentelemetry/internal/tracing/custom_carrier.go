@@ -22,7 +22,10 @@ package tracing
 
 import (
 	"context"
+	"encoding/base64"
+	"strings"
 
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 )
@@ -30,6 +33,8 @@ import (
 // GRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
 // to propagate trace context in binary format.
 const GRPCTraceBinHeaderKey = "grpc-trace-bin"
+
+var logger = grpclog.Component("otel-plugin")
 
 // CustomCarrier is a TextMapCarrier that uses gRPC context to store and
 // retrieve any propagated key-value pairs in text format along with binary
@@ -47,7 +52,18 @@ func NewCustomCarrier(ctx context.Context) *CustomCarrier {
 // Get returns the string value associated with the passed key from the gRPC
 // context. It returns an empty string if the key is not present in the
 // context or if the value associated with the key is empty.
+//
+// If the key is `grpc-trace-bin`, it retrieves the binary value using
+// `c.GetBinary()` and then base64 encodes it before returning. For all other
+// keys, it retrieves the value from the context's metadata.
 func (c *CustomCarrier) Get(key string) string {
+	if key == GRPCTraceBinHeaderKey {
+		return base64.StdEncoding.EncodeToString(c.GetBinary())
+	}
+	if strings.HasSuffix(key, "bin") && key != GRPCTraceBinHeaderKey {
+		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
+	}
+
 	md, ok := metadata.FromIncomingContext(c.ctx)
 	if !ok {
 		return ""
@@ -59,9 +75,23 @@ func (c *CustomCarrier) Get(key string) string {
 	return values[0]
 }
 
-// Set stores the key-value pair in string format in the gRPC context. If the
-// key already exists, its value will be overwritten.
+// Set stores the key-value pair in the gRPC context. If the key already
+// exists, its value will be overwritten.
+//
+// If the key is `grpc-trace-bin`, it base64 decodes the `value` and stores the
+// resulting binary data using `c.SetBinary()`. For all other keys, it stores
+// the key-value pair in the string format in context's metadata.
 func (c *CustomCarrier) Set(key, value string) {
+	if key == GRPCTraceBinHeaderKey {
+		decodedValue, err := base64.StdEncoding.DecodeString(value)
+		if err != nil {
+			logger.Errorf("encountered error in decoding %s value", GRPCTraceBinHeaderKey)
+			return
+		}
+		c.SetBinary(decodedValue)
+		return
+	}
+
 	md, ok := metadata.FromOutgoingContext(c.ctx)
 	if !ok {
 		md = metadata.MD{}
