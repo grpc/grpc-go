@@ -21,6 +21,7 @@ package internal
 import (
 	"context"
 	"encoding/base64"
+	"reflect"
 	"testing"
 
 	otelpropagation "go.opentelemetry.io/otel/propagation"
@@ -63,7 +64,7 @@ func (s) TestInject_FastPath(t *testing.T) {
 	p.Inject(tCtx, c)
 
 	got := stats.OutgoingTrace(c.Context())
-	want := Binary(sc)
+	want := binary(sc)
 	if string(got) != string(want) {
 		t.Fatalf("got = %v, want %v", got, want)
 	}
@@ -89,7 +90,7 @@ func (s) TestInject_SlowPath(t *testing.T) {
 	p.Inject(tCtx, c)
 
 	got := c.Get(itracing.GRPCTraceBinHeaderKey)
-	want := base64.StdEncoding.EncodeToString(Binary(sc))
+	want := base64.StdEncoding.EncodeToString(binary(sc))
 	if got != want {
 		t.Fatalf("got = %v, want %v", got, want)
 	}
@@ -108,7 +109,7 @@ func (s) TestExtract_FastPath(t *testing.T) {
 		TraceFlags: oteltrace.FlagsSampled,
 		Remote:     true,
 	})
-	bd := Binary(sc)
+	bd := binary(sc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -134,7 +135,7 @@ func (s) TestExtract_SlowPath(t *testing.T) {
 		TraceFlags: oteltrace.FlagsSampled,
 		Remote:     true,
 	})
-	bd := Binary(sc)
+	bd := binary(sc)
 
 	c := otelpropagation.MapCarrier{
 		itracing.GRPCTraceBinHeaderKey: base64.StdEncoding.EncodeToString(bd),
@@ -146,5 +147,106 @@ func (s) TestExtract_SlowPath(t *testing.T) {
 
 	if !got.Equal(sc) {
 		t.Fatalf("got = %v, want %v", got, sc)
+	}
+}
+
+// TestBinary verifies that the binary() function correctly serializes a valid
+// OpenTelemetry SpanContext into its binary format representation.
+func (s) TestBinary(t *testing.T) {
+	tests := []struct {
+		name string
+		sc   oteltrace.SpanContext
+		want []byte
+	}{
+		{
+			name: "valid",
+			sc: oteltrace.SpanContext{}.WithTraceID(
+				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			).WithSpanID(
+				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24},
+			).WithTraceFlags(
+				oteltrace.TraceFlags(1),
+			),
+			want: []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
+		},
+		{
+			name: "zero value",
+			sc:   oteltrace.SpanContext{},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := binary(tt.sc); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("binary() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFromBinary verifies that the fromBinary function correctly deserializes
+// a binary format representation of a valid OpenTelemetry SpanContext into its
+// corresponding SpanContext.
+func (s) TestFromBinary(t *testing.T) {
+	tests := []struct {
+		name string
+		b    []byte
+		want oteltrace.SpanContext
+		ok   bool
+	}{
+		{
+			name: "valid",
+			b:    []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
+			want: oteltrace.SpanContext{}.WithTraceID(
+				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			).WithSpanID(
+				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24},
+			).WithTraceFlags(
+				oteltrace.TraceFlags(1),
+			).WithRemote(true),
+			ok: true,
+		},
+		{
+			name: "invalid length",
+			b:    []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2},
+			want: oteltrace.SpanContext{},
+			ok:   false,
+		},
+		{
+			name: "invalid version",
+			b:    []byte{1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
+			want: oteltrace.SpanContext{},
+			ok:   false,
+		},
+		{
+			name: "invalid traceID field ID",
+			b:    []byte{0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
+			want: oteltrace.SpanContext{},
+			ok:   false,
+		},
+		{
+			name: "invalid spanID field ID",
+			b:    []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
+			want: oteltrace.SpanContext{},
+			ok:   false,
+		},
+		{
+			name: "invalid traceFlags field ID",
+			b:    []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 1, 1},
+			want: oteltrace.SpanContext{},
+			ok:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := fromBinary(tt.b)
+			if ok != tt.ok {
+				t.Errorf("fromBinary() ok = %v, want %v", ok, tt.ok)
+				return
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("fromBinary() got = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
