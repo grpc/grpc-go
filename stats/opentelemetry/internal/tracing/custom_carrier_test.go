@@ -20,6 +20,7 @@ package tracing
 
 import (
 	"context"
+	"encoding/base64"
 	"reflect"
 	"testing"
 
@@ -132,52 +133,76 @@ func (s) TestSet(t *testing.T) {
 	}
 }
 
-func (s) TestGetBinary(t *testing.T) {
-	t.Run("get grpc-trace-bin header", func(t *testing.T) {
-		want := []byte{0x01, 0x02, 0x03}
-		ctx, cancel := context.WithCancel(context.Background())
-		c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
-		got := c.GetBinary()
-		if got == nil {
-			t.Fatalf("got nil, want %v", got)
-		}
-		if string(got) != string(want) {
-			t.Fatalf("got %s, want %s", got, want)
-		}
-		cancel()
-	})
+func (s) TestGetBinary_GRPCTraceBinHeaderKey(t *testing.T) {
+	want := []byte{0x01, 0x02, 0x03}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
 
-	t.Run("get non grpc-trace-bin header", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		c := NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.Pairs("non-trace-bin", "\x01\x02\x03")))
-		got := c.GetBinary()
-		if got != nil {
-			t.Fatalf("got %v, want nil", got)
-		}
-		cancel()
-	})
+	got := c.GetBinary()
+	if got == nil {
+		t.Fatalf("GetBinary() = nil, want %v", got)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("GetBinary() = %s, want %s", got, want)
+	}
+
+	// Regular Get() should return base64 encoded binary string
+	gotStr := c.Get(GRPCTraceBinHeaderKey)
+	wantStr := base64.StdEncoding.EncodeToString(want)
+	if gotStr != wantStr {
+		t.Fatalf("Get() = %s, want %s", gotStr, wantStr)
+	}
 }
 
-func (s) TestSetBinary(t *testing.T) {
-	t.Run("set grpc-trace-bin header", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		want := []byte{0x01, 0x02, 0x03}
-		c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
-		c.SetBinary(want)
-		got := stats.OutgoingTrace(c.Context())
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("got %v, want %v", got, want)
-		}
-		cancel()
-	})
+func (s) TestGetBinary_NonGRPCTraceBinHeaderKey(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.Pairs("non-trace-bin", "\x01\x02\x03")))
 
-	t.Run("set non grpc-trace-bin header", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{"non-trace-bin": []string{"value"}}))
-		got := stats.OutgoingTrace(c.Context())
-		if got != nil {
-			t.Fatalf("got %v, want nil", got)
-		}
-		cancel()
-	})
+	got := c.GetBinary()
+	if got != nil {
+		t.Fatalf("GetBinary() = %v, want nil", got)
+	}
+
+	gotStr := c.Get(GRPCTraceBinHeaderKey) // regular Get() should return empty string for GRPCTraceBinHeaderKey
+	if gotStr != "" {
+		t.Fatalf("Get() = %s, want empty", gotStr)
+	}
+	gotStr = c.Get("non-trace-bin") // regular Get() should return the string value for non GRPCTraceBinHeaderKey
+	wantStr := "\x01\x02\x03"
+	if gotStr != wantStr {
+		t.Fatalf("Get() = %s, want %s", gotStr, wantStr)
+	}
+}
+
+func (s) TestSetBinary_GRPCTraceBinHeaderKey(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	want := []byte{0x01, 0x02, 0x03}
+	c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
+
+	c.SetBinary(want)
+	got := stats.OutgoingTrace(c.Context())
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+
+	c = NewCustomCarrier(ctx)
+	c.Set(GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(want)) // regular Set() should decode base64 encoded binary string and call SetBinary()
+	got = stats.OutgoingTrace(c.Context())
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func (s) TestSetBinary_NonGRPCTraceBinHeaderKey(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{"non-trace-bin": []string{"value"}}))
+
+	got := stats.OutgoingTrace(c.Context())
+	if got != nil {
+		t.Fatalf("got %v, want nil", got)
+	}
 }
