@@ -49,7 +49,7 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 		return
 	}
 
-	bd := Binary(span.SpanContext())
+	bd := binary(span.SpanContext())
 	if bd == nil {
 		return
 	}
@@ -84,7 +84,7 @@ func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropaga
 		return ctx
 	}
 
-	sc, ok := FromBinary([]byte(bd))
+	sc, ok := fromBinary([]byte(bd))
 	if !ok {
 		return ctx
 	}
@@ -103,7 +103,7 @@ func (p GRPCTraceBinPropagator) Fields() []string {
 // Binary returns the binary format representation of a SpanContext.
 //
 // If sc is the zero value, returns nil.
-func Binary(sc oteltrace.SpanContext) []byte {
+func binary(sc oteltrace.SpanContext) []byte {
 	if sc.Equal(oteltrace.SpanContext{}) {
 		return nil
 	}
@@ -118,28 +118,25 @@ func Binary(sc oteltrace.SpanContext) []byte {
 	return b[:]
 }
 
-// FromBinary returns the SpanContext represented by b.
+// FromBinary returns the SpanContext represented by b withRemote set to true.
 //
-// If b has an unsupported version ID or contains no TraceID, FromBinary
-// returns with zero value SpanContext and false.
-func FromBinary(b []byte) (oteltrace.SpanContext, bool) {
-	if len(b) == 0 || b[0] != 0 {
-		return oteltrace.SpanContext{}, false
-	}
-	b = b[1:]
-	if len(b) < 17 || b[0] != 0 {
+// It returns with zero value SpanContext and false, if any of the
+// below condition is not satisfied:
+// - Valid header: len(b) = 29
+// - Valid version: b[0] = 0
+// - Valid traceID prefixed with 0: b[1] = 0
+// - Valid spanID prefixed with 1: b[18] = 1
+// - Valid traceFlags prefixed with 2: b[27] = 2
+func fromBinary(b []byte) (oteltrace.SpanContext, bool) {
+	if len(b) != 29 || b[0] != 0 || b[1] != 0 || b[18] != 1 || b[27] != 2 {
 		return oteltrace.SpanContext{}, false
 	}
 
-	sc := oteltrace.SpanContext{}
-	sc = sc.WithTraceID(oteltrace.TraceID(b[1:17]))
-	b = b[17:]
-	if len(b) >= 9 && b[0] == 1 {
-		sc = sc.WithSpanID(oteltrace.SpanID(b[1:9]))
-		b = b[9:]
-	}
-	if len(b) >= 2 && b[0] == 2 {
-		sc = sc.WithTraceFlags(oteltrace.TraceFlags(b[1]))
-	}
-	return sc, true
+	return oteltrace.SpanContext{}.WithTraceID(
+		oteltrace.TraceID(b[2:18]),
+	).WithSpanID(
+		oteltrace.SpanID(b[19:27]),
+	).WithTraceFlags(
+		oteltrace.TraceFlags(b[28]),
+	).WithRemote(true), true
 }
