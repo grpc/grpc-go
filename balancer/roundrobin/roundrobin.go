@@ -76,6 +76,11 @@ func (p *rrPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	subConnsLen := uint32(len(p.subConns))
 	nextIndex := atomic.AddUint32(&p.next, 1)
 
+	// Check if subConnsLen is zero
+	if subConnsLen == 0 {
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+	}
+
 	sc := p.subConns[nextIndex%subConnsLen]
 	return balancer.PickResult{SubConn: sc}, nil
 }
