@@ -19,7 +19,7 @@ syntax = "proto3";
 
 package grpc.testingv3;
 
-option go_package = "google.golang.org/grpc/testdata/grpc_testing_not_regenerate";
+option go_package = "google.golang.org/grpc/testdata/grpc_testing_not_regenerated";
 
 message SearchResponseV3 {
   message Result {

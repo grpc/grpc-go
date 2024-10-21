@@ -39,7 +39,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	tpb "google.golang.org/grpc/testdata/grpc_testing_not_regenerate"
+	tpb "google.golang.org/grpc/testdata/grpc_testing_not_regenerated"
 )
 
 const defaultTestTimeout = 10 * time.Second
