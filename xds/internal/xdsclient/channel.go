@@ -39,8 +39,8 @@ import (
 // concurrently and the xDS client implementation needs to handle them in a
 // thread-safe manner.
 type xdsChannelEventHandler interface {
-	// adsStreamFailure is called when the xdsChannel channel encounters an ADS
-	// stream failure.
+	// adsStreamFailure is called when the xdsChannel encounters an ADS stream
+	// failure.
 	adsStreamFailure(error)
 
 	// adsResourceUpdate is called when the xdsChannel receives an ADS response
