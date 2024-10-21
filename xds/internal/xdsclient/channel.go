@@ -34,10 +34,10 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-// xdsChannelEventHandler wraps callbacks used by the xdsChannel to notify the
-// xDS client about events on the channel. Methods in this interface may be
-// invoked concurrently and the xDS client implementation needs to handle them
-// in a thread-safe manner.
+// xdsChannelEventHandler wraps callbacks used to notify the xDS client about
+// events on the xdsChannel. Methods in this interface may be invoked
+// concurrently and the xDS client implementation needs to handle them in a
+// thread-safe manner.
 type xdsChannelEventHandler interface {
 	// adsStreamFailure is called when the xdsChannel channel encounters an ADS
 	// stream failure.
