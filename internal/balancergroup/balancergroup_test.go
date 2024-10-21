@@ -575,6 +575,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 
 	bg.Start()
+	defer bg.Close()
 
 	m1 := make(map[resolver.Address]balancer.SubConn)
 	scs := make(map[balancer.SubConn]bool)
@@ -603,6 +604,9 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.ResolverState.Addresses = ccs.ResolverState.Addresses[1:]

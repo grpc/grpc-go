@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/transport"
@@ -418,17 +419,21 @@ func (s) TestWithTransportCredentialsTLS(t *testing.T) {
 
 // When creating a transport configured with n addresses, only calculate the
 // backoff once per "round" of attempts instead of once per address (n times
-// per "round" of attempts).
-func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
+// per "round" of attempts) for old pickfirst and once per address for new pickfirst.
+func (s) TestDial_BackoffCountPerRetryGroup(t *testing.T) {
 	var attempts uint32
+	wantBackoffs := uint32(1)
+	if envconfig.NewPickFirstEnabled {
+		wantBackoffs = 2
+	}
 	getMinConnectTimeout := func() time.Duration {
-		if atomic.AddUint32(&attempts, 1) == 1 {
+		if atomic.AddUint32(&attempts, 1) <= wantBackoffs {
 			// Once all addresses are exhausted, hang around and wait for the
 			// client.Close to happen rather than re-starting a new round of
 			// attempts.
 			return time.Hour
 		}
-		t.Error("only one attempt backoff calculation, but got more")
+		t.Errorf("only %d attempt backoff calculation, but got more", wantBackoffs)
 		return 0
 	}
 
@@ -498,6 +503,10 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	case <-timeout:
 		t.Fatal("timed out waiting for test to finish")
 	case <-server2Done:
+	}
+
+	if got, want := atomic.LoadUint32(&attempts), wantBackoffs; got != want {
+		t.Errorf("attempts = %d, want %d", got, want)
 	}
 }
 
@@ -1062,17 +1071,13 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	}
 
 	// Grab the addrConn and call tryUpdateAddrs.
-	var ac *addrConn
 	client.mu.Lock()
 	for clientAC := range client.conns {
-		ac = clientAC
-		break
+		// Call UpdateAddresses with the same list of addresses, it should be a noop
+		// (even when the SubConn is Connecting, and doesn't have a curAddr).
+		clientAC.acbw.UpdateAddresses(clientAC.addrs)
 	}
 	client.mu.Unlock()
-
-	// Call UpdateAddresses with the same list of addresses, it should be a noop
-	// (even when the SubConn is Connecting, and doesn't have a curAddr).
-	ac.acbw.UpdateAddresses(addrsList)
 
 	// We've called tryUpdateAddrs - now let's make server2 close the
 	// connection and check that it continues to server3.

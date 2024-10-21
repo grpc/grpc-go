@@ -58,18 +58,24 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			t.Logf("Received request for resources: %v of type %s", req.GetResourceNames(), req.GetTypeUrl())
+
+			// Drain the resource name channels before writing to them to ensure
+			// that the most recently requested names are made available to the
+			// test.
 			switch req.GetTypeUrl() {
 			case version.V3ClusterURL:
 				select {
-				case cdsResourcesCh <- req.GetResourceNames():
+				case <-cdsResourcesCh:
 				default:
 				}
+				cdsResourcesCh <- req.GetResourceNames()
 			case version.V3ListenerURL:
-				t.Logf("Received LDS request for resources: %v", req.GetResourceNames())
 				select {
-				case ldsResourcesCh <- req.GetResourceNames():
+				case <-ldsResourcesCh:
 				default:
 				}
+				ldsResourcesCh <- req.GetResourceNames()
 			}
 			return nil
 		},
@@ -130,6 +136,17 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Verify the update received by the watcher.
+	wantListenerUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
+			RouteConfigName: routeConfigName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+	}
+	if err := verifyListenerUpdate(ctx, lw.updateCh, wantListenerUpdate); err != nil {
+		t.Fatal(err)
+	}
+
 	// Cancel the watch for the above listener resource, and verify that an LDS
 	// request with no resource names is sent.
 	ldsCancel()
@@ -171,6 +188,11 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	}
 	defer ldsCancel()
 
+	// Verify the update received by the watcher.
+	if err := verifyListenerUpdate(ctx, lw.updateCh, wantListenerUpdate); err != nil {
+		t.Fatal(err)
+	}
+
 	// Create a cluster resource on the management server, in addition to the
 	// existing listener resource.
 	const clusterName = "cluster"
@@ -189,6 +211,17 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	cw := newClusterWatcher()
 	cdsCancel := xdsresource.WatchCluster(client, clusterName, cw)
 	if err := waitForResourceNames(ctx, t, cdsResourcesCh, []string{clusterName}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the update received by the watcher.
+	wantClusterUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
+			ClusterName:    clusterName,
+			EDSServiceName: clusterName,
+		},
+	}
+	if err := verifyClusterUpdate(ctx, cw.updateCh, wantClusterUpdate); err != nil {
 		t.Fatal(err)
 	}
 
