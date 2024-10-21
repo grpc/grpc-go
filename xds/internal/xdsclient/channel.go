@@ -34,11 +34,11 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
-// channelEventHandler wraps callbacks used by the xdsChannel to notify the xDS
-// client about events on the channel. Methods in this interface may be invoked
-// concurrently and the xDS client implementation needs to handle them in a
-// thread-safe manner.
-type channelEventHandler interface {
+// xdsChannelEventHandler wraps callbacks used by the xdsChannel to notify the
+// xDS client about events on the channel. Methods in this interface may be
+// invoked concurrently and the xDS client implementation needs to handle them
+// in a thread-safe manner.
+type xdsChannelEventHandler interface {
 	// adsStreamFailure is called when the xdsChannel channel encounters an ADS
 	// stream failure.
 	adsStreamFailure(error)
@@ -57,22 +57,22 @@ type channelEventHandler interface {
 	adsResourceDoesNotExist(xdsresource.Type, string)
 }
 
-// channelOptions holds the options for creating a new xdsChannel.
-type channelOptions struct {
+// xdsChannelOpts holds the options for creating a new xdsChannel.
+type xdsChannelOpts struct {
 	transport          transport.Interface           // Takes ownership of this transport.
 	serverConfig       *bootstrap.ServerConfig       // Configuration of the server to connect to.
 	bootstrapConfig    *bootstrap.Config             // Complete bootstrap configuration, used to decode resources.
 	resourceTypeGetter func(string) xdsresource.Type // Function to retrieve resource parsing functionality, based on resource type.
-	eventHandler       channelEventHandler           // Callbacks for ADS stream events.
-	backoff            func(int) time.Duration       // Backoff function to use for stream retries.
+	eventHandler       xdsChannelEventHandler        // Callbacks for ADS stream events.
+	backoff            func(int) time.Duration       // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
 	watchExpiryTimeout time.Duration                 // Timeout for ADS resource watch expiry.
 	logPrefix          string                        // Prefix to use for logging.
 }
 
-// newChannel creates a new xdsChannel instance with the provided options.
+// newXDSChannel creates a new xdsChannel instance with the provided options.
 // It performs basic validation on the provided options and initializes the
 // xdsChannel with the necessary components.
-func newChannel(opts channelOptions) (*xdsChannel, error) {
+func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 	switch {
 	case opts.transport == nil:
 		return nil, errors.New("xdsChannel: transport is nil")
@@ -119,9 +119,9 @@ func newChannel(opts channelOptions) (*xdsChannel, error) {
 	return xc, nil
 }
 
-// The xdsChannel represents a client channel to the management server, and is
-// responsible for managing the lifecycle of the ADS and LRS streams and
-// invoking callbacks on interested authorities for various stream events.
+// xdsChannel represents a client channel to a management server, and is
+// responsible for managing the lifecycle of the ADS and LRS streams. It invokes
+// callbacks on the registered event handler for various ADS stream events.
 type xdsChannel struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that, and hence need not be guarded by a mutex.
@@ -131,7 +131,7 @@ type xdsChannel struct {
 	serverConfig       *bootstrap.ServerConfig       // Configuration of the server to connect to.
 	bootstrapConfig    *bootstrap.Config             // Complete bootstrap configuration, used to decode resources.
 	resourceTypeGetter func(string) xdsresource.Type // Function to retrieve resource parsing functionality, based on resource type.
-	eventHandler       channelEventHandler           // Callbacks for ADS stream events.
+	eventHandler       xdsChannelEventHandler        // Callbacks for ADS stream events.
 	logger             *igrpclog.PrefixLogger        // Logger to use for logging.
 	closed             *grpcsync.Event               // Fired when the channel is closed.
 }
@@ -188,7 +188,7 @@ func (xc *xdsChannel) unsubscribe(typ xdsresource.Type, name string) {
 func (xc *xdsChannel) OnADSStreamError(err error) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
-			xc.logger.Infof("Received error on closed ADS stream: %v", err)
+			xc.logger.Infof("Received ADS stream error on a closed xdsChannel: %v", err)
 		}
 		return
 	}
@@ -200,7 +200,7 @@ func (xc *xdsChannel) OnADSStreamError(err error) {
 func (xc *xdsChannel) OnADSWatchExpiry(typ xdsresource.Type, name string) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
-			xc.logger.Infof("Received resource watch expiry for resource %q on closed ADS stream", name)
+			xc.logger.Infof("Received ADS resource watch expiry for resource %q on a closed xdsChannel", name)
 		}
 		return
 	}
@@ -210,6 +210,9 @@ func (xc *xdsChannel) OnADSWatchExpiry(typ xdsresource.Type, name string) {
 // OnADSResponse is invoked when a response is received on the ADS stream. It
 // decodes the resources in the response, and propagates the updates to the xDS
 // client.
+//
+// It returns the list of resource names in the response and any errors
+// encountered during decoding.
 func (xc *xdsChannel) OnADSResponse(resp ads.Response, onDone func()) ([]string, error) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
@@ -239,6 +242,19 @@ func (xc *xdsChannel) OnADSResponse(resp ads.Response, onDone func()) ([]string,
 	return names, err
 }
 
+// decodeResponse decodes the resources in the given ADS response.
+//
+// The opts parameter provides configuration options for decoding the resources.
+// The rType parameter specifies the resource type parser to use for decoding
+// the resources.
+//
+// The returned map contains a key for each resource in the response, with the
+// value being either the decoded resource data or an error if decoding failed.
+// The returned metadata includes the version of the response, the timestamp of
+// the update, and the status of the update (ACKed or NACKed).
+//
+// If there are any errors decoding the resources, the metadata will indicate
+// that the update was NACKed, and the errors will be returned as well.
 func decodeResponse(opts *xdsresource.DecodeOptions, rType xdsresource.Type, resp ads.Response) (map[string]ads.DataAndErrTuple, xdsresource.UpdateMetadata, error) {
 	timestamp := time.Now()
 	md := xdsresource.UpdateMetadata{

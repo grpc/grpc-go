@@ -90,7 +90,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	}
 
 	// Create an xdsChannel that uses everything set up above.
-	xc, err := newChannel(channelOptions{
+	xc, err := newXDSChannel(xdsChannelOpts{
 		transport:       tr,
 		serverConfig:    serverCfg,
 		bootstrapConfig: bootstrapCfg,
@@ -151,22 +151,22 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		opts       channelOptions
+		opts       xdsChannelOpts
 		wantErrStr string
 	}{
 		{
 			name:       "emptyTransport",
-			opts:       channelOptions{},
+			opts:       xdsChannelOpts{},
 			wantErrStr: "transport is nil",
 		},
 		{
 			name:       "emptyServerConfig",
-			opts:       channelOptions{transport: &fakeTransport{}},
+			opts:       xdsChannelOpts{transport: &fakeTransport{}},
 			wantErrStr: "serverConfig is nil",
 		},
 		{
 			name: "emptyBootstrapConfig",
-			opts: channelOptions{
+			opts: xdsChannelOpts{
 				transport:    &fakeTransport{},
 				serverConfig: &bootstrap.ServerConfig{},
 			},
@@ -174,7 +174,7 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 		},
 		{
 			name: "emptyResourceTypeGetter",
-			opts: channelOptions{
+			opts: xdsChannelOpts{
 				transport:       &fakeTransport{},
 				serverConfig:    &bootstrap.ServerConfig{},
 				bootstrapConfig: &bootstrap.Config{},
@@ -183,7 +183,7 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 		},
 		{
 			name: "emptyEventHandler",
-			opts: channelOptions{
+			opts: xdsChannelOpts{
 				transport:          &fakeTransport{},
 				serverConfig:       &bootstrap.ServerConfig{},
 				bootstrapConfig:    &bootstrap.Config{},
@@ -195,7 +195,7 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := newChannel(test.opts)
+			_, err := newXDSChannel(test.opts)
 			if err == nil || !strings.Contains(err.Error(), test.wantErrStr) {
 				t.Fatalf("newXDSChannel() = %v, want %q", err, test.wantErrStr)
 			}
