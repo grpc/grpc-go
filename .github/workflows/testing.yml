@@ -43,7 +43,7 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: '1.23'
+            goversion: '1.22'
 
           - type: extras
             goversion: '1.23'
