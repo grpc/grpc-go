@@ -155,7 +155,7 @@ type SubConn interface {
 	// indicate the shutdown operation.  This may be delivered before
 	// in-progress RPCs are complete and the actual connection is closed.
 	Shutdown()
-	// enforceEmbedding is an unexported method to enforce implementers embed
+	// enforceEmbedding is an unexported method to force implementers embed
 	// this interface, allowing gRPC to add methods without breaking users.
 	enforceEmbedding()
 }
