@@ -79,23 +79,26 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	serverTLS := &tls.Config{
-		// MinVersion should be set to 1.2 by gRPC by default.
-		Certificates: []tls.Certificate{serverCert},
-	}
-
 	testCases := []struct {
 		name      string
 		serverTLS func() *tls.Config
 	}{
 		{
-			name:      "base_case",
-			serverTLS: func() *tls.Config { return serverTLS },
+			name: "base_case",
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					// MinVersion should be set to 1.2 by gRPC by default.
+					Certificates: []tls.Certificate{serverCert},
+				}
+			},
 		},
 		{
 			name: "fallback_to_base",
 			serverTLS: func() *tls.Config {
-				config := serverTLS.Clone()
+				config := &tls.Config{
+					// MinVersion should be set to 1.2 by gRPC by default.
+					Certificates: []tls.Certificate{serverCert},
+				}
 				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 					return nil, nil
 				}
@@ -107,7 +110,10 @@ func (s) TestTLS_MinVersion12(t *testing.T) {
 			serverTLS: func() *tls.Config {
 				return &tls.Config{
 					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-						return serverTLS, nil
+						return &tls.Config{
+							// MinVersion should be set to 1.2 by gRPC by default.
+							Certificates: []tls.Certificate{serverCert},
+						}, nil
 					},
 				}
 			},
@@ -166,24 +172,28 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 	for _, cs := range tls.CipherSuites() {
 		allCipherSuites = append(allCipherSuites, cs.ID)
 	}
-	serverTLS := &tls.Config{
-		MinVersion:   tls.VersionTLS10,
-		Certificates: []tls.Certificate{serverCert},
-		CipherSuites: allCipherSuites,
-	}
-
 	testCases := []struct {
 		name      string
 		serverTLS func() *tls.Config
 	}{
 		{
-			name:      "base_case",
-			serverTLS: func() *tls.Config { return serverTLS },
+			name: "base_case",
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					MinVersion:   tls.VersionTLS10,
+					Certificates: []tls.Certificate{serverCert},
+					CipherSuites: allCipherSuites,
+				}
+			},
 		},
 		{
 			name: "fallback_to_base",
 			serverTLS: func() *tls.Config {
-				config := serverTLS.Clone()
+				config := &tls.Config{
+					MinVersion:   tls.VersionTLS10,
+					Certificates: []tls.Certificate{serverCert},
+					CipherSuites: allCipherSuites,
+				}
 				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 					return nil, nil
 				}
@@ -195,7 +205,11 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 			serverTLS: func() *tls.Config {
 				return &tls.Config{
 					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-						return serverTLS, nil
+						return &tls.Config{
+							MinVersion:   tls.VersionTLS10,
+							Certificates: []tls.Certificate{serverCert},
+							CipherSuites: allCipherSuites,
+						}, nil
 					},
 				}
 			},
@@ -237,21 +251,24 @@ func (s) TestTLS_MinVersionOverridable(t *testing.T) {
 func (s) TestTLS_CipherSuites(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	serverTLS := &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-	}
 	testCases := []struct {
 		name      string
 		serverTLS func() *tls.Config
 	}{
 		{
-			name:      "base_case",
-			serverTLS: func() *tls.Config { return serverTLS },
+			name: "base_case",
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					Certificates: []tls.Certificate{serverCert},
+				}
+			},
 		},
 		{
 			name: "fallback_to_base",
 			serverTLS: func() *tls.Config {
-				config := serverTLS.Clone()
+				config := &tls.Config{
+					Certificates: []tls.Certificate{serverCert},
+				}
 				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 					return nil, nil
 				}
@@ -263,7 +280,9 @@ func (s) TestTLS_CipherSuites(t *testing.T) {
 			serverTLS: func() *tls.Config {
 				return &tls.Config{
 					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-						return serverTLS, nil
+						return &tls.Config{
+							Certificates: []tls.Certificate{serverCert},
+						}, nil
 					},
 				}
 			},
@@ -316,22 +335,26 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	serverTLS := &tls.Config{
-		Certificates: []tls.Certificate{serverCert},
-		CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
-	}
 	testCases := []struct {
 		name      string
 		serverTLS func() *tls.Config
 	}{
 		{
-			name:      "base_case",
-			serverTLS: func() *tls.Config { return serverTLS },
+			name: "base_case",
+			serverTLS: func() *tls.Config {
+				return &tls.Config{
+					Certificates: []tls.Certificate{serverCert},
+					CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
+				}
+			},
 		},
 		{
 			name: "fallback_to_base",
 			serverTLS: func() *tls.Config {
-				config := serverTLS.Clone()
+				config := &tls.Config{
+					Certificates: []tls.Certificate{serverCert},
+					CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
+				}
 				config.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 					return nil, nil
 				}
@@ -343,7 +366,10 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 			serverTLS: func() *tls.Config {
 				return &tls.Config{
 					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-						return serverTLS, nil
+						return &tls.Config{
+							Certificates: []tls.Certificate{serverCert},
+							CipherSuites: []uint16{tls.TLS_RSA_WITH_AES_128_CBC_SHA},
+						}, nil
 					},
 				}
 			},
