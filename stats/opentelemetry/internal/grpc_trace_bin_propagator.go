@@ -118,7 +118,7 @@ func binary(sc oteltrace.SpanContext) []byte {
 	return b[:]
 }
 
-// FromBinary returns the SpanContext represented by b withRemote set to true.
+// FromBinary returns the SpanContext represented by b with Remote set to true.
 //
 // It returns with zero value SpanContext and false, if any of the
 // below condition is not satisfied:
@@ -133,10 +133,7 @@ func fromBinary(b []byte) (oteltrace.SpanContext, bool) {
 	}
 
 	return oteltrace.SpanContext{}.WithTraceID(
-		oteltrace.TraceID(b[2:18]),
-	).WithSpanID(
-		oteltrace.SpanID(b[19:27]),
-	).WithTraceFlags(
-		oteltrace.TraceFlags(b[28]),
-	).WithRemote(true), true
+		oteltrace.TraceID(b[2:18])).WithSpanID(
+		oteltrace.SpanID(b[19:27])).WithTraceFlags(
+		oteltrace.TraceFlags(b[28])).WithRemote(true), true
 }
