@@ -36,7 +36,9 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -101,7 +103,7 @@ func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 		},
 		{
 			desc: `When the server sends its connection preface, but the connection dies before the client can write its
-connection preface, the client enters TRANSIENT FAILURE.`,
+ connection preface, the client enters TRANSIENT FAILURE.`,
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
@@ -125,7 +127,7 @@ connection preface, the client enters TRANSIENT FAILURE.`,
 		},
 		{
 			desc: `When the server reads the client connection preface but does not send its connection preface, the
-client enters TRANSIENT FAILURE.`,
+ client enters TRANSIENT FAILURE.`,
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
@@ -615,4 +617,53 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 			t.Fatalf("Timed out waiting for state update %v: %s", i, want)
 		}
 	}
+}
+
+// TestChannelStateWaitingForFirstResolverUpdate verifies the initial
+// state of the channel when a manual name resolver doesn't provide any updates.
+func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	defer mr.Close()
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+
+	// TODO: Change this assertion to testutils.AwaitState(shortCtx, t, cc,
+	// connectivity.Connecting) when the channel correctly transitions to
+	// CONNECTING while waiting for the first resolver update.
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
+
+	internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))(cc)
+
+	cc.Connect()
+
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
+
+	shortCancel()
+	shortCtx, shortCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+
+	go func() {
+		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(shortCtx, &testgrpc.Empty{})
+		if err == nil {
+			t.Errorf("Expected RPC to fail, but it succeeded")
+		}
+	}()
+
+	// TODO: Change this assertion to testutils.AwaitState(shortCtx, t, cc,
+	// connectivity.Connecting) when the channel correctly transitions to
+	// CONNECTING while waiting for the resolver update.
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
 }
