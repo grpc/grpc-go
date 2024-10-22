@@ -18,7 +18,6 @@ package opentelemetry
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -86,7 +85,6 @@ func (h *clientStatsHandler) initializeTracing() {
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	fmt.Println("Inside client unary interceptor") // TODO(aranjans): Remove once e2e tests are written.
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
@@ -122,7 +120,6 @@ func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOpt
 }
 
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	fmt.Println("Inside client stream interceptor") // TODO(aranjans): Remove once e2e tests are written.
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
@@ -176,7 +173,6 @@ func (h *clientStatsHandler) createCallSpan(ctx context.Context, method string) 
 	if !isTracingDisabled(h.options.TraceOptions) {
 		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 		tracer := otel.Tracer("grpc-open-telemetry")
-		fmt.Println("Creating call span") // TODO(aranjans): Remove this once e2e tests are written.
 		ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	}
 	return ctx, span
@@ -192,7 +188,6 @@ func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management.
 func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	fmt.Println("Inside Tag RPC client.") // TODO(aranjans): Remove once e2e tests are written.
 	// Numerous stats handlers can be used for the same channel. The cluster
 	// impl balancer which writes to this will only write once, thus have this
 	// stats handler's per attempt scoped context point to the same optional
@@ -213,7 +208,6 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	if !isTracingDisabled(h.options.TraceOptions) {
 		callSpan := trace.SpanFromContext(ctx)
 		if info.NameResolutionDelay {
-			fmt.Println("Adding event for name resolution delay in call span, ", callSpan) // TODO(aranjans): Remove this.
 			callSpan.AddEvent("Delayed name resolution complete")
 		}
 		ctx, ti = h.traceTagRPC(ctx, info)

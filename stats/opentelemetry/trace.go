@@ -39,7 +39,7 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 
 	tracer := otel.Tracer("grpc-open-telemetry")
-	_, span := tracer.Start(ctx, mn)
+	ctx, span := tracer.Start(ctx, mn)
 
 	carrier := otelinternaltracing.NewCustomCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
@@ -67,8 +67,7 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// Span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
-	_, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
-
+	ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
 	return ctx, &traceInfo{
 		span:         span,
 		countSentMsg: 0,
