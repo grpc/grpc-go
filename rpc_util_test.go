@@ -297,8 +297,6 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 // used for testing compression and decompression functionality.
 // Compress is a placeholder for the compression logic.
 // It currently returns a nil WriteCloser and no error, as the actual compression is not implemented.
-// DecompressedSize returns the pre-configured size of the decompressed data.
-// This is used in testing to simulate the size calculation of the decompressed output
 type testCompressor struct {
 	decompressedData []byte
 	errDecompress    error
@@ -319,11 +317,6 @@ func (m *testCompressor) Decompress(r io.Reader) (io.Reader, error) {
 	return bytes.NewReader(m.decompressedData), nil
 }
 
-// DecompressedSize calculates and returns the size of the decompressed data dynamically,
-// by returning the length of the decompressedData slice.
-func (m *testCompressor) DecompressedSize(compressedBytes mem.BufferSlice) int {
-	return len(m.decompressedData) // Calculate size dynamically
-}
 func (m *testCompressor) Name() string {
 	return "testCompressor"
 }
@@ -333,11 +326,53 @@ type ErrorReader struct{}
 func (e *ErrorReader) Read(p []byte) (n int, err error) {
 	return 0, errors.New("simulated io.Copy read error")
 }
-
-// TestDecompress tests the decompression logic using different scenarios, such as successful decompression,
-// decompression errors, buffer overflows, and io.Copy errors. The test cases ensure that the decompressor
-// correctly handles various inputs and error conditions.
 func TestDecompress(t *testing.T) {
+	bestCompressor, err := NewGZIPCompressorWithLevel(gzip.BestCompression)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with best compression.")
+	}
+	bestSpeedCompressor, err := NewGZIPCompressorWithLevel(gzip.BestSpeed)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with best speed compression.")
+	}
+
+	defaultCompressor, err := NewGZIPCompressorWithLevel(gzip.BestSpeed)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with default compression.")
+	}
+
+	level5, err := NewGZIPCompressorWithLevel(5)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with level 5 compression.")
+	}
+
+	for _, test := range []struct {
+		// input
+		data                  []byte
+		cp                    Compressor
+		dc                    Decompressor
+		maxReceiveMessageSize int
+		compressedsize        int
+		// outputs
+		err error
+	}{
+		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), 100, 0, nil},
+		{make([]byte, 1024), bestCompressor, NewGZIPDecompressor(), 100, 0, nil},
+		{make([]byte, 1024), bestSpeedCompressor, NewGZIPDecompressor(), 100, 0, nil},
+		{make([]byte, 1024), defaultCompressor, NewGZIPDecompressor(), 100, 0, nil},
+		{make([]byte, 1024), level5, NewGZIPDecompressor(), 100, 0, nil},
+	} {
+		b := new(bytes.Buffer)
+		if err := test.cp.Do(b, test.data); err != test.err {
+			t.Fatalf("Compressor.Do(_, %v) = %v, want %v", test.data, err, test.err)
+		}
+		if b.Len() >= len(test.data) {
+			t.Fatalf("The compressor fails to compress data.")
+		}
+		if p, err := test.dc.Do(b); err != nil || !bytes.Equal(test.data, p) {
+			t.Fatalf("Decompressor.Do(%v) = %v, %v, want %v, <nil>", b, p, err, test.data)
+		}
+	}
 	tests := []struct {
 		name                  string
 		compressor            encoding.Compressor
