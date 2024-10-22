@@ -21,7 +21,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-PATH="${HOME}/go/bin:${GOROOT}/bin:${PATH}"
+if [ -n "${GOROOT}" ]; then
+  PATH="${GOROOT}/bin:${PATH}"
+fi
+PATH="${HOME}/go/bin:${PATH}"
 go version
 
 if [[ "$1" = "-install" ]]; then
