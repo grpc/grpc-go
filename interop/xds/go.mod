@@ -4,14 +4,11 @@ go 1.22.7
 
 replace google.golang.org/grpc => ../..
 
-replace google.golang.org/grpc/stats/opentelemetry => ../../stats/opentelemetry
-
 require (
 	github.com/prometheus/client_golang v1.20.5
 	go.opentelemetry.io/otel/exporters/prometheus v0.53.0
 	go.opentelemetry.io/otel/sdk/metric v1.31.0
 	google.golang.org/grpc v1.67.1
-	google.golang.org/grpc/stats/opentelemetry v0.0.0-20241017035653-830135e6c5a3
 )
 
 require (
