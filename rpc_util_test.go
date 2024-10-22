@@ -348,19 +348,18 @@ func TestDecompress(t *testing.T) {
 
 	for _, test := range []struct {
 		// input
-		data                  []byte
-		cp                    Compressor
-		dc                    Decompressor
-		maxReceiveMessageSize int
-		compressedsize        int
+		data []byte
+		cp   Compressor
+		dc   Decompressor
+
 		// outputs
 		err error
 	}{
-		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), 100, 0, nil},
-		{make([]byte, 1024), bestCompressor, NewGZIPDecompressor(), 100, 0, nil},
-		{make([]byte, 1024), bestSpeedCompressor, NewGZIPDecompressor(), 100, 0, nil},
-		{make([]byte, 1024), defaultCompressor, NewGZIPDecompressor(), 100, 0, nil},
-		{make([]byte, 1024), level5, NewGZIPDecompressor(), 100, 0, nil},
+		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), bestCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), bestSpeedCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), defaultCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), level5, NewGZIPDecompressor(), nil},
 	} {
 		b := new(bytes.Buffer)
 		if err := test.cp.Do(b, test.data); err != test.err {
