@@ -21,7 +21,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-PATH="${HOME}/go/bin:${GOROOT}/bin:${PATH}"
+if [ -n "${GOROOT}" ]; then
+  PATH="${GOROOT}/bin:${PATH}"
+fi
+PATH="${HOME}/go/bin:${PATH}"
 go version
 
 if [[ "$1" = "-install" ]]; then
@@ -97,13 +100,13 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.21
+  go mod tidy -compat=1.22
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
-  staticcheck -go 1.21 -checks 'all' ./... >"${SC_OUT}" || true
+  staticcheck -go 1.22 -checks 'all' ./... >"${SC_OUT}" || true
 
   # Error for anything other than checks that need exclusions.
   noret_grep -v "(ST1000)" "${SC_OUT}" | noret_grep -v "(SA1019)" | noret_grep -v "(ST1003)" | noret_grep -v "(ST1019)\|\(other import of\)" | not grep -v "(SA4000)"
