@@ -254,7 +254,8 @@ func (xc *xdsChannel) OnADSResponse(resp ads.Response, onDone func()) ([]string,
 // the update, and the status of the update (ACKed or NACKed).
 //
 // If there are any errors decoding the resources, the metadata will indicate
-// that the update was NACKed, and the errors will be returned as well.
+// that the update was NACKed, and the returned error will contain information
+// about all errors encountered by this function.
 func decodeResponse(opts *xdsresource.DecodeOptions, rType xdsresource.Type, resp ads.Response) (map[string]ads.DataAndErrTuple, xdsresource.UpdateMetadata, error) {
 	timestamp := time.Now()
 	md := xdsresource.UpdateMetadata{
