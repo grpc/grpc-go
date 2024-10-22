@@ -103,7 +103,7 @@ func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 		},
 		{
 			desc: `When the server sends its connection preface, but the connection dies before the client can write its
- connection preface, the client enters TRANSIENT FAILURE.`,
+connection preface, the client enters TRANSIENT FAILURE.`,
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
@@ -127,7 +127,7 @@ func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 		},
 		{
 			desc: `When the server reads the client connection preface but does not send its connection preface, the
- client enters TRANSIENT FAILURE.`,
+client enters TRANSIENT FAILURE.`,
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
