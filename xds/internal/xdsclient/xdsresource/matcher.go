@@ -19,7 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"strings"
 
 	"google.golang.org/grpc/internal/grpcutil"

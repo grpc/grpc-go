@@ -22,7 +22,7 @@
 package roundrobin
 
 import (
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"

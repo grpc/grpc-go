@@ -19,7 +19,7 @@ package xdsresource
 
 import (
 	"context"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/bits"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"strings"
 	"sync/atomic"
 	"time"

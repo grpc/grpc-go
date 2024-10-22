@@ -27,7 +27,7 @@ import (
 	"flag"
 	"io"
 	"log"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"time"
 
 	"google.golang.org/grpc"

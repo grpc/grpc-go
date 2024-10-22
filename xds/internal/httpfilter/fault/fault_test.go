@@ -26,7 +26,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"net"
 	"reflect"
 	"testing"

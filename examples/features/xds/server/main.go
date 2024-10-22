@@ -25,7 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"net"
 	"os"
 

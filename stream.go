@@ -23,7 +23,7 @@ import (
 	"errors"
 	"io"
 	"math"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"strconv"
 	"sync"
 	"time"

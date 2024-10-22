@@ -20,7 +20,7 @@ package wrr
 import (
 	"errors"
 	"math"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"strconv"
 	"testing"
 

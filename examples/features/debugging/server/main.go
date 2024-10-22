@@ -23,7 +23,7 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"net"
 	"time"
 

@@ -20,7 +20,7 @@
 package adaptive
 
 import (
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"sync"
 	"time"
 )

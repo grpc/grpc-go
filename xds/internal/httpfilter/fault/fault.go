@@ -24,7 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"strconv"
 	"sync/atomic"
 	"time"

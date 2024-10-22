@@ -19,7 +19,7 @@ package wrr
 
 import (
 	"fmt"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"sort"
 )
 

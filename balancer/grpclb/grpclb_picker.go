@@ -19,7 +19,7 @@
 package grpclb
 
 import (
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
 

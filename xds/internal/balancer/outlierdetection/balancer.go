@@ -25,7 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"strings"
 	"sync"
 	"sync/atomic"

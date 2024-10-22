@@ -24,7 +24,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"math/rand/v2"
+	rand "math/rand/v2"
 	"os"
 	"sort"
 	"strconv"
