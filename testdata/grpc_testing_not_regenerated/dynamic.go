@@ -15,7 +15,7 @@
  *
  */
 
-package grpc_testing_not_regenerate
+package grpc_testing_not_regenerated
 
 // FileDynamicProtoRawDesc is the descriptor for dynamic.proto, see README.md.
 var FileDynamicProtoRawDesc = []byte{
