@@ -640,15 +640,15 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer shortCancel()
 
-	// TODO: Change this assertion to testutils.AwaitState(shortCtx, t, cc,
-	// connectivity.Connecting) when the channel correctly transitions to
-	// CONNECTING while waiting for the first resolver update.
 	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
 
 	internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))(cc)
 
 	cc.Connect()
 
+	// TODO: Change this assertion to testutils.AwaitState(shortCtx, t, cc,
+	// connectivity.Connecting) when the channel correctly transitions to
+	// CONNECTING while waiting for the first resolver update.
 	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
 
 	shortCancel()
