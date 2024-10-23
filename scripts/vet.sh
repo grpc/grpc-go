@@ -21,7 +21,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-PATH="${HOME}/go/bin:${GOROOT}/bin:${PATH}"
+if [ -n "${GOROOT}" ]; then
+  PATH="${GOROOT}/bin:${PATH}"
+fi
+PATH="${HOME}/go/bin:${PATH}"
 go version
 
 if [[ "$1" = "-install" ]]; then
@@ -56,13 +59,13 @@ git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Exampl
 git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
 
 # - Do not use "interface{}"; use "any" instead.
-git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerate'
+git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerated'
 
 # - Do not call grpclog directly. Use grpclog.Component instead.
 git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go\|^internal/grpclog/prefix_logger.go'
 
 # - Ensure that the deprecated protobuf dependency is not used.
-not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)reflection/test/grpc_testing_not_regenerate/*'
+not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)testdata/grpc_testing_not_regenerated/*'
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
 not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
@@ -97,19 +100,19 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.21
+  go mod tidy -compat=1.22
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
-  staticcheck -go 1.21 -checks 'all' ./... >"${SC_OUT}" || true
+  staticcheck -go 1.22 -checks 'all' ./... >"${SC_OUT}" || true
 
   # Error for anything other than checks that need exclusions.
   noret_grep -v "(ST1000)" "${SC_OUT}" | noret_grep -v "(SA1019)" | noret_grep -v "(ST1003)" | noret_grep -v "(ST1019)\|\(other import of\)" | not grep -v "(SA4000)"
 
   # Exclude underscore checks for generated code.
-  noret_grep "(ST1003)" "${SC_OUT}" | not grep -v '\(.pb.go:\)\|\(code_string_test.go:\)\|\(grpc_testing_not_regenerate\)'
+  noret_grep "(ST1003)" "${SC_OUT}" | not grep -v '\(.pb.go:\)\|\(code_string_test.go:\)\|\(grpc_testing_not_regenerated\)'
 
   # Error for duplicate imports not including grpc protos.
   noret_grep "(ST1019)\|\(other import of\)" "${SC_OUT}" | not grep -Fv 'XXXXX PleaseIgnoreUnused
@@ -146,7 +149,7 @@ XXXXX PleaseIgnoreUnused'
 XXXXX Protobuf related deprecation errors:
 "github.com/golang/protobuf
 .pb.go:
-grpc_testing_not_regenerate
+grpc_testing_not_regenerated
 : ptypes.
 proto.RegisterType
 XXXXX gRPC internal usage deprecation errors:
@@ -188,7 +191,7 @@ done
 # Error for violation of enabled lint rules in config excluding generated code.
 revive \
   -set_exit_status=1 \
-  -exclude "reflection/test/grpc_testing_not_regenerate/" \
+  -exclude "testdata/grpc_testing_not_regenerated/" \
   -exclude "**/*.pb.go" \
   -formatter plain \
   -config "$(dirname "$0")/revive.toml" \

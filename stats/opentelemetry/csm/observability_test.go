@@ -32,8 +32,6 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/metadata"
@@ -46,12 +44,11 @@ import (
 // Env Vars as well, and mocks the resource detector's returned attribute set to
 // simulate the environment. It registers a cleanup function on the provided t
 // to restore the environment to its original state.
-func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID, csmCanonicalServiceName, csmWorkloadName string) {
-	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, "xds_server_uri")
-	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
-
+func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, meshID, csmCanonicalServiceName, csmWorkloadName string) {
+	oldCSMMeshID, csmMeshIDPresent := os.LookupEnv("CSM_MESH_ID")
 	oldCSMCanonicalServiceName, csmCanonicalServiceNamePresent := os.LookupEnv("CSM_CANONICAL_SERVICE_NAME")
 	oldCSMWorkloadName, csmWorkloadNamePresent := os.LookupEnv("CSM_WORKLOAD_NAME")
+	os.Setenv("CSM_MESH_ID", meshID)
 	os.Setenv("CSM_CANONICAL_SERVICE_NAME", csmCanonicalServiceName)
 	os.Setenv("CSM_WORKLOAD_NAME", csmWorkloadName)
 
@@ -67,6 +64,11 @@ func setupEnv(t *testing.T, resourceDetectorEmissions map[string]string, nodeID,
 		return &attrSet
 	}
 	t.Cleanup(func() {
+		if csmMeshIDPresent {
+			os.Setenv("CSM_MESH_ID", oldCSMMeshID)
+		} else {
+			os.Unsetenv("CSM_MESH_ID")
+		}
 		if csmCanonicalServiceNamePresent {
 			os.Setenv("CSM_CANONICAL_SERVICE_NAME", oldCSMCanonicalServiceName)
 		} else {
@@ -99,10 +101,10 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 		"k8s.namespace.name": "k8s_namespace_name_val",
 		"k8s.cluster.name":   "k8s_cluster_name_val",
 	}
-	const nodeID = "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
+	const meshID = "mesh_id"
 	const csmCanonicalServiceName = "csm_canonical_service_name"
 	const csmWorkloadName = "csm_workload_name"
-	setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
+	setupEnv(t, resourceDetectorEmissions, meshID, csmCanonicalServiceName, csmWorkloadName)
 
 	attributesWant := map[string]string{
 		"csm.workload_canonical_service": csmCanonicalServiceName, // from env
@@ -266,10 +268,10 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 		"k8s.namespace.name": "k8s_namespace_name_val",
 		"k8s.cluster.name":   "k8s_cluster_name_val",
 	}
-	const nodeID = "projects/12345/networks/mesh:mesh_id/nodes/aaaa-aaaa-aaaa-aaaa"
+	const meshID = "mesh_id"
 	const csmCanonicalServiceName = "csm_canonical_service_name"
 	const csmWorkloadName = "csm_workload_name"
-	setupEnv(t, resourceDetectorEmissions, nodeID, csmCanonicalServiceName, csmWorkloadName)
+	setupEnv(t, resourceDetectorEmissions, meshID, csmCanonicalServiceName, csmWorkloadName)
 
 	attributesWant := map[string]string{
 		"csm.workload_canonical_service": csmCanonicalServiceName, // from env
