@@ -1158,12 +1158,11 @@ func mockTimer() (triggerFunc func(), timerFunc func(_ time.Duration, f func()) 
 	return triggerFunc, func(_ time.Duration, f func()) func() {
 		// Set a really long expiration to prevent it from triggering
 		// automatically.
-		timer := time.AfterFunc(time.Hour, f)
 		stopCh := make(chan struct{})
 		go func() {
 			select {
 			case <-timerCh:
-				timer.Reset(0)
+				f()
 			case <-stopCh:
 			}
 		}()
