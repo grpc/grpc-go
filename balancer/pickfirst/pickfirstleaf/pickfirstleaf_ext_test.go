@@ -915,6 +915,9 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
 
 	// Third SubConn fails.
+	shortCancel()
+	shortCtx, shortCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
 	holds[2].Fail(fmt.Errorf("test error"))
 	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
 
