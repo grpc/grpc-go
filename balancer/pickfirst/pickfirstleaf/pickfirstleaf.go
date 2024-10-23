@@ -62,12 +62,14 @@ var (
 // TODO: change to pick-first when this becomes the default pick_first policy.
 const logPrefix = "[pick-first-leaf-lb %p] "
 
-type ipAddrType int
+type ipAddrFamily int
 
 const (
-	ipTypeUnknown ipAddrType = iota
-	ipv4
-	ipv6
+	// ipAddrFamilyUnknown represents strings that can't be parsed as an IP
+	// address.
+	ipAddrFamilyUnknown ipAddrFamily = iota
+	ipAddrFamilyV4
+	ipAddrFamilyV6
 )
 
 type pickfirstBuilder struct{}
@@ -238,8 +240,6 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	// SubConn multiple times in the same pass. We don't want this.
 	newAddrs = deDupAddresses(newAddrs)
 
-	// Interleave addresses of both families (IPv4 and IPv6) as per RFC-8305
-	// section 4.
 	newAddrs = interleaveAddresses(newAddrs)
 
 	// Since we have a new set of addresses, we are again at first pass.
@@ -324,62 +324,69 @@ func deDupAddresses(addrs []resolver.Address) []resolver.Address {
 	return retAddrs
 }
 
+// interleaveAddresses interleaves addresses of both families (IPv4 and IPv6)
+// as per RFC-8305 section 4.
+// Whichever address family is first in the list is followed by an address of
+// the other address family; that is, if the first address in the list is IPv6,
+// then the first IPv4 address should be moved up in the list to be second in
+// the list. It doesn't support configuring "First Address Family Count", i.e.
+// there will always be a single member of the first address family at the
+// beginning of the interleaved list.
+// Addresses that are neither IPv4 nor IPv6 are treated as part of a third
+// "unknown" family for interleaving.
+// See: https://datatracker.ietf.org/doc/html/rfc8305#autoid-6
 func interleaveAddresses(addrs []resolver.Address) []resolver.Address {
-	// Group the addresses by their type and determine the order in which to
-	// interleave the address families. The order of interleaving the families
-	// is the order in which the first address of a particular type appears in
-	// the address list.
-	familyAddrsMap := map[ipAddrType][]resolver.Address{}
-	interleavingOrder := []ipAddrType{}
+	familyAddrsMap := map[ipAddrFamily][]resolver.Address{}
+	interleavingOrder := []ipAddrFamily{}
 	for _, addr := range addrs {
-		typ := addressType(addr.Addr)
-		if _, found := familyAddrsMap[typ]; !found {
-			interleavingOrder = append(interleavingOrder, typ)
+		family := addressFamily(addr.Addr)
+		if _, found := familyAddrsMap[family]; !found {
+			interleavingOrder = append(interleavingOrder, family)
 		}
-		familyAddrsMap[typ] = append(familyAddrsMap[typ], addr)
+		familyAddrsMap[family] = append(familyAddrsMap[family], addr)
 	}
 
 	interleavedAddrs := make([]resolver.Address, 0, len(addrs))
 
-	for curTypeIndex := 0; len(interleavedAddrs) < len(addrs); curTypeIndex = (curTypeIndex + 1) % len(interleavingOrder) {
+	for curFamilyIdx := 0; len(interleavedAddrs) < len(addrs); curFamilyIdx = (curFamilyIdx + 1) % len(interleavingOrder) {
 		// Some IP types may have fewer addresses than others, so we look for
 		// the next type that has a remaining member to add to the interleaved
 		// list.
-		typ := interleavingOrder[curTypeIndex]
-		remainingMembers := familyAddrsMap[typ]
+		family := interleavingOrder[curFamilyIdx]
+		remainingMembers := familyAddrsMap[family]
 		if len(remainingMembers) > 0 {
 			interleavedAddrs = append(interleavedAddrs, remainingMembers[0])
-			familyAddrsMap[typ] = remainingMembers[1:]
+			familyAddrsMap[family] = remainingMembers[1:]
 		}
 	}
 
 	return interleavedAddrs
 }
 
-func addressType(address string) ipAddrType {
+func addressFamily(address string) ipAddrFamily {
 	// Try parsing addresses without a port specified.
 	ip := net.ParseIP(address)
 	if ip == nil {
 		// Try to parse the IP after removing the port.
 		host, _, err := net.SplitHostPort(address)
 		if err != nil {
-			return ipTypeUnknown
+			return ipAddrFamilyUnknown
 		}
 		ip = net.ParseIP(host)
 	}
 
-	// If using the passthrough resolver, the hostnames would be unresolved
-	// and therefore not valid IP addresses.
-	if ip == nil {
-		return ipTypeUnknown
+	// If using a resolver like passthrough, the hostnames may not be IP
+	// addresses but in some format that the dialer can parse.
+	switch {
+	case ip == nil:
+		return ipAddrFamilyUnknown
+	case ip.To4() != nil:
+		return ipAddrFamilyV4
+	case ip.To16() != nil:
+		return ipAddrFamilyV6
+	default:
+		return ipAddrFamilyUnknown
 	}
-
-	if ip.To4() != nil {
-		return ipv4
-	} else if ip.To16() != nil {
-		return ipv6
-	}
-	return ipTypeUnknown
 }
 
 // reconcileSubConnsLocked updates the active subchannels based on a new address
