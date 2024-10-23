@@ -24,13 +24,10 @@ import (
 	"encoding/base64"
 	"net/url"
 	"os"
-	"strings"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats/opentelemetry/internal"
-
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -233,24 +230,6 @@ func constructMetadataFromEnv(ctx context.Context) (map[string]string, string) {
 	return initializeLocalAndMetadataLabels(labels)
 }
 
-// parseMeshIDString parses the mesh id from the node id according to the format
-// "projects/[GCP Project number]/networks/mesh:[Mesh ID]/nodes/[UUID]". Returns
-// "unknown" if there is a syntax error in the node ID.
-func parseMeshIDFromNodeID(nodeID string) string {
-	meshSplit := strings.Split(nodeID, "/")
-	if len(meshSplit) != 6 {
-		return "unknown"
-	}
-	if meshSplit[0] != "projects" || meshSplit[2] != "networks" || meshSplit[4] != "nodes" {
-		return "unknown"
-	}
-	meshID, ok := strings.CutPrefix(meshSplit[3], "mesh:")
-	if !ok { // errors become "unknown"
-		return "unknown"
-	}
-	return meshID
-}
-
 // initializeLocalAndMetadataLabels csm local labels for a CSM Plugin Option to
 // record. It also builds out a base 64 encoded protobuf.Struct containing the
 // metadata exchange labels to be sent as part of metadata exchange from a CSM
@@ -261,9 +240,7 @@ func initializeLocalAndMetadataLabels(labels map[string]string) (map[string]stri
 	val := labels["canonical_service"]
 	localLabels := make(map[string]string)
 	localLabels["csm.workload_canonical_service"] = val
-	// Get the CSM Mesh ID from the bootstrap file.
-	nodeID := getNodeID()
-	localLabels["csm.mesh_id"] = parseMeshIDFromNodeID(nodeID)
+	localLabels["csm.mesh_id"] = getEnv("CSM_MESH_ID")
 
 	// Metadata exchange labels - can go ahead and encode into proto, and then
 	// base64.
@@ -286,18 +263,6 @@ func initializeLocalAndMetadataLabels(labels map[string]string) (map[string]stri
 	// will cause server side to respond with metadata exchange labels.
 
 	return localLabels, metadataExchangeLabelsEncoded
-}
-
-// getNodeID gets the Node ID from the bootstrap data.
-func getNodeID() string {
-	cfg, err := bootstrap.GetConfiguration()
-	if err != nil {
-		return "" // will become "unknown"
-	}
-	if cfg.Node() == nil {
-		return ""
-	}
-	return cfg.Node().GetId()
 }
 
 // metadataExchangeKey is the key for HTTP metadata exchange.

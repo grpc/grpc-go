@@ -1,6 +1,5 @@
 /*
- *
- * Copyright 2018 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +15,13 @@
  *
  */
 
-package grpc
+syntax = "proto3";
 
-// Version is the current grpc version.
-const Version = "1.69.0-dev"
+package grpc.testdata.grpc_testing_not_regenerated;
+
+option go_package = "google.golang.org/grpc/testdata/grpc_testing_not_regenerated";
+
+// SimpleMessage is used to hold string data.
+message SimpleMessage {
+  string data = 1;
+}

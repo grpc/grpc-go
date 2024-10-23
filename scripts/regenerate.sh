@@ -26,9 +26,9 @@ export PATH="${GOBIN}:${PATH}"
 mkdir -p "${GOBIN}"
 
 echo "removing existing generated files..."
-# grpc_testing_not_regenerate/*.pb.go is not re-generated,
-# see grpc_testing_not_regenerate/README.md for details.
-find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerate' | xargs rm -f || true
+# grpc_testing_not_regenerated/*.pb.go is not re-generated,
+# see grpc_testing_not_regenerated/README.md for details.
+find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerated' | xargs rm -f || true
 
 echo "Executing: go install google.golang.org/protobuf/cmd/protoc-gen-go..."
 (cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go)
@@ -124,8 +124,8 @@ done
 mkdir -p "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 mv "${WORKDIR}"/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* "${WORKDIR}/out/google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 
-# grpc_testing_not_regenerate/*.pb.go are not re-generated,
-# see grpc_testing_not_regenerate/README.md for details.
-rm "${WORKDIR}"/out/google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate/*.pb.go
+# grpc_testing_not_regenerated/*.pb.go are not re-generated,
+# see grpc_testing_not_regenerated/README.md for details.
+rm "${WORKDIR}"/out/google.golang.org/grpc/testdata/grpc_testing_not_regenerated/*.pb.go
 
 cp -R "${WORKDIR}"/out/google.golang.org/grpc/* .
