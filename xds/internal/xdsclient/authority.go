@@ -254,7 +254,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			//   - this update is different from the one currently cached
 			//   - the previous update for this resource was NACKed, but the update
 			//     before that was the same as this update.
-			if state.cache == nil || !state.cache.Equal(uErr.resource) || state.md.ErrState != nil {
+			if state.cache == nil || !state.cache.RawEqual(uErr.resource) || state.md.ErrState != nil {
 				for watcher := range state.watchers {
 					watcher := watcher
 					resource := uErr.resource
