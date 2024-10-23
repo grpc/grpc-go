@@ -850,11 +850,10 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	}
 }
 
-// TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList verifies that pickfirst
-// correctly detects the end of the first happy eyeballs pass when the timer
-// causes pickfirst to reach the end of the address list and failures are
-// reported out of order.
-func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
+// Test verifies that pickfirst correctly detects the end of the first happy
+// eyeballs pass when the timer causes pickfirst to reach the end of the address
+// list and failures are reported out of order.
+func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -895,8 +894,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	if holds[0].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
 	}
-
-	// Ensure no other servers are contacted.
 	if holds[1].IsStarted() != false {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
 	}
@@ -907,8 +904,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	// Make the happy eyeballs timer fire once and verify that the
 	// second server is contacted, but the third isn't.
 	timerCh <- struct{}{}
-
-	// Verify that the second server is contacted and 3rd isn't.
 	if holds[1].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
@@ -934,7 +929,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 
 	// Third SubConn fails.
 	holds[2].Fail(fmt.Errorf("test error"))
-
 	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
 
 	// Last SubConn fails, this should result in a TF update.
@@ -942,9 +936,8 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFAfterEndOfList(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }
 
-// TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay verifies that
-// pickfirst attempts to connect to the second backend once the happy eyeballs
-// timer expires.
+// Test verifies that pickfirst attempts to connect to the second backend once
+// the happy eyeballs timer expires.
 func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -982,7 +975,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
-	// Verify that the first server is contacted and the second is not.
+	// Verify that only the first server is contacted.
 	if holds[0].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
 	}
@@ -990,20 +983,22 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
 	}
 
+	// Make the happy eyeballs timer fire once and verify that the
+	// second server is contacted.
 	timerCh <- struct{}{}
-
-	// Second connection attempt is successful.
 	if holds[1].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
+
+	// Get the connection attempt to the second server to succeed and verify
+	// that the channel becomes READY.
 	holds[1].Resume()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
 
-// TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires tests the pickfirst balancer
-// by causing a SubConn to fail and then jumping to the 3rd SubConn after the
-// happy eyeballs timer expires.
-func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
+// Test tests the pickfirst balancer by causing a SubConn to fail and then
+// jumping to the 3rd SubConn after the happy eyeballs timer expires.
+func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1048,8 +1043,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	if holds[0].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
 	}
-
-	// Ensure no other servers are contacted.
 	if holds[1].IsStarted() != false {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
 	}
@@ -1058,7 +1051,10 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	}
 
 	// Replace the timer channel so that the old timers don't attempt to read
-	// messages pushed next.
+	// messages pushed next. This is required since pickfirst will stop the
+	// timer, but the fake TimeAfterFunc will still keep waiting on the timer
+	// channel till the context is cancelled. If there are multiple listeners on
+	/// the timer channel, they will race to read from the channel.
 	timerMu.Lock()
 	timerCh = make(chan struct{})
 	timerMu.Unlock()
@@ -1070,8 +1066,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	if holds[1].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
-
-	// Ensure no other servers are contacted.
 	if holds[2].IsStarted() != false {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
@@ -1079,12 +1073,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TFThenTimerFires(t *testing.T) {
 	// The happy eyeballs timer expires, skipping server[1] and requesting the creation
 	// of a third SubConn.
 	timerCh <- struct{}{}
-
 	if holds[2].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
 	}
 
-	// Second SubConn connects.
+	// Get the connection attempt to the second server to succeed and verify
+	// that the channel becomes READY.
 	holds[1].Resume()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
