@@ -453,7 +453,7 @@ func (b *pickfirstBalancer) scheduleNextConnectionLocked() {
 		if b.addressList.increment() {
 			b.requestConnectionLocked()
 		}
-	}).Stop
+	})
 	// Access to the cancellation callback held by the balancer is guarded by
 	// the balancer's mutex, so it's safe to set the boolean from the callback.
 	b.cancelConnectionTimer = sync.OnceFunc(func() {

@@ -857,25 +857,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	timerCh := make(chan struct{})
 	originalTimer := pfinternal.TimeAfterFunc
-	pfinternal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
-		// Set a really long expiration to prevent it from triggering
-		// automatically.
-		timer := time.AfterFunc(time.Hour, f)
-		go func() {
-			select {
-			case <-ctx.Done():
-			case <-timerCh:
-			}
-			timer.Reset(0)
-		}()
-		return timer
-	}
-
 	defer func() {
 		pfinternal.TimeAfterFunc = originalTimer
 	}()
+	triggerTimer, timeAfter := mockTimer()
+	pfinternal.TimeAfterFunc = timeAfter
 
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
@@ -903,7 +890,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 
 	// Make the happy eyeballs timer fire once and verify that the
 	// second server is contacted, but the third isn't.
-	timerCh <- struct{}{}
+	triggerTimer()
 	if holds[1].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
@@ -913,7 +900,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 
 	// Make the happy eyeballs timer fire once more and verify that the
 	// third server is contacted.
-	timerCh <- struct{}{}
+	triggerTimer()
 	if holds[2].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
 	}
@@ -942,25 +929,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	timerCh := make(chan struct{})
 	originalTimer := pfinternal.TimeAfterFunc
-	pfinternal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
-		// Set a really long expiration to prevent it from triggering
-		// automatically.
-		timer := time.AfterFunc(time.Hour, f)
-		go func() {
-			select {
-			case <-ctx.Done():
-			case <-timerCh:
-			}
-			timer.Reset(0)
-		}()
-		return timer
-	}
-
 	defer func() {
 		pfinternal.TimeAfterFunc = originalTimer
 	}()
+	triggerTimer, timeAfter := mockTimer()
+	pfinternal.TimeAfterFunc = timeAfter
 
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
@@ -985,7 +959,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 
 	// Make the happy eyeballs timer fire once and verify that the
 	// second server is contacted.
-	timerCh <- struct{}{}
+	triggerTimer()
 	if holds[1].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
 	}
@@ -1002,29 +976,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	timerMu := sync.Mutex{}
-	timerCh := make(chan struct{})
 	originalTimer := pfinternal.TimeAfterFunc
-	pfinternal.TimeAfterFunc = func(_ time.Duration, f func()) *time.Timer {
-		// Set a really long expiration to prevent it from triggering
-		// automatically.
-		timer := time.AfterFunc(time.Hour, f)
-		timerMu.Lock()
-		ch := timerCh
-		timerMu.Unlock()
-		go func() {
-			select {
-			case <-ctx.Done():
-			case <-ch:
-			}
-			timer.Reset(0)
-		}()
-		return timer
-	}
-
 	defer func() {
 		pfinternal.TimeAfterFunc = originalTimer
 	}()
+	triggerTimer, timeAfter := mockTimer()
+	pfinternal.TimeAfterFunc = timeAfter
 
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
@@ -1050,15 +1007,6 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
 
-	// Replace the timer channel so that the old timers don't attempt to read
-	// messages pushed next. This is required since pickfirst will stop the
-	// timer, but the fake TimeAfterFunc will still keep waiting on the timer
-	// channel till the context is cancelled. If there are multiple listeners on
-	/// the timer channel, they will race to read from the channel.
-	timerMu.Lock()
-	timerCh = make(chan struct{})
-	timerMu.Unlock()
-
 	// First SubConn Fails.
 	holds[0].Fail(fmt.Errorf("test error"))
 
@@ -1072,7 +1020,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 
 	// The happy eyeballs timer expires, skipping server[1] and requesting the creation
 	// of a third SubConn.
-	timerCh <- struct{}{}
+	triggerTimer()
 	if holds[2].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
 	}
@@ -1194,4 +1142,30 @@ type ccStateSubscriber struct {
 
 func (c *ccStateSubscriber) OnMessage(msg any) {
 	c.transitions = append(c.transitions, msg.(connectivity.State))
+}
+
+// mockTimer returns a fake timeAfterFunc that will not trigger automatically.
+// It returns a function that can be called to manually trigger the execution
+// of the scheduled callback.
+func mockTimer() (triggerFunc func(), timerFunc func(_ time.Duration, f func()) func()) {
+	timerCh := make(chan struct{})
+	triggerFunc = func() {
+		timerCh <- struct{}{}
+	}
+	return triggerFunc, func(_ time.Duration, f func()) func() {
+		// Set a really long expiration to prevent it from triggering
+		// automatically.
+		timer := time.AfterFunc(time.Hour, f)
+		stopCh := make(chan struct{})
+		go func() {
+			select {
+			case <-timerCh:
+				timer.Reset(0)
+			case <-stopCh:
+			}
+		}()
+		return sync.OnceFunc(func() {
+			close(stopCh)
+		})
+	}
 }

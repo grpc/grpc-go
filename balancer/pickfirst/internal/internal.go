@@ -28,5 +28,8 @@ var (
 	RandShuffle = rand.Shuffle
 	// TimeAfterFunc allows mocking the timer for testing connection delay
 	// related functionality.
-	TimeAfterFunc = time.AfterFunc
+	TimeAfterFunc = func(d time.Duration, f func()) func() {
+		timer := time.AfterFunc(d, f)
+		return func() { timer.Stop() }
+	}
 )
