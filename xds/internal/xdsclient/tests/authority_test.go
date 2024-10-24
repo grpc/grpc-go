@@ -102,10 +102,10 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:                 t.Name(),
-		Contents:             bootstrapContents,
-		WatchExpiryTimeout:   defaultTestWatchExpiryTimeout,
-		AuthorityIdleTimeout: idleTimeout,
+		Name:                     t.Name(),
+		Contents:                 bootstrapContents,
+		WatchExpiryTimeout:       defaultTestWatchExpiryTimeout,
+		IdleChannelExpiryTimeout: idleTimeout,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
@@ -127,14 +127,14 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	return lisDefault, lisNonDefault, client, close
 }
 
-// TestAuthorityShare tests the authority sharing logic. The test verifies the
+// Tests the xdsChannel sharing logic among authorities. The test verifies the
 // following scenarios:
 //   - A watch for a resource name with an authority matching an existing watch
 //     should not result in a new transport being created.
 //   - A watch for a resource name with different authority name but same
 //     authority config as an existing watch should not result in a new transport
 //     being created.
-func (s) TestAuthorityShare(t *testing.T) {
+func (s) TestAuthority_XDSChannelSharing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	lis, _, client, close := setupForAuthorityTests(ctx, t, time.Duration(0))
@@ -176,14 +176,13 @@ func (s) TestAuthorityShare(t *testing.T) {
 	}
 }
 
-// TestAuthorityIdle test the authority idle timeout logic. The test verifies
-// that the xDS client does not close authorities immediately after the last
-// watch is canceled, but waits for the configured idle timeout to expire before
-// closing them.
-func (s) TestAuthorityIdleTimeout(t *testing.T) {
+// Test the xdsChannel idle timeout logic. The test verifies that the xDS client
+// does not close xdsChannels immediately after the last watch is canceled, but
+// waits for the configured idle timeout to expire before closing them.
+func (s) TestAuthority_XDSChannelIdleTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleChannelExpiryTimeout)
 	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
@@ -213,21 +212,20 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 		t.Fatal("Connection to management server closed unexpectedly")
 	}
 
-	// Wait for the authority idle timeout to fire.
-	time.Sleep(2 * defaultTestIdleAuthorityTimeout)
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := conn.CloseCh.Receive(sCtx); err != nil {
+	// Ensure the transport is closed once the idle timeout fires.
+	select {
+	case <-conn.CloseCh.C:
+	case <-time.After(2 * defaultTestIdleChannelExpiryTimeout):
 		t.Fatal("Connection to management server not closed after idle timeout expiry")
 	}
 }
 
-// TestAuthorityClientClose verifies that authorities in use and in the idle
-// cache are all closed when the client is closed.
-func (s) TestAuthorityClientClose(t *testing.T) {
-	// Set the authority idle timeout to twice the defaultTestTimeout. This will
-	// ensure that idle authorities stay in the cache for the duration of this
-	// test, until explicitly closed.
+// Tests that xdsChannels in use and in the idle cache are all closed when the
+// xDS client is closed.
+func (s) TestAuthority_XDSChannelCloseOnClientClose(t *testing.T) {
+	// Set the idle timeout to twice the defaultTestTimeout. This will ensure
+	// that idle channels stay in the cache for the duration of this test, until
+	// explicitly closed.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	lisDefault, lisNonDefault, client, close := setupForAuthorityTests(ctx, t, time.Duration(2*defaultTestTimeout))
@@ -273,12 +271,12 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 	}
 }
 
-// TestAuthorityRevive verifies that an authority in the idle cache is revived
-// when a new watch is started on this authority.
-func (s) TestAuthorityRevive(t *testing.T) {
+// Tests that an xdsChannel in the idle cache is revived when a new watch is
+// started on an authority.
+func (s) TestAuthority_XDSChannelRevive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleChannelExpiryTimeout)
 	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
@@ -305,7 +303,7 @@ func (s) TestAuthorityRevive(t *testing.T) {
 
 	// Wait for double the idle timeout, and the connection to the management
 	// server should not be closed, since it was revived from the idle cache.
-	time.Sleep(2 * defaultTestIdleAuthorityTimeout)
+	time.Sleep(2 * defaultTestIdleChannelExpiryTimeout)
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := conn.CloseCh.Receive(sCtx); err != context.DeadlineExceeded {
