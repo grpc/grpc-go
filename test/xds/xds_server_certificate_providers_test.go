@@ -273,7 +273,7 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	}
 
 	// Create an xDS-enabled gRPC server that is configured to use xDS
-	// credentials and sets it on a stub server, configuring a mode change
+	// credentials and assigned to a stub server, configuring a mode change
 	// option that closes a channel when listener2 enters serving mode.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
