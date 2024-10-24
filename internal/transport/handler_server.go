@@ -387,12 +387,7 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 
 func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream func(*Stream)) {
 	// With this transport type there will be exactly 1 stream: this HTTP request.
-	var cancel context.CancelFunc
-	if ht.timeoutSet {
-		ctx, cancel = context.WithTimeout(ctx, ht.timeout)
-	} else {
-		ctx, cancel = context.WithCancel(ctx)
-	}
+	ctx, cancel := createContext(ctx, ht.timeoutSet, ht.timeout)
 
 	// requestOver is closed when the status has been written via WriteStatus.
 	requestOver := make(chan struct{})
@@ -402,8 +397,8 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		case <-ht.closedCh:
 		case <-ht.req.Context().Done():
 		}
-		cancel()
-		ht.Close(errors.New("request is done processing"))
+		cancel(ErrRequestDone)
+		ht.Close(ErrRequestDone)
 	}()
 
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)

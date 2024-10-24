@@ -528,11 +528,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
 	}
-	if timeoutSet {
-		s.ctx, s.cancel = context.WithTimeout(ctx, timeout)
-	} else {
-		s.ctx, s.cancel = context.WithCancel(ctx)
-	}
+	s.ctx, s.cancel = createContext(ctx, timeoutSet, timeout)
 
 	// Attach the received metadata to the context.
 	if len(mdata) > 0 {
@@ -547,18 +543,19 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
-		s.cancel()
+		s.cancel(ErrUnreachable)
 		return nil
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
+		rstCode := http2.ErrCodeRefusedStream
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
-			rstCode:  http2.ErrCodeRefusedStream,
+			rstCode:  rstCode,
 			onWrite:  func() {},
 		})
-		s.cancel()
+		s.cancel(RstCodeError{rstCode})
 		return nil
 	}
 	if httpMethod != http.MethodPost {
@@ -567,14 +564,15 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		if t.logger.V(logLevel) {
 			t.logger.Infof("Aborting the stream early: %v", errMsg)
 		}
+		status := status.New(codes.Internal, errMsg)
 		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     405,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
-			status:         status.New(codes.Internal, errMsg),
+			status:         status,
 			rst:            !frame.StreamEnded(),
 		})
-		s.cancel()
+		s.cancel(StatusError{status})
 		return nil
 	}
 	if t.inTapHandle != nil {
@@ -1271,7 +1269,7 @@ func (t *http2Server) Close(err error) {
 	channelz.RemoveEntry(t.channelz.ID)
 	// Cancel all active streams.
 	for _, s := range streams {
-		s.cancel()
+		s.cancel(ErrServerTransportClosed)
 	}
 }
 
@@ -1301,7 +1299,7 @@ func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, h
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
-	s.cancel()
+	s.cancel(RstCodeError{rstCode})
 
 	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
@@ -1325,7 +1323,7 @@ func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eo
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
-	s.cancel()
+	s.cancel(RstCodeError{rstCode})
 
 	s.swapState(streamDone)
 	t.deleteStream(s, eosReceived)

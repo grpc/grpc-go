@@ -288,14 +288,14 @@ const (
 // Stream represents an RPC in the transport layer.
 type Stream struct {
 	id           uint32
-	st           ServerTransport    // nil for client side Stream
-	ct           ClientTransport    // nil for server side Stream
-	ctx          context.Context    // the associated context of the stream
-	cancel       context.CancelFunc // always nil for client side Stream
-	done         chan struct{}      // closed at the end of stream to unblock writers. On the client side.
-	doneFunc     func()             // invoked at the end of stream on client side.
-	ctxDone      <-chan struct{}    // same as done chan but for server side. Cache of ctx.Done() (for performance)
-	method       string             // the associated RPC method of the stream
+	st           ServerTransport         // nil for client side Stream
+	ct           ClientTransport         // nil for server side Stream
+	ctx          context.Context         // the associated context of the stream
+	cancel       context.CancelCauseFunc // always nil for client side Stream
+	done         chan struct{}           // closed at the end of stream to unblock writers. On the client side.
+	doneFunc     func()                  // invoked at the end of stream on client side.
+	ctxDone      <-chan struct{}         // same as done chan but for server side. Cache of ctx.Done() (for performance)
+	method       string                  // the associated RPC method of the stream
 	recvCompress string
 	sendCompress string
 	buf          *recvBuffer
