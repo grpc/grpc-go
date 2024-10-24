@@ -21,12 +21,14 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"math"
 	"reflect"
 	"testing"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
 	protoenc "google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
@@ -289,4 +291,171 @@ func BenchmarkGZIPCompressor512KiB(b *testing.B) {
 
 func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
+}
+
+// testCompressor is a mock implementation of an encoding.Compressor interface
+// used for testing compression and decompression functionality.
+// Compress is a placeholder for the compression logic.
+// It currently returns a nil WriteCloser and no error, as the actual compression is not implemented.
+type testCompressor struct {
+	decompressedData []byte
+	errDecompress    error
+	customReader     io.Reader
+}
+
+func (m *testCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	return nil, nil
+}
+
+func (m *testCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	if m.errDecompress != nil {
+		return nil, m.errDecompress
+	}
+	if m.customReader != nil {
+		return m.customReader, nil
+	}
+	return bytes.NewReader(m.decompressedData), nil
+}
+
+func (m *testCompressor) Name() string {
+	return "testCompressor"
+}
+
+type ErrorReader struct{}
+
+func (e *ErrorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("simulated io.Copy read error")
+}
+func TestDecompress(t *testing.T) {
+	bestCompressor, err := NewGZIPCompressorWithLevel(gzip.BestCompression)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with best compression.")
+	}
+	bestSpeedCompressor, err := NewGZIPCompressorWithLevel(gzip.BestSpeed)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with best speed compression.")
+	}
+
+	defaultCompressor, err := NewGZIPCompressorWithLevel(gzip.BestSpeed)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with default compression.")
+	}
+
+	level5, err := NewGZIPCompressorWithLevel(5)
+	if err != nil {
+		t.Fatalf("Could not initialize gzip compressor with level 5 compression.")
+	}
+
+	for _, test := range []struct {
+		// input
+		data []byte
+		cp   Compressor
+		dc   Decompressor
+
+		// outputs
+		err error
+	}{
+		{make([]byte, 1024), NewGZIPCompressor(), NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), bestCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), bestSpeedCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), defaultCompressor, NewGZIPDecompressor(), nil},
+		{make([]byte, 1024), level5, NewGZIPDecompressor(), nil},
+	} {
+		b := new(bytes.Buffer)
+		if err := test.cp.Do(b, test.data); err != test.err {
+			t.Fatalf("Compressor.Do(_, %v) = %v, want %v", test.data, err, test.err)
+		}
+		if b.Len() >= len(test.data) {
+			t.Fatalf("The compressor fails to compress data.")
+		}
+		if p, err := test.dc.Do(b); err != nil || !bytes.Equal(test.data, p) {
+			t.Fatalf("Decompressor.Do(%v) = %v, %v, want %v, <nil>", b, p, err, test.data)
+		}
+	}
+	tests := []struct {
+		name                  string
+		compressor            encoding.Compressor
+		input                 mem.BufferSlice
+		maxReceiveMessageSize int
+		want                  mem.BufferSlice
+		compressedsize        int
+		error                 error
+	}{
+		{
+			name: "Successful decompression",
+			compressor: &testCompressor{
+				decompressedData: []byte("decompressed data"),
+			},
+			input:                 mem.BufferSlice{},
+			maxReceiveMessageSize: 100,
+			want: func() mem.BufferSlice {
+				decompressed := []byte("decompressed data")
+				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
+			}(),
+			compressedsize: 17,
+			error:          nil,
+		},
+		{
+			name: "Error during decompression",
+			compressor: &testCompressor{
+				errDecompress: errors.New("decompression error"),
+			},
+			input:                 mem.BufferSlice{},
+			maxReceiveMessageSize: 100,
+			want:                  nil,
+			compressedsize:        0,
+			error:                 errors.New("decompression error"),
+		},
+		{
+			name: "Buffer overflow",
+			compressor: &testCompressor{
+				decompressedData: []byte("overflow data"),
+			},
+			input:                 mem.BufferSlice{},
+			maxReceiveMessageSize: 5,
+			want:                  nil,
+			compressedsize:        6,
+
+			error: errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)."),
+		},
+		{
+			name: "MaxInt64 receive size with small data",
+			compressor: &testCompressor{
+				decompressedData: []byte("small data"),
+			},
+			input:                 mem.BufferSlice{},
+			maxReceiveMessageSize: math.MaxInt64,
+			want: func() mem.BufferSlice {
+				smallDecompressed := []byte("small data, small data ")
+				return mem.BufferSlice{mem.NewBuffer(&smallDecompressed, nil)}
+			}(),
+			compressedsize: 10,
+			error:          nil,
+		}, {
+			name: "Error during io.Copy",
+			compressor: &testCompressor{
+				customReader: &ErrorReader{},
+			},
+			input:                 mem.BufferSlice{},
+			maxReceiveMessageSize: 100,
+			want:                  nil,
+			compressedsize:        0,
+			error:                 errors.New("simulated io.Copy read error"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, size, err := decompress(tt.compressor, tt.input, tt.maxReceiveMessageSize, nil)
+			// check both err and tt.error are either nil or non-nil, the condition will be false
+			if (err != nil) != (tt.error != nil) {
+				t.Errorf("decompress() error, got err=%v, want err=%v", err, tt.error)
+			}
+			if size != tt.compressedsize {
+				t.Errorf("decompress() size, got = %d, want = %d", size, tt.compressedsize)
+			}
+			if len(tt.want) != len(output) {
+				t.Errorf("decompress() output length, got = %d, want = %d", output, tt.want)
+			}
+		})
+	}
 }
