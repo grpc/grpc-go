@@ -63,7 +63,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 		updateCh <- args.Mode
 	})
 
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+	// Initialize a test gRPC server, assign it to the stub server, and start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -214,7 +214,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		}
 	})
 
-	// Initialize an xDS-enabled gRPC server and use the helper to start the test service.
+	// Initialize a test gRPC server, assign it to the stub server, and start the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
