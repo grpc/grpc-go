@@ -107,16 +107,17 @@ func (s) TestBuffer_NewBufferHandlesShortBuffers(t *testing.T) {
 		internal.SetBufferPoolingThresholdForTesting.(func(int))(0)
 	})
 
-	// Make a Buffer whose capacity is larger than the pooling threshold, but whose length is less than
-	// the threshold.
+	// Make a pool with a buffer whose capacity is larger than the pooling
+	// threshold, but whose length is less than the threshold.
 	b := make([]byte, threshold/2, threshold*2)
 	pool := &singleBufferPool{
 		t:    t,
 		data: &b,
 	}
 
-	// Get a Buffer, then free it. If NewBuffer decided that the Buffer shouldn't get pooled, Free will
-	// be a noop and singleBufferPool will not have been updated.
+	// Get a Buffer, then free it. If NewBuffer decided that the Buffer
+	// shouldn't get pooled, Free will be a noop and singleBufferPool will not
+	// have been updated.
 	mem.NewBuffer(&b, pool).Free()
 
 	if pool.data != nil {
