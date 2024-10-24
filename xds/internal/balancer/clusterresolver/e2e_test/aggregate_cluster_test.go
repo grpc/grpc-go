@@ -112,7 +112,9 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 				return nil
 			}
 			if len(req.GetResourceNames()) == 0 {
-				// This is the case for ACKs. Do nothing here.
+				// This happens at the end of the test when the grpc channel is
+				// being shut down and it is no longer interested in xDS
+				// resources.
 				return nil
 			}
 			select {
@@ -489,11 +491,15 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 			if req.GetTypeUrl() != version.V3EndpointsURL {
 				return nil
 			}
-			if len(req.GetResourceNames()) > 0 {
-				select {
-				case edsResourceCh <- req.GetResourceNames()[0]:
-				default:
-				}
+			if len(req.GetResourceNames()) == 0 {
+				// This happens at the end of the test when the grpc channel is
+				// being shut down and it is no longer interested in xDS
+				// resources.
+				return nil
+			}
+			select {
+			case edsResourceCh <- req.GetResourceNames()[0]:
+			default:
 			}
 			return nil
 		},
