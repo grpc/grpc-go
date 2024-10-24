@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
@@ -260,6 +261,12 @@ type acBalancerWrapper struct {
 
 	producersMu sync.Mutex
 	producers   map[balancer.ProducerBuilder]*refCountedProducer
+
+	// connectivityState stores the most recent connectivity state delivered
+	// to the LB policy. It is a pointer to enable distinguishing when a SubConn
+	// transitions to a state and then returns to the same state. It is atomic
+	// because it is read when a health listener is registered by the LB policy.
+	connectivityState atomic.Pointer[connectivity.State]
 }
 
 // updateState is invoked by grpc to push a subConn state update to the
@@ -279,6 +286,21 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 		if s == connectivity.Ready {
 			setConnectedAddress(&scs, curAddr)
 		}
+		// Invalidate the health listener by changing the state.
+		acbw.connectivityState.Store(&scs.ConnectivityState)
+		// A race may occur if a health listener is registered soon after the
+		// connectivity state is set but before the stateListener is called.
+		// Two cases may arise:
+		// 1. The new state is not READY: RegisterHealthListener has checks to
+		//    ensure no updates are sent when the connectivity state is not
+		//    READY.
+		// 2. The new state is READY: This means that the old state wasn't Ready.
+		//    The RegisterHealthListener API mentions that a health listener
+		//    must not be registered when a SubConn is not ready to avoid such
+		//    races. When this happens, the LB policy would get health updates
+		//    on the old listener. When the LB policy registers a new listener
+		//    on receiving the connectivity update, the health updates will be
+		//    sent to the new health listener.
 		acbw.stateListener(scs)
 	})
 }
@@ -372,4 +394,30 @@ func (acbw *acBalancerWrapper) closeProducers() {
 		pData.close()
 		delete(acbw.producers, pb)
 	}
+}
+
+func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
+	initialConnectivityState := acbw.connectivityState.Load()
+	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
+		if ctx.Err() != nil || acbw.ccb.balancer == nil {
+			return
+		}
+		// If the connectivity state has changed since the listener was
+		// registered, don't use the listener.
+		if initialConnectivityState != acbw.connectivityState.Load() {
+			return
+		}
+		// listeners should not be registered when the connectivity state
+		// isn't Ready. This may happen when the balancer registers a listener
+		// after the connectivityState is updated, but before it is notified
+		// of the update.
+		if *initialConnectivityState != connectivity.Ready {
+			return
+		}
+		if initialConnectivityState == nil {
+			logger.Errorf("Health listener registered on IDLE SubConn %q", acbw)
+			return
+		}
+		listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	})
 }

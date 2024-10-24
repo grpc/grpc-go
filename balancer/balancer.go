@@ -155,6 +155,12 @@ type SubConn interface {
 	// indicate the shutdown operation.  This may be delivered before
 	// in-progress RPCs are complete and the actual connection is closed.
 	Shutdown()
+	// RegisterHealthListener sets the health listener to which health updates
+	// are delivered when a SubConn is Ready. A listener should be registered
+	// each time the SubConn's connectivity state changes. Only one health
+	// listener can be registered at a time. A health listener must be
+	// registered only when a SubConn's connectivity state is Ready.
+	RegisterHealthListener(func(SubConnState))
 }
 
 // NewSubConnOptions contains options to create new SubConn.

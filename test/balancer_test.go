@@ -981,3 +981,87 @@ func (s) TestSubConnShutdown(t *testing.T) {
 		})
 	}
 }
+
+// Test calls RegisterHealthListener on a SubConn to verify that expected health
+// updates are sent only to the most recently registered listener.
+func (s) TestSubConn_RegisterHealthListener(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	scChan := make(chan balancer.SubConn, 1)
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := bd.ClientConn
+			b := &testBalancer{}
+			bd.Data = b.Build(cc, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(*testBalancer)
+			ret := bal.UpdateClientConnState(ccs)
+			scChan <- bal.sc
+			return ret
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("Error creating client: %v", err)
+	}
+	defer cc.Close()
+
+	cc.Connect()
+
+	sc := <-scChan
+	healthUpdateChan := make(chan balancer.SubConnState, 1)
+
+	// Register listener while Ready and verify it gets a health update.
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	for i := 0; i < 2; i++ {
+		sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+			healthUpdateChan <- scs
+		})
+		select {
+		case scs := <-healthUpdateChan:
+			if scs.ConnectivityState != connectivity.Ready {
+				t.Fatalf("Received health update = %v, want = %v", scs.ConnectivityState, connectivity.Ready)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Context timed out waiting for health update")
+		}
+
+		// No further updates are expected.
+		select {
+		case scs := <-healthUpdateChan:
+			t.Fatalf("Received unexpected health update while channel is in state %v: %v", cc.GetState(), scs)
+		case <-time.After(defaultTestShortTimeout):
+		}
+	}
+
+	// Enter Idle and register a health listener and verify the health update
+	// again.
+	internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))(cc)
+	cc.Connect()
+	sc = <-scChan
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+		healthUpdateChan <- scs
+	})
+	select {
+	case scs := <-healthUpdateChan:
+		if scs.ConnectivityState != connectivity.Ready {
+			t.Fatalf("Received health update = %v, want = %v", scs.ConnectivityState, connectivity.Ready)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for health update")
+	}
+}
