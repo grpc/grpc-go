@@ -911,11 +911,9 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	// No TF should be reported until the first pass is complete.
 	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer shortCancel()
-
 	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
 
 	// Third SubConn fails.
-	shortCancel()
 	shortCtx, shortCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer shortCancel()
 	holds[2].Fail(fmt.Errorf("test error"))
@@ -1021,8 +1019,9 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
 	}
 
-	// The happy eyeballs timer expires, skipping server[1] and requesting the creation
-	// of a third SubConn.
+	// The happy eyeballs timer expires, pickfirst should stop waiting for
+	// server[1] to report a failure/success and request the creation of a third
+	// SubConn.
 	triggerTimer()
 	if holds[2].Wait(ctx) != true {
 		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
