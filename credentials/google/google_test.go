@@ -68,7 +68,7 @@ func (c *testPerRPCCreds) RequireTransportSecurity() bool {
 	return true
 }
 
-func (c *testPerRPCCreds) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+func (c *testPerRPCCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
 	return c.md, nil
 }
 
