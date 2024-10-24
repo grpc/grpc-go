@@ -78,9 +78,9 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	// management server.
 	contents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-					 "server_uri": %q,
-					 "channel_creds": [{"type": "insecure"}]
-				 }]`, serverURI)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, serverURI)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {

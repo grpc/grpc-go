@@ -29,6 +29,9 @@ import (
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/xdsclient/internal"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport/ads"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport/grpctransport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -54,24 +57,48 @@ const NameForServer = "#server"
 // only when all references are released, and it is safe for the caller to
 // invoke this close function multiple times.
 func New(name string) (XDSClient, func(), error) {
-	return newRefCounted(name, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout, backoff.DefaultExponential.Backoff)
+	return newRefCounted(name, defaultWatchExpiryTimeout, defaultIdleChannelExpiryTimeout, backoff.DefaultExponential.Backoff)
 }
 
 // newClientImpl returns a new xdsClient with the given config.
-func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, idleAuthorityDeleteTimeout time.Duration, streamBackoff func(int) time.Duration) (*clientImpl, error) {
+func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (*clientImpl, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &clientImpl{
 		done:               grpcsync.NewEvent(),
+		authorities:        make(map[string]*authority),
 		config:             config,
 		watchExpiryTimeout: watchExpiryTimeout,
 		backoff:            streamBackoff,
 		serializer:         grpcsync.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
+		transportBuilder:   &grpctransport.Builder{},
 		resourceTypes:      newResourceTypeRegistry(),
-		authorities:        make(map[string]*authority),
-		idleAuthorities:    cache.NewTimeoutCache(idleAuthorityDeleteTimeout),
+		xdsActiveChannels:  make(map[string]*channelState),
+		xdsIdleChannels:    cache.NewTimeoutCache(idleChannelExpiryTimeout),
 	}
 
+	for name, cfg := range config.Authorities() {
+		// If server configus are specified in the authorities map, use that. Else,
+		// use the top-level server configs.
+		serverCfg := config.XDSServers()
+		if len(cfg.XDSServers) >= 1 {
+			serverCfg = cfg.XDSServers
+		}
+		c.authorities[name] = newAuthority(authorityArgs{
+			serverConfigs:    serverCfg,
+			name:             name,
+			serializer:       c.serializer,
+			getChannelForADS: c.getChannelForADS,
+			logPrefix:        clientPrefix(c),
+		})
+	}
+	c.topLevelAuthority = newAuthority(authorityArgs{
+		serverConfigs:    config.XDSServers(),
+		name:             "",
+		serializer:       c.serializer,
+		getChannelForADS: c.getChannelForADS,
+		logPrefix:        clientPrefix(c),
+	})
 	c.logger = prefixLogger(c)
 	return c, nil
 }
@@ -89,13 +116,13 @@ type OptionsForTesting struct {
 	// unspecified, uses the default value used in non-test code.
 	WatchExpiryTimeout time.Duration
 
-	// AuthorityIdleTimeout is the timeout before idle authorities are deleted.
+	// IdleChannelExpiryTimeout is the timeout before idle channels are deleted.
 	// If unspecified, uses the default value used in non-test code.
-	AuthorityIdleTimeout time.Duration
+	IdleChannelExpiryTimeout time.Duration
 
 	// StreamBackoffAfterFailure is the backoff function used to determine the
-	// backoff duration after stream failures. If unspecified, uses the default
-	// value used in non-test code.
+	// backoff duration after stream failures.
+	// If unspecified, uses the default value used in non-test code.
 	StreamBackoffAfterFailure func(int) time.Duration
 }
 
@@ -115,8 +142,8 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 	if opts.WatchExpiryTimeout == 0 {
 		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
-	if opts.AuthorityIdleTimeout == 0 {
-		opts.AuthorityIdleTimeout = defaultIdleAuthorityDeleteTimeout
+	if opts.IdleChannelExpiryTimeout == 0 {
+		opts.IdleChannelExpiryTimeout = defaultIdleChannelExpiryTimeout
 	}
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
@@ -125,7 +152,7 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 	if err := bootstrap.SetFallbackBootstrapConfig(opts.Contents); err != nil {
 		return nil, nil, err
 	}
-	client, cancel, err := newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.AuthorityIdleTimeout, opts.StreamBackoffAfterFailure)
+	client, cancel, err := newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.IdleChannelExpiryTimeout, opts.StreamBackoffAfterFailure)
 	return client, func() { bootstrap.UnsetFallbackBootstrapConfigForTesting(); cancel() }, err
 }
 
@@ -152,6 +179,8 @@ func GetForTesting(name string) (XDSClient, func(), error) {
 
 func init() {
 	internal.TriggerXDSResourceNotFoundForTesting = triggerXDSResourceNotFoundForTesting
+	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
+
 }
 
 func triggerXDSResourceNotFoundForTesting(client XDSClient, typ xdsresource.Type, name string) error {
@@ -160,6 +189,14 @@ func triggerXDSResourceNotFoundForTesting(client XDSClient, typ xdsresource.Type
 		return fmt.Errorf("xDS client is of type %T, want %T", client, &clientRefCounted{})
 	}
 	return crc.clientImpl.triggerResourceNotFoundForTesting(typ, name)
+}
+
+func resourceWatchStateForTesting(client XDSClient, typ xdsresource.Type, name string) (ads.ResourceWatchState, error) {
+	crc, ok := client.(*clientRefCounted)
+	if !ok {
+		return ads.ResourceWatchState{}, fmt.Errorf("xDS client is of type %T, want %T", client, &clientRefCounted{})
+	}
+	return crc.clientImpl.resourceWatchStateForTesting(typ, name)
 }
 
 var (
