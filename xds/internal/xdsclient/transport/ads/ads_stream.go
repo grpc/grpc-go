@@ -54,6 +54,13 @@ type Response struct {
 	Resources []*anypb.Any
 }
 
+// DataAndErrTuple is a struct that holds a resource and an error. It is used to
+// return a resource and any associated error from a function.
+type DataAndErrTuple struct {
+	Resource xdsresource.ResourceData
+	Err      error
+}
+
 // StreamEventHandler is an interface that defines the callbacks for events that
 // occur on the ADS stream. Methods on this interface may be invoked
 // concurrently and implementations need to handle them in a thread-safe manner.
