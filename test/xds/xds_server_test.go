@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -93,12 +94,20 @@ func (s) TestServeLDSRDS(t *testing.T) {
 		}
 	})
 
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
+
+	stub.S = server
+	stubserver.StartTestService(t, stub)
+
 	go func() {
 		if err := server.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
@@ -201,12 +210,20 @@ func (s) TestRDSNack(t *testing.T) {
 		}
 	})
 
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
+
+	stub.S = server
+	stubserver.StartTestService(t, stub)
+
 	go func() {
 		if err := server.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
@@ -259,12 +276,30 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
+
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+
 	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
+
+	stub.S = server
+	stubserver.StartTestService(t, stub)
+
 	go func() {
 		if err := server.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)

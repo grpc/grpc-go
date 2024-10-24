@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -62,13 +63,21 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 		updateCh <- args.Mode
 	})
 
-	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
+	// Initialize a test gRPC server, assign it to the stub server, and start
+	// the test service.
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
+
+	stub.S = server
+	stubserver.StartTestService(t, stub)
 
 	// Setup the management server to respond with the listener resources.
 	host, port, err := hostPortFromListener(lis)
@@ -206,13 +215,21 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		}
 	})
 
-	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
+	// Initialize a test gRPC server, assign it to the stub server, and start
+	// the test service.
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
+
+	stub.S = server
+	stubserver.StartTestService(t, stub)
 
 	// Setup the management server to respond with server-side Listener
 	// resources for both listeners.
