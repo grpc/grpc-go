@@ -64,6 +64,12 @@ func (s) TestGet(t *testing.T) {
 			key:  "key1",
 			want: "",
 		},
+		{
+			name: "non-grpc-trace-bin key",
+			md:   metadata.Pairs("non-trace-bin", "\x01\x02\x03"),
+			key:  "non-trace-bin",
+			want: "",
+		},
 	}
 
 	for _, test := range tests {
@@ -72,7 +78,7 @@ func (s) TestGet(t *testing.T) {
 			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md))
 			got := c.Get(test.key)
 			if got != test.want {
-				t.Fatalf("got %s, want %s", got, test.want)
+				t.Fatalf("Get() = %s, want %s", got, test.want)
 			}
 			cancel()
 		})
@@ -82,16 +88,18 @@ func (s) TestGet(t *testing.T) {
 func (s) TestSet(t *testing.T) {
 	tests := []struct {
 		name      string
-		initialMD metadata.MD // Metadata to initialize the context with
-		setKey    string      // Key to set using c.Set()
-		setValue  string      // Value to set using c.Set()
-		wantKeys  []string    // Expected keys returned by c.Keys()
+		initialMD metadata.MD
+		setKey    string
+		setValue  string
+		wantValue string // expected value of the set key
+		wantKeys  []string
 	}{
 		{
 			name:      "set new key",
 			initialMD: metadata.MD{},
 			setKey:    "key1",
 			setValue:  "value1",
+			wantValue: "value1",
 			wantKeys:  []string{"key1"},
 		},
 		{
@@ -99,14 +107,24 @@ func (s) TestSet(t *testing.T) {
 			initialMD: metadata.MD{"key1": []string{"oldvalue"}},
 			setKey:    "key1",
 			setValue:  "newvalue",
+			wantValue: "newvalue",
 			wantKeys:  []string{"key1"},
 		},
 		{
-			name:      "set key with existing unrelated key",
+			name:      "set new key with different existing key",
 			initialMD: metadata.MD{"key2": []string{"value2"}},
 			setKey:    "key1",
 			setValue:  "value1",
-			wantKeys:  []string{"key2", "key1"}, // Order matesters here!
+			wantValue: "value1",
+			wantKeys:  []string{"key2", "key1"},
+		},
+		{
+			name:      "set non-grcp-trace-bin binary key",
+			initialMD: metadata.MD{"key1": []string{"value1"}},
+			setKey:    "non-grcp-trace-bin",
+			setValue:  base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03}),
+			wantValue: "", // non-grcp-trace-bin key should not be set
+			wantKeys:  []string{"key1"},
 		},
 	}
 
@@ -125,7 +143,7 @@ func (s) TestSet(t *testing.T) {
 				t.Fatalf("got keys %v, want %v", gotKeys, test.wantKeys)
 			}
 			gotMD, _ := metadata.FromOutgoingContext(c.Context())
-			if gotMD.Get(test.setKey)[0] != test.setValue {
+			if test.wantValue != "" && gotMD.Get(test.setKey)[0] != test.setValue {
 				t.Fatalf("got value %s, want %s, for key %s", gotMD.Get(test.setKey)[0], test.setValue, test.setKey)
 			}
 			cancel()
@@ -146,33 +164,18 @@ func (s) TestGetBinary_GRPCTraceBinHeaderKey(t *testing.T) {
 	if string(got) != string(want) {
 		t.Fatalf("GetBinary() = %s, want %s", got, want)
 	}
-
-	// Regular Get() should return base64 encoded binary string
-	gotStr := c.Get(GRPCTraceBinHeaderKey)
-	wantStr := base64.StdEncoding.EncodeToString(want)
-	if gotStr != wantStr {
-		t.Fatalf("Get() = %s, want %s", gotStr, wantStr)
-	}
 }
 
-func (s) TestGetBinary_NonGRPCTraceBinHeaderKey(t *testing.T) {
+func TestGet_GRPCTraceBinHeaderKey(t *testing.T) {
+	tc := []byte{0x01, 0x02, 0x03}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.Pairs("non-trace-bin", "\x01\x02\x03")))
+	c := NewCustomCarrier(stats.SetIncomingTrace(ctx, tc))
 
-	got := c.GetBinary()
-	if got != nil {
-		t.Fatalf("GetBinary() = %v, want nil", got)
-	}
-
-	gotStr := c.Get(GRPCTraceBinHeaderKey) // regular Get() should return empty string for GRPCTraceBinHeaderKey
-	if gotStr != "" {
-		t.Fatalf("Get() = %s, want empty", gotStr)
-	}
-	gotStr = c.Get("non-trace-bin") // regular Get() should return the string value for non GRPCTraceBinHeaderKey
-	wantStr := "\x01\x02\x03"
-	if gotStr != wantStr {
-		t.Fatalf("Get() = %s, want %s", gotStr, wantStr)
+	got := c.Get(GRPCTraceBinHeaderKey)
+	want := base64.StdEncoding.EncodeToString(tc)
+	if got != want {
+		t.Fatalf("Get() = %s, want %s", got, want)
 	}
 }
 
@@ -180,29 +183,24 @@ func (s) TestSetBinary_GRPCTraceBinHeaderKey(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	want := []byte{0x01, 0x02, 0x03}
-	c := NewCustomCarrier(stats.SetIncomingTrace(ctx, want))
+	c := NewCustomCarrier(ctx)
 
 	c.SetBinary(want)
 	got := stats.OutgoingTrace(c.Context())
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
-
-	c = NewCustomCarrier(ctx)
-	c.Set(GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(want)) // regular Set() should decode base64 encoded binary string and call SetBinary()
-	got = stats.OutgoingTrace(c.Context())
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
 }
 
-func (s) TestSetBinary_NonGRPCTraceBinHeaderKey(t *testing.T) {
+func (s) TestSet_GRPCTraceBinHeaderKey(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, metadata.MD{"non-trace-bin": []string{"value"}}))
+	want := []byte{0x01, 0x02, 0x03}
+	c := NewCustomCarrier(ctx)
 
+	c.Set(GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(want))
 	got := stats.OutgoingTrace(c.Context())
-	if got != nil {
-		t.Fatalf("got %v, want nil", got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }
