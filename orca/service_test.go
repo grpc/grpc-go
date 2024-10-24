@@ -95,6 +95,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}
 
+	// Assign the gRPC server to the stub server and start serving.
 	stub.S = s
 	stubserver.StartTestService(t, stub)
 	go s.Serve(lis)
