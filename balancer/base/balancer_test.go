@@ -41,6 +41,7 @@ func (c *testClientConn) NewSubConn(addrs []resolver.Address, opts balancer.NewS
 func (c *testClientConn) UpdateState(balancer.State) {}
 
 type testSubConn struct {
+	balancer.SubConn
 	updateState func(balancer.SubConnState)
 }
 
