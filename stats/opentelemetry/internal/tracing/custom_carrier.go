@@ -62,6 +62,7 @@ func (c *CustomCarrier) Get(key string) string {
 	}
 	if strings.HasSuffix(key, "bin") && key != GRPCTraceBinHeaderKey {
 		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
+		return ""
 	}
 
 	md, ok := metadata.FromIncomingContext(c.ctx)
@@ -83,12 +84,16 @@ func (c *CustomCarrier) Get(key string) string {
 // the key-value pair in the string format in context's metadata.
 func (c *CustomCarrier) Set(key, value string) {
 	if key == GRPCTraceBinHeaderKey {
-		decodedValue, err := base64.StdEncoding.DecodeString(value)
+		b, err := base64.StdEncoding.DecodeString(value)
 		if err != nil {
 			logger.Errorf("encountered error in decoding %s value", GRPCTraceBinHeaderKey)
 			return
 		}
-		c.SetBinary(decodedValue)
+		c.SetBinary(b)
+		return
+	}
+	if strings.HasSuffix(key, "bin") && key != GRPCTraceBinHeaderKey {
+		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
 		return
 	}
 
