@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/rls/internal/test/e2e"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -37,7 +38,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
-	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
@@ -46,6 +46,8 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
+
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -67,20 +69,20 @@ func (s) TestConfigUpdate_ControlChannel(t *testing.T) {
 	// Start a couple of test backends, and set up the fake RLS servers to return
 	// these as a target in the RLS response.
 	backendCh1, backendAddress1 := startBackend(t)
-	rlsServer1.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer1.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress1}}}
 	})
 	backendCh2, backendAddress2 := startBackend(t)
-	rlsServer2.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer2.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress2}}}
 	})
 
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -153,7 +155,7 @@ func (s) TestConfigUpdate_ControlChannelWithCreds(t *testing.T) {
 	// and set up the fake RLS server to return this as the target in the RLS
 	// response.
 	backendCh, backendAddress := startBackend(t, grpc.Creds(serverCreds))
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress}}}
 	})
 
@@ -164,9 +166,9 @@ func (s) TestConfigUpdate_ControlChannelWithCreds(t *testing.T) {
 	// server certificate used for the RLS server and the backend specifies a
 	// DNS SAN of "*.test.example.com". Hence we use a dial target which is a
 	// subdomain of the same here.
-	cc, err := grpc.Dial(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(clientCreds))
+	cc, err := grpc.NewClient(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -217,16 +219,16 @@ func (s) TestConfigUpdate_ControlChannelServiceConfig(t *testing.T) {
 	// Start a test backend, and set up the fake RLS server to return this as a
 	// target in the RLS response.
 	backendCh, backendAddress := startBackend(t)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress}}}
 	})
 
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -261,9 +263,9 @@ func (s) TestConfigUpdate_DefaultTarget(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -298,7 +300,7 @@ func (s) TestConfigUpdate_ChildPolicyConfigs(t *testing.T) {
 	testBackendCh, testBackendAddress := startBackend(t)
 
 	// Set up the RLS server to respond with the test backend.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 	})
 
@@ -519,7 +521,7 @@ func (s) TestConfigUpdate_BadChildPolicyConfigs(t *testing.T) {
 	// Set up the RLS server to respond with a bad target field which is expected
 	// to cause the child policy's ParseTarget to fail and should result in the LB
 	// policy creating a lame child policy wrapper.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{e2e.RLSChildPolicyBadTarget}}}
 	})
 
@@ -535,9 +537,9 @@ func (s) TestConfigUpdate_BadChildPolicyConfigs(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -588,7 +590,7 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	// these as targets in the RLS response, based on request keys.
 	backendCh1, backendAddress1 := startBackend(t)
 	backendCh2, backendAddress2 := startBackend(t)
-	rlsServer.SetResponseCallback(func(ctx context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		if req.KeyMap["k1"] == "v1" {
 			return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress1}}}
 		}
@@ -650,6 +652,179 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	verifyRLSRequest(t, rlsReqCh, true)
 }
 
+// Test that when a data cache entry is evicted due to config change
+// in cache size, the picker is updated accordingly.
+func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
+	// Override the clientConn update hook to get notified.
+	clientConnUpdateDone := make(chan struct{}, 1)
+	origClientConnUpdateHook := clientConnUpdateHook
+	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
+	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
+
+	// Override the cache entry size func, and always return 1.
+	origEntrySizeFunc := computeDataCacheEntrySize
+	computeDataCacheEntrySize = func(cacheKey, *cacheEntry) int64 { return 1 }
+	defer func() { computeDataCacheEntrySize = origEntrySizeFunc }()
+
+	// Override the backoff strategy to return a large backoff which
+	// will make sure the date cache entry remains in backoff for the
+	// duration of the test.
+	origBackoffStrategy := defaultBackoffStrategy
+	defaultBackoffStrategy = &fakeBackoffStrategy{backoff: defaultTestTimeout}
+	defer func() { defaultBackoffStrategy = origBackoffStrategy }()
+
+	// Override the minEvictionDuration to ensure that when the config update
+	// reduces the cache size, the resize operation is not stopped because
+	// we find an entry whose minExpiryDuration has not elapsed.
+	origMinEvictDuration := minEvictDuration
+	minEvictDuration = time.Duration(0)
+	defer func() { minEvictDuration = origMinEvictDuration }()
+
+	// Register the top-level wrapping balancer which forwards calls to RLS.
+	topLevelBalancerName := t.Name() + "top-level"
+	var ccWrapper *testCCWrapper
+	stub.Register(topLevelBalancerName, stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccWrapper = &testCCWrapper{ClientConn: bd.ClientConn}
+			bd.Data = balancer.Get(Name).Build(ccWrapper, bd.BuildOptions)
+		},
+		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			parser := balancer.Get(Name).(balancer.ConfigParser)
+			return parser.ParseConfig(sc)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			return bal.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.Close()
+		},
+	})
+
+	// Start an RLS server and set the throttler to never throttle requests.
+	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
+	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Register an LB policy to act as the child policy for RLS LB policy.
+	childPolicyName := "test-child-policy" + t.Name()
+	e2e.RegisterRLSChildPolicy(childPolicyName, nil)
+	t.Logf("Registered child policy with name %q", childPolicyName)
+
+	// Start a couple of test backends, and set up the fake RLS server to return
+	// these as targets in the RLS response, based on request keys.
+	// Start a couple of test backends, and set up the fake RLS server to return
+	// these as targets in the RLS response, based on request keys.
+	backendCh1, backendAddress1 := startBackend(t)
+	backendCh2, backendAddress2 := startBackend(t)
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+		if req.KeyMap["k1"] == "v1" {
+			return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress1}}}
+		}
+		if req.KeyMap["k2"] == "v2" {
+			return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress2}}}
+		}
+		return &rlstest.RouteLookupResponse{Err: errors.New("no keys in request metadata")}
+	})
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := manual.NewBuilderWithScheme("rls-e2e")
+	headers := `
+    [
+        {
+            "key": "k1",
+            "names": [
+                "n1"
+            ]
+        },
+        {
+            "key": "k2",
+            "names": [
+                "n2"
+            ]
+        }
+    ]
+    `
+
+	configJSON := `
+	{
+	  "loadBalancingConfig": [
+		{
+		  "%s": {
+			"routeLookupConfig": {
+				"grpcKeybuilders": [{
+					"names": [{"service": "grpc.testing.TestService"}],
+					"headers": %s
+				}],
+				"lookupService": "%s",
+				"cacheSizeBytes": %d
+			},
+			"childPolicy": [{"%s": {}}],
+			"childPolicyConfigTargetFieldName": "Backend"
+		  }
+		}
+	  ]
+	}`
+	scJSON := fmt.Sprintf(configJSON, topLevelBalancerName, headers, rlsServer.Address, 1000, childPolicyName)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
+	r.InitialState(resolver.State{ServiceConfig: sc})
+
+	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("create grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	<-clientConnUpdateDone
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Make an RPC call with empty metadata, which will eventually throw
+	// the error as no metadata will match from rlsServer response
+	// callback defined above. This will cause the control channel to
+	// throw the error and cause the item to get into backoff.
+	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
+
+	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
+	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh1)
+	verifyRLSRequest(t, rlsReqCh, true)
+
+	ctxOutgoing = metadata.AppendToOutgoingContext(ctx, "n2", "v2")
+	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh2)
+	verifyRLSRequest(t, rlsReqCh, true)
+
+	initialStateCnt := len(ccWrapper.getStates())
+	// Setting the size to 1 will cause the entries to be
+	// evicted.
+	scJSON1 := fmt.Sprintf(`
+{
+  "loadBalancingConfig": [
+    {
+      "%s": {
+		"routeLookupConfig": {
+			"grpcKeybuilders": [{
+				"names": [{"service": "grpc.testing.TestService"}],
+				"headers": %s
+			}],
+			"lookupService": "%s",
+			"cacheSizeBytes": 2
+		},
+		"childPolicy": [{"%s": {}}],
+		"childPolicyConfigTargetFieldName": "Backend"
+      }
+    }
+  ]
+}`, topLevelBalancerName, headers, rlsServer.Address, childPolicyName)
+	sc1 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON1)
+	r.UpdateState(resolver.State{ServiceConfig: sc1})
+	<-clientConnUpdateDone
+	finalStateCnt := len(ccWrapper.getStates())
+
+	if finalStateCnt != initialStateCnt+1 {
+		t.Errorf("Unexpected balancer state count: got %v, want %v", finalStateCnt, initialStateCnt)
+	}
+}
+
 // TestDataCachePurging verifies that the LB policy periodically evicts expired
 // entries from the data cache.
 func (s) TestDataCachePurging(t *testing.T) {
@@ -684,16 +859,16 @@ func (s) TestDataCachePurging(t *testing.T) {
 	// Start a test backend, and set up the fake RLS server to return this as a
 	// target in the RLS response.
 	backendCh, backendAddress := startBackend(t)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress}}}
 	})
 
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -775,16 +950,16 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Start a test backend, and set up the fake RLS server to return this as a
 	// target in the RLS response.
 	backendCh, backendAddress := startBackend(t)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress}}}
 	})
 
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 
@@ -919,7 +1094,10 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	}
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
 		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &childPolicyConfig{}
@@ -946,7 +1124,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 
 	// Start a test backend and set the RLS server to respond with it.
 	testBackendCh, testBackendAddress := startBackend(t)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, _ *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 	})
 

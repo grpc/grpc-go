@@ -16,7 +16,7 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to send and receive metadata to and from an RPC.
 package main
 
 import (
@@ -287,7 +287,7 @@ const message = "this is examples/metadata"
 func main() {
 	flag.Parse()
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

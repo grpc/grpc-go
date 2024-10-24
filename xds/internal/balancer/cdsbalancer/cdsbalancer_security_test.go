@@ -25,8 +25,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -40,8 +42,8 @@ import (
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -75,14 +77,15 @@ func (tcc *testCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.New
 	if len(addrs) != 1 {
 		return nil, fmt.Errorf("NewSubConn got %d addresses, want 1", len(addrs))
 	}
-	getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *xdscredsinternal.HandshakeInfo)
+	getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *unsafe.Pointer)
 	hi := getHI(addrs[0].Attributes)
 	if hi == nil {
 		return nil, fmt.Errorf("NewSubConn got address without xDS handshake info")
 	}
+
 	sc, err := tcc.ClientConn.NewSubConn(addrs, opts)
 	select {
-	case tcc.handshakeInfoCh <- hi:
+	case tcc.handshakeInfoCh <- (*xdscredsinternal.HandshakeInfo)(*hi):
 	default:
 	}
 	return sc, err
@@ -135,7 +138,10 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, serverCreds credentials.TransportCredentials) (*grpc.ClientConn, string) {
 	t.Helper()
 
-	xdsClient, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -258,12 +264,15 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	registerWrappedCDSPolicyWithNewSubConnOverride(t, handshakeInfoCh)
 
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create a grpc channel with insecure creds talking to a test server with
 	// insecure credentials.
-	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, insecure.NewCredentials(), nil)
+	cc, serverAddress := setupForSecurityTests(t, bc, insecure.NewCredentials(), nil)
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
@@ -292,7 +301,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting to read handshake info passed to NewSubConn")
 	}
-	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil)
+	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil, nil, false)
 	if !cmp.Equal(gotHI, wantHI) {
 		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
 	}
@@ -309,12 +318,15 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	registerWrappedCDSPolicyWithNewSubConnOverride(t, handshakeInfoCh)
 
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create a grpc channel with xDS creds talking to a test server with
 	// insecure credentials.
-	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), nil)
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is not configured to return any security configuration.
@@ -343,12 +355,12 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting to read handshake info passed to NewSubConn")
 	}
-	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil)
+	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil, nil, false)
 	if !cmp.Equal(gotHI, wantHI) {
 		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
 	}
 	if !gotHI.UseFallbackCreds() {
-		t.Fatal("NewSubConn got hanshake info that does not specify the use of fallback creds")
+		t.Fatal("NewSubConn got handshake info that does not specify the use of fallback creds")
 	}
 }
 
@@ -357,15 +369,17 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 // that the cds LB policy puts the channel in TRANSIENT_FAILURE.
 func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, _, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Ignore the bootstrap configuration returned by the above call to
-	// e2e.SetupManagementServer and create a new one that does not have
-	// ceritificate providers configuration.
-	bootstrapContents, err := xdsbootstrap.Contents(xdsbootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
+	// Create bootstrap configuration pointing to the above management server,
+	// and one that does not have certificate providers configuration.
+	nodeID := uuid.New().String()
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
@@ -391,7 +405,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }
 
-// A ceritificate provider builder that returns a nil Provider from the starter
+// A certificate provider builder that returns a nil Provider from the starter
 // func passed to certprovider.NewBuildableConfig().
 type errCertProviderBuilder struct{}
 
@@ -416,21 +430,24 @@ func init() {
 // policy attempts to build a certificate provider. Verifies that the cds LB
 // policy puts the channel in TRANSIENT_FAILURE.
 func (s) TestCertproviderStoreError(t *testing.T) {
-	mgmtServer, nodeID, _, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Ignore the bootstrap configuration returned by the above call to
-	// e2e.SetupManagementServer and create a new one that includes ceritificate
-	// providers configuration for errCertProviderBuilder.
+	// Create bootstrap configuration pointing to the above management server
+	// and one that includes certificate providers configuration for
+	// errCertProviderBuilder.
+	nodeID := uuid.New().String()
 	providerCfg := json.RawMessage(fmt.Sprintf(`{
 		"plugin_name": "%s",
 		"config": {}
 	}`, errCertProviderName))
-	bootstrapContents, err := xdsbootstrap.Contents(xdsbootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          mgmtServer.Address,
-		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
+		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
@@ -461,12 +478,16 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 // the server is secure.
 func (s) TestGoodSecurityConfig(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server
+	// and one that includes certificate providers configuration.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
-	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
@@ -500,12 +521,15 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 // server is secure.
 func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
-	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource contains security configuration with a certificate
@@ -569,12 +593,15 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 // use of fallback credentials, which in this case is insecure creds.
 func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
-	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
@@ -645,12 +672,15 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
 
 	// Spin up an xDS management server.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
-	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.

@@ -21,29 +21,18 @@ package service
 
 import (
 	"context"
-	"net"
 
-	"github.com/golang/protobuf/ptypes"
-	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/channelz/internal/protoconv"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/protoadapt"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func init() {
 	channelz.TurnOn()
 }
-
-var logger = grpclog.Component("channelz")
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
 //
@@ -62,289 +51,52 @@ type serverImpl struct {
 	channelzgrpc.UnimplementedChannelzServer
 }
 
-func connectivityStateToProto(s connectivity.State) *channelzpb.ChannelConnectivityState {
-	switch s {
-	case connectivity.Idle:
-		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_IDLE}
-	case connectivity.Connecting:
-		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_CONNECTING}
-	case connectivity.Ready:
-		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_READY}
-	case connectivity.TransientFailure:
-		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_TRANSIENT_FAILURE}
-	case connectivity.Shutdown:
-		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_SHUTDOWN}
-	default:
-		return &channelzpb.ChannelConnectivityState{State: channelzpb.ChannelConnectivityState_UNKNOWN}
+func (s *serverImpl) GetChannel(_ context.Context, req *channelzpb.GetChannelRequest) (*channelzpb.GetChannelResponse, error) {
+	ch, err := protoconv.GetChannel(req.GetChannelId())
+	if err != nil {
+		return nil, err
 	}
+	return &channelzpb.GetChannelResponse{Channel: ch}, nil
 }
 
-func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
-	pbt := &channelzpb.ChannelTrace{}
-	pbt.NumEventsLogged = ct.EventNum
-	if ts, err := ptypes.TimestampProto(ct.CreationTime); err == nil {
-		pbt.CreationTimestamp = ts
-	}
-	events := make([]*channelzpb.ChannelTraceEvent, 0, len(ct.Events))
-	for _, e := range ct.Events {
-		cte := &channelzpb.ChannelTraceEvent{
-			Description: e.Desc,
-			Severity:    channelzpb.ChannelTraceEvent_Severity(e.Severity),
-		}
-		if ts, err := ptypes.TimestampProto(e.Timestamp); err == nil {
-			cte.Timestamp = ts
-		}
-		if e.RefID != 0 {
-			switch e.RefType {
-			case channelz.RefChannel:
-				cte.ChildRef = &channelzpb.ChannelTraceEvent_ChannelRef{ChannelRef: &channelzpb.ChannelRef{ChannelId: e.RefID, Name: e.RefName}}
-			case channelz.RefSubChannel:
-				cte.ChildRef = &channelzpb.ChannelTraceEvent_SubchannelRef{SubchannelRef: &channelzpb.SubchannelRef{SubchannelId: e.RefID, Name: e.RefName}}
-			}
-		}
-		events = append(events, cte)
-	}
-	pbt.Events = events
-	return pbt
-}
-
-func channelMetricToProto(cm *channelz.ChannelMetric) *channelzpb.Channel {
-	c := &channelzpb.Channel{}
-	c.Ref = &channelzpb.ChannelRef{ChannelId: cm.ID, Name: cm.RefName}
-
-	c.Data = &channelzpb.ChannelData{
-		State:          connectivityStateToProto(cm.ChannelData.State),
-		Target:         cm.ChannelData.Target,
-		CallsStarted:   cm.ChannelData.CallsStarted,
-		CallsSucceeded: cm.ChannelData.CallsSucceeded,
-		CallsFailed:    cm.ChannelData.CallsFailed,
-	}
-	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
-		c.Data.LastCallStartedTimestamp = ts
-	}
-	nestedChans := make([]*channelzpb.ChannelRef, 0, len(cm.NestedChans))
-	for id, ref := range cm.NestedChans {
-		nestedChans = append(nestedChans, &channelzpb.ChannelRef{ChannelId: id, Name: ref})
-	}
-	c.ChannelRef = nestedChans
-
-	subChans := make([]*channelzpb.SubchannelRef, 0, len(cm.SubChans))
-	for id, ref := range cm.SubChans {
-		subChans = append(subChans, &channelzpb.SubchannelRef{SubchannelId: id, Name: ref})
-	}
-	c.SubchannelRef = subChans
-
-	sockets := make([]*channelzpb.SocketRef, 0, len(cm.Sockets))
-	for id, ref := range cm.Sockets {
-		sockets = append(sockets, &channelzpb.SocketRef{SocketId: id, Name: ref})
-	}
-	c.SocketRef = sockets
-	c.Data.Trace = channelTraceToProto(cm.Trace)
-	return c
-}
-
-func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchannel {
-	sc := &channelzpb.Subchannel{}
-	sc.Ref = &channelzpb.SubchannelRef{SubchannelId: cm.ID, Name: cm.RefName}
-
-	sc.Data = &channelzpb.ChannelData{
-		State:          connectivityStateToProto(cm.ChannelData.State),
-		Target:         cm.ChannelData.Target,
-		CallsStarted:   cm.ChannelData.CallsStarted,
-		CallsSucceeded: cm.ChannelData.CallsSucceeded,
-		CallsFailed:    cm.ChannelData.CallsFailed,
-	}
-	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
-		sc.Data.LastCallStartedTimestamp = ts
-	}
-	nestedChans := make([]*channelzpb.ChannelRef, 0, len(cm.NestedChans))
-	for id, ref := range cm.NestedChans {
-		nestedChans = append(nestedChans, &channelzpb.ChannelRef{ChannelId: id, Name: ref})
-	}
-	sc.ChannelRef = nestedChans
-
-	subChans := make([]*channelzpb.SubchannelRef, 0, len(cm.SubChans))
-	for id, ref := range cm.SubChans {
-		subChans = append(subChans, &channelzpb.SubchannelRef{SubchannelId: id, Name: ref})
-	}
-	sc.SubchannelRef = subChans
-
-	sockets := make([]*channelzpb.SocketRef, 0, len(cm.Sockets))
-	for id, ref := range cm.Sockets {
-		sockets = append(sockets, &channelzpb.SocketRef{SocketId: id, Name: ref})
-	}
-	sc.SocketRef = sockets
-	sc.Data.Trace = channelTraceToProto(cm.Trace)
-	return sc
-}
-
-func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security {
-	switch v := se.(type) {
-	case *credentials.TLSChannelzSecurityValue:
-		return &channelzpb.Security{Model: &channelzpb.Security_Tls_{Tls: &channelzpb.Security_Tls{
-			CipherSuite:       &channelzpb.Security_Tls_StandardName{StandardName: v.StandardName},
-			LocalCertificate:  v.LocalCertificate,
-			RemoteCertificate: v.RemoteCertificate,
-		}}}
-	case *credentials.OtherChannelzSecurityValue:
-		otherSecurity := &channelzpb.Security_OtherSecurity{
-			Name: v.Name,
-		}
-		if anyval, err := anypb.New(protoadapt.MessageV2Of(v.Value)); err == nil {
-			otherSecurity.Value = anyval
-		}
-		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
-	}
-	return nil
-}
-
-func addrToProto(a net.Addr) *channelzpb.Address {
-	switch a.Network() {
-	case "udp":
-		// TODO: Address_OtherAddress{}. Need proto def for Value.
-	case "ip":
-		// Note zone info is discarded through the conversion.
-		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.IPAddr).IP}}}
-	case "ip+net":
-		// Note mask info is discarded through the conversion.
-		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.IPNet).IP}}}
-	case "tcp":
-		// Note zone info is discarded through the conversion.
-		return &channelzpb.Address{Address: &channelzpb.Address_TcpipAddress{TcpipAddress: &channelzpb.Address_TcpIpAddress{IpAddress: a.(*net.TCPAddr).IP, Port: int32(a.(*net.TCPAddr).Port)}}}
-	case "unix", "unixgram", "unixpacket":
-		return &channelzpb.Address{Address: &channelzpb.Address_UdsAddress_{UdsAddress: &channelzpb.Address_UdsAddress{Filename: a.String()}}}
-	default:
-	}
-	return &channelzpb.Address{}
-}
-
-func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
-	s := &channelzpb.Socket{}
-	s.Ref = &channelzpb.SocketRef{SocketId: sm.ID, Name: sm.RefName}
-
-	s.Data = &channelzpb.SocketData{
-		StreamsStarted:   sm.SocketData.StreamsStarted,
-		StreamsSucceeded: sm.SocketData.StreamsSucceeded,
-		StreamsFailed:    sm.SocketData.StreamsFailed,
-		MessagesSent:     sm.SocketData.MessagesSent,
-		MessagesReceived: sm.SocketData.MessagesReceived,
-		KeepAlivesSent:   sm.SocketData.KeepAlivesSent,
-	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastLocalStreamCreatedTimestamp); err == nil {
-		s.Data.LastLocalStreamCreatedTimestamp = ts
-	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastRemoteStreamCreatedTimestamp); err == nil {
-		s.Data.LastRemoteStreamCreatedTimestamp = ts
-	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastMessageSentTimestamp); err == nil {
-		s.Data.LastMessageSentTimestamp = ts
-	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastMessageReceivedTimestamp); err == nil {
-		s.Data.LastMessageReceivedTimestamp = ts
-	}
-	s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
-	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
-
-	if sm.SocketData.SocketOptions != nil {
-		s.Data.Option = sockoptToProto(sm.SocketData.SocketOptions)
-	}
-	if sm.SocketData.Security != nil {
-		s.Security = securityToProto(sm.SocketData.Security)
-	}
-
-	if sm.SocketData.LocalAddr != nil {
-		s.Local = addrToProto(sm.SocketData.LocalAddr)
-	}
-	if sm.SocketData.RemoteAddr != nil {
-		s.Remote = addrToProto(sm.SocketData.RemoteAddr)
-	}
-	s.RemoteName = sm.SocketData.RemoteName
-	return s
-}
-
-func (s *serverImpl) GetTopChannels(ctx context.Context, req *channelzpb.GetTopChannelsRequest) (*channelzpb.GetTopChannelsResponse, error) {
-	metrics, end := channelz.GetTopChannels(req.GetStartChannelId(), req.GetMaxResults())
+func (s *serverImpl) GetTopChannels(_ context.Context, req *channelzpb.GetTopChannelsRequest) (*channelzpb.GetTopChannelsResponse, error) {
 	resp := &channelzpb.GetTopChannelsResponse{}
-	for _, m := range metrics {
-		resp.Channel = append(resp.Channel, channelMetricToProto(m))
-	}
-	resp.End = end
+	resp.Channel, resp.End = protoconv.GetTopChannels(req.GetStartChannelId(), int(req.GetMaxResults()))
 	return resp, nil
 }
 
-func serverMetricToProto(sm *channelz.ServerMetric) *channelzpb.Server {
-	s := &channelzpb.Server{}
-	s.Ref = &channelzpb.ServerRef{ServerId: sm.ID, Name: sm.RefName}
-
-	s.Data = &channelzpb.ServerData{
-		CallsStarted:   sm.ServerData.CallsStarted,
-		CallsSucceeded: sm.ServerData.CallsSucceeded,
-		CallsFailed:    sm.ServerData.CallsFailed,
+func (s *serverImpl) GetServer(_ context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
+	srv, err := protoconv.GetServer(req.GetServerId())
+	if err != nil {
+		return nil, err
 	}
-
-	if ts, err := ptypes.TimestampProto(sm.ServerData.LastCallStartedTimestamp); err == nil {
-		s.Data.LastCallStartedTimestamp = ts
-	}
-	sockets := make([]*channelzpb.SocketRef, 0, len(sm.ListenSockets))
-	for id, ref := range sm.ListenSockets {
-		sockets = append(sockets, &channelzpb.SocketRef{SocketId: id, Name: ref})
-	}
-	s.ListenSocket = sockets
-	return s
+	return &channelzpb.GetServerResponse{Server: srv}, nil
 }
 
-func (s *serverImpl) GetServers(ctx context.Context, req *channelzpb.GetServersRequest) (*channelzpb.GetServersResponse, error) {
-	metrics, end := channelz.GetServers(req.GetStartServerId(), req.GetMaxResults())
+func (s *serverImpl) GetServers(_ context.Context, req *channelzpb.GetServersRequest) (*channelzpb.GetServersResponse, error) {
 	resp := &channelzpb.GetServersResponse{}
-	for _, m := range metrics {
-		resp.Server = append(resp.Server, serverMetricToProto(m))
-	}
-	resp.End = end
+	resp.Server, resp.End = protoconv.GetServers(req.GetStartServerId(), int(req.GetMaxResults()))
 	return resp, nil
 }
 
-func (s *serverImpl) GetServerSockets(ctx context.Context, req *channelzpb.GetServerSocketsRequest) (*channelzpb.GetServerSocketsResponse, error) {
-	metrics, end := channelz.GetServerSockets(req.GetServerId(), req.GetStartSocketId(), req.GetMaxResults())
+func (s *serverImpl) GetSubchannel(_ context.Context, req *channelzpb.GetSubchannelRequest) (*channelzpb.GetSubchannelResponse, error) {
+	subChan, err := protoconv.GetSubChannel(req.GetSubchannelId())
+	if err != nil {
+		return nil, err
+	}
+	return &channelzpb.GetSubchannelResponse{Subchannel: subChan}, nil
+}
+
+func (s *serverImpl) GetServerSockets(_ context.Context, req *channelzpb.GetServerSocketsRequest) (*channelzpb.GetServerSocketsResponse, error) {
 	resp := &channelzpb.GetServerSocketsResponse{}
-	for _, m := range metrics {
-		resp.SocketRef = append(resp.SocketRef, &channelzpb.SocketRef{SocketId: m.ID, Name: m.RefName})
-	}
-	resp.End = end
+	resp.SocketRef, resp.End = protoconv.GetServerSockets(req.GetServerId(), req.GetStartSocketId(), int(req.GetMaxResults()))
 	return resp, nil
 }
 
-func (s *serverImpl) GetChannel(ctx context.Context, req *channelzpb.GetChannelRequest) (*channelzpb.GetChannelResponse, error) {
-	var metric *channelz.ChannelMetric
-	if metric = channelz.GetChannel(req.GetChannelId()); metric == nil {
-		return nil, status.Errorf(codes.NotFound, "requested channel %d not found", req.GetChannelId())
+func (s *serverImpl) GetSocket(_ context.Context, req *channelzpb.GetSocketRequest) (*channelzpb.GetSocketResponse, error) {
+	socket, err := protoconv.GetSocket(req.GetSocketId())
+	if err != nil {
+		return nil, err
 	}
-	resp := &channelzpb.GetChannelResponse{Channel: channelMetricToProto(metric)}
-	return resp, nil
-}
-
-func (s *serverImpl) GetSubchannel(ctx context.Context, req *channelzpb.GetSubchannelRequest) (*channelzpb.GetSubchannelResponse, error) {
-	var metric *channelz.SubChannelMetric
-	if metric = channelz.GetSubChannel(req.GetSubchannelId()); metric == nil {
-		return nil, status.Errorf(codes.NotFound, "requested sub channel %d not found", req.GetSubchannelId())
-	}
-	resp := &channelzpb.GetSubchannelResponse{Subchannel: subChannelMetricToProto(metric)}
-	return resp, nil
-}
-
-func (s *serverImpl) GetSocket(ctx context.Context, req *channelzpb.GetSocketRequest) (*channelzpb.GetSocketResponse, error) {
-	var metric *channelz.SocketMetric
-	if metric = channelz.GetSocket(req.GetSocketId()); metric == nil {
-		return nil, status.Errorf(codes.NotFound, "requested socket %d not found", req.GetSocketId())
-	}
-	resp := &channelzpb.GetSocketResponse{Socket: socketMetricToProto(metric)}
-	return resp, nil
-}
-
-func (s *serverImpl) GetServer(ctx context.Context, req *channelzpb.GetServerRequest) (*channelzpb.GetServerResponse, error) {
-	var metric *channelz.ServerMetric
-	if metric = channelz.GetServer(req.GetServerId()); metric == nil {
-		return nil, status.Errorf(codes.NotFound, "requested server %d not found", req.GetServerId())
-	}
-	resp := &channelzpb.GetServerResponse{Server: serverMetricToProto(metric)}
-	return resp, nil
+	return &channelzpb.GetSocketResponse{Socket: socket}, nil
 }

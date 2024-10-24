@@ -66,6 +66,7 @@ func makeClientTLSConfig(t *testing.T, mTLS bool) *tls.Config {
 		// verification function. So, the server credentials tests will rely
 		// solely on the success/failure of the server-side handshake.
 		InsecureSkipVerify: true,
+		NextProtos:         []string{"h2"},
 	}
 }
 
@@ -122,7 +123,7 @@ func (s) TestServerCredsInvalidHandshakeInfo(t *testing.T) {
 		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
 	}
 
-	info := xdsinternal.NewHandshakeInfo(&fakeProvider{}, nil)
+	info := xdsinternal.NewHandshakeInfo(&fakeProvider{}, nil, nil, false)
 	conn := newWrappedConn(nil, info, time.Time{})
 	if _, _, err := creds.ServerHandshake(conn); err == nil {
 		t.Fatal("ServerHandshake succeeded without identity certificate provider in HandshakeInfo")
@@ -158,7 +159,7 @@ func (s) TestServerCredsProviderFailure(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			info := xdsinternal.NewHandshakeInfo(test.rootProvider, test.identityProvider)
+			info := xdsinternal.NewHandshakeInfo(test.rootProvider, test.identityProvider, nil, false)
 			conn := newWrappedConn(nil, info, time.Time{})
 			if _, _, err := creds.ServerHandshake(conn); err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("ServerHandshake() returned error: %q, wantErr: %q", err, test.wantErr)
@@ -232,8 +233,7 @@ func (s) TestServerCredsHandshakeTimeout(t *testing.T) {
 	// Create a test server which uses the xDS server credentials created above
 	// to perform TLS handshake on incoming connections.
 	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
-		hi := xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server2_cert.pem", "x509/server2_key.pem"))
-		hi.SetRequireClientCert(true)
+		hi := xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server2_cert.pem", "x509/server2_key.pem"), nil, true)
 
 		// Create a wrapped conn which can return the HandshakeInfo created
 		// above with a very small deadline.
@@ -285,8 +285,7 @@ func (s) TestServerCredsHandshakeFailure(t *testing.T) {
 	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
 		// Create a HandshakeInfo which has a root provider which does not match
 		// the certificate sent by the client.
-		hi := xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/client2_cert.pem", "x509/client2_key.pem"))
-		hi.SetRequireClientCert(true)
+		hi := xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/client2_cert.pem", "x509/client2_key.pem"), nil, true)
 
 		// Create a wrapped conn which can return the HandshakeInfo and
 		// configured deadline to the xDS credentials' ServerHandshake()
@@ -367,8 +366,7 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 			// created above to perform TLS handshake on incoming connections.
 			ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
 				// Create a HandshakeInfo with information from the test table.
-				hi := xdsinternal.NewHandshakeInfo(test.rootProvider, test.identityProvider)
-				hi.SetRequireClientCert(test.requireClientCert)
+				hi := xdsinternal.NewHandshakeInfo(test.rootProvider, test.identityProvider, nil, test.requireClientCert)
 
 				// Create a wrapped conn which can return the HandshakeInfo and
 				// configured deadline to the xDS credentials' ServerHandshake()
@@ -448,8 +446,7 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 		if cnt == 1 {
 			// Create a HandshakeInfo which has a root provider which does not match
 			// the certificate sent by the client.
-			hi = xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/client2_cert.pem", "x509/client2_key.pem"))
-			hi.SetRequireClientCert(true)
+			hi = xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/client2_cert.pem", "x509/client2_key.pem"), nil, true)
 
 			// Create a wrapped conn which can return the HandshakeInfo and
 			// configured deadline to the xDS credentials' ServerHandshake()
@@ -463,8 +460,7 @@ func (s) TestServerCredsProviderSwitch(t *testing.T) {
 			return handshakeResult{}
 		}
 
-		hi = xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"))
-		hi.SetRequireClientCert(true)
+		hi = xdsinternal.NewHandshakeInfo(makeRootProvider(t, "x509/client_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), nil, true)
 
 		// Create a wrapped conn which can return the HandshakeInfo and
 		// configured deadline to the xDS credentials' ServerHandshake()

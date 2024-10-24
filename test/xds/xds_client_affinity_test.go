@@ -25,10 +25,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -84,14 +84,7 @@ func ringhashCluster(clusterName, edsServiceName string) *v3clusterpb.Cluster {
 // propagated to pick the ring_hash policy. It doesn't test the affinity
 // behavior in ring_hash policy.
 func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
-	defer func() func() {
-		old := envconfig.XDSRingHash
-		envconfig.XDSRingHash = true
-		return func() { envconfig.XDSRingHash = old }
-	}()()
-
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -122,7 +115,7 @@ func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

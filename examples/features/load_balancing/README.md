@@ -61,8 +61,8 @@ this is examples/load_balancing (from :50051)
 
 The second client is configured to use `round_robin`. `round_robin` connects to
 all the addresses it sees, and sends an RPC to each backend one at a time in
-order. E.g. the first RPC will be sent to backend-1, the second RPC will be be
-sent to backend-2, and the third RPC will be be sent to backend-1 again.
+order. E.g. the first RPC will be sent to backend-1, the second RPC will be
+sent to backend-2, and the third RPC will be sent to backend-1 again.
 
 ```
 this is examples/load_balancing (from :50051)

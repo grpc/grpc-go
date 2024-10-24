@@ -41,7 +41,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc"
@@ -51,7 +50,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
@@ -72,12 +70,13 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/grpc/testdata"
 
-	anypb "github.com/golang/protobuf/ptypes/any"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	_ "google.golang.org/grpc/encoding/gzip"
 )
@@ -147,7 +146,7 @@ type testServer struct {
 	unaryCallSleepTime time.Duration
 }
 
-func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+func (s *testServer) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		// For testing purpose, returns an error if user-agent is failAppUA.
 		// To test that client gets the correct error.
@@ -506,21 +505,19 @@ type test struct {
 	clientNopCompression        bool
 	unaryClientInt              grpc.UnaryClientInterceptor
 	streamClientInt             grpc.StreamClientInterceptor
-	sc                          <-chan grpc.ServiceConfig
-	customCodec                 encoding.Codec
 	clientInitialWindowSize     int32
 	clientInitialConnWindowSize int32
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
 
-	// These are are set once startServer is called. The common case is to have
+	// These are set once startServer is called. The common case is to have
 	// only one testServer.
 	srv     stopper
 	hSrv    healthgrpc.HealthServer
 	srvAddr string
 
-	// These are are set once startServers is called.
+	// These are set once startServers is called.
 	srvs     []stopper
 	hSrvs    []healthgrpc.HealthServer
 	srvAddrs []string
@@ -737,8 +734,8 @@ type nopCompressor struct {
 	grpc.Compressor
 }
 
-// NewNopCompressor creates a compressor to test the case that type is not supported.
-func NewNopCompressor() grpc.Compressor {
+// newNopCompressor creates a compressor to test the case that type is not supported.
+func newNopCompressor() grpc.Compressor {
 	return &nopCompressor{grpc.NewGZIPCompressor()}
 }
 
@@ -750,8 +747,8 @@ type nopDecompressor struct {
 	grpc.Decompressor
 }
 
-// NewNopDecompressor creates a decompressor to test the case that type is not supported.
-func NewNopDecompressor() grpc.Decompressor {
+// newNopDecompressor creates a decompressor to test the case that type is not supported.
+func newNopDecompressor() grpc.Decompressor {
 	return &nopDecompressor{grpc.NewGZIPDecompressor()}
 }
 
@@ -761,10 +758,6 @@ func (d *nopDecompressor) Type() string {
 
 func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) {
 	opts = append(opts, grpc.WithDialer(te.e.dialer), grpc.WithUserAgent(te.userAgent))
-
-	if te.sc != nil {
-		opts = append(opts, grpc.WithServiceConfig(te.sc))
-	}
 
 	if te.clientCompression {
 		opts = append(opts,
@@ -777,8 +770,8 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.clientNopCompression {
 		opts = append(opts,
-			grpc.WithCompressor(NewNopCompressor()),
-			grpc.WithDecompressor(NewNopDecompressor()),
+			grpc.WithCompressor(newNopCompressor()),
+			grpc.WithDecompressor(newNopDecompressor()),
 		)
 	}
 	if te.unaryClientInt != nil {
@@ -829,9 +822,6 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.perRPCCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(te.perRPCCreds))
-	}
-	if te.customCodec != nil {
-		opts = append(opts, grpc.WithDefaultCallOptions(grpc.ForceCodec(te.customCodec)))
 	}
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
@@ -1016,11 +1006,12 @@ func testServerGracefulStopIdempotent(t *testing.T, e env) {
 	}
 }
 
-func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
+func (s) TestDetailedConnectionCloseErrorPropagatesToRPCError(t *testing.T) {
 	rpcStartedOnServer := make(chan struct{})
 	rpcDoneOnClient := make(chan struct{})
+	defer close(rpcDoneOnClient)
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			close(rpcStartedOnServer)
 			<-rpcDoneOnClient
 			return status.Error(codes.Internal, "arbitrary status")
@@ -1034,25 +1025,27 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an RPC. Then, while the RPC is still being accepted or handled at the server, abruptly
-	// stop the server, killing the connection. The RPC error message should include details about the specific
-	// connection error that was encountered.
+	// Start an RPC. Then, while the RPC is still being accepted or handled at
+	// the server, abruptly stop the server, killing the connection. The RPC
+	// error message should include details about the specific connection error
+	// that was encountered.
 	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
 	}
-	// Block until the RPC has been started on the server. This ensures that the ClientConn will find a healthy
-	// connection for the RPC to go out on initially, and that the TCP connection will shut down strictly after
-	// the RPC has been started on it.
+	// Block until the RPC has been started on the server. This ensures that the
+	// ClientConn will find a healthy connection for the RPC to go out on
+	// initially, and that the TCP connection will shut down strictly after the
+	// RPC has been started on it.
 	<-rpcStartedOnServer
 	ss.S.Stop()
-	// The precise behavior of this test is subject to raceyness around the timing
-	// of when TCP packets are sent from client to server, and when we tell the
-	// server to stop, so we need to account for both possible error messages.
+	// The precise behavior of this test is subject to raceyness around the
+	// timing of when TCP packets are sent from client to server, and when we
+	// tell the server to stop, so we need to account for both possible error
+	// messages.
 	if _, err := stream.Recv(); err == io.EOF || !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
-	close(rpcDoneOnClient)
 }
 
 func (s) TestFailFast(t *testing.T) {
@@ -1108,18 +1101,8 @@ func testServiceConfigSetup(t *testing.T, e env) *test {
 	return te
 }
 
-func newBool(b bool) (a *bool) {
-	return &b
-}
-
 func newInt(b int) (a *int) {
 	return &b
-}
-
-func newDuration(b time.Duration) (a *time.Duration) {
-	a = new(time.Duration)
-	*a = b
-	return
 }
 
 func (s) TestGetMethodConfig(t *testing.T) {
@@ -2099,6 +2082,10 @@ func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, er
 		switch info.FullMethodName {
 		case "/grpc.testing.TestService/EmptyCall":
 			t.cnt++
+
+			if vals := info.Header.Get("return-error"); len(vals) > 0 && vals[0] == "true" {
+				return nil, status.Errorf(codes.Unknown, "tap error")
+			}
 		case "/grpc.testing.TestService/UnaryCall":
 			return nil, fmt.Errorf("tap error")
 		case "/grpc.testing.TestService/FullDuplexCall":
@@ -2120,11 +2107,26 @@ func testTap(t *testing.T, e env) {
 	tc := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	if ttap.cnt != 1 {
 		t.Fatalf("Get the count in ttap %d, want 1", ttap.cnt)
+	}
+
+	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "false"), &testpb.Empty{}); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
+	}
+	if ttap.cnt != 2 {
+		t.Fatalf("Get the count in ttap %d, want 2", ttap.cnt)
+	}
+
+	if _, err := tc.EmptyCall(metadata.AppendToOutgoingContext(ctx, "return-error", "true"), &testpb.Empty{}); status.Code(err) != codes.Unknown {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.Unknown)
+	}
+	if ttap.cnt != 3 {
+		t.Fatalf("Get the count in ttap %d, want 3", ttap.cnt)
 	}
 
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 31)
@@ -2917,7 +2919,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	}
 }
 
-// TestMalformedHTTP2Metadata verfies the returned error when the client
+// TestMalformedHTTP2Metadata verifies the returned error when the client
 // sends an illegal metadata.
 func (s) TestMalformedHTTP2Metadata(t *testing.T) {
 	for _, e := range listTestEnv() {
@@ -3402,7 +3404,7 @@ type concurrentSendServer struct {
 	testgrpc.TestServiceServer
 }
 
-func (s concurrentSendServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+func (s concurrentSendServer) StreamingOutputCall(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 	for i := 0; i < 10; i++ {
 		stream.Send(&testpb.StreamingOutputCallResponse{
 			Payload: &testpb.Payload{
@@ -3772,7 +3774,7 @@ func (s) TestUnaryServerInterceptor(t *testing.T) {
 	}
 }
 
-func errInjector(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func errInjector(context.Context, any, *grpc.UnaryServerInfo, grpc.UnaryHandler) (any, error) {
 	return nil, status.Error(codes.PermissionDenied, "")
 }
 
@@ -3881,7 +3883,7 @@ func (s) TestClientRequestBodyErrorUnexpectedEOF(t *testing.T) {
 
 func testClientRequestBodyErrorUnexpectedEOF(t *testing.T, e env) {
 	te := newTest(t, e)
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
 		t.Error(errUnexpectedCall)
 		return nil, errUnexpectedCall
@@ -3902,10 +3904,70 @@ func (s) TestClientRequestBodyErrorCloseAfterLength(t *testing.T) {
 	}
 }
 
+// Tests gRPC server's behavior when a gRPC client sends a frame with an invalid
+// streamID. Per [HTTP/2 spec]: Streams initiated by a client MUST use
+// odd-numbered stream identifiers. This test sets up a test server and sends a
+// header frame with stream ID of 2. The test asserts that a subsequent read on
+// the transport sends a GoAwayFrame with error code: PROTOCOL_ERROR.
+//
+// [HTTP/2 spec]: https://httpwg.org/specs/rfc7540.html#StreamIdentifiers
+func (s) TestClientInvalidStreamID(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(2, "/grpc.testing.TestService/StreamingInputCall", true)
+	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
+	want := "received an illegal stream id: 2."
+	if got := string(goAwayFrame.DebugData()); !strings.Contains(got, want) {
+		t.Fatalf(" Received: %v, Expected error message to contain: %v.", got, want)
+	}
+}
+
+// TestInvalidStreamIDSmallerThanPrevious tests the server sends a GOAWAY frame
+// with error code: PROTOCOL_ERROR when the streamID of the current frame is
+// lower than the previous frames.
+func (s) TestInvalidStreamIDSmallerThanPrevious(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeadersGRPC(3, "/grpc.testing.TestService/StreamingInputCall", true)
+	st.wantAnyFrame()
+	st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", true)
+	goAwayFrame := st.wantGoAway(http2.ErrCodeProtocol)
+	want := "received an illegal stream id: 1"
+	if got := string(goAwayFrame.DebugData()); !strings.Contains(got, want) {
+		t.Fatalf(" Received: %v, Expected error message to contain: %v.", got, want)
+	}
+}
+
 func testClientRequestBodyErrorCloseAfterLength(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise("Server.processUnaryRPC failed to write status")
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		errUnexpectedCall := errors.New("unexpected call func server method")
 		t.Error(errUnexpectedCall)
 		return nil, errUnexpectedCall
@@ -3929,7 +3991,7 @@ func (s) TestClientRequestBodyErrorCancel(t *testing.T) {
 func testClientRequestBodyErrorCancel(t *testing.T, e env) {
 	te := newTest(t, e)
 	gotCall := make(chan bool, 1)
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		gotCall <- true
 		return new(testpb.SimpleResponse), nil
 	}}
@@ -4167,7 +4229,7 @@ type clientFailCreds struct{}
 func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
-func (c *clientFailCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *clientFailCreds) ClientHandshake(context.Context, string, net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, nil, fmt.Errorf("client handshake fails with fatal error")
 }
 func (c *clientFailCreds) Info() credentials.ProtocolInfo {
@@ -4176,7 +4238,7 @@ func (c *clientFailCreds) Info() credentials.ProtocolInfo {
 func (c *clientFailCreds) Clone() credentials.TransportCredentials {
 	return c
 }
-func (c *clientFailCreds) OverrideServerName(s string) error {
+func (c *clientFailCreds) OverrideServerName(string) error {
 	return nil
 }
 
@@ -4277,7 +4339,7 @@ type flowControlLogicalRaceServer struct {
 	itemCount int
 }
 
-func (s *flowControlLogicalRaceServer) StreamingOutputCall(req *testpb.StreamingOutputCallRequest, srv testgrpc.TestService_StreamingOutputCallServer) error {
+func (s *flowControlLogicalRaceServer) StreamingOutputCall(_ *testpb.StreamingOutputCallRequest, srv testgrpc.TestService_StreamingOutputCallServer) error {
 	for i := 0; i < s.itemCount; i++ {
 		err := srv.Send(&testpb.StreamingOutputCallResponse{
 			Payload: &testpb.Payload{
@@ -4421,7 +4483,7 @@ func (s) TestGRPCMethod(t *testing.T) {
 	var ok bool
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			method, ok = grpc.Method(ctx)
 			return &testpb.Empty{}, nil
 		},
@@ -4448,7 +4510,7 @@ func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 
 	// endpoint ensures mdkey is NOT in metadata and returns an error if it is.
 	endpoint := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if md, ok := metadata.FromIncomingContext(ctx); !ok || md[mdkey] != nil {
 				return nil, status.Errorf(codes.Internal, "endpoint: md=%v; want !contains(%q)", md, mdkey)
 			}
@@ -4563,7 +4625,7 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 	// endpoint ensures Tags() and Trace() in context match those that were added
 	// by the client and returns an error if not.
 	endpoint := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
 			if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, tags) {
 				return nil, status.Errorf(codes.Internal, "stats.Tags(%v)=%v; want %v", ctx, tg, tags)
@@ -4623,7 +4685,7 @@ func (s) TestTapTimeout(t *testing.T) {
 	}
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			<-ctx.Done()
 			return nil, status.Errorf(codes.Canceled, ctx.Err().Error())
 		},
@@ -4648,7 +4710,7 @@ func (s) TestTapTimeout(t *testing.T) {
 
 func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			return status.Errorf(codes.Internal, "")
 		},
 	}
@@ -4679,13 +4741,6 @@ type windowSizeConfig struct {
 	serverConn   int32
 	clientStream int32
 	clientConn   int32
-}
-
-func max(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func (s) TestConfigurableWindowSizeWithLargeWindow(t *testing.T) {
@@ -4869,7 +4924,7 @@ func (s) TestMethodFromServerStream(t *testing.T) {
 	te := newTest(t, e)
 	var method string
 	var ok bool
-	te.unknownHandler = func(srv any, stream grpc.ServerStream) error {
+	te.unknownHandler = func(_ any, stream grpc.ServerStream) error {
 		method, ok = grpc.MethodFromServerStream(stream)
 		return nil
 	}
@@ -4927,11 +4982,11 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		}
 	}
 
-	te.unaryClientInt = func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	te.unaryClientInt = func(_ context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		populateOpts(opts)
 		return nil
 	}
-	te.streamClientInt = func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	te.streamClientInt = func(_ context.Context, _ *grpc.StreamDesc, _ *grpc.ClientConn, _ string, _ grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 		populateOpts(opts)
 		return nil, nil
 	}
@@ -5043,7 +5098,7 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 	)
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return nil, status.Errorf(codes.Internal, origMsg)
 		},
 	}
@@ -5072,7 +5127,7 @@ func (s) TestStatusInvalidUTF8Details(t *testing.T) {
 	)
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			st := status.New(codes.Internal, origMsg)
 			st, err := st.WithDetails(&testpb.Empty{})
 			if err != nil {
@@ -5381,7 +5436,7 @@ func (s) TestNetPipeConn(t *testing.T) {
 	pl := testutils.NewPipeListener()
 	s := grpc.NewServer()
 	defer s.Stop()
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		return &testpb.SimpleResponse{}, nil
 	}}
 	testgrpc.RegisterTestServiceServer(s, ts)
@@ -5421,7 +5476,7 @@ func testLargeTimeout(t *testing.T, e env) {
 	}
 
 	for i, maxTimeout := range timeouts {
-		ts.unaryCall = func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		ts.unaryCall = func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			deadline, ok := ctx.Deadline()
 			timeout := time.Until(deadline)
 			minTimeout := maxTimeout - 5*time.Second
@@ -5787,7 +5842,7 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 		t.Fatalf("Unexpected frame: %v", f)
 	}
 
-	// Flood settings frames until a timeout occurs, indiciating the server has
+	// Flood settings frames until a timeout occurs, indicating the server has
 	// stopped reading from the connection, then close the conn.
 	for {
 		conn.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))
@@ -5814,7 +5869,7 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 	timer.Stop()
 }
 
-func unaryInterceptorVerifyConn(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func unaryInterceptorVerifyConn(ctx context.Context, _ any, _ *grpc.UnaryServerInfo, _ grpc.UnaryHandler) (any, error) {
 	conn := transport.GetConnection(ctx)
 	if conn == nil {
 		return nil, status.Error(codes.NotFound, "connection was not in context")
@@ -5839,7 +5894,7 @@ func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
 	}
 }
 
-func streamingInterceptorVerifyConn(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamingInterceptorVerifyConn(_ any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, _ grpc.StreamHandler) error {
 	conn := transport.GetConnection(ss.Context())
 	if conn == nil {
 		return status.Error(codes.NotFound, "connection was not in context")
@@ -5871,7 +5926,7 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 // unaryInterceptorVerifyAuthority verifies there is an unambiguous :authority
 // once the request gets to an interceptor. An unambiguous :authority is defined
 // as at most a single :authority header, and no host header according to A41.
-func unaryInterceptorVerifyAuthority(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func unaryInterceptorVerifyAuthority(ctx context.Context, _ any, _ *grpc.UnaryServerInfo, _ grpc.UnaryHandler) (any, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "metadata was not in context")
@@ -5947,7 +6002,7 @@ func (s) TestAuthorityHeader(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			te := newTest(t, tcpClearRREnv)
-			ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			ts := &funcServer{unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{}, nil
 			}}
 			te.unaryServerInt = unaryInterceptorVerifyAuthority
@@ -6054,7 +6109,7 @@ func (s) TestServerClosesConn(t *testing.T) {
 func (s) TestNilStatsHandler(t *testing.T) {
 	grpctest.TLogger.ExpectErrorN("ignoring nil parameter", 2)
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
@@ -6076,7 +6131,7 @@ func (s) TestNilStatsHandler(t *testing.T) {
 // not fail with unexpected.EOF.
 func (s) TestUnexpectedEOF(t *testing.T) {
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{
 				Payload: &testpb.Payload{
 					Body: bytes.Repeat([]byte("a"), int(in.ResponseSize)),
@@ -6176,7 +6231,7 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 		internal.ClearGlobalServerOptions()
 	}()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -6249,7 +6304,7 @@ type triggerRPCBlockPicker struct {
 	pickDone func()
 }
 
-func (bp *triggerRPCBlockPicker) Pick(pi balancer.PickInfo) (balancer.PickResult, error) {
+func (bp *triggerRPCBlockPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	bp.pickDone()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
@@ -6338,7 +6393,7 @@ func (bpb *triggerRPCBlockBalancer) UpdateState(state balancer.State) {
 func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	sh := &statsHandlerRecordEvents{}
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}

@@ -20,19 +20,20 @@ package xdsclient_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -65,8 +66,6 @@ var (
 // Returns two listeners used by the default and non-default management servers
 // respectively, and the xDS client and its close function.
 func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.Duration) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, xdsclient.XDSClient, func()) {
-	overrideFedEnvVar(t)
-
 	// Create listener wrappers which notify on to a channel whenever a new
 	// connection is accepted. We use this to track the number of transports
 	// used by the xDS client.
@@ -74,34 +73,42 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	lisNonDefault := testutils.NewListenerWrapper(t, nil)
 
 	// Start a management server to act as the default authority.
-	defaultAuthorityServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{Listener: lisDefault})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(func() { defaultAuthorityServer.Stop() })
+	defaultAuthorityServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lisDefault})
 
 	// Start a management server to act as the non-default authority.
-	nonDefaultAuthorityServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{Listener: lisNonDefault})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(func() { nonDefaultAuthorityServer.Stop() })
+	nonDefaultAuthorityServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lisNonDefault})
 
 	// Create a bootstrap configuration with two non-default authorities which
 	// have empty server configs, and therefore end up using the default server
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
-	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, defaultAuthorityServer.Address),
-		NodeProto: &v3corepb.Node{Id: nodeID},
-		Authorities: map[string]*bootstrap.Authority{
-			testAuthority1: {},
-			testAuthority2: {},
-			testAuthority3: {XDSServer: xdstestutils.ServerConfigForAddress(t, nonDefaultAuthorityServer.Address)},
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, defaultAuthorityServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			testAuthority1: []byte(`{}`),
+			testAuthority2: []byte(`{}`),
+			testAuthority3: []byte(fmt.Sprintf(`{
+				"xds_servers": [{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]}`, nonDefaultAuthorityServer.Address)),
 		},
-	}, defaultTestWatchExpiryTimeout, idleTimeout)
+	})
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:                 t.Name(),
+		Contents:             bootstrapContents,
+		WatchExpiryTimeout:   defaultTestWatchExpiryTimeout,
+		AuthorityIdleTimeout: idleTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 
 	resources := e2e.UpdateOptions{
@@ -119,12 +126,6 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	}
 	return lisDefault, lisNonDefault, client, close
 }
-
-type noopClusterWatcher struct{}
-
-func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData) {}
-func (noopClusterWatcher) OnError(err error)                                {}
-func (noopClusterWatcher) OnResourceDoesNotExist()                          {}
 
 // TestAuthorityShare tests the authority sharing logic. The test verifies the
 // following scenarios:

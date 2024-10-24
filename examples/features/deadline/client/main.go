@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to set deadlines for RPCs and how to handle
+// deadline-exceeded errors.
 package main
 
 import (
@@ -73,7 +74,7 @@ func streamingCall(c pb.EchoClient, requestID int, message string, want codes.Co
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

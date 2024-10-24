@@ -36,9 +36,9 @@ type testCredsBuilder struct {
 	config json.RawMessage
 }
 
-func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
+func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
 	t.config = config
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (t *testCredsBuilder) Name() string {
@@ -53,11 +53,50 @@ func TestRegisterNew(t *testing.T) {
 
 	const sampleConfig = "sample_config"
 	rawMessage := json.RawMessage(sampleConfig)
-	if _, err := c.Build(rawMessage); err != nil {
+	if _, _, err := c.Build(rawMessage); err != nil {
 		t.Errorf("Build(%v) error = %v, want nil", rawMessage, err)
 	}
 
 	if got, want := string(builder.config), sampleConfig; got != want {
 		t.Errorf("Build config = %v, want %v", got, want)
+	}
+}
+
+func TestCredsBuilders(t *testing.T) {
+	tests := []struct {
+		typename string
+		builder  Credentials
+	}{
+		{"google_default", &googleDefaultCredsBuilder{}},
+		{"insecure", &insecureCredsBuilder{}},
+		{"tls", &tlsCredsBuilder{}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.typename, func(t *testing.T) {
+			if got, want := test.builder.Name(), test.typename; got != want {
+				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
+			}
+
+			_, stop, err := test.builder.Build(nil)
+			if err != nil {
+				t.Fatalf("%T.Build failed: %v", test.builder, err)
+			}
+			stop()
+		})
+	}
+}
+
+func TestTlsCredsBuilder(t *testing.T) {
+	tls := &tlsCredsBuilder{}
+	_, stop, err := tls.Build(json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("tls.Build() failed with error %s when expected to succeed", err)
+	}
+	stop()
+
+	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
+		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
+		stop()
 	}
 }

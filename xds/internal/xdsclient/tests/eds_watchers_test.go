@@ -20,6 +20,7 @@ package xdsclient_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,14 +32,12 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
@@ -51,6 +50,18 @@ const (
 	edsPort2 = 2
 	edsPort3 = 3
 )
+
+type noopEndpointsWatcher struct{}
+
+func (noopEndpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
+	onDone()
+}
+func (noopEndpointsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	onDone()
+}
+func (noopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	onDone()
+}
 
 type endpointsUpdateErrTuple struct {
 	update xdsresource.EndpointsUpdate
@@ -65,20 +76,23 @@ func newEndpointsWatcher() *endpointsWatcher {
 	return &endpointsWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData) {
+func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
 	ew.updateCh.Send(endpointsUpdateErrTuple{update: update.Resource})
+	onDone()
 }
 
-func (ew *endpointsWatcher) OnError(err error) {
+func (ew *endpointsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
+	onDone()
 }
 
-func (ew *endpointsWatcher) OnResourceDoesNotExist() {
+func (ew *endpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	ew.updateCh.Replace(endpointsUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Endpoints not found in received response")})
+	onDone()
 }
 
 // badEndpointsResource returns a endpoints resource for the given
@@ -113,7 +127,7 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.EndpointsUpdate{}, "Raw")}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the endpoints resource update: (-want, got):\n%s", diff)
+		return fmt.Errorf("received unexpected diff in the endpoints resource update: (-want, got):\n%s", diff)
 	}
 	return nil
 }
@@ -202,12 +216,34 @@ func (s) TestEDSWatch(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			overrideFedEnvVar(t)
-			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup()
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+			nodeID := uuid.New().String()
+			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(fmt.Sprintf(`[{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]`, mgmtServer.Address)),
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+				Authorities: map[string]json.RawMessage{
+					// Xdstp resource names used in this test do not specify an
+					// authority. These will end up looking up an entry with the
+					// empty key in the authorities map. Having an entry with an
+					// empty key and empty configuration, results in these
+					// resources also using the top-level configuration.
+					"": []byte(`{}`),
+				},
+			})
+			if err != nil {
+				t.Fatalf("Failed to create bootstrap configuration: %v", err)
+			}
+			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     t.Name(),
+				Contents: bc,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -370,12 +406,34 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			overrideFedEnvVar(t)
-			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup()
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+			nodeID := uuid.New().String()
+			bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(fmt.Sprintf(`[{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]`, mgmtServer.Address)),
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+				Authorities: map[string]json.RawMessage{
+					// Xdstp resource names used in this test do not specify an
+					// authority. These will end up looking up an entry with the
+					// empty key in the authorities map. Having an entry with an
+					// empty key and empty configuration, results in these
+					// resources also using the top-level configuration.
+					"": []byte(`{}`),
+				},
+			})
+			if err != nil {
+				t.Fatalf("Failed to create bootstrap configuration: %v", err)
+			}
+			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:     t.Name(),
+				Contents: bc,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
@@ -452,12 +510,34 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 //
 // The test is run with both old and new style names.
 func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
-	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			// Xdstp style resource names used in this test use a slash removed
+			// version of t.Name as their authority, and the empty config
+			// results in the top-level xds server configuration being used for
+			// this authority.
+			authority: []byte(`{}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -473,6 +553,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	defer edsCancel2()
 
 	// Register the third watch for a different endpoint resource.
+	edsNameNewStyle := makeNewStyleEDSName(authority)
 	ew3 := newEndpointsWatcher()
 	edsCancel3 := xdsresource.WatchEndpoints(client, edsNameNewStyle, ew3)
 	defer edsCancel3()
@@ -528,12 +609,11 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
 func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
-	overrideFedEnvVar(t)
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
 
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
@@ -550,10 +630,16 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 			return nil
 		},
 	})
-	defer cleanup()
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -628,19 +714,19 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
 func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
-	overrideFedEnvVar(t)
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-		NodeProto: &v3corepb.Node{},
-	}, defaultTestWatchExpiryTimeout, time.Duration(0))
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		Contents:           bc,
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 	defer close()
 
@@ -667,21 +753,21 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 // verifies that the behavior associated with the expiry timer (i.e, callback
 // invocation with error) does not take place.
 func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
-	overrideFedEnvVar(t)
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
-	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
-		NodeProto: &v3corepb.Node{Id: nodeID},
-	}, defaultTestWatchExpiryTimeout, time.Duration(0))
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS client talking to the above management server.
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:               t.Name(),
+		Contents:           bc,
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
+		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
 	defer close()
 
@@ -737,12 +823,17 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 // server is NACK'ed by the xdsclient. The test verifies that the error is
 // propagated to the watcher.
 func (s) TestEDSWatch_NACKError(t *testing.T) {
-	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -784,12 +875,34 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
 func (s) TestEDSWatch_PartialValid(t *testing.T) {
-	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	authority := makeAuthorityName(t.Name())
+	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			// Xdstp style resource names used in this test use a slash removed
+			// version of t.Name as their authority, and the empty config
+			// results in the top-level xds server configuration being used for
+			// this authority.
+			authority: []byte(`{}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -798,11 +911,11 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	// Register two watches for two endpoint resources. The first watch is
 	// expected to receive an error because the received resource is NACKed.
 	// The second watch is expected to get a good update.
-	badResourceName := rdsName
+	badResourceName := edsName
 	ew1 := newEndpointsWatcher()
 	edsCancel1 := xdsresource.WatchEndpoints(client, badResourceName, ew1)
 	defer edsCancel1()
-	goodResourceName := ldsNameNewStyle
+	goodResourceName := makeNewStyleEDSName(authority)
 	ew2 := newEndpointsWatcher()
 	edsCancel2 := xdsresource.WatchEndpoints(client, goodResourceName, ew2)
 	defer edsCancel2()

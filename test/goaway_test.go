@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -72,7 +73,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	}
 	go s.Serve(lis)
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}
@@ -93,7 +94,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 func (s) TestDetailedGoAwayErrorOnGracefulClosePropagatesToRPCError(t *testing.T) {
 	rpcDoneOnClient := make(chan struct{})
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			<-rpcDoneOnClient
 			return status.Error(codes.Internal, "arbitrary status")
 		},
@@ -133,7 +134,7 @@ func (s) TestDetailedGoAwayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) 
 
 	rpcDoneOnClient := make(chan struct{})
 	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			<-rpcDoneOnClient
 			return status.Error(codes.Internal, "arbitrary status")
 		},
@@ -553,7 +554,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	s1 := grpc.NewServer()
 	defer s1.Stop()
 	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		fullDuplexCall: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -759,5 +760,64 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 	conn.Close()
 	if _, err := gsDone.Receive(ctx); err != nil {
 		t.Fatalf("Error waiting for graceful shutdown of the server: %v", err)
+	}
+}
+
+// TestClientSendsAGoAway tests the scenario where you get a go away ping
+// frames from the client during graceful shutdown.
+func (s) TestClientSendsAGoAway(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("error listening: %v", err)
+	}
+	defer lis.Close()
+	goAwayReceived := make(chan struct{})
+	errCh := make(chan error)
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("error in lis.Accept(): %v", err)
+		}
+		ct := newClientTester(t, conn)
+		defer ct.conn.Close()
+		for {
+			f, err := ct.fr.ReadFrame()
+			if err != nil {
+				errCh <- fmt.Errorf("error reading frame: %v", err)
+				return
+			}
+			switch fr := f.(type) {
+			case *http2.GoAwayFrame:
+				fr = f.(*http2.GoAwayFrame)
+				if fr.ErrCode == http2.ErrCodeNo {
+					t.Logf("GoAway received from client")
+					close(goAwayReceived)
+					return
+				}
+			default:
+				t.Errorf("server tester received unexpected frame type %T", f)
+				errCh <- fmt.Errorf("server tester received unexpected frame type %T", f)
+				close(errCh)
+			}
+		}
+	}()
+
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("error dialing: %v", err)
+	}
+	cc.Connect()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	cc.Close()
+	select {
+	case <-goAwayReceived:
+	case err := <-errCh:
+		t.Errorf("Error receiving the goAway: %v", err)
+	case <-ctx.Done():
+		t.Errorf("Context timed out")
 	}
 }

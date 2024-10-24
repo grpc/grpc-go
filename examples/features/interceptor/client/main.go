@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to use interceptors to observe or control the
+// behavior of gRPC including logging, authentication,metrics collection, etc.
 package main
 
 import (
@@ -153,13 +154,13 @@ func main() {
 	}
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithUnaryInterceptor(unaryInterceptor), grpc.WithStreamInterceptor(streamInterceptor))
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(creds), grpc.WithUnaryInterceptor(unaryInterceptor), grpc.WithStreamInterceptor(streamInterceptor))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 
-	// Make a echo client and send RPCs.
+	// Make an echo client and send RPCs.
 	rgc := ecpb.NewEchoClient(conn)
 	callUnaryEcho(rgc, "hello world")
 	callBidiStreamingEcho(rgc)

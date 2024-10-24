@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -74,6 +75,9 @@ type testRPCStream struct {
 	first bool
 	// useful for testing concurrent calls.
 	delay time.Duration
+	// The minimum expected value of the network_latency_ms field in a
+	// NextHandshakeMessageReq.
+	minExpectedNetworkLatency time.Duration
 }
 
 func (t *testRPCStream) Recv() (*altspb.HandshakerResp, error) {
@@ -102,6 +106,17 @@ func (t *testRPCStream) Send(req *altspb.HandshakerReq) error {
 			}
 		}
 	} else {
+		switch req := req.ReqOneof.(type) {
+		case *altspb.HandshakerReq_Next:
+			// Compare the network_latency_ms field to the minimum expected network
+			// latency.
+			if nl := time.Duration(req.Next.NetworkLatencyMs) * time.Millisecond; nl < t.minExpectedNetworkLatency {
+				return fmt.Errorf("networkLatency (%v) is smaller than expected min network latency (%v)", nl, t.minExpectedNetworkLatency)
+			}
+		default:
+			return fmt.Errorf("handshake request has unexpected type: %v", req)
+		}
+
 		// Add delay to test concurrent calls.
 		cleanup := stat.Update()
 		defer cleanup()
@@ -133,9 +148,11 @@ func (s) TestClientHandshake(t *testing.T) {
 	for _, testCase := range []struct {
 		delay              time.Duration
 		numberOfHandshakes int
+		readLatency        time.Duration
 	}{
-		{0 * time.Millisecond, 1},
-		{100 * time.Millisecond, 10 * int(envconfig.ALTSMaxConcurrentHandshakes)},
+		{0 * time.Millisecond, 1, time.Duration(0)},
+		{0 * time.Millisecond, 1, 2 * time.Millisecond},
+		{100 * time.Millisecond, 10 * int(envconfig.ALTSMaxConcurrentHandshakes), time.Duration(0)},
 	} {
 		errc := make(chan error)
 		stat.Reset()
@@ -145,8 +162,9 @@ func (s) TestClientHandshake(t *testing.T) {
 
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
 			stream := &testRPCStream{
-				t:        t,
-				isClient: true,
+				t:                         t,
+				isClient:                  true,
+				minExpectedNetworkLatency: testCase.readLatency,
 			}
 			// Preload the inbound frames.
 			f1 := testutil.MakeFrame("ServerInit")
@@ -154,7 +172,7 @@ func (s) TestClientHandshake(t *testing.T) {
 			in := bytes.NewBuffer(f1)
 			in.Write(f2)
 			out := new(bytes.Buffer)
-			tc := testutil.NewTestConn(in, out)
+			tc := testutil.NewTestConnWithReadLatency(in, out, testCase.readLatency)
 			chs := &altsHandshaker{
 				stream: stream,
 				conn:   tc,
@@ -175,10 +193,10 @@ func (s) TestClientHandshake(t *testing.T) {
 			}()
 		}
 
-		// Ensure all errors are expected.
+		// Ensure that there are no errors.
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
-			if err := <-errc; err != nil && err != errDropped {
-				t.Errorf("ClientHandshake() = _, %v, want _, <nil> or %v", err, errDropped)
+			if err := <-errc; err != nil {
+				t.Errorf("ClientHandshake() = _, %v, want _, <nil>", err)
 			}
 		}
 
@@ -232,10 +250,10 @@ func (s) TestServerHandshake(t *testing.T) {
 			}()
 		}
 
-		// Ensure all errors are expected.
+		// Ensure that there are no errors.
 		for i := 0; i < testCase.numberOfHandshakes; i++ {
-			if err := <-errc; err != nil && err != errDropped {
-				t.Errorf("ServerHandshake() = _, %v, want _, <nil> or %v", err, errDropped)
+			if err := <-errc; err != nil {
+				t.Errorf("ServerHandshake() = _, %v, want _, <nil>", err)
 			}
 		}
 
@@ -255,7 +273,7 @@ func (t *testUnresponsiveRPCStream) Recv() (*altspb.HandshakerResp, error) {
 	return &altspb.HandshakerResp{}, nil
 }
 
-func (t *testUnresponsiveRPCStream) Send(req *altspb.HandshakerReq) error {
+func (t *testUnresponsiveRPCStream) Send(*altspb.HandshakerReq) error {
 	return nil
 }
 
@@ -291,7 +309,9 @@ func (s) TestNewClientHandshaker(t *testing.T) {
 	conn := testutil.NewTestConn(nil, nil)
 	clientConn := &grpc.ClientConn{}
 	opts := &ClientHandshakerOptions{}
-	hs, err := NewClientHandshaker(context.Background(), clientConn, conn, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	hs, err := NewClientHandshaker(ctx, clientConn, conn, opts)
 	if err != nil {
 		t.Errorf("NewClientHandshaker returned unexpected error: %v", err)
 	}
@@ -323,7 +343,9 @@ func (s) TestNewServerHandshaker(t *testing.T) {
 	conn := testutil.NewTestConn(nil, nil)
 	clientConn := &grpc.ClientConn{}
 	opts := &ServerHandshakerOptions{}
-	hs, err := NewServerHandshaker(context.Background(), clientConn, conn, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	hs, err := NewServerHandshaker(ctx, clientConn, conn, opts)
 	if err != nil {
 		t.Errorf("NewServerHandshaker returned unexpected error: %v", err)
 	}

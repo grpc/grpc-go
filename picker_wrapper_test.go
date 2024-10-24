@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ type testingPicker struct {
 	maxCalled int64
 }
 
-func (p *testingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+func (p *testingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	if atomic.AddInt64(&p.maxCalled, -1) < 0 {
 		return balancer.PickResult{}, fmt.Errorf("pick called to many times (> goroutineCount)")
 	}
@@ -78,12 +79,17 @@ func (s) TestBlockingPick(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	// All goroutines should block because picker is nil in bp.
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	wg := sync.WaitGroup{}
+	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned non-nil error: %v", err)
+			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
+			wg.Done()
 		}()
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -91,19 +97,26 @@ func (s) TestBlockingPick(t *testing.T) {
 		t.Errorf("finished goroutines count: %v, want 0", c)
 	}
 	bp.updatePicker(&testingPicker{sc: testSC, maxCalled: goroutineCount})
+	// Wait for all pickers to finish before the context is cancelled.
+	wg.Wait()
 }
 
 func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	var finishedCount uint64
 	bp.updatePicker(&testingPicker{err: balancer.ErrNoSubConnAvailable, maxCalled: goroutineCount})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// All goroutines should block because picker returns no subConn available.
+	wg := sync.WaitGroup{}
+	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned non-nil error: %v", err)
+			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
+			wg.Done()
 		}()
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -111,20 +124,27 @@ func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
 		t.Errorf("finished goroutines count: %v, want 0", c)
 	}
 	bp.updatePicker(&testingPicker{sc: testSC, maxCalled: goroutineCount})
+	// Wait for all pickers to finish before the context is cancelled.
+	wg.Wait()
 }
 
 func (s) TestBlockingPickTransientWaitforready(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	bp.updatePicker(&testingPicker{err: balancer.ErrTransientFailure, maxCalled: goroutineCount})
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// All goroutines should block because picker returns transientFailure and
 	// picks are not failfast.
+	wg := sync.WaitGroup{}
+	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), false, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned non-nil error: %v", err)
+			if tr, _, err := bp.pick(ctx, false, balancer.PickInfo{}); err != nil || tr != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
+			wg.Done()
 		}()
 	}
 	time.Sleep(time.Millisecond)
@@ -132,19 +152,26 @@ func (s) TestBlockingPickTransientWaitforready(t *testing.T) {
 		t.Errorf("finished goroutines count: %v, want 0", c)
 	}
 	bp.updatePicker(&testingPicker{sc: testSC, maxCalled: goroutineCount})
+	// Wait for all pickers to finish before the context is cancelled.
+	wg.Wait()
 }
 
 func (s) TestBlockingPickSCNotReady(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	bp.updatePicker(&testingPicker{sc: testSCNotReady, maxCalled: goroutineCount})
 	var finishedCount uint64
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// All goroutines should block because subConn is not ready.
+	wg := sync.WaitGroup{}
+	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned non-nil error: %v", err)
+			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
+			wg.Done()
 		}()
 	}
 	time.Sleep(time.Millisecond)
@@ -152,4 +179,6 @@ func (s) TestBlockingPickSCNotReady(t *testing.T) {
 		t.Errorf("finished goroutines count: %v, want 0", c)
 	}
 	bp.updatePicker(&testingPicker{sc: testSC, maxCalled: goroutineCount})
+	// Wait for all pickers to finish before the context is cancelled.
+	wg.Wait()
 }

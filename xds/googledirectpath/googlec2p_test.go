@@ -19,25 +19,28 @@
 package googledirectpath
 
 import (
-	"fmt"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/protobuf/testing/protocmp"
-	"google.golang.org/protobuf/types/known/structpb"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type emptyResolver struct {
 	resolver.Resolver
@@ -59,45 +62,51 @@ var (
 	testXDSResolver = &emptyResolver{scheme: "xds"}
 )
 
-func replaceResolvers() func() {
+// replaceResolvers unregisters the real resolvers for schemes `dns` and `xds`
+// and registers test resolvers instead. This allows the test to verify that
+// expected resolvers are built.
+func replaceResolvers(t *testing.T) {
 	oldDNS := resolver.Get("dns")
 	resolver.Register(testDNSResolver)
 	oldXDS := resolver.Get("xds")
 	resolver.Register(testXDSResolver)
-	return func() {
+	t.Cleanup(func() {
 		resolver.Register(oldDNS)
 		resolver.Register(oldXDS)
-	}
+	})
 }
 
-type testXDSClient struct {
-	xdsclient.XDSClient
-	closed chan struct{}
-}
-
-func (c *testXDSClient) Close() {
-	c.closed <- struct{}{}
-}
-
-// Test that when bootstrap env is set and we're running on GCE, don't fallback to DNS (because
-// federation is enabled by default).
-func TestBuildWithBootstrapEnvSet(t *testing.T) {
-	defer replaceResolvers()()
-	builder := resolver.Get(c2pScheme)
-
-	// make the test behave the ~same whether it's running on or off GCE
+func simulateRunningOnGCE(t *testing.T, gce bool) {
 	oldOnGCE := onGCE
-	onGCE = func() bool { return true }
-	defer func() { onGCE = oldOnGCE }()
+	onGCE = func() bool { return gce }
+	t.Cleanup(func() { onGCE = oldOnGCE })
+}
 
-	// don't actually read the bootstrap file contents
-	xdsClient := &testXDSClient{closed: make(chan struct{}, 1)}
-	oldNewClient := newClientWithConfig
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
-		return xdsClient, func() { xdsClient.Close() }, nil
+// ensure universeDomain is set to the expected default,
+// and clean it up again after the test.
+func useCleanUniverseDomain(t *testing.T) {
+	universeDomainMu.Lock()
+	defer universeDomainMu.Unlock()
+	if universeDomain != "" {
+		t.Fatalf("universe domain unexpectedly initialized: %v", universeDomain)
 	}
-	defer func() { newClientWithConfig = oldNewClient }()
+	t.Cleanup(func() {
+		universeDomainMu.Lock()
+		universeDomain = ""
+		universeDomainMu.Unlock()
+	})
+}
 
+// Tests the scenario where the bootstrap env vars are set and we're running on
+// GCE. The test builds a google-c2p resolver and verifies that an xDS resolver
+// is built and that we don't fallback to DNS (because federation is enabled by
+// default).
+func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
+
+	builder := resolver.Get(c2pScheme)
 	for i, envP := range []*string{&envconfig.XDSBootstrapFileName, &envconfig.XDSBootstrapFileContent} {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			// Set bootstrap config env var.
@@ -105,151 +114,196 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 			*envP = "does not matter"
 			defer func() { *envP = oldEnv }()
 
-			// Build should return xDS, not DNS.
+			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
-			rr := r.(*c2pResolver)
-			if rrr := rr.Resolver; rrr != testXDSResolver {
-				t.Fatalf("want xds resolver, got %#v", rrr)
+			defer r.Close()
+
+			// Build should return xDS, not DNS.
+			if r != testXDSResolver {
+				t.Fatalf("Build() returned %#v, want xds resolver", r)
 			}
 		})
 	}
 }
 
-// Test that when not on GCE, fallback to DNS.
-func TestBuildNotOnGCE(t *testing.T) {
-	defer replaceResolvers()()
+// Tests the scenario where we are not running on GCE.  The test builds a
+// google-c2p resolver and verifies that we fallback to DNS.
+func (s) TestBuildNotOnGCE(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, false)
+	useCleanUniverseDomain(t)
 	builder := resolver.Get(c2pScheme)
 
-	oldOnGCE := onGCE
-	onGCE = func() bool { return false }
-	defer func() { onGCE = oldOnGCE }()
-
-	// Build should return DNS, not xDS.
+	// Build the google-c2p resolver.
 	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("failed to build resolver: %v", err)
 	}
+	defer r.Close()
+
+	// Build should return DNS, not xDS.
 	if r != testDNSResolver {
-		t.Fatalf("want dns resolver, got %#v", r)
+		t.Fatalf("Build() returned %#v, want dns resolver", r)
 	}
 }
 
-// Test that when xDS is built, the client is built with the correct config.
-func TestBuildXDS(t *testing.T) {
-	defer replaceResolvers()()
+func bootstrapConfig(t *testing.T, opts bootstrap.ConfigOptionsForTesting) *bootstrap.Config {
+	t.Helper()
+
+	contents, err := bootstrap.NewContentsForTesting(opts)
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap contents: %v", err)
+	}
+	cfg, err := bootstrap.NewConfigForTesting(contents)
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap config: %v", err)
+	}
+	return cfg
+}
+
+// Test that when a google-c2p resolver is built, the xDS client is built with
+// the expected config.
+func (s) TestBuildXDS(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
 	builder := resolver.Get(c2pScheme)
 
-	oldOnGCE := onGCE
-	onGCE = func() bool { return true }
-	defer func() { onGCE = oldOnGCE }()
-
-	const testZone = "test-zone"
+	// Override the zone returned by the metadata server.
 	oldGetZone := getZone
-	getZone = func(time.Duration) string { return testZone }
+	getZone = func(time.Duration) string { return "test-zone" }
 	defer func() { getZone = oldGetZone }()
 
+	// Override the random func used in the node ID.
+	origRandInd := randInt
+	randInt = func() int { return 666 }
+	defer func() { randInt = origRandInd }()
+
 	for _, tt := range []struct {
-		name  string
-		ipv6  bool
-		tdURI string // traffic director URI will be overridden if this is set.
+		desc                string
+		ipv6Capable         bool
+		tdURIOverride       string
+		wantBootstrapConfig *bootstrap.Config
 	}{
-		{name: "ipv6 true", ipv6: true},
-		{name: "ipv6 false", ipv6: false},
-		{name: "override TD URI", ipv6: true, tdURI: "test-uri"},
+		{
+			desc: "ipv6 false",
+			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "dns:///directpath-pa.googleapis.com",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+				},
+				Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"}
+					}`),
+			}),
+		},
+		{
+			desc:        "ipv6 true",
+			ipv6Capable: true,
+			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "dns:///directpath-pa.googleapis.com",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+				},
+				Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"},
+			  			"metadata": {
+							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+			  			}
+					}`),
+			}),
+		},
+		{
+			desc:          "override TD URI",
+			ipv6Capable:   true,
+			tdURIOverride: "test-uri",
+			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(`[{
+					"server_uri": "test-uri",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
+				Authorities: map[string]json.RawMessage{
+					"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "test-uri",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+				},
+				Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"},
+			  			"metadata": {
+							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+			  			}
+					}`),
+			}),
+		},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.desc, func(t *testing.T) {
+			// Override IPv6 capability returned by the metadata server.
 			oldGetIPv6Capability := getIPv6Capable
-			getIPv6Capable = func(time.Duration) bool { return tt.ipv6 }
+			getIPv6Capable = func(time.Duration) bool { return tt.ipv6Capable }
 			defer func() { getIPv6Capable = oldGetIPv6Capability }()
 
-			if tt.tdURI != "" {
+			// Override TD URI test only env var.
+			if tt.tdURIOverride != "" {
 				oldURI := envconfig.C2PResolverTestOnlyTrafficDirectorURI
-				envconfig.C2PResolverTestOnlyTrafficDirectorURI = tt.tdURI
-				defer func() {
-					envconfig.C2PResolverTestOnlyTrafficDirectorURI = oldURI
-				}()
+				envconfig.C2PResolverTestOnlyTrafficDirectorURI = tt.tdURIOverride
+				defer func() { envconfig.C2PResolverTestOnlyTrafficDirectorURI = oldURI }()
 			}
 
-			tXDSClient := &testXDSClient{closed: make(chan struct{}, 1)}
-
-			configCh := make(chan *bootstrap.Config, 1)
-			oldNewClient := newClientWithConfig
-			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
-				configCh <- config
-				return tXDSClient, func() { tXDSClient.Close() }, nil
-			}
-			defer func() { newClientWithConfig = oldNewClient }()
-
-			// Build should return DNS, not xDS.
+			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
-			rr := r.(*c2pResolver)
-			if rrr := rr.Resolver; rrr != testXDSResolver {
-				t.Fatalf("want xds resolver, got %#v, ", rrr)
+			defer r.Close()
+
+			// Build should return xDS, not DNS.
+			if r != testXDSResolver {
+				t.Fatalf("Build() returned %#v, want xds resolver", r)
 			}
 
-			wantNode := &v3corepb.Node{
-				Id:                   id,
-				Metadata:             nil,
-				Locality:             &v3corepb.Locality{Zone: testZone},
-				UserAgentName:        gRPCUserAgentName,
-				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-				ClientFeatures:       []string{clientFeatureNoOverprovisioning},
-			}
-			if tt.ipv6 {
-				wantNode.Metadata = &structpb.Struct{
-					Fields: map[string]*structpb.Value{
-						ipv6CapableMetadataName: {
-							Kind: &structpb.Value_BoolValue{BoolValue: true},
-						},
-					},
-				}
-			}
-			wantServerConfig, err := bootstrap.ServerConfigFromJSON([]byte(fmt.Sprintf(`{
-				"server_uri": "%s",
-				"channel_creds": [{"type": "google_default"}],
-				"server_features": ["xds_v3", "ignore_resource_deletion"]
-			}`, tdURL)))
+			gotConfig, err := bootstrap.GetConfiguration()
 			if err != nil {
-				t.Fatalf("Failed to build server bootstrap config: %v", err)
+				t.Fatalf("Failed to get bootstrap config: %v", err)
 			}
-			wantConfig := &bootstrap.Config{
-				XDSServer: wantServerConfig,
-				ClientDefaultListenerResourceNameTemplate: "%s",
-				Authorities: map[string]*bootstrap.Authority{
-					"traffic-director-c2p.xds.googleapis.com": {
-						XDSServer: wantServerConfig,
-					},
-				},
-				NodeProto: wantNode,
-			}
-			if tt.tdURI != "" {
-				wantConfig.XDSServer.ServerURI = tt.tdURI
-			}
-			cmpOpts := cmp.Options{
-				cmpopts.IgnoreFields(bootstrap.ServerConfig{}, "Creds"),
-				cmp.AllowUnexported(bootstrap.ServerConfig{}),
-				protocmp.Transform(),
-			}
-			select {
-			case gotConfig := <-configCh:
-				if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts); diff != "" {
-					t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
-				}
-			case <-time.After(time.Second):
-				t.Fatalf("timeout waiting for client config")
-			}
-
-			r.Close()
-			select {
-			case <-tXDSClient.closed:
-			case <-time.After(time.Second):
-				t.Fatalf("timeout waiting for client close")
+			if diff := cmp.Diff(tt.wantBootstrapConfig, gotConfig); diff != "" {
+				t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -258,7 +312,8 @@ func TestBuildXDS(t *testing.T) {
 // TestDialFailsWhenTargetContainsAuthority attempts to Dial a target URI of
 // google-c2p scheme with a non-empty authority and verifies that it fails with
 // an expected error.
-func TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
+func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
+	useCleanUniverseDomain(t)
 	uri := "google-c2p://an-authority/resource"
 	cc, err := grpc.Dial(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	defer func() {
@@ -269,5 +324,190 @@ func TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	wantErr := "google-c2p URI scheme does not support authorities"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("grpc.Dial(%s) returned error: %v, want: %v", uri, err, wantErr)
+	}
+}
+
+func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
+	builder := resolver.Get(c2pScheme)
+
+	// Override the zone returned by the metadata server.
+	oldGetZone := getZone
+	getZone = func(time.Duration) string { return "test-zone" }
+	defer func() { getZone = oldGetZone }()
+
+	// Override IPv6 capability returned by the metadata server.
+	oldGetIPv6Capability := getIPv6Capable
+	getIPv6Capable = func(time.Duration) bool { return false }
+	defer func() { getIPv6Capable = oldGetIPv6Capability }()
+
+	// Override the random func used in the node ID.
+	origRandInd := randInt
+	randInt = func() int { return 666 }
+	defer func() { randInt = origRandInd }()
+
+	// Set the universe domain
+	testUniverseDomain := "test-universe-domain.test"
+	if err := SetUniverseDomain(testUniverseDomain); err != nil {
+		t.Fatalf("SetUniverseDomain(%s) failed: %v", testUniverseDomain, err)
+	}
+
+	// Now set universe domain to something different, it should fail
+	domain := "test-universe-domain-2.test"
+	err := SetUniverseDomain(domain)
+	wantErr := "already set"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("googlec2p.SetUniverseDomain(%s) returned error: %v, want: %v", domain, err, wantErr)
+	}
+
+	// Now explicitly set universe domain to the default, it should also fail
+	domain = "googleapis.com"
+	err = SetUniverseDomain(domain)
+	wantErr = "already set"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("googlec2p.SetUniverseDomain(%s) returned error: %v, want: %v", domain, err, wantErr)
+	}
+
+	// Now set universe domain to the original value, it should work
+	if err := SetUniverseDomain(testUniverseDomain); err != nil {
+		t.Fatalf("googlec2p.SetUniverseDomain(%s) failed: %v", testUniverseDomain, err)
+	}
+
+	// Build the google-c2p resolver.
+	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("failed to build resolver: %v", err)
+	}
+	defer r.Close()
+
+	// Build should return xDS, not DNS.
+	if r != testXDSResolver {
+		t.Fatalf("Build() returned %#v, want xds resolver", r)
+	}
+
+	gotConfig, err := bootstrap.GetConfiguration()
+	if err != nil {
+		t.Fatalf("Failed to get bootstrap config: %v", err)
+	}
+
+	// Check that we use directpath-pa.test-universe-domain.test in the
+	// bootstrap config.
+	wantBootstrapConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.test-universe-domain.test",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
+		Authorities: map[string]json.RawMessage{
+			"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "dns:///directpath-pa.test-universe-domain.test",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+		},
+		Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"}
+					}`),
+	})
+	if diff := cmp.Diff(wantBootstrapConfig, gotConfig); diff != "" {
+		t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestDefaultUniverseDomain(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
+	builder := resolver.Get(c2pScheme)
+
+	// Override the zone returned by the metadata server.
+	oldGetZone := getZone
+	getZone = func(time.Duration) string { return "test-zone" }
+	defer func() { getZone = oldGetZone }()
+
+	// Override IPv6 capability returned by the metadata server.
+	oldGetIPv6Capability := getIPv6Capable
+	getIPv6Capable = func(time.Duration) bool { return false }
+	defer func() { getIPv6Capable = oldGetIPv6Capability }()
+
+	// Override the random func used in the node ID.
+	origRandInd := randInt
+	randInt = func() int { return 666 }
+	defer func() { randInt = origRandInd }()
+
+	// Build the google-c2p resolver.
+	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("failed to build resolver: %v", err)
+	}
+	defer r.Close()
+
+	// Build should return xDS, not DNS.
+	if r != testXDSResolver {
+		t.Fatalf("Build() returned %#v, want xds resolver", r)
+	}
+
+	gotConfig, err := bootstrap.GetConfiguration()
+	if err != nil {
+		t.Fatalf("Failed to get bootstrap config: %v", err)
+	}
+
+	// Check that we use directpath-pa.googleapis.com in the bootstrap config
+	wantBootstrapConfig := bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(`[{
+					"server_uri": "dns:///directpath-pa.googleapis.com",
+					"channel_creds": [{"type": "google_default"}],
+					"server_features": ["ignore_resource_deletion"]
+  				}]`),
+		Authorities: map[string]json.RawMessage{
+			"traffic-director-c2p.xds.googleapis.com": []byte(`{
+							"xds_servers": [
+  								{
+								    "server_uri": "dns:///directpath-pa.googleapis.com",
+								    "channel_creds": [{"type": "google_default"}],
+								    "server_features": ["ignore_resource_deletion"]
+  								}
+							]
+						}`),
+		},
+		Node: []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"}
+					}`),
+	})
+	if diff := cmp.Diff(wantBootstrapConfig, gotConfig); diff != "" {
+		t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
+	}
+
+	// Now set universe domain to something different than the default, it should fail
+	domain := "test-universe-domain.test"
+	err = SetUniverseDomain(domain)
+	wantErr := "already set"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("googlec2p.SetUniverseDomain(%s) returned error: %v, want: %v", domain, err, wantErr)
+	}
+
+	// Now explicitly set universe domain to the default, it should work
+	domain = "googleapis.com"
+	if err := SetUniverseDomain(domain); err != nil {
+		t.Fatalf("googlec2p.SetUniverseDomain(%s) failed: %v", domain, err)
+	}
+}
+
+func (s) TestSetUniverseDomainEmptyString(t *testing.T) {
+	replaceResolvers(t)
+	simulateRunningOnGCE(t, true)
+	useCleanUniverseDomain(t)
+	wantErr := "cannot be empty"
+	err := SetUniverseDomain("")
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("googlec2p.SetUniverseDomain(\"\") returned error: %v, want: %v", err, wantErr)
 	}
 }

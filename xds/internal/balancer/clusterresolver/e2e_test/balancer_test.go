@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -41,6 +42,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
@@ -72,7 +74,10 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	t.Helper()
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsC, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	xdsC, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -104,7 +109,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 }
 
 // TestErrorFromParentLB_ConnectionError tests the case where the parent of the
-// clusterresolver LB policy sends its a connection error. The parent policy,
+// clusterresolver LB policy sends it a connection error. The parent policy,
 // CDS LB policy, sends a connection error when the ADS stream to the management
 // server breaks. The test verifies that there is no perceivable effect because
 // of this connection error, and that RPCs continue to work (because the LB
@@ -120,7 +125,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	// Start an xDS management server with the above restartable listener, and
 	// push a channel when the stream is closed.
 	streamClosedCh := make(chan struct{}, 1)
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamClosed: func(int64, *v3corepb.Node) {
 			select {
@@ -129,7 +134,10 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 			}
 		},
 	})
-	defer cleanup()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -185,11 +193,11 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	// notify the test about the following events:
 	// - an EDS requested with the expected resource name is requested
 	// - EDS resource is unrequested, i.e, an EDS request with no resource name
-	//   is received, which indicates that we are not longer interested in that
+	//   is received, which indicates that we are no longer interested in that
 	//   resource.
 	edsResourceRequestedCh := make(chan struct{}, 1)
 	edsResourceCanceledCh := make(chan struct{}, 1)
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3EndpointsURL {
 				switch len(req.GetResourceNames()) {
@@ -212,7 +220,10 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 			return nil
 		},
 	})
-	defer cleanup()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -248,7 +259,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Delete the cluster resource from the mangement server.
+	// Delete the cluster resource from the management server.
 	resources.Clusters = nil
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -344,8 +355,11 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	})
 	defer balancer.Register(priorityBuilder)
 
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -376,7 +390,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 
 	// Create xDS client, configure cds_experimental LB policy with a manual
 	// resolver, and dial the test backends.
-	_, cleanup = setupAndDial(t, bootstrapContents)
+	_, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
 
 	// The priority configuration generated should have Outlier Detection as a
@@ -400,8 +414,9 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 						ChildPolicy: &iserviceconfig.BalancerConfig{
 							Name: clusterimpl.Name,
 							Config: &clusterimpl.LBConfig{
-								Cluster:        clusterName,
-								EDSServiceName: edsServiceName,
+								Cluster:         clusterName,
+								EDSServiceName:  edsServiceName,
+								TelemetryLabels: xdsinternal.UnknownCSMLabels,
 								ChildPolicy: &iserviceconfig.BalancerConfig{
 									Name: wrrlocality.Name,
 									Config: &wrrlocality.LBConfig{

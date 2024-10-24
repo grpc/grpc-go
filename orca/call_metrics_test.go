@@ -24,7 +24,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -33,6 +32,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/orca/internal"
+	"google.golang.org/protobuf/proto"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -118,9 +118,9 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 			defer srv.Stop()
 
 			// Dial the stub server.
-			cc, err := grpc.Dial(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.NewClient(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%s) failed: %v", srv.Address, err)
+				t.Fatalf("grpc.NewClient(%s) failed: %v", srv.Address, err)
 			}
 			defer cc.Close()
 
@@ -239,9 +239,9 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 			defer srv.Stop()
 
 			// Dial the stub server.
-			cc, err := grpc.Dial(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.NewClient(srv.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%s) failed: %v", srv.Address, err)
+				t.Fatalf("grpc.NewClient(%s) failed: %v", srv.Address, err)
 			}
 			defer cc.Close()
 

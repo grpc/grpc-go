@@ -44,6 +44,7 @@ import (
 )
 
 const defaultTestTimeout = 10 * time.Second
+const defaultTestShortTimeout = 10 * time.Millisecond
 
 // TestMaxConnectionIdle tests that a server will send GoAway to an idle
 // client. An idle client is one who doesn't make any RPC calls for a duration
@@ -249,6 +250,16 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 	}
 }
 
+func channelzSubChannel(t *testing.T) *channelz.SubChannel {
+	ch := channelz.RegisterChannel(nil, "test chan")
+	sc := channelz.RegisterSubChannel(ch, "test subchan")
+	t.Cleanup(func() {
+		channelz.RemoveEntry(sc.ID)
+		channelz.RemoveEntry(ch.ID)
+	})
+	return sc
+}
+
 // TestKeepaliveClientClosesUnresponsiveServer creates a server which does not
 // respond to keepalive pings, and makes sure that the client closes the
 // transport once the keepalive logic kicks in. Here, we set the
@@ -257,7 +268,7 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:                10 * time.Millisecond,
 			Timeout:             10 * time.Millisecond,
@@ -287,7 +298,7 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    10 * time.Millisecond,
 			Timeout: 10 * time.Millisecond,
@@ -317,7 +328,7 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
 	copts := ConnectOptions{
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		ChannelzParent: channelzSubChannel(t),
 		KeepaliveParams: keepalive.ClientParameters{
 			Time:    500 * time.Millisecond,
 			Timeout: 500 * time.Millisecond,

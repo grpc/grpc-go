@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -79,6 +80,14 @@ var (
 		BlackoutPeriod:          stringp("0s"),
 		WeightExpirationPeriod:  stringp("60s"),
 		WeightUpdatePeriod:      stringp(".050s"),
+		ErrorUtilizationPenalty: float64p(0),
+	}
+	testMetricsConfig = iwrr.LBConfig{
+		EnableOOBLoadReport:     boolp(false),
+		OOBReportingPeriod:      stringp("0.005s"),
+		BlackoutPeriod:          stringp("0s"),
+		WeightExpirationPeriod:  stringp("60s"),
+		WeightUpdatePeriod:      stringp("30s"),
 		ErrorUtilizationPenalty: float64p(0),
 	}
 )
@@ -129,7 +138,7 @@ func startServer(t *testing.T, r reportType) *testServer {
 			MinReportingInterval:  10 * time.Millisecond,
 		}
 		internal.ORCAAllowAnyMinReportingInterval.(func(so *orca.ServiceOptions))(&oso)
-		sopts = append(sopts, stubserver.RegisterServiceServerOption(func(s *grpc.Server) {
+		sopts = append(sopts, stubserver.RegisterServiceServerOption(func(s grpc.ServiceRegistrar) {
 			if err := orca.Register(s, oso); err != nil {
 				t.Fatalf("Failed to register orca service: %v", err)
 			}
@@ -193,6 +202,51 @@ func (s) TestBalancer_OneAddress(t *testing.T) {
 				time.Sleep(time.Millisecond) // Delay; test will run 100ms and should perform ~10 weight updates
 			}
 		})
+	}
+}
+
+// TestWRRMetricsBasic tests metrics emitted from the WRR balancer. It
+// configures a weighted round robin balancer as the top level balancer of a
+// ClientConn, and configures a fake stats handler on the ClientConn to receive
+// metrics. It verifies stats emitted from the Weighted Round Robin Balancer on
+// balancer startup case which triggers the first picker and scheduler update
+// before any load reports are received.
+//
+// Note that this test and others, metrics emission assertions are a snapshot
+// of the most recently emitted metrics. This is due to the nondeterminism of
+// scheduler updates with respect to test bodies, so the assertions made are
+// from the most recently synced state of the system (picker/scheduler) from the
+// test body.
+func (s) TestWRRMetricsBasic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv := startServer(t, reportCall)
+	sc := svcConfig(t, testMetricsConfig)
+
+	tmr := stats.NewTestMetricsRecorder()
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(tmr)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	srv.callMetrics.SetQPS(float64(1))
+
+	if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("Error from EmptyCall: %v", err)
+	}
+
+	if got, _ := tmr.Metric("grpc.lb.wrr.rr_fallback"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.rr_fallback", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_not_yet_usable"); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_not_yet_usable", got, 1)
+	}
+	// Unusable, so no endpoint weight. Due to only one SubConn, this will never
+	// update the weight. Thus, this will stay 0.
+	if got, _ := tmr.Metric("grpc.lb.wrr.endpoint_weight_stale"); got != 0 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.wrr.endpoint_weight_stale", got, 0)
 	}
 }
 
@@ -693,7 +747,7 @@ type srvWeight struct {
 const rrIterations = 100
 
 // checkWeights does rrIterations RPCs and expects the different backends to be
-// routed in a ratio as deterimined by the srvWeights passed in.  Allows for
+// routed in a ratio as determined by the srvWeights passed in.  Allows for
 // some variance (+/- 2 RPCs per backend).
 func checkWeights(ctx context.Context, t *testing.T, sws ...srvWeight) {
 	t.Helper()

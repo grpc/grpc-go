@@ -18,7 +18,7 @@
 
 // Package local implements local transport credentials.
 // Local credentials reports the security level based on the type
-// of connetion. If the connection is local TCP, NoSecurity will be
+// of connection. If the connection is local TCP, NoSecurity will be
 // reported, and if the connection is UDS, PrivacyAndIntegrity will be
 // reported. If local credentials is not used in local connections
 // (local TCP or UDS), it will fail.
@@ -65,6 +65,9 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 	// Local TCP connection
 	case strings.HasPrefix(addr, "127."), strings.HasPrefix(addr, "[::1]:"):
 		return credentials.NoSecurity, nil
+	// Windows named pipe connection
+	case network == "pipe" && strings.HasPrefix(addr, `\\.\pipe\`):
+		return credentials.NoSecurity, nil
 	// UDS connection
 	case network == "unix":
 		return credentials.PrivacyAndIntegrity, nil
@@ -74,7 +77,7 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 	}
 }
 
-func (*localTC) ClientHandshake(ctx context.Context, authority string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (*localTC) ClientHandshake(_ context.Context, _ string, conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	secLevel, err := getSecurityLevel(conn.RemoteAddr().Network(), conn.RemoteAddr().String())
 	if err != nil {
 		return nil, nil, err
@@ -105,7 +108,7 @@ func (c *localTC) Clone() credentials.TransportCredentials {
 }
 
 // OverrideServerName overrides the server name used to verify the hostname on the returned certificates from the server.
-// Since this feature is specific to TLS (SNI + hostname verification check), it does not take any effet for local credentials.
+// Since this feature is specific to TLS (SNI + hostname verification check), it does not take any effect for local credentials.
 func (c *localTC) OverrideServerName(serverNameOverride string) error {
 	c.info.ServerName = serverNameOverride
 	return nil

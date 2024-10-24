@@ -22,12 +22,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	_ "google.golang.org/grpc/balancer/weightedtarget"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 const (
@@ -89,6 +88,14 @@ var (
 )
 
 func TestParseConfig(t *testing.T) {
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
 	tests := []struct {
 		name    string
 		js      string
@@ -133,8 +140,8 @@ func TestParseConfig(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !cmp.Equal(got, tt.want, cmpopts.IgnoreFields(bootstrap.ServerConfig{}, "Creds")) {
-				t.Errorf("parseConfig() got unexpected result, diff: %v", cmp.Diff(got, tt.want))
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("parseConfig() got unexpected diff (-want, +got): %v", diff)
 			}
 		})
 	}

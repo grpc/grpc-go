@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
@@ -37,13 +38,14 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -195,7 +197,7 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 //   - the nodeID expected by the management server
 //   - the grpc channel to the test backend service
 //   - the manual resolver configured on the channel
-//   - the xDS cient used the grpc channel
+//   - the xDS client used the grpc channel
 //   - a channel on which requested cluster resource names are sent
 //   - a channel used to signal that previously requested cluster resources are
 //     no longer requested
@@ -204,7 +206,7 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 
 	cdsResourceRequestedCh := make(chan []string, 1)
 	cdsResourceCanceledCh := make(chan struct{}, 1)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ClusterURL {
 				switch len(req.GetResourceNames()) {
@@ -226,9 +228,15 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 		// at once.
 		AllowResourceSubset: true,
 	})
-	t.Cleanup(cleanup)
 
-	xdsC, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	xdsC, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -342,9 +350,16 @@ func (s) TestConfigurationUpdate_Success(t *testing.T) {
 // the CDS LB policy. Verifies that ErrBadResolverState is returned.
 func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Setup a management server and an xDS client to talk to it.
-	_, _, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	t.Cleanup(cleanup)
-	xdsClient, xdsClose, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -456,6 +471,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					EDSServiceName:        serviceName,
 					MaxConcurrentRequests: newUint32(512),
 					OutlierDetection:      json.RawMessage(`{}`),
+					TelemetryLabels:       xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -483,6 +499,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{}`),
+					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":100, "maxRingSize":1000}}]`),
 			},
@@ -505,6 +522,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{"successRateEjection":{}}`),
+					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
@@ -557,6 +575,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 							"requestVolume": 50
 						}
 					}`),
+					TelemetryLabels: xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
 			},
@@ -597,16 +616,19 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 		ServiceName: serviceName,
 		EnableLRS:   true,
 	})
+	lrsServerCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: fmt.Sprintf("passthrough:///%s", mgmtServer.Address)})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
+
 	wantChildCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
-			Cluster:        clusterName,
-			Type:           clusterresolver.DiscoveryMechanismTypeEDS,
-			EDSServiceName: serviceName,
-			LoadReportingServer: &bootstrap.ServerConfig{
-				ServerURI: mgmtServer.Address,
-				Creds:     bootstrap.ChannelCreds{Type: "insecure"},
-			},
-			OutlierDetection: json.RawMessage(`{}`),
+			Cluster:             clusterName,
+			Type:                clusterresolver.DiscoveryMechanismTypeEDS,
+			EDSServiceName:      serviceName,
+			LoadReportingServer: lrsServerCfg,
+			OutlierDetection:    json.RawMessage(`{}`),
+			TelemetryLabels:     xdsinternal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}

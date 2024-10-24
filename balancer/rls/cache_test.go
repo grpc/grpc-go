@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/testutils/stats"
 )
 
 var (
@@ -119,7 +120,7 @@ func (s) TestLRU_BasicOperations(t *testing.T) {
 
 func (s) TestDataCache_BasicOperations(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil)
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -133,7 +134,7 @@ func (s) TestDataCache_BasicOperations(t *testing.T) {
 
 func (s) TestDataCache_AddForcesResize(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(1, nil)
+	dc := newDataCache(1, nil, &stats.NoopMetricsRecorder{}, "")
 
 	// The first entry in cacheEntries has a minimum expiry time in the future.
 	// This entry would stop the resize operation since we do not evict entries
@@ -162,7 +163,7 @@ func (s) TestDataCache_AddForcesResize(t *testing.T) {
 
 func (s) TestDataCache_Resize(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil)
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -193,7 +194,7 @@ func (s) TestDataCache_Resize(t *testing.T) {
 
 func (s) TestDataCache_EvictExpiredEntries(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil)
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -220,7 +221,7 @@ func (s) TestDataCache_ResetBackoffState(t *testing.T) {
 	}
 
 	initCacheEntries()
-	dc := newDataCache(5, nil)
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -239,5 +240,63 @@ func (s) TestDataCache_ResetBackoffState(t *testing.T) {
 	entry := dc.getEntry(cacheKeys[1])
 	if diff := cmp.Diff(entry.backoffState, newBackoffState, cmp.AllowUnexported(backoffState{})); diff != "" {
 		t.Fatalf("unexpected diff in backoffState for cache entry after dataCache.resetBackoffState(): %s", diff)
+	}
+}
+
+func (s) TestDataCache_Metrics(t *testing.T) {
+	cacheEntriesMetricsTests := []*cacheEntry{
+		{size: 1},
+		{size: 2},
+		{size: 3},
+		{size: 4},
+		{size: 5},
+	}
+	tmr := stats.NewTestMetricsRecorder()
+	dc := newDataCache(50, nil, tmr, "")
+
+	dc.updateRLSServerTarget("rls-server-target")
+	for i, k := range cacheKeys {
+		dc.addEntry(k, cacheEntriesMetricsTests[i])
+	}
+
+	const cacheEntriesKey = "grpc.lb.rls.cache_entries"
+	const cacheSizeKey = "grpc.lb.rls.cache_size"
+	// 5 total entries which add up to 15 size, so should record that.
+	if got, _ := tmr.Metric(cacheEntriesKey); got != 5 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 5)
+	}
+	if got, _ := tmr.Metric(cacheSizeKey); got != 15 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 15)
+	}
+
+	// Resize down the cache to 2 entries (deterministic as based of LRU).
+	dc.resize(9)
+	if got, _ := tmr.Metric(cacheEntriesKey); got != 2 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 2)
+	}
+	if got, _ := tmr.Metric(cacheSizeKey); got != 9 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 9)
+	}
+
+	// Update an entry to have size 6. This should reflect in the size metrics,
+	// which will increase by 1 to 11, while the number of cache entries should
+	// stay same. This write is deterministic and writes to the last one.
+	dc.updateEntrySize(cacheEntriesMetricsTests[4], 6)
+
+	if got, _ := tmr.Metric(cacheEntriesKey); got != 2 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 2)
+	}
+	if got, _ := tmr.Metric(cacheSizeKey); got != 10 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 10)
+	}
+
+	// Delete this scaled up cache key. This should scale down the cache to 1
+	// entries, and remove 6 size so cache size should be 4.
+	dc.deleteAndCleanup(cacheKeys[4], cacheEntriesMetricsTests[4])
+	if got, _ := tmr.Metric(cacheEntriesKey); got != 1 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheEntriesKey, got, 1)
+	}
+	if got, _ := tmr.Metric(cacheSizeKey); got != 4 {
+		t.Fatalf("Unexpected data for metric %v, got: %v, want: %v", cacheSizeKey, got, 4)
 	}
 }

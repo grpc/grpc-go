@@ -35,12 +35,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -49,7 +50,6 @@ import (
 	rpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -60,13 +60,7 @@ import (
 // (NonForwardingAction), and the RPC's matching those routes should proceed as
 // normal.
 func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()
@@ -251,7 +245,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -408,11 +402,6 @@ func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, r
 // as normal and certain RPC's are denied by the RBAC HTTP Filter which gets
 // called by hooked xds interceptors.
 func (s) TestRBACHTTPFilter(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	internal.RegisterRBACHTTPFilterForTesting()
 	defer internal.UnregisterRBACHTTPFilterForTesting()
 	tests := []struct {
@@ -606,7 +595,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 		// This test tests that an RBAC Config with Action.LOG configured allows
 		// every RPC through. This maps to the line "At this time, if the
 		// RBAC.action is Action.LOG then the policy will be completely ignored,
-		// as if RBAC was not configurated." from A41
+		// as if RBAC was not configured." from A41
 		{
 			name: "action-log",
 			rbacCfg: &rpb.RBAC{
@@ -638,8 +627,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				}
 				audit.RegisterLoggerBuilder(lb)
 
-				managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-				defer cleanup1()
+				managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 				lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 				defer cleanup2()
@@ -666,7 +654,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+				cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 				if err != nil {
 					t.Fatalf("failed to dial local test server: %v", err)
 				}
@@ -681,18 +669,6 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantStatusUnaryCall {
 					t.Fatalf("UnaryCall() returned err with status: %v, wantStatusUnaryCall: %v", err, test.wantStatusUnaryCall)
 				}
-
-				// Toggle the RBAC Env variable off, this should disable RBAC and allow any RPC"s through (will not go through
-				// routing or processed by HTTP Filters and thus will never get denied by RBAC).
-				envconfig.XDSRBAC = false
-				if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
-					t.Fatalf("EmptyCall() returned err with status: %v, once RBAC is disabled all RPC's should proceed as normal", status.Code(err))
-				}
-				if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
-					t.Fatalf("UnaryCall() returned err with status: %v, once RBAC is disabled all RPC's should proceed as normal", status.Code(err))
-				}
-				// Toggle RBAC back on for next iterations.
-				envconfig.XDSRBAC = true
 
 				if test.wantAuthzOutcomes != nil {
 					if diff := cmp.Diff(lb.authzDecisionStat, test.wantAuthzOutcomes); diff != "" {
@@ -827,15 +803,7 @@ func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uin
 }
 
 func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
-	// Turn RBAC support on.
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
-
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
 	defer cleanup2()
@@ -868,7 +836,7 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -879,63 +847,6 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
-		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
-	}
-}
-
-func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
-	// Turn RBAC support off.
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = false
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
-
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
-
-	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
-	defer cleanup2()
-
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("failed to retrieve host and port of server: %v", err)
-	}
-	const serviceName = "my-service-fallback"
-
-	// The inbound listener needs a route table that will never match on a VH,
-	// and thus shouldn't allow incoming RPC's to proceed.
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       host,
-		Port:       port,
-		SecLevel:   e2e.SecurityLevelNone,
-	})
-	// This bad route configuration shouldn't affect incoming RPC's from
-	// proceeding as normal, as the configuration shouldn't be parsed due to the
-	// RBAC Environment variable not being set to true.
-	inboundLis := serverListenerWithBadRouteConfiguration(t, host, port)
-	resources.Listeners = append(resources.Listeners, inboundLis)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// Setup the management server with client and server-side resources.
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
-	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
-		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
-	}
-	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
 		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
 }

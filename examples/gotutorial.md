@@ -6,7 +6,7 @@ This tutorial provides a basic Go programmer's introduction to working with gRPC
 - Generate server and client code using the protocol buffer compiler.
 - Use the Go gRPC API to write a simple client and server for your service.
 
-It assumes that you have read the [Getting started](https://github.com/grpc/grpc/tree/master/examples) guide and are familiar with [protocol buffers](https://developers.google.com/protocol-buffers/docs/overview). Note that the example in this tutorial uses the proto3 version of the protocol buffers language, you can find out more in the [proto3 language guide](https://developers.google.com/protocol-buffers/docs/proto3) and see the [release notes](https://github.com/google/protobuf/releases) for the new version in the protocol buffers Github repository.
+It assumes that you have read the [Getting started](https://github.com/grpc/grpc/tree/master/examples) guide and are familiar with [protocol buffers](https://developers.google.com/protocol-buffers/docs/overview). Note that the example in this tutorial uses the proto3 version of the protocol buffers language, you can find out more in the [proto3 language guide](https://developers.google.com/protocol-buffers/docs/proto3) and see the [release notes](https://github.com/google/protobuf/releases) for the new version in the protocol buffers GitHub repository.
 
 This isn't a comprehensive guide to using gRPC in Go: more reference documentation is coming soon.
 
@@ -28,7 +28,7 @@ Then change your current directory to `grpc-go/examples/route_guide`:
 $ cd $GOPATH/src/google.golang.org/grpc/examples/route_guide
 ```
 
-You also should have the relevant tools installed to generate the server and client interface code - if you don't already, follow the setup instructions in [the Go quick start guide](https://github.com/grpc/grpc-go/tree/master/examples/).
+Ensure you have the relevant tools installed to generate the server and client interface code. If you don't, follow the setup instructions in [the Go quick start guide](https://grpc.io/docs/languages/go/quickstart).
 
 
 ## Defining the service
@@ -89,18 +89,10 @@ message Point {
 
 ## Generating client and server code
 
-Next we need to generate the gRPC client and server interfaces from our `.proto` service definition. We do this using the protocol buffer compiler `protoc` with a special gRPC Go plugin.
-
-For simplicity, we've provided a [bash script](https://github.com/grpc/grpc-go/blob/master/codegen.sh) that runs `protoc` for you with the appropriate plugin, input, and output (if you want to run this by yourself, make sure you've installed protoc and followed the gRPC-Go [installation instructions](https://github.com/grpc/grpc-go/blob/master/README.md) first):
+Next we need to generate the gRPC client and server interfaces from our `.proto` service definition. We do this using the protocol buffer compiler `protoc` with a special gRPC Go plugin (if you want to run this by yourself, make sure you've installed protoc and followed the gRPC-Go [installation instructions](https://github.com/grpc/grpc-go/blob/master/README.md) first) and run:
 
 ```shell
-$ codegen.sh route_guide.proto
-```
-
-which actually runs:
-
-```shell
-$ protoc --go_out=plugins=grpc:. route_guide.proto
+protoc --go_out=.  --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative "route_guide.proto"
 ```
 
 Running this command generates the following file in your current directory:
@@ -159,13 +151,13 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 
 ```go
 func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, error) {
-	for _, feature := range s.savedFeatures {
-		if proto.Equal(feature.Location, point) {
-			return feature, nil
-		}
-	}
-	// No feature was found, return an unnamed feature
-	return &pb.Feature{"", point}, nil
+    for _, feature := range s.savedFeatures {
+        if proto.Equal(feature.Location, point) {
+            return feature, nil
+        }
+    }
+    // No feature was found, return an unnamed feature
+    return &pb.Feature{"", point}, nil
 }
 ```
 
@@ -176,14 +168,14 @@ Now let's look at one of our streaming RPCs. `ListFeatures` is a server-side str
 
 ```go
 func (s *routeGuideServer) ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) error {
-	for _, feature := range s.savedFeatures {
-		if inRange(feature.Location, rect) {
-			if err := stream.Send(feature); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+    for _, feature := range s.savedFeatures {
+        if inRange(feature.Location, rect) {
+            if err := stream.Send(feature); err != nil {
+                return err
+            }
+        }
+    }
+    return nil
 }
 ```
 
@@ -196,34 +188,34 @@ Now let's look at something a little more complicated: the client-side streaming
 
 ```go
 func (s *routeGuideServer) RecordRoute(stream pb.RouteGuide_RecordRouteServer) error {
-	var pointCount, featureCount, distance int32
-	var lastPoint *pb.Point
-	startTime := time.Now()
-	for {
-		point, err := stream.Recv()
-		if err == io.EOF {
-			endTime := time.Now()
-			return stream.SendAndClose(&pb.RouteSummary{
-				PointCount:   pointCount,
-				FeatureCount: featureCount,
-				Distance:     distance,
-				ElapsedTime:  int32(endTime.Sub(startTime).Seconds()),
-			})
-		}
-		if err != nil {
-			return err
-		}
-		pointCount++
-		for _, feature := range s.savedFeatures {
-			if proto.Equal(feature.Location, point) {
-				featureCount++
-			}
-		}
-		if lastPoint != nil {
-			distance += calcDistance(lastPoint, point)
-		}
-		lastPoint = point
-	}
+    var pointCount, featureCount, distance int32
+    var lastPoint *pb.Point
+    startTime := time.Now()
+    for {
+        point, err := stream.Recv()
+        if err == io.EOF {
+            endTime := time.Now()
+            return stream.SendAndClose(&pb.RouteSummary{
+                PointCount:   pointCount,
+                FeatureCount: featureCount,
+                Distance:     distance,
+                ElapsedTime:  int32(endTime.Sub(startTime).Seconds()),
+            })
+        }
+        if err != nil {
+            return err
+        }
+        pointCount++
+        for _, feature := range s.savedFeatures {
+            if proto.Equal(feature.Location, point) {
+                featureCount++
+            }
+        }
+        if lastPoint != nil {
+            distance += calcDistance(lastPoint, point)
+        }
+        lastPoint = point
+    }
 }
 ```
 
@@ -234,22 +226,22 @@ Finally, let's look at our bidirectional streaming RPC `RouteChat()`.
 
 ```go
 func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error {
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		key := serialize(in.Location)
+    for {
+        in, err := stream.Recv()
+        if err == io.EOF {
+            return nil
+        }
+        if err != nil {
+            return err
+        }
+        key := serialize(in.Location)
                 ... // look for notes to be sent to client
-		for _, note := range s.routeNotes[key] {
-			if err := stream.Send(note); err != nil {
-				return err
-			}
-		}
-	}
+        for _, note := range s.routeNotes[key] {
+            if err := stream.Send(note); err != nil {
+                return err
+            }
+        }
+    }
 }
 ```
 
@@ -286,17 +278,17 @@ In this section, we'll look at creating a Go client for our `RouteGuide` service
 
 ### Creating a stub
 
-To call service methods, we first need to create a gRPC *channel* to communicate with the server. We create this by passing the server address and port number to `grpc.Dial()` as follows:
+To call service methods, we first need to create a gRPC *channel* to communicate with the server. We create this by passing the server address and port number to `grpc.NewClient()` as follows:
 
 ```go
-conn, err := grpc.Dial(*serverAddr)
+conn, err := grpc.NewClient(*serverAddr)
 if err != nil {
     ...
 }
 defer conn.Close()
 ```
 
-You can use `DialOptions` to set the auth credentials (e.g., TLS, GCE credentials, JWT credentials) in `grpc.Dial` if the service you request requires that - however, we don't need to do this for our `RouteGuide` service.
+You can use `DialOptions` to set the auth credentials (e.g., TLS, GCE credentials, JWT credentials) in `grpc.NewClient` if the service you request requires that - however, we don't need to do this for our `RouteGuide` service.
 
 Once the gRPC *channel* is setup, we need a client *stub* to perform RPCs. We get this using the `NewRouteGuideClient` method provided in the `pb` package we generated from our `.proto` file.
 
@@ -361,21 +353,21 @@ r := rand.New(rand.NewSource(time.Now().UnixNano()))
 pointCount := int(r.Int31n(100)) + 2 // Traverse at least two points
 var points []*pb.Point
 for i := 0; i < pointCount; i++ {
-	points = append(points, randomPoint(r))
+    points = append(points, randomPoint(r))
 }
 log.Printf("Traversing %d points.", len(points))
 stream, err := client.RecordRoute(ctx)
 if err != nil {
-	log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+    log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
 }
 for _, point := range points {
-	if err := stream.Send(point); err != nil {
-		log.Fatalf("%v.Send(%v) = %v", stream, point, err)
-	}
+    if err := stream.Send(point); err != nil {
+        log.Fatalf("%v.Send(%v) = %v", stream, point, err)
+    }
 }
 reply, err := stream.CloseAndRecv()
 if err != nil {
-	log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+    log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
 }
 log.Printf("Route summary: %v", reply)
 ```
@@ -390,23 +382,23 @@ Finally, let's look at our bidirectional streaming RPC `RouteChat()`. As in the 
 stream, err := client.RouteChat(ctx)
 waitc := make(chan struct{})
 go func() {
-	for {
-		in, err := stream.Recv()
-		if err == io.EOF {
-			// read done.
-			close(waitc)
-			return
-		}
-		if err != nil {
-			log.Fatalf("Failed to receive a note : %v", err)
-		}
-		log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
-	}
+    for {
+        in, err := stream.Recv()
+        if err == io.EOF {
+            // read done.
+            close(waitc)
+            return
+        }
+        if err != nil {
+            log.Fatalf("Failed to receive a note : %v", err)
+        }
+        log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
+    }
 }()
 for _, note := range notes {
-	if err := stream.Send(note); err != nil {
-		log.Fatalf("Failed to send a note: %v", err)
-	}
+    if err := stream.Send(note); err != nil {
+        log.Fatalf("Failed to send a note: %v", err)
+    }
 }
 stream.CloseSend()
 <-waitc

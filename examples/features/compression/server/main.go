@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to install and support compressors for
+// incoming RPCs.
 package main
 
 import (
@@ -27,7 +28,9 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
+	// Installing the gzip encoding registers it as an available compressor.
+	// gRPC will automatically negotiate and use gzip if the client supports it.
+	_ "google.golang.org/grpc/encoding/gzip"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
@@ -38,7 +41,7 @@ type server struct {
 	pb.UnimplementedEchoServer
 }
 
-func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *server) UnaryEcho(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("UnaryEcho called with message %q\n", in.GetMessage())
 	return &pb.EchoResponse{Message: in.Message}, nil
 }

@@ -16,7 +16,8 @@
  *
  */
 
-// Package main implements a client for Greeter service.
+// Binary client demonstrates how to instrument RPCs with logging, metrics,
+// and tracing.
 package main
 
 import (
@@ -43,7 +44,7 @@ var (
 func main() {
 	// Turn on global telemetry for the whole binary. If a configuration is
 	// specified, any created gRPC Client Conn's or Servers will emit telemetry
-	// data according the the configuration.
+	// data according the configuration.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	err := observability.Start(ctx)
@@ -54,7 +55,7 @@ func main() {
 
 	flag.Parse()
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

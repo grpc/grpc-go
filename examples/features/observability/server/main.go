@@ -16,7 +16,8 @@
  *
  */
 
-// Package main implements a server for Greeter service.
+// Binary server demonstrates how to instrument RPCs for logging, metrics,
+// and tracing.
 package main
 
 import (
@@ -45,7 +46,7 @@ type server struct {
 }
 
 // SayHello implements helloworld.GreeterServer
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	log.Printf("Received: %v", in.GetName())
 	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
 }
@@ -53,7 +54,7 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 func main() {
 	// Turn on global telemetry for the whole binary. If a configuration is
 	// specified, any created gRPC Client Conn's or Servers will emit telemetry
-	// data according the the configuration.
+	// data according the configuration.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	err := observability.Start(ctx)

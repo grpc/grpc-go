@@ -24,9 +24,9 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -43,11 +43,11 @@ type testCreds struct {
 	typ string
 }
 
-func (c *testCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *testCreds) ClientHandshake(context.Context, string, net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, &testAuthInfo{typ: c.typ}, nil
 }
 
-func (c *testCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *testCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, &testAuthInfo{typ: c.typ}, nil
 }
 
@@ -109,7 +109,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with non-CFE cluster name",
 				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "lalala").Attributes,
+					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "lalala").Attributes,
 				}),
 				// non-CFE backends should use alts.
 				wantTyp: "alts",
@@ -117,7 +117,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with CFE cluster name",
 				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "google_cfe_bigtable.googleapis.com").Attributes,
+					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// CFE should use tls.
 				wantTyp: "tls",
@@ -125,7 +125,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with xdstp CFE cluster name",
 				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
+					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// CFE should use tls.
 				wantTyp: "tls",
@@ -133,7 +133,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with xdstp non-CFE cluster name",
 				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://other.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
+					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://other.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// non-CFE should use atls.
 				wantTyp: "alts",

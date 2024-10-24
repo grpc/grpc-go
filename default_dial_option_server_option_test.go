@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -40,6 +41,7 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 	// Set and check the DialOptions
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
 	internal.AddGlobalDialOptions.(func(opt ...DialOption))(opts...)
+	defer internal.ClearGlobalDialOptions()
 	for i, opt := range opts {
 		if globalDialOptions[i] != opt {
 			t.Fatalf("Unexpected global dial option at index %d: %v != %v", i, globalDialOptions[i], opt)
@@ -64,6 +66,7 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 func (s) TestDisableGlobalOptions(t *testing.T) {
 	// Set transport credentials as a global option.
 	internal.AddGlobalDialOptions.(func(opt ...DialOption))(WithTransportCredentials(insecure.NewCredentials()))
+	defer internal.ClearGlobalDialOptions()
 	// Dial with the disable global options dial option. This dial should fail
 	// due to the global dial options with credentials not being picked up due
 	// to global options being disabled.
@@ -71,7 +74,34 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	if _, err := Dial("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
 		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
 	}
-	internal.ClearGlobalDialOptions()
+}
+
+type testPerTargetDialOption struct{}
+
+func (do *testPerTargetDialOption) DialOptionForTarget(parsedTarget url.URL) DialOption {
+	if parsedTarget.Scheme == "passthrough" {
+		return WithTransportCredentials(insecure.NewCredentials()) // credentials provided, should pass NewClient.
+	}
+	return EmptyDialOption{} // no credentials, should fail NewClient
+}
+
+// TestGlobalPerTargetDialOption configures a global per target dial option that
+// produces transport credentials for channels using "passthrough" scheme.
+// Channels that use the passthrough scheme should be successfully created due
+// to picking up transport credentials, whereas other channels should fail at
+// creation due to not having transport credentials.
+func (s) TestGlobalPerTargetDialOption(t *testing.T) {
+	internal.AddGlobalPerTargetDialOptions.(func(opt any))(&testPerTargetDialOption{})
+	defer internal.ClearGlobalPerTargetDialOptions()
+	noTSecStr := "no transport security set"
+	if _, err := NewClient("dns:///fake"); !strings.Contains(fmt.Sprint(err), noTSecStr) {
+		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
+	}
+	cc, err := NewClient("passthrough:///nice")
+	if err != nil {
+		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+	}
+	cc.Close()
 }
 
 func (s) TestAddGlobalServerOptions(t *testing.T) {
@@ -79,6 +109,7 @@ func (s) TestAddGlobalServerOptions(t *testing.T) {
 	// Set and check the ServerOptions
 	opts := []ServerOption{Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
 	internal.AddGlobalServerOptions.(func(opt ...ServerOption))(opts...)
+	defer internal.ClearGlobalServerOptions()
 	for i, opt := range opts {
 		if globalServerOptions[i] != opt {
 			t.Fatalf("Unexpected global server option at index %d: %v != %v", i, globalServerOptions[i], opt)
@@ -117,7 +148,7 @@ func (s) TestJoinDialOption(t *testing.T) {
 	}
 }
 
-// TestJoinDialOption tests the join server option. It configures a joined
+// TestJoinServerOption tests the join server option. It configures a joined
 // server option with three individual server options, and verifies that all
 // three are successfully applied.
 func (s) TestJoinServerOption(t *testing.T) {
@@ -130,5 +161,18 @@ func (s) TestJoinServerOption(t *testing.T) {
 	}
 	if s.opts.initialWindowSize != initialWindowSize {
 		t.Fatalf("Unexpected s.opts.initialWindowSize: %d != %d", s.opts.initialWindowSize, initialWindowSize)
+	}
+}
+
+// funcTestHeaderListSizeDialOptionServerOption tests
+func (s) TestHeaderListSizeDialOptionServerOption(t *testing.T) {
+	const maxHeaderListSize uint32 = 998765
+	clientHeaderListSize := WithMaxHeaderListSize(maxHeaderListSize)
+	if clientHeaderListSize.(MaxHeaderListSizeDialOption).MaxHeaderListSize != maxHeaderListSize {
+		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", clientHeaderListSize, maxHeaderListSize)
+	}
+	serverHeaderListSize := MaxHeaderListSize(maxHeaderListSize)
+	if serverHeaderListSize.(MaxHeaderListSizeServerOption).MaxHeaderListSize != maxHeaderListSize {
+		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", serverHeaderListSize, maxHeaderListSize)
 	}
 }

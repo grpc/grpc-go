@@ -16,7 +16,8 @@
  *
  */
 
-// Binary client is an example client.
+// Binary client demonstrates how to check and observe gRPC server health using
+// the health library.
 package main
 
 import (
@@ -72,9 +73,9 @@ func main() {
 		grpc.WithDefaultServiceConfig(serviceConfig),
 	}
 
-	conn, err := grpc.Dial(address, options...)
+	conn, err := grpc.NewClient(address, options...)
 	if err != nil {
-		log.Fatalf("grpc.Dial(%q): %v", address, err)
+		log.Fatalf("grpc.NewClient(%q): %v", address, err)
 	}
 	defer conn.Close()
 

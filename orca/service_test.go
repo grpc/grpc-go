@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -33,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/orca/internal"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
@@ -106,9 +106,9 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 	// Dial the test server.
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 

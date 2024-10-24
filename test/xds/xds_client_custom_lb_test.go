@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/resolver"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -45,10 +46,10 @@ import (
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
 	v3wrrlocalitypb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/wrr_locality/v3"
-	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -93,11 +94,6 @@ func clusterWithLBConfiguration(t *testing.T, clusterName, edsServiceName string
 // first) child load balancing policy, and asserts the correct distribution
 // based on the locality weights and the endpoint picking policy specified.
 func (s) TestWrrLocality(t *testing.T) {
-	oldCustomLBSupport := envconfig.XDSCustomLBPolicy
-	envconfig.XDSCustomLBPolicy = true
-	defer func() {
-		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
-	}()
 	oldLeastRequestLBSupport := envconfig.LeastRequestLB
 	envconfig.LeastRequestLB = true
 	defer func() {
@@ -226,8 +222,9 @@ func (s) TestWrrLocality(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-			defer cleanup()
+			// Start an xDS management server.
+			managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
+
 			routeConfigName := "route-" + serviceName
 			clusterName := "cluster-" + serviceName
 			endpointsName := "endpoints-" + serviceName
@@ -258,7 +255,7 @@ func (s) TestWrrLocality(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 			if err != nil {
 				t.Fatalf("Failed to dial local test server: %v", err)
 			}

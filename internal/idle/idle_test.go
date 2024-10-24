@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -55,10 +54,8 @@ func (ti *testEnforcer) ExitIdleMode() error {
 
 }
 
-func (ti *testEnforcer) EnterIdleMode() error {
+func (ti *testEnforcer) EnterIdleMode() {
 	ti.enterIdleCh <- struct{}{}
-	return nil
-
 }
 
 func newTestEnforcer() *testEnforcer {
@@ -91,7 +88,7 @@ func overrideNewTimer(t *testing.T) <-chan struct{} {
 // TestManager_Disabled tests the case where the idleness manager is
 // disabled by passing an idle_timeout of 0. Verifies the following things:
 //   - timer callback does not fire
-//   - an RPC does not trigger a call to ExitIdleMode on the ClientConn
+//   - an RPC triggers a call to ExitIdleMode on the ClientConn
 //   - more calls to RPC termination (as compared to RPC initiation) does not
 //     result in an error log
 func (s) TestManager_Disabled(t *testing.T) {
@@ -100,7 +97,7 @@ func (s) TestManager_Disabled(t *testing.T) {
 	// Create an idleness manager that is disabled because of idleTimeout being
 	// set to `0`.
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(0), Logger: grpclog.Component("test")})
+	mgr := NewManager(enforcer, time.Duration(0))
 
 	// Ensure that the timer callback does not fire within a short deadline.
 	select {
@@ -109,13 +106,13 @@ func (s) TestManager_Disabled(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// The first invocation of OnCallBegin() would lead to a call to
-	// ExitIdleMode() on the enforcer, unless the idleness manager is disabled.
-	mgr.OnCallBegin()
+	// The first invocation of OnCallBegin() should lead to a call to
+	// ExitIdleMode() on the enforcer.
+	go mgr.OnCallBegin()
 	select {
 	case <-enforcer.exitIdleCh:
-		t.Fatalf("ExitIdleMode() called on enforcer when manager is disabled")
 	case <-time.After(defaultTestShortTimeout):
+		t.Fatal("Timeout waiting for channel to move out of idle mode")
 	}
 
 	// If the number of calls to OnCallEnd() exceeds the number of calls to
@@ -127,7 +124,7 @@ func (s) TestManager_Disabled(t *testing.T) {
 
 	// The idleness manager is explicitly not closed here. But since the manager
 	// is disabled, it will not start the run goroutine, and hence we expect the
-	// leakchecker to not find any leaked goroutines.
+	// leak checker to not find any leaked goroutines.
 }
 
 // TestManager_Enabled_TimerFires tests the case where the idle manager
@@ -137,10 +134,11 @@ func (s) TestManager_Enabled_TimerFires(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout), Logger: grpclog.Component("test")})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
+	mgr.ExitIdleMode()
 
-	// Ensure that the timer callback fires within a appropriate amount of time.
+	// Ensure that the timer callback fires within an appropriate amount of time.
 	select {
 	case <-callbackCh:
 	case <-time.After(2 * defaultTestIdleTimeout):
@@ -162,8 +160,9 @@ func (s) TestManager_Enabled_OngoingCall(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout), Logger: grpclog.Component("test")})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
+	mgr.ExitIdleMode()
 
 	// Fire up a goroutine that simulates an ongoing RPC that is terminated
 	// after the timer callback fires for the first time.
@@ -207,8 +206,9 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	callbackCh := overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout), Logger: grpclog.Component("test")})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
+	mgr.ExitIdleMode()
 
 	// Fire up a goroutine that simulates unary RPCs until the timer callback
 	// fires.
@@ -233,6 +233,7 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	case <-callbackCh:
 		close(timerFired)
 	case <-time.After(2 * defaultTestIdleTimeout):
+		close(timerFired)
 		t.Fatal("Timeout waiting for idle timer callback to fire")
 	}
 	select {
@@ -241,7 +242,7 @@ func (s) TestManager_Enabled_ActiveSinceLastCheck(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Since the unrary RPC terminated and we have no other active RPCs, the
+	// Since the unary RPC terminated and we have no other active RPCs, the
 	// channel must move to idle eventually.
 	select {
 	case <-enforcer.enterIdleCh:
@@ -257,9 +258,11 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 	overrideNewTimer(t)
 
 	enforcer := newTestEnforcer()
-	mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(defaultTestIdleTimeout), Logger: grpclog.Component("test")})
+	mgr := NewManager(enforcer, time.Duration(defaultTestIdleTimeout))
 	defer mgr.Close()
 
+	mgr.ExitIdleMode()
+	<-enforcer.exitIdleCh
 	// Ensure that the channel moves to idle since there are no RPCs.
 	select {
 	case <-enforcer.enterIdleCh:
@@ -297,21 +300,31 @@ func (s) TestManager_Enabled_ExitIdleOnRPC(t *testing.T) {
 type racyState int32
 
 const (
-	stateInital racyState = iota
+	stateInitial racyState = iota
 	stateEnteredIdle
 	stateExitedIdle
 	stateActiveRPCs
 )
 
-// racyIdlnessEnforcer is a test idleness enforcer used specifically to test the
+// racyEnforcer is a test idleness enforcer used specifically to test the
 // race between idle timeout and incoming RPCs.
 type racyEnforcer struct {
-	state *racyState // Accessed atomically.
+	t       *testing.T
+	state   *racyState // Accessed atomically.
+	started bool
 }
 
 // ExitIdleMode sets the internal state to stateExitedIdle. We should only ever
 // exit idle when we are currently in idle.
 func (ri *racyEnforcer) ExitIdleMode() error {
+	// Set only on the initial ExitIdleMode
+	if ri.started == false {
+		if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInitial), int32(stateInitial)) {
+			return fmt.Errorf("idleness enforcer's first ExitIdleMode after EnterIdleMode")
+		}
+		ri.started = true
+		return nil
+	}
 	if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateEnteredIdle), int32(stateExitedIdle)) {
 		return fmt.Errorf("idleness enforcer asked to exit idle when it did not enter idle earlier")
 	}
@@ -319,46 +332,44 @@ func (ri *racyEnforcer) ExitIdleMode() error {
 }
 
 // EnterIdleMode attempts to set the internal state to stateEnteredIdle. We should only ever enter idle before RPCs start.
-func (ri *racyEnforcer) EnterIdleMode() error {
-	if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInital), int32(stateEnteredIdle)) {
-		return fmt.Errorf("idleness enforcer asked to enter idle after rpcs started")
+func (ri *racyEnforcer) EnterIdleMode() {
+	if !atomic.CompareAndSwapInt32((*int32)(ri.state), int32(stateInitial), int32(stateEnteredIdle)) {
+		ri.t.Errorf("idleness enforcer asked to enter idle after rpcs started")
 	}
-	return nil
 }
 
-// TestManager_IdleTimeoutRacesWithOnCallBegin tests the case where
-// firing of the idle timeout races with an incoming RPC. The test verifies that
-// if the timer callback win the race and puts the channel in idle, the RPCs can
-// kick it out of idle. And if the RPCs win the race and keep the channel
-// active, then the timer callback should not attempt to put the channel in idle
-// mode.
+// TestManager_IdleTimeoutRacesWithOnCallBegin tests the case where firing of
+// the idle timeout races with an incoming RPC. The test verifies that if the
+// timer callback wins the race and puts the channel in idle, the RPCs can kick
+// it out of idle. And if the RPCs win the race and keep the channel active,
+// then the timer callback should not attempt to put the channel in idle mode.
 func (s) TestManager_IdleTimeoutRacesWithOnCallBegin(t *testing.T) {
 	// Run multiple iterations to simulate different possibilities.
 	for i := 0; i < 20; i++ {
 		t.Run(fmt.Sprintf("iteration=%d", i), func(t *testing.T) {
 			var idlenessState racyState
-			enforcer := &racyEnforcer{state: &idlenessState}
+			enforcer := &racyEnforcer{t: t, state: &idlenessState}
 
 			// Configure a large idle timeout so that we can control the
 			// race between the timer callback and RPCs.
-			mgr := NewManager(ManagerOptions{Enforcer: enforcer, Timeout: time.Duration(10 * time.Minute), Logger: grpclog.Component("test")})
+			mgr := NewManager(enforcer, time.Duration(10*time.Minute))
 			defer mgr.Close()
+			mgr.ExitIdleMode()
 
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				m := mgr.(interface{ handleIdleTimeout() })
-				<-time.After(defaultTestIdleTimeout / 10)
-				m.handleIdleTimeout()
+				<-time.After(defaultTestIdleTimeout / 50)
+				mgr.handleIdleTimeout()
 			}()
-			for j := 0; j < 100; j++ {
+			for j := 0; j < 5; j++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 					// Wait for the configured idle timeout and simulate an RPC to
 					// race with the idle timeout timer callback.
-					<-time.After(defaultTestIdleTimeout / 10)
+					<-time.After(defaultTestIdleTimeout / 50)
 					if err := mgr.OnCallBegin(); err != nil {
 						t.Errorf("OnCallBegin() failed: %v", err)
 					}

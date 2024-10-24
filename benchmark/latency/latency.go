@@ -63,21 +63,28 @@ type Network struct {
 }
 
 var (
-	//Local simulates local network.
+	// Local simulates local network.
 	Local = Network{0, 0, 0}
-	//LAN simulates local area network network.
+	// LAN simulates local area network.
 	LAN = Network{100 * 1024, 2 * time.Millisecond, 1500}
-	//WAN simulates wide area network.
+	// WAN simulates wide area network.
 	WAN = Network{20 * 1024, 30 * time.Millisecond, 1500}
-	//Longhaul simulates bad network.
+	// Longhaul simulates bad network.
 	Longhaul = Network{1000 * 1024, 200 * time.Millisecond, 9000}
 )
+
+func (n *Network) isLocal() bool {
+	return *n == Local
+}
 
 // Conn returns a net.Conn that wraps c and injects n's latency into that
 // connection.  This function also imposes latency for connection creation.
 // If n's Latency is lower than the measured latency in c, an error is
 // returned.
 func (n *Network) Conn(c net.Conn) (net.Conn, error) {
+	if n.isLocal() {
+		return c, nil
+	}
 	start := now()
 	nc := &conn{Conn: c, network: n, readBuf: new(bytes.Buffer)}
 	if err := nc.sync(); err != nil {
@@ -246,6 +253,9 @@ func (c *conn) sync() error {
 // Listener returns a net.Listener that wraps l and injects n's latency in its
 // connections.
 func (n *Network) Listener(l net.Listener) net.Listener {
+	if n.isLocal() {
+		return l
+	}
 	return &listener{Listener: l, network: n}
 }
 
@@ -265,6 +275,9 @@ func (l *listener) Accept() (net.Conn, error) {
 // Dialer returns a Dialer that wraps d and injects n's latency in its
 // connections.  n's Latency is also injected to the connection's creation.
 func (n *Network) Dialer(d Dialer) Dialer {
+	if n.isLocal() {
+		return d
+	}
 	return func(network, address string) (net.Conn, error) {
 		conn, err := d(network, address)
 		if err != nil {
@@ -278,6 +291,9 @@ func (n *Network) Dialer(d Dialer) Dialer {
 // in its connections.  n's Latency is also injected to the connection's
 // creation.
 func (n *Network) TimeoutDialer(d TimeoutDialer) TimeoutDialer {
+	if n.isLocal() {
+		return d
+	}
 	return func(network, address string, timeout time.Duration) (net.Conn, error) {
 		conn, err := d(network, address, timeout)
 		if err != nil {
@@ -291,6 +307,9 @@ func (n *Network) TimeoutDialer(d TimeoutDialer) TimeoutDialer {
 // in its connections.  n's Latency is also injected to the connection's
 // creation.
 func (n *Network) ContextDialer(d ContextDialer) ContextDialer {
+	if n.isLocal() {
+		return d
+	}
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		conn, err := d(ctx, network, address)
 		if err != nil {

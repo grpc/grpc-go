@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to use interceptors to observe or control the
+// behavior of gRPC including logging, authentication,metrics collection, etc.
 package main
 
 import (
@@ -55,7 +56,7 @@ type server struct {
 	pb.UnimplementedEchoServer
 }
 
-func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *server) UnaryEcho(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("unary echoing message %q\n", in.Message)
 	return &pb.EchoResponse{Message: in.Message}, nil
 }
@@ -87,7 +88,7 @@ func valid(authorization []string) bool {
 	return token == "some-secret-token"
 }
 
-func unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	// authentication (token verification)
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -123,7 +124,7 @@ func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
 	return &wrappedStream{s}
 }
 
-func streamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	// authentication (token verification)
 	md, ok := metadata.FromIncomingContext(ss.Context())
 	if !ok {

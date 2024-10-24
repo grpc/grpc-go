@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -56,9 +57,9 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigParseError(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
+		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 
@@ -88,9 +89,9 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigInvalidTypeError(t *testing.
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Config: fakeConfig{}}})
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
+		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 
@@ -158,8 +159,11 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	ccUpdateCh := testutils.NewChannel()
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			pf := balancer.Get(grpc.PickFirstBalancerName)
+			pf := balancer.Get(pickfirst.Name)
 			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &wrappingBalancerConfig{}
@@ -181,7 +185,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 
 	// Start a backend exposing the test service.
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
 	if err := backend.StartServer(); err != nil {
 		t.Fatalf("Failed to start backend: %v", err)

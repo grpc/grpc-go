@@ -16,7 +16,7 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates to enforce retries on client side.
 package main
 
 import (
@@ -57,7 +57,7 @@ func (s *failingServer) maybeFailRequest() error {
 	return status.Errorf(codes.Unavailable, "maybeFailRequest: failing it")
 }
 
-func (s *failingServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *failingServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	if err := s.maybeFailRequest(); err != nil {
 		log.Println("request failed count:", s.reqCounter)
 		return nil, err

@@ -23,11 +23,10 @@ import (
 	"net"
 	"strconv"
 
-	"google.golang.org/protobuf/protoadapt"
-
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -39,7 +38,6 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
 const (
@@ -65,7 +63,7 @@ const (
 	// is required. Only the server presents an identity certificate in this
 	// configuration.
 	SecurityLevelTLS
-	// SecurityLevelMTLS is used when security ocnfiguration corresponding to
+	// SecurityLevelMTLS is used when security configuration corresponding to
 	// mTLS is required. Both client and server present identity certificates in
 	// this configuration.
 	SecurityLevelMTLS
@@ -130,16 +128,121 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 }
 
 func marshalAny(m proto.Message) *anypb.Any {
-	a, err := anypb.New(protoadapt.MessageV2Of(m))
+	a, err := anypb.New(m)
 	if err != nil {
 		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", m, err))
 	}
 	return a
 }
 
-// DefaultServerListener returns a basic xds Listener resource to be used on
-// the server side.
-func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
+// filterChainWontMatch returns a filter chain that won't match if running the
+// test locally.
+func filterChainWontMatch(routeName string, addressPrefix string, srcPorts []uint32) *v3listenerpb.FilterChain {
+	hcm := &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+			Rds: &v3httppb.Rds{
+				ConfigSource: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+				},
+				RouteConfigName: routeName,
+			},
+		},
+		HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+	}
+	return &v3listenerpb.FilterChain{
+		Name: routeName + "-wont-match",
+		FilterChainMatch: &v3listenerpb.FilterChainMatch{
+			PrefixRanges: []*v3corepb.CidrRange{
+				{
+					AddressPrefix: addressPrefix,
+					PrefixLen: &wrapperspb.UInt32Value{
+						Value: uint32(0),
+					},
+				},
+			},
+			SourceType:  v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+			SourcePorts: srcPorts,
+			SourcePrefixRanges: []*v3corepb.CidrRange{
+				{
+					AddressPrefix: addressPrefix,
+					PrefixLen: &wrapperspb.UInt32Value{
+						Value: uint32(0),
+					},
+				},
+			},
+		},
+		Filters: []*v3listenerpb.Filter{
+			{
+				Name:       "filter-1",
+				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
+			},
+		},
+	}
+}
+
+// ListenerResourceThreeRouteResources returns a listener resource that points
+// to three route configurations. Only the filter chain that points to the first
+// route config can be matched to.
+func ListenerResourceThreeRouteResources(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	lis := defaultServerListenerCommon(host, port, secLevel, routeName, false)
+	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName2", "1.1.1.1", []uint32{1}))
+	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName3", "2.2.2.2", []uint32{2}))
+	return lis
+}
+
+// ListenerResourceFallbackToDefault returns a listener resource that contains a
+// filter chain that will never get chosen to process traffic and a default
+// filter chain. The default filter chain points to routeName2.
+func ListenerResourceFallbackToDefault(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
+	lis := defaultServerListenerCommon(host, port, secLevel, "", false)
+	lis.FilterChains = nil
+	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName", "1.1.1.1", []uint32{1}))
+	lis.DefaultFilterChain = filterChainWontMatch("routeName2", "2.2.2.2", []uint32{2})
+	return lis
+}
+
+// DefaultServerListener returns a basic xds Listener resource to be used on the
+// server side. The returned Listener resource contains an inline route
+// configuration with the name of routeName.
+func DefaultServerListener(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	return defaultServerListenerCommon(host, port, secLevel, routeName, true)
+}
+
+func defaultServerListenerCommon(host string, port uint32, secLevel SecurityLevel, routeName string, inlineRouteConfig bool) *v3listenerpb.Listener {
+	var hcm *v3httppb.HttpConnectionManager
+	if inlineRouteConfig {
+		hcm = &v3httppb.HttpConnectionManager{
+			RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+				RouteConfig: &v3routepb.RouteConfiguration{
+					Name: routeName,
+					VirtualHosts: []*v3routepb.VirtualHost{{
+						// This "*" string matches on any incoming authority. This is to ensure any
+						// incoming RPC matches to Route_NonForwardingAction and will proceed as
+						// normal.
+						Domains: []string{"*"},
+						Routes: []*v3routepb.Route{{
+							Match: &v3routepb.RouteMatch{
+								PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+							},
+							Action: &v3routepb.Route_NonForwardingAction{},
+						}}}}},
+			},
+			HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+		}
+	} else {
+		hcm = &v3httppb.HttpConnectionManager{
+			RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+				Rds: &v3httppb.Rds{
+					ConfigSource: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+					},
+					RouteConfigName: routeName,
+				},
+			},
+			HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
+		}
+	}
+
 	var tlsContext *v3tlspb.DownstreamTlsContext
 	switch secLevel {
 	case SecurityLevelNone:
@@ -212,27 +315,8 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 				},
 				Filters: []*v3listenerpb.Filter{
 					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-									RouteConfig: &v3routepb.RouteConfiguration{
-										Name: "routeName",
-										VirtualHosts: []*v3routepb.VirtualHost{{
-											// This "*" string matches on any incoming authority. This is to ensure any
-											// incoming RPC matches to Route_NonForwardingAction and will proceed as
-											// normal.
-											Domains: []string{"*"},
-											Routes: []*v3routepb.Route{{
-												Match: &v3routepb.RouteMatch{
-													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-												},
-												Action: &v3routepb.Route_NonForwardingAction{},
-											}}}}},
-								},
-								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-							}),
-						},
+						Name:       "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
 					},
 				},
 				TransportSocket: ts,
@@ -260,27 +344,8 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 				},
 				Filters: []*v3listenerpb.Filter{
 					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: marshalAny(&v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-									RouteConfig: &v3routepb.RouteConfiguration{
-										Name: "routeName",
-										VirtualHosts: []*v3routepb.VirtualHost{{
-											// This "*" string matches on any incoming authority. This is to ensure any
-											// incoming RPC matches to Route_NonForwardingAction and will proceed as
-											// normal.
-											Domains: []string{"*"},
-											Routes: []*v3routepb.Route{{
-												Match: &v3routepb.RouteMatch{
-													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-												},
-												Action: &v3routepb.Route_NonForwardingAction{},
-											}}}}},
-								},
-								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-							}),
-						},
+						Name:       "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
 					},
 				},
 				TransportSocket: ts,
@@ -300,11 +365,11 @@ func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
 }
 
 // DefaultRouteConfig returns a basic xds RouteConfig resource.
-func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.RouteConfiguration {
+func DefaultRouteConfig(routeName, vhDomain, clusterName string) *v3routepb.RouteConfiguration {
 	return &v3routepb.RouteConfiguration{
 		Name: routeName,
 		VirtualHosts: []*v3routepb.VirtualHost{{
-			Domains: []string{ldsTarget},
+			Domains: []string{vhDomain},
 			Routes: []*v3routepb.Route{{
 				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
 				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
@@ -348,7 +413,6 @@ type RouteConfigOptions struct {
 	ListenerName string
 	// ClusterSpecifierType determines the cluster specifier type.
 	ClusterSpecifierType RouteConfigClusterSpecifierType
-
 	// ClusterName is name of the cluster resource used when the cluster
 	// specifier type is set to RouteConfigClusterSpecifierTypeCluster.
 	//
@@ -611,6 +675,8 @@ type LocalityOptions struct {
 	Weight uint32
 	// Backends is a set of backends belonging to this locality.
 	Backends []BackendOptions
+	// Priority is the priority of the locality. Defaults to 0.
+	Priority uint32
 }
 
 // BackendOptions contains options to configure individual backends in a
@@ -622,6 +688,8 @@ type BackendOptions struct {
 	// Health status of the backend. Default is UNKNOWN which is treated the
 	// same as HEALTHY.
 	HealthStatus v3corepb.HealthStatus
+	// Weight sets the backend weight. Defaults to 1.
+	Weight uint32
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -644,7 +712,7 @@ type EndpointOptions struct {
 func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
 	var bOpts []BackendOptions
 	for _, p := range ports {
-		bOpts = append(bOpts, BackendOptions{Port: p})
+		bOpts = append(bOpts, BackendOptions{Port: p, Weight: 1})
 	}
 	return EndpointResourceWithOptions(EndpointOptions{
 		ClusterName: clusterName,
@@ -665,6 +733,10 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 	for i, locality := range opts.Localities {
 		var lbEndpoints []*v3endpointpb.LbEndpoint
 		for _, b := range locality.Backends {
+			// Weight defaults to 1.
+			if b.Weight == 0 {
+				b.Weight = 1
+			}
 			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
@@ -676,7 +748,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 					}},
 				}},
 				HealthStatus:        b.HealthStatus,
-				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
+				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: b.Weight},
 			})
 		}
 
@@ -688,7 +760,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 			},
 			LbEndpoints:         lbEndpoints,
 			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: locality.Weight},
-			Priority:            0,
+			Priority:            locality.Priority,
 		})
 	}
 
@@ -713,4 +785,66 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 		}
 	}
 	return cla
+}
+
+// DefaultServerListenerWithRouteConfigName returns a basic xds Listener
+// resource to be used on the server side. The returned Listener resource
+// contains a RouteConfiguration resource name that needs to be resolved.
+func DefaultServerListenerWithRouteConfigName(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
+	return defaultServerListenerCommon(host, port, secLevel, routeName, false)
+}
+
+// RouteConfigNoRouteMatch returns an xDS RouteConfig resource which a route
+// with no route match. This will be NACKed by the xDS Client.
+func RouteConfigNoRouteMatch(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to ensure any
+			// incoming RPC matches to Route_NonForwardingAction and will proceed as
+			// normal.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Action: &v3routepb.Route_NonForwardingAction{},
+			}}}}}
+}
+
+// RouteConfigNonForwardingAction returns an xDS RouteConfig resource which
+// specifies to route to a route specifying non forwarding action. This is
+// intended to be used on the server side for RDS requests, and corresponds to
+// the inline route configuration in DefaultServerListener.
+func RouteConfigNonForwardingAction(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to ensure any
+			// incoming RPC matches to Route_NonForwardingAction and will proceed as
+			// normal.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+				},
+				Action: &v3routepb.Route_NonForwardingAction{},
+			}}}}}
+}
+
+// RouteConfigFilterAction returns an xDS RouteConfig resource which specifies
+// to route to a route specifying route filter action. Since this is not type
+// non forwarding action, this should fail requests that match to this server
+// side.
+func RouteConfigFilterAction(routeName string) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			// This "*" string matches on any incoming authority. This is to
+			// ensure any incoming RPC matches to Route_Route and will fail with
+			// UNAVAILABLE.
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{
+					PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+				},
+				Action: &v3routepb.Route_FilterAction{},
+			}}}}}
 }

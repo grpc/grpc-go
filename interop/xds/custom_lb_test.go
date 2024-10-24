@@ -58,7 +58,7 @@ func (s) TestCustomLB(t *testing.T) {
 	// Setup a backend which verifies the expected rpc-behavior metadata is
 	// present in the request.
 	backend := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
 				errCh.Send(errors.New("failed to receive metadata"))
@@ -105,9 +105,9 @@ func (s) TestCustomLB(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

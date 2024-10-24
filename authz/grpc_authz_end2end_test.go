@@ -78,7 +78,7 @@ var authzTests = map[string]struct {
 	"DeniesRPCMatchInDenyNoMatchInAllow": {
 		authzPolicy: `{
 				"name": "authz",
-				"allow_rules": 
+				"allow_rules":
 				[
 					{
 						"name": "allow_StreamingOutputCall",
@@ -166,11 +166,11 @@ var authzTests = map[string]struct {
 								"/grpc.testing.TestService/UnaryCall",
 								"/grpc.testing.TestService/StreamingInputCall"
 							],
-							"headers": 
+							"headers":
 							[
 								{
 									"key": "key-abc",
-									"values": 
+									"values":
 									[
 										"val-abc",
 										"val-def"
@@ -250,7 +250,7 @@ var authzTests = map[string]struct {
 				[
 					{
 						"name": "allow_StreamingOutputCall",
-						"request": 
+						"request":
 						{
 							"paths":
 							[
@@ -326,9 +326,9 @@ func (s) TestStaticPolicyEnd2End(t *testing.T) {
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+				t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 			}
 			defer clientConn.Close()
 			client := testgrpc.NewTestServiceClient(clientConn)
@@ -400,9 +400,9 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnTLSAuthenticatedConnection(t *
 	if err != nil {
 		t.Fatalf("failed to load credentials: %v", err)
 	}
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 	}
 	defer clientConn.Close()
 	client := testgrpc.NewTestServiceClient(clientConn)
@@ -478,9 +478,9 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t 
 		RootCAs:      roots,
 		ServerName:   "x.test.example.com",
 	})
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(creds))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 	}
 	defer clientConn.Close()
 	client := testgrpc.NewTestServiceClient(clientConn)
@@ -516,9 +516,9 @@ func (s) TestFileWatcherEnd2End(t *testing.T) {
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+				t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 			}
 			defer clientConn.Close()
 			client := testgrpc.NewTestServiceClient(clientConn)
@@ -585,9 +585,9 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 	}
 	defer clientConn.Close()
 	client := testgrpc.NewTestServiceClient(clientConn)
@@ -633,9 +633,9 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 	}
 	defer clientConn.Close()
 	client := testgrpc.NewTestServiceClient(clientConn)
@@ -684,9 +684,9 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
 	}
 	defer clientConn.Close()
 	client := testgrpc.NewTestServiceClient(clientConn)

@@ -19,13 +19,13 @@ package xdsclient_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -44,35 +44,35 @@ const testNonDefaultAuthority = "non-default-authority"
 // Returns the management server associated with the non-default authority, the
 // nodeID to use, and the xDS client.
 func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string, xdsclient.XDSClient) {
-	overrideFedEnvVar(t)
-
 	// Start a management server as the default authority.
-	serverDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(serverDefaultAuthority.Stop)
+	serverDefaultAuthority := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Start another management server as the other authority.
-	serverNonDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to spin up the xDS management server: %v", err)
-	}
-	t.Cleanup(serverNonDefaultAuthority.Stop)
+	serverNonDefaultAuthority := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          serverDefaultAuthority.Address,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-		// Specify the address of the non-default authority.
-		Authorities: map[string]string{testNonDefaultAuthority: serverNonDefaultAuthority.Address},
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, serverDefaultAuthority.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			testNonDefaultAuthority: []byte(fmt.Sprintf(`{
+				"xds_servers": [{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]}`, serverNonDefaultAuthority.Address)),
+		},
 	})
 	if err != nil {
-		t.Fatalf("Failed to create bootstrap file: %v", err)
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bootstrapContents,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -97,15 +97,11 @@ func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 
 	// Register two watches for listener resources with the same query string,
 	// but context parameters in different order.
-	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(resourceName1, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, resourceName1, lw1)
 	defer ldsCancel1()
-	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
-	})
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, resourceName2, lw2)
 	defer ldsCancel2()
 
 	// Configure the management server for the non-default authority to return a
@@ -121,17 +117,17 @@ func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
 			RouteConfigName: "rds-resource",
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
 	// Verify the contents of the received update.
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -153,15 +149,11 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 
 	// Register two watches for route configuration resources with the same
 	// query string, but context parameters in different order.
-	updateCh1 := testutils.NewChannel()
-	rdsCancel1 := client.WatchRouteConfig(resourceName1, func(u xdsresource.RouteConfigUpdate, err error) {
-		updateCh1.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-	})
+	rw1 := newRouteConfigWatcher()
+	rdsCancel1 := xdsresource.WatchRouteConfig(client, resourceName1, rw1)
 	defer rdsCancel1()
-	updateCh2 := testutils.NewChannel()
-	rdsCancel2 := client.WatchRouteConfig(resourceName2, func(u xdsresource.RouteConfigUpdate, err error) {
-		updateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-	})
+	rw2 := newRouteConfigWatcher()
+	rdsCancel2 := xdsresource.WatchRouteConfig(client, resourceName2, rw2)
 	defer rdsCancel2()
 
 	// Configure the management server for the non-default authority to return a
@@ -177,8 +169,8 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	wantUpdate := xdsresource.RouteConfigUpdateErrTuple{
-		Update: xdsresource.RouteConfigUpdate{
+	wantUpdate := routeConfigUpdateErrTuple{
+		update: xdsresource.RouteConfigUpdate{
 			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{"listener-resource"},
@@ -194,10 +186,10 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 		},
 	}
 	// Verify the contents of the received update.
-	if err := verifyRouteConfigUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyRouteConfigUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -239,8 +231,8 @@ func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	wantUpdate := xdsresource.ClusterUpdateErrTuple{
-		Update: xdsresource.ClusterUpdate{
+	wantUpdate := clusterUpdateErrTuple{
+		update: xdsresource.ClusterUpdate{
 			ClusterName:    "xdstp://non-default-authority/envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource?a=1&b=2",
 			EDSServiceName: "eds-service-name",
 		},

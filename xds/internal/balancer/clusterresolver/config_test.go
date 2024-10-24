@@ -28,9 +28,9 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
@@ -171,14 +171,14 @@ const (
 }`
 )
 
-var testLRSServerConfig = &bootstrap.ServerConfig{
-	ServerURI: "trafficdirector.googleapis.com:443",
-	Creds: bootstrap.ChannelCreds{
-		Type: "google_default",
-	},
-}
-
 func TestParseConfig(t *testing.T) {
+	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
+		URI:          "trafficdirector.googleapis.com:443",
+		ChannelCreds: []bootstrap.ChannelCreds{{Type: "google_default"}},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create LRS server config for testing: %v", err)
+	}
 	tests := []struct {
 		name    string
 		js      string

@@ -26,23 +26,22 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -101,20 +100,11 @@ func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSer
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		NodeID:                             nodeID,
-		ServerURI:                          fs.Address,
-		ServerListenerResourceNameTemplate: "grpc/server",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Initialize a gRPC server and register the stubServer on it.
 	server := grpc.NewServer()
@@ -132,9 +122,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		}
 	}()
 
-	return fs, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		fs.Stop()
-		bootstrapCleanup()
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
 		server.Stop()
 	}
 }
@@ -219,7 +207,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		cfgs: []*fpb.HTTPFault{{
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 100, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		}},
 		randOutInc: 5,
@@ -233,7 +221,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		cfgs: []*fpb.HTTPFault{{
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 1000, Denominator: tpb.FractionalPercent_TEN_THOUSAND},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		}},
 		randOutInc: 500,
@@ -257,7 +245,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		cfgs: []*fpb.HTTPFault{{
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 80, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(3 * time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(3 * time.Second)},
 			},
 			Abort: &fpb.FaultAbort{
 				Percentage: &tpb.FractionalPercent{Numerator: 50, Denominator: tpb.FractionalPercent_HUNDRED},
@@ -457,7 +445,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		}, {
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 80, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		}},
 		randOutInc: 10,
@@ -483,7 +471,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer func() { randIntn = grpcrand.Intn; newTimer = time.NewTimer }()
+			defer func() { randIntn = rand.Intn; newTimer = time.NewTimer }()
 			var intnCalls []int
 			var newTimerCalls []time.Duration
 			randOut := 0
@@ -506,7 +494,8 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				SecLevel:   e2e.SecurityLevelNone,
 			})
 			hcm := new(v3httppb.HttpConnectionManager)
-			err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
+			lis := resources.Listeners[0].GetApiListener().GetApiListener()
+			err := lis.UnmarshalTo(hcm)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -528,7 +517,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 
 			// Create a ClientConn and run the test case.
-			cc, err := grpc.Dial("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -570,14 +559,15 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 	hcm := new(v3httppb.HttpConnectionManager)
-	err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
+	lis := resources.Listeners[0].GetApiListener().GetApiListener()
+	err := lis.UnmarshalTo(hcm)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer func() { newTimer = time.NewTimer }()
 	timers := make(chan *time.Timer, 2)
-	newTimer = func(d time.Duration) *time.Timer {
+	newTimer = func(time.Duration) *time.Timer {
 		t := time.NewTimer(24 * time.Hour) // Will reset to fire.
 		timers <- t
 		return t
@@ -588,7 +578,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 			MaxActiveFaults: wrapperspb.UInt32(2),
 			Delay: &cpb.FaultDelay{
 				Percentage:         &tpb.FractionalPercent{Numerator: 100, Denominator: tpb.FractionalPercent_HUNDRED},
-				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: ptypes.DurationProto(time.Second)},
+				FaultDelaySecifier: &cpb.FaultDelay_FixedDelay{FixedDelay: durationpb.New(time.Second)},
 			},
 		})},
 		hcm.HttpFilters...)
@@ -603,7 +593,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	}
 
 	// Create a ClientConn
-	cc, err := grpc.Dial("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

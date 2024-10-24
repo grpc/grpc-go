@@ -22,7 +22,7 @@ package proto
 import "google.golang.org/grpc/encoding"
 
 func init() {
-	encoding.RegisterCodec(protoCodec{})
+    encoding.RegisterCodec(protoCodec{})
 }
 
 // ... implementation of protoCodec ...
@@ -50,14 +50,14 @@ On the client-side, to specify a `Codec` to use for message transmission, the
 `CallOption` `CallContentSubtype` should be used as follows:
 
 ```go
-	response, err := myclient.MyCall(ctx, request, grpc.CallContentSubtype("mycodec"))
+    response, err := myclient.MyCall(ctx, request, grpc.CallContentSubtype("mycodec"))
 ```
 
 As a reminder, all `CallOption`s may be converted into `DialOption`s that become
 the default for all RPCs sent through a client using `grpc.WithDefaultCallOptions`:
 
 ```go
-	myclient := grpc.Dial(ctx, target, grpc.WithDefaultCallOptions(grpc.CallContentSubtype("mycodec")))
+    myclient := grpc.Dial(ctx, target, grpc.WithDefaultCallOptions(grpc.CallContentSubtype("mycodec")))
 ```
 
 When specified in either of these ways, messages will be encoded using this
@@ -83,7 +83,7 @@ performing compression and decompression.
 A `Compressor` contains code to compress and decompress by wrapping `io.Writer`s
 and `io.Reader`s, respectively.  (The form of `Compress` and `Decompress` were
 chosen to most closely match Go's standard package
-[implementations](https://golang.org/pkg/compress/) of compressors.  Like
+[implementations](https://golang.org/pkg/compress/) of compressors).  Like
 `Codec`s, `Compressor`s are registered by name into a global registry maintained
 in the `encoding` package.
 
@@ -98,7 +98,7 @@ package gzip
 import "google.golang.org/grpc/encoding"
 
 func init() {
-	encoding.RegisterCompressor(compressor{})
+    encoding.RegisterCompressor(compressor{})
 }
 
 // ... implementation of compressor ...
@@ -125,14 +125,14 @@ On the client-side, to specify a `Compressor` to use for message transmission,
 the `CallOption` `UseCompressor` should be used as follows:
 
 ```go
-	response, err := myclient.MyCall(ctx, request, grpc.UseCompressor("gzip"))
+    response, err := myclient.MyCall(ctx, request, grpc.UseCompressor("gzip"))
 ```
 
 As a reminder, all `CallOption`s may be converted into `DialOption`s that become
 the default for all RPCs sent through a client using `grpc.WithDefaultCallOptions`:
 
 ```go
-	myclient := grpc.Dial(ctx, target, grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")))
+    myclient := grpc.Dial(ctx, target, grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")))
 ```
 
 When specified in either of these ways, messages will be compressed using this

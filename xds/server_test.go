@@ -40,8 +40,8 @@ import (
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
@@ -102,12 +102,7 @@ func newFakeGRPCServer() *fakeGRPCServer {
 }
 
 func generateBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
-	t.Helper()
-
-	bs, err := e2e.DefaultBootstrapContents(nodeID, serverURI)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bs := e2e.DefaultBootstrapContents(t, nodeID, serverURI)
 	return bs
 }
 
@@ -165,10 +160,6 @@ func (s) TestNewServer_Success(t *testing.T) {
 				t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 			}
 			defer s.Stop()
-
-			if s.xdsCredsInUse != test.wantXDSCredsInUse {
-				t.Fatalf("xdsCredsInUse is %v, want %v", s.xdsCredsInUse, test.wantXDSCredsInUse)
-			}
 		})
 	}
 }
@@ -187,7 +178,7 @@ func (s) TestNewServer_Failure(t *testing.T) {
 		{
 			desc:       "bootstrap env var not set",
 			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds)},
-			wantErr:    "bootstrap env vars are unspecified",
+			wantErr:    "failed to get xDS bootstrap config",
 		},
 		{
 			desc: "empty bootstrap config",
@@ -198,37 +189,22 @@ func (s) TestNewServer_Failure(t *testing.T) {
 			wantErr: "xDS client creation failed",
 		},
 		{
-			desc: "certificate provider config is missing",
-			serverOpts: []grpc.ServerOption{
-				grpc.Creds(xdsCreds),
-				func() grpc.ServerOption {
-					bs, err := bootstrap.Contents(bootstrap.Options{
-						NodeID:                             uuid.New().String(),
-						ServerURI:                          nonExistentManagementServer,
-						ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-					})
-					if err != nil {
-						t.Errorf("Failed to create bootstrap configuration: %v", err)
-					}
-					return BootstrapContentsForTesting(bs)
-				}(),
-			},
-			wantErr: "certificate_providers config is missing",
-		},
-		{
 			desc: "server_listener_resource_name_template is missing",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
 				func() grpc.ServerOption {
-					bs, err := bootstrap.Contents(bootstrap.Options{
-						NodeID:    uuid.New().String(),
-						ServerURI: nonExistentManagementServer,
+					bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+						Servers: []byte(fmt.Sprintf(`[{
+							"server_uri": %q,
+							"channel_creds": [{"type": "insecure"}]
+						}]`, nonExistentManagementServer)),
+						Node: []byte(fmt.Sprintf(`{"id": "%s"}`, uuid.New().String())),
 						CertificateProviders: map[string]json.RawMessage{
 							"cert-provider-instance": json.RawMessage("{}"),
 						},
 					})
 					if err != nil {
-						t.Errorf("Failed to create bootstrap configuration: %v", err)
+						t.Fatalf("Failed to create bootstrap configuration: %v", err)
 					}
 					return BootstrapContentsForTesting(bs)
 				}(),
@@ -255,7 +231,7 @@ func (s) TestRegisterService(t *testing.T) {
 	fs := newFakeGRPCServer()
 
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	s, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), "non-existent-management-server")))
@@ -378,8 +354,8 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Setup an xDS management server that pushes on a channel when an LDS
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
-	mgmtServer, nodeID, bootstrapContents, _, cancel := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case ldsRequestCh <- req.GetResourceNames():
@@ -389,13 +365,16 @@ func (s) TestServeSuccess(t *testing.T) {
 			return nil
 		},
 	})
-	defer cancel()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Override the function to create the underlying grpc.Server to allow the
 	// test to verify that Serve() is called on the underlying server.
 	fs := newFakeGRPCServer()
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
+	newGRPCServer = func(...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	// Create a new xDS enabled gRPC server and pass it a server option to get
@@ -431,7 +410,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
 	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
+	wantNames := []string{strings.ReplaceAll(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())}
 	if !cmp.Equal(gotNames, wantNames) {
 		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
 	}
@@ -440,7 +419,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	host, port := hostPortFromListener(t, lis)
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)},
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone, "routeName")},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -492,93 +471,11 @@ func (s) TestServeSuccess(t *testing.T) {
 	}
 }
 
-// TestServeWithStop tests the case where Stop() is called before an LDS update
-// is received. This should cause Serve() to exit before calling Serve() on the
-// underlying grpc.Server.
-func (s) TestServeWithStop(t *testing.T) {
-	// Setup an xDS management server that pushes on a channel when an LDS
-	// request is received by it. It also blocks on the incoming LDS request
-	// until unblocked by the test.
-	ldsRequestCh := make(chan []string, 1)
-	ldsRequestBlockCh := make(chan struct{})
-	mgmtServer, nodeID, _, _, cancel := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == version.V3ListenerURL {
-				select {
-				case ldsRequestCh <- req.GetResourceNames():
-				default:
-				}
-				<-ldsRequestBlockCh
-			}
-			return nil
-		},
-	})
-	defer cancel()
-	defer close(ldsRequestBlockCh)
-
-	// Override the function to create the underlying grpc.Server to allow the
-	// test to verify that Serve() is called on the underlying server.
-	fs := newFakeGRPCServer()
-	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
-	defer func() { newGRPCServer = origNewGRPCServer }()
-
-	// Create a new xDS enabled gRPC server.  Note that we are not deferring the
-	// Stop() here since we explicitly call it after the LDS watch has been
-	// registered.
-	server, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, nodeID, mgmtServer.Address)))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-
-	// Call Serve() in a goroutine, and push on a channel when Serve returns.
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		server.Stop()
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	serveDone := testutils.NewChannel()
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Error(err)
-		}
-		serveDone.Send(nil)
-	}()
-
-	// Ensure that the LDS request is sent out for the expected name.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	var gotNames []string
-	select {
-	case gotNames = <-ldsRequestCh:
-	case <-ctx.Done():
-		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
-	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
-	if !cmp.Equal(gotNames, wantNames) {
-		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
-	}
-
-	// Call Stop() on the xDS enabled gRPC server before the management server
-	// can respond.
-	server.Stop()
-	if _, err := serveDone.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for Serve() to exit: %v", err)
-	}
-
-	// Make sure that Serve() on the underlying grpc.Server is not called.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := fs.serveCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("Serve() called on underlying grpc.Server")
-	}
-}
-
 // TestNewServer_ClientCreationFailure tests the case where the xDS client
 // creation fails and verifies that the call to NewGRPCServer() fails.
 func (s) TestNewServer_ClientCreationFailure(t *testing.T) {
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+	newXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
 		return nil, nil, errors.New("xdsClient creation failed")
 	}
 	defer func() { newXDSClient = origNewXDSClient }()
@@ -592,19 +489,18 @@ func (s) TestNewServer_ClientCreationFailure(t *testing.T) {
 // server is not configured with xDS credentials. Verifies that the security
 // config received as part of a Listener update is not acted upon.
 func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
-	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
-	if err != nil {
-		t.Fatalf("Failed to start xDS management server: %v", err)
-	}
-	defer mgmtServer.Stop()
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Generate bootstrap configuration pointing to the above management server
-	// with certificate provider configuration pointing to fake certifcate
+	// with certificate provider configuration pointing to fake certificate
 	// providers.
 	nodeID := uuid.NewString()
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
 			e2e.ClientSideCertProviderInstance: fakeProvider2Config,
@@ -647,7 +543,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	host, port := hostPortFromListener(t, lis)
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)},
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS, "routeName")},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -675,8 +571,8 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// Setup an xDS management server that pushes on a channel when an LDS
 	// request is received by it.
 	ldsRequestCh := make(chan []string, 1)
-	mgmtServer, nodeID, _, _, cancel := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case ldsRequestCh <- req.GetResourceNames():
@@ -686,14 +582,17 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 			return nil
 		},
 	})
-	defer cancel()
 
 	// Generate bootstrap configuration pointing to the above management server
-	// with certificate provider configuration pointing to fake certifcate
+	// with certificate provider configuration pointing to fake certificate
 	// providers.
-	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		NodeID:    nodeID,
-		ServerURI: mgmtServer.Address,
+	nodeID := uuid.New().String()
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		CertificateProviders: map[string]json.RawMessage{
 			e2e.ServerSideCertProviderInstance: fakeProvider1Config,
 			e2e.ClientSideCertProviderInstance: fakeProvider2Config,
@@ -731,7 +630,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	host, port := hostPortFromListener(t, lis)
-	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
+	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS, "routeName")
 	listener.ListenerFilters = []*v3listenerpb.ListenerFilter{{Name: "foo"}}
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -748,7 +647,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for an LDS request to be sent out")
 	}
-	wantNames := []string{strings.Replace(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)}
+	wantNames := []string{strings.ReplaceAll(e2e.ServerListenerResourceNameTemplate, "%s", lis.Addr().String())}
 	if !cmp.Equal(gotNames, wantNames) {
 		t.Fatalf("LDS watch registered for names %v, want %v", gotNames, wantNames)
 	}
@@ -798,17 +697,16 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	}
 
 	wg := sync.WaitGroup{}
+	wg.Add(200)
 	for i := 0; i < 100; i++ {
 		server, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)))
 		if err != nil {
 			t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 		}
-		wg.Add(1)
 		go func() {
 			server.Serve(lis)
 			wg.Done()
 		}()
-		wg.Add(1)
 		go func() {
 			server.Stop()
 			wg.Done()

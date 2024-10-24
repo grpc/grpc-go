@@ -41,9 +41,9 @@ import (
 // the expected error code.
 func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	client := testgrpc.NewTestServiceClient(cc)
 
@@ -71,8 +71,8 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 		if len(tcs) != 1 {
 			t.Fatalf("there should only be one top channel, not %d", len(tcs))
 		}
-		started := tcs[0].ChannelData.CallsStarted
-		completed := tcs[0].ChannelData.CallsSucceeded + tcs[0].ChannelData.CallsFailed
+		started := tcs[0].ChannelMetrics.CallsStarted.Load()
+		completed := tcs[0].ChannelMetrics.CallsSucceeded.Load() + tcs[0].ChannelMetrics.CallsFailed.Load()
 		if (started - completed) == 1 {
 			break
 		}

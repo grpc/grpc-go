@@ -20,11 +20,13 @@ package grpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -34,18 +36,40 @@ type parseTestCase struct {
 	wantErr bool
 }
 
+func lbConfigFor(t *testing.T, name string, cfg serviceconfig.LoadBalancingConfig) serviceconfig.LoadBalancingConfig {
+	if name == "" {
+		name = "pick_first"
+		cfg = struct {
+			serviceconfig.LoadBalancingConfig
+		}{}
+	}
+	d := []map[string]any{{name: cfg}}
+	strCfg, err := json.Marshal(d)
+	t.Logf("strCfg = %v", string(strCfg))
+	if err != nil {
+		t.Fatalf("Error parsing config: %v", err)
+	}
+	parsedCfg, err := gracefulswitch.ParseConfig(strCfg)
+	if err != nil {
+		t.Fatalf("Error parsing config: %v", err)
+	}
+	return parsedCfg
+}
+
 func runParseTests(t *testing.T, testCases []parseTestCase) {
 	t.Helper()
-	for _, c := range testCases {
-		scpr := parseServiceConfig(c.scjs)
-		var sc *ServiceConfig
-		sc, _ = scpr.Config.(*ServiceConfig)
-		if !c.wantErr {
-			c.wantSC.rawJSONString = c.scjs
-		}
-		if c.wantErr != (scpr.Err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
-			t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, scpr.Err, c.wantSC, c.wantErr)
-		}
+	for i, c := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			scpr := parseServiceConfig(c.scjs, defaultMaxCallAttempts)
+			var sc *ServiceConfig
+			sc, _ = scpr.Config.(*ServiceConfig)
+			if !c.wantErr {
+				c.wantSC.rawJSONString = c.scjs
+			}
+			if c.wantErr != (scpr.Err != nil) || !reflect.DeepEqual(sc, c.wantSC) {
+				t.Fatalf("parseServiceConfig(%s) = %+v, %v, want %+v, %v", c.scjs, sc, scpr.Err, c.wantSC, c.wantErr)
+			}
+		})
 	}
 }
 
@@ -69,7 +93,7 @@ func (parseBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBa
 	return d, nil
 }
 
-func (parseBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (parseBalancerBuilder) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
 	panic("unimplemented")
 }
 
@@ -85,7 +109,7 @@ func (s) TestParseLBConfig(t *testing.T) {
 }`,
 			&ServiceConfig{
 				Methods:  make(map[string]MethodConfig),
-				lbConfig: &lbConfig{name: "pbb", cfg: pbbData{Foo: "hi"}},
+				lbConfig: lbConfigFor(t, "pbb", pbbData{Foo: "hi"}),
 			},
 			false,
 		},
@@ -128,12 +152,12 @@ func (s) TestParseLoadBalancer(t *testing.T) {
     ]
 }`,
 			&ServiceConfig{
-				LB: newString("round_robin"),
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(true),
 					},
 				},
+				lbConfig: lbConfigFor(t, "round_robin", nil),
 			},
 			false,
 		},
@@ -181,6 +205,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 						WaitForReady: newBool(true),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -204,6 +229,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 						WaitForReady: newBool(false),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -260,6 +286,7 @@ func (s) TestParseTimeOut(t *testing.T) {
 						Timeout: newDuration(time.Second),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -335,6 +362,7 @@ func (s) TestParseMsgSize(t *testing.T) {
 						MaxRespSize: newInt(2048),
 					},
 				},
+				lbConfig: lbConfigFor(t, "", nil),
 			},
 			false,
 		},
@@ -375,6 +403,7 @@ func (s) TestParseDefaultMethodConfig(t *testing.T) {
 		Methods: map[string]MethodConfig{
 			"": {WaitForReady: newBool(true)},
 		},
+		lbConfig: lbConfigFor(t, "", nil),
 	}
 
 	runParseTests(t, []parseTestCase{
@@ -452,9 +481,5 @@ func newBool(b bool) *bool {
 }
 
 func newDuration(b time.Duration) *time.Duration {
-	return &b
-}
-
-func newString(b string) *string {
 	return &b
 }

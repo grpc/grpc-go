@@ -36,11 +36,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/examples/data"
-
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
@@ -62,7 +60,7 @@ type routeGuideServer struct {
 }
 
 // GetFeature returns the feature at the given point.
-func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb.Feature, error) {
+func (s *routeGuideServer) GetFeature(_ context.Context, point *pb.Point) (*pb.Feature, error) {
 	for _, feature := range s.savedFeatures {
 		if proto.Equal(feature.Location, point) {
 			return feature, nil

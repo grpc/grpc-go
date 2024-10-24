@@ -38,8 +38,8 @@ func Test(t *testing.T) {
 var (
 	cmpOpts = cmp.Options{
 		cmpopts.EquateEmpty(),
-		cmp.FilterValues(func(x, y error) bool { return true }, cmpopts.EquateErrors()),
-		cmp.Comparer(func(a, b time.Time) bool { return true }),
+		cmp.FilterValues(func(_, _ error) bool { return true }, cmpopts.EquateErrors()),
+		cmp.Comparer(func(_, _ time.Time) bool { return true }),
 		protocmp.Transform(),
 	}
 )

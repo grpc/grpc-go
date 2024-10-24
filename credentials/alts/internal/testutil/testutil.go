@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/alts/internal/conn"
@@ -67,20 +68,33 @@ func (s *Stats) Reset() {
 // testConn mimics a net.Conn to the peer.
 type testConn struct {
 	net.Conn
-	in  *bytes.Buffer
-	out *bytes.Buffer
+	in          *bytes.Buffer
+	out         *bytes.Buffer
+	readLatency time.Duration
 }
 
 // NewTestConn creates a new instance of testConn object.
 func NewTestConn(in *bytes.Buffer, out *bytes.Buffer) net.Conn {
 	return &testConn{
-		in:  in,
-		out: out,
+		in:          in,
+		out:         out,
+		readLatency: time.Duration(0),
+	}
+}
+
+// NewTestConnWithReadLatency creates a new instance of testConn object that
+// pauses for readLatency before any call to Read() returns.
+func NewTestConnWithReadLatency(in *bytes.Buffer, out *bytes.Buffer, readLatency time.Duration) net.Conn {
+	return &testConn{
+		in:          in,
+		out:         out,
+		readLatency: readLatency,
 	}
 }
 
 // Read reads from the in buffer.
 func (c *testConn) Read(b []byte) (n int, err error) {
+	time.Sleep(c.readLatency)
 	return c.in.Read(b)
 }
 
@@ -106,12 +120,12 @@ func NewUnresponsiveTestConn() net.Conn {
 }
 
 // Read reads from the in buffer.
-func (c *unresponsiveTestConn) Read(b []byte) (n int, err error) {
+func (c *unresponsiveTestConn) Read([]byte) (n int, err error) {
 	return 0, io.EOF
 }
 
 // Write writes to the out buffer.
-func (c *unresponsiveTestConn) Write(b []byte) (n int, err error) {
+func (c *unresponsiveTestConn) Write([]byte) (n int, err error) {
 	return 0, nil
 }
 

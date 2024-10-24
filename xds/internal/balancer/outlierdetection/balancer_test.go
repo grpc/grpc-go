@@ -543,14 +543,16 @@ type subConnWithState struct {
 	state balancer.SubConnState
 }
 
-func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.TestClientConn, func()) {
+func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.BalancerClientConn, func()) {
 	t.Helper()
 	builder := balancer.Get(Name)
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", Name)
 	}
-	tcc := testutils.NewTestClientConn(t)
-	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, time.Now().Unix(), nil)})
+	tcc := testutils.NewBalancerClientConn(t)
+	ch := channelz.RegisterChannel(nil, "test channel")
+	t.Cleanup(func() { channelz.RemoveEntry(ch.ID) })
+	odB := builder.Build(tcc, balancer.BuildOptions{ChannelzParent: ch})
 	return odB.(*outlierDetectionBalancer), tcc, odB.Close
 }
 
@@ -559,7 +561,7 @@ type emptyChildConfig struct {
 }
 
 // TestChildBasicOperations tests basic operations of the Outlier Detection
-// Balancer and it's interaction with it's child. The following scenarios are
+// Balancer and its interaction with its child. The following scenarios are
 // tested, in a step by step fashion:
 // 1. The Outlier Detection Balancer receives it's first good configuration. The
 // balancer is expected to create a child and sent the child it's configuration.
@@ -576,11 +578,11 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	closeCh := testutils.NewChannel()
 
 	stub.Register(t.Name()+"child1", stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(_ *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccsCh.Send(ccs.BalancerConfig)
 			return nil
 		},
-		Close: func(bd *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			closeCh.Send(nil)
 		},
 	})
@@ -596,7 +598,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 			ccsCh.Send(nil)
 			return nil
 		},
-		Close: func(bd *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			closeCh.Send(nil)
 		},
 	})
@@ -604,7 +606,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	od, tcc, _ := setup(t)
 
 	// This first config update should cause a child to be built and forwarded
-	// it's first update.
+	// its first update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
 			ChildPolicy: &iserviceconfig.BalancerConfig{
@@ -625,7 +627,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	}
 
 	// This Update Client Conn State call should cause the first child balancer
-	// to close, and a new child to be created and also forwarded it's first
+	// to close, and a new child to be created and also forwarded its first
 	// config update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
@@ -652,7 +654,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	if _, err = closeCh.Receive(ctx); err != nil {
 		t.Fatalf("timed out waiting for the first child balancer to be closed: %v", err)
 	}
-	// Verify the second child balancer received it's first config update.
+	// Verify the second child balancer received its first config update.
 	if _, err = ccsCh.Receive(ctx); err != nil {
 		t.Fatalf("timed out waiting for UpdateClientConnState on the second child balancer: %v", err)
 	}
@@ -850,7 +852,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 }
 
 func scwsEqual(gotSCWS subConnWithState, wantSCWS subConnWithState) error {
-	if gotSCWS.sc != wantSCWS.sc || !cmp.Equal(gotSCWS.state, wantSCWS.state, cmp.AllowUnexported(subConnWrapper{}, addressInfo{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
+	if gotSCWS.sc != wantSCWS.sc || !cmp.Equal(gotSCWS.state, wantSCWS.state, cmp.AllowUnexported(subConnWrapper{}, addressInfo{}, balancer.SubConnState{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
 		return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCWS, wantSCWS)
 	}
 	return nil

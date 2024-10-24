@@ -22,9 +22,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/test/codec_perf"
+	"google.golang.org/protobuf/proto"
+
+	pb "google.golang.org/grpc/test/codec_perf"
 )
 
 func setupBenchmarkProtoCodecInputs(payloadBaseSize uint32) []proto.Message {
@@ -40,7 +41,7 @@ func setupBenchmarkProtoCodecInputs(payloadBaseSize uint32) []proto.Message {
 	protoStructs := make([]proto.Message, 0)
 
 	for _, p := range payloadSuffixes {
-		ps := &codec_perf.Buffer{}
+		ps := &pb.Buffer{}
 		ps.Body = append(payloadBase, p...)
 		protoStructs = append(protoStructs, ps)
 	}
@@ -67,7 +68,7 @@ func BenchmarkProtoCodec(b *testing.B) {
 			protoStructs := setupBenchmarkProtoCodecInputs(s)
 			name := fmt.Sprintf("MinPayloadSize:%v/SetParallelism(%v)", s, p)
 			b.Run(name, func(b *testing.B) {
-				codec := &codec{}
+				codec := &codecV2{}
 				b.SetParallelism(p)
 				b.RunParallel(func(pb *testing.PB) {
 					benchmarkProtoCodec(codec, protoStructs, pb, b)
@@ -77,7 +78,7 @@ func BenchmarkProtoCodec(b *testing.B) {
 	}
 }
 
-func benchmarkProtoCodec(codec *codec, protoStructs []proto.Message, pb *testing.PB, b *testing.B) {
+func benchmarkProtoCodec(codec *codecV2, protoStructs []proto.Message, pb *testing.PB, b *testing.B) {
 	counter := 0
 	for pb.Next() {
 		counter++
@@ -86,12 +87,12 @@ func benchmarkProtoCodec(codec *codec, protoStructs []proto.Message, pb *testing
 	}
 }
 
-func fastMarshalAndUnmarshal(codec encoding.Codec, protoStruct proto.Message, b *testing.B) {
+func fastMarshalAndUnmarshal(codec encoding.CodecV2, protoStruct proto.Message, b *testing.B) {
 	marshaledBytes, err := codec.Marshal(protoStruct)
 	if err != nil {
 		b.Errorf("codec.Marshal(_) returned an error")
 	}
-	res := codec_perf.Buffer{}
+	res := pb.Buffer{}
 	if err := codec.Unmarshal(marshaledBytes, &res); err != nil {
 		b.Errorf("codec.Unmarshal(_) returned an error")
 	}

@@ -26,12 +26,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
+	pickfirst "google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/fakegrpclb"
-	"google.golang.org/grpc/internal/testutils/pickfirst"
+	pfutil "google.golang.org/grpc/internal/testutils/pickfirst"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -45,12 +46,23 @@ const (
 	loadBalancedServicePort = 443
 	wantGRPCLBTraceDesc     = `Channel switches to new LB policy "grpclb"`
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
+	pickFirstServiceConfig  = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 
 	// This is the number of stub backends set up at the start of each test. The
 	// first backend is used for the "grpclb" policy and the rest are used for
 	// other LB policies to test balancer switching.
 	backendCount = 3
 )
+
+// stubBackendsToResolverAddrs converts from a set of stub server backends to
+// resolver addresses. Useful when pushing addresses to the manual resolver.
+func stubBackendsToResolverAddrs(backends []*stubserver.StubServer) []resolver.Address {
+	addrs := make([]resolver.Address, len(backends))
+	for i, backend := range backends {
+		addrs[i] = resolver.Address{Addr: backend.Address}
+	}
+	return addrs
+}
 
 // setupBackendsAndFakeGRPCLB sets up backendCount number of stub server
 // backends and a fake grpclb server for tests which exercise balancer switch
@@ -93,7 +105,7 @@ func startBackendsForBalancerSwitch(t *testing.T) ([]*stubserver.StubServer, fun
 	backends := make([]*stubserver.StubServer, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 		}
 		if err := backend.StartServer(); err != nil {
 			t.Fatalf("Failed to start backend: %v", err)
@@ -127,7 +139,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +158,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 		Addresses:     addrs,
 		ServiceConfig: parseServiceConfig(t, r, pickFirstServiceConfig),
 	})
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -195,7 +207,7 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	// newly configured backends, as part of the balancer switch.
 	emptyConfig := parseServiceConfig(t, r, `{}`)
 	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: emptyConfig})
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -220,7 +232,7 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: addrs[1:]})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -245,7 +257,7 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	// Switch to "pick_first" again by sending no grpclb server addresses.
 	emptyConfig := parseServiceConfig(t, r, `{}`)
 	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: emptyConfig})
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -308,7 +320,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 }
 
 // TestBalancerSwitch_grpclbNotRegistered tests the scenario where the grpclb
-// balancer is not registered. Verifies that the ClientConn fallbacks to the
+// balancer is not registered. Verifies that the ClientConn falls back to the
 // default LB policy or the LB policy specified in the service config, and that
 // addresses of type "grpclb" are filtered out.
 func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
@@ -333,14 +345,14 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	// apply the grpclb policy. But since grpclb is not registered, it should
 	// fallback to the default LB policy which is pick_first. The ClientConn is
 	// also expected to filter out the grpclb address when sending the addresses
-	// list fo pick_first.
+	// list for pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address"}}
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: grpclbAddr}))
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -374,7 +386,7 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 			close(uccsCalled)
 			return nil
 		},
-		Close: func(data *stub.BalancerData) {
+		Close: func(*stub.BalancerData) {
 			(<-scChan).Shutdown()
 		},
 	})
@@ -468,8 +480,11 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	waitToProceed := make(chan struct{})
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			pf := balancer.Get(grpc.PickFirstBalancerName)
+			pf := balancer.Get(pickfirst.Name)
 			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bal := bd.Data.(balancer.Balancer)
@@ -503,7 +518,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// underlying "pick_first" balancer which will result in a healthy picker
 	// being reported to the channel. RPCs should start using the new balancer.
 	close(waitToProceed)
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
+	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }

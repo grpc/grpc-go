@@ -69,7 +69,7 @@ type testServer struct {
 	testgrpc.UnimplementedBenchmarkServiceServer
 }
 
-func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func (s *testServer) UnaryCall(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{
 		Payload: NewPayload(in.ResponseType, int(in.ResponseSize)),
 	}, nil
@@ -218,7 +218,7 @@ type byteBufServer struct {
 
 // UnaryCall is an empty function and is not used for benchmark.
 // If bytebuf UnaryCall benchmark is needed later, the function body needs to be updated.
-func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+func (s *byteBufServer) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	return &testpb.SimpleResponse{}, nil
 }
 
@@ -276,7 +276,7 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	}
 }
 
-// DoUnaryCall performs an unary RPC with given stub and request and response sizes.
+// DoUnaryCall performs a unary RPC with given stub and request and response sizes.
 func DoUnaryCall(tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) error {
 	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
@@ -318,7 +318,7 @@ func DoStreamingRoundTripPreloaded(stream testgrpc.BenchmarkService_StreamingCal
 }
 
 // DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using a custom codec for byte buffer.
-func DoByteBufStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+func DoByteBufStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, _ int) error {
 	out := make([]byte, reqSize)
 	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)

@@ -127,7 +127,7 @@ func setupBackends(t *testing.T) []string {
 	// Construct and start three working backends.
 	for i := 0; i < numBackends; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 				return &testpb.Empty{}, nil
 			},
 			FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -170,7 +170,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 			}
 			iterations = append(iterations, iteration)
 		}
-		// Ensure the the first iteration contains all addresses in addrs.
+		// Ensure the first iteration contains all addresses in addrs.
 		for _, addr := range iterations[0] {
 			gotAddrCount[addr]++
 		}
@@ -194,13 +194,13 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 // deterministic, allowing the test to make assertions on the distribution.
 func (s) TestLeastRequestE2E(t *testing.T) {
 	defer func(u func() uint32) {
-		grpcranduint32 = u
-	}(grpcranduint32)
+		randuint32 = u
+	}(randuint32)
 	var index int
 	indexes := []uint32{
 		0, 0, 1, 1, 2, 2, // Triggers a round robin distribution.
 	}
-	grpcranduint32 = func() uint32 {
+	randuint32 = func() uint32 {
 		ret := indexes[index%len(indexes)]
 		index++
 		return ret
@@ -232,9 +232,9 @@ func (s) TestLeastRequestE2E(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -310,13 +310,13 @@ func (s) TestLeastRequestE2E(t *testing.T) {
 // previous. Any created streams should then be started on the new backend.
 func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 	defer func(u func() uint32) {
-		grpcranduint32 = u
-	}(grpcranduint32)
+		randuint32 = u
+	}(randuint32)
 	var index int
 	indexes := []uint32{
 		0, 0, 1, 1,
 	}
-	grpcranduint32 = func() uint32 {
+	randuint32 = func() uint32 {
 		ret := indexes[index%len(indexes)]
 		index++
 		return ret
@@ -347,9 +347,9 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -488,9 +488,9 @@ func (s) TestConcurrentRPCs(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

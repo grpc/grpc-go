@@ -39,7 +39,7 @@ type traceInfo struct {
 // about this span into gRPC Metadata.
 func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	// TODO: get consensus on whether this method name of "s.m" is correct.
-	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
+	mn := "Attempt." + strings.ReplaceAll(removeLeadingSlash(rti.FullMethodName), "/", ".")
 	// Returned context is ignored because will populate context with data that
 	// wraps the span instead. Don't set span kind client on this attempt span
 	// to prevent backend from prepending span name with "Sent.".
@@ -57,7 +57,7 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
-	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
+	mn := strings.ReplaceAll(removeLeadingSlash(rti.FullMethodName), "/", ".")
 
 	var span *trace.Span
 	if sc, ok := propagation.FromBinary(stats.Trace(ctx)); ok {
@@ -81,7 +81,7 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // populateSpan populates span information based on stats passed in (invariants
 // of the RPC lifecycle), and also ends span which triggers the span to be
 // exported.
-func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
+func populateSpan(_ context.Context, rs stats.RPCStats, ti *traceInfo) {
 	if ti == nil || ti.span == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.

@@ -25,13 +25,12 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
@@ -75,7 +74,7 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 }
 
 func TestClusterPicks(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -154,7 +153,7 @@ func TestClusterPicks(t *testing.T) {
 // TestConfigUpdateAddCluster covers the cases the balancer receives config
 // update with extra clusters.
 func TestConfigUpdateAddCluster(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -312,7 +311,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 // TestRoutingConfigUpdateDeleteAll covers the cases the balancer receives
 // config update with no clusters. Pick should fail with details in error.
 func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -482,9 +481,8 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	// it in the UpdateClientConnState method.
 	ccsCh := testutils.NewChannel()
 	bOpts := balancer.BuildOptions{
-		DialCreds:        insecure.NewCredentials(),
-		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, 1234, nil),
-		CustomUserAgent:  userAgent,
+		DialCreds:       insecure.NewCredentials(),
+		CustomUserAgent: userAgent,
 	}
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
@@ -498,7 +496,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 		},
 	})
 
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, bOpts)
@@ -558,7 +556,7 @@ func init() {
 // TestInitialIdle covers the case that if the child reports Idle, the overall
 // state will be Idle.
 func TestInitialIdle(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
@@ -605,10 +603,11 @@ func TestInitialIdle(t *testing.T) {
 // it's state and completes the graceful switch process the new picker should
 // reflect this change.
 func TestClusterGracefulSwitch(t *testing.T) {
-	cc := testutils.NewTestClientConn(t)
+	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
 
 	configJSON1 := `{
 "children": {
@@ -644,7 +643,10 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	childPolicyName := t.Name()
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(grpc.PickFirstBalancerName).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			bal := bd.Data.(balancer.Balancer)
@@ -708,20 +710,20 @@ func TestClusterGracefulSwitch(t *testing.T) {
 // tcc wraps a testutils.TestClientConn but stores all state transitions in a
 // slice.
 type tcc struct {
-	*testutils.TestClientConn
+	*testutils.BalancerClientConn
 	states []balancer.State
 }
 
 func (t *tcc) UpdateState(bs balancer.State) {
 	t.states = append(t.states, bs)
-	t.TestClientConn.UpdateState(bs)
+	t.BalancerClientConn.UpdateState(bs)
 }
 
 func (s) TestUpdateStatePauses(t *testing.T) {
-	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+	cc := &tcc{BalancerClientConn: testutils.NewBalancerClientConn(t)}
 
 	balFuncs := stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
 			return nil
@@ -732,6 +734,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
 	bal := builder.Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
 
 	configJSON1 := `{
 "children": {

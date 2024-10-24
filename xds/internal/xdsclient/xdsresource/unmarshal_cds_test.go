@@ -25,10 +25,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -40,8 +41,9 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -50,19 +52,11 @@ const (
 	serviceName = "service"
 )
 
-var emptyUpdate = ClusterUpdate{ClusterName: clusterName, LRSServerConfig: ClusterLRSOff}
-
 func (s) TestValidateCluster_Failure(t *testing.T) {
-	oldCustomLBSupport := envconfig.XDSCustomLBPolicy
-	envconfig.XDSCustomLBPolicy = true
-	defer func() {
-		envconfig.XDSCustomLBPolicy = oldCustomLBSupport
-	}()
 	tests := []struct {
-		name       string
-		cluster    *v3clusterpb.Cluster
-		wantUpdate ClusterUpdate
-		wantErr    bool
+		name    string
+		cluster *v3clusterpb.Cluster
+		wantErr bool
 	}{
 		{
 			name: "non-supported-cluster-type-static",
@@ -77,8 +71,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "non-supported-cluster-type-original-dst",
@@ -93,8 +86,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "no-eds-config",
@@ -102,8 +94,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "no-ads-config-source",
@@ -112,8 +103,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				EdsClusterConfig:     &v3clusterpb.Cluster_EdsClusterConfig{},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "non-round-robin-or-ring-hash-lb-policy",
@@ -128,8 +118,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "logical-dns-multiple-localities",
@@ -145,8 +134,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "ring-hash-hash-function-not-xx-hash",
@@ -158,8 +146,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "least-request-choice-count-less-than-two",
@@ -171,8 +158,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "ring-hash-max-bound-greater-than-upper-bound",
@@ -184,8 +170,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "ring-hash-max-bound-greater-than-upper-bound-load-balancing-policy",
@@ -214,8 +199,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "least-request-unsupported-in-converter-since-env-var-unset",
@@ -240,8 +224,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "aggregate-nil-clusters",
@@ -255,8 +238,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 		{
 			name: "aggregate-empty-clusters",
@@ -272,71 +254,16 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: emptyUpdate,
-			wantErr:    true,
+			wantErr: true,
 		},
 	}
 
-	oldAggregateAndDNSSupportEnv := envconfig.XDSAggregateAndDNS
-	envconfig.XDSAggregateAndDNS = true
-	defer func() { envconfig.XDSAggregateAndDNS = oldAggregateAndDNSSupportEnv }()
-	oldRingHashSupport := envconfig.XDSRingHash
-	envconfig.XDSRingHash = true
-	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
+			if update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil); err == nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error", test.cluster, update)
 			}
 		})
-	}
-}
-
-func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
-	// Turn off the env var protection for client-side security.
-	origClientSideSecurityEnvVar := envconfig.XDSClientSideSecurity
-	envconfig.XDSClientSideSecurity = false
-	defer func() { envconfig.XDSClientSideSecurity = origClientSideSecurityEnvVar }()
-
-	cluster := &v3clusterpb.Cluster{
-		Name:                 clusterName,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-			EdsConfig: &v3corepb.ConfigSource{
-				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-					Ads: &v3corepb.AggregatedConfigSource{},
-				},
-			},
-			ServiceName: serviceName,
-		},
-		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-		TransportSocket: &v3corepb.TransportSocket{
-			Name: "envoy.transport_sockets.tls",
-			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
-					CommonTlsContext: &v3tlspb.CommonTlsContext{
-						ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-							ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-								InstanceName:    "rootInstance",
-								CertificateName: "rootCert",
-							},
-						},
-					},
-				}),
-			},
-		},
-	}
-	wantUpdate := ClusterUpdate{
-		ClusterName:     clusterName,
-		EDSServiceName:  serviceName,
-		LRSServerConfig: ClusterLRSOff,
-	}
-	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
-	if err != nil {
-		t.Errorf("validateClusterAndConstructClusterUpdate() failed: %v", err)
-	}
-	if diff := cmp.Diff(wantUpdate, gotUpdate, cmpopts.IgnoreFields(ClusterUpdate{}, "LBPolicy")); diff != "" {
-		t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, got):\n%s", diff)
 	}
 }
 
@@ -428,7 +355,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 					},
 				},
 			},
-			wantErr: "unsupported require_sugned_ceritificate_timestamp field in CommonTlsContext message",
+			wantErr: "unsupported require_signed_certificate_timestamp field in CommonTlsContext message",
 		},
 		{
 			name: "unsupported-field-crl-in-validation-context",
@@ -941,13 +868,13 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:     clusterName,
-				EDSServiceName:  serviceName,
-				LRSServerConfig: ClusterLRSOff,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -983,13 +910,13 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:     clusterName,
-				EDSServiceName:  serviceName,
-				LRSServerConfig: ClusterLRSOff,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
 				},
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1027,15 +954,15 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:     clusterName,
-				EDSServiceName:  serviceName,
-				LRSServerConfig: ClusterLRSOff,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
 				},
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1075,15 +1002,15 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:     clusterName,
-				EDSServiceName:  serviceName,
-				LRSServerConfig: ClusterLRSOff,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
 				},
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1135,9 +1062,8 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:     clusterName,
-				EDSServiceName:  serviceName,
-				LRSServerConfig: ClusterLRSOff,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -1151,6 +1077,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
@@ -1202,9 +1129,8 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:     clusterName,
-				EDSServiceName:  serviceName,
-				LRSServerConfig: ClusterLRSOff,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -1218,13 +1144,14 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
@@ -1276,11 +1203,82 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 		})
+
+		v3ClusterAnyWithTelemetryLabels = testutils.MarshalAny(t, &v3clusterpb.Cluster{
+			Name:                 v3ClusterName,
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+						Ads: &v3corepb.AggregatedConfigSource{},
+					},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+			Metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"com.google.csm.telemetry_labels": {
+						Fields: map[string]*structpb.Value{
+							"service_name":      structpb.NewStringValue("grpc-service"),
+							"service_namespace": structpb.NewStringValue("grpc-service-namespace"),
+						},
+					},
+				},
+			},
+		})
+		v3ClusterAnyWithTelemetryLabelsIgnoreSome = testutils.MarshalAny(t, &v3clusterpb.Cluster{
+			Name:                 v3ClusterName,
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+						Ads: &v3corepb.AggregatedConfigSource{},
+					},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+			Metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"com.google.csm.telemetry_labels": {
+						Fields: map[string]*structpb.Value{
+							"string-value-should-ignore": structpb.NewStringValue("string-val"),
+							"float-value-ignore":         structpb.NewNumberValue(3),
+							"bool-value-ignore":          structpb.NewBoolValue(false),
+							"service_name":               structpb.NewStringValue("grpc-service"), // shouldn't ignore
+							"service_namespace":          structpb.NewNullValue(),                 // should ignore - wrong type
+						},
+					},
+					"ignore-this-metadata": { // should ignore this filter_metadata
+						Fields: map[string]*structpb.Value{
+							"service_namespace": structpb.NewStringValue("string-val-should-ignore"),
+						},
+					},
+				},
+			},
+		})
 	)
+
+	serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: "test-server"})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
 
 	tests := []struct {
 		name       string
 		resource   *anypb.Any
+		serverCfg  *bootstrap.ServerConfig
 		wantName   string
 		wantUpdate ClusterUpdate
 		wantErr    bool
@@ -1331,33 +1329,74 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "v3 cluster",
-			resource: v3ClusterAny,
-			wantName: v3ClusterName,
+			name:      "v3 cluster",
+			resource:  v3ClusterAny,
+			serverCfg: serverCfg,
+			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
-				ClusterName:    v3ClusterName,
-				EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
-				Raw: v3ClusterAny,
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: serverCfg,
+				Raw:             v3ClusterAny,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
-			name:     "v3 cluster wrapped",
-			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
-			wantName: v3ClusterName,
+			name:      "v3 cluster wrapped",
+			resource:  testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
+			serverCfg: serverCfg,
+			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
-				ClusterName:    v3ClusterName,
-				EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
-				Raw: v3ClusterAny,
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: serverCfg,
+				Raw:             v3ClusterAny,
+				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
 		{
-			name:     "v3 cluster with EDS config source self",
-			resource: v3ClusterAnyWithEDSConfigSourceSelf,
-			wantName: v3ClusterName,
+			name:      "v3 cluster with EDS config source self",
+			resource:  v3ClusterAnyWithEDSConfigSourceSelf,
+			serverCfg: serverCfg,
+			wantName:  v3ClusterName,
 			wantUpdate: ClusterUpdate{
-				ClusterName:    v3ClusterName,
-				EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
-				Raw: v3ClusterAnyWithEDSConfigSourceSelf,
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: serverCfg,
+				Raw:             v3ClusterAnyWithEDSConfigSourceSelf,
+				TelemetryLabels: internal.UnknownCSMLabels,
+			},
+		},
+		{
+			name:      "v3 cluster with telemetry case",
+			resource:  v3ClusterAnyWithTelemetryLabels,
+			serverCfg: serverCfg,
+			wantName:  v3ClusterName,
+			wantUpdate: ClusterUpdate{
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: serverCfg,
+				Raw:             v3ClusterAnyWithTelemetryLabels,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "grpc-service",
+					"csm.service_namespace_name": "grpc-service-namespace",
+				},
+			},
+		},
+		{
+			name:      "v3 metadata ignore other types not string and not com.google.csm.telemetry_labels",
+			resource:  v3ClusterAnyWithTelemetryLabelsIgnoreSome,
+			serverCfg: serverCfg,
+			wantName:  v3ClusterName,
+			wantUpdate: ClusterUpdate{
+				ClusterName:     v3ClusterName,
+				EDSServiceName:  v3Service,
+				LRSServerConfig: serverCfg,
+				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
+				TelemetryLabels: map[string]string{
+					"csm.service_name":           "grpc-service",
+					"csm.service_namespace_name": "unknown",
+				},
 			},
 		},
 		{
@@ -1380,7 +1419,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalClusterResource(test.resource)
+			name, update, err := unmarshalClusterResource(test.resource, test.serverCfg)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("unmarshalClusterResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1549,7 +1588,7 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}

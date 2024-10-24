@@ -26,11 +26,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/rls"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -100,19 +100,13 @@ func (s) TestRLSinxDS(t *testing.T) {
 }
 
 func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
-	oldRLS := envconfig.XDSRLS
-	envconfig.XDSRLS = true
 	internal.RegisterRLSClusterSpecifierPluginForTesting()
-	defer func() {
-		envconfig.XDSRLS = oldRLS
-		internal.UnregisterRLSClusterSpecifierPluginForTesting()
-	}()
+	defer internal.UnregisterRLSClusterSpecifierPluginForTesting()
 
 	// Set up all components and configuration necessary - management server,
 	// xDS resolver, fake RLS Server, and xDS configuration which specifies an
 	// RLS Balancer that communicates to this set up fake RLS Server.
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -148,7 +142,7 @@ func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
 	})
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

@@ -16,7 +16,8 @@
  *
  */
 
-// Binary server is an example server.
+// Binary server demonstrates how to enforce keepalive settings and manage idle
+// connections to maintain active client connections.
 package main
 
 import (
@@ -53,7 +54,7 @@ type server struct {
 	pb.UnimplementedEchoServer
 }
 
-func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *server) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Message: req.Message}, nil
 }
 

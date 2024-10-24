@@ -25,7 +25,7 @@ import (
 
 // buildGetCertificates returns the certificate that matches the SNI field
 // for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
-func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
+func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *Options) (*tls.Certificate, error) {
 	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
 		return nil, fmt.Errorf("function GetCertificates must be specified")
 	}

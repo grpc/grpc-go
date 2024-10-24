@@ -1,6 +1,3 @@
-// TODO(@gregorycooke) - Remove when only golang 1.19+ is supported
-//go:build go1.19
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -29,7 +26,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -40,89 +36,8 @@ import (
 	"testing"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
-
-func TestX509NameHash(t *testing.T) {
-	nameTests := []struct {
-		in  pkix.Name
-		out string
-	}{
-		{
-			in: pkix.Name{
-				Country:      []string{"US"},
-				Organization: []string{"Example"},
-			},
-			out: "9cdd41ff",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"us"},
-				Organization: []string{"example"},
-			},
-			out: "9cdd41ff",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"      us"},
-				Organization: []string{"example"},
-			},
-			out: "9cdd41ff",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"US"},
-				Province:     []string{"California"},
-				Locality:     []string{"Mountain View"},
-				Organization: []string{"BoringSSL"},
-			},
-			out: "c24414d9",
-		},
-		{
-			in: pkix.Name{
-				Country:      []string{"US"},
-				Province:     []string{"California"},
-				Locality:     []string{"Mountain           View"},
-				Organization: []string{"BoringSSL"},
-			},
-			out: "c24414d9",
-		},
-		{
-			in: pkix.Name{
-				SerialNumber: "87f4514475ba0a2b",
-			},
-			out: "9dc713cd",
-		},
-		{
-			in: pkix.Name{
-				Country:            []string{"US"},
-				Province:           []string{"California"},
-				Locality:           []string{"Mountain View"},
-				Organization:       []string{"Google LLC"},
-				OrganizationalUnit: []string{"Production", "campus-sln"},
-				CommonName:         "Root CA (2021-02-02T07:30:36-08:00)",
-			},
-			out: "0b35a562",
-		},
-		{
-			in: pkix.Name{
-				ExtraNames: []pkix.AttributeTypeAndValue{
-					{Type: asn1.ObjectIdentifier{5, 5, 5, 5}, Value: "aaaa"},
-				},
-			},
-			out: "eea339da",
-		},
-	}
-	for _, tt := range nameTests {
-		t.Run(tt.in.String(), func(t *testing.T) {
-			h := x509NameHash(tt.in.ToRDNSequence())
-			if h != tt.out {
-				t.Errorf("x509NameHash(%v): Got %v wanted %v", tt.in, h, tt.out)
-			}
-		})
-	}
-}
 
 func TestUnsupportedCRLs(t *testing.T) {
 	crlBytesSomeReasons := []byte(`-----BEGIN X509 CRL-----
@@ -223,13 +138,12 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 	if err != nil {
 		t.Fatalf("parseRevocationList(dummyCrlFile) failed: %v", err)
 	}
-	crlExt := &certificateListExt{CertList: crl}
-	var crlIssuer pkix.Name = crl.Issuer
+	crlExt := &CRL{certList: crl}
 
 	var revocationTests = []struct {
 		desc    string
 		in      x509.Certificate
-		revoked RevocationStatus
+		revoked revocationStatus
 	}{
 		{
 			desc: "Single revoked",
@@ -290,7 +204,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 		{
 			desc: "Single unrevoked Issuer",
 			in: x509.Certificate{
-				Issuer:                crlIssuer,
+				Issuer:                crl.Issuer,
 				SerialNumber:          big.NewInt(2),
 				CRLDistributionPoints: []string{"test"},
 			},
@@ -338,128 +252,29 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 	return certChain
 }
 
-func loadCRL(t *testing.T, path string) *certificateListExt {
-	b, err := os.ReadFile(path)
+func loadCRL(t *testing.T, path string) *CRL {
+	crl, err := ReadCRLFile(path)
 	if err != nil {
-		t.Fatalf("readFile(%v) failed err = %v", path, err)
+		t.Fatalf("ReadCRLFile(%v) failed err = %v", path, err)
 	}
-	crl, err := parseRevocationList(b)
-	if err != nil {
-		t.Fatalf("parseCrl(%v) failed err = %v", path, err)
-	}
-	crlExt, err := parseCRLExtensions(crl)
-	if err != nil {
-		t.Fatalf("parseCRLExtensions(%v) failed err = %v", path, err)
-	}
-	crlExt.RawIssuer, err = extractCRLIssuer(b)
-	if err != nil {
-		t.Fatalf("extractCRLIssuer(%v) failed err= %v", path, err)
-	}
-	return crlExt
+	return crl
 }
 
-func TestCachedCRL(t *testing.T) {
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("lru.New: err = %v", err)
-	}
-
-	tests := []struct {
-		desc string
-		val  any
-		ok   bool
-	}{
-		{
-			desc: "Valid",
-			val: &certificateListExt{
-				CertList: &x509.RevocationList{
-					NextUpdate: time.Now().Add(time.Hour),
-				}},
-			ok: true,
-		},
-		{
-			desc: "Expired",
-			val: &certificateListExt{
-				CertList: &x509.RevocationList{
-					NextUpdate: time.Now().Add(-time.Hour),
-				}},
-			ok: false,
-		},
-		{
-			desc: "Wrong Type",
-			val:  "string",
-			ok:   false,
-		},
-		{
-			desc: "Empty",
-			val:  nil,
-			ok:   false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			if tt.val != nil {
-				cache.Add(hex.EncodeToString([]byte(tt.desc)), tt.val)
-			}
-			_, ok := cachedCrl([]byte(tt.desc), cache)
-			if tt.ok != ok {
-				t.Errorf("Cache ok error expected %v vs %v", tt.ok, ok)
-			}
-		})
-	}
-}
-
-func TestGetIssuerCRLCache(t *testing.T) {
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("lru.New: err = %v", err)
-	}
-
-	tests := []struct {
-		desc      string
-		rawIssuer []byte
-		certs     []*x509.Certificate
-	}{
-		{
-			desc:      "Valid",
-			rawIssuer: makeChain(t, testdata.Path("crl/unrevoked.pem"))[1].RawIssuer,
-			certs:     makeChain(t, testdata.Path("crl/unrevoked.pem")),
-		},
-		{
-			desc:      "Unverified",
-			rawIssuer: makeChain(t, testdata.Path("crl/unrevoked.pem"))[1].RawIssuer,
-		},
-		{
-			desc:      "Not Found",
-			rawIssuer: []byte("not_found"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			cache.Purge()
-			_, err := fetchIssuerCRL(tt.rawIssuer, tt.certs, RevocationConfig{
-				RootDir: testdata.Path("."),
-				Cache:   cache,
-			})
-			if err == nil && cache.Len() == 0 {
-				t.Error("Verified CRL not added to cache")
-			}
-			if err != nil && cache.Len() != 0 {
-				t.Error("Unverified CRL added to cache")
-			}
-		})
-	}
+func checkRevocation(conn tls.ConnectionState, cfg RevocationOptions) error {
+	return checkChainRevocation(conn.VerifiedChains, cfg)
 }
 
 func TestVerifyCrl(t *testing.T) {
-	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
+	tamperedSignature := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.CertList.Signature[0]++
+	tamperedSignature.certList.Signature[0]++
+	tamperedContent := loadCRL(t, testdata.Path("crl/provider_crl_empty.pem"))
+	// Change the content so it won't find a match
+	tamperedContent.rawIssuer[0]++
 
 	verifyTests := []struct {
 		desc    string
-		crl     *certificateListExt
+		crl     *CRL
 		certs   []*x509.Certificate
 		cert    *x509.Certificate
 		errWant string
@@ -483,27 +298,48 @@ func TestVerifyCrl(t *testing.T) {
 			crl:     loadCRL(t, testdata.Path("crl/3.crl")),
 			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
 			cert:    makeChain(t, testdata.Path("crl/revokedInt.pem"))[1],
-			errWant: "No certificates mached",
+			errWant: "No certificates matched",
 		},
 		{
 			desc:    "Fail no certs",
 			crl:     loadCRL(t, testdata.Path("crl/1.crl")),
 			certs:   []*x509.Certificate{},
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
-			errWant: "No certificates mached",
+			errWant: "No certificates matched",
 		},
 		{
 			desc:    "Fail Tampered signature",
-			crl:     tampered,
+			crl:     tamperedSignature,
 			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
 			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "verification failure",
+		},
+		{
+			desc:    "Fail Tampered content",
+			crl:     tamperedContent,
+			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
+			errWant: "No certificates",
+		},
+		{
+			desc:    "Fail CRL by malicious CA",
+			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_client_trust_cert.pem"))[0],
+			errWant: "verification error",
+		},
+		{
+			desc:    "Fail KeyUsage without cRLSign bit",
+			crl:     loadCRL(t, testdata.Path("crl/provider_malicious_crl_empty.pem")),
+			certs:   makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem")),
+			cert:    makeChain(t, testdata.Path("crl/provider_malicious_client_trust_cert.pem"))[0],
+			errWant: "certificate can't be used",
 		},
 	}
 
 	for _, tt := range verifyTests {
 		t.Run(tt.desc, func(t *testing.T) {
-			err := verifyCRL(tt.crl, tt.cert.RawIssuer, tt.certs)
+			err := verifyCRL(tt.crl, tt.certs)
 			switch {
 			case tt.errWant == "" && err != nil:
 				t.Errorf("Valid CRL did not verify err = %v", err)
@@ -520,16 +356,26 @@ func TestRevokedCert(t *testing.T) {
 	revokedIntChain := makeChain(t, testdata.Path("crl/revokedInt.pem"))
 	revokedLeafChain := makeChain(t, testdata.Path("crl/revokedLeaf.pem"))
 	validChain := makeChain(t, testdata.Path("crl/unrevoked.pem"))
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("lru.New: err = %v", err)
+	rawCRLs := make([][]byte, 6)
+	for i := 1; i <= 6; i++ {
+		rawCRL, err := os.ReadFile(testdata.Path(fmt.Sprintf("crl/%d.crl", i)))
+		if err != nil {
+			t.Fatalf("readFile(%v) failed err = %v", fmt.Sprintf("crl/%d.crl", i), err)
+		}
+		rawCRLs = append(rawCRLs, rawCRL)
 	}
+	staticCRLProvider := NewStaticCRLProvider(rawCRLs)
+	directoryCRLProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: testdata.Path("crl")})
+	if err != nil {
+		t.Fatalf("NewFileWatcherCRLProvider: err = %v", err)
+	}
+	defer directoryCRLProvider.Close()
 
 	var revocationTests = []struct {
-		desc              string
-		in                tls.ConnectionState
-		revoked           bool
-		allowUndetermined bool
+		desc             string
+		in               tls.ConnectionState
+		revoked          bool
+		denyUndetermined bool
 	}{
 		{
 			desc:    "Single unrevoked",
@@ -566,26 +412,37 @@ func TestRevokedCert(t *testing.T) {
 			in: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{
 				{&x509.Certificate{CRLDistributionPoints: []string{"test"}}},
 			}},
-			revoked: true,
+			revoked:          true,
+			denyUndetermined: true,
 		},
 		{
 			desc: "Undetermined allowed",
 			in: tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{
 				{&x509.Certificate{CRLDistributionPoints: []string{"test"}}},
 			}},
-			revoked:           false,
-			allowUndetermined: true,
+			revoked: false,
 		},
 	}
 
 	for _, tt := range revocationTests {
-		t.Run(tt.desc, func(t *testing.T) {
-			err := CheckRevocation(tt.in, RevocationConfig{
-				RootDir:           testdata.Path("crl"),
-				AllowUndetermined: tt.allowUndetermined,
-				Cache:             cache,
+		t.Run(fmt.Sprintf("%v with x509 crl dir", tt.desc), func(t *testing.T) {
+			err := checkRevocation(tt.in, RevocationOptions{
+				CRLProvider:      directoryCRLProvider,
+				DenyUndetermined: tt.denyUndetermined,
 			})
-			t.Logf("CheckRevocation err = %v", err)
+			t.Logf("checkRevocation err = %v", err)
+			if tt.revoked && err == nil {
+				t.Error("Revoked certificate chain was allowed")
+			} else if !tt.revoked && err != nil {
+				t.Error("Unrevoked certificate not allowed")
+			}
+		})
+		t.Run(fmt.Sprintf("%v with static provider", tt.desc), func(t *testing.T) {
+			err := checkRevocation(tt.in, RevocationOptions{
+				DenyUndetermined: tt.denyUndetermined,
+				CRLProvider:      staticCRLProvider,
+			})
+			t.Logf("checkRevocation err = %v", err)
 			if tt.revoked && err == nil {
 				t.Error("Revoked certificate chain was allowed")
 			} else if !tt.revoked && err != nil {
@@ -696,17 +553,22 @@ func TestVerifyConnection(t *testing.T) {
 				t.Fatalf("templ.CreateRevocationList failed err = %v", err)
 			}
 
-			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
+			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", cert.Subject.ToRDNSequence())), crl, 0777)
 			if err != nil {
 				t.Fatalf("os.WriteFile failed err = %v", err)
 			}
 
 			cp := x509.NewCertPool()
 			cp.AddCert(cert)
+			provider, err := NewFileWatcherCRLProvider(FileWatcherOptions{CRLDirectory: dir})
+			if err != nil {
+				t.Errorf("NewFileWatcherCRLProvider: err = %v", err)
+			}
+			defer provider.Close()
 			cliCfg := tls.Config{
 				RootCAs: cp,
 				VerifyConnection: func(cs tls.ConnectionState) error {
-					return CheckRevocation(cs, RevocationConfig{RootDir: dir})
+					return checkRevocation(cs, RevocationOptions{CRLProvider: provider})
 				},
 			}
 			conn, err := tls.Dial(lis.Addr().Network(), lis.Addr().String(), &cliCfg)
@@ -721,56 +583,5 @@ func TestVerifyConnection(t *testing.T) {
 				conn.Close()
 			}
 		})
-	}
-}
-
-func TestIssuerNonPrintableString(t *testing.T) {
-	rawIssuer, err := hex.DecodeString("300c310a300806022a030c023a29")
-	if err != nil {
-		t.Fatalf("failed to decode issuer: %s", err)
-	}
-	_, err = fetchCRL(rawIssuer, RevocationConfig{RootDir: testdata.Path("crl")})
-	if err != nil {
-		t.Fatalf("fetchCRL failed: %s", err)
-	}
-}
-
-// TestCRLCacheExpirationReloading tests the basic expiration and reloading of a
-// cached CRL. The setup places an empty CRL in the cache, and a corresponding
-// CRL with a revocation in the CRL directory. We then validate the certificate
-// to verify that the certificate is not revoked.  Then, we modify the
-// NextUpdate time to be in the past so that when we next check for revocation,
-// the existing cache entry should be seen as expired, and the CRL in the
-// directory showing `revokedInt.pem` as revoked will be loaded, resulting in
-// the check returning `RevocationRevoked`.
-func TestCRLCacheExpirationReloading(t *testing.T) {
-	cache, err := lru.New(5)
-	if err != nil {
-		t.Fatalf("Creating cache failed")
-	}
-
-	var certs = makeChain(t, testdata.Path("crl/revokedInt.pem"))
-	// Certs[1] has the same issuer as the revoked cert
-	rawIssuer := certs[1].RawIssuer
-
-	// `3.crl`` revokes `revokedInt.pem`
-	crl := loadCRL(t, testdata.Path("crl/3.crl"))
-	// Modify the crl so that the cert is NOT revoked and add it to the cache
-	crl.CertList.RevokedCertificates = nil
-	crl.CertList.NextUpdate = time.Now().Add(time.Hour)
-	cache.Add(hex.EncodeToString(rawIssuer), crl)
-	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
-	revocationStatus := checkChain(certs, cfg)
-	if revocationStatus != RevocationUnrevoked {
-		t.Fatalf("Certificate check should be RevocationUnrevoked, was %v", revocationStatus)
-	}
-
-	// Modify the entry in the cache so that the cache will be refreshed
-	crl.CertList.NextUpdate = time.Now()
-	cache.Add(hex.EncodeToString(rawIssuer), crl)
-
-	revocationStatus = checkChain(certs, cfg)
-	if revocationStatus != RevocationRevoked {
-		t.Fatalf("A certificate should have been `RevocationRevoked` but was %v", revocationStatus)
 	}
 }

@@ -34,12 +34,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -88,6 +85,8 @@ var (
 	}
 )
 
+var grpcStatusDetailsBinHeader = "grpc-status-details-bin"
+
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
 // reserved by gRPC protocol. Any other headers are classified as the
 // user-specified metadata.
@@ -103,7 +102,6 @@ func isReservedHeader(hdr string) bool {
 		"grpc-message",
 		"grpc-status",
 		"grpc-timeout",
-		"grpc-status-details-bin",
 		// Intentionally exclude grpc-previous-rpc-attempts and
 		// grpc-retry-pushback-ms, which are "reserved", but their API
 		// intentionally works via metadata.
@@ -152,18 +150,6 @@ func decodeMetadataHeader(k, v string) (string, error) {
 		return string(b), err
 	}
 	return v, nil
-}
-
-func decodeGRPCStatusDetails(rawDetails string) (*status.Status, error) {
-	v, err := decodeBinHeader(rawDetails)
-	if err != nil {
-		return nil, err
-	}
-	st := &spb.Status{}
-	if err = proto.Unmarshal(v, st); err != nil {
-		return nil, err
-	}
-	return status.FromProto(st), nil
 }
 
 type timeoutUnit uint8
@@ -331,28 +317,32 @@ func newBufWriter(conn net.Conn, batchSize int, pool *sync.Pool) *bufWriter {
 	return w
 }
 
-func (w *bufWriter) Write(b []byte) (n int, err error) {
+func (w *bufWriter) Write(b []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
 	if w.batchSize == 0 { // Buffer has been disabled.
-		n, err = w.conn.Write(b)
+		n, err := w.conn.Write(b)
 		return n, toIOError(err)
 	}
 	if w.buf == nil {
 		b := w.pool.Get().(*[]byte)
 		w.buf = *b
 	}
+	written := 0
 	for len(b) > 0 {
-		nn := copy(w.buf[w.offset:], b)
-		b = b[nn:]
-		w.offset += nn
-		n += nn
-		if w.offset >= w.batchSize {
-			err = w.flushKeepBuffer()
+		copied := copy(w.buf[w.offset:], b)
+		b = b[copied:]
+		written += copied
+		w.offset += copied
+		if w.offset < w.batchSize {
+			continue
+		}
+		if err := w.flushKeepBuffer(); err != nil {
+			return written, err
 		}
 	}
-	return n, err
+	return written, nil
 }
 
 func (w *bufWriter) Flush() error {
@@ -403,7 +393,7 @@ type framer struct {
 	fr     *http2.Framer
 }
 
-var writeBufferPoolMap map[int]*sync.Pool = make(map[int]*sync.Pool)
+var writeBufferPoolMap = make(map[int]*sync.Pool)
 var writeBufferMutex sync.Mutex
 
 func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBuffer bool, maxHeaderListSize uint32) *framer {
@@ -432,10 +422,9 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, sharedWriteBu
 	return f
 }
 
-func getWriteBufferPool(writeBufferSize int) *sync.Pool {
+func getWriteBufferPool(size int) *sync.Pool {
 	writeBufferMutex.Lock()
 	defer writeBufferMutex.Unlock()
-	size := writeBufferSize * 2
 	pool, ok := writeBufferPoolMap[size]
 	if ok {
 		return pool

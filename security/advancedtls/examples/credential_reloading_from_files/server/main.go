@@ -47,7 +47,7 @@ type greeterServer struct {
 }
 
 // sayHello is a simple implementation of the pb.GreeterServer SayHello method.
-func (greeterServer) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (greeterServer) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
@@ -76,7 +76,7 @@ func main() {
 	defer rootProvider.Close()
 
 	// Start a server and create a client using advancedtls API with Provider.
-	options := &advancedtls.ServerOptions{
+	options := &advancedtls.Options{
 		IdentityOptions: advancedtls.IdentityCertificateOptions{
 			IdentityProvider: identityProvider,
 		},
@@ -84,12 +84,12 @@ func main() {
 			RootProvider: rootProvider,
 		},
 		RequireClientCert: true,
-		VerifyPeer: func(params *advancedtls.VerificationFuncParams) (*advancedtls.VerificationResults, error) {
+		AdditionalPeerVerification: func(params *advancedtls.HandshakeVerificationInfo) (*advancedtls.PostHandshakeVerificationResults, error) {
 			// This message is to show the certificate under the hood is actually reloaded.
 			fmt.Printf("Client common name: %s.\n", params.Leaf.Subject.CommonName)
-			return &advancedtls.VerificationResults{}, nil
+			return &advancedtls.PostHandshakeVerificationResults{}, nil
 		},
-		VType: advancedtls.CertVerification,
+		VerificationType: advancedtls.CertVerification,
 	}
 	serverTLSCreds, err := advancedtls.NewServerCreds(options)
 	if err != nil {

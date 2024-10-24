@@ -19,26 +19,23 @@ jobs:
   vet-proto:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      VET_ONLY_PROTO: 1
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       # Setup the environment.
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-      - name: Checkout repo
-        uses: actions/checkout@v3
+          go-version: '1.22'
+          cache-dependency-path: "**/go.sum"
 
-      # Run the vet checks.
-      - name: vet
-        run: ./vet.sh -install && ./vet.sh
+      # Run the vet-proto checks.
+      - name: vet-proto
+        run: ./scripts/vet-proto.sh -install && ./scripts/vet-proto.sh
 
   # Run the main gRPC-Go tests.
   tests:
-    # Proto checks are run in the above job.
-    env:
-      VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -46,31 +43,37 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: '1.21'
+            goversion: '1.22'
+
+          - type: extras
+            goversion: '1.22'
 
           - type: tests
-            goversion: '1.21'
+            goversion: '1.22'
 
           - type: tests
-            goversion: '1.21'
+            goversion: '1.22'
             testflags: -race
 
           - type: tests
-            goversion: '1.21'
+            goversion: '1.22'
+            testflags: '-race -tags=buffer_pooling'
+
+          - type: tests
+            goversion: '1.22'
             goarch: 386
 
           - type: tests
-            goversion: '1.21'
+            goversion: '1.22'
             goarch: arm64
 
           - type: tests
-            goversion: '1.20'
+            goversion: '1.21'
 
           - type: tests
-            goversion: '1.19'
-
-          - type: extras
-            goversion: '1.21'
+            goversion: '1.22'
+            testflags: -race
+            grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=true'
 
     steps:
       # Setup the environment.
@@ -82,24 +85,25 @@ jobs:
         if: matrix.goarch == 'arm64'
         # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
         # are automatically executed using qemu.
-        run: docker run --rm --privileged multiarch/qemu-user-static:5.2.0-2 --reset --credential yes --persistent yes
+        run: docker run --rm --privileged multiarch/qemu-user-static:7.2.0-1 --reset --credential yes --persistent yes
 
       - name: Setup GRPC environment
         if: matrix.grpcenv != ''
         run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
 
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.goversion }}
-
-      - name: Checkout repo
-        uses: actions/checkout@v3
+          cache-dependency-path: "**/*go.sum"
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
         if: matrix.type == 'vet'
-        run: ./vet.sh -install && ./vet.sh
+        run: ./scripts/vet.sh -install && ./scripts/vet.sh
 
       # Main tests run for everything except when testing "extras"
       # (where we run a reduced set of tests).
@@ -129,3 +133,6 @@ jobs:
           interop/interop_test.sh
           echo -e "\n-- Running xDS E2E Test --"
           xds/internal/test/e2e/run.sh
+          echo -e "\n-- Running protoc-gen-go-grpc test --"
+          ./scripts/vet-proto.sh -install
+          cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh

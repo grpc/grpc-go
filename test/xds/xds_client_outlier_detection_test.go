@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/peer"
@@ -50,8 +51,7 @@ import (
 // Detection balancer. This test verifies that an RPC is able to proceed
 // normally with this configuration.
 func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
@@ -75,7 +75,7 @@ func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -136,7 +136,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 			}
 			iterations = append(iterations, iteration)
 		}
-		// Ensure the the first iteration contains all addresses in addrs.
+		// Ensure the first iteration contains all addresses in addrs.
 		gotAddrCount := make(map[string]int)
 		for _, addr := range iterations[0] {
 			gotAddrCount[addr]++
@@ -162,8 +162,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 // the unhealthy upstream is ejected, RPC's should regularly round robin across
 // all three upstreams.
 func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
-	managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// Working backend 1.
 	backend1 := stubserver.StartTestService(t, nil)
@@ -204,7 +203,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -244,8 +243,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 // Detection present in the CDS update, but with SuccessRateEjection unset, and
 // asserts that Outlier Detection is turned on and ejects upstreams.
 func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
-	managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup()
+	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	// Working backend 1.
 	backend1 := stubserver.StartTestService(t, nil)
@@ -291,7 +289,7 @@ func (s) TestOutlierDetectionXDSDefaultOn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

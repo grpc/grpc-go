@@ -74,11 +74,12 @@ func channelzTraceEventFound(ctx context.Context, wantDesc string) error {
 		if l := len(tcs); l != 1 {
 			return fmt.Errorf("when looking for channelz trace event with description %q, found %d top-level channels, want 1", wantDesc, l)
 		}
-		if tcs[0].Trace == nil {
+		trace := tcs[0].Trace()
+		if trace == nil {
 			return fmt.Errorf("when looking for channelz trace event with description %q, no trace events found for top-level channel", wantDesc)
 		}
 
-		for _, e := range tcs[0].Trace.Events {
+		for _, e := range trace.Events {
 			if strings.Contains(e.Desc, wantDesc) {
 				return nil
 			}
@@ -487,9 +488,9 @@ func (s) TestChannelIdleness_Enabled_IdleTimeoutRacesWithRPCs(t *testing.T) {
 		grpc.WithIdleTimeout(defaultTestShortTimeout),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -530,9 +531,9 @@ func (s) TestChannelIdleness_Connect(t *testing.T) {
 		grpc.WithIdleTimeout(defaultTestShortIdleTimeout),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -580,18 +581,14 @@ func (s) TestChannelIdleness_RaceBetweenEnterAndExitIdleMode(t *testing.T) {
 		grpc.WithIdleTimeout(30 * time.Minute),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"pick_first":{}}]}`),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
-	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn) error)
-	enterIdleFunc := func() {
-		if err := enterIdle(cc); err != nil {
-			t.Errorf("Failed to enter idle mode: %v", err)
-		}
-	}
+	enterIdle := internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))
+	enterIdleFunc := func() { enterIdle(cc) }
 	exitIdle := internal.ExitIdleModeForTesting.(func(*grpc.ClientConn) error)
 	exitIdleFunc := func() {
 		if err := exitIdle(cc); err != nil {

@@ -191,7 +191,7 @@ func (vi *viewInformation) Equal(vi2 *viewInformation) bool {
 }
 
 // distributionDataLatencyCount checks if the view information contains the
-// desired distrubtion latency total count that falls in buckets of 5 seconds or
+// desired distribution latency total count that falls in buckets of 5 seconds or
 // less. This must be called with non nil view information that is aggregated
 // with distribution data. Returns a nil error if correct count information
 // found, non nil error if correct information not found.
@@ -307,7 +307,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer view.UnregisterExporter(fe)
 
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, 10000),
 			}}, nil
@@ -351,7 +351,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	wantMetrics := []struct {
 		metric   *view.View
 		wantVI   *viewInformation
-		wantTags [][]tag.Tag // for non determinstic (i.e. latency) metrics. First dimension represents rows.
+		wantTags [][]tag.Tag // for non deterministic (i.e. latency) metrics. First dimension represents rows.
 	}{
 		{
 			metric: ClientStartedRPCsView,
@@ -1060,7 +1060,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 // TestOpenCensusTags tests this instrumentation code's ability to propagate
 // OpenCensus tags across the wire. It also tests the server stats handler's
 // functionality of adding the server method tag for the application to see. The
-// test makes an Unary RPC without a tag map and with a tag map, and expects to
+// test makes a Unary RPC without a tag map and with a tag map, and expects to
 // see a tag map at the application layer with server method tag in the first
 // case, and a tag map at the application layer with the populated tag map plus
 // server method tag in second case.
@@ -1072,7 +1072,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 	// populated at the client side application layer if populated.
 	tmCh := testutils.NewChannel()
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			// Do the sends of the tag maps for assertions in this main testing
 			// goroutine. Do the receives and assertions in a forked goroutine.
 			if tm := tag.FromContext(ctx); tm != nil {
@@ -1113,7 +1113,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 				readerErrCh.Send(fmt.Errorf("no key: %v present in OpenCensus tag map", keyServerMethod.Name()))
 			}
 			if val != unaryCallMethodName {
-				readerErrCh.Send(fmt.Errorf("serverMethod receieved: %v, want server method: %v", val, unaryCallMethodName))
+				readerErrCh.Send(fmt.Errorf("serverMethod received: %v, want server method: %v", val, unaryCallMethodName))
 			}
 		} else {
 			readerErrCh.Send(fmt.Errorf("error while waiting for a tag map: %v", err))
@@ -1404,7 +1404,7 @@ func (s) TestSpan(t *testing.T) {
 		DisableTrace: false,
 	}
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {

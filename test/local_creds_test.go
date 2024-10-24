@@ -41,7 +41,7 @@ import (
 
 func testLocalCredsE2ESucceed(network, address string) error {
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			pr, ok := peer.FromContext(ctx)
 			if !ok {
 				return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
@@ -89,11 +89,11 @@ func testLocalCredsE2ESucceed(network, address string) error {
 	switch network {
 	case "unix":
 		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
-			func(ctx context.Context, addr string) (net.Conn, error) {
+			func(_ context.Context, addr string) (net.Conn, error) {
 				return net.Dial("unix", addr)
 			}))
 	case "tcp":
-		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
+		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	default:
 		return fmt.Errorf("unsupported network %q", network)
 	}
@@ -191,7 +191,7 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 
 	go s.Serve(spoofListener(lis, fakeClientAddr))
 
-	cc, err := grpc.Dial(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
+	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {
 		return fmt.Errorf("Failed to dial server: %v, %v", err, lis.Addr().String())
 	}

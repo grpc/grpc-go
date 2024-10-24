@@ -293,7 +293,7 @@ type RunData struct {
 	Fiftieth time.Duration
 	// Ninetieth is the 90th percentile latency.
 	Ninetieth time.Duration
-	// Ninetyninth is the 99th percentile latency.
+	// NinetyNinth is the 99th percentile latency.
 	NinetyNinth time.Duration
 	// Average is the average latency.
 	Average time.Duration
@@ -493,11 +493,4 @@ func (s *Stats) dump(result *BenchResults) {
 	b.WriteString(fmt.Sprintf("Number of requests:  %v\tRequest throughput:  %v bit/s\n", req, result.Data.ReqT))
 	b.WriteString(fmt.Sprintf("Number of responses: %v\tResponse throughput: %v bit/s\n", resp, result.Data.RespT))
 	fmt.Println(b.String())
-}
-
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }

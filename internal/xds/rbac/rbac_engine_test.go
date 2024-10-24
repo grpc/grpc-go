@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
@@ -35,7 +36,6 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
@@ -46,7 +46,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -316,7 +319,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "MatcherToNotPrinicipal",
+			name: "MatcherToNotPrincipal",
 			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
@@ -333,7 +336,7 @@ func (s) TestNewChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// PrinicpalProductViewer tests the construction of a chained engine
+		// PrincipalProductViewer tests the construction of a chained engine
 		// with a policy that allows any downstream to send a GET request on a
 		// certain path.
 		{
@@ -1742,14 +1745,15 @@ func (s) TestChainEngine(t *testing.T) {
 			}
 			// Query the created chain of RBAC Engines with different args to see
 			// if the chain of RBAC Engines configured as such works as intended.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 			for _, data := range test.rbacQueries {
 				func() {
 					// Construct the context with three data points that have enough
 					// information to represent incoming RPC's. This will be how a
 					// user uses this API. A user will have to put MD, PeerInfo, and
 					// the connection the RPC is sent on in the context.
-					ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md)
-
+					ctx = metadata.NewIncomingContext(ctx, data.rpcData.md)
 					// Make a TCP connection with a certain destination port. The
 					// address/port of this connection will be used to populate the
 					// destination ip/port in RPCData struct. This represents what
@@ -1808,15 +1812,15 @@ func (sts *ServerTransportStreamWithMethod) Method() string {
 	return sts.method
 }
 
-func (sts *ServerTransportStreamWithMethod) SetHeader(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SetHeader(metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SendHeader(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SendHeader(metadata.MD) error {
 	return nil
 }
 
-func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
+func (sts *ServerTransportStreamWithMethod) SetTrailer(metadata.MD) error {
 	return nil
 }
 
@@ -1840,11 +1844,11 @@ type TestAuditLoggerBufferConfig struct {
 	audit.LoggerConfig
 }
 
-func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(configJSON json.RawMessage) (config audit.LoggerConfig, err error) {
+func (b *TestAuditLoggerBufferBuilder) ParseLoggerConfig(json.RawMessage) (config audit.LoggerConfig, err error) {
 	return TestAuditLoggerBufferConfig{}, nil
 }
 
-func (b *TestAuditLoggerBufferBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerBufferBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerBuffer{auditEvents: &b.auditEvents}
 }
 
@@ -1881,7 +1885,7 @@ func (b TestAuditLoggerCustomConfigBuilder) ParseLoggerConfig(configJSON json.Ra
 	return c, nil
 }
 
-func (b *TestAuditLoggerCustomConfigBuilder) Build(config audit.LoggerConfig) audit.Logger {
+func (b *TestAuditLoggerCustomConfigBuilder) Build(audit.LoggerConfig) audit.Logger {
 	return &TestAuditLoggerCustomConfig{}
 }
 

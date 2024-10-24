@@ -24,12 +24,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/resolver"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -83,7 +86,7 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 
 	// Map from stream id to a map of resource type to resource version.
 	ackVersionsMap := make(map[int64]map[string]string)
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
+	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			// Return early under the following circumstances:
@@ -122,7 +125,19 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 			streamRestarted.Fire()
 		},
 	})
-	defer cleanup1()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var xdsResolver resolver.Builder
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
 
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
@@ -142,7 +157,7 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

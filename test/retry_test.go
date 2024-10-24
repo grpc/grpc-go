@@ -30,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,6 +38,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -226,7 +226,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		}
 	}
 	sErr := func(c codes.Code) serverOp {
-		return func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		return func(testgrpc.TestService_FullDuplexCallServer) error {
 			return status.New(c, "this is a test error").Err()
 		}
 	}
@@ -455,7 +455,7 @@ func (s) TestRetryStreaming(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		func() {
 			serverOpIter = 0
 			serverOps = tc.serverOps
@@ -464,14 +464,105 @@ func (s) TestRetryStreaming(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%v: Error while creating stream: %v", tc.desc, err)
 			}
-			for _, op := range tc.clientOps {
+			for j, op := range tc.clientOps {
 				if err := op(stream); err != nil {
-					t.Errorf("%v: %v", tc.desc, err)
+					t.Errorf("%d %d %v: %v", i, j, tc.desc, err)
 					break
 				}
 			}
 			if serverOpIter != len(serverOps) {
 				t.Errorf("%v: serverOpIter = %v; want %v", tc.desc, serverOpIter, len(serverOps))
+			}
+		}()
+	}
+}
+
+func (s) TestMaxCallAttempts(t *testing.T) {
+	testCases := []struct {
+		serviceMaxAttempts int
+		clientMaxAttempts  int
+		expectedAttempts   int
+	}{
+		{serviceMaxAttempts: 9, clientMaxAttempts: 4, expectedAttempts: 4},
+		{serviceMaxAttempts: 9, clientMaxAttempts: 7, expectedAttempts: 7},
+		{serviceMaxAttempts: 3, clientMaxAttempts: 10, expectedAttempts: 3},
+		{serviceMaxAttempts: 8, clientMaxAttempts: -1, expectedAttempts: 5}, // 5 is default max
+		{serviceMaxAttempts: 3, clientMaxAttempts: 0, expectedAttempts: 3},
+	}
+
+	for _, tc := range testCases {
+		clientOpts := []grpc.DialOption{
+			grpc.WithMaxCallAttempts(tc.clientMaxAttempts),
+			grpc.WithDefaultServiceConfig(fmt.Sprintf(`{
+				"methodConfig": [{
+					"name": [{"service": "grpc.testing.TestService"}],
+					"waitForReady": true,
+					"retryPolicy": {
+						"MaxAttempts": %d,
+						"InitialBackoff": ".01s",
+						"MaxBackoff": ".01s",
+						"BackoffMultiplier": 1.0,
+						"RetryableStatusCodes": [ "UNAVAILABLE" ]
+					}
+					}]}`, tc.serviceMaxAttempts),
+			),
+		}
+
+		streamCallCount := 0
+		unaryCallCount := 0
+
+		ss := &stubserver.StubServer{
+			FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
+				streamCallCount++
+				return status.New(codes.Unavailable, "this is a test error").Err()
+			},
+			EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+				unaryCallCount++
+				return nil, status.New(codes.Unavailable, "this is a test error").Err()
+			},
+		}
+
+		func() {
+
+			if err := ss.Start([]grpc.ServerOption{}, clientOpts...); err != nil {
+				t.Fatalf("Error starting endpoint server: %v", err)
+			}
+			defer ss.Stop()
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			for {
+				if ctx.Err() != nil {
+					t.Fatalf("Timed out waiting for service config update")
+				}
+				if ss.CC.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+
+			// Test streaming RPC
+			stream, err := ss.Client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Fatalf("Error while creating stream: %v", err)
+			}
+			if got, err := stream.Recv(); err == nil {
+				t.Fatalf("client: Recv() = %s, %v; want <nil>, error", got, err)
+			} else if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: Recv() = _, %v; want _, Unavailable", err)
+			}
+			if streamCallCount != tc.expectedAttempts {
+				t.Fatalf("stream expectedAttempts = %v; want %v", streamCallCount, tc.expectedAttempts)
+			}
+
+			// Test unary RPC
+			if ugot, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+				t.Fatalf("client: EmptyCall() = %s, %v; want <nil>, error", ugot, err)
+			} else if status.Code(err) != codes.Unavailable {
+				t.Fatalf("client: EmptyCall() = _, %v; want _, Unavailable", err)
+			}
+			if unaryCallCount != tc.expectedAttempts {
+				t.Fatalf("unary expectedAttempts = %v; want %v", unaryCallCount, tc.expectedAttempts)
 			}
 		}()
 	}
@@ -531,7 +622,7 @@ func (s) TestRetryStats(t *testing.T) {
 	}
 	server.start(t, lis)
 	handler := &retryStatsHandler{}
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(handler),
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(handler),
 		grpc.WithDefaultServiceConfig((`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],

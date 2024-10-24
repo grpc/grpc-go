@@ -210,7 +210,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 }
 
 // TestAuthorityReplacedWithResolverAddress tests the scenario where the resolver
-// returned address contains a ServerName override. The test verifies that the the
+// returned address contains a ServerName override. The test verifies that the
 // :authority header value sent to the server as part of the http/2 HEADERS frame
 // is set to the value specified in the resolver returned address.
 func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
@@ -228,9 +228,9 @@ func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address, ServerName: expectedAuthority}}})
-	cc, err := grpc.Dial(r.Scheme()+":///whatever", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///whatever", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%q) = %v", ss.Address, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
 	}
 	defer cc.Close()
 

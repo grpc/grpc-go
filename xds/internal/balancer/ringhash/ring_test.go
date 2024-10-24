@@ -38,9 +38,9 @@ func init() {
 		testAddr("c", 4),
 	}
 	testSubConnMap = resolver.NewAddressMap()
-	testSubConnMap.Set(testAddrs[0], &subConn{addr: "a"})
-	testSubConnMap.Set(testAddrs[1], &subConn{addr: "b"})
-	testSubConnMap.Set(testAddrs[2], &subConn{addr: "c"})
+	testSubConnMap.Set(testAddrs[0], &subConn{addr: "a", weight: 3})
+	testSubConnMap.Set(testAddrs[1], &subConn{addr: "b", weight: 3})
+	testSubConnMap.Set(testAddrs[2], &subConn{addr: "c", weight: 4})
 }
 
 func testAddr(addr string, weight uint32) resolver.Address {
@@ -55,7 +55,7 @@ func (s) TestRingNew(t *testing.T) {
 				r := newRing(testSubConnMap, min, max, nil)
 				totalCount := len(r.items)
 				if totalCount < int(min) || totalCount > int(max) {
-					t.Fatalf("unexpect size %v, want min %v, max %v", totalCount, min, max)
+					t.Fatalf("unexpected size %v, want min %v, max %v", totalCount, min, max)
 				}
 				for _, a := range testAddrs {
 					var count int

@@ -37,7 +37,7 @@ func init() {
 
 type orcabb struct{}
 
-func (orcabb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (orcabb) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	return &orcab{cc: cc}
 }
 
@@ -46,9 +46,8 @@ func (orcabb) Name() string {
 }
 
 type orcab struct {
-	cc          balancer.ClientConn
-	sc          balancer.SubConn
-	cancelWatch func()
+	cc balancer.ClientConn
+	sc balancer.SubConn
 
 	reportMu sync.Mutex
 	report   *v3orcapb.OrcaLoadReport
@@ -70,7 +69,6 @@ func (o *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("error creating subconn: %v", err))})
 		return nil
 	}
-	o.cancelWatch = orca.RegisterOOBListener(o.sc, o, orca.OOBListenerOptions{ReportInterval: time.Second})
 	o.sc.Connect()
 	o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: base.NewErrPicker(balancer.ErrNoSubConnAvailable)})
 	return nil
@@ -89,6 +87,7 @@ func (o *orcab) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnSt
 func (o *orcab) updateSubConnState(state balancer.SubConnState) {
 	switch state.ConnectivityState {
 	case connectivity.Ready:
+		orca.RegisterOOBListener(o.sc, o, orca.OOBListenerOptions{ReportInterval: time.Second})
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &orcaPicker{o: o}})
 	case connectivity.TransientFailure:
 		o.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: base.NewErrPicker(fmt.Errorf("all subchannels in transient failure: %v", state.ConnectionError))})
@@ -102,9 +101,7 @@ func (o *orcab) updateSubConnState(state balancer.SubConnState) {
 	}
 }
 
-func (o *orcab) Close() {
-	o.cancelWatch()
-}
+func (o *orcab) Close() {}
 
 func (o *orcab) OnLoadReport(r *v3orcapb.OrcaLoadReport) {
 	o.reportMu.Lock()

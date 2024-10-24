@@ -37,7 +37,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -529,11 +528,6 @@ func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 // TestNewFilterChainImpl_Success_RouteUpdate tests the construction of the
 // filter chain with valid HTTP Filters present.
 func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	tests := []struct {
 		name   string
 		lis    *v3listenerpb.Listener
@@ -769,11 +763,6 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 // TestNewFilterChainImpl_Failure_BadRouteUpdate verifies cases where the Route
 // Update in the filter chain are invalid.
 func (s) TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	tests := []struct {
 		name    string
 		lis     *v3listenerpb.Listener
@@ -981,11 +970,6 @@ func (s) TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 // TestNewFilterChainImpl_Success_HTTPFilters tests the construction of the
 // filter chain with valid HTTP Filters present.
 func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	tests := []struct {
 		name   string
 		lis    *v3listenerpb.Listener
@@ -1304,11 +1288,6 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 // TestNewFilterChainImpl_Success_SecurityConfig verifies cases where the
 // security configuration in the filter chain contains valid data.
 func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	tests := []struct {
 		desc   string
 		lis    *v3listenerpb.Listener
@@ -1536,11 +1515,6 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 // success at config validation time and the filter chains which contains
 // unsupported match fields will be skipped at lookup time.
 func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	unspecifiedEntry := &destPrefixEntry{
 		srcTypeArr: [3]*sourcePrefixes{
 			{
@@ -1706,11 +1680,6 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 // TestNewFilterChainImpl_Success_AllCombinations verifies different
 // combinations of the supported match criteria.
 func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	tests := []struct {
 		desc   string
 		lis    *v3listenerpb.Listener
@@ -2357,11 +2326,6 @@ func (s) TestLookup_Failures(t *testing.T) {
 }
 
 func (s) TestLookup_Successes(t *testing.T) {
-	oldRBAC := envconfig.XDSRBAC
-	envconfig.XDSRBAC = true
-	defer func() {
-		envconfig.XDSRBAC = oldRBAC
-	}()
 	lisWithDefaultChain := &v3listenerpb.Listener{
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
@@ -2771,14 +2735,14 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			fc := FilterChain{
 				HTTPFilters: test.filters,
 			}
-			vhswi, err := fc.ConstructUsableRouteConfiguration(test.routeConfig)
-			if err != nil {
-				t.Fatalf("Error constructing usable route configuration: %v", err)
+			urc := fc.ConstructUsableRouteConfiguration(test.routeConfig)
+			if urc.Err != nil {
+				t.Fatalf("Error constructing usable route configuration: %v", urc.Err)
 			}
 			// Build out list of errors by iterating through the virtual hosts and routes,
 			// and running the filters in route configurations.
 			var errs []string
-			for _, vh := range vhswi {
+			for _, vh := range urc.VHS {
 				for _, r := range vh.Routes {
 					for _, int := range r.Interceptors {
 						errs = append(errs, int.AllowRPC(context.Background()).Error())
@@ -2795,23 +2759,42 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 // The Equal() methods defined below help with using cmp.Equal() on these types
 // which contain all unexported fields.
 
-func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
-	if (fci == nil) != (other == nil) {
+func (fcm *FilterChainManager) Equal(other *FilterChainManager) bool {
+	if (fcm == nil) != (other == nil) {
 		return false
 	}
-	if fci == nil {
+	if fcm == nil {
 		return true
 	}
 	switch {
-	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
+	case !cmp.Equal(fcm.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
 		return false
 	// TODO: Support comparing dstPrefixes slice?
-	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
+	case !cmp.Equal(fcm.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
 		return false
-	case !cmp.Equal(fci.RouteConfigNames, other.RouteConfigNames, cmpopts.EquateEmpty()):
+	case !cmp.Equal(fcm.RouteConfigNames, other.RouteConfigNames, cmpopts.EquateEmpty()):
 		return false
 	}
 	return true
+}
+
+func (fc *FilterChain) Equal(other *FilterChain) bool {
+	if (fc == nil) != (other == nil) {
+		return false
+	}
+	if fc == nil {
+		return true
+	}
+	if !cmp.Equal(fc.SecurityCfg, other.SecurityCfg, cmpopts.EquateEmpty()) {
+		return false
+	}
+	if !cmp.Equal(fc.RouteConfigName, other.RouteConfigName) {
+		return false
+	}
+	if !cmp.Equal(fc.HTTPFilters, other.HTTPFilters, cmpopts.EquateEmpty(), protocmp.Transform()) {
+		return false
+	}
+	return cmp.Equal(fc.InlineRouteConfig, other.InlineRouteConfig, cmpopts.EquateEmpty())
 }
 
 func (dpe *destPrefixEntry) Equal(other *destPrefixEntry) bool {
@@ -2862,28 +2845,28 @@ func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
 // The String() methods defined below help with debugging test failures as the
 // regular %v or %+v formatting directives do not expands pointer fields inside
 // structs, and these types have a lot of pointers pointing to other structs.
-func (fci *FilterChainManager) String() string {
-	if fci == nil {
+func (fcm *FilterChainManager) String() string {
+	if fcm == nil {
 		return ""
 	}
 
 	var sb strings.Builder
-	if fci.dstPrefixMap != nil {
+	if fcm.dstPrefixMap != nil {
 		sb.WriteString("destination_prefix_map: map {\n")
-		for k, v := range fci.dstPrefixMap {
+		for k, v := range fcm.dstPrefixMap {
 			sb.WriteString(fmt.Sprintf("%q: %v\n", k, v))
 		}
 		sb.WriteString("}\n")
 	}
-	if fci.dstPrefixes != nil {
+	if fcm.dstPrefixes != nil {
 		sb.WriteString("destination_prefixes: [")
-		for _, p := range fci.dstPrefixes {
+		for _, p := range fcm.dstPrefixes {
 			sb.WriteString(fmt.Sprintf("%v ", p))
 		}
 		sb.WriteString("]")
 	}
-	if fci.def != nil {
-		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fci.def))
+	if fcm.def != nil {
+		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fcm.def))
 	}
 	return sb.String()
 }
@@ -2944,11 +2927,11 @@ func (spe *sourcePrefixEntry) String() string {
 	return sb.String()
 }
 
-func (f *FilterChain) String() string {
-	if f == nil || f.SecurityCfg == nil {
+func (fc *FilterChain) String() string {
+	if fc == nil || fc.SecurityCfg == nil {
 		return ""
 	}
-	return fmt.Sprintf("security_config: %v", f.SecurityCfg)
+	return fmt.Sprintf("security_config: %v", fc.SecurityCfg)
 }
 
 func ipNetFromCIDR(cidr string) *net.IPNet {

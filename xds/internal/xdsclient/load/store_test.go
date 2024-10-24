@@ -99,7 +99,12 @@ func TestLocalityStats(t *testing.T) {
 		wantStoreData = &Data{
 			LocalityStats: map[string]LocalityData{
 				localities[0]: {
-					RequestStats: RequestData{Succeeded: 20, Errored: 10, InProgress: 10},
+					RequestStats: RequestData{
+						Succeeded:  20,
+						Errored:    10,
+						InProgress: 10,
+						Issued:     40,
+					},
 					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 20, Sum: 20},
 						"disk": {Count: 20, Sum: 40},
@@ -108,7 +113,12 @@ func TestLocalityStats(t *testing.T) {
 					},
 				},
 				localities[1]: {
-					RequestStats: RequestData{Succeeded: 40, Errored: 20, InProgress: 20},
+					RequestStats: RequestData{
+						Succeeded:  40,
+						Errored:    20,
+						InProgress: 20,
+						Issued:     80,
+					},
 					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 40, Sum: 40},
 						"disk": {Count: 40, Sum: 80},
@@ -162,7 +172,7 @@ func TestLocalityStats(t *testing.T) {
 
 func TestResetAfterStats(t *testing.T) {
 	// Push a bunch of drops, call stats and load stats, and leave inProgress to be non-zero.
-	// Dump the stats. Verify expexted
+	// Dump the stats. Verify expected
 	// Push the same set of loads as before
 	// Now dump and verify the newly expected ones.
 	var (
@@ -192,7 +202,13 @@ func TestResetAfterStats(t *testing.T) {
 			},
 			LocalityStats: map[string]LocalityData{
 				localities[0]: {
-					RequestStats: RequestData{Succeeded: 20, Errored: 10, InProgress: 10},
+					RequestStats: RequestData{
+						Succeeded:  20,
+						Errored:    10,
+						InProgress: 10,
+						Issued:     40,
+					},
+
 					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 20, Sum: 20},
 						"disk": {Count: 20, Sum: 40},
@@ -201,7 +217,13 @@ func TestResetAfterStats(t *testing.T) {
 					},
 				},
 				localities[1]: {
-					RequestStats: RequestData{Succeeded: 40, Errored: 20, InProgress: 20},
+					RequestStats: RequestData{
+						Succeeded:  40,
+						Errored:    20,
+						InProgress: 20,
+						Issued:     80,
+					},
+
 					LoadStats: map[string]ServerLoadData{
 						"net":  {Count: 40, Sum: 40},
 						"disk": {Count: 40, Sum: 80},
@@ -298,7 +320,7 @@ func TestStoreStats(t *testing.T) {
 			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
 			LocalityStats: map[string]LocalityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1},
+					RequestStats: RequestData{Succeeded: 1, Issued: 1},
 					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
 				},
 			},
@@ -308,7 +330,7 @@ func TestStoreStats(t *testing.T) {
 			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
 			LocalityStats: map[string]LocalityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1},
+					RequestStats: RequestData{Succeeded: 1, Issued: 1},
 					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
 				},
 			},
@@ -327,7 +349,7 @@ func TestStoreStats(t *testing.T) {
 			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
 			LocalityStats: map[string]LocalityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1},
+					RequestStats: RequestData{Succeeded: 1, Issued: 1},
 					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
 				},
 			},
@@ -337,7 +359,7 @@ func TestStoreStats(t *testing.T) {
 			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
 			LocalityStats: map[string]LocalityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1},
+					RequestStats: RequestData{Succeeded: 1, Issued: 1},
 					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
 				},
 			},
@@ -347,7 +369,7 @@ func TestStoreStats(t *testing.T) {
 			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
 			LocalityStats: map[string]LocalityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1},
+					RequestStats: RequestData{Succeeded: 1, Issued: 1},
 					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
 				},
 			},
@@ -357,7 +379,7 @@ func TestStoreStats(t *testing.T) {
 			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
 			LocalityStats: map[string]LocalityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1},
+					RequestStats: RequestData{Succeeded: 1, Issued: 1},
 					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
 				},
 			},
@@ -394,25 +416,25 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 		{
 			Cluster: "c0", Service: "s0",
 			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{Succeeded: 1}},
+				"test-locality": {RequestStats: RequestData{Succeeded: 1, Issued: 1}},
 			},
 		},
 		{
 			Cluster: "c0", Service: "s1",
 			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{Succeeded: 1}},
+				"test-locality": {RequestStats: RequestData{Succeeded: 1, Issued: 1}},
 			},
 		},
 		{
 			Cluster: "c1", Service: "s0",
 			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+				"test-locality": {RequestStats: RequestData{InProgress: 1, Issued: 1}},
 			},
 		},
 		{
 			Cluster: "c1", Service: "s1",
 			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+				"test-locality": {RequestStats: RequestData{InProgress: 1, Issued: 1}},
 			},
 		},
 	}

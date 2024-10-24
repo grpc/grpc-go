@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -65,7 +66,7 @@ func makeLogicalDNSClusterResource(name, dnsHost string, dnsPort uint32) *v3clus
 // Tests the case where the cluster resource requested by the cds LB policy is a
 // leaf cluster. The management server sends two updates for the same leaf
 // cluster resource. The test verifies that the load balancing configuration
-// pushed to the cluster_resolver LB policy is contains the expected discovery
+// pushed to the cluster_resolver LB policy contains the expected discovery
 // mechanism corresponding to the leaf cluster, on both occasions.
 func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	tests := []struct {
@@ -85,6 +86,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName,
 					OutlierDetection: json.RawMessage(`{}`),
+					TelemetryLabels:  internal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -94,6 +96,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName:   serviceName + "-new",
 					OutlierDetection: json.RawMessage(`{}`),
+					TelemetryLabels:  internal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -108,6 +111,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname:      "dns_host:8080",
 					OutlierDetection: json.RawMessage(`{}`),
+					TelemetryLabels:  internal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -117,6 +121,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 					Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname:      "dns_host_new:8080",
 					OutlierDetection: json.RawMessage(`{}`),
+					TelemetryLabels:  internal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 			},
@@ -211,12 +216,14 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 				EDSServiceName:   serviceName,
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 			{
 				Cluster:          dnsClusterName,
 				Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname:      fmt.Sprintf("%s:%d", dnsHostName, dnsPort),
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 		},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
@@ -247,12 +254,14 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 				EDSServiceName:   serviceName,
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 			{
 				Cluster:          dnsClusterNameNew,
 				Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname:      fmt.Sprintf("%s:%d", dnsHostNameNew, dnsPort),
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 		},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
@@ -298,12 +307,14 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 				EDSServiceName:   serviceName,
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 			{
 				Cluster:          dnsClusterName,
 				Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname:      fmt.Sprintf("%s:%d", dnsHostName, dnsPort),
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 		},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
@@ -329,6 +340,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 			Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 			EDSServiceName:   serviceName,
 			OutlierDetection: json.RawMessage(`{}`),
+			TelemetryLabels:  internal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
@@ -363,6 +375,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 			Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 			EDSServiceName:   serviceName,
 			OutlierDetection: json.RawMessage(`{}`),
+			TelemetryLabels:  internal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
@@ -391,12 +404,14 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 				EDSServiceName:   serviceName,
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 			{
 				Cluster:          dnsClusterName,
 				Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname:      fmt.Sprintf("%s:%d", dnsHostName, dnsPort),
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 		},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
@@ -420,6 +435,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 			Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 			EDSServiceName:   serviceName,
 			OutlierDetection: json.RawMessage(`{}`),
+			TelemetryLabels:  internal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
@@ -429,7 +445,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 }
 
 // Tests the scenario where an aggregate cluster exceeds the maximum depth,
-// which is 16. Verfies that the channel moves to TRANSIENT_FAILURE, and the
+// which is 16. Verifies that the channel moves to TRANSIENT_FAILURE, and the
 // error is propagated to RPC callers. The test then modifies the graph to no
 // longer exceed maximum depth, but be at the maximum allowed depth, and
 // verifies that an RPC can be made successfully.
@@ -572,6 +588,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 			Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 			EDSServiceName:   serviceName,
 			OutlierDetection: json.RawMessage(`{}`),
+			TelemetryLabels:  internal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
@@ -584,7 +601,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // C]; B->[C, D]). Verifies that the load balancing configuration pushed to the
 // cluster_resolver LB policy does not contain duplicates, and that the
 // discovery mechanism corresponding to cluster C is of higher priority than the
-// discovery mechanism for cluser D. Also verifies that the configuration is
+// discovery mechanism for cluster D. Also verifies that the configuration is
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
@@ -639,12 +656,14 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 				EDSServiceName:   serviceName,
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 			{
 				Cluster:          clusterNameD,
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 				EDSServiceName:   serviceName,
 				OutlierDetection: json.RawMessage(`{}`),
+				TelemetryLabels:  internal.UnknownCSMLabels,
 			},
 		},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
@@ -659,7 +678,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // cluster (EDS or Logical DNS), no configuration should be pushed to the child
 // policy.  The channel is expected to move to TRANSIENT_FAILURE and RPCs are
 // expected to fail with code UNAVAILABLE and an error message specifying that
-// the aggregate cluster grpah no leaf clusters.  Then the test updates A -> B,
+// the aggregate cluster graph has no leaf clusters.  Then the test updates A -> B,
 // where B is a leaf EDS cluster. Verifies that configuration is pushed to the
 // child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
@@ -727,6 +746,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 			Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 			EDSServiceName:   serviceName,
 			OutlierDetection: json.RawMessage(`{}`),
+			TelemetryLabels:  internal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}
@@ -832,6 +852,7 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 			Type:             clusterresolver.DiscoveryMechanismTypeEDS,
 			EDSServiceName:   serviceName,
 			OutlierDetection: json.RawMessage(`{}`),
+			TelemetryLabels:  internal.UnknownCSMLabels,
 		}},
 		XDSLBPolicy: json.RawMessage(`[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]`),
 	}

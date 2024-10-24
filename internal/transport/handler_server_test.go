@@ -31,12 +31,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	dpb "github.com/golang/protobuf/ptypes/duration"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
@@ -50,15 +52,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 	}
 	tests := []testCase{
 		{
-			name: "http/1.1",
-			req: &http.Request{
-				ProtoMajor: 1,
-				ProtoMinor: 1,
-			},
-			wantErr:     "gRPC requires HTTP/2",
-			wantErrCode: http.StatusBadRequest,
-		},
-		{
 			name: "bad method",
 			req: &http.Request{
 				ProtoMajor: 2,
@@ -66,7 +59,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Header:     http.Header{},
 			},
 			wantErr:     `invalid gRPC request method "GET"`,
-			wantErrCode: http.StatusBadRequest,
+			wantErrCode: http.StatusMethodNotAllowed,
 		},
 		{
 			name: "bad content type",
@@ -81,6 +74,17 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 			wantErrCode: http.StatusUnsupportedMediaType,
 		},
 		{
+			name: "http/1.1",
+			req: &http.Request{
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+				Method:     "POST",
+				Header:     http.Header{"Content-Type": []string{"application/grpc"}},
+			},
+			wantErr:     "gRPC requires HTTP/2",
+			wantErrCode: http.StatusHTTPVersionNotSupported,
+		},
+		{
 			name: "not flusher",
 			req: &http.Request{
 				ProtoMajor: 2,
@@ -93,7 +97,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				// Return w without its Flush method
 				type onlyCloseNotifier interface {
 					http.ResponseWriter
-					http.CloseNotifier
 				}
 				return struct{ onlyCloseNotifier }{w.(onlyCloseNotifier)}
 			},
@@ -135,7 +138,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					Path: "/service/foo.bar",
 				},
 			},
-			check: func(t *serverHandlerTransport, tt *testCase) error {
+			check: func(t *serverHandlerTransport, _ *testCase) error {
 				if !t.timeoutSet {
 					return errors.New("timeout not set")
 				}
@@ -176,7 +179,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					Path: "/service/foo.bar",
 				},
 			},
-			check: func(ht *serverHandlerTransport, tt *testCase) error {
+			check: func(ht *serverHandlerTransport, _ *testCase) error {
 				want := metadata.MD{
 					"meta-bar":     {"bar-val1", "bar-val2"},
 					"user-agent":   {"x/y a/b"},
@@ -185,7 +188,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				}
 
 				if !reflect.DeepEqual(ht.headerMD, want) {
-					return fmt.Errorf("metdata = %#v; want %#v", ht.headerMD, want)
+					return fmt.Errorf("metadata = %#v; want %#v", ht.headerMD, want)
 				}
 				return nil
 			},
@@ -196,13 +199,12 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 		rrec := httptest.NewRecorder()
 		rw := http.ResponseWriter(testHandlerResponseWriter{
 			ResponseRecorder: rrec,
-			closeNotify:      make(chan bool, 1),
 		})
 
 		if tt.modrw != nil {
 			rw = tt.modrw(rw)
 		}
-		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil)
+		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil, mem.DefaultBufferPool())
 		if (gotErr != nil) != (tt.wantErr != "") || (gotErr != nil && gotErr.Error() != tt.wantErr) {
 			t.Errorf("%s: error = %q; want %q", tt.name, gotErr.Error(), tt.wantErr)
 			continue
@@ -227,16 +229,13 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 
 type testHandlerResponseWriter struct {
 	*httptest.ResponseRecorder
-	closeNotify chan bool
 }
 
-func (w testHandlerResponseWriter) CloseNotify() <-chan bool { return w.closeNotify }
-func (w testHandlerResponseWriter) Flush()                   {}
+func (w testHandlerResponseWriter) Flush() {}
 
 func newTestHandlerResponseWriter() http.ResponseWriter {
 	return testHandlerResponseWriter{
 		ResponseRecorder: httptest.NewRecorder(),
-		closeNotify:      make(chan bool, 1),
 	}
 }
 
@@ -261,7 +260,7 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, nil)
+	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +313,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
 	}
 	st.ht.HandleStreams(
-		func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *Stream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":          nil,
@@ -347,7 +346,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 		st.ht.WriteStatus(s, status.New(statusCode, msg))
 	}
 	st.ht.HandleStreams(
-		func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *Stream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -376,7 +375,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
-	ht, err := NewServerHandlerTransport(rw, req, nil)
+	ht, err := NewServerHandlerTransport(rw, req, nil, mem.DefaultBufferPool())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +395,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		ht.WriteStatus(s, status.New(codes.DeadlineExceeded, "too slow"))
 	}
 	ht.HandleStreams(
-		func(s *Stream) { go runStream(s) },
+		context.Background(), func(s *Stream) { go runStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -441,21 +440,21 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 		st.bodyw.Close() // no body
 
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
-		st.ht.Write(s, []byte("hdr"), []byte("data"), &Options{})
+		st.ht.Write(s, []byte("hdr"), newBufferSlice([]byte("data")), &Options{})
 	})
 }
 
 func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handleStreamTest, s *Stream)) {
 	st := newHandleStreamTest(t)
 	st.ht.HandleStreams(
-		func(s *Stream) { go handleStream(st, s) },
+		context.Background(), func(s *Stream) { go handleStream(st, s) },
 	)
 }
 
 func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
-	errDetails := []proto.Message{
+	errDetails := []protoadapt.MessageV1{
 		&epb.RetryInfo{
-			RetryDelay: &dpb.Duration{Seconds: 60},
+			RetryDelay: &durationpb.Duration{Seconds: 60},
 		},
 		&epb.ResourceInfo{
 			ResourceType: "foo bar",
@@ -481,7 +480,7 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 		hst.ht.WriteStatus(s, st)
 	}
 	hst.ht.HandleStreams(
-		func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *Stream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
