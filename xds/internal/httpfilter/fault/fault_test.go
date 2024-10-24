@@ -26,7 +26,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
+	rand "math/rand/v2"
 	"net"
 	"reflect"
 	"testing"
@@ -471,7 +471,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer func() { randIntn = rand.Intn; newTimer = time.NewTimer }()
+			defer func() { randIntn = rand.IntN; newTimer = time.NewTimer }()
 			var intnCalls []int
 			var newTimerCalls []time.Duration
 			randOut := 0

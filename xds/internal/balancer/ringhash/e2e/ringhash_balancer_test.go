@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	rand "math/rand/v2"
 	"net"
 	"slices"
 	"testing"
