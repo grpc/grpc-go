@@ -33,10 +33,8 @@ jobs:
           BEFORE="$(mktemp -d)"
           AFTER="$(mktemp -d)"
 
-          cp scripts/gen-deps.sh /tmp/  # TODO: delete
           scripts/gen-deps.sh "${AFTER}"
           git checkout origin/master
-          cp /tmp/gen-deps.sh scripts/  # TODO: delete
           scripts/gen-deps.sh "${BEFORE}"
 
           echo "Comparing dependencies..."
