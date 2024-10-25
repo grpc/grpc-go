@@ -349,7 +349,7 @@ func (s *StreamImpl) sendNew(stream transport.StreamingCall, typ xdsresource.Typ
 		return nil
 	}
 
-	return s.sendMessageIfWritePending(stream, typ, state)
+	return s.sendMessageIfWritePendingLocked(stream, typ, state)
 }
 
 // sendExisting sends out discovery requests for existing resources when
@@ -379,7 +379,7 @@ func (s *StreamImpl) sendExisting(stream transport.StreamingCall) error {
 		}
 
 		state.pendingWrite = true
-		if err := s.sendMessageIfWritePending(stream, typ, state); err != nil {
+		if err := s.sendMessageIfWritePendingLocked(stream, typ, state); err != nil {
 			return err
 		}
 	}
@@ -398,7 +398,7 @@ func (s *StreamImpl) sendBuffered(stream transport.StreamingCall) error {
 	for typ, state := range s.resourceTypeState {
 		select {
 		case <-state.bufferedRequests:
-			if err := s.sendMessageIfWritePending(stream, typ, state); err != nil {
+			if err := s.sendMessageIfWritePendingLocked(stream, typ, state); err != nil {
 				return err
 			}
 		default:
@@ -409,14 +409,14 @@ func (s *StreamImpl) sendBuffered(stream transport.StreamingCall) error {
 	return nil
 }
 
-// sendMessageIfWritePending attempts to sends a discovery request to the
+// sendMessageIfWritePendingLocked attempts to sends a discovery request to the
 // server, if there is a pending write for the given resource type.
 //
 // If the request is successfully sent, the pending write field is cleared and
 // watch timers are started for the resources in the request.
 //
 // Caller needs to hold c.mu.
-func (s *StreamImpl) sendMessageIfWritePending(stream transport.StreamingCall, typ xdsresource.Type, state *resourceTypeState) error {
+func (s *StreamImpl) sendMessageIfWritePendingLocked(stream transport.StreamingCall, typ xdsresource.Type, state *resourceTypeState) error {
 	if !state.pendingWrite {
 		if s.logger.V(2) {
 			s.logger.Infof("Skipping sending request for type %q, because all subscribed resources were already sent", typ.TypeURL())
