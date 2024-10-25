@@ -17,6 +17,10 @@ E.g.:
   protoc --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false[,other options...] \
 ```
 
+**Using of --go-grpc_out and --go-grpc_opt**
+- `--go-grpc_out=<output-directory>`: This option specifies the output directory for the generated Go gRPC code. The value should be the directory where you want the generated files to be placed (e.g., `.` for the current directory).
+- `--go-grpc_opt=<options>`: This option is used to pass additional settings for code generation, such as configuring compatibility behavior or specifying file path rules. Multiple options can be passed by separating them with commas.
+
 Note that this is not recommended, and the option is only provided to restore
 backward compatibility with previously-generated code.
 
