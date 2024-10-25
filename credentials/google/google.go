@@ -39,8 +39,8 @@ var logger = grpclog.Component("credentials")
 type DefaultCredentialsOptions struct {
 	// PerRPCCreds is a per RPC credentials that is passed to a bundle.
 	PerRPCCreds credentials.PerRPCCredentials
-	// ALTSRPCCreds is a per RPC credentials that, if specified, will supercede
-	// PerRPCCreds above for and only for ALTS connections.
+	// ALTSPerRPCCreds is a per RPC credentials that, if specified, will
+	// supercede PerRPCCreds above for and only for ALTS connections.
 	ALTSPerRPCCreds credentials.PerRPCCredentials
 }
 
