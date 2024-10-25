@@ -50,17 +50,19 @@ func NewCustomCarrier(ctx context.Context) *CustomCarrier {
 }
 
 // Get returns the string value associated with the passed key from the gRPC
-// context. It returns an empty string if the key is not present in the
-// context or if the value associated with the key is empty.
+// context. It returns an empty string in any of the following cases:
+// - the key is not present in the context
+// - the value associated with the key is empty
+// - the key ends with "-bin" and is not `grpc-trace-bin`
 //
 // If the key is `grpc-trace-bin`, it retrieves the binary value using
 // `c.GetBinary()` and then base64 encodes it before returning. For all other
-// keys, it retrieves the value from the context's metadata.
+// string keys, it retrieves the value from the context's metadata.
 func (c *CustomCarrier) Get(key string) string {
 	if key == GRPCTraceBinHeaderKey {
 		return base64.StdEncoding.EncodeToString(c.GetBinary())
 	}
-	if strings.HasSuffix(key, "bin") && key != GRPCTraceBinHeaderKey {
+	if strings.HasSuffix(key, "-bin") && key != GRPCTraceBinHeaderKey {
 		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
 		return ""
 	}
@@ -77,7 +79,8 @@ func (c *CustomCarrier) Get(key string) string {
 }
 
 // Set stores the key-value pair in the gRPC context. If the key already
-// exists, its value will be overwritten.
+// exists, its value will be overwritten. If the key ends with "-bin" and is
+// not `grpc-trace-bin`, the key-value pair is not stored.
 //
 // If the key is `grpc-trace-bin`, it base64 decodes the `value` and stores the
 // resulting binary data using `c.SetBinary()`. For all other keys, it stores
@@ -92,7 +95,7 @@ func (c *CustomCarrier) Set(key, value string) {
 		c.SetBinary(b)
 		return
 	}
-	if strings.HasSuffix(key, "bin") && key != GRPCTraceBinHeaderKey {
+	if strings.HasSuffix(key, "-bin") && key != GRPCTraceBinHeaderKey {
 		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
 		return
 	}
@@ -108,7 +111,7 @@ func (c *CustomCarrier) Set(key, value string) {
 // GetBinary returns the binary value from the gRPC context in the incoming
 // RPC, associated with the header `grpc-trace-bin`. If header is not found or
 // is empty, it returns nil.
-func (c CustomCarrier) GetBinary() []byte {
+func (c *CustomCarrier) GetBinary() []byte {
 	values := stats.Trace(c.ctx)
 	if len(values) == 0 {
 		return nil
