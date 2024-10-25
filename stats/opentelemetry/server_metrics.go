@@ -68,8 +68,8 @@ func (h *serverStatsHandler) initializeMetrics() {
 }
 
 func (h *serverStatsHandler) initializeTracing() {
-	// Will set no metrics to record, logically making this stats handler a
-	// no-op.
+	// Will set no traces to record if tracing is disabled, logically
+	// making this stats handler a no-op.
 	if !isTracingDisabled(h.options.TraceOptions) {
 		return
 	}
@@ -209,7 +209,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 	}
 
-	var ti *traceInfo
+	var ti *attemptTraceSpan
 	if !isTracingDisabled(h.options.TraceOptions) {
 		ctx, ti = h.traceTagRPC(ctx, info)
 	}

@@ -9,53 +9,47 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 	"google.golang.org/grpc/status"
 )
 
-// traceInfo is data used for recording traces.
-type traceInfo struct {
+// attemptTraceSpan is data used for recording traces. It holds a reference to the
+// current span, message counters for sent and received messages (used for
+// generating message IDs), and the number of previous RPC attempts for the
+// associated call.
+type attemptTraceSpan struct {
 	span                trace.Span
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRpcAttempts uint32
-	isTransparentRetry  bool
 }
 
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
-func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptTraceSpan) {
 	if csh.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
 	}
 
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		return ctx, nil
-	}
-
 	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
-
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn)
 
 	carrier := otelinternaltracing.NewCustomCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
-	return metadata.NewOutgoingContext(ctx, md), // Return a new context with the updated metadata
-		&traceInfo{
-			span:         span,
-			countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
-			countRecvMsg: 0,
-		}
+	return carrier.Context(), &attemptTraceSpan{
+		span:         span,
+		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
+		countRecvMsg: 0,
+	}
 }
 
 // traceTagRPC populates context with new span data, with a parent based on the
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
-func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptTraceSpan) {
 	if ssh.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
 	}
@@ -68,17 +62,18 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	// Span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
 	ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
-	return ctx, &traceInfo{
+	return ctx, &attemptTraceSpan{
 		span:         span,
 		countSentMsg: 0,
 		countRecvMsg: 0,
 	}
 }
 
-// populateSpan populates span information based on stats passed in (invariants
-// of the RPC lifecycle), and also ends span which triggers the span to be
-// exported.
-func populateSpan(_ context.Context, rs stats.RPCStats, ti *traceInfo) {
+// populateSpan populates span information based on stats passed in, representing
+// invariants of the RPC lifecycle. It ends the span, triggering its export.
+// This function handles attempt spans on the client-side and call spans on the
+// server-side.
+func populateSpan(_ context.Context, rs stats.RPCStats, ti *attemptTraceSpan) {
 	if ti == nil || ti.span == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.
@@ -96,7 +91,7 @@ func populateSpan(_ context.Context, rs stats.RPCStats, ti *traceInfo) {
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.Client),
 			attribute.Int64("previous-rpc-attempts", int64(ti.previousRpcAttempts)),
-			attribute.Bool("transparent-retry", ti.isTransparentRetry),
+			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
 		// increment previous rpc attempts applicable for next attempt
 		atomic.AddUint32(&ti.previousRpcAttempts, 1)

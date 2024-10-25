@@ -74,8 +74,8 @@ func (h *clientStatsHandler) initializeMetrics() {
 }
 
 func (h *clientStatsHandler) initializeTracing() {
-	// Will set no traces to record, logically making this stats handler a
-	// no-op.
+	// Will set no traces to record if either of (TraceProvider, TextMapPropagator)
+	// are nil, logically making this stats handler a no-op.
 	if h.options.TraceOptions.TracerProvider == nil || h.options.TraceOptions.TextMapPropagator == nil {
 		return
 	}
@@ -145,15 +145,15 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, span trace.Span) {
+func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
 	s := status.Convert(err)
-	if span != nil {
+	if !isTracingDisabled(h.options.TraceOptions) && ts != nil {
 		if s.Code() == grpccodes.OK {
-			span.SetStatus(otelcodes.Ok, s.Message())
+			ts.SetStatus(otelcodes.Ok, s.Message())
 		} else {
-			span.SetStatus(otelcodes.Error, s.Message())
+			ts.SetStatus(otelcodes.Error, s.Message())
 		}
-		span.End()
+		ts.End()
 	}
 	if !isMetricsDisabled(h.options.MetricsOptions) {
 		callLatency := float64(time.Since(startTime)) / float64(time.Second)
@@ -204,7 +204,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	var ti *traceInfo
+	var ti *attemptTraceSpan
 	if !isTracingDisabled(h.options.TraceOptions) {
 		callSpan := trace.SpanFromContext(ctx)
 		if info.NameResolutionDelay {

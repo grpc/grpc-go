@@ -206,7 +206,7 @@ type attemptInfo struct {
 	pluginOptionLabels map[string]string // pluginOptionLabels to attach to metrics emitted
 	xdsLabels          map[string]string
 
-	ti *traceInfo
+	ti *attemptTraceSpan
 }
 
 type clientMetrics struct {

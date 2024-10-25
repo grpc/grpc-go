@@ -40,10 +40,11 @@ type RPCTagInfo struct {
 	FailFast bool
 	// NameResolutionDelay indicates whether there was a delay in name
 	// resolution.
+	//
 	// This field is only valid on client side, it's always false on server side.
 	NameResolutionDelay bool
-	// IsTransparentRetry indicates whether there was a delay in name
-	// resolution.
+	// IsTransparentRetry indicates whether the stream is undergoing a
+	// transparent retry.
 	IsTransparentRetry bool
 }
 
