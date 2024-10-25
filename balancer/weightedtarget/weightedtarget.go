@@ -99,7 +99,10 @@ func LocalityFromResolverState(state resolver.State) string {
 // creates/deletes sub-balancers and sends them update. addresses are split into
 // groups based on hierarchy path.
 func (b *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
+	if b.logger.V(2) {
+		b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
+	}
+
 	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
