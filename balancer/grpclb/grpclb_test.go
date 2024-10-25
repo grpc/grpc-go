@@ -827,6 +827,9 @@ func (s) TestGRPCLB_Fallback(t *testing.T) {
 	defer stopBackends(standaloneBEs)
 
 	r := manual.NewBuilderWithScheme("whatever")
+	// Set the initial resolver state with fallback backend address stored in
+	// the `Addresses` field and an invalid remote balancer address stored in
+	// attributes, which will cause fallback behavior to be invoked.
 	rs := resolver.State{
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbConfig),
