@@ -644,7 +644,7 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	testutils.AwaitState(shortCtx, t, cc, connectivity.Idle)
 
 	mr.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: backend.Address}}, // Delivering the address
+		Addresses: []resolver.Address{{Addr: backend.Address}},
 	})
 
 	// Check that the channel transitions to CONNECTING then READY
