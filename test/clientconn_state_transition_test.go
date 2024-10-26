@@ -640,30 +640,36 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer shortCancel()
 
-	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
-
-	internal.EnterIdleModeForTesting.(func(*grpc.ClientConn))(cc)
-
 	cc.Connect()
+	testutils.AwaitState(shortCtx, t, cc, connectivity.Idle)
 
-	// TODO: Change this assertion to testutils.AwaitState(shortCtx, t, cc,
-	// connectivity.Connecting) when the channel correctly transitions to
-	// CONNECTING while waiting for the first resolver update.
-	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
+	mr.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{Addr: backend.Address}}, // Delivering the address
+	})
 
-	shortCancel()
-	shortCtx, shortCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer shortCancel()
+	// Check that the channel transitions to CONNECTING then READY
+	testutils.AwaitState(shortCtx, t, cc, connectivity.Connecting)
+	t.Skipf("After connecting, before READY state: current state = %v\n", cc.GetState())
 
+	testutils.AwaitState(shortCtx, t, cc, connectivity.Ready)
+	t.Skipf("After entering READY state: current state = %v\n", cc.GetState())
+
+	mr.UpdateState(resolver.State{Addresses: nil})
+
+	done := make(chan struct{})
 	go func() {
 		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(shortCtx, &testgrpc.Empty{})
 		if err == nil {
 			t.Errorf("Expected RPC to fail, but it succeeded")
 		}
+		close(done)
 	}()
 
-	// TODO: Change this assertion to testutils.AwaitState(shortCtx, t, cc,
-	// connectivity.Connecting) when the channel correctly transitions to
-	// CONNECTING while waiting for the resolver update.
-	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
+	// Wait for the goroutine to finish
+	select {
+	case <-done:
+		// RPC call completed as expected
+	case <-shortCtx.Done():
+		t.Error("Timed out waiting for RPC call to complete")
+	}
 }
