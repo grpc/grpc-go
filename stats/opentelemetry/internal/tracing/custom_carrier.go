@@ -56,11 +56,11 @@ func NewCustomCarrier(ctx context.Context) *CustomCarrier {
 // - the key ends with "-bin" and is not `grpc-trace-bin`
 //
 // If the key is `grpc-trace-bin`, it retrieves the binary value using
-// `c.GetBinary()` and then base64 encodes it before returning. For all other
+// `stats.Trace()` and then base64 encodes it before returning. For all other
 // string keys, it retrieves the value from the context's metadata.
 func (c *CustomCarrier) Get(key string) string {
 	if key == GRPCTraceBinHeaderKey {
-		return base64.StdEncoding.EncodeToString(c.GetBinary())
+		return base64.StdEncoding.EncodeToString(stats.Trace(c.ctx))
 	}
 	if strings.HasSuffix(key, "-bin") && key != GRPCTraceBinHeaderKey {
 		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
@@ -83,7 +83,7 @@ func (c *CustomCarrier) Get(key string) string {
 // not `grpc-trace-bin`, the key-value pair is not stored.
 //
 // If the key is `grpc-trace-bin`, it base64 decodes the `value` and stores the
-// resulting binary data using `c.SetBinary()`. For all other keys, it stores
+// resulting binary data using `stats.SetTrace()`. For all other keys, it stores
 // the key-value pair in the string format in context's metadata.
 func (c *CustomCarrier) Set(key, value string) {
 	if key == GRPCTraceBinHeaderKey {
@@ -92,7 +92,7 @@ func (c *CustomCarrier) Set(key, value string) {
 			logger.Errorf("encountered error in decoding %s value", GRPCTraceBinHeaderKey)
 			return
 		}
-		c.SetBinary(b)
+		c.ctx = stats.SetTrace(c.ctx, b)
 		return
 	}
 	if strings.HasSuffix(key, "-bin") && key != GRPCTraceBinHeaderKey {
@@ -128,9 +128,12 @@ func (c *CustomCarrier) SetBinary(value []byte) {
 // Keys returns the keys stored in the carrier's context.
 func (c *CustomCarrier) Keys() []string {
 	md, _ := metadata.FromOutgoingContext(c.ctx)
-	keys := make([]string, 0, len(md))
+	keys := make([]string, 0, len(md)+1) // +1 for grpc-trace-bin (if present)
 	for k := range md {
 		keys = append(keys, k)
+	}
+	if stats.OutgoingTrace(c.ctx) != nil {
+		keys = append(keys, GRPCTraceBinHeaderKey) // add grpc-trace-bin key if grpc-trace-bin is present in the context
 	}
 	return keys
 }
