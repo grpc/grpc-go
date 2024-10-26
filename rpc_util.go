@@ -876,31 +876,29 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	if err != nil {
 		return nil, 0, err
 	}
+	bufferSize := 32 * 1024
 
-	// TODO: Can/should this still be preserved with the new BufferSlice API? Are
-	//  there any actual benefits to allocating a single large buffer instead of
-	//  multiple smaller ones?
-	//if sizer, ok := compressor.(interface {
-	//	DecompressedSize(compressedBytes []byte) int
-	//}); ok {
-	//	if size := sizer.DecompressedSize(d); size >= 0 {
-	//		if size > maxReceiveMessageSize {
-	//			return nil, size, nil
-	//		}
-	//		// size is used as an estimate to size the buffer, but we
-	//		// will read more data if available.
-	//		// +MinRead so ReadFrom will not reallocate if size is correct.
-	//		//
-	//		// TODO: If we ensure that the buffer size is the same as the DecompressedSize,
-	//		// we can also utilize the recv buffer pool here.
-	//		buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
-	//		bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
-	//		return buf.Bytes(), int(bytesRead), err
-	//	}
-	//}
+	if sizer, ok := compressor.(interface {
+		DecompressedSize(compressedBytes []byte) int
+	}); ok {
+		if size := sizer.DecompressedSize(d.Materialize()); size >= 0 {
+			if size > maxReceiveMessageSize {
+				return nil, size, nil
+			}
+			// size is used as an estimate to size the buffer, but we
+			// will read more data if available
+			// If the size is < 32Kb, we reduce the buffer size to the decompressed size
+			if size < bufferSize {
+				bufferSize = size
+			}
+		}
+	}
 
 	var out mem.BufferSlice
-	_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	buff := pool.Get(bufferSize)
+	b := mem.NewBuffer(buff, pool)
+	_, err = io.CopyBuffer(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1), *buff)
+	b.Free()
 	if err != nil {
 		out.Free()
 		return nil, 0, err

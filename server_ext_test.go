@@ -20,6 +20,7 @@ package grpc_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"runtime"
 	"sync"
@@ -29,6 +30,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
@@ -328,5 +331,72 @@ func (s) TestServer_GracefulStopWaits(t *testing.T) {
 	case <-stopped.Done():
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for second RPC to start on server.")
+	}
+}
+
+type nopCloserWriter struct{ io.Writer }
+
+func (n nopCloserWriter) Close() error { return nil }
+
+type noopCompressor struct {
+}
+
+func (i *noopCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	return &nopCloserWriter{
+		Writer: w,
+	}, nil
+}
+
+func (i *noopCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	return r, nil
+}
+
+func (i *noopCompressor) Name() string {
+	return "noop"
+}
+
+func BenchmarkRPCCompressor(b *testing.B) {
+	encoding.RegisterCompressor(&noopCompressor{})
+
+	for _, comp := range []string{gzip.Name, "noop"} {
+		for _, payloadSize := range []int{1024, 10 * 1024, 500 * 1024} {
+			b.Run(fmt.Sprintf("comp=%v,payloadSize=%v", comp, payloadSize), func(b *testing.B) {
+				ss := stubserver.StubServer{
+					UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+						return &testpb.SimpleResponse{
+							Username: "test",
+						}, nil
+					},
+				}
+
+				// Start one RPC to the server.
+				if err := ss.Start(nil, grpc.WithDefaultCallOptions(grpc.UseCompressor(comp))); err != nil {
+					b.Fatal("Error starting server:", err)
+				}
+				defer ss.Stop()
+				paylaod := make([]byte, payloadSize)
+				for i := 0; i < payloadSize; i++ {
+					paylaod[i] = byte(i)
+				}
+
+				for i := 0; i < b.N; i++ {
+					b.ReportAllocs()
+					ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+					defer cancel()
+					_, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{
+						ResponseType: testpb.PayloadType_COMPRESSABLE,
+						ResponseSize: 1024,
+						Payload: &testpb.Payload{
+							Type: testpb.PayloadType_COMPRESSABLE,
+							Body: paylaod,
+						},
+					})
+
+					if err != nil {
+						b.Fatal("Error staring call:", err)
+					}
+				}
+			})
+		}
 	}
 }
