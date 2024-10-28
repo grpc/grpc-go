@@ -100,13 +100,16 @@ type authority struct {
 	// actual state of the resource.
 	resources map[xdsresource.Type]map[string]*resourceState
 
-	// An ordered list of xdsChannels along with their server configuration.
+	// An ordered list of xdsChannels corresponding to the list of server
+	// configurations specified for this authority in the bootstrap. The
+	// ordering specifies the order in which these channels are preferred for
+	// fallback.
 	xdsChannelConfigs []*xdsChannelWithConfig
 
 	// The current active xdsChannel. Here, active does not mean that the
 	// channel has a working connection to the server. It simply points to the
 	// channel that we are trying to work with, based on fallback logic.
-	activeChannel *xdsChannelWithConfig
+	activeXDSChannel *xdsChannelWithConfig
 }
 
 // authorityArgs is a convenience struct to wrap arguments required to create a
@@ -156,6 +159,9 @@ func newAuthority(args authorityArgs) *authority {
 // failure on the channel to the management server identified by the provided
 // server config. The error will be forwarded to all the resource watchers.
 //
+// This method is called by the xDS client implementation (on all interested
+// authorities) when a stream error is reported by the xdsChannel.
+//
 // Errors of type xdsresource.ErrTypeStreamFailedAfterRecv are ignored.
 func (a *authority) adsStreamFailure(serverConfig *bootstrap.ServerConfig, err error) {
 	a.serializer.TrySchedule(func(context.Context) {
@@ -202,6 +208,9 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 // adsResourceUpdate is called to notify the authority about a resource update
 // received on the ADS stream. It processes the update, updating the resource
 // cache and notifying any registered watchers of the update.
+//
+// This method is called by the xDS client implementation (on all interested
+// authorities) when a stream error is reported by the xdsChannel.
 //
 // Once the update has been processed by all watchers, the authority is expected
 // to invoke the onDone callback.
@@ -529,8 +538,8 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 // Otherwise, it creates a new channel using the first server configuration in
 // the list of configurations, and returns that.
 func (a *authority) xdsChannelToUseLocked() *xdsChannelWithConfig {
-	if a.activeChannel != nil {
-		return a.activeChannel
+	if a.activeXDSChannel != nil {
+		return a.activeXDSChannel
 	}
 
 	sc := a.xdsChannelConfigs[0].sc
@@ -541,8 +550,8 @@ func (a *authority) xdsChannelToUseLocked() *xdsChannelWithConfig {
 	}
 	a.xdsChannelConfigs[0].xc = xc
 	a.xdsChannelConfigs[0].cleanup = cleanup
-	a.activeChannel = a.xdsChannelConfigs[0]
-	return a.activeChannel
+	a.activeXDSChannel = a.xdsChannelConfigs[0]
+	return a.activeXDSChannel
 }
 
 func (a *authority) closeXDSChannelsLocked() {
@@ -553,7 +562,7 @@ func (a *authority) closeXDSChannelsLocked() {
 		}
 		xc.xc = nil
 	}
-	a.activeChannel = nil
+	a.activeXDSChannel = nil
 }
 
 func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig {
