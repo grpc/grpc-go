@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -161,8 +162,11 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	testgrpc.RegisterTestServiceServer(server, &testService{})
 	defer server.Stop()
+
+	stub := &stubserver.StubServer{}
+	stub.S = server
+	stubserver.StartTestService(t, stub)
 
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
@@ -268,9 +272,9 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
-	// Create an xDS-enabled grpc server that is configured to use xDS
-	// credentials, and register the test service on it. Configure a mode change
-	// option that closes a channel when listener2 enter serving mode.
+	// Create an xDS-enabled gRPC server that is configured to use xDS
+	// credentials and assigned to a stub server, configuring a mode change
+	// option that closes a channel when listener2 enters serving mode.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatal(err)
@@ -283,12 +287,20 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 			}
 		}
 	})
+
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	testgrpc.RegisterTestServiceServer(server, &testService{})
 	defer server.Stop()
+
+	stub.S = server
+	stubserver.StartTestService(t, stub)
 
 	go func() {
 		if err := server.Serve(lis1); err != nil {
