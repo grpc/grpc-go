@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -51,8 +52,9 @@ type ChildState struct {
 // policies each owning a single endpoint.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	es := &endpointSharding{
-		cc:    cc,
-		bOpts: opts,
+		cc:     cc,
+		bOpts:  opts,
+		closed: grpcsync.NewEvent(),
 	}
 	es.children.Store(resolver.NewEndpointMap())
 	return es
@@ -67,6 +69,7 @@ type endpointSharding struct {
 
 	childMu  sync.Mutex // syncs balancer.Balancer calls into children
 	children atomic.Pointer[resolver.EndpointMap]
+	closed   *grpcsync.Event
 
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
@@ -83,6 +86,9 @@ type endpointSharding struct {
 // addresses it will ignore that endpoint. Otherwise, returns first error found
 // from a child, but fully processes the new update.
 func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
+
 	es.inhibitChildUpdates.Store(true)
 	defer func() {
 		es.inhibitChildUpdates.Store(false)
@@ -115,7 +121,6 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			bal.Balancer = gracefulswitch.NewBalancer(bal, es.bOpts)
 		}
 		newChildren.Set(endpoint, bal)
-		es.childMu.Lock()
 		if err := bal.UpdateClientConnState(balancer.ClientConnState{
 			BalancerConfig: state.BalancerConfig,
 			ResolverState: resolver.State{
@@ -129,16 +134,13 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			// validations, this is a current limitation for simplicity sake.
 			ret = err
 		}
-		es.childMu.Unlock()
 	}
 	// Delete old children that are no longer present.
 	for _, e := range children.Keys() {
 		child, _ := children.Get(e)
 		bal := child.(balancer.Balancer)
 		if _, ok := newChildren.Get(e); !ok {
-			es.childMu.Lock()
 			bal.Close()
-			es.childMu.Unlock()
 		}
 	}
 	es.children.Store(newChildren)
@@ -149,6 +151,8 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 // children and sends a single synchronous update of the childStates at the end
 // of the ResolverError operation.
 func (es *endpointSharding) ResolverError(err error) {
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
 	es.inhibitChildUpdates.Store(true)
 	defer func() {
 		es.inhibitChildUpdates.Store(false)
@@ -157,9 +161,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	children := es.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
-		es.childMu.Lock()
 		bal.ResolverError(err)
-		es.childMu.Unlock()
 	}
 }
 
@@ -168,13 +170,14 @@ func (es *endpointSharding) UpdateSubConnState(balancer.SubConn, balancer.SubCon
 }
 
 func (es *endpointSharding) Close() {
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
 	children := es.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
-		es.childMu.Lock()
 		bal.Close()
-		es.childMu.Unlock()
 	}
+	es.closed.Fire()
 }
 
 // updateState updates this component's state. It sends the aggregated state,
@@ -287,7 +290,9 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	if ei, ok := bw.Balancer.(balancer.ExitIdler); state.ConnectivityState == connectivity.Idle && ok {
 		go func() {
 			bw.es.childMu.Lock()
-			ei.ExitIdle()
+			if !bw.es.closed.HasFired() {
+				ei.ExitIdle()
+			}
 			bw.es.childMu.Unlock()
 		}()
 	}
