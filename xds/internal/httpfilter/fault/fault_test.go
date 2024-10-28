@@ -103,6 +103,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 			}
 		},
 	}
+
 	server := grpc.NewServer()
 
 	stub.S = server
