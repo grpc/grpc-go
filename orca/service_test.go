@@ -72,6 +72,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			mu.Lock()
 			requests++
+
 			smr.SetNamedUtilization(requestsMetricKey, float64(requests)*0.01)
 			mu.Unlock()
 
