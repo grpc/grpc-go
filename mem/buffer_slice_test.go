@@ -30,9 +30,7 @@ import (
 )
 
 const (
-	// 1025 is a value above 1024 that is not mem.IsBelowBufferPoolingThreshold().
-	// See https://github.com/grpc/grpc-go/issues/7631.
-	minReadSize = 1025
+	minReadSize = 1
 	// Should match the constant in buffer_slice.go (another package)
 	readAllBufSize = 32 * 1024 // 32 KiB
 )
