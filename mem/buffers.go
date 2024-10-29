@@ -92,7 +92,11 @@ func newBuffer() *buffer {
 //
 // Note that the backing array of the given data is not copied.
 func NewBuffer(data *[]byte, pool BufferPool) Buffer {
-	if pool == nil || IsBelowBufferPoolingThreshold(len(*data)) {
+	// Use the buffer's capacity instead of the length, otherwise buffers may
+	// not be reused under certain conditions. For example, if a large buffer
+	// is acquired from the pool, but fewer bytes than the buffering threshold
+	// are written to it, the buffer will not be returned to the pool.
+	if pool == nil || IsBelowBufferPoolingThreshold(cap(*data)) {
 		return (SliceBuffer)(*data)
 	}
 	b := newBuffer()

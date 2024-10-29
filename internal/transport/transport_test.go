@@ -2781,6 +2781,89 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	}
 }
 
+// readHangingConn is a wrapper around net.Conn that makes the Read() hang when
+// Close() is called.
+type readHangingConn struct {
+	net.Conn
+	readHangConn chan struct{} // Read() hangs until this channel is closed by Close().
+	closed       *atomic.Bool  // Set to true when Close() is called.
+}
+
+func (hc *readHangingConn) Read(b []byte) (n int, err error) {
+	n, err = hc.Conn.Read(b)
+	if hc.closed.Load() {
+		<-hc.readHangConn // hang the read till we want
+	}
+	return n, err
+}
+
+func (hc *readHangingConn) Close() error {
+	hc.closed.Store(true)
+	return hc.Conn.Close()
+}
+
+// Tests that closing a client transport does not return until the reader
+// goroutine exits.
+func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	server := setUpServerOnly(t, 0, &ServerConfig{}, normal)
+	defer server.stop()
+	addr := resolver.Address{Addr: "localhost:" + server.port}
+
+	isReaderHanging := &atomic.Bool{}
+	readHangConn := make(chan struct{})
+	copts := ConnectOptions{
+		Dialer: func(_ context.Context, addr string) (net.Conn, error) {
+			conn, err := net.Dial("tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			return &readHangingConn{Conn: conn, readHangConn: readHangConn, closed: isReaderHanging}, nil
+		},
+		ChannelzParent: channelzSubChannel(t),
+	}
+
+	// Create a client transport with a custom dialer that hangs the Read()
+	// after Close().
+	ct, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
+	if err != nil {
+		t.Fatalf("Failed to create transport: %v", err)
+	}
+
+	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
+		t.Fatalf("Failed to open stream: %v", err)
+	}
+
+	// Closing the client transport will result in the underlying net.Conn being
+	// closed, which will result in readHangingConn.Read() to hang. This will
+	// stall the exit of the reader goroutine, and will stall client
+	// transport's Close from returning.
+	transportClosed := make(chan struct{})
+	go func() {
+		ct.Close(errors.New("manually closed by client"))
+		close(transportClosed)
+	}()
+
+	// Wait for a short duration and ensure that the client transport's Close()
+	// does not return.
+	select {
+	case <-transportClosed:
+		t.Fatal("Transport closed before reader completed")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	// Closing the channel will unblock the reader goroutine and will ensure
+	// that the client transport's Close() returns.
+	close(readHangConn)
+	select {
+	case <-transportClosed:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for transport to close")
+	}
+}
+
 // hangingConn is a net.Conn wrapper for testing, simulating hanging connections
 // after a GOAWAY frame is sent, of which Write operations pause until explicitly
 // signaled or a timeout occurs.

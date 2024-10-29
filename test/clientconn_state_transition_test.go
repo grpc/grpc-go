@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -323,6 +324,13 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	client, err := grpc.Dial("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			// Set a really long back-off delay to ensure the first subConn does
+			// not enter IDLE before the second subConn connects.
+			Backoff: backoff.Config{
+				BaseDelay: 1 * time.Hour,
+			},
+		}),
 		grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
@@ -333,6 +341,16 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
+	}
+	if envconfig.NewPickFirstEnabled {
+		want = []connectivity.State{
+			// The first subconn fails.
+			connectivity.Connecting,
+			connectivity.TransientFailure,
+			// The second subconn connects.
+			connectivity.Connecting,
+			connectivity.Ready,
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

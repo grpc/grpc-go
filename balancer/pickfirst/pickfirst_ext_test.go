@@ -16,7 +16,7 @@
  *
  */
 
-package test
+package pickfirst_test
 
 import (
 	"context"
@@ -28,11 +28,13 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	pfinternal "google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
@@ -45,7 +47,38 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
+const (
+	pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
+	// Default timeout for tests in this package.
+	defaultTestTimeout = 10 * time.Second
+	// Default short timeout, to be used when waiting for events which are not
+	// expected to happen.
+	defaultTestShortTimeout = 100 * time.Millisecond
+)
+
+func init() {
+	channelz.TurnOn()
+}
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+// parseServiceConfig is a test helper which uses the manual resolver to parse
+// the given service config. It calls t.Fatal() if service config parsing fails.
+func parseServiceConfig(t *testing.T, r *manual.Resolver, sc string) *serviceconfig.ParseResult {
+	t.Helper()
+
+	scpr := r.CC.ParseServiceConfig(sc)
+	if scpr.Err != nil {
+		t.Fatalf("Failed to parse service config %q: %v", sc, scpr.Err)
+	}
+	return scpr
+}
 
 // setupPickFirst performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, creates a ClientConn to them
@@ -377,16 +410,15 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 	const serviceConfig = `{"loadBalancingConfig": [{"pick_first":{ "shuffleAddressList": true }}]}`
 
 	// Install a shuffler that always reverses two entries.
-	origShuf := internal.ShuffleAddressListForTesting
-	defer func() { internal.ShuffleAddressListForTesting = origShuf }()
-	internal.ShuffleAddressListForTesting = func(n int, f func(int, int)) {
+	origShuf := pfinternal.RandShuffle
+	defer func() { pfinternal.RandShuffle = origShuf }()
+	pfinternal.RandShuffle = func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return
 		}
 		f(0, 1) // reverse the two addresses
 	}
-
 	// Set up our backends.
 	cc, r, backends := setupPickFirst(t, 2)
 	addrs := stubBackendsToResolverAddrs(backends)
@@ -434,9 +466,9 @@ func (s) TestPickFirst_ShuffleAddressList(t *testing.T) {
 // Test config parsing with the env var turned on and off for various scenarios.
 func (s) TestPickFirst_ParseConfig_Success(t *testing.T) {
 	// Install a shuffler that always reverses two entries.
-	origShuf := internal.ShuffleAddressListForTesting
-	defer func() { internal.ShuffleAddressListForTesting = origShuf }()
-	internal.ShuffleAddressListForTesting = func(n int, f func(int, int)) {
+	origShuf := pfinternal.RandShuffle
+	defer func() { pfinternal.RandShuffle = origShuf }()
+	pfinternal.RandShuffle = func(n int, f func(int, int)) {
 		if n != 2 {
 			t.Errorf("Shuffle called with n=%v; want 2", n)
 			return

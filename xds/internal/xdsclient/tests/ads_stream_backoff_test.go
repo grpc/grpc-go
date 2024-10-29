@@ -434,15 +434,16 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) error {
 	t.Helper()
 
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+	var lastRequestedNames []string
+	for ; ; <-time.After(defaultTestShortTimeout) {
 		select {
 		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for resources %v to be requested from the management server. Last requested resources: %v", wantNames, lastRequestedNames)
 		case gotNames := <-namesCh:
 			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
 				return nil
 			}
-			t.Logf("Received resource names %v, want %v", gotNames, wantNames)
+			lastRequestedNames = gotNames
 		}
 	}
-	return fmt.Errorf("timeout waiting for resource to be requested from the management server")
 }

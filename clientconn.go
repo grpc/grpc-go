@@ -775,10 +775,7 @@ func (cc *ClientConn) updateResolverStateAndUnlock(s resolver.State, err error) 
 		}
 	}
 
-	var balCfg serviceconfig.LoadBalancingConfig
-	if cc.sc != nil && cc.sc.lbConfig != nil {
-		balCfg = cc.sc.lbConfig
-	}
+	balCfg := cc.sc.lbConfig
 	bw := cc.balancerWrapper
 	cc.mu.Unlock()
 
@@ -1140,10 +1137,15 @@ func (cc *ClientConn) Close() error {
 
 	<-cc.resolverWrapper.serializer.Done()
 	<-cc.balancerWrapper.serializer.Done()
-
+	var wg sync.WaitGroup
 	for ac := range conns {
-		ac.tearDown(ErrClientConnClosing)
+		wg.Add(1)
+		go func(ac *addrConn) {
+			defer wg.Done()
+			ac.tearDown(ErrClientConnClosing)
+		}(ac)
 	}
+	wg.Wait()
 	cc.addTraceEvent("deleted")
 	// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add
 	// trace reference to the entity being deleted, and thus prevent it from being
@@ -1249,6 +1251,8 @@ func (ac *addrConn) resetTransportAndUnlock() {
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(acCtx, addrs, connectDeadline); err != nil {
+		// TODO: #7534 - Move re-resolution requests into the pick_first LB policy
+		// to ensure one resolution request per pass instead of per subconn failure.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		ac.mu.Lock()
 		if acCtx.Err() != nil {

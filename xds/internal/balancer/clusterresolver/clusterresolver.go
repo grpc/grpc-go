@@ -184,7 +184,10 @@ func (b *clusterResolverBalancer) handleClientConnUpdate(update *ccUpdate) {
 		return
 	}
 
-	b.logger.Infof("Received new balancer config: %v", pretty.ToJSON(update.state.BalancerConfig))
+	if b.logger.V(2) {
+		b.logger.Infof("Received new balancer config: %v", pretty.ToJSON(update.state.BalancerConfig))
+	}
+
 	cfg, _ := update.state.BalancerConfig.(*LBConfig)
 	if cfg == nil {
 		b.logger.Warningf("Ignoring unsupported balancer configuration of type: %T", update.state.BalancerConfig)
