@@ -631,30 +631,24 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	mr := manual.NewBuilderWithScheme("e2e-test")
 	defer mr.Close()
 
-	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 
-	testutils.AwaitState(context.Background(), t, cc, connectivity.Idle)
-
-	mr.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{Addr: backend.Address}},
-	})
-
-	cc.Connect()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+	cc.Connect()
 
-	time.Sleep(100 * time.Millisecond)
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	mr.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: backend.Address}},
 	})
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
