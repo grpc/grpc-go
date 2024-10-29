@@ -28,9 +28,10 @@ package endpointsharding
 import (
 	"encoding/json"
 	"errors"
-	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	rand "math/rand/v2"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -225,7 +226,7 @@ func (es *endpointSharding) updateState() {
 	p := &pickerWithChildStates{
 		pickers:     pickers,
 		childStates: childStates,
-		next:        uint32(rand.Intn(len(pickers))),
+		next:        uint32(rand.IntN(len(pickers))),
 	}
 	es.cc.UpdateState(balancer.State{
 		ConnectivityState: aggState,

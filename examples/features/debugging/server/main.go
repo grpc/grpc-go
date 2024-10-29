@@ -23,7 +23,7 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand"
+	rand "math/rand/v2"
 	"net"
 	"time"
 
@@ -55,7 +55,7 @@ type slowServer struct {
 // SayHello implements helloworld.GreeterServer
 func (s *slowServer) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	// Delay 100ms ~ 200ms before replying
-	time.Sleep(time.Duration(100+rand.Intn(100)) * time.Millisecond)
+	time.Sleep(time.Duration(100+rand.IntN(100)) * time.Millisecond)
 	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
 }
 
