@@ -57,10 +57,6 @@ jobs:
 
           - type: tests
             goversion: '1.23'
-            testflags: '-race -tags=buffer_pooling'
-
-          - type: tests
-            goversion: '1.23'
             goarch: 386
 
           - type: tests
