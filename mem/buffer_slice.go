@@ -234,8 +234,8 @@ func NewWriter(buffers *BufferSlice, pool BufferPool) io.Writer {
 // A successful call returns err == nil, not err == EOF. Because ReadAll is
 // defined to read from src until EOF, it does not treat an EOF from Read
 // as an error to be reported.
-// A failed call returns a non-nil error and could return partially read buffers.
-// It is the responsibility of the caller to free this buffer.
+// A failed call returns a non-nil error and could return partially read
+// buffers. It is the responsibility of the caller to free this buffer.
 func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 	var result BufferSlice
 	wt, ok := r.(io.WriterTo)

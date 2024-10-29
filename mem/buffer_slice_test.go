@@ -164,7 +164,8 @@ func (s) TestBufferSlice_Reader(t *testing.T) {
 	}
 }
 
-// TestBufferSlice_ReadAll_Reads exercises ReadAll by allowing it to read various combinations of data, empty data, EOF.
+// TestBufferSlice_ReadAll_Reads exercises ReadAll by allowing it to read
+// various combinations of data, empty data, EOF.
 func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 	testcases := []struct {
 		name     string
@@ -349,7 +350,8 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 			if len(data) != tc.wantBufs {
 				t.Fatalf("ReadAll() returned %d bufs, wanted %d bufs", len(data), tc.wantBufs)
 			}
-			for i := 0; i < len(data)-1; i++ { // all but last should be full buffers
+			// all but last should be full buffers
+			for i := 0; i < len(data)-1; i++ {
 				if data[i].Len() != readAllBufSize {
 					t.Fatalf("ReadAll() returned data length %d, wanted %d", data[i].Len(), readAllBufSize)
 				}
@@ -434,7 +436,8 @@ var (
 	_ mem.BufferPool = (*testPool)(nil)
 )
 
-// readStep describes what a single stepReader.Read should do - how much data to return and what error to return.
+// readStep describes what a single stepReader.Read should do - how much data
+// to return and what error to return.
 type readStep struct {
 	n   int
 	err error
