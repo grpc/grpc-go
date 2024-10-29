@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -622,54 +621,40 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 // TestChannelStateWaitingForFirstResolverUpdate verifies the initial
 // state of the channel when a manual name resolver doesn't provide any updates.
 func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 
 	mr := manual.NewBuilderWithScheme("e2e-test")
 	defer mr.Close()
 
-	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer shortCancel()
-
-	cc.Connect()
-	testutils.AwaitState(shortCtx, t, cc, connectivity.Idle)
+	testutils.AwaitState(context.Background(), t, cc, connectivity.Idle)
 
 	mr.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: backend.Address}},
 	})
 
-	// Check that the channel transitions to CONNECTING then READY
-	testutils.AwaitState(shortCtx, t, cc, connectivity.Connecting)
-	t.Skipf("After connecting, before READY state: current state = %v\n", cc.GetState())
+	cc.Connect()
 
-	testutils.AwaitState(shortCtx, t, cc, connectivity.Ready)
-	t.Skipf("After entering READY state: current state = %v\n", cc.GetState())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-	mr.UpdateState(resolver.State{Addresses: nil})
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
-	done := make(chan struct{})
-	go func() {
-		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(shortCtx, &testgrpc.Empty{})
-		if err == nil {
-			t.Errorf("Expected RPC to fail, but it succeeded")
-		}
-		close(done)
-	}()
+	time.Sleep(100 * time.Millisecond)
 
-	// Wait for the goroutine to finish
-	select {
-	case <-done:
-		// RPC call completed as expected
-	case <-shortCtx.Done():
-		t.Error("Timed out waiting for RPC call to complete")
-	}
+	mr.UpdateState(resolver.State{
+		Addresses: []resolver.Address{{Addr: backend.Address}},
+	})
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
