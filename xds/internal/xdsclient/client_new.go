@@ -78,13 +78,13 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpi
 	}
 
 	for name, cfg := range config.Authorities() {
-		// If server configus are specified in the authorities map, use that. Else,
-		// use the top-level server configs.
+		// If server configs are specified in the authorities map, use that.
+		// Else, use the top-level server configs.
 		serverCfg := config.XDSServers()
 		if len(cfg.XDSServers) >= 1 {
 			serverCfg = cfg.XDSServers
 		}
-		c.authorities[name] = newAuthority(authorityArgs{
+		c.authorities[name] = newAuthority(authorityBuildOptions{
 			serverConfigs:    serverCfg,
 			name:             name,
 			serializer:       c.serializer,
@@ -92,7 +92,7 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpi
 			logPrefix:        clientPrefix(c),
 		})
 	}
-	c.topLevelAuthority = newAuthority(authorityArgs{
+	c.topLevelAuthority = newAuthority(authorityBuildOptions{
 		serverConfigs:    config.XDSServers(),
 		name:             "",
 		serializer:       c.serializer,

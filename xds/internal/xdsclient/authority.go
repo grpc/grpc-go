@@ -74,8 +74,8 @@ type xdsChannelWithConfig struct {
 // server configuration entries will end up sharing the xdsChannel for that
 // server configuration. The xdsChannels are owned and managed by the xdsClient.
 //
-// It also contains cache of resource state for resources requested from the
-// management server. This cache contains the list of registered watchers and
+// It also contains a cache of resource state for resources requested from
+// management server(s). This cache contains the list of registered watchers and
 // the most recent resource configuration received from the management server.
 type authority struct {
 	// The following fields are initialized at creation time and are read-only
@@ -83,8 +83,8 @@ type authority struct {
 	name                      string                       // Name of the authority from bootstrap configuration.
 	watcherCallbackSerializer *grpcsync.CallbackSerializer // Serializer to run watcher callbacks, owned by the xDS client implementation.
 	getChannelForADS          xdsChannelForADS             // Function to get an xdsChannel for ADS, provided by the xDS client implementation.
-	serializer                *grpcsync.CallbackSerializer // Serializer to run call ins from the xDS client, owned by this authority.
-	serializerClose           func()                       // Function to close the above serializer.
+	xdsClientSerializer       *grpcsync.CallbackSerializer // Serializer to run call ins from the xDS client, owned by this authority.
+	xdsClientSerializerClose  func()                       // Function to close the above serializer.
 	logger                    *igrpclog.PrefixLogger       // Logger for this authority.
 
 	// The below defined fields must only be accessed in the context of the
@@ -112,9 +112,8 @@ type authority struct {
 	activeXDSChannel *xdsChannelWithConfig
 }
 
-// authorityArgs is a convenience struct to wrap arguments required to create a
-// new authority.
-type authorityArgs struct {
+// authorityBuildOptions wraps arguments required to create a new authority.
+type authorityBuildOptions struct {
 	serverConfigs    bootstrap.ServerConfigs      // Server configs for the authority
 	name             string                       // Name of the authority
 	serializer       *grpcsync.CallbackSerializer // Callback serializer for invoking watch callbacks
@@ -131,14 +130,14 @@ type authorityArgs struct {
 // Note that no channels to management servers are created at this time. Instead
 // a channel to the first server configuration is created when the first watch
 // is registered, and more channels are created as needed by the fallback logic.
-func newAuthority(args authorityArgs) *authority {
+func newAuthority(args authorityBuildOptions) *authority {
 	ctx, cancel := context.WithCancel(context.Background())
 	ret := &authority{
 		name:                      args.name,
 		watcherCallbackSerializer: args.serializer,
 		getChannelForADS:          args.getChannelForADS,
-		serializer:                grpcsync.NewCallbackSerializer(ctx),
-		serializerClose:           cancel,
+		xdsClientSerializer:       grpcsync.NewCallbackSerializer(ctx),
+		xdsClientSerializerClose:  cancel,
 		resources:                 make(map[xdsresource.Type]map[string]*resourceState),
 	}
 
@@ -148,7 +147,9 @@ func newAuthority(args authorityArgs) *authority {
 	ret.logger = igrpclog.NewPrefixLogger(l, logPrefix)
 
 	// Create an ordered list of xdsChannels with their server configs. The
-	// actual channels are created as needed to support fallback.
+	// actual channel to the first server configuration is created when the
+	// first watch is registered, and channels to other server configurations
+	// are created as needed to support fallback.
 	for _, sc := range args.serverConfigs {
 		ret.xdsChannelConfigs = append(ret.xdsChannelConfigs, &xdsChannelWithConfig{sc: sc})
 	}
@@ -156,15 +157,15 @@ func newAuthority(args authorityArgs) *authority {
 }
 
 // adsStreamFailure is called to notify the authority about an ADS stream
-// failure on the channel to the management server identified by the provided
-// server config. The error will be forwarded to all the resource watchers.
+// failure on an xdsChannel to the management server identified by the provided
+// server config. The error is forwarded to all the resource watchers.
 //
 // This method is called by the xDS client implementation (on all interested
-// authorities) when a stream error is reported by the xdsChannel.
+// authorities) when a stream error is reported by an xdsChannel.
 //
 // Errors of type xdsresource.ErrTypeStreamFailedAfterRecv are ignored.
 func (a *authority) adsStreamFailure(serverConfig *bootstrap.ServerConfig, err error) {
-	a.serializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		a.handleADSStreamFailure(serverConfig, err)
 	})
 }
@@ -206,20 +207,22 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 }
 
 // adsResourceUpdate is called to notify the authority about a resource update
-// received on the ADS stream. It processes the update, updating the resource
-// cache and notifying any registered watchers of the update.
+// received on the ADS stream.
 //
 // This method is called by the xDS client implementation (on all interested
-// authorities) when a stream error is reported by the xdsChannel.
+// authorities) when a stream error is reported by an xdsChannel.
 //
 // Once the update has been processed by all watchers, the authority is expected
 // to invoke the onDone callback.
 func (a *authority) adsResourceUpdate(serverConfig *bootstrap.ServerConfig, rType xdsresource.Type, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
-	a.serializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		a.handleADSResourceUpdate(serverConfig, rType, updates, md, onDone)
 	})
 }
 
+// handleADSResourceUpdate processes an update from the xDS client, updating the
+// resource cache and notifying any registered watchers of the update.
+//
 // Only executed in the context of a serializer callback.
 func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig, rType xdsresource.Type, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
 	// TODO(easwars-fallback): Trigger reverting to a higher priority server if
@@ -374,12 +377,19 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 	}
 }
 
+// adsResourceDoesNotExist is called by the xDS client implementation (on all
+// interested authorities) to notify the authority that a subscribed resource
+// does not exist.
 func (a *authority) adsResourceDoesNotExist(rType xdsresource.Type, resourceName string) {
-	a.serializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		a.handleADSResourceDoesNotExist(rType, resourceName)
 	})
 }
 
+// handleADSResourceDoesNotExist is called when a subscribed resource does not
+// exist. It removes the resource from the cache, updates the metadata status
+// to ServiceStatusNotExist, and notifies all watchers that the resource does
+// not exist.
 func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resourceName string) {
 	if a.logger.V(2) {
 		a.logger.Infof("Watch for resource %q of type %s timed out", resourceName, rType.TypeName())
@@ -412,7 +422,8 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 // name. It returns a function that can be called to cancel the watch.
 //
 // If this is the first watch for any resource on this authority, an xdsChannel
-// to the management server will be created.
+// to the first management server (from the list of server configurations) will
+// be created.
 //
 // If this is the first watch for the given resource name, it will subscribe to
 // the resource with the xdsChannel. If a cached copy of the resource exists, it
@@ -422,7 +433,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	cleanup := func() {}
 	done := make(chan struct{})
 
-	a.serializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		defer close(done)
 
 		if a.logger.V(2) {
@@ -478,7 +489,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {
 	return grpcsync.OnceFunc(func() {
 		done := make(chan struct{})
-		a.serializer.ScheduleOr(func(context.Context) {
+		a.xdsClientSerializer.ScheduleOr(func(context.Context) {
 			defer close(done)
 
 			if a.logger.V(2) {
@@ -537,6 +548,8 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 // the management server. If an active channel is available, it returns that.
 // Otherwise, it creates a new channel using the first server configuration in
 // the list of configurations, and returns that.
+//
+// Only executed in the context of a serializer callback.
 func (a *authority) xdsChannelToUseLocked() *xdsChannelWithConfig {
 	if a.activeXDSChannel != nil {
 		return a.activeXDSChannel
@@ -554,6 +567,10 @@ func (a *authority) xdsChannelToUseLocked() *xdsChannelWithConfig {
 	return a.activeXDSChannel
 }
 
+// closeXDSChannelsLocked closes all the xDS channels associated with this
+// authority, when there are no more watchers for any resource type.
+//
+// Only executed in the context of a serializer callback.
 func (a *authority) closeXDSChannelsLocked() {
 	for _, xc := range a.xdsChannelConfigs {
 		if xc.cleanup != nil {
@@ -569,7 +586,7 @@ func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig 
 	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
 	done := make(chan struct{})
 
-	a.serializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		defer close(done)
 		for rType, resourceStates := range a.resources {
 			typeURL := rType.TypeURL()
@@ -602,8 +619,8 @@ func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig 
 }
 
 func (a *authority) close() {
-	a.serializerClose()
-	<-a.serializer.Done()
+	a.xdsClientSerializerClose()
+	<-a.xdsClientSerializer.Done()
 	if a.logger.V(2) {
 		a.logger.Infof("Closed")
 	}

@@ -52,7 +52,7 @@ type clientImpl struct {
 	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
 	transportBuilder   transport.Builder            // Builder to create transports to the xDS server.
 	resourceTypes      *resourceTypeRegistry        // Registry of resource types, for parsing incoming ADS responses.
-	serializer         *grpcsync.CallbackSerializer // Serializer for invoking watcher callbacks.
+	serializer         *grpcsync.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
 	logger             *grpclog.PrefixLogger        // Logger for this client.
 
@@ -96,10 +96,10 @@ func (cs *channelState) adsStreamFailure(err error) {
 	}
 
 	cs.parent.channelsMu.Lock()
+	defer cs.parent.channelsMu.Unlock()
 	for authority := range cs.interestedAuthorities {
 		authority.adsStreamFailure(cs.serverConfig, err)
 	}
-	cs.parent.channelsMu.Unlock()
 }
 
 func (cs *channelState) adsResourceUpdate(typ xdsresource.Type, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
@@ -133,10 +133,10 @@ func (cs *channelState) adsResourceDoesNotExist(typ xdsresource.Type, resourceNa
 	}
 
 	cs.parent.channelsMu.Lock()
+	defer cs.parent.channelsMu.Unlock()
 	for authority := range cs.interestedAuthorities {
 		authority.adsResourceDoesNotExist(typ, resourceName)
 	}
-	cs.parent.channelsMu.Unlock()
 }
 
 // BootstrapConfig returns the configuration read from the bootstrap file.
