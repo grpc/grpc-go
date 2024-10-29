@@ -88,12 +88,14 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
-	// Initialize a test gRPC server, assign it to the stub server, and start the test service.
+	// Initialize a test gRPC server, assign it to the stub server, and start
+	// the test service.
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			// End RPC after client does a CloseSend.
 			for {
 				if _, err := stream.Recv(); err == io.EOF {
 					return nil
@@ -104,9 +106,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		},
 	}
 
-	server := grpc.NewServer()
-
-	stub.S = server
 	stubserver.StartTestService(t, stub)
 
 	// Create a local listener and pass it to Serve().
@@ -116,13 +115,13 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 
 	go func() {
-		if err := server.Serve(lis); err != nil {
+		if err := stub.S.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
 
 	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		server.Stop()
+		stub.S.Stop()
 	}
 }
 

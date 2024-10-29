@@ -151,7 +151,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	stubserver.StartTestService(t, stub)
 
 	go func() {
-		if err := server.Serve(lis); err != nil {
+		if err := stub.S.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
@@ -296,7 +296,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	stubserver.StartTestService(t, stub)
 
 	go func() {
-		if err := server.Serve(lis); err != nil {
+		if err := stub.S.Serve(lis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
