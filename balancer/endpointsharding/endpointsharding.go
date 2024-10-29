@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -52,9 +51,8 @@ type ChildState struct {
 // policies each owning a single endpoint.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	es := &endpointSharding{
-		cc:     cc,
-		bOpts:  opts,
-		closed: grpcsync.NewEvent(),
+		cc:    cc,
+		bOpts: opts,
 	}
 	es.children.Store(resolver.NewEndpointMap())
 	return es
@@ -69,7 +67,7 @@ type endpointSharding struct {
 
 	childMu  sync.Mutex // syncs balancer.Balancer calls into children
 	children atomic.Pointer[resolver.EndpointMap]
-	closed   *grpcsync.Event
+	closed   bool
 
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
@@ -177,7 +175,7 @@ func (es *endpointSharding) Close() {
 		bal := child.(balancer.Balancer)
 		bal.Close()
 	}
-	es.closed.Fire()
+	es.closed = true
 }
 
 // updateState updates this component's state. It sends the aggregated state,
@@ -290,7 +288,7 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	if ei, ok := bw.Balancer.(balancer.ExitIdler); state.ConnectivityState == connectivity.Idle && ok {
 		go func() {
 			bw.es.childMu.Lock()
-			if !bw.es.closed.HasFired() {
+			if !bw.es.closed {
 				ei.ExitIdle()
 			}
 			bw.es.childMu.Unlock()
