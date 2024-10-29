@@ -166,12 +166,13 @@ func (s) TestBufferSlice_Reader(t *testing.T) {
 	}
 }
 
+// TestBufferSlice_ReadAll_Reads exercises ReadAll by allowing it to read various combinations of data, empty data, EOF.
 func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 	testcases := []struct {
-		name         string
-		reads        []readStep
-		expectedErr  string
-		expectedBufs int
+		name     string
+		reads    []readStep
+		wantErr  string
+		wantBufs int
 	}{
 		{
 			name: "EOF",
@@ -191,7 +192,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "data+EOF",
@@ -201,7 +202,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "0,data+EOF",
@@ -212,7 +213,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "0,data,EOF",
@@ -225,7 +226,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "data,data+EOF",
@@ -238,7 +239,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "error",
@@ -247,7 +248,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: errors.New("boom"),
 				},
 			},
-			expectedErr: "boom",
+			wantErr: "boom",
 		},
 		{
 			name: "data+error",
@@ -257,8 +258,8 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: errors.New("boom"),
 				},
 			},
-			expectedErr:  "boom",
-			expectedBufs: 1,
+			wantErr:  "boom",
+			wantBufs: 1,
 		},
 		{
 			name: "data,data+error",
@@ -271,8 +272,8 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: errors.New("boom"),
 				},
 			},
-			expectedErr:  "boom",
-			expectedBufs: 1,
+			wantErr:  "boom",
+			wantBufs: 1,
 		},
 		{
 			name: "data,data+EOF - whole buf",
@@ -285,7 +286,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "data,data,EOF - whole buf",
@@ -300,7 +301,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 1,
+			wantBufs: 1,
 		},
 		{
 			name: "data,data,EOF - 2 bufs",
@@ -321,7 +322,7 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 					err: io.EOF,
 				},
 			},
-			expectedBufs: 3,
+			wantBufs: 3,
 		},
 	}
 
@@ -334,30 +335,30 @@ func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
 				reads: tc.reads,
 			}
 			data, err := mem.ReadAll(r, pool)
-			if tc.expectedErr != "" {
-				if err == nil || err.Error() != tc.expectedErr {
-					t.Fatalf("ReadAll() expected error %q, got %q", tc.expectedErr, err)
+			if tc.wantErr != "" {
+				if err == nil || err.Error() != tc.wantErr {
+					t.Fatalf("ReadAll() returned err %v, wanted %q", err, tc.wantErr)
 				}
 			} else {
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-			actualData := data.Materialize()
-			if !bytes.Equal(r.read, actualData) {
-				t.Fatalf("ReadAll() expected data %q, got %q", r.read, actualData)
+			gotData := data.Materialize()
+			if !bytes.Equal(r.read, gotData) {
+				t.Fatalf("ReadAll() returned data %q, wanted %q", gotData, r.read)
 			}
-			if len(data) != tc.expectedBufs {
-				t.Fatalf("ReadAll() expected %d bufs, got %d", tc.expectedBufs, len(data))
+			if len(data) != tc.wantBufs {
+				t.Fatalf("ReadAll() returned %d bufs, wanted %d bufs", len(data), tc.wantBufs)
 			}
 			for i := 0; i < len(data)-1; i++ { // all but last should be full buffers
 				if data[i].Len() != readAllBufSize {
-					t.Fatalf("ReadAll() expected data length %d, got %d", readAllBufSize, data[i].Len())
+					t.Fatalf("ReadAll() returned data length %d, wanted %d", data[i].Len(), readAllBufSize)
 				}
 			}
 			data.Free()
 			if len(pool.allocated) > 0 {
-				t.Fatalf("expected no allocated buffers, got %d", len(pool.allocated))
+				t.Fatalf("got %d allocated buffers, wanted none", len(pool.allocated))
 			}
 		})
 	}
@@ -397,13 +398,13 @@ func (s) TestBufferSlice_ReadAll_WriteTo(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			actualData := data.Materialize()
-			if !bytes.Equal(buf, actualData) {
-				t.Fatalf("ReadAll() expected data %q, got %q", buf, actualData)
+			gotData := data.Materialize()
+			if !bytes.Equal(buf, gotData) {
+				t.Fatalf("ReadAll() = %q, wanted %q", gotData, buf)
 			}
 			data.Free()
 			if len(pool.allocated) > 0 {
-				t.Fatalf("expected no allocated buffers, got %d", len(pool.allocated))
+				t.Fatalf("wanted no allocated buffers, got %d", len(pool.allocated))
 			}
 		})
 	}
@@ -435,11 +436,15 @@ var (
 	_ mem.BufferPool = (*testPool)(nil)
 )
 
+// readStep describes what a single stepReader.Read should do - how much data to return and what error to return.
 type readStep struct {
 	n   int
 	err error
 }
 
+// stepReader implements io.Reader that reads specified amount of data and/or
+// returns the specified error in specified steps.
+// The read data is accumulated in the read field.
 type stepReader struct {
 	reads []readStep
 	read  []byte
@@ -459,6 +464,9 @@ func (s *stepReader) Read(buf []byte) (int, error) {
 	return read.n, read.err
 }
 
+// testPool is an implementation of BufferPool that allows to ensure that:
+// - there are matching Put calls for all Get calls.
+// - there are no unexpected Put calls.
 type testPool struct {
 	allocated map[*[]byte]struct{}
 }

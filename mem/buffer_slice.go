@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	readAllBufSize = 32 * 1024 // 32 KiB
+	// 32 KiB is what io.Copy uses.
+	readAllBufSize = 32 * 1024
 )
 
 // BufferSlice offers a means to represent data that spans one or more Buffer
@@ -223,8 +224,8 @@ func (w *writer) Write(p []byte) (n int, err error) {
 
 // NewWriter wraps the given BufferSlice and BufferPool to implement the
 // io.Writer interface. Every call to Write copies the contents of the given
-// buffer into a new Buffer pulled from the given pool and the Buffer is added to
-// the given BufferSlice.
+// buffer into a new Buffer pulled from the given pool and the Buffer is
+// added to the given BufferSlice.
 func NewWriter(buffers *BufferSlice, pool BufferPool) io.Writer {
 	return &writer{buffers: buffers, pool: pool}
 }
@@ -233,20 +234,24 @@ func NewWriter(buffers *BufferSlice, pool BufferPool) io.Writer {
 // A successful call returns err == nil, not err == EOF. Because ReadAll is
 // defined to read from src until EOF, it does not treat an EOF from Read
 // as an error to be reported.
-// Make sure to free the returned buffers even if you get an error from this function.
+// A failed call returns a non-nil error and could return partially read buffers.
+// It is the responsibility of the caller to free this buffer.
 func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 	var result BufferSlice
 	wt, ok := r.(io.WriterTo)
 	if ok {
-		// This is more optimal since wt knows the size of chunks it wants to write and, hence, we can allocate
-		// buffers of an optimal size to fit them. E.g. might be a single big chunk, and we wouldn't chop it into pieces.
+		// This is more optimal since wt knows the size of chunks it wants to
+		// write and, hence, we can allocate buffers of an optimal size to fit
+		// them. E.g. might be a single big chunk, and we wouldn't chop it
+		// into pieces.
 		w := NewWriter(&result, pool)
 		_, err := wt.WriteTo(w)
 		return result, err
 	}
 	for {
 		buf := pool.Get(readAllBufSize)
-		// We asked for 32KiB but may have been given a bigger buffer. Use all of it if that's the case.
+		// We asked for 32KiB but may have been given a bigger buffer.
+		// Use all of it if that's the case.
 		*buf = (*buf)[:cap(*buf)]
 		usedCap := 0
 		for {
