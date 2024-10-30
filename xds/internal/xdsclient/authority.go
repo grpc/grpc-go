@@ -440,7 +440,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.logger.Infof("New watch for type %q, resource name %q", rType.TypeName(), resourceName)
 		}
 
-		xdsChannel := a.xdsChannelToUseLocked()
+		xdsChannel := a.xdsChannelToUse()
 		if xdsChannel == nil {
 			return
 		}
@@ -537,20 +537,20 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 				if a.logger.V(2) {
 					a.logger.Infof("Removing last watch for for any resource type, releasing reference to the xdsChannel")
 				}
-				a.closeXDSChannelsLocked()
+				a.closeXDSChannels()
 			}
 		}, func() { close(done) })
 		<-done
 	})
 }
 
-// xdsChannelToUseLocked returns the xdsChannel to use for communicating with
-// the management server. If an active channel is available, it returns that.
+// xdsChannelToUse returns the xdsChannel to use for communicating with the
+// management server. If an active channel is available, it returns that.
 // Otherwise, it creates a new channel using the first server configuration in
 // the list of configurations, and returns that.
 //
 // Only executed in the context of a serializer callback.
-func (a *authority) xdsChannelToUseLocked() *xdsChannelWithConfig {
+func (a *authority) xdsChannelToUse() *xdsChannelWithConfig {
 	if a.activeXDSChannel != nil {
 		return a.activeXDSChannel
 	}
@@ -567,11 +567,11 @@ func (a *authority) xdsChannelToUseLocked() *xdsChannelWithConfig {
 	return a.activeXDSChannel
 }
 
-// closeXDSChannelsLocked closes all the xDS channels associated with this
-// authority, when there are no more watchers for any resource type.
+// closeXDSChannels closes all the xDS channels associated with this authority,
+// when there are no more watchers for any resource type.
 //
 // Only executed in the context of a serializer callback.
-func (a *authority) closeXDSChannelsLocked() {
+func (a *authority) closeXDSChannels() {
 	for _, xc := range a.xdsChannelConfigs {
 		if xc.cleanup != nil {
 			xc.cleanup()
