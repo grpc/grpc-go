@@ -622,7 +622,7 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 // state of the channel when a manual name resolver doesn't provide any updates.
 func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
+		t.Skip("Skipping test.")
 	}
 
 	backend := stubserver.StartTestService(t, nil)
@@ -640,15 +640,15 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+
 	cc.Connect()
 
-	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	mr.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: backend.Address}},
 	})
-
-	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
