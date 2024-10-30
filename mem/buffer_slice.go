@@ -238,8 +238,7 @@ func NewWriter(buffers *BufferSlice, pool BufferPool) io.Writer {
 // buffers. It is the responsibility of the caller to free this buffer.
 func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 	var result BufferSlice
-	wt, ok := r.(io.WriterTo)
-	if ok {
+	if wt, ok := r.(io.WriterTo); ok {
 		// This is more optimal since wt knows the size of chunks it wants to
 		// write and, hence, we can allocate buffers of an optimal size to fit
 		// them. E.g. might be a single big chunk, and we wouldn't chop it
@@ -248,6 +247,7 @@ func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 		_, err := wt.WriteTo(w)
 		return result, err
 	}
+nextBuffer:
 	for {
 		buf := pool.Get(readAllBufSize)
 		// We asked for 32KiB but may have been given a bigger buffer.
@@ -272,7 +272,7 @@ func ReadAll(r io.Reader, pool BufferPool) (BufferSlice, error) {
 			}
 			if len(*buf) == usedCap {
 				result = append(result, NewBuffer(buf, pool))
-				break // grab a new buf from pool
+				continue nextBuffer
 			}
 		}
 	}
