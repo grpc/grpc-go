@@ -132,19 +132,17 @@ type authorityBuildOptions struct {
 // is registered, and more channels are created as needed by the fallback logic.
 func newAuthority(args authorityBuildOptions) *authority {
 	ctx, cancel := context.WithCancel(context.Background())
+	l := grpclog.Component("xds")
+	logPrefix := args.logPrefix + fmt.Sprintf("[authority %q] ", args.name)
 	ret := &authority{
 		name:                      args.name,
 		watcherCallbackSerializer: args.serializer,
 		getChannelForADS:          args.getChannelForADS,
 		xdsClientSerializer:       grpcsync.NewCallbackSerializer(ctx),
 		xdsClientSerializerClose:  cancel,
+		logger:                    igrpclog.NewPrefixLogger(l, logPrefix),
 		resources:                 make(map[xdsresource.Type]map[string]*resourceState),
 	}
-
-	// Create a prefix logger specific to this authority.
-	l := grpclog.Component("xds")
-	logPrefix := args.logPrefix + fmt.Sprintf("[authority %q] ", args.name)
-	ret.logger = igrpclog.NewPrefixLogger(l, logPrefix)
 
 	// Create an ordered list of xdsChannels with their server configs. The
 	// actual channel to the first server configuration is created when the
@@ -211,9 +209,6 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 //
 // This method is called by the xDS client implementation (on all interested
 // authorities) when a stream error is reported by an xdsChannel.
-//
-// Once the update has been processed by all watchers, the authority is expected
-// to invoke the onDone callback.
 func (a *authority) adsResourceUpdate(serverConfig *bootstrap.ServerConfig, rType xdsresource.Type, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
 	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		a.handleADSResourceUpdate(serverConfig, rType, updates, md, onDone)
@@ -222,6 +217,9 @@ func (a *authority) adsResourceUpdate(serverConfig *bootstrap.ServerConfig, rTyp
 
 // handleADSResourceUpdate processes an update from the xDS client, updating the
 // resource cache and notifying any registered watchers of the update.
+//
+// Once the update has been processed by all watchers, the authority is expected
+// to invoke the onDone callback.
 //
 // Only executed in the context of a serializer callback.
 func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig, rType xdsresource.Type, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
@@ -582,39 +580,52 @@ func (a *authority) closeXDSChannels() {
 	a.activeXDSChannel = nil
 }
 
+// dumpResources returns a dump of the resource configuration cached by this
+// authority, for CSDS purposes.
 func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig {
 	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
 	done := make(chan struct{})
 
 	a.xdsClientSerializer.TrySchedule(func(context.Context) {
 		defer close(done)
-		for rType, resourceStates := range a.resources {
-			typeURL := rType.TypeURL()
-			for name, state := range resourceStates {
-				var raw *anypb.Any
-				if state.cache != nil {
-					raw = state.cache.Raw()
-				}
-				config := &v3statuspb.ClientConfig_GenericXdsConfig{
-					TypeUrl:      typeURL,
-					Name:         name,
-					VersionInfo:  state.md.Version,
-					XdsConfig:    raw,
-					LastUpdated:  timestamppb.New(state.md.Timestamp),
-					ClientStatus: serviceStatusToProto(state.md.Status),
-				}
-				if errState := state.md.ErrState; errState != nil {
-					config.ErrorState = &v3adminpb.UpdateFailureState{
-						LastUpdateAttempt: timestamppb.New(errState.Timestamp),
-						Details:           errState.Err.Error(),
-						VersionInfo:       errState.Version,
-					}
-				}
-				ret = append(ret, config)
-			}
-		}
+		ret = a.resourceConfig()
 	})
 	<-done
+	return ret
+}
+
+// resourceConfig returns a slice of GenericXdsConfig objects representing the
+// current state of all resources managed by this authority. This is used for
+// reporting the current state of the xDS client.
+//
+// Only executed in the context of a serializer callback.
+func (a *authority) resourceConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
+	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
+	for rType, resourceStates := range a.resources {
+		typeURL := rType.TypeURL()
+		for name, state := range resourceStates {
+			var raw *anypb.Any
+			if state.cache != nil {
+				raw = state.cache.Raw()
+			}
+			config := &v3statuspb.ClientConfig_GenericXdsConfig{
+				TypeUrl:      typeURL,
+				Name:         name,
+				VersionInfo:  state.md.Version,
+				XdsConfig:    raw,
+				LastUpdated:  timestamppb.New(state.md.Timestamp),
+				ClientStatus: serviceStatusToProto(state.md.Status),
+			}
+			if errState := state.md.ErrState; errState != nil {
+				config.ErrorState = &v3adminpb.UpdateFailureState{
+					LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+					Details:           errState.Err.Error(),
+					VersionInfo:       errState.Version,
+				}
+			}
+			ret = append(ret, config)
+		}
+	}
 	return ret
 }
 

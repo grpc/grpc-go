@@ -116,8 +116,8 @@ type OptionsForTesting struct {
 	// unspecified, uses the default value used in non-test code.
 	WatchExpiryTimeout time.Duration
 
-	// IdleChannelExpiryTimeout is the timeout before idle channels are deleted.
-	// If unspecified, uses the default value used in non-test code.
+	// IdleChannelExpiryTimeout is the timeout before idle xdsChannels are
+	// deleted. If unspecified, uses the default value used in non-test code.
 	IdleChannelExpiryTimeout time.Duration
 
 	// StreamBackoffAfterFailure is the backoff function used to determine the

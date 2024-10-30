@@ -50,7 +50,7 @@ type clientImpl struct {
 	config             *bootstrap.Config            // Complete bootstrap configuration.
 	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
 	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
-	transportBuilder   transport.Builder            // Builder to create transports to the xDS server.
+	transportBuilder   transport.Builder            // Builder to create transports to xDS server.
 	resourceTypes      *resourceTypeRegistry        // Registry of resource types, for parsing incoming ADS responses.
 	serializer         *grpcsync.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
@@ -161,7 +161,7 @@ func (c *clientImpl) close() {
 	// with stream failure happening at the same time. The latter will callback
 	// into the clientImpl and will attempt to grab the lock. This will result
 	// in a deadlock. So instead, we release the lock and wait for all active
-	// channel to be closed.
+	// channels to be closed.
 	var channelsToClose []*xdsChannel
 	c.channelsMu.Lock()
 	for _, cs := range c.xdsActiveChannels {
@@ -169,23 +169,17 @@ func (c *clientImpl) close() {
 	}
 	c.xdsActiveChannels = nil
 	c.channelsMu.Unlock()
-
-	var wg sync.WaitGroup
 	for _, c := range channelsToClose {
-		wg.Add(1)
-		go func(c *xdsChannel) {
-			defer wg.Done()
-			c.close()
-		}(c)
+		c.close()
 	}
-	wg.Wait()
 
 	// Similarly, closing idle channels cannot be done with the lock held, for
 	// the same reason as described above.  So, we clear the idle cache in a
 	// goroutine and use a condition variable to wait on the condition that the
 	// idle cache has zero entries. The Wait() method on the condition variable
-	// release the lock and blocks the goroutine until signaled (which happens
-	// when an idle channel is removed from the cache and closed).
+	// releases the lock and blocks the goroutine until signaled (which happens
+	// when an idle channel is removed from the cache and closed), and grabs the
+	// lock before returning.
 	c.channelsMu.Lock()
 	c.closeCond = sync.NewCond(&c.channelsMu)
 	go c.xdsIdleChannels.Clear(true)
@@ -212,6 +206,17 @@ func (c *clientImpl) close() {
 	c.logger.Infof("Shutdown")
 }
 
+// getChannelForADS returns an xdsChannel for the given server configuration.
+//
+// If an xdsChannel exists for the given server configuration, it is returned.
+// Else a new one is created. It also ensures that the calling authority is
+// added to the set of interested authorities for the returned channel.
+//
+// It returns the xdsChannel and a function to release the calling authority's
+// reference on the channel. The caller must call the cancel function when it is
+// no longer interested in this channel.
+//
+// A non-nil error is returned if an xdsChannel was not created.
 func (c *clientImpl) getChannelForADS(serverConfig *bootstrap.ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
 		return nil, nil, ErrClientClosed
@@ -233,6 +238,17 @@ func (c *clientImpl) getChannelForADS(serverConfig *bootstrap.ServerConfig, call
 	return c.getOrCreateChannel(serverConfig, initLocked, deInitLocked)
 }
 
+// getChannelForLRS returns an xdsChannel for the given server configuration.
+//
+// If an xdsChannel exists for the given server configuration, it is returned.
+// Else a new one is created. A reference count that tracks the number of LRS
+// calls on the returned channel is incremented before returning the channel.
+//
+// It returns the xdsChannel and a function to decrement the reference count
+// that tracks the number of LRS calls on the returned channel. The caller must
+// call the cancel function when it is no longer interested in this channel.
+//
+// A non-nil error is returned if an xdsChannel was not created.
 func (c *clientImpl) getChannelForLRS(serverConfig *bootstrap.ServerConfig) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
 		return nil, nil, ErrClientClosed
@@ -244,6 +260,27 @@ func (c *clientImpl) getChannelForLRS(serverConfig *bootstrap.ServerConfig) (*xd
 	return c.getOrCreateChannel(serverConfig, initLocked, deInitLocked)
 }
 
+// getOrCreateChannel returns an xdsChannel for the given server configuration.
+//
+// If an active xdsChannel exists for the given server configuration, it is
+// returned. If an idle xdsChannel exists for the given server configuration, it
+// is revived from the idle cache and returned. Else a new one is created.
+//
+// The initLocked function runs some initialization logic before the channel is
+// returned. This includes adding the calling authority to the set of interested
+// authorities for the channel or incrementing the count of the number of LRS
+// calls on the channel.
+//
+// The deInitLocked function runs some cleanup logic when the returned cleanup
+// function is called. This involves removing the calling authority from the set
+// of interested authorities for the channel or decrementing the count of the
+// number of LRS calls on the channel.
+//
+// Both initLocked and deInitLocked are called with the c.channelsMu held.
+//
+// Returns the xdsChannel and a cleanup function to be invoked when the channel
+// is no longer required. A non-nil error is returned if an xdsChannel was not
+// created.
 func (c *clientImpl) getOrCreateChannel(serverConfig *bootstrap.ServerConfig, initLocked, deInitLocked func(*channelState)) (*xdsChannel, func(), error) {
 	c.channelsMu.Lock()
 	defer c.channelsMu.Unlock()
@@ -262,12 +299,12 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *bootstrap.ServerConfig, in
 	}
 
 	// If an idle channel exists for this server config, remove it from the
-	// idle cache and add it to the map of active channels, add return it.
-	if state, ok := c.xdsIdleChannels.Remove(serverConfig.String()); ok {
+	// idle cache and add it to the map of active channels, and return it.
+	if s, ok := c.xdsIdleChannels.Remove(serverConfig.String()); ok {
 		if c.logger.V(2) {
 			c.logger.Infof("Reviving an xdsChannel from the idle cache for server config %q", serverConfig)
 		}
-		state, _ := state.(*channelState)
+		state := s.(*channelState)
 		c.xdsActiveChannels[serverConfig.String()] = state
 		initLocked(state)
 		return state.channel, c.releaseChannel(serverConfig, state, deInitLocked), nil
@@ -307,6 +344,19 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *bootstrap.ServerConfig, in
 	return state.channel, c.releaseChannel(serverConfig, state, deInitLocked), nil
 }
 
+// releaseChannel is a function that is called when a reference to an xdsChannel
+// needs to be released. It handles the logic of moving the channel to an idle
+// cache if there are no other active references, and closing the channel if it
+// remains in the idle cache for the configured duration.
+//
+// The function takes the following parameters:
+// - serverConfig: the server configuration for the xdsChannel
+// - state: the state of the xdsChannel
+// - deInitLocked: a function that performs any necessary cleanup for the xdsChannel
+//
+// The function returns another function that can be called to release the
+// reference to the xdsChannel. This returned function is idempotent, meaning
+// it can be called multiple times without any additional effect.
 func (c *clientImpl) releaseChannel(serverConfig *bootstrap.ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
 	return grpcsync.OnceFunc(func() {
 		c.channelsMu.Lock()
