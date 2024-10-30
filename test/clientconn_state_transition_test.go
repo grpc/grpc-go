@@ -644,6 +644,8 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 
 	cc.Connect()
 
+	time.Sleep(100 * time.Millisecond)
+
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	mr.UpdateState(resolver.State{
