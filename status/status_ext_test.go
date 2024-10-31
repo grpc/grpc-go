@@ -21,6 +21,7 @@ package status_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -35,8 +36,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	tpb "google.golang.org/grpc/testdata/grpc_testing_not_regenerated"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -201,5 +204,58 @@ func (s) TestStatusDetails(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// TestStatus_ErrorDetailsMessageV1 verifies backward compatibility of the
+// status.Details() method when using protobuf code generated with only the
+// MessageV1 API implementation.
+func (s) TestStatus_ErrorDetailsMessageV1(t *testing.T) {
+	details := []protoadapt.MessageV1{
+		&tpb.SimpleMessage{Data: "abc"},
+	}
+	s, err := status.New(codes.Aborted, "").WithDetails(details...)
+	if err != nil {
+		t.Fatalf("(%v).WithDetails(%+v) failed: %v", s, details, err)
+	}
+	gotDetails := s.Details()
+	for i, msg := range gotDetails {
+		if got, want := reflect.TypeOf(msg), reflect.TypeOf(details[i]); got != want {
+			t.Errorf("reflect.Typeof(%v) = %v, want = %v", msg, got, want)
+		}
+		if _, ok := msg.(protoadapt.MessageV1); !ok {
+			t.Errorf("(%v).Details() returned message that doesn't implement protoadapt.MessageV1: %v", s, msg)
+		}
+		if diff := cmp.Diff(msg, details[i], protocmp.Transform()); diff != "" {
+			t.Errorf("(%v).Details got unexpected output, diff (-got +want):\n%s", s, diff)
+		}
+	}
+}
+
+// TestStatus_ErrorDetailsMessageV1AndV2 verifies that status.Details() method
+// returns the same message types when using protobuf code generated with both the
+// MessageV1 and MessageV2 API implementations.
+func (s) TestStatus_ErrorDetailsMessageV1AndV2(t *testing.T) {
+	details := []protoadapt.MessageV1{
+		&testpb.Empty{},
+	}
+	s, err := status.New(codes.Aborted, "").WithDetails(details...)
+	if err != nil {
+		t.Fatalf("(%v).WithDetails(%+v) failed: %v", s, details, err)
+	}
+	gotDetails := s.Details()
+	for i, msg := range gotDetails {
+		if got, want := reflect.TypeOf(msg), reflect.TypeOf(details[i]); got != want {
+			t.Errorf("reflect.Typeof(%v) = %v, want = %v", msg, got, want)
+		}
+		if _, ok := msg.(protoadapt.MessageV1); !ok {
+			t.Errorf("(%v).Details() returned message that doesn't implement protoadapt.MessageV1: %v", s, msg)
+		}
+		if _, ok := msg.(protoadapt.MessageV2); !ok {
+			t.Errorf("(%v).Details() returned message that doesn't implement protoadapt.MessageV2: %v", s, msg)
+		}
+		if diff := cmp.Diff(msg, details[i], protocmp.Transform()); diff != "" {
+			t.Errorf("(%v).Details got unexpected output, diff (-got +want):\n%s", s, diff)
+		}
 	}
 }
