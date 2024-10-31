@@ -106,9 +106,13 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	}
 
 	// Restart the server and verify that the timer is running and the watch
-	// state is `requested`.
+	// state is `requested`, for the second resource. For the first resource,
+	// nothing should change.
 	lis.Restart()
 	if err := waitForResourceWatchState(ctx, client, listenerName2, ads.ResourceWatchStateRequested, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyResourceWatchState(client, listenerName1, ads.ResourceWatchStateReceived, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,6 +133,8 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	}
 }
 
+// Tests the behavior of the xDS client when a resource watch timer expires and
+// verifies the resource watch state transitions as expected.
 func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -160,6 +166,9 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Since the resource is not configured on the management server, the watch
+	// expiry timer is expected to fire, and the watch state should move to
+	// `timeout`.
 	if err := waitForResourceWatchState(ctx, client, listenerName, ads.ResourceWatchStateTimeout, false); err != nil {
 		t.Fatal(err)
 	}
