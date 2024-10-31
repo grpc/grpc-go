@@ -17,9 +17,9 @@
 
 syntax = "proto3";
 
-option go_package = "google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate";
-
 package grpc.testing;
+
+option go_package = "google.golang.org/grpc/testdata/grpc_testing_not_regenerated";
 
 message DynamicRes {}
 

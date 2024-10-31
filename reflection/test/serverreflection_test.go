@@ -43,7 +43,7 @@ import (
 	v1reflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	v1alphareflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
-	pbv3 "google.golang.org/grpc/reflection/test/grpc_testing_not_regenerate"
+	pbv3 "google.golang.org/grpc/testdata/grpc_testing_not_regenerated"
 )
 
 var (
