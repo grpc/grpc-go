@@ -1873,8 +1873,6 @@ type ServerTransportStream interface {
 	SetTrailer(md metadata.MD) error
 }
 
-func (s *Server) mustEmbedDelegateStream() {}
-
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in
 // ctx. Returns nil if the given context has no stream associated with it
 // (which implies it is not an RPC invocation context).
