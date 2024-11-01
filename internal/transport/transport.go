@@ -284,17 +284,48 @@ const (
 	streamDone                  // the entire stream is finished.
 )
 
+type ClientStream struct {
+	*Stream // Embed for common stream functionality.
+
+	ct       ClientTransport
+	done     chan struct{} // closed at the end of stream to unblock writers.
+	doneFunc func()        // invoked at the end of stream.
+
+	headerChan       chan struct{} // closed to indicate the end of header metadata.
+	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
+	// headerValid indicates whether a valid header was received.  Only
+	// meaningful after headerChan is closed (always call waitOnHeader() before
+	// reading its value).
+	headerValid bool
+	header      metadata.MD // the received header metadata
+	noHeaders   bool        // set if the client never received headers (set only after the stream is done).
+
+	status *status.Status // the status error received from the server
+}
+
+type ServerStream struct {
+	*Stream // Embed for common stream functionality.
+
+	st      ServerTransport
+	ctxDone <-chan struct{}    // closed at the end of stream.  Cache of ctx.Done() (for performance)
+	cancel  context.CancelFunc // invoked at the end of stream to cancel ctx.
+
+	// Holds compressor names passed in grpc-accept-encoding metadata from the
+	// client.
+	clientAdvertisedCompressors string
+	headerWireLength            int
+
+	// hdrMu protects outgoing header and trailer metadata.
+	hdrMu      sync.Mutex
+	header     metadata.MD // the outgoing header metadata.  Updated by WriteHeader.
+	headerSent uint32      // atomically set to 1 when the headers are sent out.
+}
+
 // Stream represents an RPC in the transport layer.
 type Stream struct {
 	id           uint32
-	st           ServerTransport    // nil for client side Stream
-	ct           ClientTransport    // nil for server side Stream
-	ctx          context.Context    // the associated context of the stream
-	cancel       context.CancelFunc // always nil for client side Stream
-	done         chan struct{}      // closed at the end of stream to unblock writers. On the client side.
-	doneFunc     func()             // invoked at the end of stream on client side.
-	ctxDone      <-chan struct{}    // same as done chan but for server side. Cache of ctx.Done() (for performance)
-	method       string             // the associated RPC method of the stream
+	ctx          context.Context // the associated context of the stream
+	method       string          // the associated RPC method of the stream
 	recvCompress string
 	sendCompress string
 	buf          *recvBuffer
@@ -302,40 +333,11 @@ type Stream struct {
 	fc           *inFlow
 	wq           *writeQuota
 
-	// Holds compressor names passed in grpc-accept-encoding metadata from the
-	// client. This is empty for the client side stream.
-	clientAdvertisedCompressors string
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.
 	requestRead func(int)
 
-	headerChan       chan struct{} // closed to indicate the end of header metadata.
-	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
-	// headerValid indicates whether a valid header was received.  Only
-	// meaningful after headerChan is closed (always call waitOnHeader() before
-	// reading its value).  Not valid on server side.
-	headerValid      bool
-	headerWireLength int // Only set on server side.
-
-	// hdrMu protects header and trailer metadata on the server-side.
-	hdrMu sync.Mutex
-	// On client side, header keeps the received header metadata.
-	//
-	// On server side, header keeps the header set by SetHeader(). The complete
-	// header will merged into this after t.WriteHeader() is called.
-	header  metadata.MD
-	trailer metadata.MD // the key-value map of trailer metadata.
-
-	noHeaders bool // set if the client never received headers (set only after the stream is done).
-
-	// On the server-side, headerSent is atomically set to 1 when the headers are sent out.
-	headerSent uint32
-
 	state streamState
-
-	// On client-side it is the status error received from the server.
-	// On server-side it is unused.
-	status *status.Status
 
 	bytesReceived uint32 // indicates whether any bytes have been received on this stream
 	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
@@ -343,16 +345,18 @@ type Stream struct {
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
+
+	trailer metadata.MD // the key-value map of trailer metadata.
 }
 
-// isHeaderSent is only valid on the server-side.
-func (s *Stream) isHeaderSent() bool {
+// isHeaderSent indicates whether headers have been sent.
+func (s *ServerStream) isHeaderSent() bool {
 	return atomic.LoadUint32(&s.headerSent) == 1
 }
 
 // updateHeaderSent updates headerSent and returns true
-// if it was already set. It is valid only on server-side.
-func (s *Stream) updateHeaderSent() bool {
+// if it was already set.
+func (s *ServerStream) updateHeaderSent() bool {
 	return atomic.SwapUint32(&s.headerSent, 1) == 1
 }
 
@@ -368,7 +372,7 @@ func (s *Stream) getState() streamState {
 	return streamState(atomic.LoadUint32((*uint32)(&s.state)))
 }
 
-func (s *Stream) waitOnHeader() {
+func (s *ClientStream) waitOnHeader() {
 	if s.headerChan == nil {
 		// On the server headerChan is always nil since a stream originates
 		// only after having received headers.
@@ -388,13 +392,19 @@ func (s *Stream) waitOnHeader() {
 
 // RecvCompress returns the compression algorithm applied to the inbound
 // message. It is empty string if there is no compression applied.
-func (s *Stream) RecvCompress() string {
+func (s *ClientStream) RecvCompress() string {
 	s.waitOnHeader()
 	return s.recvCompress
 }
 
+// RecvCompress returns the compression algorithm applied to the inbound
+// message. It is empty string if there is no compression applied.
+func (s *ServerStream) RecvCompress() string {
+	return s.recvCompress
+}
+
 // SetSendCompress sets the compression algorithm to the stream.
-func (s *Stream) SetSendCompress(name string) error {
+func (s *ServerStream) SetSendCompress(name string) error {
 	if s.isHeaderSent() || s.getState() == streamDone {
 		return errors.New("transport: set send compressor called after headers sent or stream done")
 	}
@@ -410,7 +420,7 @@ func (s *Stream) SendCompress() string {
 
 // ClientAdvertisedCompressors returns the compressor names advertised by the
 // client via grpc-accept-encoding header.
-func (s *Stream) ClientAdvertisedCompressors() []string {
+func (s *ServerStream) ClientAdvertisedCompressors() []string {
 	values := strings.Split(s.clientAdvertisedCompressors, ",")
 	for i, v := range values {
 		values[i] = strings.TrimSpace(v)
@@ -420,24 +430,15 @@ func (s *Stream) ClientAdvertisedCompressors() []string {
 
 // Done returns a channel which is closed when it receives the final status
 // from the server.
-func (s *Stream) Done() <-chan struct{} {
+func (s *ClientStream) Done() <-chan struct{} {
 	return s.done
 }
 
-// Header returns the header metadata of the stream.
-//
-// On client side, it acquires the key-value pairs of header metadata once it is
-// available. It blocks until i) the metadata is ready or ii) there is no header
-// metadata or iii) the stream is canceled/expired.
-//
-// On server side, it returns the out header after t.WriteHeader is called.  It
-// does not block and must not be called until after WriteHeader.
-func (s *Stream) Header() (metadata.MD, error) {
-	if s.headerChan == nil {
-		// On server side, return the header in stream. It will be the out
-		// header after t.WriteHeader is called.
-		return s.header.Copy(), nil
-	}
+// Header returns the header metadata of the stream. Acquires the key-value
+// pairs of header metadata once it is available. It blocks until i) the
+// metadata is ready or ii) there is no header metadata or iii) the stream is
+// canceled/expired.
+func (s *ClientStream) Header() (metadata.MD, error) {
 	s.waitOnHeader()
 
 	if !s.headerValid || s.noHeaders {
@@ -447,22 +448,29 @@ func (s *Stream) Header() (metadata.MD, error) {
 	return s.header.Copy(), nil
 }
 
+// Header returns the header metadata of the stream.  It returns the out header
+// after t.WriteHeader is called.  It does not block and must not be called
+// until after WriteHeader.
+func (s *ServerStream) Header() (metadata.MD, error) {
+	// Return the header in stream. It will be the out
+	// header after t.WriteHeader is called.
+	return s.header.Copy(), nil
+}
+
 // TrailersOnly blocks until a header or trailers-only frame is received and
 // then returns true if the stream was trailers-only.  If the stream ends
-// before headers are received, returns true, nil.  Client-side only.
-func (s *Stream) TrailersOnly() bool {
+// before headers are received, returns true, nil.
+func (s *ClientStream) TrailersOnly() bool {
 	s.waitOnHeader()
 	return s.noHeaders
 }
 
 // Trailer returns the cached trailer metadata. Note that if it is not called
-// after the entire stream is done, it could return an empty MD. Client
-// side only.
+// after the entire stream is done, it could return an empty MD.
 // It can be safely read only after stream has ended that is either read
 // or write have returned io.EOF.
 func (s *Stream) Trailer() metadata.MD {
-	c := s.trailer.Copy()
-	return c
+	return s.trailer.Copy()
 }
 
 // ContentSubtype returns the content-subtype for a request. For example, a
@@ -493,20 +501,19 @@ func (s *Stream) Method() string {
 // Status returns the status received from the server.
 // Status can be read safely only after the stream has ended,
 // that is, after Done() is closed.
-func (s *Stream) Status() *status.Status {
+func (s *ClientStream) Status() *status.Status {
 	return s.status
 }
 
 // HeaderWireLength returns the size of the headers of the stream as received
-// from the wire. Valid only on the server.
-func (s *Stream) HeaderWireLength() int {
+// from the wire.
+func (s *ServerStream) HeaderWireLength() int {
 	return s.headerWireLength
 }
 
 // SetHeader sets the header metadata. This can be called multiple times.
-// Server side only.
 // This should not be called in parallel to other data writes.
-func (s *Stream) SetHeader(md metadata.MD) error {
+func (s *ServerStream) SetHeader(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
@@ -522,14 +529,14 @@ func (s *Stream) SetHeader(md metadata.MD) error {
 // SendHeader sends the given header metadata. The given metadata is
 // combined with any metadata set by previous calls to SetHeader and
 // then written to the transport stream.
-func (s *Stream) SendHeader(md metadata.MD) error {
+func (s *ServerStream) SendHeader(md metadata.MD) error {
 	return s.st.WriteHeader(s, md)
 }
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status
-// by the server. This can be called multiple times. Server side only.
+// by the server. This can be called multiple times.
 // This should not be called parallel to other data writes.
-func (s *Stream) SetTrailer(md metadata.MD) error {
+func (s *ServerStream) SetTrailer(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
@@ -777,16 +784,16 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
+	Write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *Options) error
 
 	// NewStream creates a Stream for an RPC.
-	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
+	NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error)
 
 	// CloseStream clears the footprint of a stream when the stream is
 	// not needed any more. The err indicates the error incurred when
 	// CloseStream is called. Must be called when a stream is finished
 	// unless the associated transport is closing.
-	CloseStream(stream *Stream, err error)
+	CloseStream(stream *ClientStream, err error)
 
 	// Error returns a channel that is closed when some I/O error
 	// happens. Typically the caller should have a goroutine to monitor
@@ -821,19 +828,19 @@ type ClientTransport interface {
 // Write methods for a given Stream will be called serially.
 type ServerTransport interface {
 	// HandleStreams receives incoming streams using the given handler.
-	HandleStreams(context.Context, func(*Stream))
+	HandleStreams(context.Context, func(*ServerStream))
 
 	// WriteHeader sends the header metadata for the given stream.
 	// WriteHeader may not be called on all streams.
-	WriteHeader(s *Stream, md metadata.MD) error
+	WriteHeader(s *ServerStream, md metadata.MD) error
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
+	Write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *Options) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.
-	WriteStatus(s *Stream, st *status.Status) error
+	WriteStatus(s *ServerStream, st *status.Status) error
 
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their

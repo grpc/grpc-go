@@ -584,7 +584,7 @@ type csAttempt struct {
 	ctx        context.Context
 	cs         *clientStream
 	t          transport.ClientTransport
-	s          *transport.Stream
+	s          *transport.ClientStream
 	p          *parser
 	pickResult balancer.PickResult
 
@@ -1340,7 +1340,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 }
 
 type addrConnStream struct {
-	s         *transport.Stream
+	s         *transport.ClientStream
 	ac        *addrConn
 	callHdr   *transport.CallHdr
 	cancel    context.CancelFunc
@@ -1578,7 +1578,7 @@ type ServerStream interface {
 type serverStream struct {
 	ctx   context.Context
 	t     transport.ServerTransport
-	s     *transport.Stream
+	s     *transport.ServerStream
 	p     *parser
 	codec baseCodec
 
