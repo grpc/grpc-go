@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -723,12 +722,6 @@ type ConnectOptions struct {
 	UseProxy bool
 	// The mem.BufferPool to use when reading/writing to the wire.
 	BufferPool mem.BufferPool
-}
-
-// NewClientTransport establishes the transport with the required ConnectOptions
-// and returns it to the caller.
-func NewClientTransport(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (ClientTransport, error) {
-	return newHTTP2Client(connectCtx, ctx, addr, opts, onClose)
 }
 
 // Options provides additional hints and information for message
