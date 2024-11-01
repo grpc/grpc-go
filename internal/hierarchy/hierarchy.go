@@ -48,6 +48,16 @@ func (p pathValue) Equal(o any) bool {
 	return true
 }
 
+// GetEndpoint returns the hierarchical path of endpoint.
+func GetEndpoint(endpoint resolver.Endpoint) []string {
+	attrs := endpoint.Attributes
+	if attrs == nil {
+		return nil
+	}
+	path, _ := attrs.Value(pathKey).(pathValue)
+	return ([]string)(path)
+}
+
 // Get returns the hierarchical path of addr.
 func Get(addr resolver.Address) []string {
 	attrs := addr.BalancerAttributes
@@ -56,6 +66,12 @@ func Get(addr resolver.Address) []string {
 	}
 	path, _ := attrs.Value(pathKey).(pathValue)
 	return ([]string)(path)
+}
+
+// SetEndpoint overrides the hierarchical path in endpoint with path.
+func SetEndpoint(endpoint resolver.Endpoint, path []string) resolver.Endpoint {
+	endpoint.Attributes = endpoint.Attributes.WithValue(pathKey, pathValue(path))
+	return endpoint
 }
 
 // Set overrides the hierarchical path in addr with path.
@@ -107,6 +123,22 @@ func Group(addrs []resolver.Address) map[string][]resolver.Address {
 		newPath := oldPath[1:]
 		newAddr := Set(addr, newPath)
 		ret[curPath] = append(ret[curPath], newAddr)
+	}
+	return ret
+}
+
+// GroupEndpoints groups endpoints as per Group above.
+func GroupEndpoints(endpoints []resolver.Endpoint) map[string][]resolver.Endpoint {
+	ret := make(map[string][]resolver.Endpoint)
+	for _, endpoint := range endpoints {
+		oldPath := GetEndpoint(endpoint)
+		if len(oldPath) == 0 {
+			continue
+		}
+		curPath := oldPath[0]
+		newPath := oldPath[1:]
+		newEndpoint := SetEndpoint(endpoint, newPath)
+		ret[curPath] = append(ret[curPath], newEndpoint)
 	}
 	return ret
 }
