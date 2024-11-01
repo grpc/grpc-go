@@ -1814,18 +1814,6 @@ func (sts *ServerTransportStreamWithMethod) Method() string {
 	return sts.method
 }
 
-func (sts *ServerTransportStreamWithMethod) SetHeader(metadata.MD) error {
-	return nil
-}
-
-func (sts *ServerTransportStreamWithMethod) SendHeader(metadata.MD) error {
-	return nil
-}
-
-func (sts *ServerTransportStreamWithMethod) SetTrailer(metadata.MD) error {
-	return nil
-}
-
 // An audit logger that will log to the auditEvents slice.
 type TestAuditLoggerBuffer struct {
 	auditEvents *[]*audit.Event
