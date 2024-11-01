@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	defaultWatchExpiryTimeout         = 15 * time.Second
-	defaultIdleAuthorityDeleteTimeout = 5 * time.Minute
+	defaultWatchExpiryTimeout       = 15 * time.Second
+	defaultIdleChannelExpiryTimeout = 5 * time.Minute
 )
 
 var (
@@ -63,7 +63,7 @@ func clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func newRefCounted(name string, watchExpiryTimeout, idleAuthorityTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+func newRefCounted(name string, watchExpiryTimeout, idleChannelExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 
@@ -77,7 +77,7 @@ func newRefCounted(name string, watchExpiryTimeout, idleAuthorityTimeout time.Du
 	if err != nil {
 		return nil, nil, fmt.Errorf("xds: failed to get xDS bootstrap config: %v", err)
 	}
-	c, err := newClientImpl(config, watchExpiryTimeout, idleAuthorityTimeout, streamBackoff)
+	c, err := newClientImpl(config, watchExpiryTimeout, idleChannelExpiryTimeout, streamBackoff)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -56,7 +56,7 @@ type StreamImpl struct {
 	// The following fields are initialized when a Stream instance is created
 	// and are read-only afterwards, and hence can be accessed without a mutex.
 	transport transport.Interface     // Transport to use for LRS stream.
-	backoff   func(int) time.Duration // Backoff for retries after stream failures.
+	backoff   func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto *v3corepb.Node          // Identifies the gRPC application.
 	doneCh    chan struct{}           // To notify exit of LRS goroutine.
 	logger    *igrpclog.PrefixLogger
@@ -71,7 +71,7 @@ type StreamImpl struct {
 // StreamOpts holds the options for creating an lrsStream.
 type StreamOpts struct {
 	Transport transport.Interface     // xDS transport to create the stream on.
-	Backoff   func(int) time.Duration // Backoff for retries after stream failures.
+	Backoff   func(int) time.Duration // Backoff for retries, after stream failures.
 	NodeProto *v3corepb.Node          // Node proto to identify the gRPC application.
 	LogPrefix string                  // Prefix to be used for log messages.
 }
@@ -117,6 +117,13 @@ func (lrs *StreamImpl) ReportLoad() (*load.Store, func()) {
 		}
 		lrs.refCount--
 		if lrs.refCount != 0 {
+			return
+		}
+
+		if lrs.cancelStream == nil {
+			// It is possible that Stop() is called before the cleanup function
+			// is called, thereby setting cancelStream to nil. Hence we need a
+			// nil check here bofore invoking the cancel function.
 			return
 		}
 		lrs.cancelStream()
