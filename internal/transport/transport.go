@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -284,46 +283,6 @@ const (
 	streamDone                  // the entire stream is finished.
 )
 
-type ClientStream struct {
-	*Stream // Embed for common stream functionality.
-
-	ct       ClientTransport
-	done     chan struct{} // closed at the end of stream to unblock writers.
-	doneFunc func()        // invoked at the end of stream.
-
-	headerChan       chan struct{} // closed to indicate the end of header metadata.
-	headerChanClosed uint32        // set when headerChan is closed. Used to avoid closing headerChan multiple times.
-	// headerValid indicates whether a valid header was received.  Only
-	// meaningful after headerChan is closed (always call waitOnHeader() before
-	// reading its value).
-	headerValid bool
-	header      metadata.MD // the received header metadata
-	noHeaders   bool        // set if the client never received headers (set only after the stream is done).
-
-	bytesReceived uint32 // indicates whether any bytes have been received on this stream
-	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
-
-	status *status.Status // the status error received from the server
-}
-
-type ServerStream struct {
-	*Stream // Embed for common stream functionality.
-
-	st      ServerTransport
-	ctxDone <-chan struct{}    // closed at the end of stream.  Cache of ctx.Done() (for performance)
-	cancel  context.CancelFunc // invoked at the end of stream to cancel ctx.
-
-	// Holds compressor names passed in grpc-accept-encoding metadata from the
-	// client.
-	clientAdvertisedCompressors string
-	headerWireLength            int
-
-	// hdrMu protects outgoing header and trailer metadata.
-	hdrMu      sync.Mutex
-	header     metadata.MD // the outgoing header metadata.  Updated by WriteHeader.
-	headerSent uint32      // atomically set to 1 when the headers are sent out.
-}
-
 // Stream represents an RPC in the transport layer.
 type Stream struct {
 	id           uint32
@@ -349,17 +308,6 @@ type Stream struct {
 	trailer metadata.MD // the key-value map of trailer metadata.
 }
 
-// isHeaderSent indicates whether headers have been sent.
-func (s *ServerStream) isHeaderSent() bool {
-	return atomic.LoadUint32(&s.headerSent) == 1
-}
-
-// updateHeaderSent updates headerSent and returns true
-// if it was already set.
-func (s *ServerStream) updateHeaderSent() bool {
-	return atomic.SwapUint32(&s.headerSent, 1) == 1
-}
-
 func (s *Stream) swapState(st streamState) streamState {
 	return streamState(atomic.SwapUint32((*uint32)(&s.state), uint32(st)))
 }
@@ -372,97 +320,9 @@ func (s *Stream) getState() streamState {
 	return streamState(atomic.LoadUint32((*uint32)(&s.state)))
 }
 
-func (s *ClientStream) waitOnHeader() {
-	if s.headerChan == nil {
-		// On the server headerChan is always nil since a stream originates
-		// only after having received headers.
-		return
-	}
-	select {
-	case <-s.ctx.Done():
-		// Close the stream to prevent headers/trailers from changing after
-		// this function returns.
-		s.ct.CloseStream(s, ContextErr(s.ctx.Err()))
-		// headerChan could possibly not be closed yet if closeStream raced
-		// with operateHeaders; wait until it is closed explicitly here.
-		<-s.headerChan
-	case <-s.headerChan:
-	}
-}
-
-// RecvCompress returns the compression algorithm applied to the inbound
-// message. It is empty string if there is no compression applied.
-func (s *ClientStream) RecvCompress() string {
-	s.waitOnHeader()
-	return s.recvCompress
-}
-
-// RecvCompress returns the compression algorithm applied to the inbound
-// message. It is empty string if there is no compression applied.
-func (s *ServerStream) RecvCompress() string {
-	return s.recvCompress
-}
-
-// SetSendCompress sets the compression algorithm to the stream.
-func (s *ServerStream) SetSendCompress(name string) error {
-	if s.isHeaderSent() || s.getState() == streamDone {
-		return errors.New("transport: set send compressor called after headers sent or stream done")
-	}
-
-	s.sendCompress = name
-	return nil
-}
-
 // SendCompress returns the send compressor name.
 func (s *Stream) SendCompress() string {
 	return s.sendCompress
-}
-
-// ClientAdvertisedCompressors returns the compressor names advertised by the
-// client via grpc-accept-encoding header.
-func (s *ServerStream) ClientAdvertisedCompressors() []string {
-	values := strings.Split(s.clientAdvertisedCompressors, ",")
-	for i, v := range values {
-		values[i] = strings.TrimSpace(v)
-	}
-	return values
-}
-
-// Done returns a channel which is closed when it receives the final status
-// from the server.
-func (s *ClientStream) Done() <-chan struct{} {
-	return s.done
-}
-
-// Header returns the header metadata of the stream. Acquires the key-value
-// pairs of header metadata once it is available. It blocks until i) the
-// metadata is ready or ii) there is no header metadata or iii) the stream is
-// canceled/expired.
-func (s *ClientStream) Header() (metadata.MD, error) {
-	s.waitOnHeader()
-
-	if !s.headerValid || s.noHeaders {
-		return nil, s.status.Err()
-	}
-
-	return s.header.Copy(), nil
-}
-
-// Header returns the header metadata of the stream.  It returns the out header
-// after t.WriteHeader is called.  It does not block and must not be called
-// until after WriteHeader.
-func (s *ServerStream) Header() (metadata.MD, error) {
-	// Return the header in stream. It will be the out
-	// header after t.WriteHeader is called.
-	return s.header.Copy(), nil
-}
-
-// TrailersOnly blocks until a header or trailers-only frame is received and
-// then returns true if the stream was trailers-only.  If the stream ends
-// before headers are received, returns true, nil.
-func (s *ClientStream) TrailersOnly() bool {
-	s.waitOnHeader()
-	return s.noHeaders
 }
 
 // Trailer returns the cached trailer metadata. Note that if it is not called
@@ -496,57 +356,6 @@ func (s *Stream) SetContext(ctx context.Context) {
 // Method returns the method for the stream.
 func (s *Stream) Method() string {
 	return s.method
-}
-
-// Status returns the status received from the server.
-// Status can be read safely only after the stream has ended,
-// that is, after Done() is closed.
-func (s *ClientStream) Status() *status.Status {
-	return s.status
-}
-
-// HeaderWireLength returns the size of the headers of the stream as received
-// from the wire.
-func (s *ServerStream) HeaderWireLength() int {
-	return s.headerWireLength
-}
-
-// SetHeader sets the header metadata. This can be called multiple times.
-// This should not be called in parallel to other data writes.
-func (s *ServerStream) SetHeader(md metadata.MD) error {
-	if md.Len() == 0 {
-		return nil
-	}
-	if s.isHeaderSent() || s.getState() == streamDone {
-		return ErrIllegalHeaderWrite
-	}
-	s.hdrMu.Lock()
-	s.header = metadata.Join(s.header, md)
-	s.hdrMu.Unlock()
-	return nil
-}
-
-// SendHeader sends the given header metadata. The given metadata is
-// combined with any metadata set by previous calls to SetHeader and
-// then written to the transport stream.
-func (s *ServerStream) SendHeader(md metadata.MD) error {
-	return s.st.WriteHeader(s, md)
-}
-
-// SetTrailer sets the trailer metadata which will be sent with the RPC status
-// by the server. This can be called multiple times.
-// This should not be called parallel to other data writes.
-func (s *ServerStream) SetTrailer(md metadata.MD) error {
-	if md.Len() == 0 {
-		return nil
-	}
-	if s.getState() == streamDone {
-		return ErrIllegalHeaderWrite
-	}
-	s.hdrMu.Lock()
-	s.trailer = metadata.Join(s.trailer, md)
-	s.hdrMu.Unlock()
-	return nil
 }
 
 func (s *Stream) write(m recvMsg) {
@@ -643,17 +452,6 @@ func (t *transportReader) Read(n int) (mem.Buffer, error) {
 	}
 	t.windowHandler(buf.Len())
 	return buf, nil
-}
-
-// BytesReceived indicates whether any bytes have been received on this stream.
-func (s *ClientStream) BytesReceived() bool {
-	return atomic.LoadUint32(&s.bytesReceived) == 1
-}
-
-// Unprocessed indicates whether the server did not process this stream --
-// i.e. it sent a refused stream or GOAWAY including this stream ID.
-func (s *ClientStream) Unprocessed() bool {
-	return atomic.LoadUint32(&s.unprocessed) == 1
 }
 
 // GoString is implemented by Stream so context.String() won't
