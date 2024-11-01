@@ -1845,6 +1845,7 @@ type streamKey struct{}
 
 // NewContextWithServerTransportStream creates a new context from ctx and
 // attaches stream to it.  stream must embed a delegate stream, typically
+// obtained by calling ServerTransportStreamFromContext first.
 //
 // # Experimental
 //
@@ -1855,7 +1856,7 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 }
 
 // NewContextWithUnstableServerTransportStream creates a new context from ctx
-// and attaches stream to it.  stream must embed a delegate stream, typically
+// and attaches stream to it.
 //
 // # Unstable
 //
@@ -1886,6 +1887,8 @@ type UnstableServerTransportStream interface {
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
+	SetSendCompress(name string) error
+	ClientAdvertisedCompressors() []string
 }
 
 // ServerTransportStream is a minimal interface that a transport stream must
@@ -2135,8 +2138,8 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
-	if !ok || stream == nil {
+	stream := ServerTransportStreamFromContext(ctx)
+	if stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")
 	}
 
@@ -2157,8 +2160,8 @@ func SetSendCompressor(ctx context.Context, name string) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func ClientSupportedCompressors(ctx context.Context) ([]string, error) {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
-	if !ok || stream == nil {
+	stream := ServerTransportStreamFromContext(ctx)
+	if stream == nil {
 		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
 	}
 

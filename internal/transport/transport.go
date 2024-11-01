@@ -742,7 +742,8 @@ func NewClientTransport(connectCtx, ctx context.Context, addr resolver.Address, 
 // Options provides additional hints and information for message
 // transmission.
 type Options struct {
-	// Last indicates whether this write is the last piece for this stream.
+	// Last indicates whether this write is the last piece for
+	// this stream.
 	Last bool
 }
 
