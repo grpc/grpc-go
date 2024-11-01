@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ClientStream implements streaming functionality for a gRPC client.
 type ClientStream struct {
 	*Stream // Embed for common stream functionality.
 

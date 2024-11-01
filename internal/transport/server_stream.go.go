@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// ServerStream implements streaming functionality for a gRPC server.
 type ServerStream struct {
 	*Stream // Embed for common stream functionality.
 
