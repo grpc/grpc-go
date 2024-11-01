@@ -352,6 +352,10 @@ type StreamDelegate interface {
 	mustEmbedDelegateStream()
 }
 
+// This assertion is necessary to prevent staticcheck from thinking
+// mustEmbedDelegateStream is an unused method on *Stream.
+var _ StreamDelegate = (*Stream)(nil)
+
 func (s *Stream) mustEmbedDelegateStream() {}
 
 // isHeaderSent is only valid on the server-side.
