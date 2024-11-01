@@ -346,6 +346,14 @@ type Stream struct {
 	contentSubtype string
 }
 
+// StreamDelegate creates a requirement that grpc.ServerTransportStream can use
+// to ensure proper delegation to an embedded stream.
+type StreamDelegate interface {
+	mustEmbedDelegateStream()
+}
+
+func (s *Stream) mustEmbedDelegateStream() {}
+
 // isHeaderSent is only valid on the server-side.
 func (s *Stream) isHeaderSent() bool {
 	return atomic.LoadUint32(&s.headerSent) == 1
@@ -731,11 +739,10 @@ func NewClientTransport(connectCtx, ctx context.Context, addr resolver.Address, 
 	return newHTTP2Client(connectCtx, ctx, addr, opts, onClose)
 }
 
-// Options provides additional hints and information for message
+// WriteOptions provides additional hints and information for message
 // transmission.
-type Options struct {
-	// Last indicates whether this write is the last piece for
-	// this stream.
+type WriteOptions struct {
+	// Last indicates whether this write is the last piece for this stream.
 	Last bool
 }
 
@@ -784,7 +791,7 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
+	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
 
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
@@ -836,7 +843,7 @@ type ServerTransport interface {
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
+	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.

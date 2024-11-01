@@ -1136,7 +1136,7 @@ func (s *Server) incrCallsFailed() {
 	s.channelz.ServerMetrics.CallsFailed.Add(1)
 }
 
-func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, msg any, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
+func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, msg any, cp Compressor, opts *transport.WriteOptions, comp encoding.Compressor) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
@@ -1431,7 +1431,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	if trInfo != nil {
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
-	opts := &transport.Options{Last: true}
+	opts := &transport.WriteOptions{Last: true}
 
 	// Server handler could have set new compressor by calling SetSendCompressor.
 	// In case it is set, we need to use it for compressing outbound message.
@@ -1844,7 +1844,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 type streamKey struct{}
 
 // NewContextWithServerTransportStream creates a new context from ctx and
-// attaches stream to it.
+// attaches stream to it.  stream must embed a delegate stream, typically
 //
 // # Experimental
 //
@@ -1866,11 +1866,14 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type ServerTransportStream interface {
+	transport.StreamDelegate // Forces embedding a stream for delegating undefined methods.
 	Method() string
 	SetHeader(md metadata.MD) error
 	SendHeader(md metadata.MD) error
 	SetTrailer(md metadata.MD) error
 }
+
+func (s *Server) mustEmbedDelegateStream() {}
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in
 // ctx. Returns nil if the given context has no stream associated with it

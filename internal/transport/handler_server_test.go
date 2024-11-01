@@ -440,7 +440,7 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 		st.bodyw.Close() // no body
 
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
-		st.ht.Write(s, []byte("hdr"), newBufferSlice([]byte("data")), &Options{})
+		st.ht.Write(s, []byte("hdr"), newBufferSlice([]byte("data")), &WriteOptions{})
 	})
 }
 

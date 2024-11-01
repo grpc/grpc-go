@@ -1784,7 +1784,8 @@ func (s) TestChainEngine(t *testing.T) {
 					}
 					ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
 					stream := &ServerTransportStreamWithMethod{
-						method: data.rpcData.fullMethod,
+						ServerTransportStream: nil, // We have no delegate because this test doesn't actually use the stream.
+						method:                data.rpcData.fullMethod,
 					}
 
 					ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
@@ -1805,6 +1806,7 @@ func (s) TestChainEngine(t *testing.T) {
 }
 
 type ServerTransportStreamWithMethod struct {
+	grpc.ServerTransportStream
 	method string
 }
 
