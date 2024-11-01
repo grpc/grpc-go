@@ -60,11 +60,6 @@ func (s *ClientStream) Unprocessed() bool {
 }
 
 func (s *ClientStream) waitOnHeader() {
-	if s.headerChan == nil {
-		// On the server headerChan is always nil since a stream originates
-		// only after having received headers.
-		return
-	}
 	select {
 	case <-s.ctx.Done():
 		// Close the stream to prevent headers/trailers from changing after
