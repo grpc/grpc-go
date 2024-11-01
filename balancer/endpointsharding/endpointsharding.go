@@ -36,9 +36,21 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
+
+// PickFirstConfig is a pick first config without shuffling enabled.
+var PickFirstConfig string
+
+func init() {
+	if envconfig.NewPickFirstEnabled {
+		PickFirstConfig = "[{\"pick_first\": {}}]"
+		return
+	}
+	PickFirstConfig = "[{\"pick_first_leaf\": {}}]"
+}
 
 // ChildState is the balancer state of a child along with the endpoint which
 // identifies the child balancer.
@@ -305,6 +317,3 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }
-
-// PickFirstConfig is a pick first config without shuffling enabled.
-const PickFirstConfig = "[{\"pick_first_leaf\": {}}]"
