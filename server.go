@@ -1854,6 +1854,40 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 	return context.WithValue(ctx, streamKey{}, stream)
 }
 
+// NewContextWithUnstableServerTransportStream creates a new context from ctx
+// and attaches stream to it.  stream must embed a delegate stream, typically
+//
+// # Unstable
+//
+// Notice: This API is UNSTABLE and is expected to change over time.  Use
+// NewContextWithServerTransportStream instead for a stable version.
+func NewContextWithUnstableServerTransportStream(ctx context.Context, stream UnstableServerTransportStream) context.Context {
+	return context.WithValue(ctx, streamKey{}, stableStream{UnstableServerTransportStream: stream})
+}
+
+type stableStream struct {
+	UnstableServerTransportStream
+	transport.StreamDelegate
+}
+
+// UnstableServerTransportStream is a minimal interface that a transport stream
+// must implement. This can be used to mock an actual transport stream for tests
+// of handler code that use, for example, grpc.SetHeader (which requires some
+// stream to be in context).
+//
+// See also NewContextWithUnstableServerTransportStream.
+//
+// # Unstable
+//
+// Notice: This API is UNSTABLE and is expected to change over time.  Use
+// ServerTransportStream instead for a stable version.
+type UnstableServerTransportStream interface {
+	Method() string
+	SetHeader(md metadata.MD) error
+	SendHeader(md metadata.MD) error
+	SetTrailer(md metadata.MD) error
+}
+
 // ServerTransportStream is a minimal interface that a transport stream must
 // implement. This can be used to mock an actual transport stream for tests of
 // handler code that use, for example, grpc.SetHeader (which requires some
@@ -1867,10 +1901,7 @@ func NewContextWithServerTransportStream(ctx context.Context, stream ServerTrans
 // later release.
 type ServerTransportStream interface {
 	transport.StreamDelegate // Forces embedding a stream for delegating undefined methods.
-	Method() string
-	SetHeader(md metadata.MD) error
-	SendHeader(md metadata.MD) error
-	SetTrailer(md metadata.MD) error
+	UnstableServerTransportStream
 }
 
 // ServerTransportStreamFromContext returns the ServerTransportStream saved in
