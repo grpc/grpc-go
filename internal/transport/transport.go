@@ -300,6 +300,9 @@ type ClientStream struct {
 	header      metadata.MD // the received header metadata
 	noHeaders   bool        // set if the client never received headers (set only after the stream is done).
 
+	bytesReceived uint32 // indicates whether any bytes have been received on this stream
+	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
+
 	status *status.Status // the status error received from the server
 }
 
@@ -338,9 +341,6 @@ type Stream struct {
 	requestRead func(int)
 
 	state streamState
-
-	bytesReceived uint32 // indicates whether any bytes have been received on this stream
-	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
 
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
@@ -646,13 +646,13 @@ func (t *transportReader) Read(n int) (mem.Buffer, error) {
 }
 
 // BytesReceived indicates whether any bytes have been received on this stream.
-func (s *Stream) BytesReceived() bool {
+func (s *ClientStream) BytesReceived() bool {
 	return atomic.LoadUint32(&s.bytesReceived) == 1
 }
 
 // Unprocessed indicates whether the server did not process this stream --
 // i.e. it sent a refused stream or GOAWAY including this stream ID.
-func (s *Stream) Unprocessed() bool {
+func (s *ClientStream) Unprocessed() bool {
 	return atomic.LoadUint32(&s.unprocessed) == 1
 }
 
