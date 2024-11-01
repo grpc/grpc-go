@@ -1136,7 +1136,7 @@ func (s *Server) incrCallsFailed() {
 	s.channelz.ServerMetrics.CallsFailed.Add(1)
 }
 
-func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, msg any, cp Compressor, opts *transport.WriteOptions, comp encoding.Compressor) error {
+func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, msg any, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
@@ -1431,7 +1431,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	if trInfo != nil {
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
-	opts := &transport.WriteOptions{Last: true}
+	opts := &transport.Options{Last: true}
 
 	// Server handler could have set new compressor by calling SetSendCompressor.
 	// In case it is set, we need to use it for compressing outbound message.

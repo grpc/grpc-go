@@ -739,9 +739,9 @@ func NewClientTransport(connectCtx, ctx context.Context, addr resolver.Address, 
 	return newHTTP2Client(connectCtx, ctx, addr, opts, onClose)
 }
 
-// WriteOptions provides additional hints and information for message
+// Options provides additional hints and information for message
 // transmission.
-type WriteOptions struct {
+type Options struct {
 	// Last indicates whether this write is the last piece for this stream.
 	Last bool
 }
@@ -791,7 +791,7 @@ type ClientTransport interface {
 
 	// Write sends the data for the given stream. A nil stream indicates
 	// the write is to be performed on the transport as a whole.
-	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
+	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
 
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error)
@@ -843,7 +843,7 @@ type ServerTransport interface {
 
 	// Write sends the data for the given stream.
 	// Write may not be called on all streams.
-	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
+	Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error
 
 	// WriteStatus sends the status of a stream to the client.  WriteStatus is
 	// the final call made on a stream and always occurs.
