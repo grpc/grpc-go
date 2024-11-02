@@ -677,6 +677,11 @@ func (s) TestClientCallSpanEvents(t *testing.T) {
 	if got, want := spans[0].SpanContext.TraceID(), spans[2].SpanContext.TraceID(); got != want {
 		t.Fatal("TraceID mismatch in client span and server span.")
 	}
+	// Check that the attempt span id of client matches the span id of server
+	// SpanContext.
+	if got, want := spans[0].Parent.SpanID(), spans[1].SpanContext.SpanID(); got != want {
+		t.Fatal("SpanID mismatch in client span and server span.")
+	}
 }
 
 // TestServerWithMetricsAndTraceOptions tests emitted metrics and traces from

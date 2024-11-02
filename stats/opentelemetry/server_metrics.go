@@ -68,8 +68,6 @@ func (h *serverStatsHandler) initializeMetrics() {
 }
 
 func (h *serverStatsHandler) initializeTracing() {
-	// Will set no traces to record if tracing is disabled, logically
-	// making this stats handler a no-op.
 	if !isTracingDisabled(h.options.TraceOptions) {
 		return
 	}

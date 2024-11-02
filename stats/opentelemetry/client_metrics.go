@@ -74,8 +74,6 @@ func (h *clientStatsHandler) initializeMetrics() {
 }
 
 func (h *clientStatsHandler) initializeTracing() {
-	// Will set no traces to record if either of (TraceProvider, TextMapPropagator)
-	// are nil, logically making this stats handler a no-op.
 	if h.options.TraceOptions.TracerProvider == nil || h.options.TraceOptions.TextMapPropagator == nil {
 		return
 	}
@@ -101,7 +99,7 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 
 	startTime := time.Now()
-	ctx, span := h.createCallSpan(ctx, method)
+	ctx, span := h.createCallTraceSpan(ctx, method)
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
 	return err
@@ -136,7 +134,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	}
 
 	startTime := time.Now()
-	ctx, span := h.createCallSpan(ctx, method)
+	ctx, span := h.createCallTraceSpan(ctx, method)
 
 	callback := func(err error) {
 		h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
@@ -166,9 +164,9 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 	}
 }
 
-// createCallSpan creates a call span if tracing is enabled, which will be put
+// createCallTraceSpan creates a call span if tracing is enabled, which will be put
 // in the context provided if created.
-func (h *clientStatsHandler) createCallSpan(ctx context.Context, method string) (context.Context, trace.Span) {
+func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
 	var span trace.Span
 	if !isTracingDisabled(h.options.TraceOptions) {
 		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
