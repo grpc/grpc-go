@@ -509,9 +509,9 @@ type ConnectOptions struct {
 	BufferPool mem.BufferPool
 }
 
-// Options provides additional hints and information for message
+// WriteOptions provides additional hints and information for message
 // transmission.
-type Options struct {
+type WriteOptions struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
@@ -560,18 +560,8 @@ type ClientTransport interface {
 	// It does not block.
 	GracefulClose()
 
-	// Write sends the data for the given stream. A nil stream indicates
-	// the write is to be performed on the transport as a whole.
-	Write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *Options) error
-
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error)
-
-	// CloseStream clears the footprint of a stream when the stream is
-	// not needed any more. The err indicates the error incurred when
-	// CloseStream is called. Must be called when a stream is finished
-	// unless the associated transport is closing.
-	CloseStream(stream *ClientStream, err error)
 
 	// Error returns a channel that is closed when some I/O error
 	// happens. Typically the caller should have a goroutine to monitor
@@ -608,18 +598,6 @@ type ServerTransport interface {
 	// HandleStreams receives incoming streams using the given handler.
 	HandleStreams(context.Context, func(*ServerStream))
 
-	// WriteHeader sends the header metadata for the given stream.
-	// WriteHeader may not be called on all streams.
-	WriteHeader(s *ServerStream, md metadata.MD) error
-
-	// Write sends the data for the given stream.
-	// Write may not be called on all streams.
-	Write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *Options) error
-
-	// WriteStatus sends the status of a stream to the client.  WriteStatus is
-	// the final call made on a stream and always occurs.
-	WriteStatus(s *ServerStream, st *status.Status) error
-
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their
 	// handlers will be terminated asynchronously.
@@ -636,6 +614,13 @@ type ServerTransport interface {
 
 	// IncrMsgRecv increments the number of message received through this transport.
 	IncrMsgRecv()
+}
+
+type internalServerTransport interface {
+	ServerTransport
+	writeHeader(s *ServerStream, md metadata.MD) error
+	write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
+	writeStatus(s *ServerStream, st *status.Status) error
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

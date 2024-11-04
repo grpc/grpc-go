@@ -508,7 +508,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 			ctxDone: s.ctx.Done(),
 			recv:    s.buf,
 			closeStream: func(err error) {
-				t.CloseStream(s, err)
+				s.Close(err)
 			},
 		},
 		windowHandler: func(n int) {
@@ -910,20 +910,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 	return s, nil
 }
 
-// CloseStream clears the footprint of a stream when the stream is not needed any more.
-// This must not be executed in reader's goroutine.
-func (t *http2Client) CloseStream(s *ClientStream, err error) {
-	var (
-		rst     bool
-		rstCode http2.ErrCode
-	)
-	if err != nil {
-		rst = true
-		rstCode = http2.ErrCodeCancel
-	}
-	t.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
-}
-
 func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
 	// Set stream status to done.
 	if s.swapState(streamDone) == streamDone {
@@ -1087,7 +1073,7 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *Options) error {
+func (t *http2Client) write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
 	reader := data.Reader()
 
 	if opts.Last {

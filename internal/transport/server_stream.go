@@ -25,14 +25,16 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // ServerStream implements streaming functionality for a gRPC server.
 type ServerStream struct {
 	*Stream // Embed for common stream functionality.
 
-	st      ServerTransport
+	st      internalServerTransport
 	ctxDone <-chan struct{}    // closed at the end of stream.  Cache of ctx.Done() (for performance)
 	cancel  context.CancelFunc // invoked at the end of stream to cancel ctx.
 
@@ -45,6 +47,24 @@ type ServerStream struct {
 	hdrMu      sync.Mutex
 	header     metadata.MD // the outgoing header metadata.  Updated by WriteHeader.
 	headerSent uint32      // atomically set to 1 when the headers are sent out.
+}
+
+// WriteHeader sends the header metadata for the given stream.
+// WriteHeader may not be called on all streams.
+func (s *ServerStream) SendHeader(md metadata.MD) error {
+	return s.st.writeHeader(s, md)
+}
+
+// Write sends the data for the given stream.
+// Write may not be called on all streams.
+func (s *ServerStream) Write(hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
+	return s.st.write(s, hdr, data, opts)
+}
+
+// WriteStatus sends the status of a stream to the client.  WriteStatus is
+// the final call made on a stream and always occurs.
+func (s *ServerStream) WriteStatus(st *status.Status) error {
+	return s.st.writeStatus(s, st)
 }
 
 // isHeaderSent indicates whether headers have been sent.
@@ -132,13 +152,6 @@ func (s *ServerStream) SetHeader(md metadata.MD) error {
 	s.header = metadata.Join(s.header, md)
 	s.hdrMu.Unlock()
 	return nil
-}
-
-// SendHeader sends the given header metadata. The given metadata is
-// combined with any metadata set by previous calls to SetHeader and
-// then written to the transport stream.
-func (s *ServerStream) SendHeader(md metadata.MD) error {
-	return s.st.WriteHeader(s, md)
 }
 
 // SetTrailer sets the trailer metadata which will be sent with the RPC status

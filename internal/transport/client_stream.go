@@ -21,6 +21,8 @@ package transport
 import (
 	"sync/atomic"
 
+	"golang.org/x/net/http2"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -29,7 +31,7 @@ import (
 type ClientStream struct {
 	*Stream // Embed for common stream functionality.
 
-	ct       ClientTransport
+	ct       *http2Client
 	done     chan struct{} // closed at the end of stream to unblock writers.
 	doneFunc func()        // invoked at the end of stream.
 
@@ -48,6 +50,22 @@ type ClientStream struct {
 	status *status.Status // the status error received from the server
 }
 
+func (s *ClientStream) Close(err error) {
+	var (
+		rst     bool
+		rstCode http2.ErrCode
+	)
+	if err != nil {
+		rst = true
+		rstCode = http2.ErrCodeCancel
+	}
+	s.ct.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
+}
+
+func (s *ClientStream) Write(hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
+	return s.ct.write(s, hdr, data, opts)
+}
+
 // BytesReceived indicates whether any bytes have been received on this stream.
 func (s *ClientStream) BytesReceived() bool {
 	return atomic.LoadUint32(&s.bytesReceived) == 1
@@ -64,7 +82,7 @@ func (s *ClientStream) waitOnHeader() {
 	case <-s.ctx.Done():
 		// Close the stream to prevent headers/trailers from changing after
 		// this function returns.
-		s.ct.CloseStream(s, ContextErr(s.ctx.Err()))
+		s.Close(ContextErr(s.ctx.Err()))
 		// headerChan could possibly not be closed yet if closeStream raced
 		// with operateHeaders; wait until it is closed explicitly here.
 		<-s.headerChan
