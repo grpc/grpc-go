@@ -28,10 +28,10 @@ package endpointsharding
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"math/rand"
 	"sync"
 	"sync/atomic"
+
+	rand "math/rand/v2"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -66,7 +66,9 @@ type endpointSharding struct {
 	cc    balancer.ClientConn
 	bOpts balancer.BuildOptions
 
+	childMu  sync.Mutex // syncs balancer.Balancer calls into children
 	children atomic.Pointer[resolver.EndpointMap]
+	closed   bool
 
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
@@ -80,19 +82,11 @@ type endpointSharding struct {
 // for endpoints that are no longer present. It also updates all the children,
 // and sends a single synchronous update of the childrens' aggregated state at
 // the end of the UpdateClientConnState operation. If any endpoint has no
-// addresses, returns error without forwarding any updates. Otherwise returns
-// first error found from a child, but fully processes the new update.
+// addresses it will ignore that endpoint. Otherwise, returns first error found
+// from a child, but fully processes the new update.
 func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState) error {
-	if len(state.ResolverState.Endpoints) == 0 {
-		return errors.New("endpoints list is empty")
-	}
-	// Check/return early if any endpoints have no addresses.
-	// TODO: make this configurable if needed.
-	for i, endpoint := range state.ResolverState.Endpoints {
-		if len(endpoint.Addresses) == 0 {
-			return fmt.Errorf("endpoint %d has empty addresses", i)
-		}
-	}
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
 
 	es.inhibitChildUpdates.Store(true)
 	defer func() {
@@ -106,6 +100,9 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
+		if len(endpoint.Addresses) == 0 {
+			continue
+		}
 		if _, ok := newChildren.Get(endpoint); ok {
 			// Endpoint child was already created, continue to avoid duplicate
 			// update.
@@ -153,6 +150,8 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 // children and sends a single synchronous update of the childStates at the end
 // of the ResolverError operation.
 func (es *endpointSharding) ResolverError(err error) {
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
 	es.inhibitChildUpdates.Store(true)
 	defer func() {
 		es.inhibitChildUpdates.Store(false)
@@ -170,11 +169,14 @@ func (es *endpointSharding) UpdateSubConnState(balancer.SubConn, balancer.SubCon
 }
 
 func (es *endpointSharding) Close() {
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
 	children := es.children.Load()
 	for _, child := range children.Values() {
 		bal := child.(balancer.Balancer)
 		bal.Close()
 	}
+	es.closed = true
 }
 
 // updateState updates this component's state. It sends the aggregated state,
@@ -234,7 +236,7 @@ func (es *endpointSharding) updateState() {
 	p := &pickerWithChildStates{
 		pickers:     pickers,
 		childStates: childStates,
-		next:        uint32(rand.Intn(len(pickers))),
+		next:        uint32(rand.IntN(len(pickers))),
 	}
 	es.cc.UpdateState(balancer.State{
 		ConnectivityState: aggState,
@@ -282,6 +284,17 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.mu.Lock()
 	bw.childState.State = state
 	bw.es.mu.Unlock()
+	// When a child balancer says it's IDLE, ping it to exit idle and reconnect.
+	// TODO: In the future, perhaps make this a knob in configuration.
+	if ei, ok := bw.Balancer.(balancer.ExitIdler); state.ConnectivityState == connectivity.Idle && ok {
+		go func() {
+			bw.es.childMu.Lock()
+			if !bw.es.closed {
+				ei.ExitIdle()
+			}
+			bw.es.childMu.Unlock()
+		}()
+	}
 	bw.es.updateState()
 }
 

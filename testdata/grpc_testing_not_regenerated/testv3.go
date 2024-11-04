@@ -20,7 +20,7 @@
 // DO NOT EDIT!
 
 /*
-Package grpc_testing_not_regenerate is a generated protocol buffer package.
+Package grpc_testing_not_regenerated is a generated protocol buffer package.
 
 It is generated from these files:
 
@@ -31,7 +31,7 @@ It has these top-level messages:
 	SearchResponseV3
 	SearchRequestV3
 */
-package grpc_testing_not_regenerate
+package grpc_testing_not_regenerated
 
 import (
 	context "context"

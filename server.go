@@ -1783,17 +1783,20 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Str
 	service := sm[:pos]
 	method := sm[pos+1:]
 
-	md, _ := metadata.FromIncomingContext(ctx)
-	for _, sh := range s.opts.statsHandlers {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: stream.Method()})
-		sh.HandleRPC(ctx, &stats.InHeader{
-			FullMethod:  stream.Method(),
-			RemoteAddr:  t.Peer().Addr,
-			LocalAddr:   t.Peer().LocalAddr,
-			Compression: stream.RecvCompress(),
-			WireLength:  stream.HeaderWireLength(),
-			Header:      md,
-		})
+	// FromIncomingContext is expensive: skip if there are no statsHandlers
+	if len(s.opts.statsHandlers) > 0 {
+		md, _ := metadata.FromIncomingContext(ctx)
+		for _, sh := range s.opts.statsHandlers {
+			ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: stream.Method()})
+			sh.HandleRPC(ctx, &stats.InHeader{
+				FullMethod:  stream.Method(),
+				RemoteAddr:  t.Peer().Addr,
+				LocalAddr:   t.Peer().LocalAddr,
+				Compression: stream.RecvCompress(),
+				WireLength:  stream.HeaderWireLength(),
+				Header:      md,
+			})
+		}
 	}
 	// To have calls in stream callouts work. Will delete once all stats handler
 	// calls come from the gRPC layer.
