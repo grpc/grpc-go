@@ -13,7 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package pickfirstleaf_test
@@ -860,13 +859,13 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
-				{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}, // no port
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
 				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
-				{Addresses: []resolver.Address{{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"}}},
-				{Addresses: []resolver.Address{{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"}}},
+				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
 		},
@@ -876,13 +875,13 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	}
 
 	wantAddrs := []resolver.Address{
-		{Addr: "1.1.1.1"},
+		{Addr: "1.1.1.1:1111"},
 		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
 		{Addr: "grpc.io:80"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"},
+		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
 		{Addr: "4.4.4.4:4"},
 	}
 
@@ -905,12 +904,12 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
-				{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}},                                        // no port
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
 				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
-				{Addresses: []resolver.Address{{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"}}},
-				{Addresses: []resolver.Address{{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"}}},
+				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
 		},
@@ -921,11 +920,11 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 
 	wantAddrs := []resolver.Address{
 		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
-		{Addr: "1.1.1.1"},
+		{Addr: "1.1.1.1:1111"},
 		{Addr: "grpc.io:80"},
-		{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"},
+		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
 		{Addr: "3.3.3.3:3"},
 		{Addr: "4.4.4.4:4"},
 	}
@@ -949,13 +948,13 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
-				{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}},    // no port
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
 				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
-				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
-				{Addresses: []resolver.Address{{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"}}},
-				{Addresses: []resolver.Address{{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "example.com:80"}}}, // not an IP.
 			},
 		},
@@ -966,13 +965,13 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 
 	wantAddrs := []resolver.Address{
 		{Addr: "grpc.io:80"},
-		{Addr: "1.1.1.1"},
+		{Addr: "1.1.1.1:1111"},
 		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
 		{Addr: "example.com:80"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "0002:0002:0002:0002:0002:0002:0002:0002"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "0003:0003:0003:0003:0003:0003:0003:0003"},
+		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
 		{Addr: "4.4.4.4:4"},
 	}
 

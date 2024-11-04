@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -363,24 +364,23 @@ func interleaveAddresses(addrs []resolver.Address) []resolver.Address {
 	return interleavedAddrs
 }
 
+// addressFamily returns the ipAddrFamily after parsing the address string.
+// If the address isn't of the format "ip-address:port", it returns
+// ipAddrFamilyUnknown. The address may be valid even if it's not an IP when
+// using a resolver like passthrough where the address may be a hostname in
+// some format that the dialer can resolve.
 func addressFamily(address string) ipAddrFamily {
-	// Try parsing addresses without a port specified.
-	ip := net.ParseIP(address)
-	if ip == nil {
-		// Try to parse the IP after removing the port.
-		host, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return ipAddrFamilyUnknown
-		}
-		ip = net.ParseIP(host)
-	}
-
-	// If using a resolver like passthrough, the hostnames may not be IP
-	// addresses but in some format that the dialer can parse.
-	switch {
-	case ip == nil:
+	// Parse the IP after removing the port.
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
 		return ipAddrFamilyUnknown
-	case ip.To4() != nil:
+	}
+	ip := net.ParseIP(host)
+	switch {
+	// Check for existence of IPv4-mapped IPv6 addresses, which are
+	// considered as IPv4 by net.IP.
+	// e.g: "::FFFF:127.0.0.1"
+	case ip.To4() != nil && !strings.Contains(host, ":"):
 		return ipAddrFamilyV4
 	case ip.To16() != nil:
 		return ipAddrFamilyV6
