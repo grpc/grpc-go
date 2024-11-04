@@ -46,9 +46,10 @@ type ServerStream struct {
 	// hdrMu protects outgoing header and trailer metadata.
 	hdrMu      sync.Mutex
 	header     metadata.MD // the outgoing header metadata.  Updated by WriteHeader.
-	headerSent uint32      // atomically set to 1 when the headers are sent out.
+	headerSent atomic.Bool // atomically set when the headers are sent out.
 }
 
+// Read reads an n byte message from the input stream.
 func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {
 	b, err := s.Stream.read(n)
 	if err == nil {
@@ -63,8 +64,7 @@ func (s *ServerStream) SendHeader(md metadata.MD) error {
 	return s.st.writeHeader(s, md)
 }
 
-// Write sends the data for the given stream.
-// Write may not be called on all streams.
+// Write writes the hdr and data bytes to the output stream.
 func (s *ServerStream) Write(hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
 	return s.st.write(s, hdr, data, opts)
 }
@@ -77,13 +77,13 @@ func (s *ServerStream) WriteStatus(st *status.Status) error {
 
 // isHeaderSent indicates whether headers have been sent.
 func (s *ServerStream) isHeaderSent() bool {
-	return atomic.LoadUint32(&s.headerSent) == 1
+	return s.headerSent.Load()
 }
 
 // updateHeaderSent updates headerSent and returns true
 // if it was already set.
 func (s *ServerStream) updateHeaderSent() bool {
-	return atomic.SwapUint32(&s.headerSent, 1) == 1
+	return s.headerSent.Swap(true)
 }
 
 // RecvCompress returns the compression algorithm applied to the inbound

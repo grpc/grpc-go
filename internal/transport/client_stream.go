@@ -50,6 +50,7 @@ type ClientStream struct {
 	status *status.Status // the status error received from the server
 }
 
+// Read reads an n byte message from the input stream.
 func (s *ClientStream) Read(n int) (mem.BufferSlice, error) {
 	b, err := s.Stream.read(n)
 	if err == nil {
@@ -58,6 +59,7 @@ func (s *ClientStream) Read(n int) (mem.BufferSlice, error) {
 	return b, err
 }
 
+// Close closes the stream and popagates err to any readers.
 func (s *ClientStream) Close(err error) {
 	var (
 		rst     bool
@@ -70,6 +72,7 @@ func (s *ClientStream) Close(err error) {
 	s.ct.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
 }
 
+// Write writes the hdr and data bytes to the output stream.
 func (s *ClientStream) Write(hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
 	return s.ct.write(s, hdr, data, opts)
 }
