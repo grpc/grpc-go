@@ -554,6 +554,9 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// between resource removal and re-addition. To avoid this, continuously
 	// push new versions of the resources to the server, ensuring the client
 	// eventually receives the configuration.
+	//
+	// TODO(https://github.com/grpc/grpc-go/issues/7807): Remove this workaround
+	// once the issue is fixed.
 waitForStateUpdate:
 	for {
 		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
