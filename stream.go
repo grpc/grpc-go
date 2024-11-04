@@ -1097,9 +1097,6 @@ func (a *csAttempt) sendMsg(m any, hdr []byte, payld mem.BufferSlice, dataLength
 			sh.HandleRPC(a.ctx, outPayload(true, m, dataLength, payloadLength, time.Now()))
 		}
 	}
-	if channelz.IsOn() {
-		a.t.IncrMsgSent()
-	}
 	return nil
 }
 
@@ -1152,9 +1149,6 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 			CompressedLength: payInfo.compressedLength,
 			Length:           payInfo.uncompressedBytes.Len(),
 		})
-	}
-	if channelz.IsOn() {
-		a.t.IncrMsgRecv()
 	}
 	if cs.desc.ServerStreams {
 		// Subsequent messages should be received by subsequent RecvMsg calls.
@@ -1440,9 +1434,6 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 		return io.EOF
 	}
 
-	if channelz.IsOn() {
-		as.t.IncrMsgSent()
-	}
 	return nil
 }
 
@@ -1480,9 +1471,6 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 		return toRPCErr(err)
 	}
 
-	if channelz.IsOn() {
-		as.t.IncrMsgRecv()
-	}
 	if as.desc.ServerStreams {
 		// Subsequent messages should be received by subsequent RecvMsg calls.
 		return nil
@@ -1676,9 +1664,6 @@ func (ss *serverStream) SendMsg(m any) (err error) {
 			// status from the service handler, we will log that error instead.
 			// This behavior is similar to an interceptor.
 		}
-		if channelz.IsOn() && err == nil {
-			ss.t.IncrMsgSent()
-		}
 	}()
 
 	// Server handler could have set new compressor by calling SetSendCompressor.
@@ -1763,9 +1748,6 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 			// This is not handled specifically now. User will return a final
 			// status from the service handler, we will log that error instead.
 			// This behavior is similar to an interceptor.
-		}
-		if channelz.IsOn() && err == nil {
-			ss.t.IncrMsgRecv()
 		}
 	}()
 	var payInfo *payloadInfo

@@ -1102,6 +1102,7 @@ func (t *http2Client) write(s *ClientStream, hdr []byte, data mem.BufferSlice, o
 		_ = reader.Close()
 		return err
 	}
+	t.incrMsgSent()
 	return nil
 }
 
@@ -1797,14 +1798,18 @@ func (t *http2Client) socketMetrics() *channelz.EphemeralSocketMetrics {
 
 func (t *http2Client) RemoteAddr() net.Addr { return t.remoteAddr }
 
-func (t *http2Client) IncrMsgSent() {
-	t.channelz.SocketMetrics.MessagesSent.Add(1)
-	t.channelz.SocketMetrics.LastMessageSentTimestamp.Store(time.Now().UnixNano())
+func (t *http2Client) incrMsgSent() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesSent.Add(1)
+		t.channelz.SocketMetrics.LastMessageSentTimestamp.Store(time.Now().UnixNano())
+	}
 }
 
-func (t *http2Client) IncrMsgRecv() {
-	t.channelz.SocketMetrics.MessagesReceived.Add(1)
-	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Store(time.Now().UnixNano())
+func (t *http2Client) incrMsgRecv() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesReceived.Add(1)
+		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Store(time.Now().UnixNano())
+	}
 }
 
 func (t *http2Client) getOutFlowWindow() int64 {

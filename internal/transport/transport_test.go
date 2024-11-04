@@ -80,7 +80,7 @@ func newBufferSlice(b []byte) mem.BufferSlice {
 }
 
 func (s *Stream) readTo(p []byte) (int, error) {
-	data, err := s.Read(len(p))
+	data, err := s.read(len(p))
 	defer data.Free()
 
 	if err != nil {
@@ -2934,7 +2934,7 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 // TestReadHeaderMultipleBuffers tests the stream when the gRPC headers are
 // split across multiple buffers. It verifies that the reporting of the
 // number of bytes read for flow control is correct.
-func (s) TestReadHeaderMultipleBuffers(t *testing.T) {
+func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	headerLen := 5
 	recvBuffer := newRecvBuffer()
 	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
@@ -2953,7 +2953,7 @@ func (s) TestReadHeaderMultipleBuffers(t *testing.T) {
 	}
 
 	header := make([]byte, headerLen)
-	err := s.ReadHeader(header)
+	err := s.ReadMessageHeader(header)
 	if err != nil {
 		t.Fatalf("ReadHeader(%v) = %v", header, err)
 	}

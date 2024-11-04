@@ -131,7 +131,7 @@ type recvBufferReader struct {
 	err         error
 }
 
-func (r *recvBufferReader) ReadHeader(header []byte) (n int, err error) {
+func (r *recvBufferReader) ReadMessageHeader(header []byte) (n int, err error) {
 	if r.err != nil {
 		return 0, r.err
 	}
@@ -140,9 +140,9 @@ func (r *recvBufferReader) ReadHeader(header []byte) (n int, err error) {
 		return n, nil
 	}
 	if r.closeStream != nil {
-		n, r.err = r.readHeaderClient(header)
+		n, r.err = r.readMessageHeaderClient(header)
 	} else {
-		n, r.err = r.readHeader(header)
+		n, r.err = r.readMessageHeader(header)
 	}
 	return n, r.err
 }
@@ -172,12 +172,12 @@ func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 	return buf, r.err
 }
 
-func (r *recvBufferReader) readHeader(header []byte) (n int, err error) {
+func (r *recvBufferReader) readMessageHeader(header []byte) (n int, err error) {
 	select {
 	case <-r.ctxDone:
 		return 0, ContextErr(r.ctx.Err())
 	case m := <-r.recv.get():
-		return r.readHeaderAdditional(m, header)
+		return r.readMessageHeaderAdditional(m, header)
 	}
 }
 
@@ -190,7 +190,7 @@ func (r *recvBufferReader) read(n int) (buf mem.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readHeaderClient(header []byte) (n int, err error) {
+func (r *recvBufferReader) readMessageHeaderClient(header []byte) (n int, err error) {
 	// If the context is canceled, then closes the stream with nil metadata.
 	// closeStream writes its error parameter to r.recv as a recvMsg.
 	// r.readAdditional acts on that message and returns the necessary error.
@@ -211,9 +211,9 @@ func (r *recvBufferReader) readHeaderClient(header []byte) (n int, err error) {
 		// faster.
 		r.closeStream(ContextErr(r.ctx.Err()))
 		m := <-r.recv.get()
-		return r.readHeaderAdditional(m, header)
+		return r.readMessageHeaderAdditional(m, header)
 	case m := <-r.recv.get():
-		return r.readHeaderAdditional(m, header)
+		return r.readMessageHeaderAdditional(m, header)
 	}
 }
 
@@ -244,7 +244,7 @@ func (r *recvBufferReader) readClient(n int) (buf mem.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readHeaderAdditional(m recvMsg, header []byte) (n int, err error) {
+func (r *recvBufferReader) readMessageHeaderAdditional(m recvMsg, header []byte) (n int, err error) {
 	r.recv.load()
 	if m.err != nil {
 		if m.buffer != nil {
@@ -351,14 +351,14 @@ func (s *Stream) write(m recvMsg) {
 // indicate an unexpected end of the stream. The method returns any error
 // encountered during the read process or nil if the header was successfully
 // read.
-func (s *Stream) ReadHeader(header []byte) (err error) {
+func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
 		return er
 	}
 	s.requestRead(len(header))
 	for len(header) != 0 {
-		n, err := s.trReader.ReadHeader(header)
+		n, err := s.trReader.ReadMessageHeader(header)
 		header = header[n:]
 		if len(header) == 0 {
 			err = nil
@@ -374,7 +374,7 @@ func (s *Stream) ReadHeader(header []byte) (err error) {
 }
 
 // Read reads n bytes from the wire for this stream.
-func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
+func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
 		return nil, er
@@ -414,8 +414,8 @@ type transportReader struct {
 	er            error
 }
 
-func (t *transportReader) ReadHeader(header []byte) (int, error) {
-	n, err := t.reader.ReadHeader(header)
+func (t *transportReader) ReadMessageHeader(header []byte) (int, error) {
+	n, err := t.reader.ReadMessageHeader(header)
 	if err != nil {
 		t.er = err
 		return 0, err
@@ -581,12 +581,6 @@ type ClientTransport interface {
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
-
-	// IncrMsgSent increments the number of message sent through this transport.
-	IncrMsgSent()
-
-	// IncrMsgRecv increments the number of message received through this transport.
-	IncrMsgRecv()
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -608,12 +602,6 @@ type ServerTransport interface {
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain(debugData string)
-
-	// IncrMsgSent increments the number of message sent through this transport.
-	IncrMsgSent()
-
-	// IncrMsgRecv increments the number of message received through this transport.
-	IncrMsgRecv()
 }
 
 type internalServerTransport interface {
@@ -621,6 +609,7 @@ type internalServerTransport interface {
 	writeHeader(s *ServerStream, md metadata.MD) error
 	write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
 	writeStatus(s *ServerStream, st *status.Status) error
+	incrMsgRecv()
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

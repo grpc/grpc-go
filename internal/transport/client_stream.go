@@ -50,6 +50,14 @@ type ClientStream struct {
 	status *status.Status // the status error received from the server
 }
 
+func (s *ClientStream) Read(n int) (mem.BufferSlice, error) {
+	b, err := s.Stream.read(n)
+	if err == nil {
+		s.ct.incrMsgRecv()
+	}
+	return b, err
+}
+
 func (s *ClientStream) Close(err error) {
 	var (
 		rst     bool

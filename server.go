@@ -1360,9 +1360,6 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		return err
 	}
 	defer d.Free()
-	if channelz.IsOn() {
-		t.IncrMsgRecv()
-	}
 	df := func(v any) error {
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
@@ -1483,9 +1480,6 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			binlog.Log(ctx, sh)
 			binlog.Log(ctx, sm)
 		}
-	}
-	if channelz.IsOn() {
-		t.IncrMsgSent()
 	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)

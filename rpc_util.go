@@ -622,7 +622,7 @@ func (pf payloadFormat) isCompressed() bool {
 }
 
 type streamReader interface {
-	ReadHeader(header []byte) error
+	ReadMessageHeader(header []byte) error
 	Read(n int) (mem.BufferSlice, error)
 }
 
@@ -656,7 +656,7 @@ type parser struct {
 // that the underlying streamReader must not return an incompatible
 // error.
 func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSlice, error) {
-	err := p.r.ReadHeader(p.header[:])
+	err := p.r.ReadMessageHeader(p.header[:])
 	if err != nil {
 		return 0, nil, err
 	}
@@ -664,9 +664,6 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (payloadFormat, mem.BufferSl
 	pf := payloadFormat(p.header[0])
 	length := binary.BigEndian.Uint32(p.header[1:])
 
-	if length == 0 {
-		return pf, nil, nil
-	}
 	if int64(length) > int64(maxInt) {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max length allowed on current machine (%d vs. %d)", length, maxInt)
 	}

@@ -1149,6 +1149,7 @@ func (t *http2Server) write(s *ServerStream, hdr []byte, data mem.BufferSlice, _
 		_ = reader.Close()
 		return err
 	}
+	t.incrMsgSent()
 	return nil
 }
 
@@ -1417,14 +1418,18 @@ func (t *http2Server) socketMetrics() *channelz.EphemeralSocketMetrics {
 	}
 }
 
-func (t *http2Server) IncrMsgSent() {
-	t.channelz.SocketMetrics.MessagesSent.Add(1)
-	t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+func (t *http2Server) incrMsgSent() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesSent.Add(1)
+		t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+	}
 }
 
-func (t *http2Server) IncrMsgRecv() {
-	t.channelz.SocketMetrics.MessagesReceived.Add(1)
-	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+func (t *http2Server) incrMsgRecv() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesReceived.Add(1)
+		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+	}
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {

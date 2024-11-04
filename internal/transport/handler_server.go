@@ -473,9 +473,9 @@ func (ht *serverHandlerTransport) runStream() {
 	}
 }
 
-func (ht *serverHandlerTransport) IncrMsgSent() {}
+func (ht *serverHandlerTransport) incrMsgSent() {}
 
-func (ht *serverHandlerTransport) IncrMsgRecv() {}
+func (ht *serverHandlerTransport) incrMsgRecv() {}
 
 func (ht *serverHandlerTransport) Drain(string) {
 	panic("Drain() is not implemented")

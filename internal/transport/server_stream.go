@@ -49,6 +49,14 @@ type ServerStream struct {
 	headerSent uint32      // atomically set to 1 when the headers are sent out.
 }
 
+func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {
+	b, err := s.Stream.read(n)
+	if err == nil {
+		s.st.incrMsgRecv()
+	}
+	return b, err
+}
+
 // WriteHeader sends the header metadata for the given stream.
 // WriteHeader may not be called on all streams.
 func (s *ServerStream) SendHeader(md metadata.MD) error {
