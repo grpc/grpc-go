@@ -320,11 +320,6 @@ func (s *Stream) getState() streamState {
 	return streamState(atomic.LoadUint32((*uint32)(&s.state)))
 }
 
-// SendCompress returns the send compressor name.
-func (s *Stream) SendCompress() string {
-	return s.sendCompress
-}
-
 // Trailer returns the cached trailer metadata. Note that if it is not called
 // after the entire stream is done, it could return an empty MD.
 // It can be safely read only after stream has ended that is either read
@@ -333,24 +328,9 @@ func (s *Stream) Trailer() metadata.MD {
 	return s.trailer.Copy()
 }
 
-// ContentSubtype returns the content-subtype for a request. For example, a
-// content-subtype of "proto" will result in a content-type of
-// "application/grpc+proto". This will always be lowercase.  See
-// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
-// more details.
-func (s *Stream) ContentSubtype() string {
-	return s.contentSubtype
-}
-
 // Context returns the context of the stream.
 func (s *Stream) Context() context.Context {
 	return s.ctx
-}
-
-// SetContext sets the context of the stream. This will be deleted once the
-// stats handler callouts all move to gRPC layer.
-func (s *Stream) SetContext(ctx context.Context) {
-	s.ctx = ctx
 }
 
 // Method returns the method for the stream.

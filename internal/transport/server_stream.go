@@ -64,6 +64,20 @@ func (s *ServerStream) RecvCompress() string {
 	return s.recvCompress
 }
 
+// SendCompress returns the send compressor name.
+func (s *ServerStream) SendCompress() string {
+	return s.sendCompress
+}
+
+// ContentSubtype returns the content-subtype for a request. For example, a
+// content-subtype of "proto" will result in a content-type of
+// "application/grpc+proto". This will always be lowercase.  See
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
+// more details.
+func (s *ServerStream) ContentSubtype() string {
+	return s.contentSubtype
+}
+
 // SetSendCompress sets the compression algorithm to the stream.
 func (s *ServerStream) SetSendCompress(name string) error {
 	if s.isHeaderSent() || s.getState() == streamDone {
@@ -72,6 +86,12 @@ func (s *ServerStream) SetSendCompress(name string) error {
 
 	s.sendCompress = name
 	return nil
+}
+
+// SetContext sets the context of the stream. This will be deleted once the
+// stats handler callouts all move to gRPC layer.
+func (s *ServerStream) SetContext(ctx context.Context) {
+	s.ctx = ctx
 }
 
 // ClientAdvertisedCompressors returns the compressor names advertised by the
