@@ -765,7 +765,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 			return
 		}
 		// The stream was unprocessed by the server.
-		atomic.StoreUint32(&s.unprocessed, 1)
+		s.unprocessed.Store(true)
 		s.write(recvMsg{err: err})
 		close(s.done)
 		// If headerChan isn't closed, then close it.
@@ -1231,7 +1231,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	}
 	if f.ErrCode == http2.ErrCodeRefusedStream {
 		// The stream was unprocessed by the server.
-		atomic.StoreUint32(&s.unprocessed, 1)
+		s.unprocessed.Store(true)
 	}
 	statusCode, ok := http2ErrConvTab[f.ErrCode]
 	if !ok {
@@ -1376,7 +1376,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 	for streamID, stream := range t.activeStreams {
 		if streamID > id && streamID <= upperLimit {
 			// The stream was unprocessed by the server.
-			atomic.StoreUint32(&stream.unprocessed, 1)
+			stream.unprocessed.Store(true)
 			streamsToClose = append(streamsToClose, stream)
 		}
 	}
@@ -1428,7 +1428,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	endStream := frame.StreamEnded()
-	atomic.StoreUint32(&s.bytesReceived, 1)
+	s.bytesReceived.Store(true)
 	initialHeader := atomic.LoadUint32(&s.headerChanClosed) == 0
 
 	if !initialHeader && !endStream {
