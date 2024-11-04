@@ -106,7 +106,13 @@ for MOD_FILE in $(find . -name 'go.mod'); do
 
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
-  staticcheck -go 1.22 -checks 'all' ./... >"${SC_OUT}" || true
+  # By default, Staticcheck targets the Go version declared in go.mod via the go
+  # directive. For Go 1.21 and newer, that directive specifies the minimum
+  # required version of Go.
+  # If a version is provided to Staticcheck using the -go flag, and the go
+  # toolchain version is higher than the one in go.mod, Staticcheck will report
+  # errors for usages of new language features in the std lib code.
+  staticcheck -checks 'all' ./... >"${SC_OUT}" || true
 
   # Error for anything other than checks that need exclusions.
   noret_grep -v "(ST1000)" "${SC_OUT}" | noret_grep -v "(SA1019)" | noret_grep -v "(ST1003)" | noret_grep -v "(ST1019)\|\(other import of\)" | not grep -v "(SA4000)"

@@ -20,6 +20,7 @@ package xdsclient
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -302,4 +303,40 @@ func decodeResponse(opts *xdsresource.DecodeOptions, rType xdsresource.Type, res
 		Timestamp: timestamp,
 	}
 	return ret, md, errRet
+}
+
+func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {
+	var errStrB strings.Builder
+	errStrB.WriteString(fmt.Sprintf("error parsing %q response: ", rType))
+	if len(topLevelErrors) > 0 {
+		errStrB.WriteString("top level errors: ")
+		for i, err := range topLevelErrors {
+			if i != 0 {
+				errStrB.WriteString(";\n")
+			}
+			errStrB.WriteString(err.Error())
+		}
+	}
+	if len(perResourceErrors) > 0 {
+		var i int
+		for name, err := range perResourceErrors {
+			if i != 0 {
+				errStrB.WriteString(";\n")
+			}
+			i++
+			errStrB.WriteString(fmt.Sprintf("resource %q: %v", name, err.Error()))
+		}
+	}
+	return errors.New(errStrB.String())
+}
+
+func (xc *xdsChannel) triggerResourceNotFoundForTesting(rType xdsresource.Type, resourceName string) error {
+	if xc.closed.HasFired() {
+		return fmt.Errorf("triggerResourceNotFoundForTesting() called on a closed channel")
+	}
+	if xc.logger.V(2) {
+		xc.logger.Infof("Triggering resource not found for type: %s, resource name: %s", rType.TypeName(), resourceName)
+	}
+	xc.ads.TriggerResourceNotFoundForTesting(rType, resourceName)
+	return nil
 }

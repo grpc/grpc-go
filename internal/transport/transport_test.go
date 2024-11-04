@@ -465,7 +465,7 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	copts.ChannelzParent = channelzSubChannel(t)
 
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, connErr := NewHTTP2Client(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if connErr != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
@@ -496,7 +496,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		connCh <- conn
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	tr, err := NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		// Server clean-up.
@@ -1353,23 +1353,23 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 
 	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	_, err = NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
-		t.Fatalf("NewClientTransport() returned successfully; wanted error")
+		t.Fatalf("NewHTTP2Client() returned successfully; wanted error")
 	}
-	t.Logf("NewClientTransport() = _, %v", err)
+	t.Logf("NewHTTP2Client() = _, %v", err)
 	if time.Since(timeBefore) > 3*time.Second {
-		t.Fatalf("NewClientTransport returned > 2.9s after context cancellation")
+		t.Fatalf("NewHTTP2Client returned > 2.9s after context cancellation")
 	}
 
 	// Test context deadline.
 	connectCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	_, err = NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
-		t.Fatalf("NewClientTransport() returned successfully; wanted error")
+		t.Fatalf("NewHTTP2Client() returned successfully; wanted error")
 	}
-	t.Logf("NewClientTransport() = _, %v", err)
+	t.Logf("NewHTTP2Client() = _, %v", err)
 }
 
 func (s) TestClientWithMisbehavedServer(t *testing.T) {
@@ -1445,7 +1445,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 
 	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ct, err := NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2436,7 +2436,7 @@ func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
 }
 
 // TestClientHandshakeInfo adds attributes to the resolver.Address passes to
-// NewClientTransport and verifies that these attributes are received by the
+// NewHTTP2Client and verifies that these attributes are received by the
 // transport credential handshaker.
 func (s) TestClientHandshakeInfo(t *testing.T) {
 	server := setUpServerOnly(t, 0, &ServerConfig{}, pingpong)
@@ -2458,9 +2458,9 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 		TransportCredentials: creds,
 		ChannelzParent:       channelzSubChannel(t),
 	}
-	tr, err := NewClientTransport(ctx, ctx, addr, copts, func(GoAwayReason) {})
+	tr, err := NewHTTP2Client(ctx, ctx, addr, copts, func(GoAwayReason) {})
 	if err != nil {
-		t.Fatalf("NewClientTransport(): %v", err)
+		t.Fatalf("NewHTTP2Client(): %v", err)
 	}
 	defer tr.Close(fmt.Errorf("closed manually by test"))
 
@@ -2471,7 +2471,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 }
 
 // TestClientHandshakeInfoDialer adds attributes to the resolver.Address passes to
-// NewClientTransport and verifies that these attributes are received by a custom
+// NewHTTP2Client and verifies that these attributes are received by a custom
 // dialer.
 func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 	server := setUpServerOnly(t, 0, &ServerConfig{}, pingpong)
@@ -2499,9 +2499,9 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		Dialer:         dialer,
 		ChannelzParent: channelzSubChannel(t),
 	}
-	tr, err := NewClientTransport(ctx, ctx, addr, copts, func(GoAwayReason) {})
+	tr, err := NewHTTP2Client(ctx, ctx, addr, copts, func(GoAwayReason) {})
 	if err != nil {
-		t.Fatalf("NewClientTransport(): %v", err)
+		t.Fatalf("NewHTTP2Client(): %v", err)
 	}
 	defer tr.Close(fmt.Errorf("closed manually by test"))
 
@@ -2759,7 +2759,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 		}
 	}()
 
-	ct, err := NewClientTransport(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
+	ct, err := NewHTTP2Client(ctx, ctx, resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2827,7 +2827,7 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 
 	// Create a client transport with a custom dialer that hangs the Read()
 	// after Close().
-	ct, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, err := NewHTTP2Client(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Failed to create transport: %v", err)
 	}
@@ -2914,7 +2914,7 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	copts := ConnectOptions{Dialer: dialer}
 	copts.ChannelzParent = channelzSubChannel(t)
 	// Create client transport with custom dialer
-	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, connErr := NewHTTP2Client(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}

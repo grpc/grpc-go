@@ -1,0 +1,43 @@
+name: Dependency Changes
+
+# Trigger on PRs.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Compare dependencies before and after this PR.
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: "**/*go.sum"
+
+      # Run the commands to generate dependencies before and after and compare.
+      - name: Compare dependencies
+        run: |
+          BEFORE="$(mktemp -d)"
+          AFTER="$(mktemp -d)"
+
+          scripts/gen-deps.sh "${AFTER}"
+          git checkout origin/master
+          scripts/gen-deps.sh "${BEFORE}"
+
+          echo "Comparing dependencies..."
+          # Run grep in a sub-shell since bash does not support ! in the middle of a pipe
+          diff -u0 -r "${BEFORE}" "${AFTER}" | bash -c '! grep -v "@@"'
+          echo "No changes detected."

@@ -23,6 +23,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpctest"
@@ -57,6 +58,18 @@ type testAuthInfo struct {
 
 func (t *testAuthInfo) AuthType() string {
 	return t.typ
+}
+
+type testPerRPCCreds struct {
+	md map[string]string
+}
+
+func (c *testPerRPCCreds) RequireTransportSecurity() bool {
+	return true
+}
+
+func (c *testPerRPCCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return c.md, nil
 }
 
 var (
@@ -159,5 +172,90 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestDefaultCredentialsWithOptions(t *testing.T) {
+	md1 := map[string]string{"foo": "tls"}
+	md2 := map[string]string{"foo": "alts"}
+	tests := []struct {
+		desc             string
+		defaultCredsOpts DefaultCredentialsOptions
+		authInfo         credentials.AuthInfo
+		wantedMetadata   map[string]string
+	}{
+		{
+			desc: "no ALTSPerRPCCreds with tls channel",
+			defaultCredsOpts: DefaultCredentialsOptions{
+				PerRPCCreds: &testPerRPCCreds{
+					md: md1,
+				},
+			},
+			authInfo:       &testAuthInfo{typ: "tls"},
+			wantedMetadata: md1,
+		},
+		{
+			desc: "no ALTSPerRPCCreds with alts channel",
+			defaultCredsOpts: DefaultCredentialsOptions{
+				PerRPCCreds: &testPerRPCCreds{
+					md: md1,
+				},
+			},
+			authInfo:       &testAuthInfo{typ: "alts"},
+			wantedMetadata: md1,
+		},
+		{
+			desc: "ALTSPerRPCCreds specified with tls channel",
+			defaultCredsOpts: DefaultCredentialsOptions{
+				PerRPCCreds: &testPerRPCCreds{
+					md: md1,
+				},
+				ALTSPerRPCCreds: &testPerRPCCreds{
+					md: md2,
+				},
+			},
+			authInfo:       &testAuthInfo{typ: "tls"},
+			wantedMetadata: md1,
+		},
+		{
+			desc: "ALTSPerRPCCreds specified with alts channel",
+			defaultCredsOpts: DefaultCredentialsOptions{
+				PerRPCCreds: &testPerRPCCreds{
+					md: md1,
+				},
+				ALTSPerRPCCreds: &testPerRPCCreds{
+					md: md2,
+				},
+			},
+			authInfo:       &testAuthInfo{typ: "alts"},
+			wantedMetadata: md2,
+		},
+		{
+			desc: "ALTSPerRPCCreds specified with unknown channel",
+			defaultCredsOpts: DefaultCredentialsOptions{
+				PerRPCCreds: &testPerRPCCreds{
+					md: md1,
+				},
+				ALTSPerRPCCreds: &testPerRPCCreds{
+					md: md2,
+				},
+			},
+			authInfo:       &testAuthInfo{typ: "foo"},
+			wantedMetadata: md1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			bundle := NewDefaultCredentialsWithOptions(tc.defaultCredsOpts)
+			ri := credentials.RequestInfo{AuthInfo: tc.authInfo}
+			ctx := icredentials.NewRequestInfoContext(context.Background(), ri)
+			got, err := bundle.PerRPCCredentials().GetRequestMetadata(ctx, "uri")
+			if err != nil {
+				t.Fatalf("Bundle's PerRPCCredentials().GetRequestMetadata() unexpected error = %v", err)
+			}
+			if diff := cmp.Diff(got, tc.wantedMetadata); diff != "" {
+				t.Errorf("Unexpected request metadata from bundle's PerRPCCredentials. Diff (-got +want):\n%v", diff)
+			}
+		})
 	}
 }
