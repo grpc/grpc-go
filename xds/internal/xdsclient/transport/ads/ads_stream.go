@@ -812,8 +812,6 @@ func (fc *adsFlowControl) wait(ctx context.Context) bool {
 
 // onDone indicates that all watchers have consumed the most recent update.
 func (fc *adsFlowControl) onDone() {
-	fc.pending.Store(false)
-
 	select {
 	// Writes to the readyCh channel should not block ideally. The default
 	// branch here is to appease the paranoid mind.
@@ -823,4 +821,5 @@ func (fc *adsFlowControl) onDone() {
 			fc.logger.Infof("ADS stream flow control readyCh is full")
 		}
 	}
+	fc.pending.Store(false)
 }
