@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"go.opentelemetry.io/otel"
 	"sync/atomic"
 	"time"
 
@@ -66,6 +67,15 @@ func (h *clientStatsHandler) initializeMetrics() {
 	}
 	h.MetricsRecorder = rm
 	rm.registerMetrics(metrics, meter)
+}
+
+func (h *clientStatsHandler) initializeTracing() {
+	if h.options.TraceOptions.TracerProvider == nil || h.options.TraceOptions.TextMapPropagator == nil {
+		return
+	}
+
+	otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
+	otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
