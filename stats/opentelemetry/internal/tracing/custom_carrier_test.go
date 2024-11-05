@@ -90,6 +90,12 @@ func (s) TestGet(t *testing.T) {
 			want: base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03}),
 		},
 		{
+			name: "grpc-trace-bin key with another string key",
+			md:   metadata.Pairs("key1", "value1"),
+			key:  "grpc-trace-bin",
+			want: base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03}),
+		},
+		{
 			name: "non-grpc-trace-bin key",
 			md:   metadata.Pairs("non-trace-bin", base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03})),
 			key:  "non-trace-bin",
@@ -102,7 +108,10 @@ func (s) TestGet(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			if strings.HasSuffix(test.key, "-bin") { // for binary headers set `grpc-trace-bin` using `stats.SetIncomingTrace()`
-				b, _ := base64.StdEncoding.DecodeString(test.want)
+				b, err := base64.StdEncoding.DecodeString(test.want)
+				if err != nil {
+					t.Fatalf("failed to decode want %s as base64 string: %v", test.want, err)
+				}
 				ctx = stats.SetIncomingTrace(ctx, b)
 			}
 			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md))
@@ -135,7 +144,7 @@ func (s) TestSet(t *testing.T) {
 		wantKeys  []string
 	}{
 		{
-			name:      "set new key",
+			name:      "new key",
 			initialMD: metadata.MD{},
 			setKey:    "key1",
 			setValue:  "value1",
@@ -151,7 +160,7 @@ func (s) TestSet(t *testing.T) {
 			wantKeys:  []string{"key1"},
 		},
 		{
-			name:      "set new key with different existing key",
+			name:      "new key with different existing key",
 			initialMD: metadata.MD{"key2": []string{"value2"}},
 			setKey:    "key1",
 			setValue:  "value1",
@@ -159,7 +168,7 @@ func (s) TestSet(t *testing.T) {
 			wantKeys:  []string{"key2", "key1"},
 		},
 		{
-			name:      "set grpc-trace-bin binary key",
+			name:      "grpc-trace-bin binary key",
 			initialMD: metadata.MD{"key1": []string{"value1"}},
 			setKey:    "grpc-trace-bin",
 			setValue:  base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03}),
@@ -167,7 +176,7 @@ func (s) TestSet(t *testing.T) {
 			wantKeys:  []string{"key1", "grpc-trace-bin"},
 		},
 		{
-			name:      "set non-grpc-trace-bin binary key",
+			name:      "non-grpc-trace-bin binary key",
 			initialMD: metadata.MD{"key1": []string{"value1"}},
 			setKey:    "non-grpc-trace-bin",
 			setValue:  base64.StdEncoding.EncodeToString([]byte{0x01, 0x02, 0x03}),
@@ -189,7 +198,10 @@ func (s) TestSet(t *testing.T) {
 			}
 			// for binary headers verify `grpc-trace-bin` binary value for outgoing trace in carrier's context
 			if strings.HasSuffix(test.setKey, "-bin") {
-				wantB, _ := base64.StdEncoding.DecodeString(test.wantValue)
+				wantB, err := base64.StdEncoding.DecodeString(test.wantValue)
+				if err != nil {
+					t.Fatalf("failed to decode want %s as base64 string: %v", test.wantValue, err)
+				}
 				verifyOutgoingTraceGRPCTraceBinHeader(c.ctx, t, wantB)
 				return
 			}

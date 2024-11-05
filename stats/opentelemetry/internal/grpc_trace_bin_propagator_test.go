@@ -34,6 +34,12 @@ import (
 
 // TODO: Move out of internal as part of open telemetry API
 
+// validSpanContext is a valid OpenTelemetry span context.
+var validSpanContext = oteltrace.SpanContext{}.WithTraceID(
+	oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
+	oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
+	oteltrace.TraceFlags(1))
+
 type s struct {
 	grpctest.Tester
 }
@@ -66,10 +72,7 @@ func (s) TestInject(t *testing.T) {
 	}{
 		{
 			name: "fast path, valid context",
-			sc: oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-				oteltrace.TraceFlags(1)),
+			sc:   validSpanContext,
 			fast: true,
 		},
 		{
@@ -79,10 +82,7 @@ func (s) TestInject(t *testing.T) {
 		},
 		{
 			name: "slow path, valid context",
-			sc: oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-				oteltrace.TraceFlags(1)),
+			sc:   validSpanContext,
 			fast: false,
 		},
 		{
@@ -142,10 +142,7 @@ func (s) TestExtract(t *testing.T) {
 	}{
 		{
 			name: "fast path, valid context",
-			sc: oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-				oteltrace.TraceFlags(1)).WithRemote(true),
+			sc:   validSpanContext.WithRemote(true),
 			fast: true,
 		},
 		{
@@ -155,10 +152,7 @@ func (s) TestExtract(t *testing.T) {
 		},
 		{
 			name: "slow path, valid context",
-			sc: oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-				oteltrace.TraceFlags(1)).WithRemote(true),
+			sc:   validSpanContext.WithRemote(true),
 			fast: false,
 		},
 		{
@@ -201,14 +195,8 @@ func (s) TestBinary(t *testing.T) {
 	}{
 		{
 			name: "valid context",
-			sc: oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-				oteltrace.TraceFlags(1)),
-			want: binary(oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-				oteltrace.TraceFlags(1))),
+			sc:   validSpanContext,
+			want: binary(validSpanContext),
 		},
 		{
 			name: "zero value context",
@@ -220,7 +208,7 @@ func (s) TestBinary(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if got := binary(test.sc); !reflect.DeepEqual(got, test.want) {
-				t.Errorf("binary() = %v, want %v", got, test.want)
+				t.Fatalf("binary() = %v, want %v", got, test.want)
 			}
 		})
 	}
@@ -241,14 +229,8 @@ func (s) TestFromBinary(t *testing.T) {
 		{
 			name: "valid",
 			b:    []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
-			want: oteltrace.SpanContext{}.WithTraceID(
-				oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			).WithSpanID(
-				oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24},
-			).WithTraceFlags(
-				oteltrace.TraceFlags(1),
-			).WithRemote(true),
-			ok: true,
+			want: validSpanContext.WithRemote(true),
+			ok:   true,
 		},
 		{
 			name: "invalid length",
@@ -286,11 +268,11 @@ func (s) TestFromBinary(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			got, ok := fromBinary(test.b)
 			if ok != test.ok {
-				t.Errorf("fromBinary() ok = %v, want %v", ok, test.ok)
+				t.Fatalf("fromBinary() ok = %v, want %v", ok, test.ok)
 				return
 			}
 			if !got.Equal(test.want) {
-				t.Errorf("fromBinary() got = %v, want %v", got, test.want)
+				t.Fatalf("fromBinary() got = %v, want %v", got, test.want)
 			}
 		})
 	}
