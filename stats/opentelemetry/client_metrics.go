@@ -208,6 +208,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		if info.NameResolutionDelay {
 			callSpan.AddEvent("Delayed name resolution complete")
 		}
+		ctx = trace.ContextWithSpan(ctx, callSpan)
 		ctx, ti = h.traceTagRPC(ctx, info)
 	}
 	ai := &attemptInfo{ // populates information about RPC start.
