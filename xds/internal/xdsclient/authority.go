@@ -218,6 +218,18 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 	a.triggerFallbackOnStreamFailure(serverConfig)
 }
 
+// serverIndexForConfig returns the index of the xdsChannelConfig that matches
+// the provided ServerConfig. If no match is found, it returns the length of the
+// xdsChannelConfigs slice, which represents the index of a non-existent config.
+func (a *authority) serverIndexForConfig(sc *bootstrap.ServerConfig) int {
+	for i, cfg := range a.xdsChannelConfigs {
+		if cfg.sc.Equal(sc) {
+			return i
+		}
+	}
+	return len(a.xdsChannelConfigs)
+}
+
 // Determines the server to fallback to and triggers fallback to the same. If
 // required, creates an xdsChannel to that server, and re-subscribes to all
 // existing resources.
@@ -230,12 +242,11 @@ func (a *authority) triggerFallbackOnStreamFailure(failingServerConfig *bootstra
 
 	// The server to fallback to is the next server on the list. If the current
 	// server is the last server, then there is nothing that can be done.
-	currentServerIdx := 0
-	for _, cfg := range a.xdsChannelConfigs {
-		if cfg.sc.Equal(failingServerConfig) {
-			break
-		}
-		currentServerIdx++
+	currentServerIdx := a.serverIndexForConfig(failingServerConfig)
+	if currentServerIdx == len(a.xdsChannelConfigs) {
+		// This can never happen.
+		a.logger.Errorf("Received error from an unknown server: %s", failingServerConfig)
+		return
 	}
 	if currentServerIdx == len(a.xdsChannelConfigs)-1 {
 		if a.logger.V(2) {
@@ -501,9 +512,11 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 }
 
 // handleRevertingToPrimaryOnUpdate is called when a resource update is received
-// from a server that is not the current active server. This method ensures that
-// all lower priority servers are closed and the active server is reverted to
-// the highest priority server that has sent an update.
+// from the xDS client.
+//
+// If the update is from the currently active server, nothing is done. Else, all
+// lower priority servers are closed and the active server is reverted to the
+// highest priority server that sent the update.
 //
 // This method is only executed in the context of a serializer callback.
 func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.ServerConfig) {
@@ -521,40 +534,35 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.Ser
 	// that we have received an update from a higher priority server and we need
 	// to revert back to it. This method guarantees that when an update is
 	// received from a server, all lower priority servers are closed.
-	serverIdx := 0
-	for _, cfg := range a.xdsChannelConfigs {
-		if cfg.sc.Equal(serverConfig) {
-			break
-		}
-		serverIdx++
-	}
+	serverIdx := a.serverIndexForConfig(serverConfig)
 	if serverIdx == len(a.xdsChannelConfigs) {
 		// This can never happen.
-		a.logger.Errorf("Received update from an unknown server: %v", serverConfig)
+		a.logger.Errorf("Received update from an unknown server: %s", serverConfig)
 		return
 	}
 	a.activeXDSChannel = a.xdsChannelConfigs[serverIdx]
 
-	// Close all lower priority channel.
+	// Close all lower priority channels.
+	//
+	// But before closing any channel, we need to unsubscribe from any resources
+	// that were subscribed to on this channel. Resources could be subscribed to
+	// from multiple channels as we fallback to lower priority servers. But when
+	// a higher priority one comes back up, we need to unsubscribe from all
+	// lower priority ones before releasing the reference to them.
 	for i := serverIdx + 1; i < len(a.xdsChannelConfigs); i++ {
 		cfg := a.xdsChannelConfigs[i]
 
-		// Unsubscribe any resources that were subscribed to, on this channel
-		// and remove it from the resource cache. When a ref to a channel is
-		// being released, there should be no more references to it from the
-		// resource cache.
 		for rType, rState := range a.resources {
 			for resourceName, state := range rState {
-				idx := 0
-				for _, xc := range state.xdsChannelConfigs {
-					if xc != cfg {
-						state.xdsChannelConfigs[idx] = xc
-						idx++
-						continue
+				for idx, xc := range state.xdsChannelConfigs {
+					// If the current resource is subscribed to on this channel,
+					// unsubscribe, and remove the channel from the list of
+					// channels that this resource is subscribed to.
+					if xc == cfg {
+						state.xdsChannelConfigs = append(state.xdsChannelConfigs[:idx], state.xdsChannelConfigs[idx+1:]...)
+						xc.xc.unsubscribe(rType, resourceName)
 					}
-					xc.xc.unsubscribe(rType, resourceName)
 				}
-				state.xdsChannelConfigs = state.xdsChannelConfigs[:idx]
 			}
 		}
 
