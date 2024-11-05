@@ -128,6 +128,11 @@ type OptionsForTesting struct {
 
 // NewForTesting returns an xDS client configured with the provided options.
 //
+// Sets the fallback bootstrap configuration to the contents in the
+// opts.Contents field. This value persists for the life of the test binary. So,
+// tests that want this value to be empty should call
+// bootstrap.UnsetFallbackBootstrapConfigForTesting to ensure the same.
+//
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
@@ -152,8 +157,7 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 	if err := bootstrap.SetFallbackBootstrapConfig(opts.Contents); err != nil {
 		return nil, nil, err
 	}
-	client, cancel, err := newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.IdleChannelExpiryTimeout, opts.StreamBackoffAfterFailure)
-	return client, func() { bootstrap.UnsetFallbackBootstrapConfigForTesting(); cancel() }, err
+	return newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.IdleChannelExpiryTimeout, opts.StreamBackoffAfterFailure)
 }
 
 // GetForTesting returns an xDS client created earlier using the given name.
