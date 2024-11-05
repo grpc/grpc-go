@@ -218,19 +218,8 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 		return fmt.Errorf("wrr: received nil or illegal BalancerConfig (type %T): %v", ccs.BalancerConfig, ccs.BalancerConfig)
 	}
 
-	// Validate the endpoints provided before updating any data in Weighted
-	// Round Robin to see if need this needs to provide an erroring TF picker to
-	// potentially trigger reresolution on the resolver. If an error does occur,
-	// call resolver error on the child. This will allow an old working system
-	// to continue working, but generate a TF picker if needed.
-	if err := resolver.ValidateEndpoints(ccs.ResolverState.Endpoints); err != nil {
-		b.child.ResolverError(err)
-		return err
-	}
-
-	// Note: empty endpoints will simply get ignored by child and create data
-	// here that will be cleared on next update, and duplicate addresses across
-	// endpoints won't explicitly error but will have undefined behavior.
+	// Note: empty endpoints and duplicate addresses across endpoints won't
+	// explicitly error but will have undefined behavior.
 	b.mu.Lock()
 	b.cfg = cfg
 	b.locality = weightedtarget.LocalityFromResolverState(ccs.ResolverState)

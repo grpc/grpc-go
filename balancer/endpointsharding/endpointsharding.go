@@ -111,9 +111,6 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
-		if len(endpoint.Addresses) == 0 {
-			continue
-		}
 		if _, ok := newChildren.Get(endpoint); ok {
 			// Endpoint child was already created, continue to avoid duplicate
 			// update.
@@ -154,6 +151,9 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 		}
 	}
 	es.children.Store(newChildren)
+	if newChildren.Len() == 0 {
+		return balancer.ErrBadResolverState
+	}
 	return ret
 }
 
