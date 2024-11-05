@@ -66,29 +66,34 @@ func Test(t *testing.T) {
 // format.
 func (s) TestInject(t *testing.T) {
 	tests := []struct {
-		name string
-		sc   oteltrace.SpanContext
-		fast bool
+		name    string
+		sc      oteltrace.SpanContext
+		fast    bool
+		validSC bool
 	}{
 		{
-			name: "fast path, valid context",
-			sc:   validSpanContext,
-			fast: true,
+			name:    "fast path, valid context",
+			sc:      validSpanContext,
+			fast:    true,
+			validSC: true,
 		},
 		{
-			name: "fast path, invalid context",
-			sc:   oteltrace.SpanContext{},
-			fast: true,
+			name:    "fast path, invalid context",
+			sc:      oteltrace.SpanContext{},
+			fast:    true,
+			validSC: false,
 		},
 		{
-			name: "slow path, valid context",
-			sc:   validSpanContext,
-			fast: false,
+			name:    "slow path, valid context",
+			sc:      validSpanContext,
+			fast:    false,
+			validSC: true,
 		},
 		{
-			name: "slow path, invalid context",
-			sc:   oteltrace.SpanContext{},
-			fast: false,
+			name:    "slow path, invalid context",
+			sc:      oteltrace.SpanContext{},
+			fast:    false,
+			validSC: false,
 		},
 	}
 
@@ -108,15 +113,24 @@ func (s) TestInject(t *testing.T) {
 				c = otelpropagation.MapCarrier{}
 			}
 			p.Inject(tCtx, c)
-			var got oteltrace.SpanContext
+
+			var gotSC oteltrace.SpanContext
+			var gotValidSC bool
 			if test.fast {
-				got, _ = fromBinary(stats.OutgoingTrace(c.(*itracing.CustomCarrier).Context()))
+				if gotSC, gotValidSC = fromBinary(stats.OutgoingTrace(c.(*itracing.CustomCarrier).Context())); test.validSC != gotValidSC {
+					t.Fatalf("got invalid span context in CustomCarrier's context from grpc-trace-bin header: %v, want valid span context", stats.OutgoingTrace(c.(*itracing.CustomCarrier).Context()))
+				}
 			} else {
-				b, _ := base64.StdEncoding.DecodeString(c.Get(itracing.GRPCTraceBinHeaderKey))
-				got, _ = fromBinary(b)
+				b, err := base64.StdEncoding.DecodeString(c.Get(itracing.GRPCTraceBinHeaderKey))
+				if err != nil {
+					t.Fatalf("failed to decode MapCarrier's grpc-trace-bin base64 string header %s to binary: %v", c.Get(itracing.GRPCTraceBinHeaderKey), err)
+				}
+				if gotSC, gotValidSC = fromBinary(b); test.validSC != gotValidSC {
+					t.Fatalf("got invalid span context in MapCarrier's context from grpc-trace-bin header: %v, want valid span context", b)
+				}
 			}
-			if test.sc.TraceID() != got.TraceID() && test.sc.SpanID() != got.SpanID() && test.sc.TraceFlags() != got.TraceFlags() {
-				t.Fatalf("got = %v, want %v", got, test.sc)
+			if test.sc.TraceID() != gotSC.TraceID() && test.sc.SpanID() != gotSC.SpanID() && test.sc.TraceFlags() != gotSC.TraceFlags() {
+				t.Fatalf("got span context = %v, want span contexts %v", gotSC, test.sc)
 			}
 		})
 	}

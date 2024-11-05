@@ -84,6 +84,18 @@ func (s) TestGet(t *testing.T) {
 			want: "",
 		},
 		{
+			name: "more than one key/value pair",
+			md:   metadata.MD{"key1": []string{"value1"}, "key2": []string{"value2"}},
+			key:  "key2",
+			want: "value2",
+		},
+		{
+			name: "more than one value for a key",
+			md:   metadata.MD{"key1": []string{"value1", "value2"}},
+			key:  "key1",
+			want: "value1",
+		},
+		{
 			name: "grpc-trace-bin key",
 			md:   metadata.MD{},
 			key:  "grpc-trace-bin",
@@ -110,7 +122,7 @@ func (s) TestGet(t *testing.T) {
 			if strings.HasSuffix(test.key, "-bin") { // for binary headers set `grpc-trace-bin` using `stats.SetIncomingTrace()`
 				b, err := base64.StdEncoding.DecodeString(test.want)
 				if err != nil {
-					t.Fatalf("failed to decode want %s as base64 string: %v", test.want, err)
+					t.Fatalf("failed to decode want %s base64 string to binary: %v", test.want, err)
 				}
 				ctx = stats.SetIncomingTrace(ctx, b)
 			}
@@ -200,13 +212,13 @@ func (s) TestSet(t *testing.T) {
 			if strings.HasSuffix(test.setKey, "-bin") {
 				wantB, err := base64.StdEncoding.DecodeString(test.wantValue)
 				if err != nil {
-					t.Fatalf("failed to decode want %s as base64 string: %v", test.wantValue, err)
+					t.Fatalf("failed to decode want %s base64 string to binary: %v", test.wantValue, err)
 				}
 				verifyOutgoingTraceGRPCTraceBinHeader(c.ctx, t, wantB)
 				return
 			}
 			// for non -bin headers verify string value in carrier's context metadata
-			if gotMD, _ := metadata.FromOutgoingContext(c.Context()); test.wantValue != "" && gotMD.Get(test.setKey)[0] != test.setValue {
+			if gotMD, ok := metadata.FromOutgoingContext(c.Context()); ok && test.wantValue != "" && gotMD.Get(test.setKey)[0] != test.setValue {
 				t.Fatalf("got value %s, want %s, for key %s", gotMD.Get(test.setKey)[0], test.setValue, test.setKey)
 			}
 		})
