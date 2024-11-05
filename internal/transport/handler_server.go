@@ -473,8 +473,6 @@ func (ht *serverHandlerTransport) runStream() {
 	}
 }
 
-func (ht *serverHandlerTransport) incrMsgSent() {}
-
 func (ht *serverHandlerTransport) incrMsgRecv() {}
 
 func (ht *serverHandlerTransport) Drain(string) {

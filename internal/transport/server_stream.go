@@ -58,8 +58,7 @@ func (s *ServerStream) Read(n int) (mem.BufferSlice, error) {
 	return b, err
 }
 
-// WriteHeader sends the header metadata for the given stream.
-// WriteHeader may not be called on all streams.
+// SendHeader sends the header metadata for the given stream.
 func (s *ServerStream) SendHeader(md metadata.MD) error {
 	return s.st.writeHeader(s, md)
 }
