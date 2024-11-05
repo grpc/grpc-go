@@ -1565,7 +1565,6 @@ type ServerStream interface {
 // serverStream implements a server side Stream.
 type serverStream struct {
 	ctx   context.Context
-	t     transport.ServerTransport
 	s     *transport.ServerStream
 	p     *parser
 	codec baseCodec
