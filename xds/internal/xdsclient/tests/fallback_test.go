@@ -421,7 +421,9 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure that a connection is attempted to the fallback, and that RPCs are
+	// Ensure that a connection is attempted to the fallback (because both
+	// conditions mentioned for fallback in A71 are satisfied: connectivity
+	// failure and a watcher for an uncached resource), and that RPCs are
 	// routed to the cluster returned by the fallback server.
 	c, err := fallbackWrappedLis.NewConnCh.Receive(ctx)
 	if err != nil {
@@ -590,7 +592,7 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	// Ensure that a connection is attempted to the fallback.
 	c, err := fallbackWrappedLis.NewConnCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Failure when waiting for a connection to be opened to the primary management server: %v", err)
+		t.Fatalf("Failure when waiting for a connection to be opened to the secondary management server: %v", err)
 	}
 	fallbackConn := c.(*testutils.ConnWrapper)
 

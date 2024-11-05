@@ -40,7 +40,7 @@ type resourceState struct {
 	cache             xdsresource.ResourceData             // Most recent ACKed update for this resource.
 	md                xdsresource.UpdateMetadata           // Metadata for the most recent update.
 	deletionIgnored   bool                                 // True, if resource deletion was ignored for a prior update.
-	xdsChannelConfigs []*xdsChannelWithConfig              // List of xdsChannels where this resource is subscribed.
+	xdsChannelConfigs map[*xdsChannelWithConfig]bool       // Set of xdsChannels where this resource is subscribed.
 }
 
 // xdsChannelForADS is used to acquire a reference to an xdsChannel. This
@@ -209,13 +209,13 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 	//    Cached resources include ones that
 	//    - have been successfully received and can be used.
 	//    - are considered non-existent according to xDS Protocol Specification.
-	if !a.uncachedWatcherExists() {
+	if !a.watcherExistsForUncachedResource() {
 		if a.logger.V(2) {
 			a.logger.Infof("No watchers for uncached resources. Not triggering fallback")
 		}
 		return
 	}
-	a.triggerFallbackOnStreamFailure(serverConfig)
+	a.fallbackToNextServerIfPossible(serverConfig)
 }
 
 // serverIndexForConfig returns the index of the xdsChannelConfig that matches
@@ -235,7 +235,7 @@ func (a *authority) serverIndexForConfig(sc *bootstrap.ServerConfig) int {
 // existing resources.
 //
 // Only executed in the context of a serializer callback.
-func (a *authority) triggerFallbackOnStreamFailure(failingServerConfig *bootstrap.ServerConfig) {
+func (a *authority) fallbackToNextServerIfPossible(failingServerConfig *bootstrap.ServerConfig) {
 	if a.logger.V(2) {
 		a.logger.Infof("Attempting to initiate fallback after failure from server %q", failingServerConfig)
 	}
@@ -292,7 +292,7 @@ func (a *authority) triggerFallbackOnStreamFailure(failingServerConfig *bootstra
 			// this resource has been requested from. Retain the cached resource
 			// and the set of existing watchers (and other metadata fields) in
 			// the resource state.
-			state.xdsChannelConfigs = append(state.xdsChannelConfigs, fallbackChannel)
+			state.xdsChannelConfigs[fallbackChannel] = true
 		}
 	}
 }
@@ -554,13 +554,13 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.Ser
 
 		for rType, rState := range a.resources {
 			for resourceName, state := range rState {
-				for idx, xc := range state.xdsChannelConfigs {
+				for xc := range state.xdsChannelConfigs {
 					// If the current resource is subscribed to on this channel,
 					// unsubscribe, and remove the channel from the list of
 					// channels that this resource is subscribed to.
 					if xc == cfg {
-						state.xdsChannelConfigs = append(state.xdsChannelConfigs[:idx], state.xdsChannelConfigs[idx+1:]...)
 						xc.xc.unsubscribe(rType, resourceName)
+						delete(state.xdsChannelConfigs, xc)
 					}
 				}
 			}
@@ -624,7 +624,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			state = &resourceState{
 				watchers:          make(map[xdsresource.ResourceWatcher]bool),
 				md:                xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
-				xdsChannelConfigs: []*xdsChannelWithConfig{xdsChannel},
+				xdsChannelConfigs: map[*xdsChannelWithConfig]bool{xdsChannel: true},
 			}
 			resources[resourceName] = state
 			xdsChannel.xc.subscribe(rType, resourceName)
@@ -678,7 +678,7 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			if a.logger.V(2) {
 				a.logger.Infof("Removing last watch for resource name %q", resourceName)
 			}
-			for _, xc := range state.xdsChannelConfigs {
+			for xc := range state.xdsChannelConfigs {
 				xc.xc.unsubscribe(rType, resourceName)
 			}
 			delete(resources, resourceName)
@@ -742,11 +742,11 @@ func (a *authority) closeXDSChannels() {
 	a.activeXDSChannel = nil
 }
 
-// uncachedWatcherExists returns true if there is at least one watcher for a
-// resource that has not yet been cached.
+// watcherExistsForUncachedResource returns true if there is at least one
+// watcher for a resource that has not yet been cached.
 //
 // Only executed in the context of a serializer callback.
-func (a *authority) uncachedWatcherExists() bool {
+func (a *authority) watcherExistsForUncachedResource() bool {
 	for _, resourceStates := range a.resources {
 		for _, state := range resourceStates {
 			if state.md.Status == xdsresource.ServiceStatusRequested {
