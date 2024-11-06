@@ -622,7 +622,7 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 // TestChannelStateWaitingForFirstResolverUpdate verifies the initial
 // state of the channel when a manual name resolver doesn't provide any updates.
 func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
-	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called.")
+	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called soon as Connect() is called. See issue #7686.")
 
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
@@ -653,7 +653,7 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 }
 
 func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
-	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made.")
+	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made soon as Connect() is called. See issue #7686.")
 
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
