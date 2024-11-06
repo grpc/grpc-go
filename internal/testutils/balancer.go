@@ -32,11 +32,13 @@ import (
 
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
+	balancer.SubConn
 	tcc           *BalancerClientConn // the CC that owns this SubConn
 	id            string
 	ConnectCh     chan struct{}
 	stateListener func(balancer.SubConnState)
 	connectCalled *grpcsync.Event
+	Addresses     []resolver.Address
 }
 
 // NewTestSubConn returns a newly initialized SubConn.  Typically, subconns
@@ -131,6 +133,7 @@ func (tcc *BalancerClientConn) NewSubConn(a []resolver.Address, o balancer.NewSu
 		ConnectCh:     make(chan struct{}, 1),
 		stateListener: o.StateListener,
 		connectCalled: grpcsync.NewEvent(),
+		Addresses:     a,
 	}
 	tcc.subConnIdx++
 	tcc.logger.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)

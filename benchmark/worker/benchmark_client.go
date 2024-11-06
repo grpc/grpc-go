@@ -22,7 +22,7 @@ import (
 	"context"
 	"flag"
 	"math"
-	"math/rand"
+	rand "math/rand/v2"
 	"runtime"
 	"sync"
 	"time"

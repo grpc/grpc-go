@@ -24,7 +24,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"math/rand"
+	rand "math/rand/v2"
 	"os"
 	"sort"
 	"strconv"
@@ -74,7 +74,7 @@ func (pcr *payloadCurveRange) chooseRandom() int {
 		return int(pcr.from)
 	}
 
-	return int(rand.Int31n(pcr.to-pcr.from+1) + pcr.from)
+	return int(rand.Int32N(pcr.to-pcr.from+1) + pcr.from)
 }
 
 // sha256file is a helper function that returns a hex string matching the

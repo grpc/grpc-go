@@ -53,7 +53,7 @@ func (l *ListenerWrapper) Accept() (net.Conn, error) {
 	}
 	closeCh := NewChannel()
 	conn := &ConnWrapper{Conn: c, CloseCh: closeCh}
-	l.NewConnCh.Send(conn)
+	l.NewConnCh.Replace(conn)
 	return conn, nil
 }
 

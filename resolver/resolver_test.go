@@ -31,3 +31,75 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
+
+// TestValidateEndpoints tests different scenarios of resolver addresses being
+// validated by the ValidateEndpoint helper.
+func (s) TestValidateEndpoints(t *testing.T) {
+	addr1 := Address{Addr: "addr1"}
+	addr2 := Address{Addr: "addr2"}
+	addr3 := Address{Addr: "addr3"}
+	addr4 := Address{Addr: "addr4"}
+	tests := []struct {
+		name      string
+		endpoints []Endpoint
+		wantErr   bool
+	}{
+		{
+			name: "duplicate-address-across-endpoints",
+			endpoints: []Endpoint{
+				{Addresses: []Address{addr1}},
+				{Addresses: []Address{addr1}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "duplicate-address-same-endpoint",
+			endpoints: []Endpoint{
+				{Addresses: []Address{addr1, addr1}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "duplicate-address-across-endpoints-plural-addresses",
+			endpoints: []Endpoint{
+				{Addresses: []Address{addr1, addr2, addr3}},
+				{Addresses: []Address{addr3, addr4}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "no-shared-addresses",
+			endpoints: []Endpoint{
+				{Addresses: []Address{addr1, addr2}},
+				{Addresses: []Address{addr3, addr4}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "endpoint-with-no-addresses",
+			endpoints: []Endpoint{
+				{Addresses: []Address{addr1, addr2}},
+				{Addresses: []Address{}},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "empty-endpoints-list",
+			endpoints: []Endpoint{},
+			wantErr:   true,
+		},
+		{
+			name:      "endpoint-list-with-no-addresses",
+			endpoints: []Endpoint{{}, {}},
+			wantErr:   true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateEndpoints(test.endpoints)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("ValidateEndpoints() wantErr: %v, got: %v", test.wantErr, err)
+			}
+		})
+	}
+}
