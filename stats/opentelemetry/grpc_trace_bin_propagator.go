@@ -16,7 +16,7 @@
  *
  */
 
-package internal
+package opentelemetry
 
 import (
 	"context"
@@ -26,8 +26,6 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
-
-// TODO: Move out of internal as part of open telemetry API
 
 // GRPCTraceBinPropagator is an OpenTelemetry TextMapPropagator which is used
 // to extract and inject trace context data from and into headers exchanged by

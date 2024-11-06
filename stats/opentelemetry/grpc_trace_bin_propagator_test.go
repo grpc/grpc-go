@@ -16,7 +16,7 @@
  *
  */
 
-package internal
+package opentelemetry
 
 import (
 	"context"
@@ -26,27 +26,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 	otelpropagation "go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
-
-// TODO: Move out of internal as part of open telemetry API
 
 // validSpanContext is a valid OpenTelemetry span context.
 var validSpanContext = oteltrace.SpanContext{}.WithTraceID(
 	oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
 	oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
 	oteltrace.TraceFlags(1))
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 // TestInject verifies that the GRPCTraceBinPropagator correctly injects
 // OpenTelemetry span context as `grpc-trace-bin` header in the provided
