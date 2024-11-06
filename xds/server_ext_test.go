@@ -125,6 +125,8 @@ func (s) TestServingModeChanges(t *testing.T) {
 		}
 	})
 
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -141,14 +143,11 @@ func (s) TestServingModeChanges(t *testing.T) {
 			}
 		},
 	}
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
-
-	stub.S = server
-	stubserver.StartTestService(t, stub)
+	stubserver.StartTestService(t, stub, sopts...)
+	defer stub.S.Stop()
 
 	go func() {
 		if err := stub.S.Serve(lis); err != nil {
@@ -270,6 +269,8 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 		}
 	})
 
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+
 	stub := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -286,14 +287,11 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 			}
 		},
 	}
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
-
-	stub.S = server
-	stubserver.StartTestService(t, stub)
+	stubserver.StartTestService(t, stub, sopts...)
+	defer stub.S.Stop()
 
 	go func() {
 		if err := stub.S.Serve(lis); err != nil {
