@@ -33,8 +33,6 @@ import (
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func init() {
@@ -53,8 +51,6 @@ var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.Di
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
 	MetricsOptions MetricsOptions
-	// TraceOptions are the tracing options for OpenTelemetry instrumentation.
-	TraceOptions TraceOptions
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -88,16 +84,6 @@ type MetricsOptions struct {
 	pluginOption otelinternal.PluginOption
 }
 
-// TraceOptions are the tracing options for OpenTelemetry instrumentation.
-type TraceOptions struct {
-	// TracerProvider provides Tracers that are used by instrumentation code to
-	// trace computational workflows.
-	TracerProvider trace.TracerProvider
-
-	// TextMapPropagator propagates span context through text map carrier.
-	TextMapPropagator propagation.TextMapPropagator
-}
-
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
 // code for a grpc.ClientConn.
 //
@@ -113,7 +99,6 @@ type TraceOptions struct {
 func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
-	csh.initializeTracing()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
@@ -134,7 +119,6 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
-	ssh.initializeTracing()
 	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 }
 
@@ -181,14 +165,6 @@ func removeLeadingSlash(mn string) string {
 	return strings.TrimLeft(mn, "/")
 }
 
-func isMetricsDisabled(mo MetricsOptions) bool {
-	return mo.MeterProvider == nil
-}
-
-func isTracingDisabled(to TraceOptions) bool {
-	return to.TracerProvider == nil || to.TextMapPropagator == nil
-}
-
 // attemptInfo is RPC information scoped to the RPC attempt life span client
 // side, and the RPC life span server side.
 type attemptInfo struct {
@@ -205,8 +181,6 @@ type attemptInfo struct {
 
 	pluginOptionLabels map[string]string // pluginOptionLabels to attach to metrics emitted
 	xdsLabels          map[string]string
-
-	ti *attemptTraceSpan
 }
 
 type clientMetrics struct {

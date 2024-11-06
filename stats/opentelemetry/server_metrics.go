@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
-	"go.opentelemetry.io/otel"
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 )
@@ -74,17 +73,6 @@ type attachLabelsTransportStream struct {
 
 	attachedLabels         atomic.Bool
 	metadataExchangeLabels metadata.MD
-}
-
-func (h *serverStatsHandler) initializeTracing() {
-	// Will set no traces to record if tracing is disabled, logically
-	// making this stats handler a no-op.
-	if !isTracingDisabled(h.options.TraceOptions) {
-		return
-	}
-
-	otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
-	otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
 }
 
 func (s *attachLabelsTransportStream) SetHeader(md metadata.MD) error {
@@ -209,14 +197,9 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 	}
 
-	var ti *attemptTraceSpan
-	if !isTracingDisabled(h.options.TraceOptions) {
-		ctx, ti = h.traceTagRPC(ctx, info)
-	}
 	ai := &attemptInfo{
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
-		ti:        ti,
 	}
 	ri := &rpcInfo{
 		ai: ai,
@@ -231,12 +214,7 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	if !isTracingDisabled(h.options.TraceOptions) {
-		populateSpan(ctx, rs, ri.ai.ti)
-	}
-	if !isMetricsDisabled(h.options.MetricsOptions) {
-		h.processRPCData(ctx, rs, ri.ai)
-	}
+	h.processRPCData(ctx, rs, ri.ai)
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
