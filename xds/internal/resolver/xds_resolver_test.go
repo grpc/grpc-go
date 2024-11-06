@@ -71,6 +71,7 @@ import (
 // build fails as well.
 func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 	// Build an xDS resolver without specifying bootstrap env vars.
+	bootstrap.UnsetFallbackBootstrapConfigForTesting()
 	builder := resolver.Get(xdsresolver.Scheme)
 	if builder == nil {
 		t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
