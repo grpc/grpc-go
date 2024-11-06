@@ -13,7 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package pickfirstleaf_test
@@ -114,7 +113,7 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 //     of the servers is running.
 //  2. RPCs are sent to verify they reach the running server.
 //
-// The state transitions of the ClientConn and all the subconns created are
+// The state transitions of the ClientConn and all the SubConns created are
 // verified.
 func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -144,7 +143,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerReady(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Ready},
 	}
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -186,7 +185,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerUnReady(t *testing.T)
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -231,7 +230,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_DuplicateAddrs(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -252,7 +251,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_DuplicateAddrs(t *testing.T) {
 //     running. This may not be the same server as before.
 //  4. RPCs are sent to verify they reach the running server.
 //
-// The state transitions of the ClientConn and all the subconns created are
+// The state transitions of the ClientConn and all the SubConns created are
 // verified.
 func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -285,7 +284,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	bm.backends[2].S.Stop()
@@ -303,7 +302,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -348,7 +347,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	bm.backends[2].S.Stop()
@@ -369,7 +368,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -412,7 +411,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	bm.backends[2].S.Stop()
@@ -432,7 +431,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -477,7 +476,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
@@ -496,7 +495,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -551,7 +550,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	// Shut down the connected server.
@@ -569,7 +568,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -617,7 +616,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	// Shut down the connected server.
@@ -641,7 +640,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -689,7 +688,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	// Shut down the connected server.
@@ -713,7 +712,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -760,7 +759,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	// Shut down the connected server.
@@ -783,7 +782,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 	}
 
 	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
-		t.Errorf("subconn states mismatch (-want +got):\n%s", diff)
+		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
 	wantConnStateTransitions := []connectivity.State{
@@ -851,7 +850,166 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	}
 }
 
-// stateStoringBalancer stores the state of the subconns being created.
+func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
+				// IPv4-mapped IPv6 address, considered as an IPv4 for
+				// interleaving.
+				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	wantAddrs := []resolver.Address{
+		{Addr: "1.1.1.1:1111"},
+		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
+		{Addr: "grpc.io:80"},
+		{Addr: "2.2.2.2:2"},
+		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
+		{Addr: "3.3.3.3:3"},
+		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
+	}
+
+	gotAddrs, err := subConnAddresses(ctx, cc, 8)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
+		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
+				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	wantAddrs := []resolver.Address{
+		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
+		{Addr: "1.1.1.1:1111"},
+		{Addr: "grpc.io:80"},
+		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"},
+		{Addr: "2.2.2.2:2"},
+		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "3.3.3.3:3"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
+	}
+
+	gotAddrs, err := subConnAddresses(ctx, cc, 8)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
+		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc := testutils.NewBalancerClientConn(t)
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
+	defer bal.Close()
+	ccState := balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
+				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
+				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "example.com:80"}}}, // not an IP.
+			},
+		},
+	}
+	if err := bal.UpdateClientConnState(ccState); err != nil {
+		t.Fatalf("UpdateClientConnState(%v) returned error: %v", ccState, err)
+	}
+
+	wantAddrs := []resolver.Address{
+		{Addr: "grpc.io:80"},
+		{Addr: "1.1.1.1:1111"},
+		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
+		{Addr: "example.com:80"},
+		{Addr: "2.2.2.2:2"},
+		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
+		{Addr: "3.3.3.3:3"},
+		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
+	}
+
+	gotAddrs, err := subConnAddresses(ctx, cc, 9)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
+		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// subConnAddresses makes the pickfirst balancer create the requested number of
+// SubConns by triggering transient failures. The function returns the
+// addresses of the created SubConns.
+func subConnAddresses(ctx context.Context, cc *testutils.BalancerClientConn, subConnCount int) ([]resolver.Address, error) {
+	addresses := []resolver.Address{}
+	for i := 0; i < subConnCount; i++ {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("test timed out after creating %d subchannels, want %d", i, subConnCount)
+		case sc := <-cc.NewSubConnCh:
+			if len(sc.Addresses) != 1 {
+				return nil, fmt.Errorf("new subchannel created with %d addresses, want 1", len(sc.Addresses))
+			}
+			addresses = append(addresses, sc.Addresses[0])
+			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+			sc.UpdateState(balancer.SubConnState{
+				ConnectivityState: connectivity.TransientFailure,
+			})
+		}
+	}
+	return addresses, nil
+}
+
+// stateStoringBalancer stores the state of the SubConns being created.
 type stateStoringBalancer struct {
 	balancer.Balancer
 	mu       sync.Mutex
