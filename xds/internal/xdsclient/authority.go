@@ -40,7 +40,7 @@ type resourceState struct {
 	cache             xdsresource.ResourceData             // Most recent ACKed update for this resource.
 	md                xdsresource.UpdateMetadata           // Metadata for the most recent update.
 	deletionIgnored   bool                                 // True, if resource deletion was ignored for a prior update.
-	xdsChannelConfigs []*xdsChannelWithConfig              // List of xdsChannels where this resource is subscribed.
+	xdsChannelConfigs map[*xdsChannelWithConfig]bool       // Set of xdsChannels where this resource is subscribed.
 }
 
 // xdsChannelForADS is used to acquire a reference to an xdsChannel. This
@@ -59,9 +59,9 @@ type xdsChannelForADS func(*bootstrap.ServerConfig, *authority) (*xdsChannel, fu
 // xdsChannelWithConfig is a struct that holds an xdsChannel and its associated
 // ServerConfig, along with a cleanup function to release the xdsChannel.
 type xdsChannelWithConfig struct {
-	xc      *xdsChannel
-	sc      *bootstrap.ServerConfig
-	cleanup func()
+	channel      *xdsChannel
+	serverConfig *bootstrap.ServerConfig
+	cleanup      func()
 }
 
 // authority provides the functionality required to communicate with a
@@ -149,7 +149,7 @@ func newAuthority(args authorityBuildOptions) *authority {
 	// first watch is registered, and channels to other server configurations
 	// are created as needed to support fallback.
 	for _, sc := range args.serverConfigs {
-		ret.xdsChannelConfigs = append(ret.xdsChannelConfigs, &xdsChannelWithConfig{sc: sc})
+		ret.xdsChannelConfigs = append(ret.xdsChannelConfigs, &xdsChannelWithConfig{serverConfig: sc})
 	}
 	return ret
 }
@@ -200,8 +200,101 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 		}
 	}
 
-	// TODO(easwars-fallback): Trigger fallback here if conditions for fallback
-	// are met.
+	// Two conditions need to be met for fallback to be triggered:
+	// 1. There is a connectivity failure on the ADS stream, as described in
+	//    gRFC A57. For us, this means that the ADS stream was closed before the
+	//    first server response was received. We already checked that condition
+	//    earlier in this method.
+	// 2. There is at least one watcher for a resource that is not cached.
+	//    Cached resources include ones that
+	//    - have been successfully received and can be used.
+	//    - are considered non-existent according to xDS Protocol Specification.
+	if !a.watcherExistsForUncachedResource() {
+		if a.logger.V(2) {
+			a.logger.Infof("No watchers for uncached resources. Not triggering fallback")
+		}
+		return
+	}
+	a.fallbackToNextServerIfPossible(serverConfig)
+}
+
+// serverIndexForConfig returns the index of the xdsChannelConfig that matches
+// the provided ServerConfig. If no match is found, it returns the length of the
+// xdsChannelConfigs slice, which represents the index of a non-existent config.
+func (a *authority) serverIndexForConfig(sc *bootstrap.ServerConfig) int {
+	for i, cfg := range a.xdsChannelConfigs {
+		if cfg.serverConfig.Equal(sc) {
+			return i
+		}
+	}
+	return len(a.xdsChannelConfigs)
+}
+
+// Determines the server to fallback to and triggers fallback to the same. If
+// required, creates an xdsChannel to that server, and re-subscribes to all
+// existing resources.
+//
+// Only executed in the context of a serializer callback.
+func (a *authority) fallbackToNextServerIfPossible(failingServerConfig *bootstrap.ServerConfig) {
+	if a.logger.V(2) {
+		a.logger.Infof("Attempting to initiate fallback after failure from server %q", failingServerConfig)
+	}
+
+	// The server to fallback to is the next server on the list. If the current
+	// server is the last server, then there is nothing that can be done.
+	currentServerIdx := a.serverIndexForConfig(failingServerConfig)
+	if currentServerIdx == len(a.xdsChannelConfigs) {
+		// This can never happen.
+		a.logger.Errorf("Received error from an unknown server: %s", failingServerConfig)
+		return
+	}
+	if currentServerIdx == len(a.xdsChannelConfigs)-1 {
+		if a.logger.V(2) {
+			a.logger.Infof("No more servers to fallback to")
+		}
+		return
+	}
+	fallbackServerIdx := currentServerIdx + 1
+	fallbackChannel := a.xdsChannelConfigs[fallbackServerIdx]
+
+	// If the server to fallback to already has an xdsChannel, it means that
+	// this connectivity error is from a server with a higher priority. There
+	// is not much we can do here.
+	if fallbackChannel.channel != nil {
+		if a.logger.V(2) {
+			a.logger.Infof("Channel to the next server in the list %q already exists", fallbackChannel.serverConfig)
+		}
+		return
+	}
+
+	// Create an xdsChannel for the fallback server.
+	if a.logger.V(2) {
+		a.logger.Infof("Initiating fallback to server %s", fallbackChannel.serverConfig)
+	}
+	xc, cleanup, err := a.getChannelForADS(fallbackChannel.serverConfig, a)
+	if err != nil {
+		a.logger.Errorf("Failed to create XDS channel: %v", err)
+		return
+	}
+	fallbackChannel.channel = xc
+	fallbackChannel.cleanup = cleanup
+	a.activeXDSChannel = fallbackChannel
+
+	// Subscribe to all existing resources from the new management server.
+	for typ, resources := range a.resources {
+		for name, state := range resources {
+			if a.logger.V(2) {
+				a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName(), name)
+			}
+			xc.subscribe(typ, name)
+
+			// Add the fallback channel to the list of xdsChannels from which
+			// this resource has been requested from. Retain the cached resource
+			// and the set of existing watchers (and other metadata fields) in
+			// the resource state.
+			state.xdsChannelConfigs[fallbackChannel] = true
+		}
+	}
 }
 
 // adsResourceUpdate is called to notify the authority about a resource update
@@ -218,13 +311,15 @@ func (a *authority) adsResourceUpdate(serverConfig *bootstrap.ServerConfig, rTyp
 // handleADSResourceUpdate processes an update from the xDS client, updating the
 // resource cache and notifying any registered watchers of the update.
 //
+// If the update is received from a higher priority xdsChannel that was
+// previously down, we revert to it and close all lower priority xdsChannels.
+//
 // Once the update has been processed by all watchers, the authority is expected
 // to invoke the onDone callback.
 //
 // Only executed in the context of a serializer callback.
 func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig, rType xdsresource.Type, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
-	// TODO(easwars-fallback): Trigger reverting to a higher priority server if
-	// the update is from one.
+	a.handleRevertingToPrimaryOnUpdate(serverConfig)
 
 	// We build a list of callback funcs to invoke, and invoke them at the end
 	// of this method instead of inline (when handling the update for a
@@ -416,6 +511,74 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 	}
 }
 
+// handleRevertingToPrimaryOnUpdate is called when a resource update is received
+// from the xDS client.
+//
+// If the update is from the currently active server, nothing is done. Else, all
+// lower priority servers are closed and the active server is reverted to the
+// highest priority server that sent the update.
+//
+// This method is only executed in the context of a serializer callback.
+func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.ServerConfig) {
+	if a.activeXDSChannel != nil && a.activeXDSChannel.serverConfig.Equal(serverConfig) {
+		// If the resource update is from the current active server, nothing
+		// needs to be done from fallback point of view.
+		return
+	}
+
+	if a.logger.V(2) {
+		a.logger.Infof("Received update from non-active server %q", serverConfig)
+	}
+
+	// If the resource update is not from the current active server, it means
+	// that we have received an update from a higher priority server and we need
+	// to revert back to it. This method guarantees that when an update is
+	// received from a server, all lower priority servers are closed.
+	serverIdx := a.serverIndexForConfig(serverConfig)
+	if serverIdx == len(a.xdsChannelConfigs) {
+		// This can never happen.
+		a.logger.Errorf("Received update from an unknown server: %s", serverConfig)
+		return
+	}
+	a.activeXDSChannel = a.xdsChannelConfigs[serverIdx]
+
+	// Close all lower priority channels.
+	//
+	// But before closing any channel, we need to unsubscribe from any resources
+	// that were subscribed to on this channel. Resources could be subscribed to
+	// from multiple channels as we fallback to lower priority servers. But when
+	// a higher priority one comes back up, we need to unsubscribe from all
+	// lower priority ones before releasing the reference to them.
+	for i := serverIdx + 1; i < len(a.xdsChannelConfigs); i++ {
+		cfg := a.xdsChannelConfigs[i]
+
+		for rType, rState := range a.resources {
+			for resourceName, state := range rState {
+				for xcc := range state.xdsChannelConfigs {
+					if xcc != cfg {
+						continue
+					}
+					// If the current resource is subscribed to on this channel,
+					// unsubscribe, and remove the channel from the list of
+					// channels that this resource is subscribed to.
+					xcc.channel.unsubscribe(rType, resourceName)
+					delete(state.xdsChannelConfigs, xcc)
+				}
+			}
+		}
+
+		// Release the reference to the channel.
+		if cfg.cleanup != nil {
+			if a.logger.V(2) {
+				a.logger.Infof("Closing lower priority server %q", cfg.serverConfig)
+			}
+			cfg.cleanup()
+			cfg.cleanup = nil
+		}
+		cfg.channel = nil
+	}
+}
+
 // watchResource registers a new watcher for the specified resource type and
 // name. It returns a function that can be called to cancel the watch.
 //
@@ -462,10 +625,10 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			state = &resourceState{
 				watchers:          make(map[xdsresource.ResourceWatcher]bool),
 				md:                xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
-				xdsChannelConfigs: []*xdsChannelWithConfig{xdsChannel},
+				xdsChannelConfigs: map[*xdsChannelWithConfig]bool{xdsChannel: true},
 			}
 			resources[resourceName] = state
-			xdsChannel.xc.subscribe(rType, resourceName)
+			xdsChannel.channel.subscribe(rType, resourceName)
 		}
 		// Always add the new watcher to the set of watchers.
 		state.watchers[watcher] = true
@@ -516,8 +679,8 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			if a.logger.V(2) {
 				a.logger.Infof("Removing last watch for resource name %q", resourceName)
 			}
-			for _, xc := range state.xdsChannelConfigs {
-				xc.xc.unsubscribe(rType, resourceName)
+			for xcc := range state.xdsChannelConfigs {
+				xcc.channel.unsubscribe(rType, resourceName)
 			}
 			delete(resources, resourceName)
 
@@ -553,13 +716,13 @@ func (a *authority) xdsChannelToUse() *xdsChannelWithConfig {
 		return a.activeXDSChannel
 	}
 
-	sc := a.xdsChannelConfigs[0].sc
+	sc := a.xdsChannelConfigs[0].serverConfig
 	xc, cleanup, err := a.getChannelForADS(sc, a)
 	if err != nil {
 		a.logger.Warningf("Failed to create xDS channel: %v", err)
 		return nil
 	}
-	a.xdsChannelConfigs[0].xc = xc
+	a.xdsChannelConfigs[0].channel = xc
 	a.xdsChannelConfigs[0].cleanup = cleanup
 	a.activeXDSChannel = a.xdsChannelConfigs[0]
 	return a.activeXDSChannel
@@ -570,14 +733,29 @@ func (a *authority) xdsChannelToUse() *xdsChannelWithConfig {
 //
 // Only executed in the context of a serializer callback.
 func (a *authority) closeXDSChannels() {
-	for _, xc := range a.xdsChannelConfigs {
-		if xc.cleanup != nil {
-			xc.cleanup()
-			xc.cleanup = nil
+	for _, xcc := range a.xdsChannelConfigs {
+		if xcc.cleanup != nil {
+			xcc.cleanup()
+			xcc.cleanup = nil
 		}
-		xc.xc = nil
+		xcc.channel = nil
 	}
 	a.activeXDSChannel = nil
+}
+
+// watcherExistsForUncachedResource returns true if there is at least one
+// watcher for a resource that has not yet been cached.
+//
+// Only executed in the context of a serializer callback.
+func (a *authority) watcherExistsForUncachedResource() bool {
+	for _, resourceStates := range a.resources {
+		for _, state := range resourceStates {
+			if state.md.Status == xdsresource.ServiceStatusRequested {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // dumpResources returns a dump of the resource configuration cached by this
