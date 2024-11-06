@@ -18,7 +18,6 @@ package opentelemetry
 
 import (
 	"context"
-	"go.opentelemetry.io/otel"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 
+	"go.opentelemetry.io/otel"
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 )
@@ -207,9 +207,14 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 	}
 
+	var ti *attemptTraceSpan
+	if !isTracingDisabled(h.options.TraceOptions) {
+		ctx, ti = h.traceTagRPC(ctx, info)
+	}
 	ai := &attemptInfo{
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
+		ti:        ti,
 	}
 	ri := &rpcInfo{
 		ai: ai,
@@ -223,6 +228,11 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
+	}
+	if !isTracingDisabled(h.options.TraceOptions) {
+		// Populate spans for client side span.
+		//
+		// This will be implemented as part of next PR.
 	}
 	if !isMetricsDisabled(h.options.MetricsOptions) {
 		h.processRPCData(ctx, rs, ri.ai)

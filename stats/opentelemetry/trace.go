@@ -40,3 +40,26 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 		countRecvMsg: 0,
 	}
 }
+
+// traceTagRPC populates context with new span data, with a parent based on the
+// spanContext deserialized from context passed in (wire data in gRPC metadata)
+// if present.
+func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptTraceSpan) {
+	if ssh.options.TraceOptions.TextMapPropagator == nil {
+		return ctx, nil
+	}
+
+	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
+	var span trace.Span
+	tracer := otel.Tracer("grpc-open-telemetry")
+	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewCustomCarrier(ctx))
+	// If the context.Context provided in `ctx` to tracer.Start(), contains a
+	// Span then the newly-created Span will be a child of that span,
+	// otherwise it will be a root span.
+	ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
+	return ctx, &attemptTraceSpan{
+		span:         span,
+		countSentMsg: 0,
+		countRecvMsg: 0,
+	}
+}

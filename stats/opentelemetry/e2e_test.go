@@ -612,12 +612,15 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 	return fmt.Errorf("error waiting for metrics %v: %v", wantMetrics, ctx.Err())
 }
 
-func TestClientTracingE2E(t *testing.T) {
+// TestClientSpanCreation verifies that client-side spans are properly created,
+// propagated, and exported when making gRPC requests with OpenTelemetry
+// instrumentation.
+func (s) TestClientSpanCreation(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 
 	// Start the server with OpenTelemetry options
-	ss := setupStubServer(t, nil, traceOptions)
+	ss := setupStubServer(t, nil, nil)
 	defer ss.Stop()
 
 	// Create client with tracing enabled
@@ -677,14 +680,75 @@ func TestClientTracingE2E(t *testing.T) {
 			// Verify recorded spans
 			spans := spanExporter.GetSpans()
 			if len(spans) != 1 {
-				t.Fatalf("got %d spans, want 1", len(spans))
+				t.Errorf("got %d spans, want 1", len(spans))
 			}
 
 			got := spans[0]
 			if got.Name != tc.wantSpanName {
-				t.Errorf("span name = %q, want %q", got.Name, tc.wantSpanName)
+				t.Errorf("got span name = %q, want %q", got.Name, tc.wantSpanName)
 			}
-			t.Logf("Got spans: %v", got)
+		})
+	}
+}
+
+// TestServerSpanCreation verifies that server-side spans are properly created
+// and exported when handling gRPC requests with OpenTelemetry instrumentation.
+func (s) TestServerSpanCreation(t *testing.T) {
+	// Set up OpenTelemetry with in-memory exporter for the server
+	traceOptions, spanExporter := defaultTraceOptions(t)
+
+	// Create a stub server with the tracing configuration
+	ss := setupStubServer(t, nil, traceOptions)
+	defer ss.Stop()
+
+	clientOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		opentelemetry.DialOption(opentelemetry.Options{
+			TraceOptions: opentelemetry.TraceOptions{
+				TracerProvider:    traceOptions.TracerProvider,
+				TextMapPropagator: traceOptions.TextMapPropagator,
+			},
+		}),
+	}
+
+	tests := []struct {
+		name         string
+		testFunc     func(context.Context, testgrpc.TestServiceClient) error
+		wantSpanName string
+	}{
+		{
+			name: "successful unary call with server tracing",
+			testFunc: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{Body: make([]byte, 10000)}})
+				return err
+			},
+			wantSpanName: "grpc.testing.TestService.UnaryCall",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spanExporter.Reset()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			// Create client connection
+			cc, err := grpc.Dial(strings.TrimPrefix(ss.Target, "whatever:///"), clientOpts...)
+			if err != nil {
+				t.Fatalf("Failed to dial test server: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+
+			// Execute test case
+			err = tc.testFunc(ctx, client)
+			// Verify recorded spans
+			spans := spanExporter.GetSpans()
+			if len(spans) != 1 {
+				t.Fatalf("got %d spans, want 1", len(spans))
+			}
 		})
 	}
 }
