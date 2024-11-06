@@ -116,10 +116,10 @@ type clusterImplBalancer struct {
 	telemetryLabels       map[string]string                 // Telemetry labels to set on picks, from LB config.
 }
 
-// handleDropAndRequestCount compares drop and request counter in newConfig with
-// the one currently used by picker. It returns a boolean indicating if a new
-// picker needs to be generated.
-func (b *clusterImplBalancer) handleDropAndRequestCount(newConfig *LBConfig) bool {
+// handleDropAndRequestCountLocked compares drop and request counter in newConfig with
+// the one currently used by picker, and is protected by b.mu. It returns a boolean
+// indicating if a new picker needs to be generated.
+func (b *clusterImplBalancer) handleDropAndRequestCountLocked(newConfig *LBConfig) bool {
 	var updatePicker bool
 	if !equalDropCategories(b.dropCategories, newConfig.DropCategories) {
 		b.dropCategories = newConfig.DropCategories
@@ -237,9 +237,12 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	return nil
 }
 
-func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) error {
+func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	defer clientConnUpdateHook()
 
+	b.mu.Lock()
+	b.inhibitPickerUpdates = true
+	b.mu.Unlock()
 	if b.logger.V(2) {
 		b.logger.Infof("Received configuration: %s", pretty.ToJSON(s.BalancerConfig))
 	}
@@ -290,7 +293,7 @@ func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) 
 
 	b.mu.Lock()
 	b.telemetryLabels = newConfig.TelemetryLabels
-	if b.handleDropAndRequestCount(newConfig) && b.childState.Picker != nil {
+	if b.handleDropAndRequestCountLocked(newConfig) && b.childState.Picker != nil {
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
 			Picker:            b.newPickerLocked(),
@@ -298,16 +301,8 @@ func (b *clusterImplBalancer) updateClientConnState(s balancer.ClientConnState) 
 	}
 	b.inhibitPickerUpdates = false
 	b.mu.Unlock()
-
 	newPickerUpdated()
 	return err
-}
-
-func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	b.mu.Lock()
-	b.inhibitPickerUpdates = true
-	b.mu.Unlock()
-	return b.updateClientConnState(s)
 }
 
 func (b *clusterImplBalancer) ResolverError(err error) {

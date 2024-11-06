@@ -980,10 +980,9 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	defer b.Close()
 
 	// Create a stub balancer which waits for the cluster_impl policy to be
-	// closed before sending a picker update (upon receipt of a subConn state
-	// change).
-	const childPolicyName = "stubBalancer-PickerUpdatedSynchronouslyOnConfigUpdate"
-	stub.Register(childPolicyName, stub.BalancerFuncs{
+	// closed before sending a picker update (upon receipt of a resolver
+	// update).
+	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			bd.ClientConn.UpdateState(balancer.State{
 				Picker: base.NewErrPicker(errors.New("dummy error picker")),
@@ -998,11 +997,11 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
-				Name: childPolicyName,
+				Name: t.Name(),
 			},
 		},
 	}); err != nil {
-		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+		t.Fatalf("Unexpected error from UpdateClientConnState: %v", err)
 	}
 
 	select {
