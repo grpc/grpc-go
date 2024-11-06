@@ -59,9 +59,9 @@ type xdsChannelForADS func(*bootstrap.ServerConfig, *authority) (*xdsChannel, fu
 // xdsChannelWithConfig is a struct that holds an xdsChannel and its associated
 // ServerConfig, along with a cleanup function to release the xdsChannel.
 type xdsChannelWithConfig struct {
-	xc      *xdsChannel
-	sc      *bootstrap.ServerConfig
-	cleanup func()
+	channel      *xdsChannel
+	serverConfig *bootstrap.ServerConfig
+	cleanup      func()
 }
 
 // authority provides the functionality required to communicate with a
@@ -149,7 +149,7 @@ func newAuthority(args authorityBuildOptions) *authority {
 	// first watch is registered, and channels to other server configurations
 	// are created as needed to support fallback.
 	for _, sc := range args.serverConfigs {
-		ret.xdsChannelConfigs = append(ret.xdsChannelConfigs, &xdsChannelWithConfig{sc: sc})
+		ret.xdsChannelConfigs = append(ret.xdsChannelConfigs, &xdsChannelWithConfig{serverConfig: sc})
 	}
 	return ret
 }
@@ -223,7 +223,7 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 // xdsChannelConfigs slice, which represents the index of a non-existent config.
 func (a *authority) serverIndexForConfig(sc *bootstrap.ServerConfig) int {
 	for i, cfg := range a.xdsChannelConfigs {
-		if cfg.sc.Equal(sc) {
+		if cfg.serverConfig.Equal(sc) {
 			return i
 		}
 	}
@@ -260,23 +260,23 @@ func (a *authority) fallbackToNextServerIfPossible(failingServerConfig *bootstra
 	// If the server to fallback to already has an xdsChannel, it means that
 	// this connectivity error is from a server with a higher priority. There
 	// is not much we can do here.
-	if fallbackChannel.xc != nil {
+	if fallbackChannel.channel != nil {
 		if a.logger.V(2) {
-			a.logger.Infof("Channel to the next server in the list %q already exists", fallbackChannel.sc)
+			a.logger.Infof("Channel to the next server in the list %q already exists", fallbackChannel.serverConfig)
 		}
 		return
 	}
 
 	// Create an xdsChannel for the fallback server.
 	if a.logger.V(2) {
-		a.logger.Infof("Initiating fallback to server %s", fallbackChannel.sc)
+		a.logger.Infof("Initiating fallback to server %s", fallbackChannel.serverConfig)
 	}
-	xc, cleanup, err := a.getChannelForADS(fallbackChannel.sc, a)
+	xc, cleanup, err := a.getChannelForADS(fallbackChannel.serverConfig, a)
 	if err != nil {
 		a.logger.Errorf("Failed to create XDS channel: %v", err)
 		return
 	}
-	fallbackChannel.xc = xc
+	fallbackChannel.channel = xc
 	fallbackChannel.cleanup = cleanup
 	a.activeXDSChannel = fallbackChannel
 
@@ -520,7 +520,7 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 //
 // This method is only executed in the context of a serializer callback.
 func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.ServerConfig) {
-	if a.activeXDSChannel != nil && a.activeXDSChannel.sc.Equal(serverConfig) {
+	if a.activeXDSChannel != nil && a.activeXDSChannel.serverConfig.Equal(serverConfig) {
 		// If the resource update is from the current active server, nothing
 		// needs to be done from fallback point of view.
 		return
@@ -554,14 +554,15 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.Ser
 
 		for rType, rState := range a.resources {
 			for resourceName, state := range rState {
-				for xc := range state.xdsChannelConfigs {
+				for xcc := range state.xdsChannelConfigs {
+					if xcc != cfg {
+						continue
+					}
 					// If the current resource is subscribed to on this channel,
 					// unsubscribe, and remove the channel from the list of
 					// channels that this resource is subscribed to.
-					if xc == cfg {
-						xc.xc.unsubscribe(rType, resourceName)
-						delete(state.xdsChannelConfigs, xc)
-					}
+					xcc.channel.unsubscribe(rType, resourceName)
+					delete(state.xdsChannelConfigs, xcc)
 				}
 			}
 		}
@@ -569,12 +570,12 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *bootstrap.Ser
 		// Release the reference to the channel.
 		if cfg.cleanup != nil {
 			if a.logger.V(2) {
-				a.logger.Infof("Closing lower priority server %q", cfg.sc)
+				a.logger.Infof("Closing lower priority server %q", cfg.serverConfig)
 			}
 			cfg.cleanup()
 			cfg.cleanup = nil
 		}
-		cfg.xc = nil
+		cfg.channel = nil
 	}
 }
 
@@ -627,7 +628,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 				xdsChannelConfigs: map[*xdsChannelWithConfig]bool{xdsChannel: true},
 			}
 			resources[resourceName] = state
-			xdsChannel.xc.subscribe(rType, resourceName)
+			xdsChannel.channel.subscribe(rType, resourceName)
 		}
 		// Always add the new watcher to the set of watchers.
 		state.watchers[watcher] = true
@@ -678,8 +679,8 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			if a.logger.V(2) {
 				a.logger.Infof("Removing last watch for resource name %q", resourceName)
 			}
-			for xc := range state.xdsChannelConfigs {
-				xc.xc.unsubscribe(rType, resourceName)
+			for xcc := range state.xdsChannelConfigs {
+				xcc.channel.unsubscribe(rType, resourceName)
 			}
 			delete(resources, resourceName)
 
@@ -715,13 +716,13 @@ func (a *authority) xdsChannelToUse() *xdsChannelWithConfig {
 		return a.activeXDSChannel
 	}
 
-	sc := a.xdsChannelConfigs[0].sc
+	sc := a.xdsChannelConfigs[0].serverConfig
 	xc, cleanup, err := a.getChannelForADS(sc, a)
 	if err != nil {
 		a.logger.Warningf("Failed to create xDS channel: %v", err)
 		return nil
 	}
-	a.xdsChannelConfigs[0].xc = xc
+	a.xdsChannelConfigs[0].channel = xc
 	a.xdsChannelConfigs[0].cleanup = cleanup
 	a.activeXDSChannel = a.xdsChannelConfigs[0]
 	return a.activeXDSChannel
@@ -732,12 +733,12 @@ func (a *authority) xdsChannelToUse() *xdsChannelWithConfig {
 //
 // Only executed in the context of a serializer callback.
 func (a *authority) closeXDSChannels() {
-	for _, xc := range a.xdsChannelConfigs {
-		if xc.cleanup != nil {
-			xc.cleanup()
-			xc.cleanup = nil
+	for _, xcc := range a.xdsChannelConfigs {
+		if xcc.cleanup != nil {
+			xcc.cleanup()
+			xcc.cleanup = nil
 		}
-		xc.xc = nil
+		xcc.channel = nil
 	}
 	a.activeXDSChannel = nil
 }
