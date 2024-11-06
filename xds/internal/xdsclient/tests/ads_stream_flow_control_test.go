@@ -516,7 +516,7 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 	}
 }
 
-// Test ADS stream flow control with a single resource that deleted from the
+// Test ADS stream flow control with a single resource that is deleted from the
 // management server and therefore the watcher's OnResourceDoesNotExist()
 // callback is expected to be invoked. Verifies that no further reads are
 // attempted until the callback is completely handled by the watcher.

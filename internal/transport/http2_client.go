@@ -123,7 +123,7 @@ type http2Client struct {
 	mu            sync.Mutex // guard the following variables
 	nextID        uint32
 	state         transportState
-	activeStreams map[uint32]*Stream
+	activeStreams map[uint32]*ClientStream
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32
 	// goAwayReason records the http2.ErrCode and debug data received with the
@@ -199,10 +199,10 @@ func isTemporary(err error) bool {
 	return true
 }
 
-// newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
+// NewHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (_ *http2Client, err error) {
+func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (_ ClientTransport, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -339,7 +339,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		framer:                newFramer(conn, writeBufSize, readBufSize, opts.SharedWriteBuffer, maxHeaderListSize),
 		fc:                    &trInFlow{limit: uint32(icwz)},
 		scheme:                scheme,
-		activeStreams:         make(map[uint32]*Stream),
+		activeStreams:         make(map[uint32]*ClientStream),
 		isSecure:              isSecure,
 		perRPCCreds:           perRPCCreds,
 		kp:                    kp,
@@ -480,17 +480,19 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	return t, nil
 }
 
-func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
+func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientStream {
 	// TODO(zhaoq): Handle uint32 overflow of Stream.id.
-	s := &Stream{
-		ct:             t,
-		done:           make(chan struct{}),
-		method:         callHdr.Method,
-		sendCompress:   callHdr.SendCompress,
-		buf:            newRecvBuffer(),
-		headerChan:     make(chan struct{}),
-		contentSubtype: callHdr.ContentSubtype,
-		doneFunc:       callHdr.DoneFunc,
+	s := &ClientStream{
+		Stream: &Stream{
+			method:         callHdr.Method,
+			sendCompress:   callHdr.SendCompress,
+			buf:            newRecvBuffer(),
+			contentSubtype: callHdr.ContentSubtype,
+		},
+		ct:         t,
+		done:       make(chan struct{}),
+		headerChan: make(chan struct{}),
+		doneFunc:   callHdr.DoneFunc,
 	}
 	s.wq = newWriteQuota(defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
@@ -738,7 +740,7 @@ func (e NewStreamError) Error() string {
 
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.  All non-nil errors returned will be *NewStreamError.
-func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error) {
+func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error) {
 	ctx = peer.NewContext(ctx, t.getPeer())
 
 	// ServerName field of the resolver returned address takes precedence over
@@ -910,7 +912,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 
 // CloseStream clears the footprint of a stream when the stream is not needed any more.
 // This must not be executed in reader's goroutine.
-func (t *http2Client) CloseStream(s *Stream, err error) {
+func (t *http2Client) CloseStream(s *ClientStream, err error) {
 	var (
 		rst     bool
 		rstCode http2.ErrCode
@@ -922,7 +924,7 @@ func (t *http2Client) CloseStream(s *Stream, err error) {
 	t.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
 }
 
-func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
+func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
 	// Set stream status to done.
 	if s.swapState(streamDone) == streamDone {
 		// If it was already done, return.  If multiple closeStream calls
@@ -1085,7 +1087,7 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *Options) error {
+func (t *http2Client) Write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *Options) error {
 	reader := data.Reader()
 
 	if opts.Last {
@@ -1117,7 +1119,7 @@ func (t *http2Client) Write(s *Stream, hdr []byte, data mem.BufferSlice, opts *O
 	return nil
 }
 
-func (t *http2Client) getStream(f http2.Frame) *Stream {
+func (t *http2Client) getStream(f http2.Frame) *ClientStream {
 	t.mu.Lock()
 	s := t.activeStreams[f.Header().StreamID]
 	t.mu.Unlock()
@@ -1127,7 +1129,7 @@ func (t *http2Client) getStream(f http2.Frame) *Stream {
 // adjustWindow sends out extra window update over the initial window size
 // of stream if the application is requesting data larger in size than
 // the window.
-func (t *http2Client) adjustWindow(s *Stream, n uint32) {
+func (t *http2Client) adjustWindow(s *ClientStream, n uint32) {
 	if w := s.fc.maybeAdjust(n); w > 0 {
 		t.controlBuf.put(&outgoingWindowUpdate{streamID: s.id, increment: w})
 	}
@@ -1136,7 +1138,7 @@ func (t *http2Client) adjustWindow(s *Stream, n uint32) {
 // updateWindow adjusts the inbound quota for the stream.
 // Window updates will be sent out when the cumulative quota
 // exceeds the corresponding threshold.
-func (t *http2Client) updateWindow(s *Stream, n uint32) {
+func (t *http2Client) updateWindow(s *ClientStream, n uint32) {
 	if w := s.fc.onRead(n); w > 0 {
 		t.controlBuf.put(&outgoingWindowUpdate{streamID: s.id, increment: w})
 	}
@@ -1383,7 +1385,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 		return connectionErrorf(true, nil, "received goaway and there are no active streams")
 	}
 
-	streamsToClose := make([]*Stream, 0)
+	streamsToClose := make([]*ClientStream, 0)
 	for streamID, stream := range t.activeStreams {
 		if streamID > id && streamID <= upperLimit {
 			// The stream was unprocessed by the server.

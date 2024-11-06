@@ -164,13 +164,13 @@ func (s) TestRetryChainedInterceptor(t *testing.T) {
 }
 
 func (s) TestStreamContext(t *testing.T) {
-	expectedStream := &transport.Stream{}
+	expectedStream := &transport.ServerStream{}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = NewContextWithServerTransportStream(ctx, expectedStream)
 
 	s := ServerTransportStreamFromContext(ctx)
-	stream, ok := s.(*transport.Stream)
+	stream, ok := s.(*transport.ServerStream)
 	if !ok || expectedStream != stream {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
 	}

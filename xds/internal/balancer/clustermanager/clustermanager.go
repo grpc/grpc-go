@@ -167,11 +167,14 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) er
 }
 
 func (b *bal) UpdateClientConnState(s balancer.ClientConnState) error {
+	if b.logger.V(2) {
+		b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
+	}
+
 	newConfig, ok := s.BalancerConfig.(*lbConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
-	b.logger.Infof("Update with config %+v, resolver state %+v", pretty.ToJSON(s.BalancerConfig), s.ResolverState)
 
 	b.stateAggregator.pauseStateUpdates()
 	defer b.stateAggregator.resumeStateUpdates()

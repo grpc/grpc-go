@@ -20,7 +20,7 @@ package wrr
 import (
 	"errors"
 	"math"
-	"math/rand"
+	rand "math/rand/v2"
 	"strconv"
 	"testing"
 
@@ -146,7 +146,7 @@ func BenchmarkRandomWRRNext(b *testing.B) {
 			w := NewRandom()
 			var sumOfWeights int64
 			for i := 0; i < n; i++ {
-				weight := rand.Int63n(maxWeight + 1)
+				weight := rand.Int64N(maxWeight + 1)
 				w.Add(i, weight)
 				sumOfWeights += weight
 			}
@@ -188,6 +188,6 @@ func BenchmarkRandomWRRNext(b *testing.B) {
 }
 
 func init() {
-	r := rand.New(rand.NewSource(0))
-	randInt63n = r.Int63n
+	r := rand.New(rand.NewPCG(0, 0))
+	randInt64n = r.Int64N
 }

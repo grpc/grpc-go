@@ -121,9 +121,9 @@ type Type interface {
 type ResourceData interface {
 	isResourceData()
 
-	// Equal returns true if the passed in resource data is equal to that of the
-	// receiver.
-	Equal(ResourceData) bool
+	// RawEqual returns true if the passed in resource data is equal to that of
+	// the receiver, based on the underlying raw protobuf message.
+	RawEqual(ResourceData) bool
 
 	// ToJSON returns a JSON string representation of the resource data.
 	ToJSON() string

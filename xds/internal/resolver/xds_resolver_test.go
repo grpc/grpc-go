@@ -548,10 +548,39 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		}
 	}
 
-	// Re-add the listener and expect everything to work again.
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
-	// Read the update pushed by the resolver to the ClientConn.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	// Workaround for https://github.com/envoyproxy/go-control-plane/issues/431.
+	//
+	// The xDS client can miss route configurations due to a race condition
+	// between resource removal and re-addition. To avoid this, continuously
+	// push new versions of the resources to the server, ensuring the client
+	// eventually receives the configuration.
+	//
+	// TODO(https://github.com/grpc/grpc-go/issues/7807): Remove this workaround
+	// once the issue is fixed.
+waitForStateUpdate:
+	for {
+		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+		defer sCancel()
+
+		configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+
+		select {
+		case state = <-stateCh:
+			if err := state.ServiceConfig.Err; err != nil {
+				t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
+			}
+			wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantDefaultServiceConfig)
+			if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
+				t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
+			}
+			break waitForStateUpdate
+		case <-sCtx.Done():
+		}
+	}
+	cs = iresolver.GetConfigSelector(state)
+	if cs == nil {
+		t.Fatal("Received nil config selector in update from resolver")
+	}
 
 	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {

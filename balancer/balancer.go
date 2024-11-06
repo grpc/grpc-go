@@ -162,6 +162,9 @@ type SubConn interface {
 	// health listener when the connectivity state is not READY may result in
 	// undefined behaviour.
 	RegisterHealthListener(func(SubConnState))
+	// enforceEmbedding is an unexported method to force implementers embed
+	// this interface, allowing gRPC to add methods without breaking users.
+	enforceEmbedding()
 }
 
 // NewSubConnOptions contains options to create new SubConn.
