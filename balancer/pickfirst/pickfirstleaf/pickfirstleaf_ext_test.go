@@ -862,9 +862,11 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
-				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
-				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
+				// IPv4-mapped IPv6 address, considered as an IPv4 for
+				// interleaving.
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
@@ -879,10 +881,10 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
 		{Addr: "grpc.io:80"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "[::FFFF:192.168.0.1]:2222"},
+		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
 		{Addr: "3.3.3.3:3"},
 		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
-		{Addr: "4.4.4.4:4"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 
 	gotAddrs, err := subConnAddresses(ctx, cc, 8)
@@ -903,12 +905,12 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
-				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // ipv6 with port
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
-				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
@@ -922,11 +924,11 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
 		{Addr: "1.1.1.1:1111"},
 		{Addr: "grpc.io:80"},
-		{Addr: "[::FFFF:192.168.0.1]:2222"},
+		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"},
 		{Addr: "2.2.2.2:2"},
 		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "4.4.4.4:4"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 
 	gotAddrs, err := subConnAddresses(ctx, cc, 8)
@@ -951,9 +953,9 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
-				{Addresses: []resolver.Address{{Addr: "4.4.4.4:4"}}},
-				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "example.com:80"}}}, // not an IP.
 			},
@@ -969,10 +971,10 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 		{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"},
 		{Addr: "example.com:80"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "[::FFFF:192.168.0.1]:2222"},
+		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
 		{Addr: "3.3.3.3:3"},
 		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
-		{Addr: "4.4.4.4:4"},
+		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 
 	gotAddrs, err := subConnAddresses(ctx, cc, 9)

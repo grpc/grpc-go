@@ -30,7 +30,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -377,10 +376,7 @@ func addressFamily(address string) ipAddrFamily {
 	}
 	ip := net.ParseIP(host)
 	switch {
-	// Check for existence of IPv4-mapped IPv6 addresses, which are
-	// considered as IPv4 by net.IP.
-	// e.g: "::FFFF:127.0.0.1"
-	case ip.To4() != nil && !strings.Contains(host, ":"):
+	case ip.To4() != nil:
 		return ipAddrFamilyV4
 	case ip.To16() != nil:
 		return ipAddrFamilyV6
