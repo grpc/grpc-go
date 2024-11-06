@@ -252,7 +252,6 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 	for i, a := range addrs {
 		endpoints[i].Attributes = a.BalancerAttributes
 		endpoints[i].Addresses = []resolver.Address{a}
-		endpoints[i].Addresses[0].BalancerAttributes = nil
 	}
 	if err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{

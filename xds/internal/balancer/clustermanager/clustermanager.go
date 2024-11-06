@@ -87,6 +87,7 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) er
 	// TODO: Get rid of handling hierarchy in addresses. This LB policy never
 	// gets addresses from the resolver.
 	addressesSplit := hierarchy.Group(s.ResolverState.Addresses)
+	endpointsSplit := hierarchy.GroupEndpoints(s.ResolverState.Endpoints)
 
 	// Remove sub-balancers that are not in the new list from the aggregator and
 	// balancergroup.
@@ -139,6 +140,7 @@ func (b *bal) updateChildren(s balancer.ClientConnState, newConfig *lbConfig) er
 		if err := b.bg.UpdateClientConnState(childName, balancer.ClientConnState{
 			ResolverState: resolver.State{
 				Addresses:     addressesSplit[childName],
+				Endpoints:     endpointsSplit[childName],
 				ServiceConfig: s.ResolverState.ServiceConfig,
 				Attributes:    s.ResolverState.Attributes,
 			},
