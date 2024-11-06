@@ -21,7 +21,6 @@ package tracing
 import (
 	"context"
 	"encoding/base64"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -41,11 +40,13 @@ func Test(t *testing.T) {
 }
 
 func verifyOutgoingTraceGRPCTraceBinHeader(ctx context.Context, t *testing.T, wantB []byte) {
+	t.Helper()
+
 	gotB := stats.OutgoingTrace(ctx)
 	if len(wantB) == 0 && gotB != nil {
 		t.Fatalf("stats.OutgoingTrace() is non-nil, want nil")
 	}
-	if gotB != nil && !reflect.DeepEqual(gotB, wantB) {
+	if gotB != nil && !cmp.Equal(gotB, wantB) {
 		t.Fatalf("stats.OutgoingTrace() = %v, want %v", gotB, wantB)
 	}
 }
@@ -234,7 +235,7 @@ func (s) TestGetBinary(t *testing.T) {
 	if got == nil {
 		t.Fatalf("c.GetBinary() = nil, want %v", got)
 	}
-	if !reflect.DeepEqual(want, got) {
+	if !cmp.Equal(want, got) {
 		t.Fatalf("c.GetBinary() = %s, want %s", got, want)
 	}
 }

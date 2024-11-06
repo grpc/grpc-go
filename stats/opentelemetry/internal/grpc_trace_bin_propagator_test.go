@@ -21,9 +21,9 @@ package internal
 import (
 	"context"
 	"encoding/base64"
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	otelpropagation "go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/internal/grpctest"
@@ -68,8 +68,8 @@ func (s) TestInject(t *testing.T) {
 	tests := []struct {
 		name    string
 		sc      oteltrace.SpanContext
-		fast    bool
-		validSC bool
+		fast    bool // to indicate whether to follow fast path or slow path for injection verification
+		validSC bool // to indicate whether to expect a valid span context or not
 	}{
 		{
 			name:    "fast path, valid context",
@@ -152,7 +152,7 @@ func (s) TestExtract(t *testing.T) {
 	tests := []struct {
 		name string
 		sc   oteltrace.SpanContext
-		fast bool
+		fast bool // to indicate whether to follow fast path or slow path for extraction verification
 	}{
 		{
 			name: "fast path, valid context",
@@ -221,7 +221,7 @@ func (s) TestBinary(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := binary(test.sc); !reflect.DeepEqual(got, test.want) {
+			if got := binary(test.sc); !cmp.Equal(got, test.want) {
 				t.Fatalf("binary() = %v, want %v", got, test.want)
 			}
 		})

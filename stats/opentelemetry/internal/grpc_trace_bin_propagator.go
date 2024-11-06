@@ -43,7 +43,7 @@ type GRPCTraceBinPropagator struct{}
 // the trace data is base64 encoded and injected using the same header in
 // text format (slow path). If span context is not valid or emptu, no data is
 // injected.
-func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagation.TextMapCarrier) {
+func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagation.TextMapCarrier) {
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
 		return
@@ -73,7 +73,7 @@ func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagat
 // extracted span context is marked as "remote", indicating that the trace
 // originated from a different process or service. If trace context is invalid
 // or not present, input `ctx` is returned as is.
-func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
+func (GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
 	var bd []byte
 	if cc, ok := carrier.(*itracing.CustomCarrier); ok {
 		bd = cc.GetBinary()
@@ -96,7 +96,7 @@ func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropaga
 // GRPCTraceBinPropagator always returns a slice containing only
 // `grpc-trace-bin` key because it only sets the `grpc-trace-bin` header for
 // propagating trace context.
-func (p GRPCTraceBinPropagator) Fields() []string {
+func (GRPCTraceBinPropagator) Fields() []string {
 	return []string{itracing.GRPCTraceBinHeaderKey}
 }
 

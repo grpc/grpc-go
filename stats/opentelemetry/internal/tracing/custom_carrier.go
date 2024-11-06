@@ -110,13 +110,9 @@ func (c *CustomCarrier) Set(key, value string) {
 
 // GetBinary returns the binary value from the gRPC context in the incoming
 // RPC, associated with the header `grpc-trace-bin`. If header is not found or
-// is empty, it returns nil.
+// is empty, it returns empty slice.
 func (c *CustomCarrier) GetBinary() []byte {
-	values := stats.Trace(c.ctx)
-	if len(values) == 0 {
-		return nil
-	}
-	return values
+	return stats.Trace(c.ctx)
 }
 
 // SetBinary sets the binary value in the carrier's context, which will be sent
