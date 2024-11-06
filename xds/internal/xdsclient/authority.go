@@ -481,7 +481,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		cleanup = a.unwatchResource(rType, resourceName, watcher)
 	}, func() {
 		if a.logger.V(2) {
-			a.logger.Infof("Failed to schedule a watch for type %q, resource name %q", rType.TypeName(), resourceName)
+			a.logger.Infof("Failed to schedule a watch for type %q, resource name %q, because the xDS client is closed", rType.TypeName(), resourceName)
 		}
 		close(done)
 	})
