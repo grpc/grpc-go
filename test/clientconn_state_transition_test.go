@@ -680,8 +680,8 @@ func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
 		}
 	}()
 
-	// The channel should transition to CONNECTING automatically when Connect()
-	// is called.
+	// The channel should transition to CONNECTING automatically when an RPC
+	// is made.
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	// The channel remains in CONNECTING state for a short time.
