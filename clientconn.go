@@ -671,21 +671,23 @@ func (cc *ClientConn) Connect() {
 }
 
 // waitForResolvedAddrs blocks until the resolver has provided addresses or the
-// context expires.  Returns nil unless the context expires first; otherwise
-// returns a status error based on the context.
-func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
+// context expires. It returns two values:
+//   - a boolean indicating if there was a name resolution delay.
+//   - an error which is nil unless the context expires first; otherwise returns
+//     a status error based on the context.
+func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) (bool, error) {
 	// This is on the RPC path, so we use a fast path to avoid the
 	// more-expensive "select" below after the resolver has returned once.
 	if cc.firstResolveEvent.HasFired() {
-		return nil
+		return false, nil
 	}
 	select {
 	case <-cc.firstResolveEvent.Done():
-		return nil
+		return true, nil
 	case <-ctx.Done():
-		return status.FromContextError(ctx.Err()).Err()
+		return true, status.FromContextError(ctx.Err()).Err()
 	case <-cc.ctx.Done():
-		return ErrClientConnClosing
+		return true, ErrClientConnClosing
 	}
 }
 

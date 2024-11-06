@@ -23,7 +23,7 @@ import (
 	"errors"
 	"io"
 	"math"
-	"math/rand"
+	rand "math/rand/v2"
 	"strconv"
 	"sync"
 	"time"
@@ -49,7 +49,6 @@ import (
 )
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
-var NameResolutionDelayDuration = time.Nanosecond * 10
 
 // StreamHandler defines the handler called by gRPC server to complete the
 // execution of a streaming RPC.
@@ -209,15 +208,11 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
-	startTime := time.Now()
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
-	if err := cc.waitForResolvedAddrs(ctx); err != nil {
+	nameResolutionDelayed, err := cc.waitForResolvedAddrs(ctx)
+	if err != nil {
 		return nil, err
-	}
-	var nameResolutionDelayed = false
-	if time.Since(startTime) > NameResolutionDelayDuration {
-		nameResolutionDelayed = true
 	}
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
@@ -594,7 +589,7 @@ type csAttempt struct {
 	ctx        context.Context
 	cs         *clientStream
 	t          transport.ClientTransport
-	s          *transport.Stream
+	s          *transport.ClientStream
 	p          *parser
 	pickResult balancer.PickResult
 
@@ -722,7 +717,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		if max := float64(rp.MaxBackoff); cur > max {
 			cur = max
 		}
-		dur = time.Duration(rand.Int63n(int64(cur)))
+		dur = time.Duration(rand.Int64N(int64(cur)))
 		cs.numRetriesSincePushback++
 	}
 
@@ -1352,7 +1347,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 }
 
 type addrConnStream struct {
-	s         *transport.Stream
+	s         *transport.ClientStream
 	ac        *addrConn
 	callHdr   *transport.CallHdr
 	cancel    context.CancelFunc
@@ -1590,7 +1585,7 @@ type ServerStream interface {
 type serverStream struct {
 	ctx   context.Context
 	t     transport.ServerTransport
-	s     *transport.Stream
+	s     *transport.ServerStream
 	p     *parser
 	codec baseCodec
 
