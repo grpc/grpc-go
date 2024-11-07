@@ -19,7 +19,7 @@
 package internal
 
 import (
-	"math/rand"
+	rand "math/rand/v2"
 	"time"
 )
 
