@@ -56,7 +56,7 @@ var (
 	// Below function is no-op in actual code, but can be overridden in
 	// tests to give tests visibility into exactly when certain events happen.
 	clientConnUpdateHook = func() {}
-	newPickerUpdated     = func() {}
+	pickerUpdateHook     = func() {}
 )
 
 func init() {
@@ -301,7 +301,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	}
 	b.inhibitPickerUpdates = false
 	b.mu.Unlock()
-	newPickerUpdated()
+	pickerUpdateHook()
 	return err
 }
 
@@ -363,6 +363,7 @@ func (b *clusterImplBalancer) UpdateState(state balancer.State) {
 		ConnectivityState: state.ConnectivityState,
 		Picker:            b.newPickerLocked(),
 	})
+	pickerUpdateHook()
 }
 
 func (b *clusterImplBalancer) setClusterName(n string) {

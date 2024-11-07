@@ -946,13 +946,13 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 // Test verify that the case picker is updated synchronously on receipt of
 // configuration update.
 func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
-	// Override the newPickerUpdated to be notified that picker was updated.
+	// Override the pickerUpdateHook to be notified that picker was updated.
 	pickerUpdated := make(chan struct{}, 1)
-	origNewPickerUpdated := newPickerUpdated
-	newPickerUpdated = func() {
+	origNewPickerUpdated := pickerUpdateHook
+	pickerUpdateHook = func() {
 		pickerUpdated <- struct{}{}
 	}
-	defer func() { newPickerUpdated = origNewPickerUpdated }()
+	defer func() { pickerUpdateHook = origNewPickerUpdated }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
