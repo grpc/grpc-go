@@ -90,17 +90,15 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		},
 	}
 
+	// Assign the gRPC server to the stub server and start serving.
+	stub.Listener = lis
+	stub.S = grpc.NewServer()
 	// Register the OpenRCAService with a very short metrics reporting interval.
-	s := grpc.NewServer()
-	if err := orca.Register(s, opts); err != nil {
+	if err := orca.Register(stub.S, opts); err != nil {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}
-
-	// Assign the gRPC server to the stub server and start serving.
-	stub.S = s
 	stubserver.StartTestService(t, stub)
-	go s.Serve(lis)
-	defer s.Stop()
+	defer stub.S.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 	// Dial the test server.
