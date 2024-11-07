@@ -176,9 +176,14 @@ func (s) TestNewServer_Failure(t *testing.T) {
 		wantErr    string
 	}{
 		{
-			desc:       "bootstrap env var not set",
-			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds)},
-			wantErr:    "failed to get xDS bootstrap config",
+			desc: "bootstrap env var not set",
+			serverOpts: func() []grpc.ServerOption {
+				// Ensure that any fallback bootstrap configuration setup by
+				// previous tests is cleared.
+				bootstrap.UnsetFallbackBootstrapConfigForTesting()
+				return []grpc.ServerOption{grpc.Creds(xdsCreds)}
+			}(),
+			wantErr: "failed to get xDS bootstrap config",
 		},
 		{
 			desc: "empty bootstrap config",
@@ -696,10 +701,16 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
+	// Generate bootstrap contents up front for all servers, and clear the
+	// fallback bootstrap configuration that gets set when a server is created
+	// with the BootstrapContentsForTesting() server option.
+	bootstrapContents := generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)
+	defer bootstrap.UnsetFallbackBootstrapConfigForTesting()
+
 	wg := sync.WaitGroup{}
 	wg.Add(200)
 	for i := 0; i < 100; i++ {
-		server, err := NewGRPCServer(BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)))
+		server, err := NewGRPCServer(BootstrapContentsForTesting(bootstrapContents))
 		if err != nil {
 			t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 		}

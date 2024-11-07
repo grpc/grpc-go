@@ -594,7 +594,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	cleanup := func() {}
 	done := make(chan struct{})
 
-	a.xdsClientSerializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.ScheduleOr(func(context.Context) {
 		defer close(done)
 
 		if a.logger.V(2) {
@@ -642,6 +642,11 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
 		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)
+	}, func() {
+		if a.logger.V(2) {
+			a.logger.Infof("Failed to schedule a watch for type %q, resource name %q, because the xDS client is closed", rType.TypeName(), resourceName)
+		}
+		close(done)
 	})
 	<-done
 	return cleanup
@@ -764,10 +769,10 @@ func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig 
 	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
 	done := make(chan struct{})
 
-	a.xdsClientSerializer.TrySchedule(func(context.Context) {
+	a.xdsClientSerializer.ScheduleOr(func(context.Context) {
 		defer close(done)
 		ret = a.resourceConfig()
-	})
+	}, func() { close(done) })
 	<-done
 	return ret
 }
