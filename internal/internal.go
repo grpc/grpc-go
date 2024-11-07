@@ -29,8 +29,6 @@ import (
 )
 
 var (
-	// WithHealthCheckFunc is set by dialoptions.go
-	WithHealthCheckFunc any // func (HealthChecker) DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
 	HealthCheckFunc HealthChecker
 	// BalancerUnregister is exported by package balancer to unregister a balancer.

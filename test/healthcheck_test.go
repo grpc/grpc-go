@@ -171,7 +171,11 @@ func setupClient(t *testing.T, c *clientConfig) (*grpc.ClientConn, *manual.Resol
 			opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, c.balancerName)))
 		}
 		if c.testHealthCheckFuncWrapper != nil {
-			opts = append(opts, internal.WithHealthCheckFunc.(func(internal.HealthChecker) grpc.DialOption)(c.testHealthCheckFuncWrapper))
+			origHealthCheckFn := internal.HealthCheckFunc
+			internal.HealthCheckFunc = c.testHealthCheckFuncWrapper
+			t.Cleanup(func() {
+				internal.HealthCheckFunc = origHealthCheckFn
+			})
 		}
 		opts = append(opts, c.extraDialOption...)
 	}
