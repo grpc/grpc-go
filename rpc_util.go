@@ -882,7 +882,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	if err = checkReceiveMessageOverflow(int64(out.Len()), int64(maxReceiveMessageSize), dcReader); err != nil {
 		return nil, out.Len() + 1, err
 	}
-	return out, len(out), err
+	return out, out.Len(), err
 }
 
 // checkReceiveMessageOverflow checks if the number of bytes read from the stream exceeds
@@ -896,7 +896,8 @@ func checkReceiveMessageOverflow(readBytes, maxReceiveMessageSize int64, dcReade
 	if readBytes == maxReceiveMessageSize {
 		b := make([]byte, 1)
 		if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
-			return fmt.Errorf("overflow: message larger than max size receivable by client (%d bytes)", maxReceiveMessageSize)
+			return fmt.Errorf("overflow: received message size is larger than the allowed maxReceiveMessageSize (%d bytes)",
+				maxReceiveMessageSize)
 		}
 	}
 	return nil
