@@ -146,14 +146,10 @@ func (s) TestServingModeChanges(t *testing.T) {
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	stub.Listener = lis
 	stubserver.StartTestService(t, stub, sopts...)
 	defer stub.S.Stop()
 
-	go func() {
-		if err := stub.S.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -290,14 +286,9 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	stub.Listener = lis
 	stubserver.StartTestService(t, stub, sopts...)
 	defer stub.S.Stop()
-
-	go func() {
-		if err := stub.S.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
