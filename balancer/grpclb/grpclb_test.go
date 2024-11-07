@@ -827,27 +827,27 @@ func (s) TestGRPCLB_Fallback(t *testing.T) {
 	defer stopBackends(standaloneBEs)
 
 	r := manual.NewBuilderWithScheme("whatever")
+	// Set the initial resolver state with fallback backend address stored in
+	// the `Addresses` field and an invalid remote balancer address stored in
+	// attributes, which will cause fallback behavior to be invoked.
+	rs := resolver.State{
+		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
+		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbConfig),
+	}
+	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: "invalid.address", ServerName: lbServerName}}})
+	r.InitialState(rs)
+
 	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
-
-	// Push an update to the resolver with fallback backend address stored in
-	// the `Addresses` field and an invalid remote balancer address stored in
-	// attributes, which will cause fallback behavior to be invoked.
-	rs := resolver.State{
-		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
-		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
-	}
-	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: "invalid.address", ServerName: lbServerName}}})
-	r.UpdateState(rs)
 
 	// Make an RPC and verify that it got routed to the fallback backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1187,22 +1187,21 @@ func (s) TestGRPCLB_BackendConnectionErrorPropagation(t *testing.T) {
 	standaloneBEs := startBackends(t, "arbitrary.invalid.name", true, beLis)
 	defer stopBackends(standaloneBEs)
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	rs := resolver.State{
+		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
+		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbConfig),
+	}
+	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
+	r.InitialState(rs)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName,
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create new client to the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
-
-	rs := resolver.State{
-		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
-		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
-	}
-	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
-	r.UpdateState(rs)
 
 	// If https://github.com/grpc/grpc-go/blob/65cabd74d8e18d7347fecd414fa8d83a00035f5f/balancer/grpclb/grpclb_test.go#L103
 	// changes, then expectedErrMsg may need to be updated.

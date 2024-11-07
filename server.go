@@ -621,8 +621,8 @@ func bufferPool(bufferPool mem.BufferPool) ServerOption {
 // workload (assuming a QPS of a few thousand requests/sec).
 const serverWorkerResetThreshold = 1 << 16
 
-// serverWorker blocks on a *transport.Stream channel forever and waits for
-// data to be fed by serveStreams. This allows multiple requests to be
+// serverWorker blocks on a *transport.ServerStream channel forever and waits
+// for data to be fed by serveStreams. This allows multiple requests to be
 // processed by the same goroutine, removing the need for expensive stack
 // re-allocations (see the runtime.morestack problem [1]).
 //
@@ -1020,7 +1020,7 @@ func (s *Server) serveStreams(ctx context.Context, st transport.ServerTransport,
 	}()
 
 	streamQuota := newHandlerQuota(s.opts.maxConcurrentStreams)
-	st.HandleStreams(ctx, func(stream *transport.Stream) {
+	st.HandleStreams(ctx, func(stream *transport.ServerStream) {
 		s.handlersWG.Add(1)
 		streamQuota.acquire()
 		f := func() {
@@ -1136,7 +1136,7 @@ func (s *Server) incrCallsFailed() {
 	s.channelz.ServerMetrics.CallsFailed.Add(1)
 }
 
-func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, msg any, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
+func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.ServerStream, msg any, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
@@ -1212,7 +1212,7 @@ func getChainUnaryHandler(interceptors []UnaryServerInterceptor, curr int, info 
 	}
 }
 
-func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
+func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTransport, stream *transport.ServerStream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
 	shs := s.opts.statsHandlers
 	if len(shs) != 0 || trInfo != nil || channelz.IsOn() {
 		if channelz.IsOn() {
@@ -1541,7 +1541,7 @@ func getChainStreamHandler(interceptors []StreamServerInterceptor, curr int, inf
 	}
 }
 
-func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTransport, stream *transport.Stream, info *serviceInfo, sd *StreamDesc, trInfo *traceInfo) (err error) {
+func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTransport, stream *transport.ServerStream, info *serviceInfo, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	if channelz.IsOn() {
 		s.incrCallsStarted()
 	}
@@ -1738,7 +1738,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 	return t.WriteStatus(ss.s, statusOK)
 }
 
-func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream) {
+func (s *Server) handleStream(t transport.ServerTransport, stream *transport.ServerStream) {
 	ctx := stream.Context()
 	ctx = contextWithServer(ctx, s)
 	var ti *traceInfo
@@ -2103,7 +2103,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
+	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")
 	}
@@ -2125,7 +2125,7 @@ func SetSendCompressor(ctx context.Context, name string) error {
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func ClientSupportedCompressors(ctx context.Context) ([]string, error) {
-	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
+	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
 		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
 	}

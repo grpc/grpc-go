@@ -274,7 +274,7 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 
 func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 	st := newHandleStreamTest(t)
-	handleStream := func(s *Stream) {
+	handleStream := func(s *ServerStream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
@@ -313,7 +313,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
 	}
 	st.ht.HandleStreams(
-		context.Background(), func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *ServerStream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":          nil,
@@ -342,11 +342,11 @@ func (s) TestHandlerTransport_HandleStreams_InvalidArgument(t *testing.T) {
 func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) {
 	st := newHandleStreamTest(t)
 
-	handleStream := func(s *Stream) {
+	handleStream := func(s *ServerStream) {
 		st.ht.WriteStatus(s, status.New(statusCode, msg))
 	}
 	st.ht.HandleStreams(
-		context.Background(), func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *ServerStream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -379,7 +379,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runStream := func(s *Stream) {
+	runStream := func(s *ServerStream) {
 		defer bodyw.Close()
 		select {
 		case <-s.ctx.Done():
@@ -395,7 +395,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		ht.WriteStatus(s, status.New(codes.DeadlineExceeded, "too slow"))
 	}
 	ht.HandleStreams(
-		context.Background(), func(s *Stream) { go runStream(s) },
+		context.Background(), func(s *ServerStream) { go runStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -412,7 +412,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 // TestHandlerTransport_HandleStreams_MultiWriteStatus ensures that
 // concurrent "WriteStatus"s do not panic writing to closed "writes" channel.
 func (s) TestHandlerTransport_HandleStreams_MultiWriteStatus(t *testing.T) {
-	testHandlerTransportHandleStreams(t, func(st *handleStreamTest, s *Stream) {
+	testHandlerTransportHandleStreams(t, func(st *handleStreamTest, s *ServerStream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
@@ -433,7 +433,7 @@ func (s) TestHandlerTransport_HandleStreams_MultiWriteStatus(t *testing.T) {
 // TestHandlerTransport_HandleStreams_WriteStatusWrite ensures that "Write"
 // following "WriteStatus" does not panic writing to closed "writes" channel.
 func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
-	testHandlerTransportHandleStreams(t, func(st *handleStreamTest, s *Stream) {
+	testHandlerTransportHandleStreams(t, func(st *handleStreamTest, s *ServerStream) {
 		if want := "/service/foo.bar"; s.method != want {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
@@ -444,10 +444,10 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 	})
 }
 
-func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handleStreamTest, s *Stream)) {
+func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handleStreamTest, s *ServerStream)) {
 	st := newHandleStreamTest(t)
 	st.ht.HandleStreams(
-		context.Background(), func(s *Stream) { go handleStream(st, s) },
+		context.Background(), func(s *ServerStream) { go handleStream(st, s) },
 	)
 }
 
@@ -476,11 +476,11 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 	}
 
 	hst := newHandleStreamTest(t)
-	handleStream := func(s *Stream) {
+	handleStream := func(s *ServerStream) {
 		hst.ht.WriteStatus(s, st)
 	}
 	hst.ht.HandleStreams(
-		context.Background(), func(s *Stream) { go handleStream(s) },
+		context.Background(), func(s *ServerStream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,

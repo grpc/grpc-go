@@ -117,7 +117,7 @@ const (
 	pingpong
 )
 
-func (h *testStreamHandler) handleStreamAndNotify(*Stream) {
+func (h *testStreamHandler) handleStreamAndNotify(*ServerStream) {
 	if h.notify == nil {
 		return
 	}
@@ -130,7 +130,7 @@ func (h *testStreamHandler) handleStreamAndNotify(*Stream) {
 	}()
 }
 
-func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStream(t *testing.T, s *ServerStream) {
 	req := expectedRequest
 	resp := expectedResponse
 	if s.Method() == "foo.Large" {
@@ -153,7 +153,7 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *Stream) {
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 
-func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *ServerStream) {
 	header := make([]byte, 5)
 	for {
 		if _, err := s.readTo(header); err != nil {
@@ -180,7 +180,7 @@ func (h *testStreamHandler) handleStreamPingPong(t *testing.T, s *Stream) {
 	}
 }
 
-func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *ServerStream) {
 	conn, ok := s.st.(*http2Server)
 	if !ok {
 		t.Errorf("Failed to convert %v to *http2Server", s.st)
@@ -213,14 +213,14 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	}
 }
 
-func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *Stream) {
+func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *ServerStream) {
 	// raw newline is not accepted by http2 framer so it must be encoded.
 	h.t.WriteStatus(s, encodingTestStatus)
 	// Drain any remaining buffers from the stream since it was closed early.
 	s.Read(math.MaxInt)
 }
 
-func (h *testStreamHandler) handleStreamInvalidHeaderField(s *Stream) {
+func (h *testStreamHandler) handleStreamInvalidHeaderField(s *ServerStream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
 	h.t.controlBuf.put(&headerFrame{
@@ -234,7 +234,7 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(s *Stream) {
 // stream-level flow control.
 // This handler assumes dynamic flow control is turned off and assumes window
 // sizes to be set to defaultWindowSize.
-func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream) {
 	req := expectedRequest
 	resp := expectedResponse
 	if s.Method() == "foo.Large" {
@@ -385,17 +385,17 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case notifyCall:
 			go transport.HandleStreams(context.Background(), h.handleStreamAndNotify)
 		case suspended:
-			go transport.HandleStreams(context.Background(), func(*Stream) {})
+			go transport.HandleStreams(context.Background(), func(*ServerStream) {})
 		case misbehaved:
-			go transport.HandleStreams(context.Background(), func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
 				go h.handleStreamMisbehave(t, s)
 			})
 		case encodingRequiredStatus:
-			go transport.HandleStreams(context.Background(), func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
 				go h.handleStreamEncodingRequiredStatus(s)
 			})
 		case invalidHeaderField:
-			go transport.HandleStreams(context.Background(), func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
 				go h.handleStreamInvalidHeaderField(s)
 			})
 		case delayRead:
@@ -404,15 +404,15 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			s.mu.Lock()
 			close(s.ready)
 			s.mu.Unlock()
-			go transport.HandleStreams(context.Background(), func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
 				go h.handleStreamDelayRead(t, s)
 			})
 		case pingpong:
-			go transport.HandleStreams(context.Background(), func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
 				go h.handleStreamPingPong(t, s)
 			})
 		default:
-			go transport.HandleStreams(context.Background(), func(s *Stream) {
+			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
 				go h.handleStream(t, s)
 			})
 		}
@@ -941,7 +941,7 @@ func (s) TestMaxStreams(t *testing.T) {
 	}
 	// Keep creating streams until one fails with deadline exceeded, marking the application
 	// of server settings on client.
-	slist := []*Stream{}
+	slist := []*ClientStream{}
 	pctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	timer := time.NewTimer(time.Second * 10)
@@ -1035,7 +1035,7 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.
-	var ss *Stream
+	var ss *ServerStream
 	for {
 		time.Sleep(time.Second)
 		sc.mu.Lock()
@@ -1095,7 +1095,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	}
 
 	<-notifyChan
-	var sstream1 *Stream
+	var sstream1 *ServerStream
 	// Access stream on the server.
 	st.mu.Lock()
 	for _, v := range st.activeStreams {
@@ -1121,7 +1121,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 		t.Fatalf("Client failed to create second stream. Err: %v", err)
 	}
 	<-notifyChan
-	var sstream2 *Stream
+	var sstream2 *ServerStream
 	st.mu.Lock()
 	for _, v := range st.activeStreams {
 		if v.id == cstream2.id {
@@ -1200,7 +1200,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 		}
 		return false, nil
 	})
-	var sstream1 *Stream
+	var sstream1 *ServerStream
 	st.mu.Lock()
 	for _, v := range st.activeStreams {
 		if v.id == 1 {
@@ -1654,7 +1654,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	const numStreams = 5
-	clientStreams := make([]*Stream, numStreams)
+	clientStreams := make([]*ClientStream, numStreams)
 	for i := 0; i < numStreams; i++ {
 		var err error
 		clientStreams[i], err = client.NewStream(ctx, &CallHdr{})
@@ -1666,7 +1666,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	// For each stream send pingpong messages to the server.
 	for _, stream := range clientStreams {
 		wg.Add(1)
-		go func(stream *Stream) {
+		go func(stream *ClientStream) {
 			defer wg.Done()
 			buf := make([]byte, msgSize+5)
 			buf[0] = byte(0)
@@ -1697,7 +1697,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		}(stream)
 	}
 	wg.Wait()
-	serverStreams := map[uint32]*Stream{}
+	serverStreams := map[uint32]*ServerStream{}
 	loopyClientStreams := map[uint32]*outStream{}
 	loopyServerStreams := map[uint32]*outStream{}
 	// Get all the streams from server reader and writer and client writer.
@@ -2211,7 +2211,7 @@ func (s) TestWriteHeaderConnectionError(t *testing.T) {
 	}
 
 	<-notifyChan // Wait for server stream to be established.
-	var sstream *Stream
+	var sstream *ServerStream
 	// Access stream on the server.
 	serverTransport.mu.Lock()
 	for _, v := range serverTransport.activeStreams {
@@ -2512,21 +2512,23 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 }
 
 func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
-	testStream := func() *Stream {
-		return &Stream{
+	testStream := func() *ClientStream {
+		return &ClientStream{
+			Stream: &Stream{
+				buf: &recvBuffer{
+					c:  make(chan recvMsg),
+					mu: sync.Mutex{},
+				},
+			},
 			done:       make(chan struct{}),
 			headerChan: make(chan struct{}),
-			buf: &recvBuffer{
-				c:  make(chan recvMsg),
-				mu: sync.Mutex{},
-			},
 		}
 	}
 
-	testClient := func(ts *Stream) *http2Client {
+	testClient := func(ts *ClientStream) *http2Client {
 		return &http2Client{
 			mu: sync.Mutex{},
-			activeStreams: map[uint32]*Stream{
+			activeStreams: map[uint32]*ClientStream{
 				0: ts,
 			},
 			controlBuf: newControlBuffer(make(<-chan struct{})),

@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -60,6 +61,16 @@ var (
 
 // TODO: change to pick-first when this becomes the default pick_first policy.
 const logPrefix = "[pick-first-leaf-lb %p] "
+
+type ipAddrFamily int
+
+const (
+	// ipAddrFamilyUnknown represents strings that can't be parsed as an IP
+	// address.
+	ipAddrFamilyUnknown ipAddrFamily = iota
+	ipAddrFamilyV4
+	ipAddrFamilyV6
+)
 
 type pickfirstBuilder struct{}
 
@@ -206,9 +217,6 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		// "Flatten the list by concatenating the ordered list of addresses for
 		// each of the endpoints, in order." - A61
 		for _, endpoint := range endpoints {
-			// "In the flattened list, interleave addresses from the two address
-			// families, as per RFC-8305 section 4." - A61
-			// TODO: support the above language.
 			newAddrs = append(newAddrs, endpoint.Addresses...)
 		}
 	} else {
@@ -231,6 +239,8 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	// Not de-duplicating would result in attempting to connect to the same
 	// SubConn multiple times in the same pass. We don't want this.
 	newAddrs = deDupAddresses(newAddrs)
+
+	newAddrs = interleaveAddresses(newAddrs)
 
 	// Since we have a new set of addresses, we are again at first pass.
 	b.firstPass = true
@@ -312,6 +322,67 @@ func deDupAddresses(addrs []resolver.Address) []resolver.Address {
 		retAddrs = append(retAddrs, addr)
 	}
 	return retAddrs
+}
+
+// interleaveAddresses interleaves addresses of both families (IPv4 and IPv6)
+// as per RFC-8305 section 4.
+// Whichever address family is first in the list is followed by an address of
+// the other address family; that is, if the first address in the list is IPv6,
+// then the first IPv4 address should be moved up in the list to be second in
+// the list. It doesn't support configuring "First Address Family Count", i.e.
+// there will always be a single member of the first address family at the
+// beginning of the interleaved list.
+// Addresses that are neither IPv4 nor IPv6 are treated as part of a third
+// "unknown" family for interleaving.
+// See: https://datatracker.ietf.org/doc/html/rfc8305#autoid-6
+func interleaveAddresses(addrs []resolver.Address) []resolver.Address {
+	familyAddrsMap := map[ipAddrFamily][]resolver.Address{}
+	interleavingOrder := []ipAddrFamily{}
+	for _, addr := range addrs {
+		family := addressFamily(addr.Addr)
+		if _, found := familyAddrsMap[family]; !found {
+			interleavingOrder = append(interleavingOrder, family)
+		}
+		familyAddrsMap[family] = append(familyAddrsMap[family], addr)
+	}
+
+	interleavedAddrs := make([]resolver.Address, 0, len(addrs))
+
+	for curFamilyIdx := 0; len(interleavedAddrs) < len(addrs); curFamilyIdx = (curFamilyIdx + 1) % len(interleavingOrder) {
+		// Some IP types may have fewer addresses than others, so we look for
+		// the next type that has a remaining member to add to the interleaved
+		// list.
+		family := interleavingOrder[curFamilyIdx]
+		remainingMembers := familyAddrsMap[family]
+		if len(remainingMembers) > 0 {
+			interleavedAddrs = append(interleavedAddrs, remainingMembers[0])
+			familyAddrsMap[family] = remainingMembers[1:]
+		}
+	}
+
+	return interleavedAddrs
+}
+
+// addressFamily returns the ipAddrFamily after parsing the address string.
+// If the address isn't of the format "ip-address:port", it returns
+// ipAddrFamilyUnknown. The address may be valid even if it's not an IP when
+// using a resolver like passthrough where the address may be a hostname in
+// some format that the dialer can resolve.
+func addressFamily(address string) ipAddrFamily {
+	// Parse the IP after removing the port.
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return ipAddrFamilyUnknown
+	}
+	ip := net.ParseIP(host)
+	switch {
+	case ip.To4() != nil:
+		return ipAddrFamilyV4
+	case ip.To16() != nil:
+		return ipAddrFamilyV6
+	default:
+		return ipAddrFamilyUnknown
+	}
 }
 
 // reconcileSubConnsLocked updates the active subchannels based on a new address
