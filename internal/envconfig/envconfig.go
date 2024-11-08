@@ -43,7 +43,8 @@ var (
 	// EnforceALPNEnabled is set if TLS connections to servers with ALPN disabled
 	// should be rejected. The HTTP/2 protocol requires ALPN to be enabled, this
 	// option is present for backward compatibility. This option may be overridden
-	// by setting the environment variable "GRPC_ENFORCE_ALPN_ENABLED" to "false".
+	// by setting the environment variable "GRPC_ENFORCE_ALPN_ENABLED" to "true"
+	// or "false".
 	EnforceALPNEnabled = boolFromEnv("GRPC_ENFORCE_ALPN_ENABLED", true)
 	// XDSFallbackSupport is the env variable that controls whether support for
 	// xDS fallback is turned on. If this is unset or is false, only the first

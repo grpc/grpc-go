@@ -482,19 +482,15 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 			scd.connectionFailed = true
 			lastErr = scd.lastErr
 			continue
-		case connectivity.Ready:
-			// Should never happen.
-			b.logger.Errorf("Requesting a connection even though we have a READY SubConn")
-			return
-		case connectivity.Shutdown:
-			// Should never happen.
-			b.logger.Errorf("SubConn with state SHUTDOWN present in SubConns map")
-			return
 		case connectivity.Connecting:
 			// Wait for the connection attempt to complete or the timer to fire
 			// before attempting the next address.
 			b.scheduleNextConnectionLocked()
 			return
+		default:
+			b.logger.Errorf("SubConn with unexpected state %v present in SubConns map.", scd.state)
+			return
+
 		}
 	}
 
@@ -643,10 +639,15 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	}
 }
 
+// endFirstPassIfPossibleLocked ends the first happy-eyeballs pass if all the
+// addresses are tried and their SubConns have reported a failure.
 func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
-	if b.addressList.isValid() || b.subConns.Len() < b.addressList.size() {
+	// An optimization to avoid iterating over the entire SubConn map.
+	if b.addressList.isValid() {
 		return
 	}
+	// Connect() has been called on all the SubConns. The first pass can be
+	// ended if all the SubConns have reported a failure.
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
 		if !sd.connectionFailed {
