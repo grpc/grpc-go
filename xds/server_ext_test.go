@@ -148,7 +148,6 @@ func (s) TestServingModeChanges(t *testing.T) {
 	stub.Listener = lis
 	stubserver.StartTestService(t, stub, sopts...)
 	defer stub.S.Stop()
-
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)

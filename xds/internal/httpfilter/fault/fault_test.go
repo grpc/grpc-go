@@ -106,23 +106,17 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		},
 	}
 
-	stubserver.StartTestService(t, stub)
-
-	// Create a local listener and pass it to Serve().
+	// Create a local listener and assign it to the stub server.
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
-
-	go func() {
-		if err := stub.S.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-
-	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
+	stub.Listener = lis
+	stubserver.StartTestService(t, stub)
+	cleanup := func() {
 		stub.S.Stop()
 	}
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), cleanup
 }
 
 func (s) TestFaultInjection_Unary(t *testing.T) {
