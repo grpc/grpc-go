@@ -189,9 +189,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		ac:            ac,
 		producers:     make(map[balancer.ProducerBuilder]*refCountedProducer),
 		stateListener: opts.StateListener,
-		healthData: &healthData{
-			connectivityState: connectivity.Idle,
-		},
+		healthData:    newHealthData(connectivity.Idle),
 	}
 	ac.acbw = acbw
 	return acbw, nil
@@ -265,10 +263,11 @@ type acBalancerWrapper struct {
 	producersMu sync.Mutex
 	producers   map[balancer.ProducerBuilder]*refCountedProducer
 
+	// Access to healthData is protected by healthMu.
 	healthMu sync.Mutex
-	// Access to the following fields are protected by healthMu. It is stored
-	// as a pointer to detect when a new health listener has been registered
-	// (closures can't be compared for equality).
+	// healthData is stored as a pointer to detect when the health listener is
+	// dropped or updated. This is required as closures can't be compared for
+	// equality.
 	healthData *healthData
 }
 
@@ -278,6 +277,10 @@ type healthData struct {
 	// to the LB policy. This is stored to avoid sending updates when the
 	// SubConn has already exited connectivity state READY.
 	connectivityState connectivity.State
+}
+
+func newHealthData(s connectivity.State) *healthData {
+	return &healthData{connectivityState: s}
 }
 
 // updateState is invoked by grpc to push a subConn state update to the
@@ -297,7 +300,7 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 		if s == connectivity.Ready {
 			setConnectedAddress(&scs, curAddr)
 		}
-		// Invalidate the health listener.
+		// Invalidate the health listener by updating the healthData.
 		acbw.healthMu.Lock()
 		// A race may occur if a health listener is registered soon after the
 		// connectivity state is set but before the stateListener is called.
@@ -312,9 +315,7 @@ func (acbw *acBalancerWrapper) updateState(s connectivity.State, curAddr resolve
 		//    on the old listener. When the LB policy registers a new listener
 		//    on receiving the connectivity update, the health updates will be
 		//    sent to the new health listener.
-		acbw.healthData = &healthData{
-			connectivityState: scs.ConnectivityState,
-		}
+		acbw.healthData = newHealthData(scs.ConnectivityState)
 		acbw.healthMu.Unlock()
 
 		acbw.stateListener(scs)
@@ -412,12 +413,11 @@ func (acbw *acBalancerWrapper) closeProducers() {
 	}
 }
 
-// RegisterHealthListener stores a health listener from the LB policy. It sends
+// RegisterHealthListener accepts a health listener from the LB policy. It sends
 // updates to the health listener as long as the SubConn's connectivity state
-// doesn't change and a new health listener is not registered. To invalidate a
-// the currently registered health listener, acbw updates the connectivity state
-// stored by the object. If a nil listener is registered, the active health
-// listener is dropped.
+// doesn't change and a new health listener is not registered. To invalidate
+// the currently registered health listener, acbw updates the healthData. If a
+// nil listener is registered, the active health listener is dropped.
 func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
 	acbw.healthMu.Lock()
 	defer acbw.healthMu.Unlock()
@@ -430,7 +430,7 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 	}
 	// Replace the health data to stop sending updates to any previously
 	// registered health listeners.
-	hd := &healthData{connectivityState: connectivity.Ready}
+	hd := newHealthData(connectivity.Ready)
 	acbw.healthData = hd
 	if listener == nil {
 		return
@@ -440,10 +440,10 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
 		}
-		// Don't send updated if a new listener is registered.
+		// Don't send updates if a new listener is registered.
 		acbw.healthMu.Lock()
+		defer acbw.healthMu.Unlock()
 		curHD := acbw.healthData
-		acbw.healthMu.Unlock()
 		if curHD != hd {
 			return
 		}

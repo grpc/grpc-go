@@ -1195,17 +1195,31 @@ func (s) TestSubConn_RegisterHealthListener_RegisterTwice(t *testing.T) {
 }
 
 // Test calls RegisterHealthListener on a SubConn with a nil listener and
-// verifies that it doesn't panic.
+// verifies that the listener registered before the nil listener doesn't receive
+// any further updates.
 func (s) TestSubConn_RegisterHealthListener_NilListener(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	scChan := make(chan balancer.SubConn, 1)
+	readyUpdateResumeCh := make(chan struct{})
+	readyUpdateReceivedCh := make(chan struct{})
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			cc := bd.ClientConn
 			ccw := &subConnStoringCCWrapper{
 				ClientConn: cc,
 				scChan:     scChan,
+				stateListener: func(scs balancer.SubConnState) {
+					if scs.ConnectivityState != connectivity.Ready {
+						return
+					}
+					close(readyUpdateReceivedCh)
+					select {
+					case <-readyUpdateResumeCh:
+					case <-ctx.Done():
+						t.Error("Context timed out waiting for update on ready channel")
+					}
+				},
 			}
 			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
 		},
@@ -1241,6 +1255,28 @@ func (s) TestSubConn_RegisterHealthListener_NilListener(t *testing.T) {
 		t.Fatal("Context timed out waiting for SubConn creation")
 	}
 
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	// Wait for the SubConn to enter READY.
+	select {
+	case <-readyUpdateReceivedCh:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for SubConn to enter READY")
+	}
+
+	healthChan := make(chan balancer.SubConnState, 1)
+
+	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+		healthChan <- scs
+	})
+
+	// Registering a nil listener should invalidate the previously registered
+	// listener.
 	sc.RegisterHealthListener(nil)
+	close(readyUpdateResumeCh)
+
+	// No updates should be received on the listener.
+	select {
+	case scs := <-healthChan:
+		t.Fatalf("Received unexpected health update on the listener: %v", scs)
+	case <-time.After(defaultTestShortTimeout):
+	}
 }
