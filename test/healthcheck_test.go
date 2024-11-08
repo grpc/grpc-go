@@ -46,8 +46,6 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-var testHealthCheckFunc = internal.HealthCheckFunc
-
 func newTestHealthServer() *testHealthServer {
 	return newTestHealthServerWithWatchFunc(defaultWatchFunc)
 }
@@ -119,14 +117,22 @@ func (s *testHealthServer) SetServingStatus(service string, status healthpb.Heal
 	s.mu.Unlock()
 }
 
-func setupHealthCheckWrapper() (hcEnterChan chan struct{}, hcExitChan chan struct{}, wrapper internal.HealthChecker) {
+func setupHealthCheckWrapper(t *testing.T) (hcEnterChan chan struct{}, hcExitChan chan struct{}) {
+	t.Helper()
+
 	hcEnterChan = make(chan struct{})
 	hcExitChan = make(chan struct{})
-	wrapper = func(ctx context.Context, newStream func(string) (any, error), update func(connectivity.State, error), service string) error {
+	origHealthCheckFn := internal.HealthCheckFunc
+	internal.HealthCheckFunc = func(ctx context.Context, newStream func(string) (any, error), update func(connectivity.State, error), service string) error {
 		close(hcEnterChan)
 		defer close(hcExitChan)
-		return testHealthCheckFunc(ctx, newStream, update, service)
+		return origHealthCheckFn(ctx, newStream, update, service)
 	}
+
+	t.Cleanup(func() {
+		internal.HealthCheckFunc = origHealthCheckFn
+	})
+
 	return
 }
 
@@ -153,9 +159,8 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 }
 
 type clientConfig struct {
-	balancerName               string
-	testHealthCheckFuncWrapper internal.HealthChecker
-	extraDialOption            []grpc.DialOption
+	balancerName    string
+	extraDialOption []grpc.DialOption
 }
 
 func setupClient(t *testing.T, c *clientConfig) (*grpc.ClientConn, *manual.Resolver) {
@@ -169,9 +174,6 @@ func setupClient(t *testing.T, c *clientConfig) (*grpc.ClientConn, *manual.Resol
 	if c != nil {
 		if c.balancerName != "" {
 			opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, c.balancerName)))
-		}
-		if c.testHealthCheckFuncWrapper != nil {
-			opts = append(opts, internal.WithHealthCheckFunc.(func(internal.HealthChecker) grpc.DialOption)(c.testHealthCheckFuncWrapper))
 		}
 		opts = append(opts, c.extraDialOption...)
 	}
@@ -281,8 +283,8 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	s, lis, ts := setupServer(t, nil)
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, hcExitChan := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
@@ -359,8 +361,8 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	s, lis, ts := setupServer(t, nil)
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, hcExitChan := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
@@ -409,8 +411,8 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	_, lis, ts := setupServer(t, nil)
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, hcExitChan := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	sc := parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
@@ -489,8 +491,8 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	_, lis, ts := setupServer(t, nil)
 	ts.SetServingStatus("foo", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, hcExitChan := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
@@ -555,8 +557,8 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	_, lis, ts := setupServer(t, watchFunc)
 	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	_, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, hcExitChan := setupHealthCheckWrapper(t)
+	_, r := setupClient(t, &clientConfig{})
 
 	// The serviceName "delay" is specially handled at server side, where response will not be sent
 	// back to client immediately upon receiving the request (client should receive no response until
@@ -618,8 +620,8 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	s, lis, ts := setupServer(t, watchFunc)
 	ts.SetServingStatus("delay", healthpb.HealthCheckResponse_SERVING)
 
-	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	_, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, hcExitChan := setupHealthCheckWrapper(t)
+	_, r := setupClient(t, &clientConfig{})
 
 	// The serviceName "delay" is specially handled at server side, where response will not be sent
 	// back to client immediately upon receiving the request (client should receive no response until
@@ -659,11 +661,8 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 }
 
 func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
-	hcEnterChan, _, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{
-		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
-		extraDialOption:            []grpc.DialOption{grpc.WithDisableHealthCheck()},
-	})
+	hcEnterChan, _ := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{extraDialOption: []grpc.DialOption{grpc.WithDisableHealthCheck()}})
 	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
@@ -694,10 +693,8 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 }
 
 func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
-	hcEnterChan, _, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{
-		testHealthCheckFuncWrapper: testHealthCheckFuncWrapper,
-	})
+	hcEnterChan, _ := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
@@ -728,8 +725,8 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 }
 
 func testHealthCheckDisableWithServiceConfig(t *testing.T, addr string) {
-	hcEnterChan, _, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
-	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
+	hcEnterChan, _ := setupHealthCheckWrapper(t)
+	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: addr}}})
 

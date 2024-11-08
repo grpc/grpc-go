@@ -1445,7 +1445,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	if !ac.scopts.HealthCheckEnabled {
 		return
 	}
-	healthCheckFunc := ac.cc.dopts.healthCheckFunc
+	healthCheckFunc := internal.HealthCheckFunc
 	if healthCheckFunc == nil {
 		// The health package is not imported to set health check function.
 		//
@@ -1477,7 +1477,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	}
 	// Start the health checking stream.
 	go func() {
-		err := ac.cc.dopts.healthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
+		err := healthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
 		if err != nil {
 			if status.Code(err) == codes.Unimplemented {
 				channelz.Error(logger, ac.channelz, "Subchannel health check is unimplemented at server side, thus health check is disabled")
