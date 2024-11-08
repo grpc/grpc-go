@@ -1477,7 +1477,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 	}
 	// Start the health checking stream.
 	go func() {
-		err := internal.HealthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
+		err := healthCheckFunc(ctx, newStream, setConnectivityState, healthCheckConfig.ServiceName)
 		if err != nil {
 			if status.Code(err) == codes.Unimplemented {
 				channelz.Error(logger, ac.channelz, "Subchannel health check is unimplemented at server side, thus health check is disabled")
