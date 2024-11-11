@@ -28,18 +28,29 @@ package endpointsharding
 import (
 	"encoding/json"
 	"errors"
+	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
-
-	rand "math/rand/v2"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
+
+// PickFirstConfig is a pick first config without shuffling enabled.
+var PickFirstConfig string
+
+func init() {
+	if envconfig.NewPickFirstEnabled {
+		PickFirstConfig = "[{\"pick_first\": {}}]"
+		return
+	}
+	PickFirstConfig = "[{\"pick_first_leaf\": {}}]"
+}
 
 // ChildState is the balancer state of a child along with the endpoint which
 // identifies the child balancer.
@@ -100,9 +111,6 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 
 	// Update/Create new children.
 	for _, endpoint := range state.ResolverState.Endpoints {
-		if len(endpoint.Addresses) == 0 {
-			continue
-		}
 		if _, ok := newChildren.Get(endpoint); ok {
 			// Endpoint child was already created, continue to avoid duplicate
 			// update.
@@ -143,6 +151,9 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 		}
 	}
 	es.children.Store(newChildren)
+	if newChildren.Len() == 0 {
+		return balancer.ErrBadResolverState
+	}
 	return ret
 }
 
@@ -306,6 +317,3 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
 }
-
-// PickFirstConfig is a pick first config without shuffling enabled.
-const PickFirstConfig = "[{\"pick_first\": {}}]"
