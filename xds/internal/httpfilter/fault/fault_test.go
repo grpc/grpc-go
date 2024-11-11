@@ -113,10 +113,9 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 	stub.Listener = lis
 	stubserver.StartTestService(t, stub)
-	cleanup := func() {
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
 		stub.S.Stop()
 	}
-	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), cleanup
 }
 
 func (s) TestFaultInjection_Unary(t *testing.T) {
