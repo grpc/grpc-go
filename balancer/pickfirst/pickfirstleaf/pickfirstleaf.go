@@ -122,9 +122,9 @@ type scData struct {
 	subConn balancer.SubConn
 	addr    resolver.Address
 
-	state            connectivity.State
-	lastErr          error
-	connectionFailed bool
+	state                       connectivity.State
+	lastErr                     error
+	connectionFailedInFirstPass bool
 }
 
 func (b *pickfirstBalancer) newSCData(addr resolver.Address) (*scData, error) {
@@ -314,7 +314,7 @@ func (b *pickfirstBalancer) startFirstPassLocked() {
 	b.numTF = 0
 	// Reset the connection attempt record for existing SubConns.
 	for _, sd := range b.subConns.Values() {
-		sd.(*scData).connectionFailed = false
+		sd.(*scData).connectionFailedInFirstPass = false
 	}
 	b.requestConnectionLocked()
 }
@@ -479,7 +479,7 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 			// The SubConn is being re-used and failed during a previous pass
 			// over the addressList. It has not completed backoff yet.
 			// Mark it as having failed and try the next address.
-			scd.connectionFailed = true
+			scd.connectionFailedInFirstPass = true
 			lastErr = scd.lastErr
 			continue
 		case connectivity.Connecting:
@@ -534,7 +534,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	oldState := sd.state
 	// Record a connection attempt when exiting CONNECTING.
 	if newState.ConnectivityState == connectivity.TransientFailure {
-		sd.connectionFailed = true
+		sd.connectionFailedInFirstPass = true
 	}
 	sd.state = newState.ConnectivityState
 	// Previously relevant SubConns can still callback with state updates.
@@ -650,7 +650,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 	// ended if all the SubConns have reported a failure.
 	for _, v := range b.subConns.Values() {
 		sd := v.(*scData)
-		if !sd.connectionFailed {
+		if !sd.connectionFailedInFirstPass {
 			return
 		}
 	}
