@@ -23,7 +23,6 @@ import (
 
 	otelpropagation "go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/stats"
 )
 
 // GRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
@@ -36,58 +35,33 @@ const GRPCTraceBinHeaderKey = "grpc-trace-bin"
 // `grpc-trace-bin` header.
 type GRPCTraceBinPropagator struct{}
 
-// Inject sets OpenTelemetry trace context information from the Context into
-// the carrier.
+// Inject sets OpenTelemetry span context from the Context into the carrier as
+// a `grpc-trace-bin` header if span context is valid.
 //
-// It first attempts to retrieve any existing binary trace data from the
-// provided context using `stats.Trace()`. If found, it means that a trace data
-// was injected by a system using gRPC OpenCensus plugin. Hence, we inject this
-// trace data into the carrier, allowing trace from system using gRPC
-// OpenCensus plugin to propagate downstream. However, we set the value in
-// string format against `grpc-trace-bin` key so that downstream systems which
-// are using gRPC OpenTelemetry plugin are able to extract it using
-// `GRPCTraceBinPropagator`.
-//
-// It then attempts to retrieve an OpenTelemetry span context from the provided
-// context. If not found, that means either there is no trace context or previous
-// system had injected it using gRPC OpenCensus plugin. Therefore, it returns
-// early without doing anymore modification to carrier. If found, that means
-// previous system had injected using OpenTelemetry plugin so it converts the
-// span context to binary and set in carrier in string format against
-// `grpc-trace-bin` key.
+// If span context is not valid, it ruturns without setting `grpc-trace-bin`
+// header.
 func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagation.TextMapCarrier) {
-	bd := stats.Trace(ctx)
-	if bd != nil {
-		carrier.Set(GRPCTraceBinHeaderKey, string(bd))
-	}
-
 	sc := oteltrace.SpanFromContext(ctx)
 	if !sc.SpanContext().IsValid() {
 		return
 	}
 
-	bd = binary(sc.SpanContext())
+	bd := binary(sc.SpanContext())
 	carrier.Set(GRPCTraceBinHeaderKey, string(bd))
 }
 
-// Extract reads OpenTelemetry trace context information from the carrier into a
-// Context.
+// Extract reads OpenTelemetry span context from the `grpc-trace-bin` header of
+// carrier into the provided context, if present.
 //
-// It first attempts to read `grpc-trace-bin` header value from carrier. If
-// found, that means the trace data was injected using gRPC OpenTelemetry
-// plugin using `GRPCTraceBinPropagator`. It then set the trace data into
-// context using `stats.SetTrace` for downstream systems still using gRPC
-// OpenCensus plugin to be able to use this context.
+// If a valid span context is retrieved from `grpc-trace-bin`, it returns a new
+// context containing the extracted OpenTelemetry span context marked as
+// remote.
 //
-// It then also extracts the OpenTelemetry span context from binary header
-// value. If span context is not valid, it just returns the context as parent.
-// If span context is valid, it creates a new context containing the extracted
-// OpenTelemetry span context marked as remote so that downstream systems using
-// OpenTelemetry are able use this context.
+// If `grpc-trace-bin` header is not present, it returns the context as is.
 func (GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
 	h := carrier.Get(GRPCTraceBinHeaderKey)
-	if h != "" {
-		ctx = stats.SetTrace(ctx, []byte(h))
+	if h == "" {
+		return ctx
 	}
 
 	sc, ok := fromBinary([]byte(h))

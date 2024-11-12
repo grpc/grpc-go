@@ -25,71 +25,38 @@ import (
 	"github.com/google/go-cmp/cmp"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/stats"
 	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
-// Valid OpenTelemetry span contexts for testing.
-var (
-	validSpanContext1 = oteltrace.SpanContext{}.WithTraceID(
-		oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
-		oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
-		oteltrace.TraceFlags(1))
-	validSpanContext2 = oteltrace.SpanContext{}.WithTraceID(
-		oteltrace.TraceID{17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}).WithSpanID(
-		oteltrace.SpanID{33, 34, 35, 36, 37, 38, 39, 40}).WithTraceFlags(
-		oteltrace.TraceFlags(1))
-)
+var validSpanContext = oteltrace.SpanContext{}.WithTraceID(
+	oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
+	oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
+	oteltrace.TraceFlags(1))
 
 // TestInject verifies that the GRPCTraceBinPropagator correctly injects
 // existing binary trace data or OpenTelemetry span context as `grpc-trace-bin`
 // header in the provided carrier's metadata.
 //
-// For existing binary traced data, it maintains a test field `scExists` which
-// if contains a valid span context, it set it as binary trace data using
-// `stats.SetIncomingTrace` to mimick scenario of previous system setting trace
-// context using gRPC OpenCensus plugin. It then verifies that if valid
-// OpenTelemetry span context is not present to inject, the carrier's metadata
-// should have binary equivalent of `scExists`.
+// It verifies that if a valid span context is injected, same span context can
+// can be retreived from the carrier's metadata.
 //
-// For OpenTelemetry span context, it maintains a test field `scToInject` which
-// if contains a valid span context, it creates a context using that span
-// context. It then verifies that irrespective of whether existing trace data
-// is present or not, if `scToInject` is valid span context, carrier's metadata
-// should have binary equivalent of `scToInject`.
-//
-// If both `scToInject` and `scExists` are invalid span contexts, it verifies
-// that `grpc-trace-bin` header is not set in the carrier's metadata.
+// If an invalid span context is injected, it verifies that `grpc-trace-bin`
+// header is not set in the carrier's metadata.
 func (s) TestInject(t *testing.T) {
 	tests := []struct {
-		name       string
-		scToInject oteltrace.SpanContext // span context to inject from the context to carrier
-		scExists   oteltrace.SpanContext // existing trace data in the context to set using `stats.SetIncomingTrace` to mimick scenario of previous system setting trace context using gRPC OpenCensus plugin.
-		wantSC     oteltrace.SpanContext // expected span context from carrier after injection
+		name     string
+		injectSC oteltrace.SpanContext
+		wantSC   oteltrace.SpanContext
 	}{
 		{
-			name:       "inject valid span context, no existing trace data",
-			scToInject: validSpanContext1,
-			scExists:   oteltrace.SpanContext{},
-			wantSC:     validSpanContext1,
+			name:     "valid OpenTelemetry span context",
+			injectSC: validSpanContext,
+			wantSC:   validSpanContext,
 		},
 		{
-			name:       "invalid span context to inject, existing trace data present",
-			scToInject: oteltrace.SpanContext{},
-			scExists:   validSpanContext2,
-			wantSC:     validSpanContext2,
-		},
-		{
-			name:       "valid span context to inject, existing trace data present",
-			scToInject: validSpanContext1,
-			scExists:   validSpanContext2,
-			wantSC:     validSpanContext1, // if new valid OpenTelemetry span context is present, it overrides existing trace data
-		},
-		{
-			name:       "invalid span context to inject, no trace data present",
-			scToInject: oteltrace.SpanContext{},
-			scExists:   oteltrace.SpanContext{},
-			wantSC:     oteltrace.SpanContext{},
+			name:     "invalid OpenTelemetry span context",
+			injectSC: oteltrace.SpanContext{},
+			wantSC:   oteltrace.SpanContext{},
 		},
 	}
 
@@ -98,12 +65,7 @@ func (s) TestInject(t *testing.T) {
 			p := GRPCTraceBinPropagator{}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			if test.scExists.IsValid() {
-				ctx = stats.SetIncomingTrace(ctx, binary(test.scExists))
-			}
-			if test.scToInject.IsValid() {
-				ctx = oteltrace.ContextWithSpanContext(ctx, test.scToInject)
-			}
+			ctx = oteltrace.ContextWithSpanContext(ctx, test.injectSC)
 
 			c := itracing.NewCustomCarrier(&metadata.MD{})
 			p.Inject(ctx, c)
@@ -132,10 +94,7 @@ func (s) TestInject(t *testing.T) {
 // OpenTelemetry span context data from the provided context using carrier.
 //
 // If a valid span context was injected, it verifies same trace span context
-// is extracted from carrier's metadata for `grpc-trace-bin` header key. It
-// also verifies that the binary value of `grpc-trace-bin` header is set
-// correcttly using `stats.SetTrace` by verifying the outgoing trace to make
-// sure trace context propagation is backward compatible.
+// is extracted from carrier's metadata for `grpc-trace-bin` header key.
 //
 // If invalid span context was injected, it verifies that valid trace span
 // context is not extracted.
@@ -146,7 +105,7 @@ func (s) TestExtract(t *testing.T) {
 	}{
 		{
 			name:   "valid OpenTelemetry span context",
-			wantSC: validSpanContext1.WithRemote(true),
+			wantSC: validSpanContext.WithRemote(true),
 		},
 		{
 			name:   "invalid OpenTelemetry span context",
@@ -168,9 +127,6 @@ func (s) TestExtract(t *testing.T) {
 			if !got.Equal(test.wantSC) {
 				t.Fatalf("got span context: %v, want span context: %v", got, test.wantSC)
 			}
-			if bd != nil && cmp.Equal(bd, stats.OutgoingTrace(ctx)) {
-				t.Fatalf("stats.OutgoingTrace(ctx) = %v, want %v", stats.OutgoingTrace(ctx), bd)
-			}
 		})
 	}
 }
@@ -186,8 +142,8 @@ func (s) TestBinary(t *testing.T) {
 	}{
 		{
 			name: "valid context",
-			sc:   validSpanContext1,
-			want: binary(validSpanContext1),
+			sc:   validSpanContext,
+			want: binary(validSpanContext),
 		},
 		{
 			name: "zero value context",
@@ -220,7 +176,7 @@ func (s) TestFromBinary(t *testing.T) {
 		{
 			name: "valid",
 			b:    []byte{0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 17, 18, 19, 20, 21, 22, 23, 24, 2, 1},
-			want: validSpanContext1.WithRemote(true),
+			want: validSpanContext.WithRemote(true),
 			ok:   true,
 		},
 		{
