@@ -83,12 +83,13 @@ var (
 	})
 )
 
-var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
+// endpointSharding which specifies pick first children.
+var endpointShardingLBConfig serviceconfig.LoadBalancingConfig
 
 func init() {
 	balancer.Register(bb{})
 	var err error
-	gracefulSwitchPickFirst, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
+	endpointShardingLBConfig, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -153,11 +154,14 @@ func (bb) Name() string {
 // Caller must hold b.mu.
 func (b *wrrBalancer) updateEndpointsLocked(endpoints []resolver.Endpoint) {
 	endpointSet := resolver.NewEndpointMap()
+	addressSet := resolver.NewAddressMap()
 	for _, endpoint := range endpoints {
 		endpointSet.Set(endpoint, nil)
+		for _, addr := range endpoint.Addresses {
+			addressSet.Set(addr, nil)
+		}
 		var ew *endpointWeight
-		ewi, ok := b.endpointToWeight.Get(endpoint)
-		if ok {
+		if ewi, ok := b.endpointToWeight.Get(endpoint); ok {
 			ew = ewi.(*endpointWeight)
 		} else {
 			ew = &endpointWeight{
@@ -185,7 +189,9 @@ func (b *wrrBalancer) updateEndpointsLocked(endpoints []resolver.Endpoint) {
 		}
 		b.endpointToWeight.Delete(endpoint)
 		for _, addr := range endpoint.Addresses {
-			b.addressWeights.Delete(addr)
+			if _, ok := addressSet.Get(addr); !ok { // old endpoints to be deleted can share addresses with new endpoints, so only delete if necessary
+				b.addressWeights.Delete(addr)
+			}
 		}
 		// SubConn map will get handled in updateSubConnState
 		// when receives SHUTDOWN signal.
@@ -226,14 +232,12 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.updateEndpointsLocked(ccs.ResolverState.Endpoints)
 	b.mu.Unlock()
 
-	// Note: if this call ever starts erroring (as of writing this won't happen
-	// unless programmer error), will need to rethink this operation, as once it
-	// gets here it has already updated all the data structures tracking
-	// endpoints.
+	// This causes child to update picker inline and will thus cause inline
+	// picker update.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: gracefulSwitchPickFirst,
+		BalancerConfig: endpointShardingLBConfig,
 		ResolverState:  ccs.ResolverState,
-	}) // this causes child to update picker inline and will thus cause inline picker update
+	})
 }
 
 func (b *wrrBalancer) UpdateState(state balancer.State) {
@@ -311,21 +315,18 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 
 	sc, err := b.ClientConn.NewSubConn([]resolver.Address{addr}, opts)
 	if err != nil {
-		return sc, err
+		return nil, err
 	}
 
 	b.mu.Lock()
-	ewv, ok := b.addressWeights.Get(addr)
+	defer b.mu.Unlock()
+	ewi, ok := b.addressWeights.Get(addr)
 	if !ok {
-		b.mu.Unlock()
 		// SubConn state updates can come in for a no longer relevant endpoint
 		// weight (from the old system after a new config update is applied).
-		// Will eventually get cleared from scMap once receives Shutdown signal.
-		return sc, err
+		return nil, err
 	}
-	ew := ewv.(*endpointWeight)
-	b.scToWeight[sc] = ew
-	b.mu.Unlock()
+	b.scToWeight[sc] = ewi.(*endpointWeight)
 
 	return sc, err
 }
@@ -343,7 +344,8 @@ func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Sub
 	b.mu.Lock()
 	ew := b.scToWeight[sc]
 	// updates from a no longer relevant SubConn update, nothing to do here but
-	// forward state to state listener, which happens in wrapped listener.
+	// forward state to state listener, which happens in wrapped listener. Will
+	// eventually get cleared from scMap once receives Shutdown signal.
 	if ew == nil {
 		b.mu.Unlock()
 		return
@@ -442,12 +444,17 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	pickedPicker := p.weightedPickers[sched.nextIndex()]
 	pr, err := pickedPicker.picker.Pick(info)
 	if err != nil {
+		logger.Errorf("ready picker returned error: %v", err)
 		return balancer.PickResult{}, err
 	}
 	if !p.cfg.EnableOOBLoadReport {
+		oldDone := pr.Done
 		pr.Done = func(info balancer.DoneInfo) {
 			if load, ok := info.ServerLoad.(*v3orcapb.OrcaLoadReport); ok && load != nil {
 				pickedPicker.weightedEndpoint.OnLoadReport(load)
+			}
+			if oldDone != nil {
+				oldDone(info)
 			}
 		}
 	}

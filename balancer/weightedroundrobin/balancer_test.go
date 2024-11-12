@@ -473,14 +473,16 @@ func (s) TestEndpoints_SharedAddress(t *testing.T) {
 		t.Fatalf("Error starting client: %v", err)
 	}
 
-	endpointsSharedAddress := []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "same-address"}}}, {Addresses: []resolver.Address{{Addr: "same-address"}}}}
-	srv.R.UpdateState(resolver.State{
-		Endpoints: endpointsSharedAddress,
-	})
+	endpointsSharedAddress := []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: srv.Address}}}, {Addresses: []resolver.Address{{Addr: srv.Address}}}}
+	srv.R.UpdateState(resolver.State{Endpoints: endpointsSharedAddress})
 
-	// Make some RPC's and make sure doesn't crash.
+	// Make some RPC's and make sure doesn't crash. It should go to one of the
+	// endpoints addresses, it's undefined which one it will choose and the load
+	// reporting might not work, but it should be able to make an RPC.
 	for i := 0; i < 10; i++ {
-		srv.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("EmptyCall failed with err: %v", err)
+		}
 	}
 }
 
@@ -508,9 +510,7 @@ func (s) TestEndpoints_MultipleAddresses(t *testing.T) {
 	}
 
 	twoEndpoints := []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "bad-address-1"}, {Addr: srv1.Address}}}, {Addresses: []resolver.Address{{Addr: "bad-address-2"}, {Addr: srv2.Address}}}}
-	srv1.R.UpdateState(resolver.State{
-		Endpoints: twoEndpoints,
-	})
+	srv1.R.UpdateState(resolver.State{Endpoints: twoEndpoints})
 
 	// Call each backend once to ensure the weights have been received.
 	ensureReached(ctx, t, srv1.Client, 2)
@@ -791,7 +791,7 @@ func ensureReached(ctx context.Context, t *testing.T, c testgrpc.TestServiceClie
 	reached := make(map[string]struct{})
 	for len(reached) != n {
 		var peer peer.Peer
-		if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer), grpc.WaitForReady(true)); err != nil {
+		if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 			t.Fatalf("Error from EmptyCall: %v", err)
 		}
 		reached[peer.Addr.String()] = struct{}{}

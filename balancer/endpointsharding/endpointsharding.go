@@ -28,12 +28,15 @@ package endpointsharding
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/pickfirst"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/envconfig"
@@ -45,11 +48,11 @@ import (
 var PickFirstConfig string
 
 func init() {
-	if envconfig.NewPickFirstEnabled {
-		PickFirstConfig = "[{\"pick_first\": {}}]"
-		return
+	name := pickfirst.Name
+	if !envconfig.NewPickFirstEnabled {
+		name = pickfirstleaf.Name
 	}
-	PickFirstConfig = "[{\"pick_first_leaf\": {}}]"
+	PickFirstConfig = fmt.Sprintf("[{%q: {}}]", name)
 }
 
 // ChildState is the balancer state of a child along with the endpoint which
