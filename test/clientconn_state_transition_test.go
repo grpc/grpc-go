@@ -622,7 +622,7 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 // TestChannelStateWaitingForFirstResolverUpdate verifies the initial
 // state of the channel when a manual name resolver doesn't provide any updates.
 func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
-	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called soon as Connect() is called. See issue #7686.")
+	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called. See issue #7686.")
 
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
@@ -636,10 +636,12 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 	}
 	defer cc.Close()
 
+	if state := cc.GetState(); state != connectivity.Idle {
+		t.Fatalf("Expected initial state to be IDLE, got %v", state)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// The channel should transition to CONNECTING automatically when Connect()
 	// is called.
@@ -653,7 +655,7 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 }
 
 func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
-	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made soon as Connect() is called. See issue #7686.")
+	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made. See issue #7686.")
 
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
@@ -667,10 +669,12 @@ func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
 	}
 	defer cc.Close()
 
+	if state := cc.GetState(); state != connectivity.Idle {
+		t.Fatalf("Expected initial state to be IDLE, got %v", state)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Make an RPC call to transition the channel to CONNECTING.
 	go func() {
