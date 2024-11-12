@@ -1,6 +1,6 @@
 module google.golang.org/grpc/examples
 
-go 1.22.7
+go 1.22
 
 require (
 	github.com/cncf/xds/go v0.0.0-20240905190251-b4127c9b8d78
