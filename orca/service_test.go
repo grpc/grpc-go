@@ -21,7 +21,7 @@ package orca_test
 import (
 	"context"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -63,19 +63,15 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 
-	var requests int64
-	var mu sync.Mutex
-
-	const numRequests = 20
+	var requests atomic.Int64
 
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			mu.Lock()
-			requests++
 
-			smr.SetNamedUtilization(requestsMetricKey, float64(requests)*0.01)
-			mu.Unlock()
+			newRequests := requests.Add(1)
 
+			smr.SetNamedUtilization(requestsMetricKey, float64(newRequests)*0.01)
 			smr.SetCPUUtilization(50.0)
 			smr.SetMemoryUtilization(0.9)
 			smr.SetApplicationUtilization(1.2)
@@ -91,7 +87,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 
 	// Assign the gRPC server to the stub server and start serving.
-	stub.Listener = lis
 	stub.S = grpc.NewServer()
 	// Register the OpenRCAService with a very short metrics reporting interval.
 	if err := orca.Register(stub.S, opts); err != nil {
@@ -114,6 +109,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
+	const numRequests = 20
 	errCh := make(chan error, 1)
 	go func() {
 		for i := 0; i < numRequests; i++ {
