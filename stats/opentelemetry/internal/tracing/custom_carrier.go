@@ -21,120 +21,51 @@
 package tracing
 
 import (
-	"context"
-	"encoding/base64"
-	"strings"
-
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/stats"
 )
 
-// GRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
-// to propagate trace context in binary format.
-const GRPCTraceBinHeaderKey = "grpc-trace-bin"
-
-var logger = grpclog.Component("otel-plugin")
-
-// CustomCarrier is a TextMapCarrier that uses gRPC context to store and
-// retrieve any propagated key-value pairs in text format along with binary
-// format for `grpc-trace-bin` header.
+// CustomCarrier is a TextMapCarrier that uses `*metadata.MD` to store and
+// retrieve any propagated key-value pairs in text format.
 type CustomCarrier struct {
-	ctx context.Context
+	md *metadata.MD
 }
 
-// NewCustomCarrier creates a new CustomMapCarrier with
-// the given context.
-func NewCustomCarrier(ctx context.Context) *CustomCarrier {
-	return &CustomCarrier{ctx: ctx}
+// NewCustomCarrier creates a new CustomCarrier with
+// the given metadata.
+func NewCustomCarrier(md *metadata.MD) *CustomCarrier {
+	return &CustomCarrier{md: md}
 }
 
-// Get returns the string value associated with the passed key from the gRPC
-// context. It returns an empty string in any of the following cases:
-// - the key is not present in the context
-// - the value associated with the key is empty
-// - the key ends with "-bin" and is not `grpc-trace-bin`
+// Get returns the string value associated with the passed key from the
+// carrier's metadata.
 //
-// If the key is `grpc-trace-bin`, it retrieves the binary value using
-// `stats.Trace()` and then base64 encodes it before returning. For all other
-// string keys, it retrieves the value from the context's metadata.
+// It returns an empty string if the key is not present in the carrier's
+// metadata or if the value associated with the key is empty.
 func (c *CustomCarrier) Get(key string) string {
-	if key == GRPCTraceBinHeaderKey {
-		return base64.StdEncoding.EncodeToString(stats.Trace(c.ctx))
-	}
-	if strings.HasSuffix(key, "-bin") && key != GRPCTraceBinHeaderKey {
-		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
-		return ""
-	}
-
-	md, ok := metadata.FromIncomingContext(c.ctx)
-	if !ok {
-		return ""
-	}
-	values := md.Get(key)
+	values := c.md.Get(key)
 	if len(values) == 0 {
 		return ""
 	}
 	return values[0]
 }
 
-// Set stores the key-value pair in the gRPC context. If the key already
-// exists, its value will be overwritten. If the key ends with "-bin" and is
-// not `grpc-trace-bin`, the key-value pair is not stored.
+// Set stores the key-value pair in the carrier's metadata.
 //
-// If the key is `grpc-trace-bin`, it base64 decodes the `value` and stores the
-// resulting binary data using `stats.SetTrace()`. For all other keys, it stores
-// the key-value pair in the string format in context's metadata.
+// If the key already exists, its value is overwritten.
 func (c *CustomCarrier) Set(key, value string) {
-	if key == GRPCTraceBinHeaderKey {
-		b, err := base64.StdEncoding.DecodeString(value)
-		if err != nil {
-			logger.Errorf("encountered error in decoding %s value", GRPCTraceBinHeaderKey)
-			return
-		}
-		c.ctx = stats.SetTrace(c.ctx, b)
-		return
-	}
-	if strings.HasSuffix(key, "-bin") && key != GRPCTraceBinHeaderKey {
-		logger.Warningf("encountered a binary header %s which is not: %s", key, GRPCTraceBinHeaderKey)
-		return
-	}
-
-	md, ok := metadata.FromOutgoingContext(c.ctx)
-	if !ok {
-		md = metadata.MD{}
-	}
-	md.Set(key, value)
-	c.ctx = metadata.NewOutgoingContext(c.ctx, md)
+	c.md.Set(key, value)
 }
 
-// GetBinary returns the binary value from the gRPC context in the incoming
-// RPC, associated with the header `grpc-trace-bin`. If header is not found or
-// is empty, it returns empty slice.
-func (c *CustomCarrier) GetBinary() []byte {
-	return stats.Trace(c.ctx)
-}
-
-// SetBinary sets the binary value in the carrier's context, which will be sent
-// in the outgoing RPC with the header `grpc-trace-bin`.
-func (c *CustomCarrier) SetBinary(value []byte) {
-	c.ctx = stats.SetTrace(c.ctx, value)
-}
-
-// Keys returns the keys stored in the carrier's context.
+// Keys returns the keys stored in the carrier's metadata.
 func (c *CustomCarrier) Keys() []string {
-	md, _ := metadata.FromOutgoingContext(c.ctx)
-	keys := make([]string, 0, len(md)+1) // +1 for grpc-trace-bin (if present)
-	for k := range md {
-		keys = append(keys, k)
-	}
-	if stats.OutgoingTrace(c.ctx) != nil {
-		keys = append(keys, GRPCTraceBinHeaderKey) // add grpc-trace-bin key if grpc-trace-bin is present in the context
+	keys := make([]string, 0, len(*c.md))
+	for key := range *c.md {
+		keys = append(keys, key)
 	}
 	return keys
 }
 
-// Context returns the underlying context associated with the CustomCarrier.
-func (c *CustomCarrier) Context() context.Context {
-	return c.ctx
+// Metadata returns the underlying metadata associated with the CustomCarrier.
+func (c *CustomCarrier) Metadata() *metadata.MD {
+	return c.md
 }
