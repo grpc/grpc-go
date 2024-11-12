@@ -126,6 +126,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	})
 
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -145,8 +146,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	stub.Listener = lis
-	stubserver.StartTestService(t, stub, sopts...)
+	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -264,6 +264,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	})
 
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -283,8 +284,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	stub.Listener = lis
-	stubserver.StartTestService(t, stub, sopts...)
+	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))

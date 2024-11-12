@@ -79,7 +79,7 @@ func Test(t *testing.T) {
 //     sent by the xdsClient for queries.
 //   - the port the server is listening on
 //   - cleanup function to be invoked by the tests when done
-func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
+func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -88,9 +88,15 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
-	// Initialize a test gRPC server, assign it to the stub server, and start
-	// the test service.
+	// Create a local listener.
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+
+	// Initialize a test gRPC server, assign it to the stub server, and start the test service.
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -106,16 +112,11 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		},
 	}
 
-	// Create a local listener and assign it to the stub server.
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	stub.Listener = lis
 	stubserver.StartTestService(t, stub)
-	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
+	t.Cleanup(func() {
 		stub.S.Stop()
-	}
+	})
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port)
 }
 
 func (s) TestFaultInjection_Unary(t *testing.T) {
@@ -457,8 +458,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		}},
 	}}
 
-	fs, nodeID, port, cleanup := clientSetup(t)
-	defer cleanup()
+	fs, nodeID, port := clientSetup(t)
 
 	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -540,8 +540,8 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 }
 
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
-	fs, nodeID, port, cleanup := clientSetup(t)
-	defer cleanup()
+	fs, nodeID, port := clientSetup(t)
+
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: "myservice",
 		NodeID:     nodeID,
