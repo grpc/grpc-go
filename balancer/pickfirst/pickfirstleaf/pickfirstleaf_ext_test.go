@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	pfinternal "google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -66,8 +67,7 @@ func Test(t *testing.T) {
 }
 
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
-// bunch of backends exporting the TestService, creates a ClientConn to them
-// with service config specifying the use of the state_storing LB policy.
+// bunch of backends exporting the TestService, and creates a ClientConn to them.
 func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, *backendManager) {
 	t.Helper()
 	r := manual.NewBuilderWithScheme("whatever")
@@ -86,7 +86,6 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
-		grpc.WithDefaultServiceConfig(stateStoringServiceConfig),
 	}
 	dopts = append(dopts, opts...)
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
@@ -121,7 +120,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerReady(t *testing.T) {
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -161,7 +160,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerUnReady(t *testing.T)
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -203,7 +202,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_DuplicateAddrs(t *testing.T) {
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
 
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -259,7 +258,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 4)
+	cc, r, bm := setupPickFirstLeaf(t, 4, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -322,7 +321,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 3)
+	cc, r, bm := setupPickFirstLeaf(t, 3, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -386,7 +385,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 3)
+	cc, r, bm := setupPickFirstLeaf(t, 3, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -451,7 +450,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -524,7 +523,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -589,7 +588,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -661,7 +660,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -733,7 +732,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 
 	balCh := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balCh})
-	cc, r, bm := setupPickFirstLeaf(t, 2)
+	cc, r, bm := setupPickFirstLeaf(t, 2, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
@@ -807,7 +806,7 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	defer cancel()
 	balChan := make(chan *stateStoringBalancer, 1)
 	balancer.Register(&stateStoringBalancerBuilder{balancer: balChan})
-	cc, r, bm := setupPickFirstLeaf(t, 1)
+	cc, r, bm := setupPickFirstLeaf(t, 1, grpc.WithDefaultServiceConfig(stateStoringServiceConfig))
 	addrs := bm.resolverAddrs()
 
 	stateSubscriber := &ccStateSubscriber{}
@@ -848,6 +847,189 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 	if diff := cmp.Diff(wantTransitions, stateSubscriber.transitions); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// Test verifies that pickfirst correctly detects the end of the first happy
+// eyeballs pass when the timer causes pickfirst to reach the end of the address
+// list and failures are reported out of order.
+func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	originalTimer := pfinternal.TimeAfterFunc
+	defer func() {
+		pfinternal.TimeAfterFunc = originalTimer
+	}()
+	triggerTimer, timeAfter := mockTimer()
+	pfinternal.TimeAfterFunc = timeAfter
+
+	dialer := testutils.NewBlockingDialer()
+	opts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithContextDialer(dialer.DialContext),
+	}
+	cc, rb, bm := setupPickFirstLeaf(t, 3, opts...)
+	addrs := bm.resolverAddrs()
+	holds := bm.holds(dialer)
+	rb.UpdateState(resolver.State{Addresses: addrs})
+	cc.Connect()
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	// Verify that only the first server is contacted.
+	if holds[0].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
+	}
+	if holds[1].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
+	}
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
+	}
+
+	// Make the happy eyeballs timer fire once and verify that the
+	// second server is contacted, but the third isn't.
+	triggerTimer()
+	if holds[1].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
+	}
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
+	}
+
+	// Make the happy eyeballs timer fire once more and verify that the
+	// third server is contacted.
+	triggerTimer()
+	if holds[2].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
+	}
+
+	// First SubConn Fails.
+	holds[0].Fail(fmt.Errorf("test error"))
+
+	// No TF should be reported until the first pass is complete.
+	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
+
+	// Third SubConn fails.
+	shortCtx, shortCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	holds[2].Fail(fmt.Errorf("test error"))
+	testutils.AwaitNotState(shortCtx, t, cc, connectivity.TransientFailure)
+
+	// Last SubConn fails, this should result in a TF update.
+	holds[1].Fail(fmt.Errorf("test error"))
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+}
+
+// Test verifies that pickfirst attempts to connect to the second backend once
+// the happy eyeballs timer expires.
+func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	originalTimer := pfinternal.TimeAfterFunc
+	defer func() {
+		pfinternal.TimeAfterFunc = originalTimer
+	}()
+	triggerTimer, timeAfter := mockTimer()
+	pfinternal.TimeAfterFunc = timeAfter
+
+	dialer := testutils.NewBlockingDialer()
+	opts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithContextDialer(dialer.DialContext),
+	}
+	cc, rb, bm := setupPickFirstLeaf(t, 2, opts...)
+	addrs := bm.resolverAddrs()
+	holds := bm.holds(dialer)
+	rb.UpdateState(resolver.State{Addresses: addrs})
+	cc.Connect()
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	// Verify that only the first server is contacted.
+	if holds[0].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
+	}
+	if holds[1].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
+	}
+
+	// Make the happy eyeballs timer fire once and verify that the
+	// second server is contacted.
+	triggerTimer()
+	if holds[1].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
+	}
+
+	// Get the connection attempt to the second server to succeed and verify
+	// that the channel becomes READY.
+	holds[1].Resume()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+}
+
+// Test tests the pickfirst balancer by causing a SubConn to fail and then
+// jumping to the 3rd SubConn after the happy eyeballs timer expires.
+func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	originalTimer := pfinternal.TimeAfterFunc
+	defer func() {
+		pfinternal.TimeAfterFunc = originalTimer
+	}()
+	triggerTimer, timeAfter := mockTimer()
+	pfinternal.TimeAfterFunc = timeAfter
+
+	dialer := testutils.NewBlockingDialer()
+	opts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithContextDialer(dialer.DialContext),
+	}
+	cc, rb, bm := setupPickFirstLeaf(t, 3, opts...)
+	addrs := bm.resolverAddrs()
+	holds := bm.holds(dialer)
+	rb.UpdateState(resolver.State{Addresses: addrs})
+	cc.Connect()
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	// Verify that only the first server is contacted.
+	if holds[0].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 0, addrs[0])
+	}
+	if holds[1].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 1, addrs[1])
+	}
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
+	}
+
+	// First SubConn Fails.
+	holds[0].Fail(fmt.Errorf("test error"))
+
+	// Verify that only the second server is contacted.
+	if holds[1].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 1, addrs[1])
+	}
+	if holds[2].IsStarted() != false {
+		t.Fatalf("Server %d with address %q contacted unexpectedly", 2, addrs[2])
+	}
+
+	// The happy eyeballs timer expires, pickfirst should stop waiting for
+	// server[1] to report a failure/success and request the creation of a third
+	// SubConn.
+	triggerTimer()
+	if holds[2].Wait(ctx) != true {
+		t.Fatalf("Timeout waiting for server %d with address %q to be contacted", 2, addrs[2])
+	}
+
+	// Get the connection attempt to the second server to succeed and verify
+	// that the channel becomes READY.
+	holds[1].Resume()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 }
 
 func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
@@ -1106,10 +1288,41 @@ func (b *backendManager) resolverAddrs() []resolver.Address {
 	return addrs
 }
 
+func (b *backendManager) holds(dialer *testutils.BlockingDialer) []*testutils.Hold {
+	holds := []*testutils.Hold{}
+	for _, addr := range b.resolverAddrs() {
+		holds = append(holds, dialer.Hold(addr.Addr))
+	}
+	return holds
+}
+
 type ccStateSubscriber struct {
 	transitions []connectivity.State
 }
 
 func (c *ccStateSubscriber) OnMessage(msg any) {
 	c.transitions = append(c.transitions, msg.(connectivity.State))
+}
+
+// mockTimer returns a fake timeAfterFunc that will not trigger automatically.
+// It returns a function that can be called to manually trigger the execution
+// of the scheduled callback.
+func mockTimer() (triggerFunc func(), timerFunc func(_ time.Duration, f func()) func()) {
+	timerCh := make(chan struct{})
+	triggerFunc = func() {
+		timerCh <- struct{}{}
+	}
+	return triggerFunc, func(_ time.Duration, f func()) func() {
+		stopCh := make(chan struct{})
+		go func() {
+			select {
+			case <-timerCh:
+				f()
+			case <-stopCh:
+			}
+		}()
+		return sync.OnceFunc(func() {
+			close(stopCh)
+		})
+	}
 }

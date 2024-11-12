@@ -73,20 +73,7 @@ func (s) TestAddressList_Iteration(t *testing.T) {
 	}
 
 	addressList := addressList{}
-	emptyAddress := resolver.Address{}
-	if got, want := addressList.first(), emptyAddress; got != want {
-		t.Fatalf("addressList.first() = %v, want %v", got, want)
-	}
-
 	addressList.updateAddrs(addrs)
-
-	if got, want := addressList.first(), addressList.currentAddress(); got != want {
-		t.Fatalf("addressList.first() = %v, want %v", got, want)
-	}
-
-	if got, want := addressList.first(), addrs[0]; got != want {
-		t.Fatalf("addressList.first() = %v, want %v", got, want)
-	}
 
 	for i := 0; i < len(addrs); i++ {
 		if got, want := addressList.isValid(), true; got != want {
