@@ -76,7 +76,7 @@ func init() {
 }
 
 func newBufferSlice(b []byte) mem.BufferSlice {
-	return mem.BufferSlice{mem.NewBuffer(&b, nil)}
+	return mem.BufferSlice{mem.SliceBuffer(b)}
 }
 
 func (s *Stream) readTo(p []byte) (int, error) {
@@ -1796,7 +1796,7 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	testData := make([]byte, 1)
 	testData[0] = 5
 	testErr := errors.New("test error")
-	s.write(recvMsg{buffer: mem.NewBuffer(&testData, nil), err: testErr})
+	s.write(recvMsg{buffer: mem.SliceBuffer(testData), err: testErr})
 
 	inBuf := make([]byte, 1)
 	actualCount, actualErr := s.readTo(inBuf)
@@ -1807,8 +1807,8 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 		t.Errorf("_ , actualErr := s.Read(_) differs; want actualErr.Error() to be %v; got %v", testErr.Error(), actualErr.Error())
 	}
 
-	s.write(recvMsg{buffer: mem.NewBuffer(&testData, nil), err: nil})
-	s.write(recvMsg{buffer: mem.NewBuffer(&testData, nil), err: errors.New("different error from first")})
+	s.write(recvMsg{buffer: mem.SliceBuffer(testData), err: nil})
+	s.write(recvMsg{buffer: mem.SliceBuffer(testData), err: errors.New("different error from first")})
 
 	for i := 0; i < 2; i++ {
 		inBuf := make([]byte, 1)

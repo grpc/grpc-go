@@ -59,13 +59,13 @@ func (f *fullReader) Read(n int) (mem.BufferSlice, error) {
 	if len(f.data) < n {
 		data := f.data
 		f.data = nil
-		return mem.BufferSlice{mem.NewBuffer(&data, nil)}, io.ErrUnexpectedEOF
+		return mem.BufferSlice{mem.SliceBuffer(data)}, io.ErrUnexpectedEOF
 	}
 
 	buf := f.data[:n]
 	f.data = f.data[n:]
 
-	return mem.BufferSlice{mem.NewBuffer(&buf, nil)}, nil
+	return mem.BufferSlice{mem.SliceBuffer(buf)}, nil
 }
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
