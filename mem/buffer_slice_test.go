@@ -20,11 +20,19 @@ package mem_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
 
 	"google.golang.org/grpc/mem"
+)
+
+const (
+	minReadSize = 1
+	// Should match the constant in buffer_slice.go (another package)
+	readAllBufSize = 32 * 1024 // 32 KiB
 )
 
 func newBuffer(data []byte, pool mem.BufferPool) mem.Buffer {
@@ -156,6 +164,252 @@ func (s) TestBufferSlice_Reader(t *testing.T) {
 	}
 }
 
+// TestBufferSlice_ReadAll_Reads exercises ReadAll by allowing it to read
+// various combinations of data, empty data, EOF.
+func (s) TestBufferSlice_ReadAll_Reads(t *testing.T) {
+	testcases := []struct {
+		name     string
+		reads    []readStep
+		wantErr  string
+		wantBufs int
+	}{
+		{
+			name: "EOF",
+			reads: []readStep{
+				{
+					err: io.EOF,
+				},
+			},
+		},
+		{
+			name: "data,EOF",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "data+EOF",
+			reads: []readStep{
+				{
+					n:   minReadSize,
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "0,data+EOF",
+			reads: []readStep{
+				{},
+				{
+					n:   minReadSize,
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "0,data,EOF",
+			reads: []readStep{
+				{},
+				{
+					n: minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "data,data+EOF",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n:   minReadSize,
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "error",
+			reads: []readStep{
+				{
+					err: errors.New("boom"),
+				},
+			},
+			wantErr: "boom",
+		},
+		{
+			name: "data+error",
+			reads: []readStep{
+				{
+					n:   minReadSize,
+					err: errors.New("boom"),
+				},
+			},
+			wantErr:  "boom",
+			wantBufs: 1,
+		},
+		{
+			name: "data,data+error",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n:   minReadSize,
+					err: errors.New("boom"),
+				},
+			},
+			wantErr:  "boom",
+			wantBufs: 1,
+		},
+		{
+			name: "data,data+EOF - whole buf",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n:   readAllBufSize - minReadSize,
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "data,data,EOF - whole buf",
+			reads: []readStep{
+				{
+					n: minReadSize,
+				},
+				{
+					n: readAllBufSize - minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			wantBufs: 1,
+		},
+		{
+			name: "data,data,EOF - 2 bufs",
+			reads: []readStep{
+				{
+					n: readAllBufSize,
+				},
+				{
+					n: minReadSize,
+				},
+				{
+					n: readAllBufSize - minReadSize,
+				},
+				{
+					n: minReadSize,
+				},
+				{
+					err: io.EOF,
+				},
+			},
+			wantBufs: 3,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &testPool{
+				allocated: make(map[*[]byte]struct{}),
+			}
+			r := &stepReader{
+				reads: tc.reads,
+			}
+			data, err := mem.ReadAll(r, pool)
+			if tc.wantErr != "" {
+				if err == nil || err.Error() != tc.wantErr {
+					t.Fatalf("ReadAll() returned err %v, wanted %q", err, tc.wantErr)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			gotData := data.Materialize()
+			if !bytes.Equal(r.read, gotData) {
+				t.Fatalf("ReadAll() returned data %q, wanted %q", gotData, r.read)
+			}
+			if len(data) != tc.wantBufs {
+				t.Fatalf("ReadAll() returned %d bufs, wanted %d bufs", len(data), tc.wantBufs)
+			}
+			// all but last should be full buffers
+			for i := 0; i < len(data)-1; i++ {
+				if data[i].Len() != readAllBufSize {
+					t.Fatalf("ReadAll() returned data length %d, wanted %d", data[i].Len(), readAllBufSize)
+				}
+			}
+			data.Free()
+			if len(pool.allocated) > 0 {
+				t.Fatalf("got %d allocated buffers, wanted none", len(pool.allocated))
+			}
+		})
+	}
+}
+
+func (s) TestBufferSlice_ReadAll_WriteTo(t *testing.T) {
+	testcases := []struct {
+		name string
+		size int
+	}{
+		{
+			name: "small",
+			size: minReadSize,
+		},
+		{
+			name: "exact size",
+			size: readAllBufSize,
+		},
+		{
+			name: "big",
+			size: readAllBufSize * 3,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &testPool{
+				allocated: make(map[*[]byte]struct{}),
+			}
+			buf := make([]byte, tc.size)
+			_, err := rand.Read(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := bytes.NewBuffer(buf)
+			data, err := mem.ReadAll(r, pool)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotData := data.Materialize()
+			if !bytes.Equal(buf, gotData) {
+				t.Fatalf("ReadAll() = %q, wanted %q", gotData, buf)
+			}
+			data.Free()
+			if len(pool.allocated) > 0 {
+				t.Fatalf("wanted no allocated buffers, got %d", len(pool.allocated))
+			}
+		})
+	}
+}
+
 func ExampleNewWriter() {
 	var bs mem.BufferSlice
 	pool := mem.DefaultBufferPool()
@@ -175,4 +429,58 @@ func ExampleNewWriter() {
 	// Wrote 4 bytes, err: <nil>
 	// Wrote 4 bytes, err: <nil>
 	// abcdabcdabcd
+}
+
+var (
+	_ io.Reader      = (*stepReader)(nil)
+	_ mem.BufferPool = (*testPool)(nil)
+)
+
+// readStep describes what a single stepReader.Read should do - how much data
+// to return and what error to return.
+type readStep struct {
+	n   int
+	err error
+}
+
+// stepReader implements io.Reader that reads specified amount of data and/or
+// returns the specified error in specified steps.
+// The read data is accumulated in the read field.
+type stepReader struct {
+	reads []readStep
+	read  []byte
+}
+
+func (s *stepReader) Read(buf []byte) (int, error) {
+	if len(s.reads) == 0 {
+		panic("unexpected Read() call")
+	}
+	read := s.reads[0]
+	s.reads = s.reads[1:]
+	_, err := rand.Read(buf[:read.n])
+	if err != nil {
+		panic(err)
+	}
+	s.read = append(s.read, buf[:read.n]...)
+	return read.n, read.err
+}
+
+// testPool is an implementation of BufferPool that allows to ensure that:
+// - there are matching Put calls for all Get calls.
+// - there are no unexpected Put calls.
+type testPool struct {
+	allocated map[*[]byte]struct{}
+}
+
+func (t *testPool) Get(length int) *[]byte {
+	buf := make([]byte, length)
+	t.allocated[&buf] = struct{}{}
+	return &buf
+}
+
+func (t *testPool) Put(buf *[]byte) {
+	if _, ok := t.allocated[buf]; !ok {
+		panic("unexpected put")
+	}
+	delete(t.allocated, buf)
 }
