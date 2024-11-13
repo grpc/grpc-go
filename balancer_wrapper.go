@@ -255,7 +255,7 @@ func (ccb *ccBalancerWrapper) Target() string {
 // acBalancerWrapper is a wrapper on top of ac for balancers.
 // It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
-	balancer.SubConn
+	internal.EnforceSubConnEmbedding
 	ac            *addrConn          // read-only
 	ccb           *ccBalancerWrapper // read-only
 	stateListener func(balancer.SubConnState)
