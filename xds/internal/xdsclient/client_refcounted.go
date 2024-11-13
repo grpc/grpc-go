@@ -19,7 +19,6 @@
 package xdsclient
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -63,7 +62,7 @@ func clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func newRefCounted(name string, watchExpiryTimeout, idleChannelExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+func newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout, idleChannelExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 
@@ -73,10 +72,6 @@ func newRefCounted(name string, watchExpiryTimeout, idleChannelExpiryTimeout tim
 	}
 
 	// Create the new client implementation.
-	config, err := bootstrap.GetConfiguration()
-	if err != nil {
-		return nil, nil, fmt.Errorf("xds: failed to get xDS bootstrap config: %v", err)
-	}
 	c, err := newClientImpl(config, watchExpiryTimeout, idleChannelExpiryTimeout, streamBackoff)
 	if err != nil {
 		return nil, nil, err
