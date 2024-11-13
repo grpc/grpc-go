@@ -119,8 +119,6 @@ type Type interface {
 // provide an implementation of this interface to represent the configuration
 // received from the xDS management server.
 type ResourceData interface {
-	isResourceData()
-
 	// RawEqual returns true if the passed in resource data is equal to that of
 	// the receiver, based on the underlying raw protobuf message.
 	RawEqual(ResourceData) bool
