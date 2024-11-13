@@ -17,7 +17,7 @@
  */
 
 // Package prxyresolver implements the default resolver that creates child
-// resolvers to resolver targetURI as well as proxy adress.
+// resolvers to resolver targetURI as well as proxy address.
 
 package delegatingresolver
 
@@ -111,37 +111,14 @@ func targetURIResolver(target resolver.Target, opts resolver.BuildOptions, targe
 	return targetBuilder.Build(target, &innerClientConn{resolver, "target"}, opts)
 }
 
-// func proxyURIResolver(target resolver.Target, opts resolver.BuildOptions, presolver *delegatingResolver) (resolver.Resolver, error) {
-// 	fmt.Printf("proxy scheme %v\n", presolver.target.URL.Scheme)
-// 	scheme := "dns"
-// 	proxyBuilder := resolver.Get(scheme)
-// 	if proxyBuilder == nil {
-// 		return nil, fmt.Errorf("resolver for proxy not found")
-// 	}
-// 	fmt.Printf("the target endpoint is %v \n", target.Endpoint())
-// 	proxyURL, err := mapAddress(target.Endpoint())
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	fmt.Printf("the proxy url is %v, %v \n", proxyURL, err)
-// 	fmt.Printf("the proxy resolver builder is %v \n", proxyBuilder)
-// 	fmt.Printf("the proxy resolver builder scheme is %v \n", proxyBuilder.Scheme())
-// 	x, y := proxyBuilder.Build(resolver.Target{URL: *proxyURL}, &innerClientConn{presolver, "proxy"}, opts)
-// 	fmt.Printf("the proxy resolver builder build returns is %v, %v \n", x, y)
-
-// 	return proxyBuilder.Build(resolver.Target{URL: *proxyURL}, &innerClientConn{presolver, "proxy"}, opts)
-// }
-
 func proxyURIResolver(proxyURL *url.URL, opts resolver.BuildOptions, presolver *delegatingResolver) (resolver.Resolver, error) {
-	fmt.Printf("proxy scheme %v\n", presolver.target.URL.Scheme)
 	scheme := "dns"
 	proxyBuilder := resolver.Get(scheme)
 	if proxyBuilder == nil {
 		return nil, fmt.Errorf("resolver for proxy not found")
 	}
-	k := proxyURL.Hostname()
-	fmt.Printf("proxy url string : %v\n", k)
-	u, err := url.Parse(k)
+	host := proxyURL.Hostname()
+	u, err := url.Parse(host)
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +159,6 @@ func (icc *innerClientConn) UpdateState(state resolver.State) error {
 	if icc.resolverType == "proxy" {
 		icc.proxyAddrs = state.Addresses
 	}
-
-	// if icc.isProxy { // TODO : Ask if
-	//check for both slices are filled or not i.e both the resolvers have
-	// updated their state.
 	if len(icc.targetAddrs) == 0 || len(icc.proxyAddrs) == 0 {
 		return nil
 	}
@@ -202,13 +175,6 @@ func (icc *innerClientConn) UpdateState(state resolver.State) error {
 	// Set the addresses in the current state.
 	curState.Addresses = addresses
 	return icc.cc.UpdateState(curState)
-
-	// } else {
-	// 	if icc.resolverType == "target" {
-	// 		return icc.cc.UpdateState(curState)
-	// 	} else {
-	// 		return nil // ask what error to send??
-	// 	}
 }
 
 // ReportError intercepts errors from the child DNS resolver.
