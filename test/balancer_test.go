@@ -981,3 +981,302 @@ func (s) TestSubConnShutdown(t *testing.T) {
 		})
 	}
 }
+
+type subConnStoringCCWrapper struct {
+	balancer.ClientConn
+	stateListener func(balancer.SubConnState)
+	scChan        chan balancer.SubConn
+}
+
+func (ccw *subConnStoringCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	if ccw.stateListener != nil {
+		origListener := opts.StateListener
+		opts.StateListener = func(scs balancer.SubConnState) {
+			ccw.stateListener(scs)
+			origListener(scs)
+		}
+	}
+	sc, err := ccw.ClientConn.NewSubConn(addrs, opts)
+	ccw.scChan <- sc
+	return sc, err
+}
+
+// Test calls RegisterHealthListener on a SubConn to verify that expected health
+// updates are sent only to the most recently registered listener.
+func (s) TestSubConn_RegisterHealthListener(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	scChan := make(chan balancer.SubConn, 1)
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := bd.ClientConn
+			ccw := &subConnStoringCCWrapper{
+				ClientConn: cc,
+				scChan:     scChan,
+			}
+			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.ExitIdler).ExitIdle()
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+
+	cc.Connect()
+
+	var sc balancer.SubConn
+	select {
+	case sc = <-scChan:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for SubConn creation")
+	}
+	healthUpdateChan := make(chan balancer.SubConnState, 1)
+
+	// Register listener while Ready and verify it gets a health update.
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	for i := 0; i < 2; i++ {
+		sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+			healthUpdateChan <- scs
+		})
+		select {
+		case scs := <-healthUpdateChan:
+			if scs.ConnectivityState != connectivity.Ready {
+				t.Fatalf("Received health update = %v, want = %v", scs.ConnectivityState, connectivity.Ready)
+			}
+		case <-ctx.Done():
+			t.Fatalf("Context timed out waiting for health update")
+		}
+
+		// No further updates are expected.
+		select {
+		case scs := <-healthUpdateChan:
+			t.Fatalf("Received unexpected health update while channel is in state %v: %v", cc.GetState(), scs)
+		case <-time.After(defaultTestShortTimeout):
+		}
+	}
+
+	// Make the SubConn enter IDLE and verify that health updates are recevied
+	// on registering a new listener.
+	backend.S.Stop()
+	backend.S = nil
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	if err := backend.StartServer(); err != nil {
+		t.Fatalf("Error while restarting the backend server: %v", err)
+	}
+	cc.Connect()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+		healthUpdateChan <- scs
+	})
+	select {
+	case scs := <-healthUpdateChan:
+		if scs.ConnectivityState != connectivity.Ready {
+			t.Fatalf("Received health update = %v, want = %v", scs.ConnectivityState, connectivity.Ready)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for health update")
+	}
+}
+
+// Test calls RegisterHealthListener on a SubConn twice while handling the
+// connectivity update. The test verifies that only the latest listener
+// receives the health update.
+func (s) TestSubConn_RegisterHealthListener_RegisterTwice(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	scChan := make(chan balancer.SubConn, 1)
+	readyUpdateResumeCh := make(chan struct{})
+	readyUpdateReceivedCh := make(chan struct{})
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := bd.ClientConn
+			ccw := &subConnStoringCCWrapper{
+				ClientConn: cc,
+				scChan:     scChan,
+				stateListener: func(scs balancer.SubConnState) {
+					if scs.ConnectivityState != connectivity.Ready {
+						return
+					}
+					close(readyUpdateReceivedCh)
+					select {
+					case <-readyUpdateResumeCh:
+					case <-ctx.Done():
+						t.Error("Context timed out waiting for update on ready channel")
+					}
+				},
+			}
+			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+
+	cc.Connect()
+
+	var sc balancer.SubConn
+	select {
+	case sc = <-scChan:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for SubConn creation")
+	}
+
+	// Wait for the SubConn to enter READY.
+	select {
+	case <-readyUpdateReceivedCh:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for SubConn to enter READY")
+	}
+
+	healthChan1 := make(chan balancer.SubConnState, 1)
+	healthChan2 := make(chan balancer.SubConnState, 1)
+
+	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+		healthChan1 <- scs
+	})
+	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+		healthChan2 <- scs
+	})
+	close(readyUpdateResumeCh)
+
+	select {
+	case scs := <-healthChan2:
+		if scs.ConnectivityState != connectivity.Ready {
+			t.Fatalf("Received health update = %v, want = %v", scs.ConnectivityState, connectivity.Ready)
+		}
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for health update")
+	}
+
+	// No updates should be received on the first listener.
+	select {
+	case scs := <-healthChan1:
+		t.Fatalf("Received unexpected health update on first listener: %v", scs)
+	case <-time.After(defaultTestShortTimeout):
+	}
+}
+
+// Test calls RegisterHealthListener on a SubConn with a nil listener and
+// verifies that the listener registered before the nil listener doesn't receive
+// any further updates.
+func (s) TestSubConn_RegisterHealthListener_NilListener(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	scChan := make(chan balancer.SubConn, 1)
+	readyUpdateResumeCh := make(chan struct{})
+	readyUpdateReceivedCh := make(chan struct{})
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			cc := bd.ClientConn
+			ccw := &subConnStoringCCWrapper{
+				ClientConn: cc,
+				scChan:     scChan,
+				stateListener: func(scs balancer.SubConnState) {
+					if scs.ConnectivityState != connectivity.Ready {
+						return
+					}
+					close(readyUpdateReceivedCh)
+					select {
+					case <-readyUpdateResumeCh:
+					case <-ctx.Done():
+						t.Error("Context timed out waiting for update on ready channel")
+					}
+				},
+			}
+			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+
+	cc.Connect()
+
+	var sc balancer.SubConn
+	select {
+	case sc = <-scChan:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for SubConn creation")
+	}
+
+	// Wait for the SubConn to enter READY.
+	select {
+	case <-readyUpdateReceivedCh:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for SubConn to enter READY")
+	}
+
+	healthChan := make(chan balancer.SubConnState, 1)
+
+	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
+		healthChan <- scs
+	})
+
+	// Registering a nil listener should invalidate the previously registered
+	// listener.
+	sc.RegisterHealthListener(nil)
+	close(readyUpdateResumeCh)
+
+	// No updates should be received on the listener.
+	select {
+	case scs := <-healthChan:
+		t.Fatalf("Received unexpected health update on the listener: %v", scs)
+	case <-time.After(defaultTestShortTimeout):
+	}
+}

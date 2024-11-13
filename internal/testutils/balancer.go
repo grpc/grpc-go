@@ -93,6 +93,9 @@ func (tsc *TestSubConn) String() string {
 	return tsc.id
 }
 
+// RegisterHealthListener is a no-op.
+func (*TestSubConn) RegisterHealthListener(func(balancer.SubConnState)) {}
+
 // BalancerClientConn is a mock balancer.ClientConn used in tests.
 type BalancerClientConn struct {
 	logger Logger

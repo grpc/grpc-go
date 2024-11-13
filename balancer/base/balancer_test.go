@@ -55,6 +55,9 @@ func (sc *testSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Pr
 	return nil, nil
 }
 
+// RegisterHealthListener is a no-op.
+func (*testSubConn) RegisterHealthListener(func(balancer.SubConnState)) {}
+
 // testPickBuilder creates balancer.Picker for test.
 type testPickBuilder struct {
 	validate func(info PickerBuildInfo)

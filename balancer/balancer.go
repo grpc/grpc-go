@@ -155,6 +155,14 @@ type SubConn interface {
 	// indicate the shutdown operation.  This may be delivered before
 	// in-progress RPCs are complete and the actual connection is closed.
 	Shutdown()
+	// RegisterHealthListener registers a health listener that receives health
+	// updates for a Ready SubConn. Only one health listener can be registered
+	// at a time. A health listener should be registered each time the SubConn's
+	// connectivity state changes to READY. Registering a health listener when
+	// the connectivity state is not READY may result in undefined behaviour.
+	// This method must not be called synchronously while handling an update
+	// from a previously registered health listener.
+	RegisterHealthListener(func(SubConnState))
 	// enforceEmbedding is an unexported method to force implementers embed
 	// this interface, allowing gRPC to add methods without breaking users.
 	enforceEmbedding()
