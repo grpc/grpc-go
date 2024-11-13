@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
@@ -65,27 +66,6 @@ const (
 	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
-
-type testService struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
-func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return &testpb.Empty{}, nil
-}
-
-func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{}, nil
-}
-
-func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
-	for {
-		_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
-		if err == io.EOF {
-			return nil
-		}
-	}
-}
 
 func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 	host, p, err := net.SplitHostPort(lis.Addr().String())
@@ -145,17 +125,29 @@ func (s) TestServingModeChanges(t *testing.T) {
 		}
 	})
 
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -271,17 +263,29 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 		}
 	})
 
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv() // hangs here forever if stream doesn't shut down...doesn't receive EOF without any errors
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
