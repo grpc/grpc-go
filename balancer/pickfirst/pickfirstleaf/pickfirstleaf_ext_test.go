@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1166,6 +1167,171 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
 		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// Test verifies that pickfirst balancer transitions to READY when the health
+// listener is enabled.
+func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(pickfirstleaf.EnableHealthListener(ccs))
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, resolver.Address{Addr: backend.Address}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Test mocks the updates sent to the health listener and verifies that the
+// balancer correctly reports the health state once the SubConn's connectivity
+// state becomes READY.
+func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
+	// Wrap the clientconn to intercept NewSubConn.
+	// Capture the health list by wrapping the SC.
+	// Wrap the picker to unwrap the SC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	healthListenerCh := make(chan func(balancer.SubConnState))
+
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccw := &healthListenerCapturingCCWrapper{
+				ClientConn:       bd.ClientConn,
+				healthListenerCh: healthListenerCh,
+			}
+			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(pickfirstleaf.EnableHealthListener(ccs))
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+	cc.Connect()
+
+	var healthListener func(balancer.SubConnState)
+	select {
+	case healthListener = <-healthListenerCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for health listener to be registered.")
+	}
+
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Connecting)
+
+	// The LB policy should update the channel state based on the health state.
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   fmt.Errorf("test health check failure"),
+	})
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.Connecting,
+		ConnectionError:   balancer.ErrNoSubConnAvailable,
+	})
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.Ready,
+	})
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, resolver.Address{Addr: backend.Address}); err != nil {
+		t.Fatal(err)
+	}
+
+	// When the health check fails, the channel should transition to TF.
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   fmt.Errorf("test health check failure"),
+	})
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+}
+
+// healthListenerCapturingCCWrapper is used to capture the health listener so
+// that health updates can be mocked for testing.
+type healthListenerCapturingCCWrapper struct {
+	balancer.ClientConn
+	healthListenerCh chan func(balancer.SubConnState)
+}
+
+func (ccw *healthListenerCapturingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	sc, err := ccw.ClientConn.NewSubConn(addrs, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &healthListenerCapturingSCWrapper{
+		SubConn:    sc,
+		listenerCh: ccw.healthListenerCh,
+	}, nil
+}
+
+func (ccw *healthListenerCapturingCCWrapper) UpdateState(state balancer.State) {
+	state.Picker = &unwrappingPicker{state.Picker}
+	ccw.ClientConn.UpdateState(state)
+}
+
+type healthListenerCapturingSCWrapper struct {
+	balancer.SubConn
+	listenerCh chan func(balancer.SubConnState)
+}
+
+func (scw *healthListenerCapturingSCWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
+	scw.listenerCh <- listener
+}
+
+// unwrappingPicker unwraps SubConns because the channel expects SubConns to be
+// addrConns.
+type unwrappingPicker struct {
+	balancer.Picker
+}
+
+func (pw *unwrappingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	pr, err := pw.Picker.Pick(info)
+	if pr.SubConn != nil {
+		pr.SubConn = pr.SubConn.(*healthListenerCapturingSCWrapper).SubConn
+	}
+	return pr, err
 }
 
 // subConnAddresses makes the pickfirst balancer create the requested number of
