@@ -63,6 +63,8 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 // Metric returns the most recent data for a metric, and whether this recorder
 // has received data for a metric.
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	data, ok := r.data[estats.Metric(name)]
 	return data, ok
 }
