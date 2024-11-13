@@ -113,9 +113,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32) {
 	}
 
 	stubserver.StartTestService(t, stub)
-	t.Cleanup(func() {
-		stub.S.Stop()
-	})
+	t.Cleanup(stub.S.Stop)
 	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port)
 }
 
@@ -541,7 +539,6 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	fs, nodeID, port := clientSetup(t)
-
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: "myservice",
 		NodeID:     nodeID,
