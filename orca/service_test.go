@@ -68,7 +68,6 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-
 			newRequests := requests.Add(1)
 
 			smr.SetNamedUtilization(requestsMetricKey, float64(newRequests)*0.01)
