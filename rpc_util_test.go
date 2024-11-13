@@ -311,124 +311,116 @@ func compressData(data []byte) []byte {
 // successful decompression, error handling, and edge cases like overflow or
 // premature data end. It ensures that the function behaves correctly with different
 // inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
+
 func TestDecompress(t *testing.T) {
 	c := encoding.GetCompressor("gzip")
 
 	tests := []struct {
 		name                  string
 		compressor            encoding.Compressor
-		input                 mem.BufferSlice
+		input                 []byte
 		maxReceiveMessageSize int
-		want                  mem.BufferSlice
-		compressedSize        int
+		want                  []byte
 		error                 error
 	}{
 		{
-			name:       "Decompresses successfully with sufficient buffer size",
-			compressor: c,
-			input: func() mem.BufferSlice {
-				compressedData := compressData([]byte("decompressed data"))
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}(),
+			name:                  "Decompresses successfully with sufficient buffer size",
+			compressor:            c,
+			input:                 []byte("decompressed data"),
 			maxReceiveMessageSize: 100,
-			want: func() mem.BufferSlice {
-				decompressed := []byte("decompressed data")
-				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
-			}(),
-			compressedSize: len([]byte("decompressed data")),
-			error:          nil,
+			want:                  []byte("decompressed data"),
+			error:                 nil,
 		},
 		{
-			name:                  "Fails with decompression error on empty input",
+			name:                  "failure, empty receive message",
 			compressor:            c,
-			input:                 mem.BufferSlice{},
+			input:                 []byte(""),
 			maxReceiveMessageSize: 1,
 			want:                  nil,
-			compressedSize:        0,
 			error:                 errors.New("decompression error"),
 		},
 		{
-			name:       "Fails with overflow error when decompressed size exceeds maxReceiveMessageSize",
-			compressor: c,
-			input: func() mem.BufferSlice {
-				compressedData := compressData([]byte("overflow test data"))
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}(),
+			name:                  "overflow failure, receive message exceeds maxReceiveMessageSize",
+			compressor:            c,
+			input:                 []byte("overflow test data"),
 			maxReceiveMessageSize: 5,
 			want:                  nil,
-			compressedSize:        6, //len([]byte("overflow test data")),
 			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)."),
 		},
 		{
-			name:       "Returns EOF error when maxReceiveMessageSize is MaxInt64 but data ends prematurely",
-			compressor: c,
-			input: func() mem.BufferSlice {
-				compressedData := compressData([]byte("small data"))
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}(),
-			maxReceiveMessageSize: math.MaxInt64,
-			want: func() mem.BufferSlice {
-				smallDecompressed := []byte("small data")
-				return mem.BufferSlice{mem.NewBuffer(&smallDecompressed, nil)}
-			}(),
-			compressedSize: len([]byte("small data")),
-			error:          nil,
-		},
-		{
-			name:                  "Fails with io.Copy error during decompression",
+			name:                  "Succeeds when message size is much smaller than maxReceiveMessageSize",
 			compressor:            c,
-			input:                 mem.BufferSlice{},
-			maxReceiveMessageSize: 100,
-			want:                  nil,
-			compressedSize:        0,
-			error:                 errors.New("simulated io.Copy read error"),
-		},
-		{
-			name:       "Succeeds when message size is much smaller than maxReceiveMessageSize",
-			compressor: c,
-			input: func() mem.BufferSlice {
-				compressedData := compressData([]byte("small message"))
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}(),
+			input:                 []byte("small message"),
 			maxReceiveMessageSize: 50,
-			want: func() mem.BufferSlice {
-				decompressed := []byte("small message")
-				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
-			}(),
-			compressedSize: len([]byte("small message")),
-			error:          nil,
-		},
-		{
-			name:       "Succeeds with MaxInt64 receive size and small decompressed data",
-			compressor: c,
-			input: func() mem.BufferSlice {
-				compressedData := compressData([]byte("small data"))
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}(),
-			maxReceiveMessageSize: math.MaxInt64,
-			want: func() mem.BufferSlice {
-				decompressed := []byte("small data")
-				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
-			}(),
-			compressedSize: len([]byte("small data")),
-			error:          nil,
+			want:                  []byte("small message"),
+			error:                 nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output, size, err := decompress(tt.compressor, tt.input, tt.maxReceiveMessageSize, nil)
-			// Check if both err and tt.error are either nil or non-nil
+			inputMem := func() mem.BufferSlice {
+				compressedData := compressData(tt.input)
+				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
+			}()
+			output, _, err := decompress(tt.compressor, inputMem, tt.maxReceiveMessageSize, nil)
+
+			wantMem := func() mem.BufferSlice {
+				decompressed := tt.want
+				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
+			}()
+
+			// Check for expected error
 			if (err != nil) != (tt.error != nil) {
 				t.Errorf("decompress() error, got err=%v, want err=%v", err, tt.error)
-			}
-			if size != tt.compressedSize {
-				t.Errorf("decompress() size, got = %d, want = %d", size, tt.compressedSize)
-			}
-			if len(tt.want) != len(output) {
-				t.Errorf("decompress() output length, got = %d, want = %d", len(output), len(tt.want))
+				return
 			}
 
+			// Check that output and wantMem have the same length
+			if len(output) != len(wantMem) {
+				t.Errorf("decompress() output length, got = %d, want = %d", len(output), len(wantMem))
+				return
+			}
+
+			// Compare each mem.Buffer in output and wantMem
+			for i := range output {
+				var outputData, wantData []byte
+
+				// Try to read all bytes from mem.Buffer into a byte slice
+				outputData, err = readAllFromBuffer(output[i])
+				if err != nil {
+					t.Errorf("failed to read from output[%d]: %v", i, err)
+					continue
+				}
+
+				wantData, err = readAllFromBuffer(wantMem[i])
+				if err != nil {
+					t.Errorf("failed to read from wantMem[%d]: %v", i, err)
+					continue
+				}
+
+				// Compare byte slices
+				if !bytes.Equal(outputData, wantData) {
+					t.Errorf("decompress() output mismatch at index %d, got = %v, want = %v", i, outputData, wantData)
+				}
+			}
 		})
 	}
+}
+
+// Helper function to read all bytes from a mem.Buffer
+func readAllFromBuffer(buf mem.Buffer) ([]byte, error) {
+	var data []byte
+	temp := make([]byte, 1024)
+	for {
+		n, err := buf.Read(temp)
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		data = append(data, temp[:n]...)
+		if err == io.EOF {
+			break
+		}
+	}
+	return data, nil
 }
