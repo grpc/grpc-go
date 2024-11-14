@@ -20,38 +20,13 @@ package transport
 
 import (
 	"context"
-	"errors"
 	"time"
-
-	"golang.org/x/net/http2"
-	"google.golang.org/grpc/status"
 )
 
-var ErrGrpcTimeout = errors.New("grpc-timeout")
-var ErrRequestDone = errors.New("request is done processing")
-var ErrServerTransportClosed = errors.New("server transport closed")
-var ErrUnreachable = errors.New("unreachable")
-
-type RstCodeError struct {
-	RstCode http2.ErrCode
-}
-
-func (e RstCodeError) Error() string {
-	return e.RstCode.String()
-}
-
-type StatusError struct {
-	Status *status.Status
-}
-
-func (e StatusError) Error() string {
-	return e.Status.String()
-}
-
-func createContext(ctx context.Context, timeoutSet bool, timeout time.Duration) (context.Context, context.CancelCauseFunc) {
-	var timoutCancel context.CancelFunc = nil
+func createContextWithTimeout(ctx context.Context, timeoutSet bool, timeout time.Duration) (context.Context, context.CancelCauseFunc) {
+	var timoutCancel context.CancelFunc
 	if timeoutSet {
-		ctx, timoutCancel = context.WithTimeoutCause(ctx, timeout, ErrGrpcTimeout)
+		ctx, timoutCancel = context.WithTimeout(ctx, timeout)
 	}
 	ctx, cancel := context.WithCancelCause(ctx)
 	if timoutCancel != nil {

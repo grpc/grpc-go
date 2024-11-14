@@ -530,7 +530,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
 	}
-	s.ctx, s.cancel = createContext(ctx, timeoutSet, timeout)
+	s.ctx, s.cancel = createContextWithTimeout(ctx, timeoutSet, timeout)
 
 	// Attach the received metadata to the context.
 	if len(mdata) > 0 {
@@ -545,19 +545,18 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	t.mu.Lock()
 	if t.state != reachable {
 		t.mu.Unlock()
-		s.cancel(ErrUnreachable)
+		s.cancel(nil)
 		return nil
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
-		rstCode := http2.ErrCodeRefusedStream
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
-			rstCode:  rstCode,
+			rstCode:  http2.ErrCodeRefusedStream,
 			onWrite:  func() {},
 		})
-		s.cancel(RstCodeError{rstCode})
+		s.cancel(nil)
 		return nil
 	}
 	if httpMethod != http.MethodPost {
@@ -566,15 +565,14 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		if t.logger.V(logLevel) {
 			t.logger.Infof("Aborting the stream early: %v", errMsg)
 		}
-		status := status.New(codes.Internal, errMsg)
 		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     405,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
-			status:         status,
+			status:         status.New(codes.Internal, errMsg),
 			rst:            !frame.StreamEnded(),
 		})
-		s.cancel(StatusError{status})
+		s.cancel(nil)
 		return nil
 	}
 	if t.inTapHandle != nil {
@@ -832,7 +830,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 func (t *http2Server) handleRSTStream(f *http2.RSTStreamFrame) {
 	// If the stream is not deleted from the transport's active streams map, then do a regular close stream.
 	if s, ok := t.getStream(f); ok {
-		t.closeStream(s, false, 0, false)
+		t.closeStream(s, false, http2.ErrCodeNo, false)
 		return
 	}
 	// If the stream is already deleted from the active streams map, then put a cleanupStream item into controlbuf to delete the stream from loopy writer's established streams map.
@@ -1271,7 +1269,7 @@ func (t *http2Server) Close(err error) {
 	channelz.RemoveEntry(t.channelz.ID)
 	// Cancel all active streams.
 	for _, s := range streams {
-		s.cancel(ErrServerTransportClosed)
+		s.cancel(nil)
 	}
 }
 
@@ -1301,7 +1299,7 @@ func (t *http2Server) finishStream(s *ServerStream, rst bool, rstCode http2.ErrC
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
-	s.cancel(RstCodeError{rstCode})
+	s.cancel(nil)
 
 	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
@@ -1325,7 +1323,7 @@ func (t *http2Server) closeStream(s *ServerStream, rst bool, rstCode http2.ErrCo
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
-	s.cancel(RstCodeError{rstCode})
+	s.cancel(HTTP2CodeError{rstCode})
 
 	s.swapState(streamDone)
 	t.deleteStream(s, eosReceived)
@@ -1472,4 +1470,15 @@ func GetConnection(ctx context.Context) net.Conn {
 // allows any unary or streaming interceptors to see the connection.
 func SetConnection(ctx context.Context, conn net.Conn) context.Context {
 	return context.WithValue(ctx, connectionKey{}, conn)
+}
+
+// HTTP2CodeError represents an error with an HTTP/2 error code.
+type HTTP2CodeError struct {
+	// Code is the HTTP/2 error code associated with the error.
+	Code http2.ErrCode
+}
+
+// Error returns the string representation of the HTTP/2 error code.
+func (e HTTP2CodeError) Error() string {
+	return e.Code.String()
 }

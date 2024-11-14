@@ -20,12 +20,15 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
 )
 
-func Test_createContext(t *testing.T) {
+var errRequestDone = errors.New("request is done processing")
+
+func Test_createContextWithTimeout(t *testing.T) {
 	tests := []struct {
 		name  string
 		f     func() context.Context
@@ -34,30 +37,30 @@ func Test_createContext(t *testing.T) {
 	}{
 		{"cause when cancelled",
 			func() context.Context {
-				ctx, cancel := createContext(context.Background(), false, 0)
-				cancel(ErrRequestDone)
+				ctx, cancel := createContextWithTimeout(context.Background(), false, 0)
+				cancel(errRequestDone)
 				return ctx
 			},
 			context.Canceled,
-			ErrRequestDone,
+			errRequestDone,
 		},
 		{"cause when cancelled after deadline exceeded",
 			func() context.Context {
-				ctx, cancel := createContext(context.Background(), true, 0)
-				cancel(ErrRequestDone)
+				ctx, cancel := createContextWithTimeout(context.Background(), true, 0)
+				cancel(errRequestDone)
 				return ctx
 			},
 			context.DeadlineExceeded,
-			ErrGrpcTimeout,
+			context.DeadlineExceeded,
 		},
 		{"cause when cancelled before deadline exceeded",
 			func() context.Context {
-				ctx, cancel := createContext(context.Background(), true, 1*time.Second)
-				cancel(ErrRequestDone)
+				ctx, cancel := createContextWithTimeout(context.Background(), true, 1*time.Second)
+				cancel(errRequestDone)
 				return ctx
 			},
 			context.Canceled,
-			ErrRequestDone,
+			errRequestDone,
 		},
 	}
 	for _, tt := range tests {
