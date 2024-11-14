@@ -667,6 +667,13 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 	return cluster
 }
 
+// LocalityID represents a locality identifier.
+type LocalityID struct {
+	Region  string
+	Zone    string
+	SubZone string
+}
+
 // LocalityOptions contains options to configure a Locality.
 type LocalityOptions struct {
 	// Name is the unique locality name.
@@ -677,6 +684,9 @@ type LocalityOptions struct {
 	Backends []BackendOptions
 	// Priority is the priority of the locality. Defaults to 0.
 	Priority uint32
+	// Locality is the locality identifier. If not specified, a random
+	// identifier is generated.
+	Locality LocalityID
 }
 
 // BackendOptions contains options to configure individual backends in a
@@ -752,12 +762,16 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 			})
 		}
 
-		endpoints = append(endpoints, &v3endpointpb.LocalityLbEndpoints{
-			Locality: &v3corepb.Locality{
+		l := locality.Locality
+		if l == (LocalityID{}) {
+			l = LocalityID{
 				Region:  fmt.Sprintf("region-%d", i+1),
 				Zone:    fmt.Sprintf("zone-%d", i+1),
 				SubZone: fmt.Sprintf("subzone-%d", i+1),
-			},
+			}
+		}
+		endpoints = append(endpoints, &v3endpointpb.LocalityLbEndpoints{
+			Locality:            &v3corepb.Locality{Region: l.Region, Zone: l.Zone, SubZone: l.SubZone},
 			LbEndpoints:         lbEndpoints,
 			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: locality.Weight},
 			Priority:            locality.Priority,
