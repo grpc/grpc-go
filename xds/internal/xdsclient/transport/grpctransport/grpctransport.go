@@ -48,7 +48,7 @@ type Builder struct{}
 // Build creates a new gRPC-based transport to an xDS server using the provided
 // options. This involves creating a grpc.ClientConn to the server identified by
 // the server URI in the provided options.
-func (b *Builder) Build(opts transport.BuildOptions) (transport.Interface, error) {
+func (b *Builder) Build(opts transport.BuildOptions) (transport.Transport, error) {
 	if opts.ServerConfig == nil {
 		return nil, fmt.Errorf("ServerConfig field in opts cannot be nil")
 	}

@@ -148,7 +148,7 @@ func verifyUpdateAndMetadata(ctx context.Context, t *testing.T, eh *testEventHan
 // serverConfig, bootstrapConfig, or resourceTypeGetter) are missing or nil.
 func (s) TestChannel_New_FailureCases(t *testing.T) {
 	type fakeTransport struct {
-		transport.Interface
+		transport.Transport
 	}
 
 	tests := []struct {
