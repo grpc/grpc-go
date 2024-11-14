@@ -260,46 +260,65 @@ func (s *ConnEnd) IsClient() bool { return s.Client }
 
 func (s *ConnEnd) isConnStats() {}
 
-type incomingTagsKey struct{}
-type outgoingTagsKey struct{}
-
 // SetTags attaches stats tagging data to the context, which will be sent in
 // the outgoing RPC with the header grpc-tags-bin.  Subsequent calls to
 // SetTags will overwrite the values from earlier calls.
 //
-// NOTE: this is provided only for backward compatibility with existing clients
-// and will likely be removed in an upcoming release.  New uses should transmit
-// this type of data using metadata with a different, non-reserved (i.e. does
-// not begin with "grpc-") header name.
+// Deprecated: set the `grpc-tags-bin` header in the metadata instead.
 func SetTags(ctx context.Context, b []byte) context.Context {
-	return context.WithValue(ctx, outgoingTagsKey{}, b)
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.MD{}
+	}
+	md.Set("grpc-tags-bin", string(b))
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // Tags returns the tags from the context for the inbound RPC.
 //
-// NOTE: this is provided only for backward compatibility with existing clients
-// and will likely be removed in an upcoming release.  New uses should transmit
-// this type of data using metadata with a different, non-reserved (i.e. does
-// not begin with "grpc-") header name.
+// Deprecated: obtain the `grpc-tags-bin` header from metadata instead.
 func Tags(ctx context.Context) []byte {
-	b, _ := ctx.Value(incomingTagsKey{}).([]byte)
-	return b
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil
+	}
+	traceValues := md.Get("grpc-tags-bin")
+	if len(traceValues) == 0 {
+		return nil
+	}
+	return []byte(traceValues[len(traceValues)-1])
 }
 
 // SetIncomingTags attaches stats tagging data to the context, to be read by
 // the application (not sent in outgoing RPCs).
 //
 // This is intended for gRPC-internal use ONLY.
+//
+// Deprecated: set the `grpc-tags-bin` header in the metadata instead.
 func SetIncomingTags(ctx context.Context, b []byte) context.Context {
-	return context.WithValue(ctx, incomingTagsKey{}, b)
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.MD{}
+	}
+	md.Set("grpc-tags-bin", string(b))
+	return metadata.NewIncomingContext(ctx, md)
 }
 
 // OutgoingTags returns the tags from the context for the outbound RPC.
 //
 // This is intended for gRPC-internal use ONLY.
+//
+// Deprecated: obtain the `grpc-tags-bin` header from metadata instead.
 func OutgoingTags(ctx context.Context) []byte {
-	b, _ := ctx.Value(outgoingTagsKey{}).([]byte)
-	return b
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return nil
+	}
+	tagValues := md.Get("grpc-tags-bin")
+	if len(tagValues) == 0 {
+		return nil
+	}
+	return []byte(tagValues[len(tagValues)-1])
 }
 
 // SetTrace attaches stats tagging data to the context, which will be sent in
@@ -312,7 +331,7 @@ func SetTrace(ctx context.Context, b []byte) context.Context {
 	if !ok {
 		md = metadata.MD{}
 	}
-	md["grpc-trace-bin"] = []string{string(b)}
+	md.Set("grpc-trace-bin", string(b))
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
@@ -324,7 +343,6 @@ func Trace(ctx context.Context) []byte {
 	if !ok {
 		return nil
 	}
-
 	traceValues := md.Get("grpc-trace-bin")
 	if len(traceValues) == 0 {
 		return nil
@@ -335,24 +353,27 @@ func Trace(ctx context.Context) []byte {
 // SetIncomingTrace attaches stats tagging data to the context's metadata
 // as `grpc-trace-bin` header, to be read by the application (not sent in
 // outgoing RPCs).  It is intended for gRPC-internal use.
+//
+// Deprecated: set the `grpc-trace-bin` header in the metadata instead.
 func SetIncomingTrace(ctx context.Context, b []byte) context.Context {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		md = metadata.MD{}
 	}
-	md["grpc-trace-bin"] = []string{string(b)}
+	md.Set("grpc-trace-bin", string(b))
 	return metadata.NewIncomingContext(ctx, md)
 }
 
 // OutgoingTrace returns the trace from the `grpc-trace-bin` header of the
 // context's metadata for the outbound RPC.  It is intended for gRPC-internal
 // use.
+//
+// Deprecated: obtain the `grpc-trace-bin` header from metadata instead.
 func OutgoingTrace(ctx context.Context) []byte {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		return nil
 	}
-
 	traceValues := md.Get("grpc-trace-bin")
 	if len(traceValues) == 0 {
 		return nil

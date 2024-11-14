@@ -599,10 +599,10 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	for k, v := range callAuthData {
 		headerFields = append(headerFields, hpack.HeaderField{Name: k, Value: encodeMetadataHeader(k, v)})
 	}
-	if b := stats.OutgoingTags(ctx); b != nil {
+	if b := outgoingTags(ctx); b != nil {
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-tags-bin", Value: encodeBinHeader(b)})
 	}
-	if b := stats.OutgoingTrace(ctx); b != nil {
+	if b := outgoingTrace(ctx); b != nil {
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
 	}
 
@@ -1840,4 +1840,28 @@ func (t *http2Client) stateForTesting() transportState {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.state
+}
+
+func outgoingTrace(ctx context.Context) []byte {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return nil
+	}
+	traceValues := md.Get("grpc-trace-bin")
+	if len(traceValues) == 0 {
+		return nil
+	}
+	return []byte(traceValues[len(traceValues)-1])
+}
+
+func outgoingTags(ctx context.Context) []byte {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return nil
+	}
+	tagValues := md.Get("grpc-tags-bin")
+	if len(tagValues) == 0 {
+		return nil
+	}
+	return []byte(tagValues[len(tagValues)-1])
 }
