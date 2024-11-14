@@ -107,6 +107,7 @@ type clusterImplBalancer struct {
 	mu                    sync.Mutex
 	clusterName           string                            // The cluster name for credentials handshaking.
 	inhibitPickerUpdates  bool                              // Inhibits state updates from child policy when processing an update from the parent.
+	pendingPickerUpdates  bool                              // True if a picker update from the child policy was inhibited when processing an update from the parent.
 	childState            balancer.State                    // Most recent state update from the child policy.
 	drops                 []*dropper                        // Drops implementation.
 	requestCounterCluster string                            // The cluster name for the request counter, from LB config.
@@ -293,7 +294,15 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 
 	b.mu.Lock()
 	b.telemetryLabels = newConfig.TelemetryLabels
-	if b.handleDropAndRequestCountLocked(newConfig) && b.childState.Picker != nil {
+	// We want to send a picker update to the parent if one of the two
+	// conditions are met:
+	// - drop/request config has changed *and* there is already a picker from
+	//   the child, or
+	// - there is a pending picker update from the child (and this covers the
+	//   case where the drop/request config has not changed, but the child sent
+	//   a picker update while we were still processing config from our parent).
+	if (b.handleDropAndRequestCountLocked(newConfig) && b.childState.Picker != nil) || b.pendingPickerUpdates {
+		b.pendingPickerUpdates = false
 		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
 			Picker:            b.newPickerLocked(),
@@ -356,6 +365,10 @@ func (b *clusterImplBalancer) UpdateState(state balancer.State) {
 	// parent. Update the childState field regardless.
 	b.childState = state
 	if b.inhibitPickerUpdates {
+		b.pendingPickerUpdates = true
+		if b.logger.V(2) {
+			b.logger.Infof("Received a picker update from the child when processing an update from the parent")
+		}
 		return
 	}
 
