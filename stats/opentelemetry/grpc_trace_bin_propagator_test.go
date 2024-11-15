@@ -71,7 +71,7 @@ func (s) TestInject(t *testing.T) {
 			p.Inject(ctx, c)
 
 			md, _ := metadata.FromOutgoingContext(c.Context())
-			gotH := md.Get(GRPCTraceBinHeaderKey)
+			gotH := md.Get(gRPCTraceBinHeaderKey)
 			if !test.wantSC.IsValid() {
 				if len(gotH) > 0 {
 					t.Fatalf("got non-empty value from CustomCarrier's context metadata grpc-trace-bin header, want empty")
@@ -122,7 +122,7 @@ func (s) TestExtract(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{GRPCTraceBinHeaderKey: []string{string(bd)}}))
+			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{gRPCTraceBinHeaderKey: []string{string(bd)}}))
 
 			tCtx := p.Extract(ctx, c)
 			got := oteltrace.SpanContextFromContext(tCtx)

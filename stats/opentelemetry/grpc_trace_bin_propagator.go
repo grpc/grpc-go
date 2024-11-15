@@ -25,9 +25,9 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
-// GRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
+// gRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
 // to propagate trace context in binary format.
-const GRPCTraceBinHeaderKey = "grpc-trace-bin"
+const gRPCTraceBinHeaderKey = "grpc-trace-bin"
 
 // GRPCTraceBinPropagator is an OpenTelemetry TextMapPropagator which is used
 // to extract and inject trace context data from and into headers exchanged by
@@ -47,7 +47,7 @@ func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagatio
 	}
 
 	bd := binary(sc.SpanContext())
-	carrier.Set(GRPCTraceBinHeaderKey, string(bd))
+	carrier.Set(gRPCTraceBinHeaderKey, string(bd))
 }
 
 // Extract reads OpenTelemetry span context from the `grpc-trace-bin` header of
@@ -59,7 +59,7 @@ func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagatio
 //
 // If `grpc-trace-bin` header is not present, it returns the context as is.
 func (GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
-	h := carrier.Get(GRPCTraceBinHeaderKey)
+	h := carrier.Get(gRPCTraceBinHeaderKey)
 	if h == "" {
 		return ctx
 	}
@@ -77,7 +77,7 @@ func (GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagati
 // `grpc-trace-bin` key because it only sets the `grpc-trace-bin` header for
 // propagating trace context.
 func (GRPCTraceBinPropagator) Fields() []string {
-	return []string{GRPCTraceBinHeaderKey}
+	return []string{gRPCTraceBinHeaderKey}
 }
 
 // Binary returns the binary format representation of a SpanContext.
