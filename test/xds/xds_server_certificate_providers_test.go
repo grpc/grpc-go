@@ -104,7 +104,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 // instance name specified in the Listener resource will not be present in the
 // bootstrap file. The test verifies that server creation does not fail and that
 // the xDS-enabled gRPC server does not enter "serving" mode.
-func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *testing.T) {
+func TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -164,6 +164,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
+
 	stub := &stubserver.StubServer{
 		Listener: lis,
 	}
