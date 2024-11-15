@@ -47,12 +47,7 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS))
 
 	tcBin := propagation.Binary(span.SpanContext())
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		md = metadata.MD{}
-	}
-	md["grpc-trace-bin"] = []string{string(tcBin)}
-	return metadata.NewOutgoingContext(ctx, md), &traceInfo{
+	return metadata.AppendToOutgoingContext(ctx, "grpc-trace-bin", string(tcBin)), &traceInfo{
 		span:         span,
 		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
 		countRecvMsg: 0,
@@ -66,10 +61,8 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	mn := strings.ReplaceAll(removeLeadingSlash(rti.FullMethodName), "/", ".")
 
 	var tcBin []byte
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if tcValues := md.Get("grpc-trace-bin"); len(tcValues) > 0 {
-			tcBin = []byte(tcValues[len(tcValues)-1])
-		}
+	if tcValues := metadata.ValueFromIncomingContext(ctx, "grpc-trace-bin"); len(tcValues) > 0 {
+		tcBin = []byte(tcValues[len(tcValues)-1])
 	}
 
 	var span *trace.Span

@@ -41,6 +41,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc"
@@ -4622,20 +4623,10 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 	const mdTagsKey = "grpc-tags-bin"
 
 	setTrace := func(ctx context.Context, b []byte) context.Context {
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			md = metadata.MD{}
-		}
-		md.Set(mdTraceKey, string(b))
-		return metadata.NewOutgoingContext(ctx, md)
+		return metadata.AppendToOutgoingContext(ctx, mdTraceKey, string(b))
 	}
 	setTags := func(ctx context.Context, b []byte) context.Context {
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			md = metadata.MD{}
-		}
-		md.Set(mdTagsKey, string(b))
-		return metadata.NewOutgoingContext(ctx, md)
+		return metadata.AppendToOutgoingContext(ctx, mdTagsKey, string(b))
 	}
 
 	// Data added to context by client (typically in a stats handler).
@@ -4647,10 +4638,10 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 	endpoint := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
-			if !reflect.DeepEqual(md[mdTagsKey], []string{string(tags)}) {
+			if md[mdTagsKey] == nil || !cmp.Equal(md[mdTagsKey][len(md[mdTagsKey])-1], string(tags)) {
 				return nil, status.Errorf(codes.Internal, "md['grpc-tags-bin']=%v; want %v", md[mdTagsKey], tags)
 			}
-			if !reflect.DeepEqual(md[mdTraceKey], []string{string(trace)}) {
+			if md[mdTraceKey] == nil || !cmp.Equal(md[mdTraceKey][len(md[mdTraceKey])-1], string(trace)) {
 				return nil, status.Errorf(codes.Internal, "md['grpc-trace-bin']=%v; want %v", md[mdTraceKey], trace)
 			}
 			return &testpb.Empty{}, nil

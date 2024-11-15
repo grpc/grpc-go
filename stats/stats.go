@@ -266,23 +266,14 @@ func (s *ConnEnd) isConnStats() {}
 //
 // Deprecated: set the `grpc-tags-bin` header in the metadata instead.
 func SetTags(ctx context.Context, b []byte) context.Context {
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		md = metadata.MD{}
-	}
-	md.Set("grpc-tags-bin", string(b))
-	return metadata.NewOutgoingContext(ctx, md)
+	return metadata.AppendToOutgoingContext(ctx, "grpc-tags-bin", string(b))
 }
 
 // Tags returns the tags from the context for the inbound RPC.
 //
 // Deprecated: obtain the `grpc-tags-bin` header from metadata instead.
 func Tags(ctx context.Context) []byte {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil
-	}
-	traceValues := md.Get("grpc-tags-bin")
+	traceValues := metadata.ValueFromIncomingContext(ctx, "grpc-tags-bin")
 	if len(traceValues) == 0 {
 		return nil
 	}
@@ -327,23 +318,14 @@ func OutgoingTags(ctx context.Context) []byte {
 //
 // Deprecated: set the `grpc-trace-bin` header in the metadata instead.
 func SetTrace(ctx context.Context, b []byte) context.Context {
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		md = metadata.MD{}
-	}
-	md.Set("grpc-trace-bin", string(b))
-	return metadata.NewOutgoingContext(ctx, md)
+	return metadata.AppendToOutgoingContext(ctx, "grpc-trace-bin", string(b))
 }
 
 // Trace returns the trace from the context for the inbound RPC.
 //
 // Deprecated: obtain the `grpc-trace-bin` header from metadata instead.
 func Trace(ctx context.Context) []byte {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil
-	}
-	traceValues := md.Get("grpc-trace-bin")
+	traceValues := metadata.ValueFromIncomingContext(ctx, "grpc-trace-bin")
 	if len(traceValues) == 0 {
 		return nil
 	}

@@ -87,12 +87,7 @@ func (csh *clientStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 
 	// Populate gRPC Metadata with OpenCensus tag map if set by application.
 	if tm := tag.FromContext(ctx); tm != nil {
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			md = metadata.MD{}
-		}
-		md["grpc-tags-bin"] = []string{string(tag.Encode(tm))}
-		ctx = metadata.NewOutgoingContext(ctx, md)
+		ctx = metadata.AppendToOutgoingContext(ctx, "grpc-tags-bin", string(tag.Encode(tm)))
 	}
 	return ctx, mi
 }
@@ -108,12 +103,10 @@ func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 		method:    info.FullMethodName,
 	}
 
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		if tgValues := md.Get("grpc-tags-bin"); len(tgValues) > 0 {
-			tagsBin := []byte(tgValues[len(tgValues)-1])
-			if tags, err := tag.Decode(tagsBin); err == nil {
-				ctx = tag.NewContext(ctx, tags)
-			}
+	if tgValues := metadata.ValueFromIncomingContext(ctx, "grpc-tags-bin"); len(tgValues) > 0 {
+		tagsBin := []byte(tgValues[len(tgValues)-1])
+		if tags, err := tag.Decode(tagsBin); err == nil {
+			ctx = tag.NewContext(ctx, tags)
 		}
 	}
 
