@@ -71,7 +71,7 @@ func (s) TestInject(t *testing.T) {
 			p.Inject(ctx, c)
 
 			md, _ := metadata.FromOutgoingContext(c.Context())
-			gotH := md.Get(gRPCTraceBinHeaderKey)
+			gotH := md.Get(grpcTraceBinHeaderKey)
 			if !test.wantSC.IsValid() {
 				if len(gotH) > 0 {
 					t.Fatalf("got non-empty value from CustomCarrier's context metadata grpc-trace-bin header, want empty")
@@ -118,11 +118,11 @@ func (s) TestExtract(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			p := GRPCTraceBinPropagator{}
-			bd := binary(test.wantSC)
+			bd := toBinary(test.wantSC)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{gRPCTraceBinHeaderKey: []string{string(bd)}}))
+			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{grpcTraceBinHeaderKey: []string{string(bd)}}))
 
 			tCtx := p.Extract(ctx, c)
 			got := oteltrace.SpanContextFromContext(tCtx)
@@ -145,7 +145,7 @@ func (s) TestBinary(t *testing.T) {
 		{
 			name: "valid context",
 			sc:   validSpanContext,
-			want: binary(validSpanContext),
+			want: toBinary(validSpanContext),
 		},
 		{
 			name: "zero value context",
@@ -156,7 +156,7 @@ func (s) TestBinary(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := binary(test.sc); !cmp.Equal(got, test.want) {
+			if got := toBinary(test.sc); !cmp.Equal(got, test.want) {
 				t.Fatalf("binary() = %v, want %v", got, test.want)
 			}
 		})

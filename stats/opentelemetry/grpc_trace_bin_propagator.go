@@ -27,7 +27,7 @@ import (
 
 // gRPCTraceBinHeaderKey is the gRPC metadata header key `grpc-trace-bin` used
 // to propagate trace context in binary format.
-const gRPCTraceBinHeaderKey = "grpc-trace-bin"
+const grpcTraceBinHeaderKey = "grpc-trace-bin"
 
 // GRPCTraceBinPropagator is an OpenTelemetry TextMapPropagator which is used
 // to extract and inject trace context data from and into headers exchanged by
@@ -46,8 +46,8 @@ func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagatio
 		return
 	}
 
-	bd := binary(sc.SpanContext())
-	carrier.Set(gRPCTraceBinHeaderKey, string(bd))
+	bd := toBinary(sc.SpanContext())
+	carrier.Set(grpcTraceBinHeaderKey, string(bd))
 }
 
 // Extract reads OpenTelemetry span context from the `grpc-trace-bin` header of
@@ -59,7 +59,7 @@ func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagatio
 //
 // If `grpc-trace-bin` header is not present, it returns the context as is.
 func (GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagation.TextMapCarrier) context.Context {
-	h := carrier.Get(gRPCTraceBinHeaderKey)
+	h := carrier.Get(grpcTraceBinHeaderKey)
 	if h == "" {
 		return ctx
 	}
@@ -77,13 +77,13 @@ func (GRPCTraceBinPropagator) Extract(ctx context.Context, carrier otelpropagati
 // `grpc-trace-bin` key because it only sets the `grpc-trace-bin` header for
 // propagating trace context.
 func (GRPCTraceBinPropagator) Fields() []string {
-	return []string{gRPCTraceBinHeaderKey}
+	return []string{grpcTraceBinHeaderKey}
 }
 
-// Binary returns the binary format representation of a SpanContext.
+// toBinary returns the binary format representation of a SpanContext.
 //
 // If sc is the zero value, returns nil.
-func binary(sc oteltrace.SpanContext) []byte {
+func toBinary(sc oteltrace.SpanContext) []byte {
 	if sc.Equal(oteltrace.SpanContext{}) {
 		return nil
 	}
@@ -98,7 +98,7 @@ func binary(sc oteltrace.SpanContext) []byte {
 	return b[:]
 }
 
-// FromBinary returns the SpanContext represented by b with Remote set to true.
+// fromBinary returns the SpanContext represented by b with Remote set to true.
 //
 // It returns with zero value SpanContext and false, if any of the
 // below condition is not satisfied:
