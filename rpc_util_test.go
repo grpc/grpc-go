@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
@@ -334,7 +335,7 @@ func TestDecompress(t *testing.T) {
 		{
 			name:                  "failure, empty receive message",
 			compressor:            c,
-			input:                 []byte(""),
+			input:                 nil,
 			maxReceiveMessageSize: 1,
 			want:                  nil,
 			error:                 errors.New("decompression error"),
@@ -363,64 +364,29 @@ func TestDecompress(t *testing.T) {
 				compressedData := compressData(tt.input)
 				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 			}()
-			output, _, err := decompress(tt.compressor, inputMem, tt.maxReceiveMessageSize, nil)
+			output, size, err := decompress(tt.compressor, inputMem, tt.maxReceiveMessageSize, nil)
 
 			wantMem := func() mem.BufferSlice {
 				decompressed := tt.want
 				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
 			}()
-
+			if size != wantMem.Len() {
+				t.Fatalf("decompress() size, got = %d, want = %d", size, wantMem.Len())
+			}
 			// Check for expected error
 			if (err != nil) != (tt.error != nil) {
-				t.Errorf("decompress() error, got err=%v, want err=%v", err, tt.error)
-				return
+				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
+
 			}
 
 			// Check that output and wantMem have the same length
 			if len(output) != len(wantMem) {
-				t.Errorf("decompress() output length, got = %d, want = %d", len(output), len(wantMem))
-				return
+				t.Fatalf("decompress() output length, got = %d, want = %d", len(output), len(wantMem))
+
 			}
-
-			// Compare each mem.Buffer in output and wantMem
-			for i := range output {
-				var outputData, wantData []byte
-
-				// Try to read all bytes from mem.Buffer into a byte slice
-				outputData, err = readAllFromBuffer(output[i])
-				if err != nil {
-					t.Errorf("failed to read from output[%d]: %v", i, err)
-					continue
-				}
-
-				wantData, err = readAllFromBuffer(wantMem[i])
-				if err != nil {
-					t.Errorf("failed to read from wantMem[%d]: %v", i, err)
-					continue
-				}
-
-				// Compare byte slices
-				if !bytes.Equal(outputData, wantData) {
-					t.Errorf("decompress() output mismatch at index %d, got = %v, want = %v", i, outputData, wantData)
-				}
+			if diff := cmp.Diff(wantMem, output); diff != "" {
+				t.Fatalf("MakeGatewayInfo() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
-}
-
-// Helper function to read all bytes from a mem.Buffer
-func readAllFromBuffer(buf mem.Buffer) ([]byte, error) {
-	var data []byte
-	temp := make([]byte, 1024)
-	for {
-		n, err := buf.Read(temp)
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-		data = append(data, temp[:n]...)
-		if err == io.EOF {
-			break
-		}
-	}
-	return data, nil
 }
