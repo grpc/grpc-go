@@ -67,7 +67,7 @@ func (s) TestInject(t *testing.T) {
 			defer cancel()
 			ctx = oteltrace.ContextWithSpanContext(ctx, test.injectSC)
 
-			c := itracing.NewCustomCarrier(ctx)
+			c := itracing.NewCustomCarrier(ctx, itracing.Outgoing)
 			p.Inject(ctx, c)
 
 			md, _ := metadata.FromOutgoingContext(c.Context())
@@ -122,7 +122,7 @@ func (s) TestExtract(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{grpcTraceBinHeaderKey: []string{string(bd)}}))
+			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{grpcTraceBinHeaderKey: []string{string(bd)}}), itracing.Incoming)
 
 			tCtx := p.Extract(ctx, c)
 			got := oteltrace.SpanContextFromContext(tCtx)
@@ -133,10 +133,10 @@ func (s) TestExtract(t *testing.T) {
 	}
 }
 
-// TestBinary verifies that the binary() function correctly serializes a valid
+// TestBinary verifies that the toBinary() function correctly serializes a valid
 // OpenTelemetry span context into its binary format representation. If span
 // context is invalid, it verifies that serialization is nil.
-func (s) TestBinary(t *testing.T) {
+func (s) TestToBinary(t *testing.T) {
 	tests := []struct {
 		name string
 		sc   oteltrace.SpanContext

@@ -108,7 +108,7 @@ func (s) TestGet(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md))
+			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md), Incoming)
 			got := c.Get(test.key)
 			if got != test.want {
 				t.Fatalf("c.Get() = %s, want %s", got, test.want)
@@ -179,7 +179,7 @@ func (s) TestSet(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, test.initialMD))
+			c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, test.initialMD), Outgoing)
 			c.Set(test.setKey, test.setValue)
 			gotKeys := c.Keys()
 			equalKeys := cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b }))
@@ -188,6 +188,49 @@ func (s) TestSet(t *testing.T) {
 			}
 			if md, ok := metadata.FromOutgoingContext(c.Context()); ok && md.Get(test.setKey)[len(md.Get(test.setKey))-1] != test.wantValue {
 				t.Fatalf("got value %s, want %s, for key %s", md.Get(test.setKey)[len(md.Get(test.setKey))-1], test.wantValue, test.setKey)
+			}
+		})
+	}
+}
+
+func TestKeys(t *testing.T) {
+	tests := []struct {
+		name      string
+		direction PropagationDirection
+		md        metadata.MD
+		want      []string
+	}{
+		{
+			name:      "invalid direction",
+			direction: 100, // invalid direction
+			md:        metadata.Pairs("key1", "val1"),
+			want:      nil,
+		},
+		{
+			name:      "outgoing ignores incoming",
+			direction: Outgoing,
+			md:        metadata.MD{"incoming-key": []string{"incoming-value"}, "outgoing-key": []string{"outgoing-value"}},
+			want:      []string{"outgoing-key"},
+		},
+		{
+			name:      "incoming ignores outgoing",
+			direction: Incoming,
+			md:        metadata.MD{"incoming-key": []string{"incoming-value"}, "outgoing-key": []string{"outgoing-value"}},
+			want:      []string{"incoming-key"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctx = metadata.NewIncomingContext(ctx, metadata.MD{"incoming-key": test.md["incoming-key"]})
+			ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"outgoing-key": test.md["outgoing-key"]})
+
+			c := NewCustomCarrier(ctx, test.direction)
+			got := c.Keys()
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("Keys() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

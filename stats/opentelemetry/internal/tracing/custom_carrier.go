@@ -26,16 +26,28 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// PropagationDirection specifies whether the propagation is incoming or
+// outgoing.
+type PropagationDirection int
+
+const (
+	Incoming PropagationDirection = iota // Incoming propagation direction
+	Outgoing                             // Outgoing propagation direction
+)
+
 // CustomCarrier is a TextMapCarrier that uses `context.Context` to store and
-// retrieve any propagated key-value pairs in text format.
+// retrieve any propagated key-value pairs in text format. The propagation
+// direction (incoming or outgoing) determines which keys should the `Keys()`
+// method returns.
 type CustomCarrier struct {
-	ctx context.Context
+	ctx       context.Context
+	direction PropagationDirection
 }
 
 // NewCustomCarrier creates a new CustomCarrier with
-// the given context.
-func NewCustomCarrier(ctx context.Context) *CustomCarrier {
-	return &CustomCarrier{ctx: ctx}
+// the given context and propagation direction.
+func NewCustomCarrier(ctx context.Context, direction PropagationDirection) *CustomCarrier {
+	return &CustomCarrier{ctx: ctx, direction: direction}
 }
 
 // Get returns the string value associated with the passed key from the
@@ -61,22 +73,27 @@ func (c *CustomCarrier) Set(key, value string) {
 }
 
 // Keys returns the keys stored in the carrier's context metadata. It returns
-// keys from both outgoing and incoming context metadata.
+// keys from outgoing context metadata if propagation direction is outgoing,
+// otherwise it returns keys from incoming context metadata.
 func (c *CustomCarrier) Keys() []string {
-	var keys []string
-	md, ok := metadata.FromOutgoingContext(c.ctx)
-	if ok {
-		keys = make([]string, 0, len(md))
-		for key := range md {
-			keys = append(keys, key)
-		}
+	var md metadata.MD
+	var ok bool
+
+	switch c.direction {
+	case Outgoing:
+		md, ok = metadata.FromOutgoingContext(c.ctx)
+	case Incoming:
+		md, ok = metadata.FromIncomingContext(c.ctx)
+	default:
+		return nil
 	}
-	md, ok = metadata.FromIncomingContext(c.ctx)
-	if ok {
-		keys = make([]string, 0, len(md))
-		for key := range md {
-			keys = append(keys, key)
-		}
+
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(md))
+	for key := range md {
+		keys = append(keys, key)
 	}
 	return keys
 }
