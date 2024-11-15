@@ -26,27 +26,28 @@ import (
 
 // A SubConn represents a single connection to a gRPC backend service.
 //
-// Each SubConn contains a list of addresses.
+// All SubConns start in IDLE, and will not try to connect. To trigger a
+// connection attempt, Balancers must call Connect.
 //
-// All SubConns start in IDLE, and will not try to connect. To trigger the
-// connecting, Balancers must call Connect.  If a connection re-enters IDLE,
-// Balancers must call Connect again to trigger a new connection attempt.
+// If the connection attempt fails, the SubConn will transition to
+// TRANSIENT_FAILURE for a backoff period, and then return to IDLE.  If the
+// connection attempt succeeds, it will transition to READY.
 //
-// gRPC will try to connect to the addresses in sequence, and stop trying the
-// remainder once the first connection is successful. If an attempt to connect
-// to all addresses encounters an error, the SubConn will enter
-// TRANSIENT_FAILURE for a backoff period, and then transition to IDLE.
+// If a READY SubConn becomes disconnected, the SubConn will transition to IDLE.
 //
-// Once established, if a connection is lost, the SubConn will transition
-// directly to IDLE.
+// If a connection re-enters IDLE, Balancers must call Connect again to trigger
+// a new connection attempt.
 //
-// NOTICE: This interface is intended to be implemented by gRPC. Users should
-// not need their own complete implementation of this interface -- they should
-// always delegate to a SubConn returned by ClientConn.NewSubConn() by embedding
-// it in their implementations. For situations like testing, which do not have a
-// delegate SubConn, implementations should embed a NopSubConn. A nil value of
-// this interface should never be embedded, as it could lead to nil panics. This
-// allows gRPC to add new methods to this interface.
+// Each SubConn contains a list of addresses.  gRPC will try to connect to the
+// addresses in sequence, and stop trying the remainder once the first
+// connection is successful.  However, this behavior is deprecated.  SubConns
+// should only use a single address.
+//
+// NOTICE: This interface is intended to be implemented by gRPC, or intercepted
+// by custom load balancing poilices.  Users should not need their own complete
+// implementation of this interface -- they should always delegate to a SubConn
+// returned by ClientConn.NewSubConn() by embedding it in their implementations.
+// An embedded SubConn must never be nil, or runtime panics will occur.
 type SubConn interface {
 	// UpdateAddresses updates the addresses used in this SubConn.
 	// gRPC checks if currently-connected address is still in the new list.
@@ -84,9 +85,9 @@ type SubConn interface {
 	// This method must not be called synchronously while handling an update
 	// from a previously registered health listener.
 	RegisterHealthListener(func(SubConnState))
-	// EnforceSubConnEmbedding is included to force implementers embed another
-	// implementation of this interface, allowing gRPC to add methods without
-	// breaking users.  This interface should never be embedded directly.
+	// EnforceSubConnEmbedding is included to force implementers to embed
+	// another implementation of this interface, allowing gRPC to add methods
+	// without breaking users.
 	internal.EnforceSubConnEmbedding
 }
 
@@ -131,22 +132,3 @@ func setConnectedAddress(scs *SubConnState, addr resolver.Address) {
 // other methods to provide additional functionality, e.g. configuration or
 // subscription registration.
 type Producer any
-
-// A NopSubConn is an implementation of a SubConn that does nothing.  It is
-// intended to be used in tests that do not have a SubConn to delegate unknown
-// operations to.  Any required SubConn functionality must be overridden
-// manually.
-type NopSubConn struct {
-	internal.EnforceSubConnEmbedding
-}
-
-// Asserts that NopSubConn implements all of SubConn.
-var _ SubConn = (*NopSubConn)(nil)
-
-func (NopSubConn) UpdateAddresses([]resolver.Address) {}
-func (NopSubConn) Connect()                           {}
-func (NopSubConn) GetOrBuildProducer(ProducerBuilder) (p Producer, close func()) {
-	return nil, nil
-}
-func (NopSubConn) Shutdown()                                 {}
-func (NopSubConn) RegisterHealthListener(func(SubConnState)) {}
