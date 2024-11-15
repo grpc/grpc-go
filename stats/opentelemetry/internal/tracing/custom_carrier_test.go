@@ -19,6 +19,7 @@
 package tracing
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,77 +37,95 @@ func Test(t *testing.T) {
 }
 
 // TestGet verifies that `CustomCarrier.Get()` returns correct value for the
-// corresponding key in the carrier's metadata, if key is present. If key is not
-// present, it verifies that empty string is returned.
+// corresponding key in the carrier's context metadata, if key is present. If
+// key is not present, it verifies that empty string is returned.
+//
+// If multiple values are present for a key, it verifies that last value is
+// returned.
 //
 // If key ends with `-bin`, it verifies that a correct binary value is returned
 // in the string format for the binary header.
 func (s) TestGet(t *testing.T) {
 	tests := []struct {
-		name string
-		md   metadata.MD
-		key  string
-		want string
+		name     string
+		md       metadata.MD
+		key      string
+		want     string
+		wantKeys []string
 	}{
 		{
-			name: "existing key",
-			md:   metadata.Pairs("key1", "value1"),
-			key:  "key1",
-			want: "value1",
+			name:     "existing key",
+			md:       metadata.Pairs("key1", "value1"),
+			key:      "key1",
+			want:     "value1",
+			wantKeys: []string{"key1"},
 		},
 		{
-			name: "non-existing key",
-			md:   metadata.Pairs("key1", "value1"),
-			key:  "key2",
-			want: "",
+			name:     "non-existing key",
+			md:       metadata.Pairs("key1", "value1"),
+			key:      "key2",
+			want:     "",
+			wantKeys: []string{"key1"},
 		},
 		{
-			name: "empty key",
-			md:   metadata.MD{},
-			key:  "key1",
-			want: "",
+			name:     "empty key",
+			md:       metadata.MD{},
+			key:      "key1",
+			want:     "",
+			wantKeys: []string{},
 		},
 		{
-			name: "more than one key/value pair",
-			md:   metadata.MD{"key1": []string{"value1"}, "key2": []string{"value2"}},
-			key:  "key2",
-			want: "value2",
+			name:     "more than one key/value pair",
+			md:       metadata.MD{"key1": []string{"value1"}, "key2": []string{"value2"}},
+			key:      "key2",
+			want:     "value2",
+			wantKeys: []string{"key1", "key2"},
 		},
 		{
-			name: "more than one value for a key",
-			md:   metadata.MD{"key1": []string{"value1", "value2"}},
-			key:  "key1",
-			want: "value1",
+			name:     "more than one value for a key",
+			md:       metadata.MD{"key1": []string{"value1", "value2"}},
+			key:      "key1",
+			want:     "value2",
+			wantKeys: []string{"key1"},
 		},
 		{
-			name: "grpc-trace-bin key",
-			md:   metadata.Pairs("grpc-trace-bin", string([]byte{0x01, 0x02, 0x03})),
-			key:  "grpc-trace-bin",
-			want: string([]byte{0x01, 0x02, 0x03}),
+			name:     "grpc-trace-bin key",
+			md:       metadata.Pairs("grpc-trace-bin", string([]byte{0x01, 0x02, 0x03})),
+			key:      "grpc-trace-bin",
+			want:     string([]byte{0x01, 0x02, 0x03}),
+			wantKeys: []string{"grpc-trace-bin"},
 		},
 		{
-			name: "grpc-trace-bin key with another string key",
-			md:   metadata.MD{"key1": []string{"value1"}, "grpc-trace-bin": []string{string([]byte{0x01, 0x02, 0x03})}},
-			key:  "grpc-trace-bin",
-			want: string([]byte{0x01, 0x02, 0x03}),
+			name:     "grpc-trace-bin key with another string key",
+			md:       metadata.MD{"key1": []string{"value1"}, "grpc-trace-bin": []string{string([]byte{0x01, 0x02, 0x03})}},
+			key:      "grpc-trace-bin",
+			want:     string([]byte{0x01, 0x02, 0x03}),
+			wantKeys: []string{"key1", "grpc-trace-bin"},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := NewCustomCarrier(&test.md)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md))
 			got := c.Get(test.key)
 			if got != test.want {
-				t.Fatalf("Get() = %s, want %s", got, test.want)
+				t.Fatalf("c.Get() = %s, want %s", got, test.want)
+			}
+			gotKeys := c.Keys()
+			equalKeys := cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b }))
+			if !equalKeys {
+				t.Fatalf("c.Keys() = keys %v, want %v", gotKeys, test.wantKeys)
 			}
 		})
 	}
 }
 
-// TestSet verifies that a key-value pair is set in carrier's metadata using
-// `CustomCarrier.Set()`. If key is not present, it verifies that key-value
-// pair is insterted. If key is already present, it verifies that value is
-// overwritten.
+// TestSet verifies that a key-value pair is set in carrier's context metadata
+// using `CustomCarrier.Set()`. If key is not present, it verifies that
+// key-value pair is insterted. If key is already present, it verifies that new
+// value is appended at the end of list for the existing key.
 //
 // If key ends with `-bin`, it verifies that a binary value is set for
 // `-bin` header in string format.
@@ -131,7 +150,7 @@ func (s) TestSet(t *testing.T) {
 			wantKeys:  []string{"key1"},
 		},
 		{
-			name:      "override existing key",
+			name:      "add to existing key",
 			initialMD: metadata.MD{"key1": []string{"oldvalue"}},
 			setKey:    "key1",
 			setValue:  "newvalue",
@@ -158,16 +177,17 @@ func (s) TestSet(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := NewCustomCarrier(&test.initialMD)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, test.initialMD))
 			c.Set(test.setKey, test.setValue)
 			gotKeys := c.Keys()
 			equalKeys := cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b }))
 			if !equalKeys {
 				t.Fatalf("c.Keys() = keys %v, want %v", gotKeys, test.wantKeys)
 			}
-			got := c.Get(test.setKey)
-			if got != test.setValue {
-				t.Fatalf("got value %s, want %s, for key %s", got, test.setValue, test.setKey)
+			if md, ok := metadata.FromOutgoingContext(c.Context()); ok && md.Get(test.setKey)[len(md.Get(test.setKey))-1] != test.wantValue {
+				t.Fatalf("got value %s, want %s, for key %s", md.Get(test.setKey)[len(md.Get(test.setKey))-1], test.wantValue, test.setKey)
 			}
 		})
 	}

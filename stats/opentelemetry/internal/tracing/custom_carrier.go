@@ -21,51 +21,67 @@
 package tracing
 
 import (
+	"context"
+
 	"google.golang.org/grpc/metadata"
 )
 
-// CustomCarrier is a TextMapCarrier that uses `*metadata.MD` to store and
+// CustomCarrier is a TextMapCarrier that uses `context.Context` to store and
 // retrieve any propagated key-value pairs in text format.
 type CustomCarrier struct {
-	md *metadata.MD
+	ctx context.Context
 }
 
 // NewCustomCarrier creates a new CustomCarrier with
-// the given metadata.
-func NewCustomCarrier(md *metadata.MD) *CustomCarrier {
-	return &CustomCarrier{md: md}
+// the given context.
+func NewCustomCarrier(ctx context.Context) *CustomCarrier {
+	return &CustomCarrier{ctx: ctx}
 }
 
 // Get returns the string value associated with the passed key from the
-// carrier's metadata.
+// carrier's context metadata.
 //
 // It returns an empty string if the key is not present in the carrier's
-// metadata or if the value associated with the key is empty.
+// context or if the value associated with the key is empty.
+//
+// If multiple values are present for a key, it returns the last one.
 func (c *CustomCarrier) Get(key string) string {
-	values := c.md.Get(key)
+	values := metadata.ValueFromIncomingContext(c.ctx, key)
 	if len(values) == 0 {
 		return ""
 	}
-	return values[0]
+	return values[len(values)-1]
 }
 
-// Set stores the key-value pair in the carrier's metadata.
+// Set stores the key-value pair in the carrier's context metadata.
 //
-// If the key already exists, its value is overwritten.
+// If the key already exists, given value is appended to the last.
 func (c *CustomCarrier) Set(key, value string) {
-	c.md.Set(key, value)
+	c.ctx = metadata.AppendToOutgoingContext(c.ctx, key, value)
 }
 
-// Keys returns the keys stored in the carrier's metadata.
+// Keys returns the keys stored in the carrier's context metadata. It returns
+// keys from both outgoing and incoming context metadata.
 func (c *CustomCarrier) Keys() []string {
-	keys := make([]string, 0, len(*c.md))
-	for key := range *c.md {
-		keys = append(keys, key)
+	var keys []string
+	md, ok := metadata.FromOutgoingContext(c.ctx)
+	if ok {
+		keys = make([]string, 0, len(md))
+		for key := range md {
+			keys = append(keys, key)
+		}
+	}
+	md, ok = metadata.FromIncomingContext(c.ctx)
+	if ok {
+		keys = make([]string, 0, len(md))
+		for key := range md {
+			keys = append(keys, key)
+		}
 	}
 	return keys
 }
 
-// Metadata returns the underlying metadata associated with the CustomCarrier.
-func (c *CustomCarrier) Metadata() *metadata.MD {
-	return c.md
+// Context returns the underlying context associated with the CustomCarrier.
+func (c *CustomCarrier) Context() context.Context {
+	return c.ctx
 }
