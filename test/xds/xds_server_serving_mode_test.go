@@ -169,7 +169,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 // TestServerSideXDS_ServingModeChanges tests the serving mode functionality in
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
-func TestServerSideXDS_ServingModeChanges(t *testing.T) {
+func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	managementServer, nodeID, bootstrapContents, _ := setup.ManagementServerAndResolver(t)
 
 	// Configure xDS credentials to be used on the server-side.

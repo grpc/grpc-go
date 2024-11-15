@@ -263,15 +263,15 @@ func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDel
 	var serverCfgs json.RawMessage
 	if ignoreResourceDeletion {
 		serverCfgs = []byte(fmt.Sprintf(`[{
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}],
-			 "server_features": ["ignore_resource_deletion"]
-		 }]`, serverURI))
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}],
+			"server_features": ["ignore_resource_deletion"]
+		}]`, serverURI))
 	} else {
 		serverCfgs = []byte(fmt.Sprintf(`[{
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, serverURI))
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, serverURI))
 
 	}
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
