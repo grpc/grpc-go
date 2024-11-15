@@ -87,7 +87,7 @@ func overrideNewCredsFuncs() func() {
 		return testALTS
 	}
 	origNewADC := newADC
-	newADC = func(ctx context.Context) (credentials.PerRPCCredentials, error) {
+	newADC = func(context.Context) (credentials.PerRPCCredentials, error) {
 		// We do not use perRPC creds in this test. It is safe to return nil here.
 		return nil, nil
 	}
