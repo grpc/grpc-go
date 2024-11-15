@@ -48,7 +48,10 @@ type DefaultCredentialsOptions struct {
 func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credentials.Bundle {
 	if opts.PerRPCCreds == nil {
 		var err error
-		opts.PerRPCCreds, err = newADC()
+		// If the ADC ends up being Compute Engine Credentials, this context
+		// won't be used. Otherwise, the context dictates all the subsequent
+		// token requests via HTTP. So we cannot have any deadline or timeout.
+		opts.PerRPCCreds, err = newADC(context.TODO())
 		if err != nil {
 			logger.Warningf("NewDefaultCredentialsWithOptions: failed to create application oauth: %v", err)
 		}
@@ -116,11 +119,8 @@ var (
 	newALTS = func() credentials.TransportCredentials {
 		return alts.NewClientCreds(alts.DefaultClientOptions())
 	}
-	newADC = func() (credentials.PerRPCCredentials, error) {
-		// If the ADC ends up being Compute Engine Credentials, this context
-		// won't be used. Otherwise, the context dictates all the subsequent
-		// token requests via HTTP. So we cannot have any deadline or timeout.
-		return oauth.NewApplicationDefault(context.Background())
+	newADC = func(ctx context.Context) (credentials.PerRPCCredentials, error) {
+		return oauth.NewApplicationDefault(ctx)
 	}
 )
 
