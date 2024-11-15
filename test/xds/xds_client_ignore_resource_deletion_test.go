@@ -263,15 +263,15 @@ func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDel
 	var serverCfgs json.RawMessage
 	if ignoreResourceDeletion {
 		serverCfgs = []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}],
-			"server_features": ["ignore_resource_deletion"]
-		}]`, serverURI))
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}],
+			 "server_features": ["ignore_resource_deletion"]
+		 }]`, serverURI))
 	} else {
 		serverCfgs = []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, serverURI))
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, serverURI))
 
 	}
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
@@ -310,6 +310,7 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 		updateCh <- args.Mode
 	})
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -317,21 +318,14 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	var err error
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	t.Cleanup(server.Stop)
+	t.Cleanup(stub.S.Stop)
 
-	stub.S = server
 	stubserver.StartTestService(t, stub)
-
-	// Serve.
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
 
 	return updateCh
 }

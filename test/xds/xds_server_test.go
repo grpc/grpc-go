@@ -95,24 +95,19 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	})
 
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
+	defer stub.S.Stop()
 
-	stub.S = server
 	stubserver.StartTestService(t, stub)
 
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
 	select {
 	case <-ctx.Done():
 		t.Fatal("timeout waiting for the xDS Server to go Serving")
@@ -211,24 +206,18 @@ func (s) TestRDSNack(t *testing.T) {
 	})
 
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
+	defer stub.S.Stop()
 
-	stub.S = server
 	stubserver.StartTestService(t, stub)
-
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -278,6 +267,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 	}
 
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -291,20 +281,13 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 		},
 	}
 
-	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	defer server.Stop()
+	defer stub.S.Stop()
 
-	stub.S = server
 	stubserver.StartTestService(t, stub)
-
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

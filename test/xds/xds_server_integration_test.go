@@ -111,12 +111,11 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		},
 	}
 
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
+	sopts := []grpc.ServerOption{grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 
-	stub.S = server
 	stubserver.StartTestService(t, stub)
 
 	// Create a local listener and pass it to Serve().
@@ -131,7 +130,7 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 	}
 
 	go func() {
-		if err := server.Serve(readyLis); err != nil {
+		if err := stub.S.Serve(readyLis); err != nil {
 			t.Errorf("Serve() failed: %v", err)
 		}
 	}()
@@ -144,7 +143,7 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 	}
 
 	return lis, func() {
-		server.Stop()
+		stub.S.Stop()
 	}
 }
 

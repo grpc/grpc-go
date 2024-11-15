@@ -158,27 +158,20 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 			close(servingModeCh)
 		}
 	})
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-	defer server.Stop()
 
-	stub := &stubserver.StubServer{}
-	stub.S = server
-	stubserver.StartTestService(t, stub)
-
-	// Create a local listener and pass it to Serve().
+	// Create a local listener and assign it to the stub server.
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
-
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stub := &stubserver.StubServer{
+		Listener: lis,
+	}
+	sopts := []grpc.ServerOption{grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs)}
+	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server:%v", err)
+	}
+	stubserver.StartTestService(t, stub)
 
 	// Create an inbound xDS listener resource for the server side that contains
 	// mTLS security configuration. Since the received certificate provider
@@ -234,7 +227,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 //
 // The test verifies that an RPC to the first listener succeeds, while the
 // second listener never moves to "serving" mode and RPCs to it fail.
-func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T) {
+func TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -288,30 +281,10 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		}
 	})
 
-	stub := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-	defer server.Stop()
-
-	stub.S = server
-	stubserver.StartTestService(t, stub)
-
-	go func() {
-		if err := server.Serve(lis1); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-	go func() {
-		if err := server.Serve(lis2); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stub1 := createStubServer(t, lis1, creds, modeChangeOpt, bootstrapContents)
+	defer stub1.S.Stop()
+	stub2 := createStubServer(t, lis2, creds, modeChangeOpt, bootstrapContents)
+	defer stub2.S.Stop()
 
 	// Create inbound xDS listener resources for the server side that contains
 	// mTLS security configuration.
