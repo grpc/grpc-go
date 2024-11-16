@@ -280,38 +280,6 @@ func Tags(ctx context.Context) []byte {
 	return []byte(traceValues[len(traceValues)-1])
 }
 
-// SetIncomingTags attaches stats tagging data to the context, to be read by
-// the application (not sent in outgoing RPCs).
-//
-// This is intended for gRPC-internal use ONLY.
-//
-// Deprecated: set the `grpc-tags-bin` header in the metadata instead.
-func SetIncomingTags(ctx context.Context, b []byte) context.Context {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.MD{}
-	}
-	md.Set("grpc-tags-bin", string(b))
-	return metadata.NewIncomingContext(ctx, md)
-}
-
-// OutgoingTags returns the tags from the context for the outbound RPC.
-//
-// This is intended for gRPC-internal use ONLY.
-//
-// Deprecated: obtain the `grpc-tags-bin` header from metadata instead.
-func OutgoingTags(ctx context.Context) []byte {
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		return nil
-	}
-	tagValues := md.Get("grpc-tags-bin")
-	if len(tagValues) == 0 {
-		return nil
-	}
-	return []byte(tagValues[len(tagValues)-1])
-}
-
 // SetTrace attaches stats tagging data to the context, which will be sent in
 // the outgoing RPC with the header grpc-trace-bin.  Subsequent calls to
 // SetTrace will overwrite the values from earlier calls.
@@ -326,37 +294,6 @@ func SetTrace(ctx context.Context, b []byte) context.Context {
 // Deprecated: obtain the `grpc-trace-bin` header from metadata instead.
 func Trace(ctx context.Context) []byte {
 	traceValues := metadata.ValueFromIncomingContext(ctx, "grpc-trace-bin")
-	if len(traceValues) == 0 {
-		return nil
-	}
-	return []byte(traceValues[len(traceValues)-1])
-}
-
-// SetIncomingTrace attaches stats tagging data to the context's metadata
-// as `grpc-trace-bin` header, to be read by the application (not sent in
-// outgoing RPCs).  It is intended for gRPC-internal use.
-//
-// Deprecated: set the `grpc-trace-bin` header in the metadata instead.
-func SetIncomingTrace(ctx context.Context, b []byte) context.Context {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.MD{}
-	}
-	md.Set("grpc-trace-bin", string(b))
-	return metadata.NewIncomingContext(ctx, md)
-}
-
-// OutgoingTrace returns the trace from the `grpc-trace-bin` header of the
-// context's metadata for the outbound RPC.  It is intended for gRPC-internal
-// use.
-//
-// Deprecated: obtain the `grpc-trace-bin` header from metadata instead.
-func OutgoingTrace(ctx context.Context) []byte {
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		return nil
-	}
-	traceValues := md.Get("grpc-trace-bin")
 	if len(traceValues) == 0 {
 		return nil
 	}
