@@ -67,23 +67,23 @@ func (s) TestInject(t *testing.T) {
 			defer cancel()
 			ctx = oteltrace.ContextWithSpanContext(ctx, test.injectSC)
 
-			c := itracing.NewCustomCarrier(ctx, itracing.Outgoing)
+			c := itracing.NewIncomingCarrier(ctx)
 			p.Inject(ctx, c)
 
 			md, _ := metadata.FromOutgoingContext(c.Context())
 			gotH := md.Get(grpcTraceBinHeaderKey)
 			if !test.wantSC.IsValid() {
 				if len(gotH) > 0 {
-					t.Fatalf("got non-empty value from CustomCarrier's context metadata grpc-trace-bin header, want empty")
+					t.Fatalf("got non-empty value from Carrier's context metadata grpc-trace-bin header, want empty")
 				}
 				return
 			}
 			if gotH[len(gotH)-1] == "" {
-				t.Fatalf("got empty value from CustomCarrier's context metadata grpc-trace-bin header, want valid span context: %v", test.wantSC)
+				t.Fatalf("got empty value from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", test.wantSC)
 			}
 			gotSC, ok := fromBinary([]byte(gotH[len(gotH)-1]))
 			if !ok {
-				t.Fatalf("got invalid span context from CustomCarrier's context metadata grpc-trace-bin header, want valid span context: %v", test.wantSC)
+				t.Fatalf("got invalid span context from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", test.wantSC)
 			}
 			if test.wantSC.TraceID() != gotSC.TraceID() && test.wantSC.SpanID() != gotSC.SpanID() && test.wantSC.TraceFlags() != gotSC.TraceFlags() {
 				t.Fatalf("got span context = %v, want span contexts %v", gotSC, test.wantSC)
@@ -122,7 +122,7 @@ func (s) TestExtract(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			c := itracing.NewCustomCarrier(metadata.NewIncomingContext(ctx, metadata.MD{grpcTraceBinHeaderKey: []string{string(bd)}}), itracing.Incoming)
+			c := itracing.NewOutgoingCarrier(metadata.NewIncomingContext(ctx, metadata.MD{grpcTraceBinHeaderKey: []string{string(bd)}}))
 
 			tCtx := p.Extract(ctx, c)
 			got := oteltrace.SpanContextFromContext(tCtx)

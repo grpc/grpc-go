@@ -36,7 +36,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestGet verifies that `CustomCarrier.Get()` returns correct value for the
+// TestGet verifies that `Carrier.Get()` returns correct value for the
 // corresponding key in the carrier's context metadata, if key is present. If
 // key is not present, it verifies that empty string is returned.
 //
@@ -108,14 +108,12 @@ func (s) TestGet(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			c := NewCustomCarrier(metadata.NewIncomingContext(ctx, test.md), Incoming)
+			c := NewIncomingCarrier(metadata.NewIncomingContext(ctx, test.md))
 			got := c.Get(test.key)
 			if got != test.want {
 				t.Fatalf("c.Get() = %s, want %s", got, test.want)
 			}
-			gotKeys := c.Keys()
-			equalKeys := cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b }))
-			if !equalKeys {
+			if gotKeys := c.Keys(); !cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				t.Fatalf("c.Keys() = keys %v, want %v", gotKeys, test.wantKeys)
 			}
 		})
@@ -123,7 +121,7 @@ func (s) TestGet(t *testing.T) {
 }
 
 // TestSet verifies that a key-value pair is set in carrier's context metadata
-// using `CustomCarrier.Set()`. If key is not present, it verifies that
+// using `Carrier.Set()`. If key is not present, it verifies that
 // key-value pair is insterted. If key is already present, it verifies that new
 // value is appended at the end of list for the existing key.
 //
@@ -131,7 +129,7 @@ func (s) TestGet(t *testing.T) {
 // `-bin` header in string format.
 //
 // It also verifies that both existing and newly inserted keys are present in
-// the carrier's context using `CustomCarrier.Keys()`.
+// the carrier's context using `Carrier.Keys()`.
 func (s) TestSet(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -179,11 +177,9 @@ func (s) TestSet(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			c := NewCustomCarrier(metadata.NewOutgoingContext(ctx, test.initialMD), Outgoing)
+			c := NewOutgoingCarrier(metadata.NewOutgoingContext(ctx, test.initialMD))
 			c.Set(test.setKey, test.setValue)
-			gotKeys := c.Keys()
-			equalKeys := cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b }))
-			if !equalKeys {
+			if gotKeys := c.Keys(); !cmp.Equal(test.wantKeys, gotKeys, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				t.Fatalf("c.Keys() = keys %v, want %v", gotKeys, test.wantKeys)
 			}
 			if md, ok := metadata.FromOutgoingContext(c.Context()); ok && md.Get(test.setKey)[len(md.Get(test.setKey))-1] != test.wantValue {
@@ -196,16 +192,10 @@ func (s) TestSet(t *testing.T) {
 func TestKeys(t *testing.T) {
 	tests := []struct {
 		name      string
-		direction PropagationDirection
+		direction propagationDirection
 		md        metadata.MD
 		want      []string
 	}{
-		{
-			name:      "invalid direction",
-			direction: 100, // invalid direction
-			md:        metadata.Pairs("key1", "val1"),
-			want:      nil,
-		},
 		{
 			name:      "outgoing ignores incoming",
 			direction: Outgoing,
@@ -226,11 +216,14 @@ func TestKeys(t *testing.T) {
 			defer cancel()
 			ctx = metadata.NewIncomingContext(ctx, metadata.MD{"incoming-key": test.md["incoming-key"]})
 			ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"outgoing-key": test.md["outgoing-key"]})
-
-			c := NewCustomCarrier(ctx, test.direction)
-			got := c.Keys()
-			if diff := cmp.Diff(test.want, got); diff != "" {
-				t.Errorf("Keys() mismatch (-want +got):\n%s", diff)
+			var c *Carrier
+			if test.direction == Incoming {
+				c = NewIncomingCarrier(ctx)
+			} else {
+				c = NewOutgoingCarrier(ctx)
+			}
+			if got := c.Keys(); !cmp.Equal(test.want, got, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
+				t.Fatalf("c.Keys() = %v, want %v", got, test.want)
 			}
 		})
 	}
