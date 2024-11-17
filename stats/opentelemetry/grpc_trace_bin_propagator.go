@@ -16,7 +16,7 @@
  *
  */
 
-package tracing
+package opentelemetry
 
 import (
 	"context"

@@ -130,9 +130,10 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 // function.
 func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
-		target: target,
-		conns:  make(map[*addrConn]struct{}),
-		dopts:  defaultDialOptions(),
+		target:                target,
+		conns:                 make(map[*addrConn]struct{}),
+		dopts:                 defaultDialOptions(),
+		nameResolutionDelayed: false,
 	}
 
 	cc.retryThrottler.Store((*retryThrottler)(nil))
@@ -603,6 +604,9 @@ type ClientConn struct {
 	resolverBuilder     resolver.Builder  // See initParsedTargetAndResolverBuilder().
 	idlenessMgr         *idle.Manager
 	metricsRecorderList *stats.MetricsRecorderList
+
+	// Tracks if there was a delay in name resolution.
+	nameResolutionDelayed bool
 
 	// The following provide their own synchronization, and therefore don't
 	// require cc.mu to be held to access them.

@@ -49,7 +49,6 @@ import (
 )
 
 var metadataFromOutgoingContextRaw = internal.FromOutgoingContextRaw.(func(context.Context) (metadata.MD, [][]string, bool))
-var NameResolutionDelayDuration = time.Nanosecond * 10
 
 // StreamHandler defines the handler called by gRPC server to complete the
 // execution of a streaming RPC.
@@ -211,20 +210,16 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 			}
 		}()
 	}
-	startTime := time.Now()
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
 	if err := cc.waitForResolvedAddrs(ctx); err != nil {
+		cc.nameResolutionDelayed = true
 		return nil, err
-	}
-	var nameResolutionDelayed = false
-	if time.Since(startTime) > NameResolutionDelayDuration {
-		nameResolutionDelayed = true
 	}
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
 	var newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, nameResolutionDelayed, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, cc.nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}

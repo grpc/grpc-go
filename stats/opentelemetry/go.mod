@@ -2,8 +2,6 @@ module google.golang.org/grpc/stats/opentelemetry
 
 go 1.22.7
 
-replace google.golang.org/grpc => ../..
-
 require (
 	github.com/envoyproxy/go-control-plane v0.13.1
 	github.com/google/go-cmp v0.6.0
@@ -37,3 +35,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 )
+
+replace google.golang.org/grpc => ../..

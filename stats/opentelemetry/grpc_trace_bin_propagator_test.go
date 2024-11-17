@@ -16,7 +16,7 @@
  *
  */
 
-package tracing
+package opentelemetry
 
 import (
 	"context"
@@ -25,21 +25,12 @@ import (
 
 	otelpropagation "go.opentelemetry.io/otel/propagation"
 	oteltrace "go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
 // TODO: Move out of internal as part of open telemetry API
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 // TestInject_FastPath verifies that the GRPCTraceBinPropagator correctly
 // injects OpenTelemetry trace context data using the CustomCarrier.
