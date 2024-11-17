@@ -366,8 +366,8 @@ func createStubServer(t *testing.T, lis net.Listener, creds credentials.Transpor
 			return &testpb.Empty{}, nil
 		},
 	}
-	sopts := []grpc.ServerOption{grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
 	var err error
+	sopts := []grpc.ServerOption{grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
