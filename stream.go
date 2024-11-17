@@ -213,13 +213,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
 	if err := cc.waitForResolvedAddrs(ctx); err != nil {
+		cc.nameResolutionDelayed = true
 		return nil, err
 	}
-
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
 	var newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, cc.nameResolutionDelayed, opts...)
 	}
 
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
@@ -257,7 +257,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return newStream(ctx, func() {})
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), opts ...CallOption) (_ iresolver.ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), nameResolutionDelayed bool, opts ...CallOption) (_ iresolver.ClientStream, err error) {
 	c := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		c.failFast = !*mc.WaitForReady
@@ -321,19 +321,20 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	cs := &clientStream{
-		callHdr:      callHdr,
-		ctx:          ctx,
-		methodConfig: &mc,
-		opts:         opts,
-		callInfo:     c,
-		cc:           cc,
-		desc:         desc,
-		codec:        c.codec,
-		cp:           cp,
-		comp:         comp,
-		cancel:       cancel,
-		firstAttempt: true,
-		onCommit:     onCommit,
+		callHdr:               callHdr,
+		ctx:                   ctx,
+		methodConfig:          &mc,
+		opts:                  opts,
+		callInfo:              c,
+		cc:                    cc,
+		desc:                  desc,
+		codec:                 c.codec,
+		cp:                    cp,
+		comp:                  comp,
+		cancel:                cancel,
+		firstAttempt:          true,
+		onCommit:              onCommit,
+		nameResolutionDelayed: nameResolutionDelayed,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -416,8 +417,10 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	method := cs.callHdr.Method
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
+	nameResolutionDelayed := false
+	nameResolutionDelayed = cs.nameResolutionDelayed
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: nameResolutionDelayed})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,
@@ -555,6 +558,8 @@ type clientStream struct {
 	// synchronized.
 	serverHeaderBinlogged bool
 
+	nameResolutionDelayed bool
+
 	mu                      sync.Mutex
 	firstAttempt            bool // if true, transparent retry is valid
 	numRetries              int  // exclusive of transparent retry attempt(s)
@@ -600,6 +605,8 @@ type csAttempt struct {
 	// trInfo.tr is set when created (if EnableTracing is true),
 	// and cleared when the finish method is called.
 	trInfo *traceInfo
+	// nameResolutionDelayed is true if name resolution is delayed.
+	nameResolutionDelayed bool
 
 	statsHandlers []stats.Handler
 	beginTime     time.Time
