@@ -286,7 +286,6 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer stub.S.Stop()
-
 	stubserver.StartTestService(t, stub)
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
