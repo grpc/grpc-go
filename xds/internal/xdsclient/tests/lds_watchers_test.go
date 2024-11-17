@@ -77,16 +77,39 @@ func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, on
 }
 
 func (cw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
-	// When used with a go-control-plane management server that continuously
-	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in OnResourceDoesNotExist() simplifies tests which will have
-	// access to the most recently received error.
 	cw.updateCh.Replace(listenerUpdateErrTuple{err: err})
 	onDone()
 }
 
 func (cw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 	cw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	onDone()
+}
+
+type listenerWatcherMultiple struct {
+	updateCh *testutils.Channel
+}
+
+func newListenerWatcherMultiple() *listenerWatcherMultiple {
+	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(2)}
+}
+
+func (cw *listenerWatcherMultiple) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+	onDone()
+}
+
+func (cw *listenerWatcherMultiple) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// access to the most recently received error.
+	cw.updateCh.Send(listenerUpdateErrTuple{err: err})
+	onDone()
+}
+
+func (cw *listenerWatcherMultiple) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	cw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
@@ -1004,9 +1027,9 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 
 // TestLDSWatch_ResourceCaching_WithNACKError covers the case where a watch is
 // registered for a resource which is already present in the cache with an old
-// good update and latest NACK error. The test verifies that new watcher
-// receives both good update and error without request being sent to the
-// management server.
+// good update as well latest NACK error. The test verifies that new watcher
+// receives both good update and error without a new resource request being
+// sent to the management server.
 func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
@@ -1022,6 +1045,13 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 			// The first ack has a non-empty version string.
 			if !firstAckReceived.HasFired() && req.GetVersionInfo() != "" {
 				firstAckReceived.Fire()
+				return nil
+			}
+			// If the request version remains "1" while the nonce keeps
+			// increasing, it indicates the client is repeatedly NACKing
+			// updates from the server but not sending any new resource
+			// request.
+			if req.GetVersionInfo() == "1" {
 				return nil
 			}
 			// Any requests after the first request and ack, are not expected.
@@ -1099,11 +1129,19 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 	// Register another watch for the same resource. This should get the update
 	// and error from the cache.
-	lw2 := newListenerWatcher()
+	lw2 := newListenerWatcherMultiple()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
+	}
+	// No request should get sent out as part of this watch.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-secondRequestReceived.Done():
+		t.Fatal("xdsClient sent out request instead of using update from cache")
 	}
 	u, err = lw2.updateCh.Receive(ctx)
 	if err != nil {
@@ -1112,15 +1150,6 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	gotErr = u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
-	}
-
-	// No request should get sent out as part of this watch.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-secondRequestReceived.Done():
-		t.Fatal("xdsClient sent out request instead of using update from cache")
 	}
 }
 
