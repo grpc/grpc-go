@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
-	"google.golang.org/grpc/stats/opentelemetry/tracing"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -56,7 +55,7 @@ func main() {
 	spanExporter := tracetest.NewInMemoryExporter()
 	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
 	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
-	textMapPropagator := propagation.NewCompositeTextMapPropagator(tracing.GRPCTraceBinPropagator{})
+	textMapPropagator := propagation.NewCompositeTextMapPropagator(opentelemetry.GRPCTraceBinPropagator{})
 	traceOptions := opentelemetry.TraceOptions{
 		TracerProvider:    tracerProvider,
 		TextMapPropagator: textMapPropagator,
