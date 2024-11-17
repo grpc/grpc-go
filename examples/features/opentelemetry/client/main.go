@@ -75,7 +75,7 @@ func main() {
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make an RPC every second. This should trigger telemetry on prometheous
+	// Make an RPC every second. This should trigger telemetry on prometheus
 	// server along with traces in the in memory exporter to be emitted from
 	// the client and the server.
 	for {

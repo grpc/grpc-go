@@ -38,7 +38,7 @@ type attemptTraceSpan struct {
 	span                trace.Span
 	countSentMsg        uint32
 	countRecvMsg        uint32
-	previousRpcAttempts uint32
+	previousRPCAttempts uint32
 }
 
 // traceTagRPC populates context with a new span, and serializes information
@@ -52,7 +52,7 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn)
 
-	carrier := otelinternaltracing.NewCustomCarrier(ctx) // Use internal custom carrier to inject
+	carrier := otelinternaltracing.NewIncomingCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
 	return carrier.Context(), &attemptTraceSpan{
@@ -73,7 +73,7 @@ func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	var span trace.Span
 	tracer := otel.Tracer("grpc-open-telemetry")
-	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewCustomCarrier(ctx))
+	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// Span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
@@ -106,11 +106,11 @@ func populateSpan(_ context.Context, rs stats.RPCStats, ti *attemptTraceSpan) {
 		span.SetAttributes(
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.Client),
-			attribute.Int64("previous-rpc-attempts", int64(ti.previousRpcAttempts)),
+			attribute.Int64("previous-rpc-attempts", int64(ti.previousRPCAttempts)),
 			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
 		// increment previous rpc attempts applicable for next attempt
-		atomic.AddUint32(&ti.previousRpcAttempts, 1)
+		atomic.AddUint32(&ti.previousRPCAttempts, 1)
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:

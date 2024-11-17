@@ -19,10 +19,11 @@ package opentelemetry
 import (
 	"context"
 	"fmt"
-	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 	"io"
 	"testing"
 	"time"
+
+	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 
 	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
@@ -606,9 +607,6 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 // goes through a stable OpenTelemetry API with well-defined behavior. This keeps
 // the robustness of assertions over time.
 type spanInformation struct {
-	// SpanContext either gets pulled off the wire in certain cases server side
-	// or created.
-	sc         trace2.SpanContext
 	spanKind   string
 	name       string
 	events     []trace.Event
@@ -629,10 +627,13 @@ func (s) TestClientCallSpanEvents(t *testing.T) {
 	ss := setupStubServer(t, nil, traceOptions)
 	defer ss.Stop()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	// Create a parent span for the client call
-	ctx, _ := otel.Tracer("grpc-open-telemetry").Start(context.Background(), "test-parent-span")
+	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewCustomCarrier(ctx))
+	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Make a unary RPC
@@ -682,10 +683,14 @@ func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
 
 	ss := setupStubServer(t, mo, to)
 	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	// Create a parent span for the client call
-	ctx, _ := otel.Tracer("grpc-open-telemetry").Start(context.Background(), "test-parent-span")
+	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewCustomCarrier(ctx))
+	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
@@ -748,10 +753,13 @@ func (s) TestGrpcTraceBinPropagator(t *testing.T) {
 	ss := setupStubServer(t, nil, traceOptions)
 	defer ss.Stop()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
 	// Create a parent span for the client call
-	ctx, _ := otel.Tracer("grpc-open-telemetry").Start(context.Background(), "test-parent-span")
+	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewCustomCarrier(ctx))
+	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	// Make a unary RPC
 	if _, err := ss.Client.UnaryCall(
@@ -923,7 +931,12 @@ func (s) TestW3CContextPropagator(t *testing.T) {
 	// Start the server with OpenTelemetry options
 	ss := setupStubServer(t, nil, traceOptions)
 	defer ss.Stop()
-	ctx, _ := otel.Tracer("grpc-open-telemetry").Start(context.Background(), "test-parent-span")
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Create a parent span for the client call
+	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
