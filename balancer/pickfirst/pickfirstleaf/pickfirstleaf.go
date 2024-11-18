@@ -738,7 +738,7 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 }
 
 func (b *pickfirstBalancer) updateConcludedStateLocked(newState balancer.State) {
-	// Optimization to no send duplicate CONNECTING and IDLE updates.
+	// Optimization to not send duplicate CONNECTING and IDLE updates.
 	if newState.ConnectivityState == b.concludedState && b.concludedState == connectivity.Connecting {
 		return
 	}
