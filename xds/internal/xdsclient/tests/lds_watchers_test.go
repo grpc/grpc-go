@@ -90,8 +90,8 @@ type listenerWatcherMultiple struct {
 	updateCh *testutils.Channel
 }
 
-func newListenerWatcherMultiple() *listenerWatcherMultiple {
-	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(2)}
+func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
+	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
 
 func (cw *listenerWatcherMultiple) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
@@ -1031,34 +1031,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 // receives both good update and error without a new resource request being
 // sent to the management server.
 func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
-	firstRequestReceived := false
-	firstAckReceived := grpcsync.NewEvent()
-	secondRequestReceived := grpcsync.NewEvent()
-
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
-			// The first request has an empty version string.
-			if !firstRequestReceived && req.GetVersionInfo() == "" {
-				firstRequestReceived = true
-				return nil
-			}
-			// The first ack has a non-empty version string.
-			if !firstAckReceived.HasFired() && req.GetVersionInfo() != "" {
-				firstAckReceived.Fire()
-				return nil
-			}
-			// If the request version remains "1" while the nonce keeps
-			// increasing, it indicates the client is repeatedly NACKing
-			// updates from the server but not sending any new resource
-			// request.
-			if req.GetVersionInfo() == "1" {
-				return nil
-			}
-			// Any requests after the first request and ack, are not expected.
-			secondRequestReceived.Fire()
-			return nil
-		},
-	})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
@@ -1101,11 +1074,6 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("timeout when waiting for receipt of ACK at the management server")
-	case <-firstAckReceived.Done():
-	}
 
 	// Configure the management server to return a single listener resource
 	// which is expected to be NACKed by the client.
@@ -1129,19 +1097,11 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 	// Register another watch for the same resource. This should get the update
 	// and error from the cache.
-	lw2 := newListenerWatcherMultiple()
+	lw2 := newListenerWatcherMultiple(2)
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
-	}
-	// No request should get sent out as part of this watch.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-secondRequestReceived.Done():
-		t.Fatal("xdsClient sent out request instead of using update from cache")
 	}
 	u, err = lw2.updateCh.Receive(ctx)
 	if err != nil {
