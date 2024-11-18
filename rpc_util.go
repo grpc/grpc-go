@@ -841,7 +841,7 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 			var uncompressedBuf []byte
 			uncompressedBuf, err = dc.Do(compressed.Reader())
 			if err == nil {
-				out = mem.BufferSlice{mem.NewBuffer(&uncompressedBuf, nil)}
+				out = mem.BufferSlice{mem.SliceBuffer(uncompressedBuf)}
 			}
 			size = len(uncompressedBuf)
 		} else {
