@@ -60,7 +60,7 @@ type xdsChannelEventHandler interface {
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
 type xdsChannelOpts struct {
-	transport          transport.Interface           // Takes ownership of this transport.
+	transport          transport.Transport           // Takes ownership of this transport.
 	serverConfig       *bootstrap.ServerConfig       // Configuration of the server to connect to.
 	bootstrapConfig    *bootstrap.Config             // Complete bootstrap configuration, used to decode resources.
 	resourceTypeGetter func(string) xdsresource.Type // Function to retrieve resource parsing functionality, based on resource type.
@@ -126,7 +126,7 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 type xdsChannel struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that, and hence need not be guarded by a mutex.
-	transport          transport.Interface           // Takes ownership of this transport (used to make streaming calls).
+	transport          transport.Transport           // Takes ownership of this transport (used to make streaming calls).
 	ads                *ads.StreamImpl               // An ADS stream to the management server.
 	lrs                *lrs.StreamImpl               // An LRS stream to the management server.
 	serverConfig       *bootstrap.ServerConfig       // Configuration of the server to connect to.

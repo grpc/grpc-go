@@ -113,7 +113,7 @@ type StreamImpl struct {
 	// The following fields are initialized from arguments passed to the
 	// constructor and are read-only afterwards, and hence can be accessed
 	// without a mutex.
-	transport          transport.Interface     // Transport to use for ADS stream.
+	transport          transport.Transport     // Transport to use for ADS stream.
 	eventHandler       StreamEventHandler      // Callbacks into the xdsChannel.
 	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto          *v3corepb.Node          // Identifies the gRPC application.
@@ -136,7 +136,7 @@ type StreamImpl struct {
 
 // StreamOpts contains the options for creating a new ADS Stream.
 type StreamOpts struct {
-	Transport          transport.Interface     // xDS transport to create the stream on.
+	Transport          transport.Transport     // xDS transport to create the stream on.
 	EventHandler       StreamEventHandler      // Callbacks for stream events.
 	Backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	NodeProto          *v3corepb.Node          // Node proto to identify the gRPC application.
