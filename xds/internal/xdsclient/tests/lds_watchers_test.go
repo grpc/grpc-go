@@ -742,7 +742,9 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 // scenarios:
 //  1. Removing a resource should trigger the watch callback with a resource
 //     removed error. It should not trigger the watch callback for an unrelated
-//     resource.
+//     resource. If any new watcher try to register watcher for removed
+//     resource, it should trigger watch callback to it with a resource removed
+//     error as well.
 //  2. An update to another resource should result in the invocation of the watch
 //     callback associated with that resource.  It should not result in the
 //     invocation of the watch callback associated with the deleted resource.
@@ -847,8 +849,20 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Any new watcher trying to register for removed resource, should get
+	// resource removed error.
+	lw3 := newListenerWatcher()
+	ldsCancel3 := xdsresource.WatchListener(client, resourceName1, lw3)
+	defer ldsCancel3()
+	if err := verifyListenerUpdate(ctx, lw3.updateCh, listenerUpdateErrTuple{
+		err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	// Update the second listener resource on the management server. The first
-	// watcher should not see an update, while the second watcher should.
+	// and third watcher should not see an update, while the second watcher
+	// should.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(resourceName2, "new-rds-resource")},
@@ -858,6 +872,9 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 	if err := verifyNoListenerUpdate(ctx, lw1.updateCh); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyNoListenerUpdate(ctx, lw3.updateCh); err != nil {
 		t.Fatal(err)
 	}
 	wantUpdate = listenerUpdateErrTuple{
