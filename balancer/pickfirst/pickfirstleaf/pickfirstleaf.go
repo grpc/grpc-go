@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
@@ -52,6 +53,10 @@ func init() {
 	balancer.Register(pickfirstBuilder{})
 }
 
+// enableHealthListenerKeyType is a unique key type used in resolver attributes
+// to indicate whether the health listener usage is enabled.
+type enableHealthListenerKeyType struct{}
+
 var (
 	logger = grpclog.Component("pick-first-leaf-lb")
 	// Name is the name of the pick_first_leaf balancer.
@@ -59,11 +64,9 @@ var (
 	// registered as the default pickfirst.
 	Name = "pick_first_leaf"
 
-	// enableHealthListenerKey is the balancer attributes key for making
-	// pickfirst listen to health updates when its under a petiole policy.
-	enableHealthListenerKey = "generic_health_listener_enabled"
-	// enableHealthListenerValue is the resolver state attributes value for making
-	// pickfirst listen to health updates when its under a petiole policy.
+	// enableHealthListenerValue is the resolver state attribute value used to
+	// enable pickfirst to listen for health updates when operating under a
+	// petiole policy.
 	enableHealthListenerValue = &struct{}{}
 )
 
@@ -115,9 +118,8 @@ func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalan
 
 // EnableHealthListener updates the state to configure pickfirst for using a
 // generic health listener.
-func EnableHealthListener(state balancer.ClientConnState) balancer.ClientConnState {
-	state.ResolverState.Attributes = state.ResolverState.Attributes.WithValue(enableHealthListenerKey, enableHealthListenerValue)
-	return state
+func EnableHealthListener(attrs *attributes.Attributes) *attributes.Attributes {
+	return attrs.WithValue(enableHealthListenerKeyType{}, enableHealthListenerValue)
 }
 
 type pfConfig struct {
@@ -225,7 +227,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.resolverErrorLocked(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
-	b.healthCheckingEnabled = state.ResolverState.Attributes.Value(enableHealthListenerKey) == enableHealthListenerValue
+	b.healthCheckingEnabled = state.ResolverState.Attributes.Value(enableHealthListenerKeyType{}) == enableHealthListenerValue
 	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
 		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v: %w", state.BalancerConfig, state.BalancerConfig, balancer.ErrBadResolverState)
@@ -579,18 +581,22 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		}
 		b.connectivityState = connectivity.Ready
 		if !b.healthCheckingEnabled {
+			if b.logger.V(2) {
+				b.logger.Infof("SubConn %p reported connectivity state READY and the health listener is disabled. Transitioning SubConn to READY.", sd.subConn)
+			}
+
 			b.updateConcludedStateLocked(balancer.State{
 				ConnectivityState: connectivity.Ready,
 				Picker:            &picker{result: balancer.PickResult{SubConn: sd.subConn}},
 			})
-		} else {
-			if b.logger.V(2) {
-				b.logger.Infof("SubConn %p reported connectivity state READY. Registering health listener.", sd.subConn)
-			}
-			sd.subConn.RegisterHealthListener(func(scs balancer.SubConnState) {
-				b.updateSubConnHealthState(sd, scs)
-			})
+			return
 		}
+		if b.logger.V(2) {
+			b.logger.Infof("SubConn %p reported connectivity state READY. Registering health listener.", sd.subConn)
+		}
+		sd.subConn.RegisterHealthListener(func(scs balancer.SubConnState) {
+			b.updateSubConnHealthState(sd, scs)
+		})
 		return
 	}
 
@@ -732,8 +738,8 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 }
 
 func (b *pickfirstBalancer) updateConcludedStateLocked(newState balancer.State) {
-	// Optimization to send duplicate CONNECTING and IDLE updates.
-	if newState.ConnectivityState == b.concludedState && (b.concludedState == connectivity.Connecting || b.concludedState == connectivity.Idle) {
+	// Optimization to no send duplicate CONNECTING and IDLE updates.
+	if newState.ConnectivityState == b.concludedState && b.concludedState == connectivity.Connecting {
 		return
 	}
 	b.forceUpdateConcludedStateLocked(newState)

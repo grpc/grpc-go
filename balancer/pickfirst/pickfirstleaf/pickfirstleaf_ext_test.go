@@ -1182,7 +1182,8 @@ func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
 			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(pickfirstleaf.EnableHealthListener(ccs))
+			ccs.ResolverState.Attributes = pickfirstleaf.EnableHealthListener(ccs.ResolverState.Attributes)
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1216,12 +1217,14 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	healthListenerCh := make(chan func(balancer.SubConnState))
+	scConnectivityStateCh := make(chan balancer.SubConnState, 5)
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			ccw := &healthListenerCapturingCCWrapper{
 				ClientConn:       bd.ClientConn,
 				healthListenerCh: healthListenerCh,
+				subConnStateCh:   scConnectivityStateCh,
 			}
 			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
 		},
@@ -1229,7 +1232,8 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(pickfirstleaf.EnableHealthListener(ccs))
+			ccs.ResolverState.Attributes = pickfirstleaf.EnableHealthListener(ccs.ResolverState.Attributes)
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1254,6 +1258,20 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 	case healthListener = <-healthListenerCh:
 	case <-ctx.Done():
 		t.Fatal("Context timed out waiting for health listener to be registered.")
+	}
+
+	// Wait for the raw connectivity state to become READY. The LB policy should
+	// wait for the health updates before transitioning the channel to READY.
+	for {
+		var scs balancer.SubConnState
+		select {
+		case scs = <-scConnectivityStateCh:
+		case <-ctx.Done():
+			t.Fatal("Context timed out waiting for the SubConn connectivity state to become READY.")
+		}
+		if scs.ConnectivityState == connectivity.Ready {
+			break
+		}
 	}
 
 	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -1293,9 +1311,17 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 type healthListenerCapturingCCWrapper struct {
 	balancer.ClientConn
 	healthListenerCh chan func(balancer.SubConnState)
+	subConnStateCh   chan balancer.SubConnState
 }
 
 func (ccw *healthListenerCapturingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	oldListener := opts.StateListener
+	opts.StateListener = func(scs balancer.SubConnState) {
+		ccw.subConnStateCh <- scs
+		if oldListener != nil {
+			oldListener(scs)
+		}
+	}
 	sc, err := ccw.ClientConn.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
