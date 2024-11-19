@@ -99,7 +99,7 @@ func (tcc *testCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.New
 // Accepts as argument a channel onto which xDS handshake information passed to
 // NewSubConn is written to.
 func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscredsinternal.HandshakeInfo) {
-	cdsBuilder := balancer.Get(cdsName)
+	cdsBuilder := balancer.Get(Name)
 	internal.BalancerUnregister(cdsBuilder.Name())
 	var ccWrapper *testCCWrapper
 	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
