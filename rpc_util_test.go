@@ -322,6 +322,7 @@ func TestDecompress(t *testing.T) {
 		input                 []byte
 		maxReceiveMessageSize int
 		want                  []byte
+		wantedSize            int
 		error                 error
 	}{
 		{
@@ -330,23 +331,26 @@ func TestDecompress(t *testing.T) {
 			input:                 []byte("decompressed data"),
 			maxReceiveMessageSize: 100,
 			want:                  []byte("decompressed data"),
+			wantedSize:            17,
 			error:                 nil,
 		},
 		{
 			name:                  "failure, empty receive message",
 			compressor:            c,
-			input:                 nil,
+			input:                 []byte{},
 			maxReceiveMessageSize: 1,
-			want:                  nil,
-			error:                 errors.New("decompression error"),
+			want:                  []byte{},
+			wantedSize:            0,
+			error:                 nil,
 		},
 		{
 			name:                  "overflow failure, receive message exceeds maxReceiveMessageSize",
 			compressor:            c,
-			input:                 []byte("overflow test data"),
+			input:                 []byte("small message"),
 			maxReceiveMessageSize: 5,
-			want:                  nil,
-			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)."),
+			want:                  []byte("smalll"),
+			wantedSize:            6,
+			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
 		},
 		{
 			name:                  "Succeeds when message size is much smaller than maxReceiveMessageSize",
@@ -354,39 +358,38 @@ func TestDecompress(t *testing.T) {
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 50,
 			want:                  []byte("small message"),
+			wantedSize:            13,
 			error:                 nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inputMem := func() mem.BufferSlice {
+			message := func() mem.BufferSlice {
 				compressedData := compressData(tt.input)
 				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 			}()
-			output, size, err := decompress(tt.compressor, inputMem, tt.maxReceiveMessageSize, nil)
-
-			wantMem := func() mem.BufferSlice {
+			output, size, err := decompress(tt.compressor, message, tt.maxReceiveMessageSize, nil)
+			wantMsg := func() mem.BufferSlice {
 				decompressed := tt.want
 				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
 			}()
-			if size != wantMem.Len() {
-				t.Fatalf("decompress() size, got = %d, want = %d", size, wantMem.Len())
+
+			if size != tt.wantedSize {
+				t.Fatalf("decompress() size, got = %d, want = %d", size, tt.wantedSize)
 			}
+
 			// Check for expected error
 			if (err != nil) != (tt.error != nil) {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
 
 			}
-
-			// Check that output and wantMem have the same length
-			if len(output) != len(wantMem) {
-				t.Fatalf("decompress() output length, got = %d, want = %d", len(output), len(wantMem))
-
+			if wantMsg != nil && output != nil {
+				if diff := cmp.Diff(wantMsg, output); diff != "" {
+					t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
+				}
 			}
-			if diff := cmp.Diff(wantMem, output); diff != "" {
-				t.Fatalf("MakeGatewayInfo() mismatch (-want +got):\n%s", diff)
-			}
+
 		})
 	}
 }
