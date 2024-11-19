@@ -322,25 +322,22 @@ func TestDecompress(t *testing.T) {
 		input                 []byte
 		maxReceiveMessageSize int
 		want                  []byte
-		wantedSize            int
 		error                 error
 	}{
 		{
 			name:                  "Decompresses successfully with sufficient buffer size",
 			compressor:            c,
 			input:                 []byte("decompressed data"),
-			maxReceiveMessageSize: 100,
+			maxReceiveMessageSize: 50,
 			want:                  []byte("decompressed data"),
-			wantedSize:            17,
 			error:                 nil,
 		},
 		{
 			name:                  "failure, empty receive message",
 			compressor:            c,
-			input:                 []byte{},
-			maxReceiveMessageSize: 1,
-			want:                  []byte{},
-			wantedSize:            0,
+			input:                 []byte(""),
+			maxReceiveMessageSize: 10,
+			want:                  []byte(""),
 			error:                 nil,
 		},
 		{
@@ -349,7 +346,6 @@ func TestDecompress(t *testing.T) {
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 5,
 			want:                  []byte("smalll"),
-			wantedSize:            6,
 			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
 		},
 		{
@@ -358,7 +354,6 @@ func TestDecompress(t *testing.T) {
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 50,
 			want:                  []byte("small message"),
-			wantedSize:            13,
 			error:                 nil,
 		},
 	}
@@ -375,19 +370,19 @@ func TestDecompress(t *testing.T) {
 				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
 			}()
 
-			if size != tt.wantedSize {
-				t.Fatalf("decompress() size, got = %d, want = %d", size, tt.wantedSize)
-			}
-
 			// Check for expected error
 			if (err != nil) != (tt.error != nil) {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
 
 			}
+			// to check when we are passing empty bytes output is "nil"  failure, empty receive message case
 			if wantMsg != nil && output != nil {
 				if diff := cmp.Diff(wantMsg, output); diff != "" {
 					t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
 				}
+			}
+			if size != wantMsg.Len() {
+				t.Fatalf("decompress() buffer len, got = %d, want = %d", size, wantMsg.Len())
 			}
 
 		})
