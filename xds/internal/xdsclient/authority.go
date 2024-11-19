@@ -641,11 +641,11 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			}
 			resource := state.cache
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
-			// If last update was NACK'd, notify the new watcher of error
-			// immediately as well.
-			if state.md.Status == xdsresource.ServiceStatusNACKed && state.md.ErrState != nil {
-				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.ErrState.Err, func() {}) })
-			}
+		}
+		// If last update was NACK'd, notify the new watcher of error
+		// immediately as well.
+		if state.md.Status == xdsresource.ServiceStatusNACKed && state.md.ErrState != nil {
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.ErrState.Err, func() {}) })
 		}
 		// If the metadata field is updated to indicate that the management
 		// server does not have this resource, notify the new watcher.

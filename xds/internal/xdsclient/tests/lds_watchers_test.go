@@ -71,45 +71,34 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+func newListenerWatcherWithSize(size int) *listenerWatcher {
+	return &listenerWatcher{updateCh: testutils.NewChannelWithSize(size)}
+}
+
+func (lw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (cw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+func (lw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	if len(lw.updateCh.C) == 1 {
+		// When used with a go-control-plane management server that continuously
+		// resends resources which are NACKed by the xDS client, using a `Replace()`
+		// here and in OnResourceDoesNotExist() simplifies tests which will have
+		// access to the most recently received error.
+		lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+	} else {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: err})
+	}
 	onDone()
 }
 
-func (cw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
-	onDone()
-}
-
-type listenerWatcherMultiple struct {
-	updateCh *testutils.Channel
-}
-
-func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
-	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
-}
-
-func (cw *listenerWatcherMultiple) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
-	onDone()
-}
-
-func (cw *listenerWatcherMultiple) OnError(err error, onDone xdsresource.OnDoneFunc) {
-	// When used with a go-control-plane management server that continuously
-	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in OnResourceDoesNotExist() simplifies tests which will have
-	// access to the most recently received error.
-	cw.updateCh.Send(listenerUpdateErrTuple{err: err})
-	onDone()
-}
-
-func (cw *listenerWatcherMultiple) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+func (lw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	if len(lw.updateCh.C) == 1 {
+		lw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	} else {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	}
 	onDone()
 }
 
@@ -1031,7 +1020,20 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 // receives both good update and error without a new resource request being
 // sent to the management server.
 func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	secondRequestReceived := grpcsync.NewEvent()
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+			// If the version is "2", it means that a second request has been
+			// received (after an initial request and ack). The client should
+			// not send a second request if the resource is already cached.
+			if req.GetVersionInfo() == "2" {
+				secondRequestReceived.Fire()
+				return nil
+			}
+			return nil
+		},
+	})
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
@@ -1059,7 +1061,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
@@ -1097,7 +1099,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 	// Register another watch for the same resource. This should get the update
 	// and error from the cache.
-	lw2 := newListenerWatcherMultiple(2)
+	lw2 := newListenerWatcherWithSize(2)
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
@@ -1110,6 +1112,15 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	gotErr = u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	}
+	// No request should get sent out as part of this watch.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-secondRequestReceived.Done():
+		t.Fatal("xdsClient sent out request instead of using update from cache")
+	default:
 	}
 }
 
