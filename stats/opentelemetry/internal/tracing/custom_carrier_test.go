@@ -198,13 +198,13 @@ func TestKeys(t *testing.T) {
 	}{
 		{
 			name:      "outgoing ignores incoming",
-			direction: Outgoing,
+			direction: outgoing,
 			md:        metadata.MD{"incoming-key": []string{"incoming-value"}, "outgoing-key": []string{"outgoing-value"}},
 			want:      []string{"outgoing-key"},
 		},
 		{
 			name:      "incoming ignores outgoing",
-			direction: Incoming,
+			direction: incoming,
 			md:        metadata.MD{"incoming-key": []string{"incoming-value"}, "outgoing-key": []string{"outgoing-value"}},
 			want:      []string{"incoming-key"},
 		},
@@ -217,7 +217,7 @@ func TestKeys(t *testing.T) {
 			ctx = metadata.NewIncomingContext(ctx, metadata.MD{"incoming-key": test.md["incoming-key"]})
 			ctx = metadata.NewOutgoingContext(ctx, metadata.MD{"outgoing-key": test.md["outgoing-key"]})
 			var c *Carrier
-			if test.direction == Incoming {
+			if test.direction == incoming {
 				c = NewIncomingCarrier(ctx)
 			} else {
 				c = NewOutgoingCarrier(ctx)

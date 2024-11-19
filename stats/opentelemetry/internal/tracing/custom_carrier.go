@@ -31,8 +31,8 @@ import (
 type propagationDirection int
 
 const (
-	Incoming propagationDirection = iota // Incoming propagation direction
-	Outgoing                             // Outgoing propagation direction
+	incoming propagationDirection = iota // incoming propagation direction
+	outgoing                             // outgoing propagation direction
 )
 
 // Carrier is a TextMapCarrier that uses `context.Context` to store and
@@ -47,13 +47,13 @@ type Carrier struct {
 // NewIncomingCarrier creates a new Carrier with the given context and
 // incoming propagation direction.
 func NewIncomingCarrier(ctx context.Context) *Carrier {
-	return &Carrier{ctx: ctx, direction: Incoming}
+	return &Carrier{ctx: ctx, direction: incoming}
 }
 
 // NewOutgoingCarrier creates a new Carrier with the given context and
 // outgoing propagation direction.
 func NewOutgoingCarrier(ctx context.Context) *Carrier {
-	return &Carrier{ctx: ctx, direction: Outgoing}
+	return &Carrier{ctx: ctx, direction: outgoing}
 }
 
 // Get returns the string value associated with the passed key from the
@@ -79,16 +79,17 @@ func (c *Carrier) Set(key, value string) {
 }
 
 // Keys returns the keys stored in the carrier's context metadata. It returns
-// keys from outgoing context metadata if propagation direction is outgoing,
-// otherwise it returns keys from incoming context metadata.
+// keys from outgoing context metadata if propagation direction is outgoing and
+// if propagation direction is incoming, it returns keys from incoming context
+// metadata. In all other cases, it returns nil.
 func (c *Carrier) Keys() []string {
 	var md metadata.MD
 	var ok bool
 
 	switch c.direction {
-	case Outgoing:
+	case outgoing:
 		md, ok = metadata.FromOutgoingContext(c.ctx)
-	case Incoming:
+	case incoming:
 		md, ok = metadata.FromIncomingContext(c.ctx)
 	}
 
