@@ -539,12 +539,6 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	// Attach the received metadata to the context.
 	if len(mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, mdata)
-		if statsTags := mdata["grpc-tags-bin"]; len(statsTags) > 0 {
-			s.ctx = stats.SetIncomingTags(s.ctx, []byte(statsTags[len(statsTags)-1]))
-		}
-		if statsTrace := mdata["grpc-trace-bin"]; len(statsTrace) > 0 {
-			s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[len(statsTrace)-1]))
-		}
 	}
 	t.mu.Lock()
 	if t.state != reachable {

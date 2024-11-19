@@ -41,6 +41,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc"
@@ -4618,6 +4619,16 @@ func (s) TestStreamingProxyDoesNotForwardMetadata(t *testing.T) {
 }
 
 func (s) TestStatsTagsAndTrace(t *testing.T) {
+	const mdTraceKey = "grpc-trace-bin"
+	const mdTagsKey = "grpc-tags-bin"
+
+	setTrace := func(ctx context.Context, b []byte) context.Context {
+		return metadata.AppendToOutgoingContext(ctx, mdTraceKey, string(b))
+	}
+	setTags := func(ctx context.Context, b []byte) context.Context {
+		return metadata.AppendToOutgoingContext(ctx, mdTagsKey, string(b))
+	}
+
 	// Data added to context by client (typically in a stats handler).
 	tags := []byte{1, 5, 2, 4, 3}
 	trace := []byte{5, 2, 1, 3, 4}
@@ -4627,17 +4638,11 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 	endpoint := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, _ := metadata.FromIncomingContext(ctx)
-			if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, tags) {
-				return nil, status.Errorf(codes.Internal, "stats.Tags(%v)=%v; want %v", ctx, tg, tags)
+			if md[mdTagsKey] == nil || !cmp.Equal(md[mdTagsKey][len(md[mdTagsKey])-1], string(tags)) {
+				return nil, status.Errorf(codes.Internal, "md['grpc-tags-bin']=%v; want %v", md[mdTagsKey], tags)
 			}
-			if !reflect.DeepEqual(md["grpc-tags-bin"], []string{string(tags)}) {
-				return nil, status.Errorf(codes.Internal, "md['grpc-tags-bin']=%v; want %v", md["grpc-tags-bin"], tags)
-			}
-			if tr := stats.Trace(ctx); !reflect.DeepEqual(tr, trace) {
-				return nil, status.Errorf(codes.Internal, "stats.Trace(%v)=%v; want %v", ctx, tr, trace)
-			}
-			if !reflect.DeepEqual(md["grpc-trace-bin"], []string{string(trace)}) {
-				return nil, status.Errorf(codes.Internal, "md['grpc-trace-bin']=%v; want %v", md["grpc-trace-bin"], trace)
+			if md[mdTraceKey] == nil || !cmp.Equal(md[mdTraceKey][len(md[mdTraceKey])-1], string(trace)) {
+				return nil, status.Errorf(codes.Internal, "md['grpc-trace-bin']=%v; want %v", md[mdTraceKey], trace)
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -4655,10 +4660,10 @@ func (s) TestStatsTagsAndTrace(t *testing.T) {
 		want codes.Code
 	}{
 		{ctx: ctx, want: codes.Internal},
-		{ctx: stats.SetTags(ctx, tags), want: codes.Internal},
-		{ctx: stats.SetTrace(ctx, trace), want: codes.Internal},
-		{ctx: stats.SetTags(stats.SetTrace(ctx, tags), tags), want: codes.Internal},
-		{ctx: stats.SetTags(stats.SetTrace(ctx, trace), tags), want: codes.OK},
+		{ctx: setTags(ctx, tags), want: codes.Internal},
+		{ctx: setTrace(ctx, trace), want: codes.Internal},
+		{ctx: setTags(setTrace(ctx, tags), tags), want: codes.Internal},
+		{ctx: setTags(setTrace(ctx, trace), tags), want: codes.OK},
 	}
 
 	for _, tc := range testCases {

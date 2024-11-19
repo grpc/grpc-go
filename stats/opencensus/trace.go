@@ -24,6 +24,7 @@ import (
 	"go.opencensus.io/trace"
 	"go.opencensus.io/trace/propagation"
 
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -46,7 +47,7 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS))
 
 	tcBin := propagation.Binary(span.SpanContext())
-	return stats.SetTrace(ctx, tcBin), &traceInfo{
+	return metadata.AppendToOutgoingContext(ctx, "grpc-trace-bin", string(tcBin)), &traceInfo{
 		span:         span,
 		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
 		countRecvMsg: 0,
@@ -55,12 +56,17 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 
 // traceTagRPC populates context with new span data, with a parent based on the
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
-// if present.
+// if present. If multiple spanContexts exist, it takes the last one.
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	mn := strings.ReplaceAll(removeLeadingSlash(rti.FullMethodName), "/", ".")
 
+	var tcBin []byte
+	if tcValues := metadata.ValueFromIncomingContext(ctx, "grpc-trace-bin"); len(tcValues) > 0 {
+		tcBin = []byte(tcValues[len(tcValues)-1])
+	}
+
 	var span *trace.Span
-	if sc, ok := propagation.FromBinary(stats.Trace(ctx)); ok {
+	if sc, ok := propagation.FromBinary(tcBin); ok {
 		// Returned context is ignored because will populate context with data
 		// that wraps the span instead.
 		_, span = trace.StartSpanWithRemoteParent(ctx, mn, sc, trace.WithSpanKind(trace.SpanKindServer), trace.WithSampler(ssh.to.TS))
