@@ -872,18 +872,19 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 }
 
 // TestLDSWatch_NewWatcherForRemovedResource covers the case where a new
-// watcher registers for the resource which is removed. The test verifies
+// watcher registers for a resource that has been removed. The test verifies
 // the following scenarios:
-//  1. Removing a resource should trigger the watch callback with a resource
-//     removed error to existing watcher.
-//  2. If any new watcher try to register for removed resource, it should
-//     trigger watch callback to it with a resource removed error as well.
-func TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
+//  1. When a resource is deleted by the management server, any active
+//     watchers of that resource should be notified with a "resource removed"
+//     error through their watch callback.
+//  2. If a new watcher attempts to register for a resource that has already
+//     been deleted, its watch callback should be immediately invoked with a
+//     "resource removed" error.
+func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
@@ -895,18 +896,17 @@ func TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	}
 	defer close()
 
-	// Register watch for the listener resources and have the
+	// Register watch for the listener resource and have the
 	// callbacks push the received updates on to a channel.
-	resourceName := ldsName
 	lw1 := newListenerWatcher()
-	ldsCancel1 := xdsresource.WatchListener(client, resourceName, lw1)
+	ldsCancel1 := xdsresource.WatchListener(client, ldsName, lw1)
 	defer ldsCancel1()
 
 	// Configure the management server to return listener resource,
 	// corresponding to the registered watch.
 	resource := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(resourceName, rdsName)},
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -937,20 +937,17 @@ func TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	}
 
 	// The existing watcher should receive a resource removed error.
-	if err := verifyListenerUpdate(ctx, lw1.updateCh, listenerUpdateErrTuple{
-		err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
-	}); err != nil {
+	updateError := listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, updateError); err != nil {
 		t.Fatal(err)
 	}
 
-	// Any new watcher trying to register for removed resource, should get
-	// resource removed error as well.
+	// New watchers attempting to register for a deleted resource should also
+	// receive a "resource removed" error.
 	lw2 := newListenerWatcher()
-	ldsCancel2 := xdsresource.WatchListener(client, resourceName, lw2)
+	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyListenerUpdate(ctx, lw2.updateCh, listenerUpdateErrTuple{
-		err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
-	}); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, updateError); err != nil {
 		t.Fatal(err)
 	}
 }
