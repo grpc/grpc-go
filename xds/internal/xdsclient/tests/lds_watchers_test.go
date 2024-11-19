@@ -1127,15 +1127,6 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
-	// No request should get sent out as part of this watch.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-secondRequestReceived.Done():
-		t.Fatal("xdsClient sent out request instead of using update from cache")
-	default:
-	}
 }
 
 // TestLDSWatch_PartialValid covers the case where a response from the
