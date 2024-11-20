@@ -37,27 +37,37 @@ const (
 
 // Carrier is a TextMapCarrier that uses `context.Context` to store and
 // retrieve any propagated key-value pairs in text format. The propagation
-// direction (incoming or outgoing) determines which keys should the `Keys()`
-// method returns.
+// direction (incoming or outgoing) determines whether the `Keys()` method
+// should return keys from the incoming or outgoing context metadata.
 type Carrier struct {
 	ctx       context.Context
 	direction propagationDirection
 }
 
-// NewIncomingCarrier creates a new Carrier with the given context and
-// incoming propagation direction.
+// NewIncomingCarrier creates a new Carrier with the incoming context from the
+// given context and incoming propagation direction. The incoming carrier
+// should be used with propagator's `Extract()` method.
 func NewIncomingCarrier(ctx context.Context) *Carrier {
-	return &Carrier{ctx: ctx, direction: incoming}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return &Carrier{ctx: metadata.NewIncomingContext(ctx, metadata.MD{}), direction: incoming}
+	}
+	return &Carrier{ctx: metadata.NewIncomingContext(ctx, md), direction: incoming}
 }
 
-// NewOutgoingCarrier creates a new Carrier with the given context and
-// outgoing propagation direction.
+// NewOutgoingCarrier creates a new Carrier with the outgoing context from the
+// given context and outgoing propagation direction. The outgoing carrier
+// should be used with propagator's `Inject()` method.
 func NewOutgoingCarrier(ctx context.Context) *Carrier {
-	return &Carrier{ctx: ctx, direction: outgoing}
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return &Carrier{ctx: metadata.NewOutgoingContext(ctx, metadata.MD{}), direction: outgoing}
+	}
+	return &Carrier{ctx: metadata.NewOutgoingContext(ctx, md), direction: outgoing}
 }
 
 // Get returns the string value associated with the passed key from the
-// carrier's context metadata.
+// carrier's incoming context metadata.
 //
 // It returns an empty string if the key is not present in the carrier's
 // context or if the value associated with the key is empty.
@@ -71,7 +81,7 @@ func (c *Carrier) Get(key string) string {
 	return values[len(values)-1]
 }
 
-// Set stores the key-value pair in the carrier's context metadata.
+// Set stores the key-value pair in the carrier's outgoing context metadata.
 //
 // If the key already exists, given value is appended to the last.
 func (c *Carrier) Set(key, value string) {
