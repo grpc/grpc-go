@@ -1170,7 +1170,9 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 }
 
 // Test verifies that pickfirst balancer transitions to READY when the health
-// listener is enabled.
+// listener is enabled. Since client side health checking is not enabled in
+// the service config, the health listener will send a health update for READY
+// after registering the listener.
 func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1182,7 +1184,7 @@ func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
 			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			ccs.ResolverState.Attributes = pickfirstleaf.EnableHealthListener(ccs.ResolverState.Attributes)
+			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 	}
@@ -1232,7 +1234,7 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			ccs.ResolverState.Attributes = pickfirstleaf.EnableHealthListener(ccs.ResolverState.Attributes)
+			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 	}

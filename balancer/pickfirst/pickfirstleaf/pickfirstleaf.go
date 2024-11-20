@@ -33,7 +33,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
@@ -63,11 +62,6 @@ var (
 	// It is changed to "pick_first" in init() if this balancer is to be
 	// registered as the default pickfirst.
 	Name = "pick_first_leaf"
-
-	// enableHealthListenerValue is the resolver state attribute value used to
-	// enable pickfirst to listen for health updates when operating under a
-	// petiole policy.
-	enableHealthListenerValue = &struct{}{}
 )
 
 const (
@@ -118,8 +112,9 @@ func (pickfirstBuilder) ParseConfig(js json.RawMessage) (serviceconfig.LoadBalan
 
 // EnableHealthListener updates the state to configure pickfirst for using a
 // generic health listener.
-func EnableHealthListener(attrs *attributes.Attributes) *attributes.Attributes {
-	return attrs.WithValue(enableHealthListenerKeyType{}, enableHealthListenerValue)
+func EnableHealthListener(state resolver.State) resolver.State {
+	state.Attributes = state.Attributes.WithValue(enableHealthListenerKeyType{}, true)
+	return state
 }
 
 type pfConfig struct {
@@ -170,7 +165,10 @@ type pickfirstBalancer struct {
 	// The mutex is used to ensure synchronization of updates triggered
 	// from the idle picker and the already serialized resolver,
 	// SubConn state updates.
-	mu                sync.Mutex
+	mu sync.Mutex
+	// The raw connectivity state based on SubConn state updates and resolver
+	// updates, i.e. independent of SubConn health updates. It is tracked
+	// separately to support the sticky TF behaviour described in A62.
 	connectivityState connectivity.State
 	// State reported to the channel. It will be the health state when being
 	// used as a leaf policy and the connectivityState is READY.
@@ -227,7 +225,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.resolverErrorLocked(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
-	b.healthCheckingEnabled = state.ResolverState.Attributes.Value(enableHealthListenerKeyType{}) == enableHealthListenerValue
+	b.healthCheckingEnabled = state.ResolverState.Attributes.Value(enableHealthListenerKeyType{}) != nil
 	cfg, ok := state.BalancerConfig.(pfConfig)
 	if state.BalancerConfig != nil && !ok {
 		return fmt.Errorf("pickfirst: received illegal BalancerConfig (type %T): %v: %w", state.BalancerConfig, state.BalancerConfig, balancer.ErrBadResolverState)
@@ -564,7 +562,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// To prevent pickers from returning these obsolete SubConns, this logic
 	// is included to check if the current list of active SubConns includes this
 	// SubConn.
-	if activeSD, found := b.subConns.Get(sd.addr); !found || activeSD != sd {
+	if !b.isActiveSCData(sd) {
 		return
 	}
 	if newState.ConnectivityState == connectivity.Shutdown {
@@ -706,6 +704,11 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 	}
 }
 
+func (b *pickfirstBalancer) isActiveSCData(sd *scData) bool {
+	activeSD, found := b.subConns.Get(sd.addr)
+	return found && activeSD == sd
+}
+
 func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.SubConnState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -713,7 +716,7 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 	// To prevent pickers from returning these obsolete SubConns, this logic
 	// is included to check if the current list of active SubConns includes
 	// this SubConn.
-	if activeSD, found := b.subConns.Get(sd.addr); !found || activeSD != sd {
+	if !b.isActiveSCData(sd) {
 		return
 	}
 	switch state.ConnectivityState {
@@ -725,7 +728,7 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 	case connectivity.TransientFailure:
 		b.updateConcludedStateLocked(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
-			Picker:            &picker{err: fmt.Errorf("health check failure: %v", state.ConnectionError)},
+			Picker:            &picker{err: fmt.Errorf("pickfirst: health check failure: %v", state.ConnectionError)},
 		})
 	case connectivity.Connecting:
 		b.updateConcludedStateLocked(balancer.State{
@@ -737,18 +740,22 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 	}
 }
 
+// updateConcludedStateLocked stores the state reported to the channel and calls
+// ClientConn.UpdateState(). As an optimization, it avoid sending duplicate
+// updates to the channel for state CONNECTING.
 func (b *pickfirstBalancer) updateConcludedStateLocked(newState balancer.State) {
-	// Optimization to not send duplicate CONNECTING and IDLE updates.
+	// Optimization to not send duplicate CONNECTING updates.
 	if newState.ConnectivityState == b.concludedState && b.concludedState == connectivity.Connecting {
 		return
 	}
 	b.forceUpdateConcludedStateLocked(newState)
 }
 
-// A separate function to force update the ClientConn state is required to send
-// the first CONNECTING update since the channel doesn't correctly assume that
-// LB policies start in CONNECTING and relies on LB policy to send an initial
-// CONNECTING update.
+// forceUpdateConcludedStateLocked stores the state reported to the channel and
+// calls ClientConn.UpdateState().
+// A separate function is defined to force update the ClientConn state since the
+// channel doesn't correctly assume that LB policies start in CONNECTING and
+// relies on LB policy to send an initial CONNECTING update.
 func (b *pickfirstBalancer) forceUpdateConcludedStateLocked(newState balancer.State) {
 	b.concludedState = newState.ConnectivityState
 	b.cc.UpdateState(newState)
