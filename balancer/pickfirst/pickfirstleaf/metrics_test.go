@@ -266,28 +266,6 @@ func (s) TestPickFirstMetricsE2E(t *testing.T) {
 			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
 		}
 	}
-	// Disconnections metric will show up eventually, as asynchronous from
-	// server stopping.
-	/*wantMetrics = []metricdata.Metrics{
-		{
-			Name:        "grpc.lb.pick_first.disconnections",
-			Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
-			Unit:        "disconnection",
-			Data: metricdata.Sum[int64]{
-				DataPoints: []metricdata.DataPoint[int64]{
-					{
-						Attributes: attribute.NewSet(attribute.String("grpc.target", grpcTarget)),
-						Value:      1,
-					},
-				},
-				Temporality: metricdata.CumulativeTemporality,
-				IsMonotonic: true,
-			},
-		},
-	}
-	if err := pollForWantMetrics(ctx, t, reader, wantMetrics); err != nil {
-		t.Fatal(err)
-	}*/
 }
 
 func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map[string]metricdata.Metrics {
@@ -300,23 +278,4 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 		}
 	}
 	return gotMetrics
-}
-
-func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.ManualReader, wantMetrics []metricdata.Metrics) error {
-	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
-		gotMetrics := metricsDataFromReader(ctx, reader)
-		for _, metric := range wantMetrics {
-			val, ok := gotMetrics[metric.Name]
-			if !ok {
-				break
-			}
-			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreValue(), metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-				return fmt.Errorf("metrics data type not equal for metric: %v", metric.Name)
-			}
-			return nil
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	return fmt.Errorf("error waiting for metrics %v: %v", wantMetrics, ctx.Err())
 }
