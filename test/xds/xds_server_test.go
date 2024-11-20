@@ -98,7 +98,7 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	// server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatal("failed to create server credentials", err)
+		t.Fatalf("failed to create server credentials: %v", err)
 	}
 	stub := createStubServer(t, lis, creds, modeChangeOpt, bootstrapContents)
 	defer stub.S.Stop()
@@ -204,7 +204,7 @@ func (s) TestRDSNack(t *testing.T) {
 	// server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatal("failed to create server credentials", err)
+		t.Fatalf("failed to create server credentials: %v", err)
 	}
 
 	stub := createStubServer(t, lis, creds, modeChangeOpt, bootstrapContents)
