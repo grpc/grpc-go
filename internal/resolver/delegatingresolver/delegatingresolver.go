@@ -18,10 +18,9 @@
 
 // Package delegatingresolver implements the default resolver for gRPC.
 // It handles both target URI and proxy address resolution, unless:
-//  - A custom dialer is set using WithContextDialer dialoption.
-//  - Proxy usage is explicitly disabled using WithNoProxy dialoption.
-//  - Client-side resolution is explicitly enforced using WithTargetResolutionEnabled.
-
+//   - A custom dialer is set using WithContextDialer dialoption.
+//   - Proxy usage is explicitly disabled using WithNoProxy dialoption.
+//   - Client-side resolution is explicitly enforced using WithTargetResolutionEnabled.
 package delegatingresolver
 
 import (
