@@ -48,7 +48,7 @@ func Dial(hsAddress string) (*grpc.ClientConn, error) {
 		// Create a new connection to the handshaker service. Note that
 		// this connection stays open until the application is closed.
 		var err error
-		hsConn, err = grpc.Dial(hsAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		hsConn, err = grpc.Dial(hsAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDisableServiceConfig())
 		if err != nil {
 			return nil, err
 		}

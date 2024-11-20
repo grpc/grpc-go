@@ -333,7 +333,11 @@ func (d *dnsResolver) lookupHost(ctx context.Context) ([]resolver.Address, error
 func (d *dnsResolver) lookup() (*resolver.State, error) {
 	ctx, cancel := context.WithTimeout(d.ctx, ResolvingTimeout)
 	defer cancel()
-	srv, srvErr := d.lookupSRV(ctx)
+	var srv []resolver.Address
+	var srvErr error
+	if !d.disableServiceConfig {
+		srv, srvErr = d.lookupSRV(ctx)
+	}
 	addrs, hostErr := d.lookupHost(ctx)
 	if hostErr != nil && (srvErr != nil || len(srv) == 0) {
 		return nil, hostErr
