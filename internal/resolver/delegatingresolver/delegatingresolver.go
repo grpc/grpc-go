@@ -74,7 +74,7 @@ func mapAddress(address string) (*url.URL, error) {
 
 // New creates a new delegating resolver that will call the target and proxy
 // child resolvers based on the proxy enviorinment configurations.
-func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder) (resolver.Resolver, error) {
+func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
 	r := &delegatingResolver{
 		target: target,
 		cc:     cc,
@@ -87,7 +87,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	}
 
 	if r.proxyURL == nil {
-		// Add an info log here.
 		logger.Info("No proxy URL detected")
 		return targetResolverBuilder.Build(target, cc, opts)
 	}
@@ -95,7 +94,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// When the scheme is 'dns', resolution should be handled by the proxy, not
 	// the client. Therefore, we bypass the target resolver and store the
 	// unresolved target address.
-	if target.URL.Scheme == "dns" {
+	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
 		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
 	} else {
 		// targetResolverBuilder must not be nil. If it is nil, the channel should
