@@ -237,7 +237,7 @@ func (d *dnsResolver) watcher() {
 }
 
 func (d *dnsResolver) lookupSRV(ctx context.Context) ([]resolver.Address, error) {
-	if !EnableSRVLookups {
+	if !EnableSRVLookups || d.host == "metadata.google.internal."{
 		return nil, nil
 	}
 	var newAddrs []resolver.Address
@@ -333,11 +333,7 @@ func (d *dnsResolver) lookupHost(ctx context.Context) ([]resolver.Address, error
 func (d *dnsResolver) lookup() (*resolver.State, error) {
 	ctx, cancel := context.WithTimeout(d.ctx, ResolvingTimeout)
 	defer cancel()
-	var srv []resolver.Address
-	var srvErr error
-	if !d.disableServiceConfig {
-		srv, srvErr = d.lookupSRV(ctx)
-	}
+	srv, srvErr := d.lookupSRV(ctx)
 	addrs, hostErr := d.lookupHost(ctx)
 	if hostErr != nil && (srvErr != nil || len(srv) == 0) {
 		return nil, hostErr
