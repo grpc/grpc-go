@@ -153,10 +153,13 @@ func (s) TestDelegatingResolverwithDNSAndProxy(t *testing.T) {
 	envconfig.HTTPProxy = "testProxyAddr.com"
 	defer func() { envconfig.HTTPProxy = origHTTPProxy }()
 	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
+		if req.URL.Host == targetTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		return nil, nil
 	}
 	defer overwrite(hpfe)()
 	mrTarget := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
@@ -197,10 +200,13 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	envconfig.HTTPProxy = "testProxyAddr.com"
 	defer func() { envconfig.HTTPProxy = origHTTPProxy }()
 	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
+		if req.URL.Host == targetTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		return nil, nil
 	}
 	defer overwrite(hpfe)()
 
