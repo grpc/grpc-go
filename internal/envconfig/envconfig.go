@@ -55,6 +55,8 @@ var (
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
 	// to "true".
 	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", false)
+
+	HTTPProxy = stringFromEnv("HTTPS_PROXY", "")
 )
 
 func boolFromEnv(envVar string, def bool) bool {
@@ -78,4 +80,12 @@ func uint64FromEnv(envVar string, def, min, max uint64) uint64 {
 		return max
 	}
 	return v
+}
+
+func stringFromEnv(envVar string, def string) string {
+	val := os.Getenv(envVar)
+	if val == "" {
+		return def
+	}
+	return val
 }

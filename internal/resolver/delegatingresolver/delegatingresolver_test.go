@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -99,7 +100,10 @@ func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, 
 // TestDelegatingResolverNoProxy verifies the behavior of the delegating resolver
 // when no proxy is configured.
 func (s) TestDelegatingResolverNoProxy(t *testing.T) {
-	t.Setenv("HTTPS_PROXY", "")
+	// Enable HTTP Proxy env var.
+	origHTTPProxy := envconfig.HTTPProxy
+	envconfig.HTTPProxy = ""
+	defer func() { envconfig.HTTPProxy = origHTTPProxy }()
 	mr := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
 	target := "test:///" + targetTestAddr
 
@@ -144,7 +148,10 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // correctly updates state when the target URI scheme is DNS and a proxy is
 // configured.
 func (s) TestDelegatingResolverwithDNSAndProxy(t *testing.T) {
-	t.Setenv("HTTPS_PROXY", "testProxyAddr.com")
+	// Enable HTTP Proxy env var.
+	origHTTPProxy := envconfig.HTTPProxy
+	envconfig.HTTPProxy = "testProxyAddr.com"
+	defer func() { envconfig.HTTPProxy = origHTTPProxy }()
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		return &url.URL{
 			Scheme: "https",
@@ -185,7 +192,10 @@ func (s) TestDelegatingResolverwithDNSAndProxy(t *testing.T) {
 // correctly updates state when the target URI scheme is not DNS and a proxy is
 // configured.
 func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
-	t.Setenv("HTTPS_PROXY", "envTestAddr.com")
+	// Enable HTTP Proxy env var.
+	origHTTPProxy := envconfig.HTTPProxy
+	envconfig.HTTPProxy = "testProxyAddr.com"
+	defer func() { envconfig.HTTPProxy = origHTTPProxy }()
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		return &url.URL{
 			Scheme: "https",
