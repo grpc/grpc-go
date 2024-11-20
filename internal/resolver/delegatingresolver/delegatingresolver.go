@@ -174,8 +174,8 @@ func SetUser(addr resolver.Address, user *url.Userinfo) resolver.Address {
 // GetUser returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
 func GetUser(addr resolver.Address) *url.Userinfo {
-	s, _ := addr.Attributes.Value(userKey).(*url.Userinfo)
-	return s
+	user, _ := addr.Attributes.Value(userKey).(*url.Userinfo)
+	return user
 }
 
 func (r *delegatingResolver) updateState(state resolver.State) resolver.State {
