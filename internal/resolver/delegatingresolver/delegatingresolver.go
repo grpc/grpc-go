@@ -150,29 +150,29 @@ type keyType string
 const proxyConnectAddrKey = keyType("grpc.resolver.delegatingresolver.proxyConnectAddr")
 const userKey = keyType("grpc.resolver.delegatingresolver.user")
 
-// Set returns a copy of the provided state with attributes containing address
-// to be sent in connect request to proxy.  It's data should not be mutated
-// after calling Set.
+// SetConnectAddr returns a copy of the provided resolver.Address with attributes
+// containing address to be sent in connect request to proxy.  It's data should
+// not be mutated after calling SetConnectAddr.
 func SetConnectAddr(resAddr resolver.Address, addr string) resolver.Address {
 	resAddr.Attributes = resAddr.Attributes.WithValue(proxyConnectAddrKey, addr)
 	return resAddr
 }
 
-// Get returns the proxy connect address in resolver.State, or nil if not present.
-// The returned data should not be mutated.
+// GetConnectAddr returns the proxy connect address in resolver.Address, or nil
+// if not present. The returned data should not be mutated.
 func GetConnectAddr(addr resolver.Address) string {
 	s, _ := addr.Attributes.Value(proxyConnectAddrKey).(string)
 	return s
 }
 
-// Set returns a copy of the provided state with attributes containing user info.
-// It's data should not be mutated after calling Set.
+// SetUser returns a copy of the provided address with attributes containing
+// user info. It's data should not be mutated after calling SetUser.
 func SetUser(addr resolver.Address, user *url.Userinfo) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(userKey, user)
 	return addr
 }
 
-// Get returns the user info in the resolver.State, or nil if not present.
+// GetUser returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
 func GetUser(addr resolver.Address) *url.Userinfo {
 	s, _ := addr.Attributes.Value(userKey).(*url.Userinfo)
