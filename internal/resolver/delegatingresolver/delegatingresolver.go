@@ -231,7 +231,7 @@ func (wcc *wrappingClientConn) ReportError(err error) {
 // NewAddress intercepts the new resolved address from the chid resolvers and
 // pass to CLientConn
 func (wcc *wrappingClientConn) NewAddress(addrs []resolver.Address) {
-	wcc.parent.cc.NewAddress(addrs)
+	wcc.UpdateState(resolver.State{Addresses: addrs})
 }
 
 // ParseServiceConfig parses the provided service config and returns an
