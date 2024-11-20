@@ -44,26 +44,18 @@ type Carrier struct {
 	direction propagationDirection
 }
 
-// NewIncomingCarrier creates a new Carrier with the incoming context from the
-// given context and incoming propagation direction. The incoming carrier
-// should be used with propagator's `Extract()` method.
+// NewIncomingCarrier creates a new Carrier with the given context and incoming
+// propagation direction. The incoming carrier should be used with propagator's
+// `Extract()` method.
 func NewIncomingCarrier(ctx context.Context) *Carrier {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return &Carrier{ctx: metadata.NewIncomingContext(ctx, metadata.MD{}), direction: incoming}
-	}
-	return &Carrier{ctx: metadata.NewIncomingContext(ctx, md), direction: incoming}
+	return &Carrier{ctx: ctx, direction: incoming}
 }
 
-// NewOutgoingCarrier creates a new Carrier with the outgoing context from the
-// given context and outgoing propagation direction. The outgoing carrier
-// should be used with propagator's `Inject()` method.
+// NewOutgoingCarrier creates a new Carrier with the given context and outgoing
+// propagation direction. The outgoing carrier should be used with propagator's
+// `Inject()` method.
 func NewOutgoingCarrier(ctx context.Context) *Carrier {
-	md, ok := metadata.FromOutgoingContext(ctx)
-	if !ok {
-		return &Carrier{ctx: metadata.NewOutgoingContext(ctx, metadata.MD{}), direction: outgoing}
-	}
-	return &Carrier{ctx: metadata.NewOutgoingContext(ctx, md), direction: outgoing}
+	return &Carrier{ctx: ctx, direction: outgoing}
 }
 
 // Get returns the string value associated with the passed key from the
