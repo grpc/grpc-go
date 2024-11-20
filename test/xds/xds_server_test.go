@@ -98,7 +98,7 @@ func (s) TestServeLDSRDS(t *testing.T) {
 	// server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("failed to create server credentials", err)
 	}
 	stub := createStubServer(t, lis, creds, modeChangeOpt, bootstrapContents)
 	defer stub.S.Stop()
@@ -204,7 +204,7 @@ func (s) TestRDSNack(t *testing.T) {
 	// server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("failed to create server credentials", err)
 	}
 
 	stub := createStubServer(t, lis, creds, modeChangeOpt, bootstrapContents)
@@ -272,8 +272,7 @@ func (s) TestMultipleUpdatesImmediatelySwitch(t *testing.T) {
 		},
 	}
 
-	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents)}
-	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
+	if stub.S, err = xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents)); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer stub.S.Stop()

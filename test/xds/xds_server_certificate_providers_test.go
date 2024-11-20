@@ -168,8 +168,7 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	stub := &stubserver.StubServer{
 		Listener: lis,
 	}
-	stub.S, err = xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs))
-	if err != nil {
+	if stub.S, err = xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs)); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 	defer stub.S.Stop()
