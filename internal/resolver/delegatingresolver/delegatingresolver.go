@@ -72,6 +72,8 @@ func mapAddress(address string) (*url.URL, error) {
 	return url, nil
 }
 
+// New creates a new delegating resolver that will call the target and proxy
+// child resolvers based on the proxy enviorinment configurations.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder) (resolver.Resolver, error) {
 	r := &delegatingResolver{
 		target: target,
