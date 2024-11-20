@@ -237,7 +237,7 @@ func (d *dnsResolver) watcher() {
 }
 
 func (d *dnsResolver) lookupSRV(ctx context.Context) ([]resolver.Address, error) {
-	if !EnableSRVLookups || d.host == "metadata.google.internal."{
+	if !EnableSRVLookups || d.host == "metadata.google.internal." {
 		return nil, nil
 	}
 	var newAddrs []resolver.Address
