@@ -229,8 +229,11 @@ func (wcc *wrappingClientConn) ReportError(err error) {
 	wcc.parent.cc.ReportError(err)
 }
 
-// NewAddress is a no-op as it has been deprecated.
-func (wcc *wrappingClientConn) NewAddress(addrs []resolver.Address) {}
+// NewAddress intercepts the new resolved address from the chid resolvers and
+// pass to CLientConn
+func (wcc *wrappingClientConn) NewAddress(addrs []resolver.Address) {
+	wcc.parent.cc.NewAddress(addrs)
+}
 
 // ParseServiceConfig parses the provided service config and returns an
 // object that provides the parsed config.
