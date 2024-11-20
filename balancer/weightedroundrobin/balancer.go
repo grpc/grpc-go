@@ -19,7 +19,6 @@
 package weightedroundrobin
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	rand "math/rand/v2"
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/resolver"
@@ -211,7 +211,7 @@ type wrrBalancer struct {
 	mu               sync.Mutex
 	cfg              *lbConfig // active config
 	locality         string
-	stopPicker       func()
+	stopPicker       *grpcsync.Event
 	addressWeights   *resolver.AddressMap  // addr -> endpointWeight
 	endpointToWeight *resolver.EndpointMap // endpoint -> endpointWeight
 	scToWeight       map[balancer.SubConn]*endpointWeight
@@ -245,7 +245,7 @@ func (b *wrrBalancer) UpdateState(state balancer.State) {
 	defer b.mu.Unlock()
 
 	if b.stopPicker != nil {
-		b.stopPicker()
+		b.stopPicker.Fire()
 		b.stopPicker = nil
 	}
 
@@ -288,9 +288,8 @@ func (b *wrrBalancer) UpdateState(state balancer.State) {
 		target:          b.target,
 	}
 
-	var ctx context.Context
-	ctx, b.stopPicker = context.WithCancel(context.Background())
-	p.start(ctx)
+	b.stopPicker = grpcsync.NewEvent()
+	p.start(b.stopPicker)
 
 	b.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: state.ConnectivityState,
@@ -388,7 +387,7 @@ func (b *wrrBalancer) updateSubConnState(sc balancer.SubConn, state balancer.Sub
 func (b *wrrBalancer) Close() {
 	b.mu.Lock()
 	if b.stopPicker != nil {
-		b.stopPicker()
+		b.stopPicker.Fire()
 		b.stopPicker = nil
 	}
 	b.mu.Unlock()
@@ -468,7 +467,7 @@ func (p *picker) regenerateScheduler() {
 	atomic.StorePointer(&p.scheduler, unsafe.Pointer(&s))
 }
 
-func (p *picker) start(ctx context.Context) {
+func (p *picker) start(done *grpcsync.Event) {
 	p.regenerateScheduler()
 	if len(p.weightedPickers) == 1 {
 		// No need to regenerate weights with only one backend.
@@ -480,7 +479,7 @@ func (p *picker) start(ctx context.Context) {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-ctx.Done():
+			case <-done.Done():
 				return
 			case <-ticker.C:
 				p.regenerateScheduler()
