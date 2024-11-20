@@ -111,8 +111,8 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		},
 	}
 
-	sopts := []grpc.ServerOption{grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents)}
-	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
+	stub.S, err = xds.NewGRPCServer(grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 

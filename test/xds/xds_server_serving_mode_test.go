@@ -66,19 +66,8 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 
 	// Initialize a test gRPC server, assign it to the stub server, and start
 	// the test service.
-	stub := &stubserver.StubServer{
-		Listener: lis,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	sopts := []grpc.ServerOption{grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
-	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
+	stub := createStubServer(t, lis, creds, modeChangeOpt, bootstrapContents)
 	defer stub.S.Stop()
-
-	stubserver.StartTestService(t, stub)
 
 	// Setup the management server to respond with the listener resources.
 	host, port, err := hostPortFromListener(lis)
