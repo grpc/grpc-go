@@ -56,9 +56,9 @@ const (
 )
 
 var (
-	testLocalityIDs []internal.LocalityID
-	testAddressStrs [][]string
-	testEndpoints   [][]xdsresource.Endpoint
+	testLocalityIDs       []internal.LocalityID
+	testResolverEndpoints [][]resolver.Endpoint
+	testEndpoints         [][]xdsresource.Endpoint
 
 	testLocalitiesP0, testLocalitiesP1 []xdsresource.Locality
 
@@ -85,12 +85,12 @@ func init() {
 	for i := 0; i < localityCount; i++ {
 		testLocalityIDs = append(testLocalityIDs, internal.LocalityID{Zone: fmt.Sprintf("test-zone-%d", i)})
 		var (
-			addrs []string
-			ends  []xdsresource.Endpoint
+			endpoints []resolver.Endpoint
+			ends      []xdsresource.Endpoint
 		)
 		for j := 0; j < endpointPerLocality; j++ {
 			addr := fmt.Sprintf("addr-%d-%d", i, j)
-			addrs = append(addrs, addr)
+			endpoints = append(endpoints, resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}})
 			ends = append(ends, xdsresource.Endpoint{
 				Address:      addr,
 				HealthStatus: xdsresource.EndpointHealthStatusHealthy,
@@ -100,7 +100,7 @@ func init() {
 				},
 			})
 		}
-		testAddressStrs = append(testAddressStrs, addrs)
+		testResolverEndpoints = append(testResolverEndpoints, endpoints)
 		testEndpoints = append(testEndpoints, ends)
 	}
 
@@ -175,7 +175,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 			mechanism: DiscoveryMechanism{
 				Type: DiscoveryMechanismTypeLogicalDNS,
 			},
-			addresses:    testAddressStrs[4],
+			endpoints:    testResolverEndpoints[4],
 			childNameGen: newNameGenerator(1),
 		},
 	}, nil)
@@ -230,7 +230,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 				Type:             DiscoveryMechanismTypeLogicalDNS,
 				outlierDetection: noopODCfg,
 			},
-			addresses:    testAddressStrs[4],
+			endpoints:    testResolverEndpoints[4],
 			childNameGen: newNameGenerator(1),
 		},
 	}, nil)
@@ -305,7 +305,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 }
 
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotAddrs := buildClusterImplConfigForDNS(newNameGenerator(3), testAddressStrs[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
+	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
 	wantName := "priority-3"
 	wantConfig := &clusterimpl.LBConfig{
 		Cluster: testClusterName2,
@@ -326,7 +326,7 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
 		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 	}
-	if diff := cmp.Diff(gotAddrs, wantEndpoints, endpointCmpOpts); diff != "" {
+	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 	}
 }

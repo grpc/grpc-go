@@ -48,8 +48,8 @@ type priorityConfig struct {
 	mechanism DiscoveryMechanism
 	// edsResp is set only if type is EDS.
 	edsResp xdsresource.EndpointsUpdate
-	// addresses is set only if type is DNS.
-	addresses []string
+	// endpoints is set only if type is DNS.
+	endpoints []resolver.Endpoint
 	// Each discovery mechanism has a name generator so that the child policies
 	// can reuse names between updates (EDS updates for example).
 	childNameGen *nameGenerator
@@ -107,7 +107,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			continue
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.addresses, p.mechanism)
+			name, config, endpoints := buildClusterImplConfigForDNS(p.childNameGen, p.endpoints, p.mechanism)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retEndpoints = append(retEndpoints, endpoints...)
 			odCfg := makeClusterImplOutlierDetectionChild(config, p.mechanism.outlierDetection)
@@ -137,14 +137,13 @@ func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg out
 	return &odCfgRet
 }
 
-func buildClusterImplConfigForDNS(g *nameGenerator, addrStrs []string, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
+func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoint, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Endpoint) {
 	// Endpoint picking policy for DNS is hardcoded to pick_first.
 	const childPolicy = "pick_first"
-	retEndpoints := make([]resolver.Endpoint, 0, len(addrStrs))
+	retEndpoints := make([]resolver.Endpoint, len(endpoints))
 	pName := fmt.Sprintf("priority-%v", g.prefix)
-	for _, addrStr := range addrStrs {
-		endpoint := resolver.Endpoint{Addresses: []resolver.Address{{Addr: addrStr}}}
-		retEndpoints = append(retEndpoints, hierarchy.SetInEndpoint(endpoint, []string{pName}))
+	for i, e := range endpoints {
+		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
 	}
 	return pName, &clusterimpl.LBConfig{
 		Cluster:         mechanism.Cluster,
