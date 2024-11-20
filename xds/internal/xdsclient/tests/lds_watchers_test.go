@@ -976,8 +976,8 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 }
 
 // TestLDSWatch_NACKError covers the case where an update from the management
-// server is NACK'ed by the xdsclient. The test verifies that the error is
-// propagated to the existing watcher. After NACK, If a new watcher registers
+// server is NACKed by the xdsclient. The test verifies that the error is
+// propagated to the existing watcher. After NACK, if a new watcher registers
 // for the resource, error is propagated to the new watcher as well.
 func (s) TestLDSWatch_NACKError(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -1018,11 +1018,11 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	// Verify that the expected error is propagated to the watcher.
 	u, err := lw.updateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
+		t.Fatalf("Timeout when waiting for a listener resource from the management server: %v", err)
 	}
 	gotErr := u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
 
 	// Verify that the expected error is propagated to the new watcher as well.
@@ -1031,11 +1031,11 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	defer ldsCancel2()
 	u, err = lw2.updateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
+		t.Fatalf("Timeout when waiting for a listener resource from the management server: %v", err)
 	}
 	gotErr = u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
 }
 
@@ -1044,18 +1044,31 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 // good update as well as latest NACK error. The test verifies that new watcher
 // receives both good update and error without a new resource request being
 // sent to the management server.
-func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
+func TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
+	firstRequestReceived := false
+	firstAckReceived := grpcsync.NewEvent()
+	secondAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
-			// If the version is "2", it means that a second request has been
-			// received (after an initial request and ack). The client should
-			// not send a second request if the resource is already cached.
-			if req.GetVersionInfo() == "2" {
-				secondRequestReceived.Fire()
+			// The first request has an empty version string.
+			if !firstRequestReceived && req.GetVersionInfo() == "" {
+				firstRequestReceived = true
 				return nil
 			}
+			// The first ack has a non-empty version string.
+			if !firstAckReceived.HasFired() && req.GetVersionInfo() != "" {
+				firstAckReceived.Fire()
+				return nil
+			}
+			// The second ack has a non-empty version string.
+			if !secondAckReceived.HasFired() && req.GetVersionInfo() != "" {
+				secondAckReceived.Fire()
+				return nil
+			}
+			// Any requests after the first request and two acks, are not expected.
+			secondRequestReceived.Fire()
 			return nil
 		},
 	})
@@ -1078,6 +1091,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	lw1 := newListenerWatcher()
 	ldsCancel1 := xdsresource.WatchListener(client, ldsName, lw1)
 	defer ldsCancel1()
+
 	// Configure the management server to return a single listener
 	// resource, corresponding to the one we registered a watch for.
 	resources := e2e.UpdateOptions{
@@ -1090,6 +1104,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
+
 	// Verify the contents of the received update.
 	wantUpdate := listenerUpdateErrTuple{
 		update: xdsresource.ListenerUpdate{
@@ -1111,6 +1126,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
+
 	// Verify that the expected error is propagated to the existing watcher.
 	u, err := lw1.updateCh.Receive(ctx)
 	if err != nil {
@@ -1118,7 +1134,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 	gotErr := u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
 
 	// Register another watch for the same resource. This should get the update
@@ -1131,11 +1147,11 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 	u, err = lw2.updateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
+		t.Fatalf("Timeout when waiting for a listener resource from the management server: %v", err)
 	}
 	gotErr = u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
 	}
 	// No request should get sent out as part of this watch.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -1150,7 +1166,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 // TestLDSWatch_PartialValid covers the case where a response from the
 // management server contains both valid and invalid resources and is expected
-// to be NACK'ed by the xdsclient. The test verifies that watchers corresponding
+// to be NACKed by the xdsclient. The test verifies that watchers corresponding
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
 func (s) TestLDSWatch_PartialValid(t *testing.T) {

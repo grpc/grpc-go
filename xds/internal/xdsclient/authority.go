@@ -644,7 +644,10 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		}
 		// If last update was NACK'd, notify the new watcher of error
 		// immediately as well.
-		if state.md.Status == xdsresource.ServiceStatusNACKed && state.md.ErrState != nil {
+		if state.md.Status == xdsresource.ServiceStatusNACKed {
+			if a.logger.V(2) {
+				a.logger.Infof("Resource type %q with resource name %q was NACKed: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
+			}
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.ErrState.Err, func() {}) })
 		}
 		// If the metadata field is updated to indicate that the management
