@@ -313,21 +313,19 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 		oldListener(state)
 	}
 
-	sc, err := b.ClientConn.NewSubConn([]resolver.Address{addr}, opts)
-	if err != nil {
-		return nil, err
-	}
-
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	ewi, ok := b.addressWeights.Get(addr)
 	if !ok {
 		// SubConn state updates can come in for a no longer relevant endpoint
 		// weight (from the old system after a new config update is applied).
+		return nil, fmt.Errorf("balancer is being closed; no new SubConns allowed")
+	}
+	sc, err := b.ClientConn.NewSubConn([]resolver.Address{addr}, opts)
+	if err != nil {
 		return nil, err
 	}
 	b.scToWeight[sc] = ewi.(*endpointWeight)
-
 	return sc, err
 }
 
