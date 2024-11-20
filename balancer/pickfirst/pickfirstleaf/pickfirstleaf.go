@@ -58,22 +58,22 @@ var (
 	// Name is the name of the pick_first_leaf balancer.
 	// It is changed to "pick_first" in init() if this balancer is to be
 	// registered as the default pickfirst.
-	Name                          = "pick_first_leaf"
-	pickFirstDisconnectionsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+	Name                 = "pick_first_leaf"
+	disconnectionsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.disconnections",
 		Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
 		Unit:        "disconnection",
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
-	pickFirstConnectionAttemptsSucceeded = estats.RegisterInt64Count(estats.MetricDescriptor{
+	connectionAttemptsSucceeded = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.connection_attempts_succeeded",
 		Description: "EXPERIMENTAL. Number of successful connection attempts.",
 		Unit:        "attempt",
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
-	pickFirstConnectionAttemptsFailed = estats.RegisterInt64Count(estats.MetricDescriptor{
+	connectionAttemptsFailed = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.connection_attempts_failed",
 		Description: "EXPERIMENTAL. Number of failed connection attempts.",
 		Unit:        "attempt",
@@ -106,7 +106,7 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, bo balancer.BuildOptions) 
 	b := &pickfirstBalancer{
 		cc:              cc,
 		target:          bo.Target.String(),
-		metricsRecorder: bo.MetricsRecorder,
+		metricsRecorder: bo.MetricsRecorder, // ClientConn will always create a Metrics Recorder so guaranteed to be non nil.
 
 		addressList:           addressList{},
 		subConns:              resolver.NewAddressMap(),
@@ -175,7 +175,7 @@ type pickfirstBalancer struct {
 	logger          *internalgrpclog.PrefixLogger
 	cc              balancer.ClientConn
 	target          string
-	metricsRecorder estats.MetricsRecorder
+	metricsRecorder estats.MetricsRecorder // guaranteed to be non nil
 
 	// The mutex is used to ensure synchronization of updates triggered
 	// from the idle picker and the already serialized resolver,
@@ -575,12 +575,12 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		return
 	}
 
-	if oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.TransientFailure {
-		pickFirstConnectionAttemptsFailed.Record(b.metricsRecorder, 1, b.target)
+	if newState.ConnectivityState == connectivity.TransientFailure {
+		connectionAttemptsFailed.Record(b.metricsRecorder, 1, b.target)
 	}
 
 	if newState.ConnectivityState == connectivity.Ready {
-		pickFirstConnectionAttemptsSucceeded.Record(b.metricsRecorder, 1, b.target)
+		connectionAttemptsSucceeded.Record(b.metricsRecorder, 1, b.target)
 		b.shutdownRemainingLocked(sd)
 		if !b.addressList.seekTo(sd.addr) {
 			// This should not fail as we should have only one SubConn after
@@ -607,7 +607,12 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		// the first address when the picker is used.
 		b.shutdownRemainingLocked(sd)
 		b.state = connectivity.Idle
-		pickFirstDisconnectionsMetric.Record(b.metricsRecorder, 1, b.target)
+		// READY SubConn interspliced in between CONNECTING and IDLE, need to
+		// account for that.
+		if oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle {
+			connectionAttemptsSucceeded.Record(b.metricsRecorder, 1, b.target)
+		}
+		disconnectionsMetric.Record(b.metricsRecorder, 1, b.target)
 		b.addressList.reset()
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.Idle,
