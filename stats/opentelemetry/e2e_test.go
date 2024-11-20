@@ -473,7 +473,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	// scheduler.
 	receivedExpectedMetrics := grpcsync.NewEvent()
 	go func() {
-		for !receivedExpectedMetrics.HasFired() {
+		for !receivedExpectedMetrics.HasFired() && ctx.Err() == nil {
 			client.EmptyCall(ctx, &testpb.Empty{})
 			time.Sleep(2 * time.Millisecond)
 		}

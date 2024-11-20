@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -27,9 +28,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -1137,4 +1142,169 @@ func waitForProducedZeroAddressesError(ctx context.Context, t *testing.T, client
 		return nil
 	}
 	return errors.New("timeout when waiting for RPCs to fail with UNAVAILABLE status and produced zero addresses")
+}
+
+// Test runs a server which listens on multiple ports. The test updates xds resouce
+// cache to contain a single endpoint with multiple addresses. The test intercepts
+// the resolver updates sent to the petiole policy and verifies that the
+// additional endpoint addresses are correctly propagated.
+func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Start a backend server which provide that listens to multiple ports to simulate
+	// a backend with multiple addresses.
+	servers, cleanup2 := startTestServiceBackends(t, 1)
+	defer cleanup2()
+	lis1, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer lis1.Close()
+	lis2, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer lis2.Close()
+
+	go servers[0].S.Serve(lis1)
+	go servers[0].S.Serve(lis2)
+
+	addrs, ports := backendAddressesAndPorts(t, servers)
+	additionalPorts := []uint32{
+		testutils.ParsePort(t, lis1.Addr().String()),
+		testutils.ParsePort(t, lis2.Addr().String()),
+	}
+
+	testCases := []struct {
+		name                      string
+		dualstackEndpointsEnabled bool
+		wantEndpointPorts         []uint32
+		wantAddrPorts             []uint32
+	}{
+		{
+			name:                      "flag_enabled",
+			dualstackEndpointsEnabled: true,
+			wantEndpointPorts:         append([]uint32{ports[0]}, additionalPorts...),
+			wantAddrPorts:             ports,
+		},
+		{
+			name:              "flag_disabled",
+			wantEndpointPorts: ports,
+			wantAddrPorts:     ports,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			origDualstackEndpointsEnabled := envconfig.XDSDualstackEndpointsEnabled
+			defer func() {
+				envconfig.XDSDualstackEndpointsEnabled = origDualstackEndpointsEnabled
+			}()
+			envconfig.XDSDualstackEndpointsEnabled = tc.dualstackEndpointsEnabled
+
+			// Wrap the round robin balancer to intercept resolver updates.
+			originalRRBuilder := balancer.Get(roundrobin.Name)
+			defer func() {
+				balancer.Register(originalRRBuilder)
+			}()
+			resolverUpdateCh := make(chan resolver.State, 1)
+			stub.Register(roundrobin.Name, stub.BalancerFuncs{
+				Init: func(bd *stub.BalancerData) {
+					bd.Data = originalRRBuilder.Build(bd.ClientConn, bd.BuildOptions)
+				},
+				Close: func(bd *stub.BalancerData) {
+					bd.Data.(balancer.Balancer).Close()
+				},
+				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+					resolverUpdateCh <- ccs.ResolverState
+					return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+				},
+			})
+
+			// Spin up a management server to receive xDS resources from.
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+			// Create bootstrap configuration pointing to the above management server.
+			nodeID := uuid.New().String()
+			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+			// Create xDS resources for consumption by the test. We start off with a
+			// single backend in a single EDS locality.
+			resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+				Name:   localityName1,
+				Weight: 1,
+				Backends: []e2e.BackendOptions{{
+					Port:            ports[0],
+					AdditionalPorts: additionalPorts}},
+			}})
+
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			// Create an xDS client talking to the above management server, configured
+			// with a short watch expiry timeout.
+			xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+				Name:               t.Name(),
+				Contents:           bootstrapContents,
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
+			if err != nil {
+				t.Fatalf("Failed to create an xDS client: %v", err)
+			}
+			defer close()
+
+			// Create a manual resolver and push a service config specifying the use of
+			// the cluster_resolver LB policy with a single discovery mechanism.
+			r := manual.NewBuilderWithScheme("whatever")
+			jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
+			scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+			r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
+
+			cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+			if err != nil {
+				t.Fatalf("failed to create new client for local test server: %v", err)
+			}
+			defer cc.Close()
+			client := testgrpc.NewTestServiceClient(cc)
+			if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs); err != nil {
+				t.Fatal(err)
+			}
+
+			var rs resolver.State
+			select {
+			case rs = <-resolverUpdateCh:
+			case <-ctx.Done():
+				t.Fatalf("Context timed out waiting for resolver update.")
+			}
+
+			gotEndpointPorts := []uint32{}
+			for _, a := range rs.Endpoints[0].Addresses {
+				gotEndpointPorts = append(gotEndpointPorts, testutils.ParsePort(t, a.Addr))
+			}
+			if diff := cmp.Diff(gotEndpointPorts, tc.wantEndpointPorts); diff != "" {
+				t.Errorf("Unexpected endpoint address ports in resolver update, diff (-got +want): %v", diff)
+			}
+
+			gotAddrPorts := []uint32{}
+			for _, a := range rs.Addresses {
+				gotAddrPorts = append(gotAddrPorts, testutils.ParsePort(t, a.Addr))
+			}
+			if diff := cmp.Diff(gotAddrPorts, tc.wantAddrPorts); diff != "" {
+				t.Errorf("Unexpected address ports in resolver update, diff (-got +want): %v", diff)
+			}
+		})
+	}
 }
