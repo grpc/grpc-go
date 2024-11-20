@@ -56,5 +56,7 @@ var (
 
 	// XDSDualstackEndpointsEnabled is true if gRPC should read the
 	// "additional addresses" in the xDS endpoint resource.
-	XDSDualstackEndpointsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_DUALSTACK_ENDPOINTS", false)
+	// TODO: Control this using an env variable when all LB policies
+	// handle endpoints.
+	XDSDualstackEndpointsEnabled = false
 )
