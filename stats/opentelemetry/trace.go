@@ -41,6 +41,9 @@ type attemptTraceSpan struct {
 	previousRPCAttempts uint32
 }
 
+// commonHandler holds common functionality for both client and server.
+type commonHandler struct{}
+
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptTraceSpan) {
@@ -89,7 +92,7 @@ func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 // invariants of the RPC lifecycle. It ends the span, triggering its export.
 // This function handles attempt spans on the client-side and call spans on the
 // server-side.
-func populateSpan(_ context.Context, rs stats.RPCStats, ti *attemptTraceSpan) {
+func (h *commonHandler) populateSpan(_ context.Context, rs stats.RPCStats, ti *attemptTraceSpan) {
 	if ti == nil || ti.span == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.

@@ -38,6 +38,7 @@ import (
 )
 
 type clientStatsHandler struct {
+	commonHandler
 	estats.MetricsRecorder
 	options       Options
 	clientMetrics clientMetrics
@@ -99,7 +100,10 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 
 	startTime := time.Now()
-	ctx, span := h.createCallTraceSpan(ctx, method)
+	var span trace.Span
+	if !isTracingDisabled(h.options.TraceOptions) {
+		ctx, span = h.createCallTraceSpan(ctx, method)
+	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
 	return err
@@ -134,8 +138,10 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	}
 
 	startTime := time.Now()
-	ctx, span := h.createCallTraceSpan(ctx, method)
-
+	var span trace.Span
+	if !isTracingDisabled(h.options.TraceOptions) {
+		ctx, span = h.createCallTraceSpan(ctx, method)
+	}
 	callback := func(err error) {
 		h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
 	}
@@ -167,13 +173,12 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 // createCallTraceSpan creates a call span if tracing is enabled, which will be put
 // in the context provided if created.
 func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
-	var span trace.Span
-	if !isTracingDisabled(h.options.TraceOptions) {
-		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
-		tracer := otel.Tracer("grpc-open-telemetry")
-		ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	if h.options.TraceOptions.TracerProvider == nil {
+		panic("tracing is required but the TracerProvider is not set. Ensure that tracing is enabled in the options.")
 	}
-	return ctx, span
+	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+	tracer := otel.Tracer("grpc-open-telemetry")
+	return tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -208,8 +213,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		if info.NameResolutionDelay {
 			callSpan.AddEvent("Delayed name resolution complete")
 		}
-		ctx = trace.ContextWithSpan(ctx, callSpan)
-		ctx, ti = h.traceTagRPC(ctx, info)
+		ctx, ti = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
 	}
 	ai := &attemptInfo{ // populates information about RPC start.
 		startTime: time.Now(),
@@ -233,7 +237,7 @@ func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		h.processRPCEvent(ctx, rs, ri.ai)
 	}
 	if !isTracingDisabled(h.options.TraceOptions) {
-		populateSpan(ctx, rs, ri.ai.ti)
+		h.populateSpan(ctx, rs, ri.ai.ti)
 	}
 }
 

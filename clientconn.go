@@ -605,7 +605,7 @@ type ClientConn struct {
 	idlenessMgr         *idle.Manager
 	metricsRecorderList *stats.MetricsRecorderList
 
-	// Tracks if there was a delay in name resolution.
+	// Track if there was a delay in name resolution.
 	nameResolutionDelayed bool
 
 	// The following provide their own synchronization, and therefore don't

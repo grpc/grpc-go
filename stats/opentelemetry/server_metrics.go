@@ -34,6 +34,7 @@ import (
 )
 
 type serverStatsHandler struct {
+	commonHandler
 	estats.MetricsRecorder
 	options       Options
 	serverMetrics serverMetrics
@@ -230,7 +231,7 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		return
 	}
 	if !isTracingDisabled(h.options.TraceOptions) {
-		populateSpan(ctx, rs, ri.ai.ti)
+		h.populateSpan(ctx, rs, ri.ai.ti)
 	}
 	if !isMetricsDisabled(h.options.MetricsOptions) {
 		h.processRPCData(ctx, rs, ri.ai)
