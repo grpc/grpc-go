@@ -34,7 +34,7 @@ import (
 )
 
 type serverStatsHandler struct {
-	commonHandler
+	statsHandler
 	estats.MetricsRecorder
 	options       Options
 	serverMetrics serverMetrics

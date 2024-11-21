@@ -38,7 +38,7 @@ import (
 )
 
 type clientStatsHandler struct {
-	commonHandler
+	statsHandler
 	estats.MetricsRecorder
 	options       Options
 	clientMetrics clientMetrics

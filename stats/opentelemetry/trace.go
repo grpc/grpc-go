@@ -30,10 +30,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// commonHandler holds common functionality for both client and server stats
-// handler.
-type commonHandler struct{}
-
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptInfo) {
@@ -78,11 +74,15 @@ func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	}
 }
 
+// statsHandler holds common functionality for both client and server stats
+// handler.
+type statsHandler struct{}
+
 // populateSpan populates span information based on stats passed in, representing
 // invariants of the RPC lifecycle. It ends the span, triggering its export.
 // This function handles attempt spans on the client-side and call spans on the
 // server-side.
-func (h *commonHandler) populateSpan(_ context.Context, rs stats.RPCStats, ai *attemptInfo) {
+func (h *statsHandler) populateSpan(_ context.Context, rs stats.RPCStats, ai *attemptInfo) {
 	if ai == nil || ai.traceSpan == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.
