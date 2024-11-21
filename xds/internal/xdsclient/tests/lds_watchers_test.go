@@ -95,7 +95,7 @@ type listenerWatcherMultiple struct {
 }
 
 // TODO: delete this once `newListenerWatcher` is modified to handle multiple
-// updates.
+// updates (https://github.com/grpc/grpc-go/issues/7864).
 func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
