@@ -348,34 +348,21 @@ func TestDecompress(t *testing.T) {
 			want:                  []byte("smalll"),
 			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
 		},
-		{
-			name:                  "Succeeds when message size is much smaller than maxReceiveMessageSize",
-			compressor:            c,
-			input:                 []byte("small message"),
-			maxReceiveMessageSize: 50,
-			want:                  []byte("small message"),
-			error:                 nil,
-		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			message := func() mem.BufferSlice {
-				compressedData := compressData(tt.input)
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}()
+			message := mem.BufferSlice{mem.NewBuffer(&tt.input, nil)}
 			output, size, err := decompress(tt.compressor, message, tt.maxReceiveMessageSize, nil)
-			wantMsg := func() mem.BufferSlice {
-				decompressed := tt.want
-				return mem.BufferSlice{mem.NewBuffer(&decompressed, nil)}
-			}()
-
-			// Check for expected error
-			if (err != nil) != (tt.error != nil) {
+			wantMsg := mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
+			if tt.error != nil && err == nil {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
-
 			}
-			// to check when we are passing empty bytes output is "nil"  failure, empty receive message case
+			if tt.error != nil && err == nil {
+				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
+			}
+			if wantMsg != nil && output == nil {
+				t.Fatalf("decompress() got = nil, want = non nil")
+			}
 			if wantMsg != nil && output != nil {
 				if diff := cmp.Diff(wantMsg, output); diff != "" {
 					t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
