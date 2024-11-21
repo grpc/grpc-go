@@ -66,14 +66,14 @@ var (
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
-	connectionAttemptsSucceeded = estats.RegisterInt64Count(estats.MetricDescriptor{
+	connectionAttemptsSucceededMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.connection_attempts_succeeded",
 		Description: "EXPERIMENTAL. Number of successful connection attempts.",
 		Unit:        "attempt",
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
-	connectionAttemptsFailed = estats.RegisterInt64Count(estats.MetricDescriptor{
+	connectionAttemptsFailedMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.connection_attempts_failed",
 		Description: "EXPERIMENTAL. Number of failed connection attempts.",
 		Unit:        "attempt",
@@ -106,7 +106,7 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, bo balancer.BuildOptions) 
 	b := &pickfirstBalancer{
 		cc:              cc,
 		target:          bo.Target.String(),
-		metricsRecorder: bo.MetricsRecorder, // ClientConn will always create a Metrics Recorder so guaranteed to be non nil.
+		metricsRecorder: bo.MetricsRecorder, // ClientConn will always create a Metrics Recorder.
 
 		addressList:           addressList{},
 		subConns:              resolver.NewAddressMap(),
@@ -576,11 +576,11 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	}
 
 	if newState.ConnectivityState == connectivity.TransientFailure {
-		connectionAttemptsFailed.Record(b.metricsRecorder, 1, b.target)
+		connectionAttemptsFailedMetric.Record(b.metricsRecorder, 1, b.target)
 	}
 
 	if newState.ConnectivityState == connectivity.Ready {
-		connectionAttemptsSucceeded.Record(b.metricsRecorder, 1, b.target)
+		connectionAttemptsSucceededMetric.Record(b.metricsRecorder, 1, b.target)
 		b.shutdownRemainingLocked(sd)
 		if !b.addressList.seekTo(sd.addr) {
 			// This should not fail as we should have only one SubConn after
@@ -609,8 +609,11 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		b.state = connectivity.Idle
 		// READY SubConn interspliced in between CONNECTING and IDLE, need to
 		// account for that.
-		if oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle {
-			connectionAttemptsSucceeded.Record(b.metricsRecorder, 1, b.target)
+		if oldState == connectivity.Connecting {
+			// A known issue (https://github.com/grpc/grpc-go/issues/7862)
+			// causes a race that prevents the READY state change notification.
+			// This works around it.
+			connectionAttemptsSucceededMetric.Record(b.metricsRecorder, 1, b.target)
 		}
 		disconnectionsMetric.Record(b.metricsRecorder, 1, b.target)
 		b.addressList.reset()
