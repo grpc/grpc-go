@@ -641,6 +641,11 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			resource := state.cache
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
 		}
+		// If the metadata field is updated to indicate that the management
+		// server does not have this resource, notify the new watcher.
+		if state.md.Status == xdsresource.ServiceStatusNotExist {
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
+		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)
 	}, func() {
 		if a.logger.V(2) {
