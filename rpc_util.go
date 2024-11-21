@@ -873,8 +873,8 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	if err != nil {
 		return nil, 0, err
 	}
-
-	out, err := mem.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1), pool)
+	var out mem.BufferSlice
+	_, err = io.Copy(mem.NewWriter(&out, pool), io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
 	if err != nil {
 		out.Free()
 		return nil, 0, err
@@ -882,7 +882,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	if err = checkReceiveMessageOverflow(int64(out.Len()), int64(maxReceiveMessageSize), dcReader); err != nil {
 		return nil, out.Len() + 1, err
 	}
-	return out, out.Len(), err
+	return out, len(out), err
 }
 
 // checkReceiveMessageOverflow checks if the number of bytes read from the stream exceeds

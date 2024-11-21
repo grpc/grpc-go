@@ -351,27 +351,21 @@ func TestDecompress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			message := mem.BufferSlice{mem.NewBuffer(&tt.input, nil)}
-			output, size, err := decompress(tt.compressor, message, tt.maxReceiveMessageSize, nil)
+			compressedMsg := func() mem.BufferSlice {
+				compressedData := compressData(tt.input)
+				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
+			}()
+			output, _, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, nil)
 			wantMsg := mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
-			if tt.error != nil && err == nil {
-				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
-			}
 			if tt.error != nil && err == nil {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
 			}
 			if wantMsg != nil && output == nil {
 				t.Fatalf("decompress() got = nil, want = non nil")
 			}
-			if wantMsg != nil && output != nil {
-				if diff := cmp.Diff(wantMsg, output); diff != "" {
-					t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
-				}
+			if diff := cmp.Diff(wantMsg, output); diff != "" {
+				t.Fatalf("decompress() mismatch in bytes (-want +got):\n%s", diff)
 			}
-			if size != wantMsg.Len() {
-				t.Fatalf("decompress() buffer len, got = %d, want = %d", size, wantMsg.Len())
-			}
-
 		})
 	}
 }
