@@ -1209,6 +1209,60 @@ func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
 	}
 }
 
+// Test verifies that a health listener is not registered when pickfirst is not
+// under a petiole policy.
+func (s) TestPickFirstLeaf_HealthListenerNotEnabled(t *testing.T) {
+	// Wrap the clientconn to intercept NewSubConn.
+	// Capture the health list by wrapping the SC.
+	// Wrap the picker to unwrap the SC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	healthListenerCh := make(chan func(balancer.SubConnState))
+
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccw := &healthListenerCapturingCCWrapper{
+				ClientConn:       bd.ClientConn,
+				healthListenerCh: healthListenerCh,
+				subConnStateCh:   make(chan balancer.SubConnState, 5),
+			}
+			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			// Functions like a non-petiole policy by not configuring the use
+			// of health listeners.
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+	cc.Connect()
+
+	select {
+	case <-healthListenerCh:
+		t.Fatal("Health listener registered when not enabled.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+}
+
 // Test mocks the updates sent to the health listener and verifies that the
 // balancer correctly reports the health state once the SubConn's connectivity
 // state becomes READY.
