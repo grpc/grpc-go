@@ -131,7 +131,7 @@ type recvBufferReader struct {
 	err         error
 }
 
-func (r *recvBufferReader) ReadHeader(header []byte) (n int, err error) {
+func (r *recvBufferReader) ReadMessageHeader(header []byte) (n int, err error) {
 	if r.err != nil {
 		return 0, r.err
 	}
@@ -140,9 +140,9 @@ func (r *recvBufferReader) ReadHeader(header []byte) (n int, err error) {
 		return n, nil
 	}
 	if r.closeStream != nil {
-		n, r.err = r.readHeaderClient(header)
+		n, r.err = r.readMessageHeaderClient(header)
 	} else {
-		n, r.err = r.readHeader(header)
+		n, r.err = r.readMessageHeader(header)
 	}
 	return n, r.err
 }
@@ -172,12 +172,12 @@ func (r *recvBufferReader) Read(n int) (buf mem.Buffer, err error) {
 	return buf, r.err
 }
 
-func (r *recvBufferReader) readHeader(header []byte) (n int, err error) {
+func (r *recvBufferReader) readMessageHeader(header []byte) (n int, err error) {
 	select {
 	case <-r.ctxDone:
 		return 0, ContextErr(r.ctx.Err())
 	case m := <-r.recv.get():
-		return r.readHeaderAdditional(m, header)
+		return r.readMessageHeaderAdditional(m, header)
 	}
 }
 
@@ -190,7 +190,7 @@ func (r *recvBufferReader) read(n int) (buf mem.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readHeaderClient(header []byte) (n int, err error) {
+func (r *recvBufferReader) readMessageHeaderClient(header []byte) (n int, err error) {
 	// If the context is canceled, then closes the stream with nil metadata.
 	// closeStream writes its error parameter to r.recv as a recvMsg.
 	// r.readAdditional acts on that message and returns the necessary error.
@@ -211,9 +211,9 @@ func (r *recvBufferReader) readHeaderClient(header []byte) (n int, err error) {
 		// faster.
 		r.closeStream(ContextErr(r.ctx.Err()))
 		m := <-r.recv.get()
-		return r.readHeaderAdditional(m, header)
+		return r.readMessageHeaderAdditional(m, header)
 	case m := <-r.recv.get():
-		return r.readHeaderAdditional(m, header)
+		return r.readMessageHeaderAdditional(m, header)
 	}
 }
 
@@ -244,7 +244,7 @@ func (r *recvBufferReader) readClient(n int) (buf mem.Buffer, err error) {
 	}
 }
 
-func (r *recvBufferReader) readHeaderAdditional(m recvMsg, header []byte) (n int, err error) {
+func (r *recvBufferReader) readMessageHeaderAdditional(m recvMsg, header []byte) (n int, err error) {
 	r.recv.load()
 	if m.err != nil {
 		if m.buffer != nil {
@@ -342,23 +342,22 @@ func (s *Stream) write(m recvMsg) {
 	s.buf.put(m)
 }
 
-// ReadHeader reads data into the provided header slice from the stream. It
-// first checks if there was an error during a previous read operation and
+// ReadMessageHeader reads data into the provided header slice from the stream.
+// It first checks if there was an error during a previous read operation and
 // returns it if present. It then requests a read operation for the length of
 // the header. It continues to read from the stream until the entire header
-// slice is filled or an error occurs. If an `io.EOF` error is encountered
-// with partially read data, it is converted to `io.ErrUnexpectedEOF` to
-// indicate an unexpected end of the stream. The method returns any error
-// encountered during the read process or nil if the header was successfully
-// read.
-func (s *Stream) ReadHeader(header []byte) (err error) {
+// slice is filled or an error occurs. If an `io.EOF` error is encountered with
+// partially read data, it is converted to `io.ErrUnexpectedEOF` to indicate an
+// unexpected end of the stream. The method returns any error encountered during
+// the read process or nil if the header was successfully read.
+func (s *Stream) ReadMessageHeader(header []byte) (err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
 		return er
 	}
 	s.requestRead(len(header))
 	for len(header) != 0 {
-		n, err := s.trReader.ReadHeader(header)
+		n, err := s.trReader.ReadMessageHeader(header)
 		header = header[n:]
 		if len(header) == 0 {
 			err = nil
@@ -374,7 +373,7 @@ func (s *Stream) ReadHeader(header []byte) (err error) {
 }
 
 // Read reads n bytes from the wire for this stream.
-func (s *Stream) Read(n int) (data mem.BufferSlice, err error) {
+func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	// Don't request a read if there was an error earlier
 	if er := s.trReader.er; er != nil {
 		return nil, er
@@ -414,8 +413,8 @@ type transportReader struct {
 	er            error
 }
 
-func (t *transportReader) ReadHeader(header []byte) (int, error) {
-	n, err := t.reader.ReadHeader(header)
+func (t *transportReader) ReadMessageHeader(header []byte) (int, error) {
+	n, err := t.reader.ReadMessageHeader(header)
 	if err != nil {
 		t.er = err
 		return 0, err
@@ -509,9 +508,9 @@ type ConnectOptions struct {
 	BufferPool mem.BufferPool
 }
 
-// Options provides additional hints and information for message
+// WriteOptions provides additional hints and information for message
 // transmission.
-type Options struct {
+type WriteOptions struct {
 	// Last indicates whether this write is the last piece for
 	// this stream.
 	Last bool
@@ -560,18 +559,8 @@ type ClientTransport interface {
 	// It does not block.
 	GracefulClose()
 
-	// Write sends the data for the given stream. A nil stream indicates
-	// the write is to be performed on the transport as a whole.
-	Write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *Options) error
-
 	// NewStream creates a Stream for an RPC.
 	NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error)
-
-	// CloseStream clears the footprint of a stream when the stream is
-	// not needed any more. The err indicates the error incurred when
-	// CloseStream is called. Must be called when a stream is finished
-	// unless the associated transport is closing.
-	CloseStream(stream *ClientStream, err error)
 
 	// Error returns a channel that is closed when some I/O error
 	// happens. Typically the caller should have a goroutine to monitor
@@ -591,12 +580,6 @@ type ClientTransport interface {
 
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
-
-	// IncrMsgSent increments the number of message sent through this transport.
-	IncrMsgSent()
-
-	// IncrMsgRecv increments the number of message received through this transport.
-	IncrMsgRecv()
 }
 
 // ServerTransport is the common interface for all gRPC server-side transport
@@ -608,18 +591,6 @@ type ServerTransport interface {
 	// HandleStreams receives incoming streams using the given handler.
 	HandleStreams(context.Context, func(*ServerStream))
 
-	// WriteHeader sends the header metadata for the given stream.
-	// WriteHeader may not be called on all streams.
-	WriteHeader(s *ServerStream, md metadata.MD) error
-
-	// Write sends the data for the given stream.
-	// Write may not be called on all streams.
-	Write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *Options) error
-
-	// WriteStatus sends the status of a stream to the client.  WriteStatus is
-	// the final call made on a stream and always occurs.
-	WriteStatus(s *ServerStream, st *status.Status) error
-
 	// Close tears down the transport. Once it is called, the transport
 	// should not be accessed any more. All the pending streams and their
 	// handlers will be terminated asynchronously.
@@ -630,12 +601,14 @@ type ServerTransport interface {
 
 	// Drain notifies the client this ServerTransport stops accepting new RPCs.
 	Drain(debugData string)
+}
 
-	// IncrMsgSent increments the number of message sent through this transport.
-	IncrMsgSent()
-
-	// IncrMsgRecv increments the number of message received through this transport.
-	IncrMsgRecv()
+type internalServerTransport interface {
+	ServerTransport
+	writeHeader(s *ServerStream, md metadata.MD) error
+	write(s *ServerStream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error
+	writeStatus(s *ServerStream, st *status.Status) error
+	incrMsgRecv()
 }
 
 // connectionErrorf creates an ConnectionError with the specified error description.

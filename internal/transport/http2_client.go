@@ -508,7 +508,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 			ctxDone: s.ctx.Done(),
 			recv:    s.buf,
 			closeStream: func(err error) {
-				t.CloseStream(s, err)
+				s.Close(err)
 			},
 		},
 		windowHandler: func(n int) {
@@ -759,7 +759,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 			return
 		}
 		// The stream was unprocessed by the server.
-		atomic.StoreUint32(&s.unprocessed, 1)
+		s.unprocessed.Store(true)
 		s.write(recvMsg{err: err})
 		close(s.done)
 		// If headerChan isn't closed, then close it.
@@ -902,20 +902,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 		t.GracefulClose()
 	}
 	return s, nil
-}
-
-// CloseStream clears the footprint of a stream when the stream is not needed any more.
-// This must not be executed in reader's goroutine.
-func (t *http2Client) CloseStream(s *ClientStream, err error) {
-	var (
-		rst     bool
-		rstCode http2.ErrCode
-	)
-	if err != nil {
-		rst = true
-		rstCode = http2.ErrCodeCancel
-	}
-	t.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
 }
 
 func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode http2.ErrCode, st *status.Status, mdata map[string][]string, eosReceived bool) {
@@ -1081,7 +1067,7 @@ func (t *http2Client) GracefulClose() {
 
 // Write formats the data into HTTP2 data frame(s) and sends it out. The caller
 // should proceed only if Write returns nil.
-func (t *http2Client) Write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *Options) error {
+func (t *http2Client) write(s *ClientStream, hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
 	reader := data.Reader()
 
 	if opts.Last {
@@ -1110,6 +1096,7 @@ func (t *http2Client) Write(s *ClientStream, hdr []byte, data mem.BufferSlice, o
 		_ = reader.Close()
 		return err
 	}
+	t.incrMsgSent()
 	return nil
 }
 
@@ -1238,7 +1225,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	}
 	if f.ErrCode == http2.ErrCodeRefusedStream {
 		// The stream was unprocessed by the server.
-		atomic.StoreUint32(&s.unprocessed, 1)
+		s.unprocessed.Store(true)
 	}
 	statusCode, ok := http2ErrConvTab[f.ErrCode]
 	if !ok {
@@ -1383,7 +1370,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 	for streamID, stream := range t.activeStreams {
 		if streamID > id && streamID <= upperLimit {
 			// The stream was unprocessed by the server.
-			atomic.StoreUint32(&stream.unprocessed, 1)
+			stream.unprocessed.Store(true)
 			streamsToClose = append(streamsToClose, stream)
 		}
 	}
@@ -1435,7 +1422,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 	endStream := frame.StreamEnded()
-	atomic.StoreUint32(&s.bytesReceived, 1)
+	s.bytesReceived.Store(true)
 	initialHeader := atomic.LoadUint32(&s.headerChanClosed) == 0
 
 	if !initialHeader && !endStream {
@@ -1805,14 +1792,18 @@ func (t *http2Client) socketMetrics() *channelz.EphemeralSocketMetrics {
 
 func (t *http2Client) RemoteAddr() net.Addr { return t.remoteAddr }
 
-func (t *http2Client) IncrMsgSent() {
-	t.channelz.SocketMetrics.MessagesSent.Add(1)
-	t.channelz.SocketMetrics.LastMessageSentTimestamp.Store(time.Now().UnixNano())
+func (t *http2Client) incrMsgSent() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesSent.Add(1)
+		t.channelz.SocketMetrics.LastMessageSentTimestamp.Store(time.Now().UnixNano())
+	}
 }
 
-func (t *http2Client) IncrMsgRecv() {
-	t.channelz.SocketMetrics.MessagesReceived.Add(1)
-	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Store(time.Now().UnixNano())
+func (t *http2Client) incrMsgRecv() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesReceived.Add(1)
+		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Store(time.Now().UnixNano())
+	}
 }
 
 func (t *http2Client) getOutFlowWindow() int64 {

@@ -969,7 +969,7 @@ func (t *http2Server) streamContextErr(s *ServerStream) error {
 }
 
 // WriteHeader sends the header metadata md back to the client.
-func (t *http2Server) WriteHeader(s *ServerStream, md metadata.MD) error {
+func (t *http2Server) writeHeader(s *ServerStream, md metadata.MD) error {
 	s.hdrMu.Lock()
 	defer s.hdrMu.Unlock()
 	if s.getState() == streamDone {
@@ -1042,7 +1042,7 @@ func (t *http2Server) writeHeaderLocked(s *ServerStream) error {
 // There is no further I/O operations being able to perform on this stream.
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
-func (t *http2Server) WriteStatus(s *ServerStream, st *status.Status) error {
+func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	s.hdrMu.Lock()
 	defer s.hdrMu.Unlock()
 
@@ -1113,11 +1113,11 @@ func (t *http2Server) WriteStatus(s *ServerStream, st *status.Status) error {
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
-func (t *http2Server) Write(s *ServerStream, hdr []byte, data mem.BufferSlice, _ *Options) error {
+func (t *http2Server) write(s *ServerStream, hdr []byte, data mem.BufferSlice, _ *WriteOptions) error {
 	reader := data.Reader()
 
 	if !s.isHeaderSent() { // Headers haven't been written yet.
-		if err := t.WriteHeader(s, nil); err != nil {
+		if err := t.writeHeader(s, nil); err != nil {
 			_ = reader.Close()
 			return err
 		}
@@ -1143,6 +1143,7 @@ func (t *http2Server) Write(s *ServerStream, hdr []byte, data mem.BufferSlice, _
 		_ = reader.Close()
 		return err
 	}
+	t.incrMsgSent()
 	return nil
 }
 
@@ -1411,14 +1412,18 @@ func (t *http2Server) socketMetrics() *channelz.EphemeralSocketMetrics {
 	}
 }
 
-func (t *http2Server) IncrMsgSent() {
-	t.channelz.SocketMetrics.MessagesSent.Add(1)
-	t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+func (t *http2Server) incrMsgSent() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesSent.Add(1)
+		t.channelz.SocketMetrics.LastMessageSentTimestamp.Add(1)
+	}
 }
 
-func (t *http2Server) IncrMsgRecv() {
-	t.channelz.SocketMetrics.MessagesReceived.Add(1)
-	t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+func (t *http2Server) incrMsgRecv() {
+	if channelz.IsOn() {
+		t.channelz.SocketMetrics.MessagesReceived.Add(1)
+		t.channelz.SocketMetrics.LastMessageReceivedTimestamp.Add(1)
+	}
 }
 
 func (t *http2Server) getOutFlowWindow() int64 {

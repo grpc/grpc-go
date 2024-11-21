@@ -68,7 +68,7 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
-	client.CloseStream(stream, io.EOF)
+	stream.Close(io.EOF)
 
 	// Verify the server sends a GoAway to client after MaxConnectionIdle timeout
 	// kicks in.
@@ -708,7 +708,7 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 		if err != nil {
 			t.Fatalf("client.NewStream() failed: %v", err)
 		}
-		client.CloseStream(stream, io.EOF)
+		stream.Close(io.EOF)
 
 		// check client TCP user timeout only when non TLS
 		// TODO : find a way to get the underlying conn for client when TLS
@@ -772,7 +772,7 @@ func checkForHealthyStream(client *http2Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := client.NewStream(ctx, &CallHdr{})
-	client.CloseStream(stream, err)
+	stream.Close(err)
 	return err
 }
 
