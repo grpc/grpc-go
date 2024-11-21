@@ -1,6 +1,6 @@
 module google.golang.org/grpc/interop/xds
 
-go 1.22.7
+go 1.22
 
 replace google.golang.org/grpc => ../..
 
@@ -9,7 +9,6 @@ require (
 	go.opentelemetry.io/otel/exporters/prometheus v0.53.0
 	go.opentelemetry.io/otel/sdk/metric v1.31.0
 	google.golang.org/grpc v1.67.1
-	google.golang.org/grpc/stats/opentelemetry v0.0.0-20241028142157-ada6787961b3
 )
 
 require (
