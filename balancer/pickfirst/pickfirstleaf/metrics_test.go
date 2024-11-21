@@ -26,9 +26,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/stats"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -201,13 +203,10 @@ func (s) TestPickFirstMetricsE2E(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	ccState := cc.GetState()
 	// Stop the server, that should send signal to disconnect, which will
-	// eventually emit disconnection metric.
+	// eventually emit disconnection metric before ClientConn goes IDLE.
 	ss.Stop()
-	if ok := cc.WaitForStateChange(ctx, ccState); !ok {
-		t.Fatal("Timeout waiting for channel to go IDLE")
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 	wantMetrics := []metricdata.Metrics{
 		{
 			Name:        "grpc.lb.pick_first.connection_attempts_succeeded",
