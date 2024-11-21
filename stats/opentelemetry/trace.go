@@ -30,23 +30,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// attemptTraceSpan is data used for recording traces. It holds a reference to the
-// current span, message counters for sent and received messages (used for
-// generating message IDs), and the number of previous RPC attempts for the
-// associated call.
-type attemptTraceSpan struct {
-	span                trace.Span
-	countSentMsg        uint32
-	countRecvMsg        uint32
-	previousRPCAttempts uint32
-}
-
-// commonHandler holds common functionality for both client and server.
+// commonHandler holds common functionality for both client and server stats
+// handler.
 type commonHandler struct{}
 
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
-func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptTraceSpan) {
+func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptInfo) {
 	if h.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
 	}
@@ -58,8 +48,8 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	carrier := otelinternaltracing.NewIncomingCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
-	return carrier.Context(), &attemptTraceSpan{
-		span:         span,
+	return carrier.Context(), &attemptInfo{
+		traceSpan:    span,
 		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
 		countRecvMsg: 0,
 	}
@@ -68,7 +58,7 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 // traceTagRPC populates context with new span data, with a parent based on the
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
-func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptTraceSpan) {
+func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptInfo) {
 	if h.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
 	}
@@ -81,8 +71,8 @@ func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	// Span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
 	ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
-	return ctx, &attemptTraceSpan{
-		span:         span,
+	return ctx, &attemptInfo{
+		traceSpan:    span,
 		countSentMsg: 0,
 		countRecvMsg: 0,
 	}
@@ -92,14 +82,14 @@ func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 // invariants of the RPC lifecycle. It ends the span, triggering its export.
 // This function handles attempt spans on the client-side and call spans on the
 // server-side.
-func (h *commonHandler) populateSpan(_ context.Context, rs stats.RPCStats, ti *attemptTraceSpan) {
-	if ti == nil || ti.span == nil {
+func (h *commonHandler) populateSpan(_ context.Context, rs stats.RPCStats, ai *attemptInfo) {
+	if ai == nil || ai.traceSpan == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.
-		logger.Error("ctx passed into stats handler tracing event handling has no span present")
+		logger.Error("ctx passed into stats handler tracing event handling has no traceSpan present")
 		return
 	}
-	span := ti.span
+	span := ai.traceSpan
 
 	switch rs := rs.(type) {
 	case *stats.Begin:
@@ -109,24 +99,24 @@ func (h *commonHandler) populateSpan(_ context.Context, rs stats.RPCStats, ti *a
 		span.SetAttributes(
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.Client),
-			attribute.Int64("previous-rpc-attempts", int64(ti.previousRPCAttempts)),
+			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
 			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
 		// increment previous rpc attempts applicable for next attempt
-		atomic.AddUint32(&ti.previousRPCAttempts, 1)
+		atomic.AddUint32(&ai.previousRPCAttempts, 1)
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting
 		// from one for sent messages and one for received messages."
-		mi := atomic.AddUint32(&ti.countRecvMsg, 1)
+		mi := atomic.AddUint32(&ai.countRecvMsg, 1)
 		span.AddEvent("Inbound compressed message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(mi)),
 			attribute.Int64("message-size", int64(rs.Length)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
 	case *stats.OutPayload:
-		mi := atomic.AddUint32(&ti.countSentMsg, 1)
+		mi := atomic.AddUint32(&ai.countSentMsg, 1)
 		span.AddEvent("Outbound compressed message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(mi)),
 			attribute.Int64("message-size", int64(rs.Length)),

@@ -206,7 +206,14 @@ type attemptInfo struct {
 	pluginOptionLabels map[string]string // pluginOptionLabels to attach to metrics emitted
 	xdsLabels          map[string]string
 
-	ti *attemptTraceSpan
+	// traceSpan is data used for recording traces.
+	traceSpan trace.Span
+	// message counters for sent and received messages (used for
+	// generating message IDs), and the number of previous RPC attempts for the
+	// associated call.
+	countSentMsg        uint32
+	countRecvMsg        uint32
+	previousRPCAttempts uint32
 }
 
 type clientMetrics struct {

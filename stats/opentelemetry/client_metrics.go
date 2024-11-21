@@ -207,24 +207,33 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	var ti *attemptTraceSpan
+	var ai *attemptInfo
 	if !isTracingDisabled(h.options.TraceOptions) {
 		callSpan := trace.SpanFromContext(ctx)
 		if info.NameResolutionDelay {
 			callSpan.AddEvent("Delayed name resolution complete")
 		}
-		ctx, ti = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
+		ctx, ai = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
+		return setRPCInfo(ctx, &rpcInfo{
+			ai: &attemptInfo{
+				startTime:           time.Now(),
+				xdsLabels:           labels.TelemetryLabels,
+				method:              info.FullMethodName,
+				traceSpan:           ai.traceSpan,
+				countSentMsg:        ai.countSentMsg,
+				countRecvMsg:        ai.countRecvMsg,
+				previousRPCAttempts: ai.previousRPCAttempts,
+			},
+		})
 	}
-	ai := &attemptInfo{ // populates information about RPC start.
-		startTime: time.Now(),
-		xdsLabels: labels.TelemetryLabels,
-		method:    info.FullMethodName,
-		ti:        ti,
-	}
-	ri := &rpcInfo{
-		ai: ai,
-	}
-	return setRPCInfo(ctx, ri)
+
+	return setRPCInfo(ctx, &rpcInfo{
+		ai: &attemptInfo{
+			startTime: time.Now(),
+			xdsLabels: labels.TelemetryLabels,
+			method:    info.FullMethodName,
+		},
+	})
 }
 
 func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
@@ -237,7 +246,7 @@ func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		h.processRPCEvent(ctx, rs, ri.ai)
 	}
 	if !isTracingDisabled(h.options.TraceOptions) {
-		h.populateSpan(ctx, rs, ri.ai.ti)
+		h.populateSpan(ctx, rs, ri.ai)
 	}
 }
 

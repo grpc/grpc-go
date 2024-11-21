@@ -38,7 +38,7 @@ type GRPCTraceBinPropagator struct{}
 // Inject sets OpenTelemetry span context from the Context into the carrier as
 // a `grpc-trace-bin` header if span context is valid.
 //
-// If span context is not valid, it ruturns without setting `grpc-trace-bin`
+// If span context is not valid, it returns without setting `grpc-trace-bin`
 // header.
 func (GRPCTraceBinPropagator) Inject(ctx context.Context, carrier otelpropagation.TextMapCarrier) {
 	sc := oteltrace.SpanFromContext(ctx)
