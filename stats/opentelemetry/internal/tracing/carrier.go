@@ -99,7 +99,7 @@ func NewOutgoingCarrier(ctx context.Context) *OutgoingCarrier {
 // Get just logs an error and returns an empty string. It implements the
 // `TextMapCarrier` interface but should not be used with `OutgoingCarrier`.
 func (c *OutgoingCarrier) Get(string) string {
-	logger.Error("Get() should not be used with `IncomingCarrier`")
+	logger.Error("Get() should not be used with `OutgoingCarrier`")
 	return ""
 }
 
