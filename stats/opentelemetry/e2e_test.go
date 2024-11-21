@@ -633,7 +633,7 @@ func (s) TestClientCallSpanEvents(t *testing.T) {
 	// Create a parent span for the client call
 	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
+	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewOutgoingCarrier(ctx))
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Make a unary RPC
@@ -690,7 +690,7 @@ func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
 	// Create a parent span for the client call
 	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
+	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewOutgoingCarrier(ctx))
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
@@ -759,7 +759,7 @@ func (s) TestGrpcTraceBinPropagator(t *testing.T) {
 	// Create a parent span for the client call
 	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
 	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
+	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewOutgoingCarrier(ctx))
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	// Make a unary RPC
 	if _, err := ss.Client.UnaryCall(

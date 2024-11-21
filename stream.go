@@ -605,8 +605,6 @@ type csAttempt struct {
 	// trInfo.tr is set when created (if EnableTracing is true),
 	// and cleared when the finish method is called.
 	trInfo *traceInfo
-	// nameResolutionDelayed is true if name resolution is delayed.
-	nameResolutionDelayed bool
 
 	statsHandlers []stats.Handler
 	beginTime     time.Time

@@ -45,7 +45,7 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn)
 
-	carrier := otelinternaltracing.NewIncomingCarrier(ctx) // Use internal custom carrier to inject
+	carrier := otelinternaltracing.NewOutgoingCarrier(ctx) // Use internal custom carrier to inject
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
 	return carrier.Context(), &attemptInfo{

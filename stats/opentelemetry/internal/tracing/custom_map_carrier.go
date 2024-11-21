@@ -23,47 +23,33 @@ package tracing
 import (
 	"context"
 
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
-// propagationDirection specifies whether the propagation is incoming or
-// outgoing.
-type propagationDirection int
+var logger = grpclog.Component("otel-plugin")
 
-const (
-	Incoming propagationDirection = iota // Incoming propagation direction
-	Outgoing                             // Outgoing propagation direction
-)
-
-// Carrier is a TextMapCarrier that uses `context.Context` to store and
-// retrieve any propagated key-value pairs in text format. The propagation
-// direction (incoming or outgoing) determines which keys should the `Keys()`
-// method returns.
-type Carrier struct {
-	ctx       context.Context
-	direction propagationDirection
+// IncomingCarrier is a TextMapCarrier that uses incoming `context.Context` to
+// retrieve any propagated key-value pairs in text format.
+type IncomingCarrier struct {
+	ctx context.Context
 }
 
-// NewIncomingCarrier creates a new Carrier with the given context and
-// incoming propagation direction.
-func NewIncomingCarrier(ctx context.Context) *Carrier {
-	return &Carrier{ctx: ctx, direction: Incoming}
-}
-
-// NewOutgoingCarrier creates a new Carrier with the given context and
-// outgoing propagation direction.
-func NewOutgoingCarrier(ctx context.Context) *Carrier {
-	return &Carrier{ctx: ctx, direction: Outgoing}
+// NewIncomingCarrier creates a new `IncomingCarrier` with the given context.
+// The incoming carrier should be used with propagator's `Extract()` method in
+// the incoming rpc path.
+func NewIncomingCarrier(ctx context.Context) *IncomingCarrier {
+	return &IncomingCarrier{ctx: ctx}
 }
 
 // Get returns the string value associated with the passed key from the
-// carrier's context metadata.
+// carrier's incoming context metadata.
 //
 // It returns an empty string if the key is not present in the carrier's
 // context or if the value associated with the key is empty.
 //
 // If multiple values are present for a key, it returns the last one.
-func (c *Carrier) Get(key string) string {
+func (c *IncomingCarrier) Get(key string) string {
 	values := metadata.ValueFromIncomingContext(c.ctx, key)
 	if len(values) == 0 {
 		return ""
@@ -71,27 +57,16 @@ func (c *Carrier) Get(key string) string {
 	return values[len(values)-1]
 }
 
-// Set stores the key-value pair in the carrier's context metadata.
-//
-// If the key already exists, given value is appended to the last.
-func (c *Carrier) Set(key, value string) {
-	c.ctx = metadata.AppendToOutgoingContext(c.ctx, key, value)
+// Set just logs an error. It implements the `TextMapCarrier` interface but
+// should not be used with `IncomingCarrier`.
+func (c *IncomingCarrier) Set(string, string) {
+	logger.Error("Set() should not be used with IncomingCarrier.")
 }
 
 // Keys returns the keys stored in the carrier's context metadata. It returns
-// keys from outgoing context metadata if propagation direction is outgoing,
-// otherwise it returns keys from incoming context metadata.
-func (c *Carrier) Keys() []string {
-	var md metadata.MD
-	var ok bool
-
-	switch c.direction {
-	case Outgoing:
-		md, ok = metadata.FromOutgoingContext(c.ctx)
-	case Incoming:
-		md, ok = metadata.FromIncomingContext(c.ctx)
-	}
-
+// keys from incoming context metadata.
+func (c *IncomingCarrier) Keys() []string {
+	md, ok := metadata.FromIncomingContext(c.ctx)
 	if !ok {
 		return nil
 	}
@@ -102,7 +77,55 @@ func (c *Carrier) Keys() []string {
 	return keys
 }
 
-// Context returns the underlying context associated with the Carrier.
-func (c *Carrier) Context() context.Context {
+// Context returns the underlying context associated with the
+// `IncomingCarrier“.
+func (c *IncomingCarrier) Context() context.Context {
+	return c.ctx
+}
+
+// OutgoingCarrier is a TextMapCarrier that uses outgoing `context.Context` to
+// store any propagated key-value pairs in text format.
+type OutgoingCarrier struct {
+	ctx context.Context
+}
+
+// NewOutgoingCarrier creates a new Carrier with the given context. The
+// outgoing carrier should be used with propagator's `Inject()` method in the
+// outgoing rpc path.
+func NewOutgoingCarrier(ctx context.Context) *OutgoingCarrier {
+	return &OutgoingCarrier{ctx: ctx}
+}
+
+// Get just logs an error and returns an empty string. It implements the
+// `TextMapCarrier` interface but should not be used with `OutgoingCarrier`.
+func (c *OutgoingCarrier) Get(string) string {
+	logger.Error("Get() should not be used with `OutgoingCarrier`")
+	return ""
+}
+
+// Set stores the key-value pair in the carrier's outgoing context metadata.
+//
+// If the key already exists, given value is appended to the last.
+func (c *OutgoingCarrier) Set(key, value string) {
+	c.ctx = metadata.AppendToOutgoingContext(c.ctx, key, value)
+}
+
+// Keys returns the keys stored in the carrier's context metadata. It returns
+// keys from outgoing context metadata.
+func (c *OutgoingCarrier) Keys() []string {
+	md, ok := metadata.FromOutgoingContext(c.ctx)
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(md))
+	for key := range md {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// Context returns the underlying context associated with the
+// `OutgoingCarrier“.
+func (c *OutgoingCarrier) Context() context.Context {
 	return c.ctx
 }
