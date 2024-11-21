@@ -94,6 +94,8 @@ type listenerWatcherMultiple struct {
 	updateCh *testutils.Channel
 }
 
+// TODO: delete this once `newListenerWatcher` is modified to handle multiple
+// updates.
 func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
@@ -174,6 +176,18 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unexpected diff in the listener resource update: (-want, got):\n%s", diff)
+	}
+	return nil
+}
+
+func verifyUnknownListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr string) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
+	}
+	gotErr := u.(listenerUpdateErrTuple).err
+	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
 	}
 	return nil
 }
@@ -1016,26 +1030,18 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the watcher.
-	u, err := lw.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout when waiting for a listener resource from the management server: %v", err)
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that the expected error is propagated to the new watcher as well.
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	u, err = lw2.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout when waiting for a listener resource from the management server: %v", err)
-	}
-	gotErr = u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1128,13 +1134,8 @@ func TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	u, err := lw1.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
 
 	// Register another watch for the same resource. This should get the update
@@ -1145,14 +1146,11 @@ func TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
-	u, err = lw2.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Timeout when waiting for a listener resource from the management server: %v", err)
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
-	gotErr = u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("Update received with error: %v, want %q", gotErr, wantListenerNACKErr)
-	}
+
 	// No request should get sent out as part of this watch.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -1233,13 +1231,9 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
-	u, err := lw1.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that the watcher watching the good resource receives a good
