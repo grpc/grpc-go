@@ -864,10 +864,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
+	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithStatsHandler(tmr),
 	}
 	cc, rb, bm := setupPickFirstLeaf(t, 3, opts...)
 	addrs := bm.resolverAddrs()
@@ -922,6 +924,17 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	// Last SubConn fails, this should result in a TF update.
 	holds[1].Fail(fmt.Errorf("test error"))
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Only connection attempt fails in this test.
+	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 3)
+	}
+	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 3)
+	}
+	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 3)
+	}
 }
 
 // Test verifies that pickfirst attempts to connect to the second backend once
@@ -937,10 +950,12 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
+	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
 		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithStatsHandler(tmr),
 	}
 	cc, rb, bm := setupPickFirstLeaf(t, 2, opts...)
 	addrs := bm.resolverAddrs()
@@ -969,6 +984,17 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	// that the channel becomes READY.
 	holds[1].Resume()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+	// Only connection attempt successes in this test.
+	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_succeeded"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_succeeded", got, 1)
+	}
+	if got, _ := tmr.Metric("grpc.lb.pick_first.connection_attempts_failed"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.connection_attempts_failed", got, 0)
+	}
+	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 0 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 0)
+	}
 }
 
 // Test tests the pickfirst balancer by causing a SubConn to fail and then
