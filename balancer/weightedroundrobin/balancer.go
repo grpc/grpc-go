@@ -325,7 +325,7 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 		return nil, err
 	}
 	b.scToWeight[sc] = ewi.(*endpointWeight)
-	return sc, err
+	return sc, nil
 }
 
 func (b *wrrBalancer) ResolverError(err error) {
@@ -467,7 +467,7 @@ func (p *picker) regenerateScheduler() {
 	atomic.StorePointer(&p.scheduler, unsafe.Pointer(&s))
 }
 
-func (p *picker) start(done *grpcsync.Event) {
+func (p *picker) start(stopPicker *grpcsync.Event) {
 	p.regenerateScheduler()
 	if len(p.weightedPickers) == 1 {
 		// No need to regenerate weights with only one backend.
@@ -479,7 +479,7 @@ func (p *picker) start(done *grpcsync.Event) {
 		defer ticker.Stop()
 		for {
 			select {
-			case <-done.Done():
+			case <-stopPicker.Done():
 				return
 			case <-ticker.C:
 				p.regenerateScheduler()
