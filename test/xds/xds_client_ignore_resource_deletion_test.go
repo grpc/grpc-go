@@ -318,10 +318,11 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	var err error
-	if stub.S, err = xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)); err != nil {
+	server, err := xds.NewGRPCServer(grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	stub.S = server
 	t.Cleanup(stub.S.Stop)
 
 	stubserver.StartTestService(t, stub)

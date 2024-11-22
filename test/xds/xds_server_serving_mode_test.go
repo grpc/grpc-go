@@ -355,10 +355,11 @@ func createStubServer(t *testing.T, lis net.Listener, creds credentials.Transpor
 			return &testpb.Empty{}, nil
 		},
 	}
-	var err error
-	if stub.S, err = xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)); err != nil {
+	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
+	stub.S = server
 	stubserver.StartTestService(t, stub)
 	return stub
 }
