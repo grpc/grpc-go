@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
@@ -104,15 +103,9 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 	}
 
 	ss.Stop()
-	var foundDisconnections bool
-	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
-		if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got == 1 {
-			foundDisconnections = true
-			break
-		}
-	}
-	if !foundDisconnections {
-		t.Fatalf("error waiting for grpc.lb.pick_first.disconnections metric: %v", ctx.Err())
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	if got, _ := tmr.Metric("grpc.lb.pick_first.disconnections"); got != 1 {
+		t.Errorf("Unexpected data for metric %v, got: %v, want: %v", "grpc.lb.pick_first.disconnections", got, 1)
 	}
 }
 

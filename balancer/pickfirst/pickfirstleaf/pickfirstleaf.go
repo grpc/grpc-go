@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
-	estats "google.golang.org/grpc/experimental/stats"
+	expstats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
@@ -59,21 +59,21 @@ var (
 	// It is changed to "pick_first" in init() if this balancer is to be
 	// registered as the default pickfirst.
 	Name                 = "pick_first_leaf"
-	disconnectionsMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+	disconnectionsMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.disconnections",
 		Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
 		Unit:        "disconnection",
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
-	connectionAttemptsSucceededMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+	connectionAttemptsSucceededMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.connection_attempts_succeeded",
 		Description: "EXPERIMENTAL. Number of successful connection attempts.",
 		Unit:        "attempt",
 		Labels:      []string{"grpc.target"},
 		Default:     false,
 	})
-	connectionAttemptsFailedMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+	connectionAttemptsFailedMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
 		Name:        "grpc.lb.pick_first.connection_attempts_failed",
 		Description: "EXPERIMENTAL. Number of failed connection attempts.",
 		Unit:        "attempt",
@@ -175,7 +175,7 @@ type pickfirstBalancer struct {
 	logger          *internalgrpclog.PrefixLogger
 	cc              balancer.ClientConn
 	target          string
-	metricsRecorder estats.MetricsRecorder // guaranteed to be non nil
+	metricsRecorder expstats.MetricsRecorder // guaranteed to be non nil
 
 	// The mutex is used to ensure synchronization of updates triggered
 	// from the idle picker and the already serialized resolver,
