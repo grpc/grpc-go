@@ -55,8 +55,11 @@ var (
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
 	// to "true".
 	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", false)
-	//HTTPProxy is set to empty string if HTTPS_PROXY env it is not set.
-	HTTPProxy = stringFromEnv("HTTPS_PROXY", "")
+	// HTTPSProxy indicates the HTTPS_PPROXY environment which is set when proxy
+	// server is to be used. It is set to the proxy address stored in the
+	// HTTPS_PROXY env variable. HTTPSProxy is set to empty string if
+	// HTTPS_PROXY env it is not set.
+	HTTPSProxy = stringFromEnv("HTTPS_PROXY", "")
 )
 
 func boolFromEnv(envVar string, def bool) bool {

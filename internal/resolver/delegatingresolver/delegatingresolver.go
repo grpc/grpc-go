@@ -16,8 +16,8 @@
  *
  */
 
-// Package delegatingresolver implements the default resolver for gRPC.
-// It handles both target URI and proxy address resolution, unless:
+// Package delegatingresolver defines a resolver that can handle both target URI
+// and proxy address resolution, unless:
 //   - A custom dialer is set using WithContextDialer dialoption.
 //   - Proxy usage is explicitly disabled using WithNoProxy dialoption.
 //   - Client-side resolution is explicitly enforced using WithTargetResolutionEnabled.
@@ -36,17 +36,14 @@ import (
 
 var (
 	// The following variable will be overwritten in the tests.
-	httpProxyFromEnvironment = http.ProxyFromEnvironment
+	HttpsProxyFromEnvironment = http.ProxyFromEnvironment
 
-	logger = grpclog.Component("delegatingresolver")
+	logger = grpclog.Component("delegating-resolver")
 )
 
-// delegatingResolver manages the resolution of both a target URI and an
-// optional proxy URI. It acts as an intermediary between the underlying
-// resolvers and the gRPC ClientConn. This type implements the
-// resolver.ClientConn interface to intercept state updates from both the target
-// and proxy resolvers, combining the results before forwarding them to the
-// client connection.
+// delegatingResolver implements the resolver.Resolver interface. It uses child
+// resolvers for the target and proxy resolution. It acts as an intermediatery
+// between the child resolvers and the gRPC ClientConn.
 type delegatingResolver struct {
 	target         resolver.Target     // parsed target URI to be resolved
 	cc             resolver.ClientConn // gRPC ClientConn
@@ -65,15 +62,15 @@ func mapAddress(address string) (*url.URL, error) {
 			Host:   address,
 		},
 	}
-	url, err := httpProxyFromEnvironment(req)
+	url, err := HttpsProxyFromEnvironment(req)
 	if err != nil {
 		return nil, err
 	}
 	return url, nil
 }
 
-// New creates a new delegating resolver that will call the target and proxy
-// child resolvers based on the proxy enviorinment configurations.
+// New creates a new delegating resolver that which is used to call the target
+// and proxy child resolvers based on the proxy enviorinment configurations.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
 	r := &delegatingResolver{
 		target: target,
@@ -83,48 +80,47 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	var err error
 	r.proxyURL, err = mapAddress(target.Endpoint())
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine proxy URL for target : %v", err)
+		return nil, fmt.Errorf("failed to determine proxy URL for %v  target endpoint: %v", target.Endpoint(), err)
 	}
 
 	if r.proxyURL == nil {
-		logger.Info("No proxy URL detected")
+		if logger.V(2) {
+			logger.Info("No proxy URL detected")
+		}
 		return targetResolverBuilder.Build(target, cc, opts)
 	}
 
-	// When the scheme is 'dns', resolution should be handled by the proxy, not
-	// the client. Therefore, we bypass the target resolver and store the
-	// unresolved target address.
+	// When the scheme is 'dns' and target resolution on client is not enabled
+	// (can be enabled by the WithTargetResolutionEnabled() dialOption), resolution should be handled by thevproxy, not the client. Therefore, we bypass the target resolver and
+	// store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
 		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
 	} else {
-		// targetResolverBuilder must not be nil. If it is nil, the channel should
-		// error out and not call this function.
 		r.targetResolver, err = targetResolverBuilder.Build(target, &wrappingClientConn{r, "target"}, opts)
 		if err != nil {
-			return nil, fmt.Errorf("delegating_resolver: unable to build the target resolver : %v", err)
+			return nil, fmt.Errorf("delegating_resolver: unable to build the resolver for target %v : %v", target, err)
 		}
 	}
-	r.proxyResolver, err = proxyURIResolver(r.proxyURL, opts, r)
-	if err != nil {
+
+	if r.proxyResolver, err = r.proxyURIResolver(opts); err != nil {
 		return nil, err
 	}
 	return r, nil
 }
 
-func proxyURIResolver(proxyURL *url.URL, opts resolver.BuildOptions, presolver *delegatingResolver) (resolver.Resolver, error) {
-	scheme := "dns"
-	proxyBuilder := resolver.Get(scheme)
+func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resolver.Resolver, error) {
+	proxyBuilder := resolver.Get("dns")
 	if proxyBuilder == nil {
-		return nil, fmt.Errorf("delegating_resolver: resolver for proxy not found")
+		return nil, fmt.Errorf("delegating_resolver: resolver for proxy not found for scheme dns")
 	}
-	host := "dns:///" + proxyURL.Host
+	host := "dns:///" + r.proxyURL.Host
 	u, err := url.Parse(host)
 	if err != nil {
 		return nil, err
 	}
 
 	proxyTarget := resolver.Target{URL: *u}
-	return proxyBuilder.Build(proxyTarget, &wrappingClientConn{presolver, "proxy"}, opts)
+	return proxyBuilder.Build(proxyTarget, &wrappingClientConn{r, "proxy"}, opts)
 }
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
