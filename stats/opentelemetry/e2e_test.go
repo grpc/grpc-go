@@ -91,7 +91,7 @@ func defaultTraceOptions(_ *testing.T) (*TraceOptions, *tracetest.InMemoryExport
 // and server side and returns the server.
 func setupStubServer(t *testing.T, metricsOptions *MetricsOptions, traceOptions *TraceOptions) *stubserver.StubServer {
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, len(in.GetPayload().GetBody())),
 			}}, nil
@@ -381,7 +381,7 @@ func metricsDataFromReader(ctx context.Context, reader *metric.ManualReader) map
 func (s) TestWRRMetrics(t *testing.T) {
 	cmr := orca.NewServerMetricsRecorder().(orca.CallMetricsRecorder)
 	backend1 := stubserver.StartTestService(t, &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
 				// Copy metrics from what the test set in cmr into r.
 				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()
@@ -399,7 +399,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	cmr.SetApplicationUtilization(1.0)
 
 	backend2 := stubserver.StartTestService(t, &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
 				// Copy metrics from what the test set in cmr into r.
 				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()
