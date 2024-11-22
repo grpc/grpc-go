@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	// The following variable will be overwritten in the tests.
+	// HTTPSProxyFromEnvironment will be used and overwritten in the tests.
 	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
 
 	logger = grpclog.Component("delegating-resolver")
