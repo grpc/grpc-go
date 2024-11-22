@@ -50,13 +50,13 @@ const (
 	resolvedProxyTestAddr1  = "2.3.4.6:7687"
 )
 
-// overwriteAndRestore overwrite function HttpsProxyFromEnvironment and
+// overwriteAndRestore overwrite function HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overwrite(hpfe func(req *http.Request) (*url.URL, error)) func() {
-	backHPFE := HttpsProxyFromEnvironment
-	HttpsProxyFromEnvironment = hpfe
+	backHPFE := HTTPSProxyFromEnvironment
+	HTTPSProxyFromEnvironment = hpfe
 	return func() {
-		HttpsProxyFromEnvironment = backHPFE
+		HTTPSProxyFromEnvironment = backHPFE
 	}
 }
 

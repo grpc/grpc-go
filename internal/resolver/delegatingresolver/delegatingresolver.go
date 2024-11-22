@@ -36,7 +36,7 @@ import (
 
 var (
 	// The following variable will be overwritten in the tests.
-	HttpsProxyFromEnvironment = http.ProxyFromEnvironment
+	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
 
 	logger = grpclog.Component("delegating-resolver")
 )
@@ -62,7 +62,7 @@ func mapAddress(address string) (*url.URL, error) {
 			Host:   address,
 		},
 	}
-	url, err := HttpsProxyFromEnvironment(req)
+	url, err := HTTPSProxyFromEnvironment(req)
 	if err != nil {
 		return nil, err
 	}
