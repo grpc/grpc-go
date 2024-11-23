@@ -417,10 +417,8 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	method := cs.callHdr.Method
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
-	nameResolutionDelayed := false
-	nameResolutionDelayed = cs.nameResolutionDelayed
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: nameResolutionDelayed})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: cs.nameResolutionDelayed})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,

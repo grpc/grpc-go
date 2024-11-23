@@ -43,9 +43,6 @@ type RPCTagInfo struct {
 	//
 	// This field is only valid on client side, it's always false on server side.
 	NameResolutionDelay bool
-	// IsTransparentRetry indicates whether the stream is undergoing a
-	// transparent retry.
-	IsTransparentRetry bool
 }
 
 // Handler defines the interface for the related stats handling (e.g., RPCs, connections).

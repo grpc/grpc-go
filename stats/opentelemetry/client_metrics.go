@@ -100,7 +100,7 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 
 	startTime := time.Now()
-	var span trace.Span
+	var span *trace.Span
 	if !isTracingDisabled(h.options.TraceOptions) {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
@@ -138,7 +138,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	}
 
 	startTime := time.Now()
-	var span trace.Span
+	var span *trace.Span
 	if !isTracingDisabled(h.options.TraceOptions) {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
@@ -149,15 +149,16 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
-	s := status.Convert(err)
+// perCallTracesAndMetrics records per call trace spans and metrics.
+func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts *trace.Span) {
 	if !isTracingDisabled(h.options.TraceOptions) && ts != nil {
+		s := status.Convert(err)
 		if s.Code() == grpccodes.OK {
-			ts.SetStatus(otelcodes.Ok, s.Message())
+			(*ts).SetStatus(otelcodes.Ok, s.Message())
 		} else {
-			ts.SetStatus(otelcodes.Error, s.Message())
+			(*ts).SetStatus(otelcodes.Error, s.Message())
 		}
-		ts.End()
+		(*ts).End()
 	}
 	if !isMetricsDisabled(h.options.MetricsOptions) {
 		callLatency := float64(time.Since(startTime)) / float64(time.Second)
@@ -170,15 +171,17 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 	}
 }
 
-// createCallTraceSpan creates a call span if tracing is enabled, which will be put
-// in the context provided if created.
-func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
+// createCallTraceSpan creates a call span to put in the provided context using
+// provided TraceProvider. If TraceProvider is nil, it returns context as is.
+func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
 	if h.options.TraceOptions.TracerProvider == nil {
-		panic("tracing is required but the TracerProvider is not set. Ensure that tracing is enabled in the options.")
+		logger.Error("tracing is required but the TracerProvider is not set. Ensure that tracing is enabled in the options.")
+		return ctx, nil
 	}
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 	tracer := otel.Tracer("grpc-open-telemetry")
-	return tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	return ctx, &span
 }
 
 // TagConn exists to satisfy stats.Handler.
