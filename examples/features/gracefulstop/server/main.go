@@ -60,15 +60,12 @@ func (s *server) ServerStreamingEcho(_ *pb.EchoRequest, stream pb.Echo_ServerStr
 			atomic.AddInt32(&streamMessages, 1)
 
 			mu.Lock()
-
 			if streamMessages > 5 {
 				return fmt.Errorf("request failed")
 			}
-
 			if err := stream.Send(&pb.EchoResponse{Message: fmt.Sprintf("Messages Sent: %d", streamMessages)}); err != nil {
 				return err
 			}
-
 			mu.Unlock()
 
 			time.Sleep(1 * time.Second)

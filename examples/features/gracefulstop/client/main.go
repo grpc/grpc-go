@@ -26,10 +26,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/status"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var addr = flag.String("addr", "localhost:50052", "the address to connect to")
@@ -37,30 +35,34 @@ var addr = flag.String("addr", "localhost:50052", "the address to connect to")
 func main() {
 	flag.Parse()
 
-	// Set up a connection to the server.
 	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+		log.Fatalf("Failed to create new client: %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewGreeterClient(conn)
+	c := pb.NewEchoClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	for i := 1; i <= 10; i++ {
-		log.Printf("Calling SayHello %d time", i)
-		r, err := c.SayHello(ctx, &pb.HelloRequest{})
+	stream, err := c.ServerStreamingEcho(ctx, &pb.EchoRequest{})
+	if err != nil {
+		log.Fatalf("Error starting stream: %v", err)
+	}
+
+	for {
+		r, err := stream.Recv()
 		if err != nil {
-			if status.Code(err) != codes.InvalidArgument {
-				log.Printf("Received unexpected error: %v", err)
-				continue
+			// Handle the error and close the stream gracefully
+			log.Printf("Error sending request: %v\n", err)
+			err := stream.CloseSend()
+			if err != nil {
+				log.Fatalf("Error closing stream: %v", err)
 			}
-			log.Printf("Received error: %v", err)
-			continue
+			log.Println("Stream closed gracefully")
+			break
 		}
-		log.Printf("Received response: %s", r.Message)
-		time.Sleep(time.Second)
+		log.Printf(r.Message)
 	}
 
 	log.Printf("Client finished interaction with server.")
