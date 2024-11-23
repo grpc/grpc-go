@@ -33,59 +33,53 @@ var validSpanContext = oteltrace.SpanContext{}.WithTraceID(
 	oteltrace.SpanID{17, 18, 19, 20, 21, 22, 23, 24}).WithTraceFlags(
 	oteltrace.TraceFlags(1))
 
-// TestInject verifies that the GRPCTraceBinPropagator correctly injects
-// existing binary trace data or OpenTelemetry span context as `grpc-trace-bin`
+// TestInject_ValidSpanContext verifies that the GRPCTraceBinPropagator
+// correctly injects a valid OpenTelemetry span context as `grpc-trace-bin`
 // header in the provided carrier's context metadata.
 //
 // It verifies that if a valid span context is injected, same span context can
 // can be retreived from the carrier's context metadata.
+func (s) TestInject_ValidSpanContext(t *testing.T) {
+	p := GRPCTraceBinPropagator{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := itracing.NewOutgoingCarrier(ctx)
+	ctx = oteltrace.ContextWithSpanContext(ctx, validSpanContext)
+
+	p.Inject(ctx, c)
+
+	md, _ := metadata.FromOutgoingContext(c.Context())
+	gotH := md.Get(grpcTraceBinHeaderKey)
+	if gotH[len(gotH)-1] == "" {
+		t.Fatalf("got empty value from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", validSpanContext)
+	}
+	gotSC, ok := fromBinary([]byte(gotH[len(gotH)-1]))
+	if !ok {
+		t.Fatalf("got invalid span context %v from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", gotSC, validSpanContext)
+	}
+	if cmp.Equal(validSpanContext, gotSC) {
+		t.Fatalf("got span context = %v, want span contexts %v", gotSC, validSpanContext)
+	}
+}
+
+// TestInject_InvalidSpanContext verifies that the GRPCTraceBinPropagator does
+// not inject an invalid OpenTelemetry span context as `grpc-trace-bin` header
+// in the provided carrier's context metadata.
 //
 // If an invalid span context is injected, it verifies that `grpc-trace-bin`
 // header is not set in the carrier's context metadata.
-func (s) TestInject(t *testing.T) {
-	tests := []struct {
-		name     string
-		injectSC oteltrace.SpanContext
-	}{
-		{
-			name:     "valid OpenTelemetry span context",
-			injectSC: validSpanContext,
-		},
-		{
-			name:     "invalid OpenTelemetry span context",
-			injectSC: oteltrace.SpanContext{},
-		},
-	}
+func (s) TestInject_InvalidSpanContext(t *testing.T) {
+	p := GRPCTraceBinPropagator{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := itracing.NewOutgoingCarrier(ctx)
+	ctx = oteltrace.ContextWithSpanContext(ctx, oteltrace.SpanContext{})
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			p := GRPCTraceBinPropagator{}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			ctx = oteltrace.ContextWithSpanContext(ctx, test.injectSC)
+	p.Inject(ctx, c)
 
-			c := itracing.NewOutgoingCarrier(ctx)
-			p.Inject(ctx, c)
-
-			md, _ := metadata.FromOutgoingContext(c.Context())
-			gotH := md.Get(grpcTraceBinHeaderKey)
-			if !test.injectSC.IsValid() {
-				if len(gotH) > 0 {
-					t.Fatalf("got %v value from Carrier's context metadata grpc-trace-bin header, want empty", gotH)
-				}
-				return
-			}
-			if gotH[len(gotH)-1] == "" {
-				t.Fatalf("got empty value from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", test.injectSC)
-			}
-			gotSC, ok := fromBinary([]byte(gotH[len(gotH)-1]))
-			if !ok {
-				t.Fatalf("got invalid span context %v from Carrier's context metadata grpc-trace-bin header, want valid span context: %v", gotSC, test.injectSC)
-			}
-			if test.injectSC.TraceID() != gotSC.TraceID() && test.injectSC.SpanID() != gotSC.SpanID() && test.injectSC.TraceFlags() != gotSC.TraceFlags() {
-				t.Fatalf("got span context = %v, want span contexts %v", gotSC, test.injectSC)
-			}
-		})
+	md, _ := metadata.FromOutgoingContext(c.Context())
+	if gotH := md.Get(grpcTraceBinHeaderKey); len(gotH) > 0 {
+		t.Fatalf("got %v value from Carrier's context metadata grpc-trace-bin header, want empty", gotH)
 	}
 }
 
