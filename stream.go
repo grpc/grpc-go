@@ -218,7 +218,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
-	var newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+	newStream := func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
 		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, opts...)
 	}
 
@@ -708,11 +708,10 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		cs.numRetriesSincePushback = 0
 	} else {
 		fact := math.Pow(rp.BackoffMultiplier, float64(cs.numRetriesSincePushback))
-		cur := float64(rp.InitialBackoff) * fact
-		if max := float64(rp.MaxBackoff); cur > max {
-			cur = max
-		}
-		dur = time.Duration(rand.Int64N(int64(cur)))
+		cur := min(float64(rp.InitialBackoff)*fact, float64(rp.MaxBackoff))
+		// apply a jitter of plus or minus 0.2
+		cur *= 0.8 + 0.4*rand.Float64()
+		dur = time.Duration(int64(cur))
 		cs.numRetriesSincePushback++
 	}
 
