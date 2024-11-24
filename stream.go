@@ -707,12 +707,15 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 		dur = time.Millisecond * time.Duration(pushback)
 		cs.numRetriesSincePushback = 0
 	} else {
-		fact := math.Pow(rp.BackoffMultiplier, float64(cs.numRetriesSincePushback))
-		cur := float64(rp.InitialBackoff) * fact
-		if max := float64(rp.MaxBackoff); cur > max {
-			cur = max
+		// Calculate the backoff duration based on the exponential backoff formula.
+		backoffDuration := rp.InitialBackoff * time.Duration(math.Pow(rp.BackoffMultiplier, float64(cs.numRetriesSincePushback)))
+		if backoffDuration > rp.MaxBackoff {
+			backoffDuration = rp.MaxBackoff
 		}
-		dur = time.Duration(rand.Int64N(int64(cur)))
+
+		// Apply jitter by multiplying with a random factor between 0.8 and 1.2.
+		jitter := 0.8 + rand.Float64()*0.4
+		dur = time.Duration(float64(backoffDuration) * jitter)
 		cs.numRetriesSincePushback++
 	}
 

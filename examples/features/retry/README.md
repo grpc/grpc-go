@@ -54,6 +54,24 @@ RetryableStatusCodes: Retry only when receiving these status codes.
         }`
 ```
 
+### Backoff Logic
+
+The backoff duration is calculated based on the following logic:
+
+1. **Initial Backoff**: The initial delay before the first retry.
+2. **Exponential Backoff**: The delay increases exponentially based on the number of retries, using the formula:
+   ```go
+   backoffDuration := InitialBackoff * time.Duration(math.Pow(BackoffMultiplier, float64(numRetries)))
+   ```
+3. **Max Backoff**: The calculated backoff duration is capped at `MaxBackoff` to prevent excessively long delays.
+4. **Jitter**: A random factor between 0.8 and 1.2 is applied to the backoff duration to avoid thundering herd problems. The final backoff duration is calculated as:
+   ```go
+   jitter := 0.8 + rand.Float64()*0.4 // Random value between 0.8 and 1.2
+   dur = time.Duration(float64(backoffDuration) * jitter)
+   ```
+
+This means that the backoff delay may be slightly lower than `InitialBackoff` or slightly higher than `MaxBackoff`, allowing for a more distributed retry behavior across clients.
+
 ### Providing the retry policy as a DialOption
 
 To use the above service config, pass it with `grpc.WithDefaultServiceConfig` to
