@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	rand "math/rand/v2"
@@ -690,7 +691,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 
 	rp := cs.methodConfig.RetryPolicy
 	if rp == nil || !rp.RetryableStatusCodes[code] {
-		return false, err
+		return false, errors.New(fmt.Sprintf("retries exhausted after %d attempts: %v", cs.numRetries, err))
 	}
 
 	// Note: the ordering here is important; we count this as a failure
