@@ -559,10 +559,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	oldState := sd.state
-	// Record a connection attempt when exiting CONNECTING.
-	if newState.ConnectivityState == connectivity.TransientFailure {
-		sd.connectionFailedInFirstPass = true
-	}
 	sd.state = newState.ConnectivityState
 	// Previously relevant SubConns can still callback with state updates.
 	// To prevent pickers from returning these obsolete SubConns, this logic
@@ -575,7 +571,9 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		return
 	}
 
+	// Record a connection attempt when exiting CONNECTING.
 	if newState.ConnectivityState == connectivity.TransientFailure {
+		sd.connectionFailedInFirstPass = true
 		connectionAttemptsFailedMetric.Record(b.metricsRecorder, 1, b.target)
 	}
 

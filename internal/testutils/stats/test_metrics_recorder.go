@@ -104,6 +104,21 @@ func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsData
 	return nil
 }
 
+// WaitForInt64CountIncr waits for an int64 count metric to be recorded and
+// verifies that the recorded metrics data incr matches the expected incr.
+// Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64CountIncr(ctx context.Context, incrWant int64) error {
+	got, err := r.intCountCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for int64Count")
+	}
+	metricsDataGot := got.(MetricsData)
+	if diff := cmp.Diff(metricsDataGot.IntIncr, incrWant); diff != "" {
+		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
+	}
+	return nil
+}
+
 // RecordInt64Count sends the metrics data to the intCountCh channel and updates
 // the internal data map with the recorded value.
 func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
