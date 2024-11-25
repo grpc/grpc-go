@@ -87,10 +87,8 @@ type pickfirstBuilder struct{}
 func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
 		cc:                    cc,
-		addressList:           addressList{},
 		subConns:              resolver.NewAddressMap(),
 		state:                 connectivity.Connecting,
-		mu:                    sync.Mutex{},
 		cancelConnectionTimer: func() {},
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
@@ -752,8 +750,10 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 // ClientConn.UpdateState(). As an optimization, it avoid sending duplicate
 // updates to the channel.
 func (b *pickfirstBalancer) updateBalancerState(newState balancer.State) {
-	// Optimization to not send duplicate CONNECTING updates.
-	if newState.ConnectivityState == b.state && b.state == connectivity.Connecting {
+	// In case of TransientFailures allow the picker to be updated to update
+	// the connectivity error, in all other cases don't send duplicate state
+	// updates.
+	if newState.ConnectivityState == b.state && b.state != connectivity.TransientFailure {
 		return
 	}
 	b.forceUpdateConcludedStateLocked(newState)
