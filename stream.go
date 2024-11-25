@@ -709,7 +709,7 @@ func (a *csAttempt) shouldRetry(err error) (bool, error) {
 	} else {
 		fact := math.Pow(rp.BackoffMultiplier, float64(cs.numRetriesSincePushback))
 		cur := min(float64(rp.InitialBackoff)*fact, float64(rp.MaxBackoff))
-		// apply a jitter of plus or minus 0.2
+		// Apply jitter by multiplying with a random factor between 0.8 and 1.2
 		cur *= 0.8 + 0.4*rand.Float64()
 		dur = time.Duration(int64(cur))
 		cs.numRetriesSincePushback++
