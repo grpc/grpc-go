@@ -69,8 +69,8 @@ func mapAddress(address string) (*url.URL, error) {
 	return url, nil
 }
 
-// New creates a new delegating resolver that which is used to call the target
-// and proxy child resolvers based on the proxy enviorinment configurations.
+// New creates a new delegating resolver that is used to call the target
+// and calls proxy child resolver if target endpoint points to a proxy.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
 	r := &delegatingResolver{
 		target: target,
@@ -90,9 +90,9 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		return targetResolverBuilder.Build(target, cc, opts)
 	}
 
-	// When the scheme is 'dns' and target resolution on client is not enabled
-	// (can be enabled by the WithTargetResolutionEnabled() dialOption), resolution should be handled by thevproxy, not the client. Therefore, we bypass the target resolver and
-	// store the unresolved target address.
+	// When the scheme is 'dns' and target resolution on client is not enabled,
+	// resolution should be handled by thevproxy, not the client. Therefore, we
+	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
 		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
 	} else {

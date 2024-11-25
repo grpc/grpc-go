@@ -55,10 +55,8 @@ var (
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
 	// to "true".
 	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", false)
-	// HTTPSProxy indicates the HTTPS_PPROXY environment which is set when proxy
-	// server is to be used. It is set to the proxy address stored in the
-	// HTTPS_PROXY env variable. HTTPSProxy is set to empty string if
-	// HTTPS_PROXY env it is not set.
+	// HTTPSProxy retrieves the HTTPS proxy address from the environment
+	// variable 'HTTPS_PROXY'. If the variable is not set, its set to empty string.
 	HTTPSProxy = stringFromEnv("HTTPS_PROXY", "")
 )
 
