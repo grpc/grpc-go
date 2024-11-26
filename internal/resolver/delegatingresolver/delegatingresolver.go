@@ -77,6 +77,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		return nil, fmt.Errorf("failed to determine proxy URL for %v  target endpoint: %v", target.Endpoint(), err)
 	}
 
+	// proxy is not configured or proxy address excluded using `NO_PROXY` env var.
 	if r.proxyURL == nil {
 		if logger.V(2) {
 			logger.Info("No proxy URL detected")
