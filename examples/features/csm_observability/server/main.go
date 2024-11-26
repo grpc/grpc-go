@@ -28,9 +28,12 @@ import (
 	"net/http"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	xdscreds "google.golang.org/grpc/credentials/xds"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/csm"
+	"google.golang.org/grpc/xds"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -67,7 +70,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		log.Fatalf("Failed to create xDS credentials: %v", err)
+	}
+	s, err := xds.NewGRPCServer(grpc.Creds(creds))
+	if err != nil {
+		log.Fatalf("Failed to start xDS Server: %v", err)
+	}
 	pb.RegisterEchoServer(s, &echoServer{addr: ":" + *port})
 
 	log.Printf("Serving on %s\n", *port)
