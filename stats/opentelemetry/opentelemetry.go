@@ -74,16 +74,16 @@ type MetricsOptions struct {
 	// MethodAttributeFilter is a function that determines whether to record the
 	// method name of RPCs as an attribute, or to bucket into "other". Take care
 	// to limit the values allowed, as allowing too many will increase
-	// cardinality and could cause severe memory or performance problems. On
-	// Client Side, to record the method name along with metric instead of
-	// bucketing into "other pass a grpc.StaticMethodCallOption as a call option
-	// into Invoke or NewStream.
+	// cardinality and could cause severe memory or performance problems.
 	//
-	// This only applies for server side metrics.
+	// This only applies for server-side metrics.  For clients, to record the
+	// method name in the attributes, pass grpc.StaticMethodCallOption to Invoke
+	// or NewStream. Note that when using protobuf generated clients, this
+	// CallOption is included automatically.
 	MethodAttributeFilter func(string) bool
 
-	// OptionalLabels specifies a list of optional labels that will be included
-	// on any metrics that have corresponding optional labels configured.
+	// OptionalLabels specifies a list of optional labels to enable on any
+	// metrics that support them.
 	OptionalLabels []string
 
 	// pluginOption is used to get labels to attach to certain metrics, if set.
