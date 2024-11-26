@@ -165,17 +165,17 @@ var metricsRegistry = make(map[string]*MetricDescriptor)
 // DescriptorForMetric returns the MetricDescriptor from the global registry.
 //
 // Returns nil if MetricDescriptor not present.
-func DescriptorForMetric(metric string) *MetricDescriptor {
-	return metricsRegistry[metric]
+func DescriptorForMetric(metricName string) *MetricDescriptor {
+	return metricsRegistry[metricName]
 }
 
-func registerMetric(name string, def bool) {
-	if registeredMetrics[name] {
-		logger.Fatalf("metric %v already registered", name)
+func registerMetric(metricName string, def bool) {
+	if registeredMetrics[metricName] {
+		logger.Fatalf("metric %v already registered", metricName)
 	}
-	registeredMetrics[name] = true
+	registeredMetrics[metricName] = true
 	if def {
-		DefaultMetrics = DefaultMetrics.Add(name)
+		DefaultMetrics = DefaultMetrics.Add(metricName)
 	}
 }
 
