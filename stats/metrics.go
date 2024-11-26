@@ -28,10 +28,10 @@ type MetricSet struct {
 	metrics map[string]bool
 }
 
-// NewMetricSet returns a MetricSet containing metrics.
-func NewMetricSet(metrics ...string) *MetricSet {
+// NewMetricSet returns a MetricSet containing metricNames.
+func NewMetricSet(metricNames ...string) *MetricSet {
 	newMetrics := make(map[string]bool)
-	for _, metric := range metrics {
+	for _, metric := range metricNames {
 		newMetrics[metric] = true
 	}
 	return &MetricSet{metrics: newMetrics}
@@ -43,15 +43,15 @@ func (m *MetricSet) Metrics() map[string]bool {
 	return m.metrics
 }
 
-// Add adds the metrics to the metrics set and returns a new copy with the
+// Add adds the metricNames to the metrics set and returns a new copy with the
 // additional metrics.
-func (m *MetricSet) Add(metrics ...string) *MetricSet {
+func (m *MetricSet) Add(metricNames ...string) *MetricSet {
 	newMetrics := make(map[string]bool)
 	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
 
-	for _, metric := range metrics {
+	for _, metric := range metricNames {
 		newMetrics[metric] = true
 	}
 	return &MetricSet{metrics: newMetrics}
@@ -66,15 +66,15 @@ func (m *MetricSet) Join(metrics *MetricSet) *MetricSet {
 	return &MetricSet{metrics: newMetrics}
 }
 
-// Remove removes the metrics from the metrics set and returns a new copy with
-// the metrics removed.
-func (m *MetricSet) Remove(metrics ...string) *MetricSet {
+// Remove removes the metricNames from the metrics set and returns a new copy
+// with the metrics removed.
+func (m *MetricSet) Remove(metricNames ...string) *MetricSet {
 	newMetrics := make(map[string]bool)
 	for metric := range m.metrics {
 		newMetrics[metric] = true
 	}
 
-	for _, metric := range metrics {
+	for _, metric := range metricNames {
 		delete(newMetrics, metric)
 	}
 	return &MetricSet{metrics: newMetrics}
