@@ -55,7 +55,7 @@ type delegatingResolver struct {
 	mu             sync.Mutex          // protects access to the resolver state during updates
 }
 
-func updateProxyUrl(address string) (*url.URL, error) {
+func updateProxyURL(address string) (*url.URL, error) {
 	req := &http.Request{URL: &url.URL{Scheme: "https", Host: address}}
 	url, err := HTTPSProxyFromEnvironment(req)
 	if err != nil {
@@ -72,7 +72,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	r := &delegatingResolver{target: target, cc: cc}
 
 	var err error
-	r.proxyURL, err = updateProxyUrl(target.Endpoint())
+	r.proxyURL, err = updateProxyURL(target.Endpoint())
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine proxy URL for %v  target endpoint: %v", target.Endpoint(), err)
 	}

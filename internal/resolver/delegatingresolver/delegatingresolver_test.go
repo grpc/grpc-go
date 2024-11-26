@@ -60,7 +60,7 @@ func overwrite(hpfe func(req *http.Request) (*url.URL, error)) func() {
 	}
 }
 
-func (s) TestupdateProxyUrlEnv(t *testing.T) {
+func (s) TestUpdateProxyUrlEnv(t *testing.T) {
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
@@ -74,7 +74,7 @@ func (s) TestupdateProxyUrlEnv(t *testing.T) {
 	defer overwrite(hpfe)()
 
 	// envTestAddr should be handled by ProxyFromEnvironment.
-	got, err := updateProxyUrl(targetTestAddr)
+	got, err := updateProxyURL(targetTestAddr)
 	if err != nil {
 		t.Error(err)
 	}
