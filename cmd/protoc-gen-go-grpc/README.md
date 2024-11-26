@@ -14,8 +14,8 @@ To restore this behavior, set the option `require_unimplemented_servers=false`.
 E.g.:
 
 ```sh
-   protoc --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false \
-          --go-grpc_opt=[other options...]
+  protoc --go-grpc_out=. --go-grpc_opt=require_unimplemented_servers=false \
+  --go-grpc_opt=[other options...]
 ```
 
 Note that this is not recommended, and the option is only provided to restore
