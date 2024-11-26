@@ -70,6 +70,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
+	// The fallback credentials are here solely for demonstration purposes.
+	// Fallback credentials should not be used this way in production as it is
+	// insecure.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		log.Fatalf("Failed to create xDS credentials: %v", err)

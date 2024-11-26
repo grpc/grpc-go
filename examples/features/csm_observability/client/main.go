@@ -57,6 +57,9 @@ func main() {
 	cleanup := csm.EnableObservability(context.Background(), opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 	defer cleanup()
 
+	// The fallback credentials are here solely for demonstration purposes.
+	// Fallback credentials should not be used this way in production as it is
+	// insecure.
 	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		log.Fatalf("Failed to create xDS credentials: %v", err)
