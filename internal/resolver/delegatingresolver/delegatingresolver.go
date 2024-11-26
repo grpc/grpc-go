@@ -55,13 +55,8 @@ type delegatingResolver struct {
 	mu             sync.Mutex          // protects access to the resolver state during updates
 }
 
-func mapAddress(address string) (*url.URL, error) {
-	req := &http.Request{
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   address,
-		},
-	}
+func updateProxyUrl(address string) (*url.URL, error) {
+	req := &http.Request{URL: &url.URL{Scheme: "https", Host: address}}
 	url, err := HTTPSProxyFromEnvironment(req)
 	if err != nil {
 		return nil, err
@@ -69,16 +64,15 @@ func mapAddress(address string) (*url.URL, error) {
 	return url, nil
 }
 
-// New creates a new delegating resolver that is used to call the target
-// and calls proxy child resolver if target endpoint points to a proxy.
+// New creates a new delegating resolver that is used to call the target and
+// proxy child resolver. If target endpoint point to proxy, both proxy and
+// target resolvers are used else only target resolver is used. If scheme is dns,
+// it bypasses target resolution at client so that it can be done at proxy server.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
-	r := &delegatingResolver{
-		target: target,
-		cc:     cc,
-	}
+	r := &delegatingResolver{target: target, cc: cc}
 
 	var err error
-	r.proxyURL, err = mapAddress(target.Endpoint())
+	r.proxyURL, err = updateProxyUrl(target.Endpoint())
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine proxy URL for %v  target endpoint: %v", target.Endpoint(), err)
 	}
@@ -91,13 +85,12 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	}
 
 	// When the scheme is 'dns' and target resolution on client is not enabled,
-	// resolution should be handled by thevproxy, not the client. Therefore, we
+	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
 		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
 	} else {
-		r.targetResolver, err = targetResolverBuilder.Build(target, &wrappingClientConn{r, "target"}, opts)
-		if err != nil {
+		if r.targetResolver, err = targetResolverBuilder.Build(target, &wrappingClientConn{r, "target"}, opts); err != nil {
 			return nil, fmt.Errorf("delegating_resolver: unable to build the resolver for target %v : %v", target, err)
 		}
 	}
@@ -154,9 +147,9 @@ func SetConnectAddr(resAddr resolver.Address, addr string) resolver.Address {
 	return resAddr
 }
 
-// GetConnectAddr returns the proxy connect address in resolver.Address, or nil
+// ProxyConnectAddr returns the proxy connect address in resolver.Address, or nil
 // if not present. The returned data should not be mutated.
-func GetConnectAddr(addr resolver.Address) string {
+func ProxyConnectAddr(addr resolver.Address) string {
 	s, _ := addr.Attributes.Value(proxyConnectAddrKey).(string)
 	return s
 }
@@ -168,20 +161,18 @@ func SetUser(addr resolver.Address, user *url.Userinfo) resolver.Address {
 	return addr
 }
 
-// GetUser returns the user info in the resolver.Address, or nil if not present.
+// User returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
-func GetUser(addr resolver.Address) *url.Userinfo {
+func User(addr resolver.Address) *url.Userinfo {
 	user, _ := addr.Attributes.Value(userKey).(*url.Userinfo)
 	return user
 }
 
-func (r *delegatingResolver) updateState(state resolver.State) resolver.State {
+func (r *delegatingResolver) updateProxyState(state resolver.State) resolver.State {
 	var addresses []resolver.Address
 	for _, proxyAddr := range r.proxyAddrs {
 		for _, targetAddr := range r.targetAddrs {
-			newAddr := resolver.Address{
-				Addr: proxyAddr.Addr,
-			}
+			newAddr := resolver.Address{Addr: proxyAddr.Addr}
 			newAddr = SetConnectAddr(newAddr, targetAddr.Addr)
 			if r.proxyURL.User != nil {
 				newAddr = SetUser(newAddr, r.proxyURL.User)
@@ -215,7 +206,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	if len(wcc.parent.targetAddrs) == 0 || len(wcc.parent.proxyAddrs) == 0 {
 		return nil
 	}
-	curState = wcc.parent.updateState(curState)
+	curState = wcc.parent.updateProxyState(curState)
 	return wcc.parent.cc.UpdateState(curState)
 }
 
