@@ -57,9 +57,8 @@ func main() {
 	cleanup := csm.EnableObservability(context.Background(), opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 	defer cleanup()
 
-	// The fallback credentials are here solely for demonstration purposes.
-	// Fallback credentials should not be used this way in production as it is
-	// insecure.
+	// Set up xds credentials that fall back to insecure as described in:
+	// https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#workloads_are_unable_to_communicate_in_the_security_setup.
 	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		log.Fatalf("Failed to create xDS credentials: %v", err)
