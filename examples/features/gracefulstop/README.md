@@ -5,25 +5,30 @@ This example demonstrates how to gracefully stop a gRPC server using
 
 ## How to run
 
-Start the server which will serve `ServerStreaming` gRPC requests. It spawns
-a go routine before starting the server that waits for signal from handler that
-server stream has started and initiates `Server.GracefulStop()`. Therefore,
-server will stop only after the in-flight rpc is finished.
+Start the server with a client streaming and unary request handler. When client
+streaming is started, client streaming handler signals the server to initiate
+graceful stop and waits for the stream to be closed or aborted. Until the
+`Server.GracefulStop()` is initiated, server will continue to accept unary
+requests. Once `Server.GracefulStop()` is initiated, server will not accept
+new unary requests.
 
 ```sh
 $ go run server/main.go
 ```
 
-In a separate terminal, start the client which will start a server stream to
-the server and wait to receive 5 messages before closing the stream.
-`ServerStreaming` handler signals the server to initiate graceful shutdown and
-start sending stream of messages to client indefinitely until client closes the
-stream.
+In a separate terminal, start the client which will start the client stream to
+the server and starts making unary requests until receiving an error. Error
+will indicate that the server graceful shutdown is initiated so client will
+stop making further unary requests and close the client stream.
 
 ```sh
 $ go run client/main.go
 ```
 
-Once the client client finish receiving 5 messages from server, it sends
-`stream.CloseSend()` to close the stream which finishes the in-flight request.
-The server then gracefully stop.
+As part of unary requests server will keep track of number of unary requests
+processed. As part of unary response it returns that number and once the client
+has successfully closed the stream, it returns the total number of unary
+requests processed as response. The number from stream response will be equal
+to the number from last unary response. This indicates that server has
+processed all in-flight requests before shutting down.
+

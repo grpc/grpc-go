@@ -19,50 +19,61 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"sync"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var (
-	port           = flag.Int("port", 50052, "port number")
-	streamMessages int32
-	mu             sync.Mutex
-	streamStart    chan struct{} // to signal if server streaming started
+	port = flag.Int("port", 50052, "port number")
 )
 
 type server struct {
 	pb.UnimplementedEchoServer
+
+	unaryRequests int32         // to track number of unary RPCs processed
+	streamStart   chan struct{} // to signal if server streaming started
 }
 
-// ServerStreamingEcho implements the EchoService.ServerStreamingEcho method.
-// It receives an EchoRequest and sends back a stream of EchoResponses until an
-// error occurs or the stream is closed.
-func (s *server) ServerStreamingEcho(_ *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
+// ClientStreamingEcho implements the EchoService.ClientStreamingEcho method.
+// It signals the server that streaming has started and waits for the stream to
+// be done or aborted. If `io.EOF` is received on stream that means client
+// has successfully closed the stream using `stream.CloseAndRecv()`, so it
+// returns an `EchoResponse` with the total number of unary RPCs processed
+// otherwise, it returns the error indicating stream is aborted.
+func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
 	// Signal streaming start to initiate graceful stop which should wait until
 	// server streaming finishes.
-	streamStart <- struct{}{}
+	s.streamStart <- struct{}{}
 
-	for {
-		atomic.AddInt32(&streamMessages, 1)
-
-		mu.Lock()
-		if err := stream.Send(&pb.EchoResponse{Message: fmt.Sprintf("Messages Sent: %d", streamMessages)}); err != nil {
-			log.Printf("Stream is closed: %v. Stop Streaming", err)
-			return err
+	if err := stream.RecvMsg(&pb.EchoResponse{}); err != nil {
+		if errors.Is(err, io.EOF) {
+			stream.SendAndClose(&pb.EchoResponse{Message: fmt.Sprintf("Total Unary Requests Processed: %d", s.unaryRequests)})
+			return nil
 		}
-		mu.Unlock()
+		return err
 	}
+
+	return nil
+}
+
+// UnaryEcho implements the EchoService.UnaryEcho method. It increments
+// `s.unaryRequests` on every call and returns it as part of `EchoResponse`.
+func (s *server) UnaryEcho(_ context.Context, _ *pb.EchoRequest) (*pb.EchoResponse, error) {
+	atomic.AddInt32(&s.unaryRequests, 1)
+	return &pb.EchoResponse{Message: fmt.Sprintf("Request Processed: %d", s.unaryRequests)}, nil
 }
 
 func main() {
-	streamStart = make(chan struct{})
 	flag.Parse()
 
 	address := fmt.Sprintf(":%v", *port)
@@ -72,10 +83,12 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &server{})
+	ss := &server{streamStart: make(chan struct{})}
+	pb.RegisterEchoServer(s, ss)
 
 	go func() {
-		<-streamStart // wait until server streaming starts
+		<-ss.streamStart // wait until server streaming starts
+		time.Sleep(1 * time.Second)
 		log.Println("Initiating graceful shutdown...")
 		s.GracefulStop() // gracefully stop server after in-flight server streaming rpc finishes
 		log.Println("Server stopped gracefully.")
