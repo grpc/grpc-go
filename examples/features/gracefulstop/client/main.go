@@ -45,25 +45,22 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	// Start a server stream and receive 5 messages before closing the stream.
+	// This will initiate the graceful stop on the server.
 	stream, err := c.ServerStreamingEcho(ctx, &pb.EchoRequest{})
 	if err != nil {
 		log.Fatalf("Error starting stream: %v", err)
 	}
-
-	for {
+	// Server must complete the in-flight streaming RPC so client should
+	// receive 5 messages before stopping.
+	for i := 0; i < 5; i++ {
 		r, err := stream.Recv()
 		if err != nil {
-			// Handle the error and close the stream gracefully
-			log.Printf("Error sending request: %v\n", err)
-			err := stream.CloseSend()
-			if err != nil {
-				log.Fatalf("Error closing stream: %v", err)
-			}
-			log.Println("Stream closed gracefully")
-			break
+			log.Fatalf("Error receiving message: %v", err)
 		}
+		time.Sleep(10 * time.Millisecond)
 		log.Printf(r.Message)
 	}
-
-	log.Printf("Client finished interaction with server.")
+	stream.CloseSend()
+	log.Printf("Client finished streaming.")
 }

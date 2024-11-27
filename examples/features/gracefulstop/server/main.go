@@ -23,12 +23,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"os/signal"
 	"sync"
 	"sync/atomic"
-	"syscall"
-	"time"
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
@@ -38,6 +34,7 @@ var (
 	port           = flag.Int("port", 50052, "port number")
 	streamMessages int32
 	mu             sync.Mutex
+	streamStart    chan struct{} // to signal if server streaming started
 )
 
 type server struct {
@@ -45,35 +42,27 @@ type server struct {
 }
 
 // ServerStreamingEcho implements the EchoService.ServerStreamingEcho method.
-// It receives an EchoRequest and sends back a stream of EchoResponses.
-// The stream will contain up to 5 messages, each sent after a 1-second delay.
-// If the client cancels the request or if more than 5 messages are sent,
-// the stream will be closed with an error.
+// It receives an EchoRequest and sends back a stream of EchoResponses until an
+// error occurs or the stream is closed.
 func (s *server) ServerStreamingEcho(_ *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
-	ctx := stream.Context()
+	// Signal streaming start to initiate graceful stop which should wait until
+	// server streaming finishes.
+	streamStart <- struct{}{}
 
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			atomic.AddInt32(&streamMessages, 1)
+		atomic.AddInt32(&streamMessages, 1)
 
-			mu.Lock()
-			if streamMessages > 5 {
-				return fmt.Errorf("request failed")
-			}
-			if err := stream.Send(&pb.EchoResponse{Message: fmt.Sprintf("Messages Sent: %d", streamMessages)}); err != nil {
-				return err
-			}
-			mu.Unlock()
-
-			time.Sleep(1 * time.Second)
+		mu.Lock()
+		if err := stream.Send(&pb.EchoResponse{Message: fmt.Sprintf("Messages Sent: %d", streamMessages)}); err != nil {
+			log.Printf("Stream is closed: %v. Stop Streaming", err)
+			return err
 		}
+		mu.Unlock()
 	}
 }
 
 func main() {
+	streamStart = make(chan struct{})
 	flag.Parse()
 
 	address := fmt.Sprintf(":%v", *port)
@@ -82,22 +71,14 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// Create a channel to listen for OS signals.
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
 	s := grpc.NewServer()
 	pb.RegisterEchoServer(s, &server{})
 
 	go func() {
-		// Wait for an OS signal for graceful shutdown.
-		<-stop
-		timer := time.AfterFunc(10*time.Second, func() { // forceful stop after 10 seconds
-			log.Printf("Graceful shutdown did not complete within 10 seconds. Forcing shutdown...")
-			s.Stop()
-		})
-		defer timer.Stop()
-		s.GracefulStop()
+		<-streamStart // wait until server streaming starts
+		log.Println("Initiating graceful shutdown...")
+		s.GracefulStop() // gracefully stop server after in-flight server streaming rpc finishes
+		log.Println("Server stopped gracefully.")
 	}()
 
 	if err := s.Serve(lis); err != nil {
