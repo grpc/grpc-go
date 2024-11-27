@@ -177,7 +177,7 @@ func User(addr resolver.Address) *url.Userinfo {
 	return addr.Attributes.Value(userKey).(*url.Userinfo)
 }
 
-func (r *delegatingResolver) updateProxyState(state resolver.State) []resolver.Address {
+func (r *delegatingResolver) updateAddressAtrributes() []resolver.Address {
 	var addresses []resolver.Address
 	for _, proxyAddr := range r.proxyAddrs {
 		for _, targetAddr := range r.targetAddrs {
@@ -214,7 +214,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	if len(wcc.parent.targetAddrs) == 0 || len(wcc.parent.proxyAddrs) == 0 {
 		return nil
 	}
-	curState.Addresses = wcc.parent.updateProxyState(curState)
+	curState.Addresses = wcc.parent.updateAddressAtrributes()
 	return wcc.parent.cc.UpdateState(curState)
 }
 
