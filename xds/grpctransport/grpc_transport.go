@@ -20,13 +20,12 @@ package grpctransport
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/bootstrap"
 )
 
 type GRPCTransportServerConfigExtension interface {
@@ -34,21 +33,11 @@ type GRPCTransportServerConfigExtension interface {
 }
 
 type GRPCTransportServerConfig struct {
-	ChannelCreds ChannelCreds
+	ServerCredentials map[string]credentials.Bundle
 }
 
 func (s *GRPCTransportServerConfig) GRPCTransportServerConfig() *GRPCTransportServerConfig {
 	return s
-}
-
-// ChannelCreds contains the credentials to be used while communicating with an
-// xDS server
-type ChannelCreds struct {
-	// Type contains a unique name identifying the credentials type. The only
-	// supported types currently are "google_default" and "insecure".
-	Type string
-	// Config contains the JSON configuration associated with the credentials.
-	Config json.RawMessage
 }
 
 // dialer captures the Dialer method specified via the credentials bundle.
@@ -76,10 +65,10 @@ func (b *Builder) Build(opts xds.TransportBuildOptions) (xds.Transport, error) {
 	}
 
 	gtsc := gtsce.GRPCTransportServerConfig()
-
-	c := bootstrap.GetCredentials(gtsc.GRPCTransportServerConfig().ChannelCreds.Type)
-
-	bundle, _, _ := c.Build(gtsc.ChannelCreds.Config)
+	bundle, ok := gtsc.ServerCredentials[opts.ServerConfig.ServerURI]
+	if !ok {
+		return nil, fmt.Errorf("server credentials were not found for server uri: %s", opts.ServerConfig.ServerURI)
+	}
 
 	credsDialOption := grpc.WithCredentialsBundle(bundle)
 	d, _ := bundle.(dialer)
