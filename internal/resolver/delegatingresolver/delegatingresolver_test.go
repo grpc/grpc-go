@@ -53,33 +53,10 @@ const (
 // overwriteAndRestore overwrite function HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overwrite(hpfe func(req *http.Request) (*url.URL, error)) func() {
-	backHPFE := HTTPSProxyFromEnvironment
+	originalHPFE := HTTPSProxyFromEnvironment
 	HTTPSProxyFromEnvironment = hpfe
 	return func() {
-		HTTPSProxyFromEnvironment = backHPFE
-	}
-}
-
-func (s) TestUpdateProxyUrlEnv(t *testing.T) {
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == targetTestAddr {
-			return &url.URL{
-				Scheme: "https",
-				Host:   envProxyAddr,
-			}, nil
-		}
-		return nil, nil
-	}
-	defer overwrite(hpfe)()
-
-	// envTestAddr should be handled by ProxyFromEnvironment.
-	got, err := updateProxyURL(targetTestAddr)
-	if err != nil {
-		t.Error(err)
-	}
-	if got.Host != envProxyAddr {
-		t.Errorf("want %v, got %v", envProxyAddr, got)
+		HTTPSProxyFromEnvironment = originalHPFE
 	}
 }
 
@@ -105,8 +82,33 @@ func overwriteAndRestoreProxyEnv(proxyURI string) func() {
 	return func() { envconfig.HTTPSProxy = origHTTPSProxy }
 }
 
-// TestDelegatingResolverNoProxy verifies the behavior of the delegating resolver
-// when no proxy is configured.
+// TestParsedURLForProxyEnv verifies that the parsedURLForProxy function
+// correctly resolves the proxy URL for a given target address.
+func (s) TestParsedURLForProxyEnv(t *testing.T) {
+	// Overwrite the function in the test and restore them in defer.
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		if req.URL.Host == targetTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		return nil, nil
+	}
+	defer overwrite(hpfe)()
+
+	// envTestAddr should be handled by ProxyFromEnvironment.
+	got, err := parsedURLForProxy(targetTestAddr)
+	if err != nil {
+		t.Errorf("Unable to get proxy URL : %v\n", err)
+	}
+	if got.Host != envProxyAddr {
+		t.Errorf("want %v, got %v", envProxyAddr, got)
+	}
+}
+
+// TestDelegatingResolverNoProxy verifies that the delegating resolver correctly
+// sends the resolved target URI to the ClientConn.
 func (s) TestDelegatingResolverNoProxy(t *testing.T) {
 	// Enable HTTP Proxy env var.
 	defer overwriteAndRestoreProxyEnv("")()
@@ -131,9 +133,9 @@ func (s) TestDelegatingResolverNoProxy(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: resolvedTargetTestAddr}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
-	state := <-stateCh
-	if len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
-		t.Errorf("Unexpected state from delegating resolver: %v, want %v", state, expectedState)
+
+	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
+		t.Fatalf("Unexpected state from delegating resolver: %v, want %v", state, expectedState)
 	}
 }
 
@@ -151,8 +153,9 @@ func setupDNS(t *testing.T) *manual.Resolver {
 }
 
 // TestDelegatingResolverwithDNSAndProxy verifies that the delegating resolver
-// correctly updates state when the target URI scheme is DNS and a proxy is
-// configured and target resolution is enabled.
+// correctly updates state with resolver proxy address with resolved target
+// URI as attribute of the proxy address when the target URI scheme is DNS and
+// a proxy is configured and target resolution is enabled.
 func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T) {
 	// Enable HTTP Proxy env var.
 	defer overwriteAndRestoreProxyEnv(envProxyAddr)()
@@ -201,9 +204,11 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	}
 }
 
-// TestDelegatingResolverwithDNSAndProxy verifies that the delegating resolver
-// correctly updates state when the target URI scheme is DNS and a proxy is
-// configured.
+// TestDelegatingResolverwithDNSAndProxyWithNoTargetResolutionverifies that the
+// delegating resolver correctly updates state with resolver proxy address with
+// unresolved target URI as attribute of the proxy address when the target URI
+// scheme is DNS and a proxy is configured and default target
+// resolution(that is not enabled.)
 func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
 	// Enable HTTP Proxy env var.
 	defer overwriteAndRestoreProxyEnv(envProxyAddr)()
@@ -247,7 +252,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 }
 
 // TestDelegatingResolverwithDNSAndProxy verifies that the delegating resolver
-// correctly updates state when the target URI scheme is not DNS and a proxy is
+// correctly updates state with resolved proxy address and custom resolved target
+// address as the attributes when the target URI scheme is not DNS and a proxy is
 // configured.
 func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	// Enable HTTP Proxy env var.
