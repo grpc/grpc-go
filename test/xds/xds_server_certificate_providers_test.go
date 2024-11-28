@@ -158,27 +158,21 @@ func (s) TestServerSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 			close(servingModeCh)
 		}
 	})
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-	defer server.Stop()
 
-	stub := &stubserver.StubServer{}
-	stub.S = server
-	stubserver.StartTestService(t, stub)
-
-	// Create a local listener and pass it to Serve().
+	// Create a local listener and assign it to the stub server.
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stub := &stubserver.StubServer{
+		Listener: lis,
+	}
+	if stub.S, err = xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bs)); err != nil {
+		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
+	}
+	defer stub.S.Stop()
+	stubserver.StartTestService(t, stub)
 
 	// Create an inbound xDS listener resource for the server side that contains
 	// mTLS security configuration. Since the received certificate provider
@@ -288,30 +282,10 @@ func (s) TestServerSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		}
 	})
 
-	stub := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	server, err := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
-	if err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
-	defer server.Stop()
-
-	stub.S = server
-	stubserver.StartTestService(t, stub)
-
-	go func() {
-		if err := server.Serve(lis1); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-	go func() {
-		if err := server.Serve(lis2); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stub1 := createStubServer(t, lis1, creds, modeChangeOpt, bootstrapContents)
+	defer stub1.S.Stop()
+	stub2 := createStubServer(t, lis2, creds, modeChangeOpt, bootstrapContents)
+	defer stub2.S.Stop()
 
 	// Create inbound xDS listener resources for the server side that contains
 	// mTLS security configuration.

@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/internal"
 	"google.golang.org/grpc/connectivity"
+	expstats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
@@ -61,7 +62,28 @@ var (
 	// Name is the name of the pick_first_leaf balancer.
 	// It is changed to "pick_first" in init() if this balancer is to be
 	// registered as the default pickfirst.
-	Name = "pick_first_leaf"
+	Name                 = "pick_first_leaf"
+	disconnectionsMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:        "grpc.lb.pick_first.disconnections",
+		Description: "EXPERIMENTAL. Number of times the selected subchannel becomes disconnected.",
+		Unit:        "disconnection",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
+	})
+	connectionAttemptsSucceededMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:        "grpc.lb.pick_first.connection_attempts_succeeded",
+		Description: "EXPERIMENTAL. Number of successful connection attempts.",
+		Unit:        "attempt",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
+	})
+	connectionAttemptsFailedMetric = expstats.RegisterInt64Count(expstats.MetricDescriptor{
+		Name:        "grpc.lb.pick_first.connection_attempts_failed",
+		Description: "EXPERIMENTAL. Number of failed connection attempts.",
+		Unit:        "attempt",
+		Labels:      []string{"grpc.target"},
+		Default:     false,
+	})
 )
 
 const (
@@ -84,9 +106,12 @@ const (
 
 type pickfirstBuilder struct{}
 
-func (pickfirstBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+func (pickfirstBuilder) Build(cc balancer.ClientConn, bo balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
-		cc:                    cc,
+		cc:              cc,
+		target:          bo.Target.String(),
+		metricsRecorder: bo.MetricsRecorder, // ClientConn will always create a Metrics Recorder.
+
 		subConns:              resolver.NewAddressMap(),
 		state:                 connectivity.Connecting,
 		cancelConnectionTimer: func() {},
@@ -160,8 +185,10 @@ func (b *pickfirstBalancer) newSCData(addr resolver.Address) (*scData, error) {
 type pickfirstBalancer struct {
 	// The following fields are initialized at build time and read-only after
 	// that and therefore do not need to be guarded by a mutex.
-	logger *internalgrpclog.PrefixLogger
-	cc     balancer.ClientConn
+	logger          *internalgrpclog.PrefixLogger
+	cc              balancer.ClientConn
+	target          string
+	metricsRecorder expstats.MetricsRecorder // guaranteed to be non nil
 
 	// The mutex is used to ensure synchronization of updates triggered
 	// from the idle picker and the already serialized resolver,
@@ -550,10 +577,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	oldState := sd.rawConnectivityState
-	// Record a connection attempt when exiting CONNECTING.
-	if newState.ConnectivityState == connectivity.TransientFailure {
-		sd.connectionFailedInFirstPass = true
-	}
 	sd.rawConnectivityState = newState.ConnectivityState
 	// Previously relevant SubConns can still callback with state updates.
 	// To prevent pickers from returning these obsolete SubConns, this logic
@@ -567,7 +590,14 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		return
 	}
 
+	// Record a connection attempt when exiting CONNECTING.
+	if newState.ConnectivityState == connectivity.TransientFailure {
+		sd.connectionFailedInFirstPass = true
+		connectionAttemptsFailedMetric.Record(b.metricsRecorder, 1, b.target)
+	}
+
 	if newState.ConnectivityState == connectivity.Ready {
+		connectionAttemptsSucceededMetric.Record(b.metricsRecorder, 1, b.target)
 		b.shutdownRemainingLocked(sd)
 		if !b.addressList.seekTo(sd.addr) {
 			// This should not fail as we should have only one SubConn after
@@ -614,6 +644,15 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 		// the first address when the picker is used.
 		b.shutdownRemainingLocked(sd)
 		sd.effectiveConnectivityState = newState.ConnectivityState
+		// READY SubConn interspliced in between CONNECTING and IDLE, need to
+		// account for that.
+		if oldState == connectivity.Connecting {
+			// A known issue (https://github.com/grpc/grpc-go/issues/7862)
+			// causes a race that prevents the READY state change notification.
+			// This works around it.
+			connectionAttemptsSucceededMetric.Record(b.metricsRecorder, 1, b.target)
+		}
+		disconnectionsMetric.Record(b.metricsRecorder, 1, b.target)
 		b.addressList.reset()
 		b.updateBalancerState(balancer.State{
 			ConnectivityState: connectivity.Idle,

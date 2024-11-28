@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -48,14 +49,14 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestPickFirstLeaf_InitialResolverError sends a resolver error to the balancer
+// TestPickFirst_InitialResolverError sends a resolver error to the balancer
 // before a valid resolver update. It verifies that the clientconn state is
 // updated to TRANSIENT_FAILURE.
-func (s) TestPickFirstLeaf_InitialResolverError(t *testing.T) {
+func (s) TestPickFirst_InitialResolverError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
 	defer bal.Close()
 	bal.ResolverError(errors.New("resolution failed: test error"))
 
@@ -81,14 +82,14 @@ func (s) TestPickFirstLeaf_InitialResolverError(t *testing.T) {
 	}
 }
 
-// TestPickFirstLeaf_ResolverErrorinTF sends a resolver error to the balancer
+// TestPickFirst_ResolverErrorinTF sends a resolver error to the balancer
 // before when it's attempting to connect to a SubConn TRANSIENT_FAILURE. It
 // verifies that the picker is updated and the SubConn is not closed.
-func (s) TestPickFirstLeaf_ResolverErrorinTF(t *testing.T) {
+func (s) TestPickFirst_ResolverErrorinTF(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
 	defer bal.Close()
 
 	// After sending a valid update, the LB policy should report CONNECTING.

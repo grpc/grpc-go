@@ -1137,7 +1137,7 @@ func (s *Server) incrCallsFailed() {
 	s.channelz.ServerMetrics.CallsFailed.Add(1)
 }
 
-func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, stream *transport.ServerStream, msg any, cp Compressor, opts *transport.Options, comp encoding.Compressor) error {
+func (s *Server) sendResponse(ctx context.Context, stream *transport.ServerStream, msg any, cp Compressor, opts *transport.WriteOptions, comp encoding.Compressor) error {
 	data, err := encode(s.getCodec(stream.ContentSubtype()), msg)
 	if err != nil {
 		channelz.Error(logger, s.channelz, "grpc: server failed to encode response: ", err)
@@ -1166,7 +1166,7 @@ func (s *Server) sendResponse(ctx context.Context, t transport.ServerTransport, 
 	if payloadLen > s.opts.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", payloadLen, s.opts.maxSendMessageSize)
 	}
-	err = t.Write(stream, hdr, payload, opts)
+	err = stream.Write(hdr, payload, opts)
 	if err == nil {
 		if len(s.opts.statsHandlers) != 0 {
 			for _, sh := range s.opts.statsHandlers {
@@ -1213,7 +1213,7 @@ func getChainUnaryHandler(interceptors []UnaryServerInterceptor, curr int, info 
 	}
 }
 
-func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTransport, stream *transport.ServerStream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
+func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerStream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
 	shs := s.opts.statsHandlers
 	if len(shs) != 0 || trInfo != nil || channelz.IsOn() {
 		if channelz.IsOn() {
@@ -1321,7 +1321,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 		decomp = encoding.GetCompressor(rc)
 		if decomp == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
-			t.WriteStatus(stream, st)
+			stream.WriteStatus(st)
 			return st.Err()
 		}
 	}
@@ -1355,15 +1355,12 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 
 	d, err := recvAndDecompress(&parser{r: stream, bufferPool: s.opts.bufferPool}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp, true)
 	if err != nil {
-		if e := t.WriteStatus(stream, status.Convert(err)); e != nil {
+		if e := stream.WriteStatus(status.Convert(err)); e != nil {
 			channelz.Warningf(logger, s.channelz, "grpc: Server.processUnaryRPC failed to write status: %v", e)
 		}
 		return err
 	}
 	defer d.Free()
-	if channelz.IsOn() {
-		t.IncrMsgRecv()
-	}
 	df := func(v any) error {
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
@@ -1405,7 +1402,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			trInfo.tr.LazyLog(stringer(appStatus.Message()), true)
 			trInfo.tr.SetError()
 		}
-		if e := t.WriteStatus(stream, appStatus); e != nil {
+		if e := stream.WriteStatus(appStatus); e != nil {
 			channelz.Warningf(logger, s.channelz, "grpc: Server.processUnaryRPC failed to write status: %v", e)
 		}
 		if len(binlogs) != 0 {
@@ -1432,20 +1429,20 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 	if trInfo != nil {
 		trInfo.tr.LazyLog(stringer("OK"), false)
 	}
-	opts := &transport.Options{Last: true}
+	opts := &transport.WriteOptions{Last: true}
 
 	// Server handler could have set new compressor by calling SetSendCompressor.
 	// In case it is set, we need to use it for compressing outbound message.
 	if stream.SendCompress() != sendCompressorName {
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
-	if err := s.sendResponse(ctx, t, stream, reply, cp, opts, comp); err != nil {
+	if err := s.sendResponse(ctx, stream, reply, cp, opts, comp); err != nil {
 		if err == io.EOF {
 			// The entire stream is done (for unary RPC only).
 			return err
 		}
 		if sts, ok := status.FromError(err); ok {
-			if e := t.WriteStatus(stream, sts); e != nil {
+			if e := stream.WriteStatus(sts); e != nil {
 				channelz.Warningf(logger, s.channelz, "grpc: Server.processUnaryRPC failed to write status: %v", e)
 			}
 		} else {
@@ -1485,9 +1482,6 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			binlog.Log(ctx, sm)
 		}
 	}
-	if channelz.IsOn() {
-		t.IncrMsgSent()
-	}
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&payload{sent: true, msg: reply}, true)
 	}
@@ -1503,7 +1497,7 @@ func (s *Server) processUnaryRPC(ctx context.Context, t transport.ServerTranspor
 			binlog.Log(ctx, st)
 		}
 	}
-	return t.WriteStatus(stream, statusOK)
+	return stream.WriteStatus(statusOK)
 }
 
 // chainStreamServerInterceptors chains all stream server interceptors into one.
@@ -1542,7 +1536,7 @@ func getChainStreamHandler(interceptors []StreamServerInterceptor, curr int, inf
 	}
 }
 
-func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTransport, stream *transport.ServerStream, info *serviceInfo, sd *StreamDesc, trInfo *traceInfo) (err error) {
+func (s *Server) processStreamingRPC(ctx context.Context, stream *transport.ServerStream, info *serviceInfo, sd *StreamDesc, trInfo *traceInfo) (err error) {
 	if channelz.IsOn() {
 		s.incrCallsStarted()
 	}
@@ -1562,7 +1556,6 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 	ctx = NewContextWithServerTransportStream(ctx, stream)
 	ss := &serverStream{
 		ctx:                   ctx,
-		t:                     t,
 		s:                     stream,
 		p:                     &parser{r: stream, bufferPool: s.opts.bufferPool},
 		codec:                 s.getCodec(stream.ContentSubtype()),
@@ -1649,7 +1642,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 		ss.decomp = encoding.GetCompressor(rc)
 		if ss.decomp == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
-			t.WriteStatus(ss.s, st)
+			ss.s.WriteStatus(st)
 			return st.Err()
 		}
 	}
@@ -1718,7 +1711,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 				binlog.Log(ctx, st)
 			}
 		}
-		t.WriteStatus(ss.s, appStatus)
+		ss.s.WriteStatus(appStatus)
 		// TODO: Should we log an error from WriteStatus here and below?
 		return appErr
 	}
@@ -1736,7 +1729,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, t transport.ServerTran
 			binlog.Log(ctx, st)
 		}
 	}
-	return t.WriteStatus(ss.s, statusOK)
+	return ss.s.WriteStatus(statusOK)
 }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.ServerStream) {
@@ -1769,7 +1762,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 			ti.tr.SetError()
 		}
 		errDesc := fmt.Sprintf("malformed method name: %q", stream.Method())
-		if err := t.WriteStatus(stream, status.New(codes.Unimplemented, errDesc)); err != nil {
+		if err := stream.WriteStatus(status.New(codes.Unimplemented, errDesc)); err != nil {
 			if ti != nil {
 				ti.tr.LazyLog(&fmtStringer{"%v", []any{err}}, true)
 				ti.tr.SetError()
@@ -1806,17 +1799,17 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 	srv, knownService := s.services[service]
 	if knownService {
 		if md, ok := srv.methods[method]; ok {
-			s.processUnaryRPC(ctx, t, stream, srv, md, ti)
+			s.processUnaryRPC(ctx, stream, srv, md, ti)
 			return
 		}
 		if sd, ok := srv.streams[method]; ok {
-			s.processStreamingRPC(ctx, t, stream, srv, sd, ti)
+			s.processStreamingRPC(ctx, stream, srv, sd, ti)
 			return
 		}
 	}
 	// Unknown service, or known server unknown method.
 	if unknownDesc := s.opts.unknownStreamDesc; unknownDesc != nil {
-		s.processStreamingRPC(ctx, t, stream, nil, unknownDesc, ti)
+		s.processStreamingRPC(ctx, stream, nil, unknownDesc, ti)
 		return
 	}
 	var errDesc string
@@ -1829,7 +1822,7 @@ func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Ser
 		ti.tr.LazyPrintf("%s", errDesc)
 		ti.tr.SetError()
 	}
-	if err := t.WriteStatus(stream, status.New(codes.Unimplemented, errDesc)); err != nil {
+	if err := stream.WriteStatus(status.New(codes.Unimplemented, errDesc)); err != nil {
 		if ti != nil {
 			ti.tr.LazyLog(&fmtStringer{"%v", []any{err}}, true)
 			ti.tr.SetError()

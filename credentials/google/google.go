@@ -22,7 +22,6 @@ package google
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
@@ -30,8 +29,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 )
-
-const tokenRequestTimeout = 30 * time.Second
 
 var logger = grpclog.Component("credentials")
 
@@ -50,10 +47,11 @@ type DefaultCredentialsOptions struct {
 // This API is experimental.
 func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credentials.Bundle {
 	if opts.PerRPCCreds == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
-		defer cancel()
 		var err error
-		opts.PerRPCCreds, err = newADC(ctx)
+		// If the ADC ends up being Compute Engine Credentials, this context
+		// won't be used. Otherwise, the context dictates all the subsequent
+		// token requests via HTTP. So we cannot have any deadline or timeout.
+		opts.PerRPCCreds, err = newADC(context.TODO())
 		if err != nil {
 			logger.Warningf("NewDefaultCredentialsWithOptions: failed to create application oauth: %v", err)
 		}

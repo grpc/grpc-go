@@ -225,7 +225,7 @@ func (ht *serverHandlerTransport) do(fn func()) error {
 	}
 }
 
-func (ht *serverHandlerTransport) WriteStatus(s *ServerStream, st *status.Status) error {
+func (ht *serverHandlerTransport) writeStatus(s *ServerStream, st *status.Status) error {
 	ht.writeStatusMu.Lock()
 	defer ht.writeStatusMu.Unlock()
 
@@ -333,7 +333,7 @@ func (ht *serverHandlerTransport) writeCustomHeaders(s *ServerStream) {
 	s.hdrMu.Unlock()
 }
 
-func (ht *serverHandlerTransport) Write(s *ServerStream, hdr []byte, data mem.BufferSlice, _ *Options) error {
+func (ht *serverHandlerTransport) write(s *ServerStream, hdr []byte, data mem.BufferSlice, _ *WriteOptions) error {
 	// Always take a reference because otherwise there is no guarantee the data will
 	// be available after this function returns. This is what callers to Write
 	// expect.
@@ -357,7 +357,7 @@ func (ht *serverHandlerTransport) Write(s *ServerStream, hdr []byte, data mem.Bu
 	return nil
 }
 
-func (ht *serverHandlerTransport) WriteHeader(s *ServerStream, md metadata.MD) error {
+func (ht *serverHandlerTransport) writeHeader(s *ServerStream, md metadata.MD) error {
 	if err := s.SetHeader(md); err != nil {
 		return err
 	}
@@ -473,9 +473,7 @@ func (ht *serverHandlerTransport) runStream() {
 	}
 }
 
-func (ht *serverHandlerTransport) IncrMsgSent() {}
-
-func (ht *serverHandlerTransport) IncrMsgRecv() {}
+func (ht *serverHandlerTransport) incrMsgRecv() {}
 
 func (ht *serverHandlerTransport) Drain(string) {
 	panic("Drain() is not implemented")

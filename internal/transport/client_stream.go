@@ -21,6 +21,8 @@ package transport
 import (
 	"sync/atomic"
 
+	"golang.org/x/net/http2"
+	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -29,7 +31,7 @@ import (
 type ClientStream struct {
 	*Stream // Embed for common stream functionality.
 
-	ct       ClientTransport
+	ct       *http2Client
 	done     chan struct{} // closed at the end of stream to unblock writers.
 	doneFunc func()        // invoked at the end of stream.
 
@@ -42,21 +44,48 @@ type ClientStream struct {
 	header      metadata.MD // the received header metadata
 	noHeaders   bool        // set if the client never received headers (set only after the stream is done).
 
-	bytesReceived uint32 // indicates whether any bytes have been received on this stream
-	unprocessed   uint32 // set if the server sends a refused stream or GOAWAY including this stream
+	bytesReceived atomic.Bool // indicates whether any bytes have been received on this stream
+	unprocessed   atomic.Bool // set if the server sends a refused stream or GOAWAY including this stream
 
 	status *status.Status // the status error received from the server
 }
 
+// Read reads an n byte message from the input stream.
+func (s *ClientStream) Read(n int) (mem.BufferSlice, error) {
+	b, err := s.Stream.read(n)
+	if err == nil {
+		s.ct.incrMsgRecv()
+	}
+	return b, err
+}
+
+// Close closes the stream and popagates err to any readers.
+func (s *ClientStream) Close(err error) {
+	var (
+		rst     bool
+		rstCode http2.ErrCode
+	)
+	if err != nil {
+		rst = true
+		rstCode = http2.ErrCodeCancel
+	}
+	s.ct.closeStream(s, err, rst, rstCode, status.Convert(err), nil, false)
+}
+
+// Write writes the hdr and data bytes to the output stream.
+func (s *ClientStream) Write(hdr []byte, data mem.BufferSlice, opts *WriteOptions) error {
+	return s.ct.write(s, hdr, data, opts)
+}
+
 // BytesReceived indicates whether any bytes have been received on this stream.
 func (s *ClientStream) BytesReceived() bool {
-	return atomic.LoadUint32(&s.bytesReceived) == 1
+	return s.bytesReceived.Load()
 }
 
 // Unprocessed indicates whether the server did not process this stream --
 // i.e. it sent a refused stream or GOAWAY including this stream ID.
 func (s *ClientStream) Unprocessed() bool {
-	return atomic.LoadUint32(&s.unprocessed) == 1
+	return s.unprocessed.Load()
 }
 
 func (s *ClientStream) waitOnHeader() {
@@ -64,7 +93,7 @@ func (s *ClientStream) waitOnHeader() {
 	case <-s.ctx.Done():
 		// Close the stream to prevent headers/trailers from changing after
 		// this function returns.
-		s.ct.CloseStream(s, ContextErr(s.ctx.Err()))
+		s.Close(ContextErr(s.ctx.Err()))
 		// headerChan could possibly not be closed yet if closeStream raced
 		// with operateHeaders; wait until it is closed explicitly here.
 		<-s.headerChan

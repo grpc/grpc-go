@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
@@ -67,25 +68,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type testService struct {
-	testgrpc.TestServiceServer
-}
-
-func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return &testpb.Empty{}, nil
-}
-
-func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
-	// End RPC after client does a CloseSend.
-	for {
-		if _, err := stream.Recv(); err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		}
-	}
-}
-
 // clientSetup performs a bunch of steps common to all xDS server tests here:
 // - spin up an xDS management server on a local port
 // - spin up a gRPC server and register the test service on it
@@ -97,7 +79,7 @@ func (*testService) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSer
 //     sent by the xdsClient for queries.
 //   - the port the server is listening on
 //   - cleanup function to be invoked by the tests when done
-func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
+func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
@@ -106,25 +88,33 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
-	// Initialize a gRPC server and register the stubServer on it.
-	server := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-
-	// Create a local listener and pass it to Serve().
+	// Create a local listener.
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-
-	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		server.Stop()
+	// Initialize a test gRPC server, assign it to the stub server, and start the test service.
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			// End RPC after client does a CloseSend.
+			for {
+				if _, err := stream.Recv(); err == io.EOF {
+					return nil
+				} else if err != nil {
+					return err
+				}
+			}
+		},
 	}
+
+	stubserver.StartTestService(t, stub)
+	t.Cleanup(stub.S.Stop)
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port)
 }
 
 func (s) TestFaultInjection_Unary(t *testing.T) {
@@ -466,8 +456,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		}},
 	}}
 
-	fs, nodeID, port, cleanup := clientSetup(t)
-	defer cleanup()
+	fs, nodeID, port := clientSetup(t)
 
 	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -549,8 +538,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 }
 
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
-	fs, nodeID, port, cleanup := clientSetup(t)
-	defer cleanup()
+	fs, nodeID, port := clientSetup(t)
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: "myservice",
 		NodeID:     nodeID,

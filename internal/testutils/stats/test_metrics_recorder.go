@@ -63,6 +63,8 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 // Metric returns the most recent data for a metric, and whether this recorder
 // has received data for a metric.
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	data, ok := r.data[estats.Metric(name)]
 	return data, ok
 }
@@ -97,6 +99,21 @@ func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsData
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
+		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
+	}
+	return nil
+}
+
+// WaitForInt64CountIncr waits for an int64 count metric to be recorded and
+// verifies that the recorded metrics data incr matches the expected incr.
+// Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64CountIncr(ctx context.Context, incrWant int64) error {
+	got, err := r.intCountCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for int64Count")
+	}
+	metricsDataGot := got.(MetricsData)
+	if diff := cmp.Diff(metricsDataGot.IntIncr, incrWant); diff != "" {
 		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
 	}
 	return nil

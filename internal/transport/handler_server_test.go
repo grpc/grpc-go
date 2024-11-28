@@ -310,7 +310,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		}
 
 		st.bodyw.Close() // no body
-		st.ht.WriteStatus(s, status.New(codes.OK, ""))
+		s.WriteStatus(status.New(codes.OK, ""))
 	}
 	st.ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go handleStream(s) },
@@ -343,7 +343,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	st := newHandleStreamTest(t)
 
 	handleStream := func(s *ServerStream) {
-		st.ht.WriteStatus(s, status.New(statusCode, msg))
+		s.WriteStatus(status.New(statusCode, msg))
 	}
 	st.ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go handleStream(s) },
@@ -392,7 +392,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			t.Errorf("ctx.Err = %v; want %v", err, context.DeadlineExceeded)
 			return
 		}
-		ht.WriteStatus(s, status.New(codes.DeadlineExceeded, "too slow"))
+		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
 	}
 	ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go runStream(s) },
@@ -423,7 +423,7 @@ func (s) TestHandlerTransport_HandleStreams_MultiWriteStatus(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			go func() {
 				defer wg.Done()
-				st.ht.WriteStatus(s, status.New(codes.OK, ""))
+				s.WriteStatus(status.New(codes.OK, ""))
 			}()
 		}
 		wg.Wait()
@@ -439,8 +439,8 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 		}
 		st.bodyw.Close() // no body
 
-		st.ht.WriteStatus(s, status.New(codes.OK, ""))
-		st.ht.Write(s, []byte("hdr"), newBufferSlice([]byte("data")), &Options{})
+		s.WriteStatus(status.New(codes.OK, ""))
+		s.Write([]byte("hdr"), newBufferSlice([]byte("data")), &WriteOptions{})
 	})
 }
 
@@ -477,7 +477,7 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 
 	hst := newHandleStreamTest(t)
 	handleStream := func(s *ServerStream) {
-		hst.ht.WriteStatus(s, st)
+		s.WriteStatus(st)
 	}
 	hst.ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go handleStream(s) },

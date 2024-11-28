@@ -27,10 +27,10 @@ import (
 )
 
 // WatchResource uses xDS to discover the resource associated with the provided
-// resource name. The resource type implementation determines how xDS requests
-// are sent out and how responses are deserialized and validated. Upon receipt
-// of a response from the management server, an appropriate callback on the
-// watcher is invoked.
+// resource name. The resource type implementation determines how xDS responses
+// are are deserialized and validated, as received from the xDS management
+// server. Upon receipt of a response from the management server, an
+// appropriate callback on the watcher is invoked.
 func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	//

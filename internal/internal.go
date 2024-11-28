@@ -267,3 +267,9 @@ const (
 // It currently has an experimental suffix which would be removed once
 // end-to-end testing of the policy is completed.
 const RLSLoadBalancingPolicyName = "rls_experimental"
+
+// EnforceSubConnEmbedding is used to enforce proper SubConn implementation
+// embedding.
+type EnforceSubConnEmbedding interface {
+	enforceSubConnEmbedding()
+}
