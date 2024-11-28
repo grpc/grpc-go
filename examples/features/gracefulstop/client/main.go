@@ -73,7 +73,7 @@ func main() {
 		log.Fatalf("Error closing stream: %v", err)
 	}
 	if fmt.Sprintf("%d", unaryRequests) != r.Message {
-		log.Fatalf("Got %s successfull unary requests processed from server, want: %d", r.Message, unaryRequests)
+		log.Fatalf("Got %s successful unary requests processed from server, want: %d", r.Message, unaryRequests)
 	}
 	log.Printf("Successful unary requests processed by server and made by client are same: %d", unaryRequests)
 }

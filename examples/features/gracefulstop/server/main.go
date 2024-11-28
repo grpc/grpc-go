@@ -40,7 +40,7 @@ var (
 type server struct {
 	pb.UnimplementedEchoServer
 
-	unaryRequests int32         // to track number of unary RPCs processed
+	unaryRequests atomic.Int32  // to track number of unary RPCs processed
 	streamStart   chan struct{} // to signal if server streaming started
 }
 
@@ -57,7 +57,7 @@ func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) e
 
 	if err := stream.RecvMsg(&pb.EchoResponse{}); err != nil {
 		if errors.Is(err, io.EOF) {
-			stream.SendAndClose(&pb.EchoResponse{Message: fmt.Sprintf("Total Unary Requests Processed: %d", s.unaryRequests)})
+			stream.SendAndClose(&pb.EchoResponse{Message: fmt.Sprintf("%d", s.unaryRequests.Load())})
 			return nil
 		}
 		return err
@@ -68,9 +68,9 @@ func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) e
 
 // UnaryEcho implements the EchoService.UnaryEcho method. It increments
 // `s.unaryRequests` on every call and returns it as part of `EchoResponse`.
-func (s *server) UnaryEcho(_ context.Context, _ *pb.EchoRequest) (*pb.EchoResponse, error) {
-	atomic.AddInt32(&s.unaryRequests, 1)
-	return &pb.EchoResponse{Message: fmt.Sprintf("Request Processed: %d", s.unaryRequests)}, nil
+func (s *server) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+	s.unaryRequests.Add(1)
+	return &pb.EchoResponse{Message: req.Message}, nil
 }
 
 func main() {
@@ -90,6 +90,11 @@ func main() {
 		<-ss.streamStart // wait until server streaming starts
 		time.Sleep(1 * time.Second)
 		log.Println("Initiating graceful shutdown...")
+		timer := time.AfterFunc(10*time.Second, func() {
+			log.Println("Server couldn't stop gracefully in time. Doing force stop.")
+			s.Stop()
+		})
+		defer timer.Stop()
 		s.GracefulStop() // gracefully stop server after in-flight server streaming rpc finishes
 		log.Println("Server stopped gracefully.")
 	}()
