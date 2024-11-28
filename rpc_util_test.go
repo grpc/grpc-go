@@ -337,7 +337,7 @@ func TestDecompress(t *testing.T) {
 			compressor:            c,
 			input:                 []byte(""),
 			maxReceiveMessageSize: 10,
-			want:                  []byte(""),
+			want:                  nil,
 			error:                 nil,
 		},
 		{
@@ -345,7 +345,7 @@ func TestDecompress(t *testing.T) {
 			compressor:            c,
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 5,
-			want:                  []byte("smalll"),
+			want:                  nil,
 			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
 		},
 	}
@@ -356,7 +356,10 @@ func TestDecompress(t *testing.T) {
 				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 			}()
 			output, _, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, nil)
-			wantMsg := mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
+			var wantMsg mem.BufferSlice
+			if tt.want != nil {
+				wantMsg = mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
+			}
 			if tt.error != nil && err == nil {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
 			}
@@ -364,8 +367,9 @@ func TestDecompress(t *testing.T) {
 				t.Fatalf("decompress() got = nil, want = non nil")
 			}
 			if diff := cmp.Diff(wantMsg, output); diff != "" {
-				t.Fatalf("decompress() mismatch in bytes (-want +got):\n%s", diff)
+				t.Fatalf("Mismatch in output:\n%s", diff)
 			}
+
 		})
 	}
 }
