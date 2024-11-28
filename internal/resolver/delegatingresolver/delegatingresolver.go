@@ -149,7 +149,7 @@ func (r *delegatingResolver) Close() {
 
 type keyType string
 
-const UserAndConnectAddrKey = keyType("grpc.resolver.delegatingresolver.userAndConnectAddr")
+const userAndConnectAddrKey = keyType("grpc.resolver.delegatingresolver.userAndConnectAddr")
 
 type attr struct {
 	user *url.Userinfo
@@ -160,20 +160,20 @@ type attr struct {
 // attributes containing address to be sent in connect request to proxy and the
 // user info.  It's data should not be mutated after calling SetConnectAddr.
 func SetUserAndConnectAddr(resAddr resolver.Address, user *url.Userinfo, addr string) resolver.Address {
-	resAddr.Attributes = resAddr.Attributes.WithValue(UserAndConnectAddrKey, attr{user: user, addr: addr})
+	resAddr.Attributes = resAddr.Attributes.WithValue(userAndConnectAddrKey, attr{user: user, addr: addr})
 	return resAddr
 }
 
 // ProxyConnectAddr returns the proxy connect address in resolver.Address, or nil
 // if not present. The returned data should not be mutated.
 func ProxyConnectAddr(addr resolver.Address) string {
-	return addr.Attributes.Value(UserAndConnectAddrKey).(attr).addr
+	return addr.Attributes.Value(userAndConnectAddrKey).(attr).addr
 }
 
 // User returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
 func User(addr resolver.Address) *url.Userinfo {
-	return addr.Attributes.Value(UserAndConnectAddrKey).(attr).user
+	return addr.Attributes.Value(userAndConnectAddrKey).(attr).user
 }
 
 func (r *delegatingResolver) updateAddressAtrributes() []resolver.Address {

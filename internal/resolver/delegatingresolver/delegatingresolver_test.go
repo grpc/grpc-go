@@ -101,11 +101,6 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 // TestDelegatingResolverNoProxy verifies that the delegating resolver correctly
 // sends the resolved target URI to the ClientConn.
 func (s) TestDelegatingResolverNoProxy(t *testing.T) {
-	// return a nil proxy URL indicating no proxy set.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return nil, nil
-	}
-	defer overwrite(hpfe)()
 	mr := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
 	target := "test:///" + targetTestAddr
 
