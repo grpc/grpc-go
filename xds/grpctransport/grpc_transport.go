@@ -20,12 +20,12 @@ package grpctransport
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"net"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/bootstrap"
 )
 
 type GRPCTransportServerConfigExtension interface {
@@ -33,21 +33,28 @@ type GRPCTransportServerConfigExtension interface {
 }
 
 type GRPCTransportServerConfig struct {
-	ServerCredentials map[string]credentials.Bundle
+	ChannelCreds []ChannelCreds
 }
 
 func (s *GRPCTransportServerConfig) GRPCTransportServerConfig() *GRPCTransportServerConfig {
 	return s
 }
 
-// dialer captures the Dialer method specified via the credentials bundle.
-type dialer interface {
-	// Dialer specifies how to dial the xDS server.
-	Dialer(context.Context, string) (net.Conn, error)
+// ChannelCreds contains the credentials to be used while communicating with an
+// xDS server. It is also used to dedup servers with the same server URI.
+type ChannelCreds struct {
+	// Type contains a unique name identifying the credentials type.
+	Type string
+	// Config contains the JSON configuration associated with the credentials.
+	Config json.RawMessage
 }
 
 // Builder provides a way to build a gRPC-based transport to an xDS server.
-type Builder struct{}
+type Builder struct {
+	// CredentialsRegistry is a map from credential type name to Credential
+	// builder.
+	CredentialsRegistry map[string]bootstrap.Credentials
+}
 
 // Build creates a new gRPC-based transport to an xDS server using the provided
 // options. This involves creating a grpc.ClientConn to the server identified by
@@ -65,18 +72,21 @@ func (b *Builder) Build(opts xds.TransportBuildOptions) (xds.Transport, error) {
 	}
 
 	gtsc := gtsce.GRPCTransportServerConfig()
-	bundle, ok := gtsc.ServerCredentials[opts.ServerConfig.ServerURI]
-	if !ok {
-		return nil, fmt.Errorf("server credentials were not found for server uri: %s", opts.ServerConfig.ServerURI)
+	for _, cc := range gtsc.ChannelCreds {
+		c := b.CredentialsRegistry[cc.Type]
+		if c == nil {
+			continue
+		}
+		bundle, cancel, err := c.Build(cc.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build credentials bundle from selected creds for %q: %v", cc.Type, err)
+		}
+		defer cancel()
+		credsDialOption := grpc.WithCredentialsBundle(bundle)
+		grpcClient, _ := grpc.NewClient(opts.ServerConfig.ServerURI, credsDialOption)
+		return &grpcTransport{cc: grpcClient}, nil
 	}
-
-	credsDialOption := grpc.WithCredentialsBundle(bundle)
-	d, _ := bundle.(dialer)
-	dialerOption := grpc.WithContextDialer(d.Dialer)
-
-	grpcClient, _ := grpc.NewClient(opts.ServerConfig.ServerURI, dialerOption, credsDialOption)
-
-	return &grpcTransport{cc: grpcClient}, nil
+	return nil, fmt.Errorf("no valid credentials found for server: %s", opts.ServerConfig.ServerURI)
 }
 
 type grpcTransport struct {
