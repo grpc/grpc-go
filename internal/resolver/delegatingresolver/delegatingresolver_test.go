@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -50,7 +49,7 @@ const (
 	resolvedProxyTestAddr1  = "2.3.4.6:7687"
 )
 
-// overwriteAndRestore overwrite function HTTPSProxyFromEnvironment and
+// overwrite function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overwrite(hpfe func(req *http.Request) (*url.URL, error)) func() {
 	originalHPFE := HTTPSProxyFromEnvironment
@@ -72,14 +71,6 @@ func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, 
 		ReportErrorF: func(err error) { errCh <- err },
 	}
 	return tcc, stateCh, errCh
-}
-
-// overwriteAndRestoreProxyEnv overwrites the proxy environment variable and
-// returns a function to restore the default values.
-func overwriteAndRestoreProxyEnv(proxyURI string) func() {
-	origHTTPSProxy := envconfig.HTTPSProxy
-	envconfig.HTTPSProxy = proxyURI
-	return func() { envconfig.HTTPSProxy = origHTTPSProxy }
 }
 
 // TestParsedURLForProxyEnv verifies that the parsedURLForProxy function
@@ -110,8 +101,11 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 // TestDelegatingResolverNoProxy verifies that the delegating resolver correctly
 // sends the resolved target URI to the ClientConn.
 func (s) TestDelegatingResolverNoProxy(t *testing.T) {
-	// Enable HTTP Proxy env var.
-	defer overwriteAndRestoreProxyEnv("")()
+	// return a nil proxy URL indicating no proxy set.
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		return nil, nil
+	}
+	defer overwrite(hpfe)()
 	mr := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
 	target := "test:///" + targetTestAddr
 
@@ -157,8 +151,6 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // URI as attribute of the proxy address when the target URI scheme is DNS and
 // a proxy is configured and target resolution is enabled.
 func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T) {
-	// Enable HTTP Proxy env var.
-	defer overwriteAndRestoreProxyEnv(envProxyAddr)()
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -195,11 +187,10 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 
 	// Verify that the delegating resolver outputs the same address.
 	expectedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr = SetConnectAddr(expectedAddr, resolvedTargetTestAddr)
+	expectedAddr = SetUserAndConnectAddr(expectedAddr, nil, resolvedTargetTestAddr)
 	expectedState := resolver.State{Addresses: []resolver.Address{expectedAddr}}
 
-	state := <-stateCh
-	if len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
+	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
 		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, expectedState)
 	}
 }
@@ -210,8 +201,6 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 // scheme is DNS and a proxy is configured and default target
 // resolution(that is not enabled.)
 func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
-	// Enable HTTP Proxy env var.
-	defer overwriteAndRestoreProxyEnv(envProxyAddr)()
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -242,11 +231,10 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 
 	// Verify that the delegating resolver outputs the same address.
 	expectedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr = SetConnectAddr(expectedAddr, targetTestAddr)
+	expectedAddr = SetUserAndConnectAddr(expectedAddr, nil, targetTestAddr)
 	expectedState := resolver.State{Addresses: []resolver.Address{expectedAddr}}
 
-	state := <-stateCh
-	if len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
+	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
 		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, expectedState)
 	}
 }
@@ -256,8 +244,6 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 // address as the attributes when the target URI scheme is not DNS and a proxy is
 // configured.
 func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
-	// Enable HTTP Proxy env var.
-	defer overwriteAndRestoreProxyEnv(envProxyAddr)()
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -298,16 +284,16 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	})
 
 	expectedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr = SetConnectAddr(expectedAddr, resolvedTargetTestAddr)
+	expectedAddr = SetUserAndConnectAddr(expectedAddr, nil, resolvedTargetTestAddr)
 
 	expectedAddr1 := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr1 = SetConnectAddr(expectedAddr1, resolvedTargetTestAddr1)
+	expectedAddr1 = SetUserAndConnectAddr(expectedAddr1, nil, resolvedTargetTestAddr1)
 
 	expectedAddr2 := resolver.Address{Addr: resolvedProxyTestAddr1}
-	expectedAddr2 = SetConnectAddr(expectedAddr2, resolvedTargetTestAddr)
+	expectedAddr2 = SetUserAndConnectAddr(expectedAddr2, nil, resolvedTargetTestAddr)
 
 	expectedAddr3 := resolver.Address{Addr: resolvedProxyTestAddr1}
-	expectedAddr3 = SetConnectAddr(expectedAddr3, resolvedTargetTestAddr1)
+	expectedAddr3 = SetUserAndConnectAddr(expectedAddr3, nil, resolvedTargetTestAddr1)
 
 	expectedState := resolver.State{Addresses: []resolver.Address{
 		expectedAddr,
@@ -318,8 +304,7 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
-	state := <-stateCh
-	if len(state.Addresses) != 4 || !cmp.Equal(expectedState, state) {
+	if state := <-stateCh; len(state.Addresses) != 4 || !cmp.Equal(expectedState, state) {
 		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, expectedState)
 	}
 }
