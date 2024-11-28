@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -53,13 +54,17 @@ func main() {
 		log.Fatalf("Error starting stream: %v", err)
 	}
 
+	// Keep track of successful unary requests which can be compared later to
+	// the successful unary requests reported by the server.
+	unaryRequests := 0
 	for {
 		r, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "Hello"})
 		if err != nil {
 			log.Printf("Error calling `UnaryEcho`. Server graceful stop initiated: %v", err)
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		unaryRequests++
+		time.Sleep(200 * time.Millisecond)
 		log.Printf(r.Message)
 	}
 
@@ -67,5 +72,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error closing stream: %v", err)
 	}
-	log.Printf(r.Message)
+	if fmt.Sprintf("%d", unaryRequests) != r.Message {
+		log.Fatalf("Got %s successfull unary requests processed from server, want: %d", r.Message, unaryRequests)
+	}
+	log.Printf("Successful unary requests processed by server and made by client are same: %d", unaryRequests)
 }
