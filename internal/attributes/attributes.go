@@ -45,11 +45,19 @@ func SetUserAndConnectAddr(resAddr resolver.Address, user *url.Userinfo, addr st
 // ProxyConnectAddr returns the proxy connect address in resolver.Address, or nil
 // if not present. The returned data should not be mutated.
 func ProxyConnectAddr(addr resolver.Address) string {
-	return addr.Attributes.Value(userAndConnectAddrKey).(attr).addr
+	attribute := addr.Attributes.Value(userAndConnectAddrKey)
+	if attribute != nil {
+		return attribute.(attr).addr
+	}
+	return ""
 }
 
 // User returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
 func User(addr resolver.Address) *url.Userinfo {
-	return addr.Attributes.Value(userAndConnectAddrKey).(attr).user
+	attribute := addr.Attributes.Value(userAndConnectAddrKey)
+	if attribute != nil {
+		return attribute.(attr).user
+	}
+	return nil
 }
