@@ -24,15 +24,12 @@
 package delegatingresolver
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -42,23 +39,6 @@ var (
 	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
 
 	logger = grpclog.Component("delegating-resolver")
-	// TimeNowFunc is used by the DNS resolver to get the current time.
-	// In non-test code, this is implemented by time.Now. In test code,
-	// this can be used to control the current time for the resolver.
-	TimeNowFunc func() time.Time = time.Now
-	// TimeAfterFunc is used by the DNS resolver to wait for the given duration
-	// to elapse. In non-test code, this is implemented by time.After. In test
-	// code, this can be used to control the amount of time the resolver is
-	// blocked waiting for the duration to elapse.
-	TimeAfterFunc func(time.Duration) <-chan time.Time = time.After
-	// TimeUntilFunc is used by the DNS resolver to calculate the remaining
-	// wait time for re-resolution. In non-test code, this is implemented by
-	// time.Until. In test code, this can be used to control the remaining
-	// time for resolver to wait for re-resolution.
-	TimeUntilFunc func(time.Time) time.Duration = time.Until
-	// MinResolutionInterval is the minimum interval at which re-resolutions are
-	// allowed. This helps to prevent excessive re-resolution.
-	MinResolutionInterval = 30 * time.Second
 )
 
 // delegatingResolver implements the `resolver.Resolver` interface. It uses child
@@ -67,15 +47,8 @@ var (
 type delegatingResolver struct {
 	target         resolver.Target     // parsed target URI to be resolved
 	cc             resolver.ClientConn // gRPC ClientConn
-	ctx            context.Context
-	cancel         context.CancelFunc
-	targetResolver resolver.Resolver // resolver for the target URI, based on its scheme
-	proxyResolver  resolver.Resolver // resolver for the proxy URI; nil if no proxy is configured
-	curState       resolver.State    //to store the current state with other info
-	// rn channel is used by ResolveNow() to force an immediate resolution of the
-	// target.
-	rn chan struct{}
-	wg sync.WaitGroup
+	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
+	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
 
 	mu          sync.Mutex         // protects access to the resolver state and addresses during updates
 	targetAddrs []resolver.Address // resolved or unresolved target addresses, depending on proxy configuration
@@ -108,8 +81,7 @@ func parsedURLForProxy(address string) (*url.URL, error) {
 // It returns error if proxy is configured but proxy target doesn't parse to
 // correct url or if target resolution at client fails.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	r := &delegatingResolver{target: target, cc: cc, ctx: ctx, cancel: cancel}
+	r := &delegatingResolver{target: target, cc: cc}
 
 	var err error
 	r.proxyURL, err = parsedURLForProxy(target.Endpoint())
@@ -142,8 +114,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	if r.proxyResolver, err = r.proxyURIResolver(opts); err != nil {
 		return nil, err
 	}
-	r.wg.Add(1)
-	go r.watcher()
 	return r, nil
 }
 
@@ -159,38 +129,6 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 	return proxyBuilder.Build(proxyTarget, &wrappingClientConn{parent: r, resolverType: proxyResolverType}, opts)
 }
 
-func (r *delegatingResolver) watcher() {
-	defer r.wg.Done()
-	backOffIndex := 1
-	for {
-		r.curState = r.updateState()
-		err := r.cc.UpdateState(r.curState)
-		var nextResolutionTime time.Time
-		if err == nil {
-			// Success resolving, wait for the next ResolveNow. However, also wait 30
-			// seconds at the very least to prevent constantly re-resolving.
-			backOffIndex = 1
-			nextResolutionTime = TimeNowFunc().Add(MinResolutionInterval)
-			select {
-			case <-r.ctx.Done():
-				{return}
-			case <-r.rn:
-			}
-		} else {
-			// Poll on an error found in DNS Resolver or an error received from
-			// ClientConn.
-			nextResolutionTime = TimeNowFunc().Add(backoff.DefaultExponential.Backoff(backOffIndex))
-			backOffIndex++
-		}
-		select {
-		case <-r.ctx.Done():
-			return
-		case <-TimeAfterFunc(TimeUntilFunc(nextResolutionTime)):
-		}
-
-	}
-}
-
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	if r.targetResolver != nil {
 		r.targetResolver.ResolveNow(o)
@@ -198,21 +136,15 @@ func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	if r.proxyResolver != nil {
 		r.proxyResolver.ResolveNow(o)
 	}
-	select {
-	case r.rn <- struct{}{}:
-	default:
-	}
 }
 
 func (r *delegatingResolver) Close() {
-	r.cancel()
 	if r.targetResolver != nil {
 		r.targetResolver.Close()
 	}
 	if r.proxyResolver != nil {
 		r.proxyResolver.Close()
 	}
-	r.wg.Wait()
 }
 
 type keyType string
@@ -244,7 +176,7 @@ func User(addr resolver.Address) *url.Userinfo {
 	return addr.Attributes.Value(userAndConnectAddrKey).(attr).user
 }
 
-func (r *delegatingResolver) updateState() resolver.State {
+func (r *delegatingResolver) updateState() []resolver.Address {
 	var addresses []resolver.Address
 	for _, proxyAddr := range r.proxyAddrs {
 		for _, targetAddr := range r.targetAddrs {
@@ -253,9 +185,8 @@ func (r *delegatingResolver) updateState() resolver.State {
 			addresses = append(addresses, newAddr)
 		}
 	}
-	r.curState.Addresses = addresses
 	// return the combined addresses.
-	return r.curState
+	return addresses
 }
 
 // resolverType is an enum representing the type of resolver (target or proxy).
@@ -275,12 +206,12 @@ type wrappingClientConn struct {
 func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	wcc.parent.mu.Lock()
 	defer wcc.parent.mu.Unlock()
-	// var curState resolver.State
+	var curState resolver.State
 	if wcc.resolverType == targetResolverType {
 		wcc.parent.targetAddrs = state.Addresses
 		logger.Infof("%v addresses received from target resolver", len(wcc.parent.targetAddrs))
 		wcc.parent.targetResolverReady = true
-		wcc.parent.curState = state
+		curState = state
 	}
 	if wcc.resolverType == proxyResolverType {
 		wcc.parent.proxyAddrs = state.Addresses
@@ -292,8 +223,8 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	if !wcc.parent.targetResolverReady || !wcc.parent.proxyResolverReady {
 		return nil
 	}
-	wcc.parent.curState = wcc.parent.updateState()
-	return wcc.parent.cc.UpdateState(wcc.parent.curState)
+	curState.Addresses = wcc.parent.updateState()
+	return wcc.parent.cc.UpdateState(curState)
 }
 
 // ReportError intercepts errors from the child resolvers and pass to ClientConn.
