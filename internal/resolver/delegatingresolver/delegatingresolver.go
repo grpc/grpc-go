@@ -30,6 +30,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/attributes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -147,41 +148,12 @@ func (r *delegatingResolver) Close() {
 	}
 }
 
-type keyType string
-
-const userAndConnectAddrKey = keyType("grpc.resolver.delegatingresolver.userAndConnectAddr")
-
-type attr struct {
-	user *url.Userinfo
-	addr string
-}
-
-// SetUserAndConnectAddr returns a copy of the provided resolver.Address with
-// attributes containing address to be sent in connect request to proxy and the
-// user info.  It's data should not be mutated after calling SetConnectAddr.
-func SetUserAndConnectAddr(resAddr resolver.Address, user *url.Userinfo, addr string) resolver.Address {
-	resAddr.Attributes = resAddr.Attributes.WithValue(userAndConnectAddrKey, attr{user: user, addr: addr})
-	return resAddr
-}
-
-// ProxyConnectAddr returns the proxy connect address in resolver.Address, or nil
-// if not present. The returned data should not be mutated.
-func ProxyConnectAddr(addr resolver.Address) string {
-	return addr.Attributes.Value(userAndConnectAddrKey).(attr).addr
-}
-
-// User returns the user info in the resolver.Address, or nil if not present.
-// The returned data should not be mutated.
-func User(addr resolver.Address) *url.Userinfo {
-	return addr.Attributes.Value(userAndConnectAddrKey).(attr).user
-}
-
 func (r *delegatingResolver) updateState() []resolver.Address {
 	var addresses []resolver.Address
 	for _, proxyAddr := range r.proxyAddrs {
 		for _, targetAddr := range r.targetAddrs {
 			newAddr := resolver.Address{Addr: proxyAddr.Addr}
-			newAddr = SetUserAndConnectAddr(newAddr, r.proxyURL.User, targetAddr.Addr)
+			newAddr = attributes.SetUserAndConnectAddr(newAddr, r.proxyURL.User, targetAddr.Addr)
 			addresses = append(addresses, newAddr)
 		}
 	}

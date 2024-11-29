@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/attributes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -182,7 +183,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 
 	// Verify that the delegating resolver outputs the same address.
 	expectedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr = SetUserAndConnectAddr(expectedAddr, nil, resolvedTargetTestAddr)
+	expectedAddr = attributes.SetUserAndConnectAddr(expectedAddr, nil, resolvedTargetTestAddr)
 	expectedState := resolver.State{Addresses: []resolver.Address{expectedAddr}}
 
 	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
@@ -226,7 +227,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 
 	// Verify that the delegating resolver outputs the same address.
 	expectedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr = SetUserAndConnectAddr(expectedAddr, nil, targetTestAddr)
+	expectedAddr = attributes.SetUserAndConnectAddr(expectedAddr, nil, targetTestAddr)
 	expectedState := resolver.State{Addresses: []resolver.Address{expectedAddr}}
 
 	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(expectedState, state) {
@@ -279,16 +280,16 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	})
 
 	expectedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr = SetUserAndConnectAddr(expectedAddr, nil, resolvedTargetTestAddr)
+	expectedAddr = attributes.SetUserAndConnectAddr(expectedAddr, nil, resolvedTargetTestAddr)
 
 	expectedAddr1 := resolver.Address{Addr: resolvedProxyTestAddr}
-	expectedAddr1 = SetUserAndConnectAddr(expectedAddr1, nil, resolvedTargetTestAddr1)
+	expectedAddr1 = attributes.SetUserAndConnectAddr(expectedAddr1, nil, resolvedTargetTestAddr1)
 
 	expectedAddr2 := resolver.Address{Addr: resolvedProxyTestAddr1}
-	expectedAddr2 = SetUserAndConnectAddr(expectedAddr2, nil, resolvedTargetTestAddr)
+	expectedAddr2 = attributes.SetUserAndConnectAddr(expectedAddr2, nil, resolvedTargetTestAddr)
 
 	expectedAddr3 := resolver.Address{Addr: resolvedProxyTestAddr1}
-	expectedAddr3 = SetUserAndConnectAddr(expectedAddr3, nil, resolvedTargetTestAddr1)
+	expectedAddr3 = attributes.SetUserAndConnectAddr(expectedAddr3, nil, resolvedTargetTestAddr1)
 
 	expectedState := resolver.State{Addresses: []resolver.Address{
 		expectedAddr,
