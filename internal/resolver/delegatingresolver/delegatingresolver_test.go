@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
@@ -35,6 +34,10 @@ import (
 
 type s struct {
 	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }
 
 const (
@@ -234,19 +237,11 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 	}
 }
 
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
 // TestDelegatingResolverwithDNSAndProxy verifies that the delegating resolver
 // correctly updates state with resolved proxy address and custom resolved target
 // address as the attributes when the target URI scheme is not DNS and a proxy is
 // configured.
-func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
-	origMinResolutionInterval := MinResolutionInterval
-	MinResolutionInterval = 1 * time.Millisecond
-	defer func() { MinResolutionInterval = origMinResolutionInterval }()
-
+func (s)TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -263,14 +258,13 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	dr, err := New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, mrTarget, false)
-
+	// t.Cleanup(func() { dr.Close() })
 	if err != nil {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 	if dr == nil {
 		t.Fatalf("Failed to create delegating resolver")
 	}
-	t.Cleanup(func() { dr.Close() }) // Ensure the resolver is closed even on test failure.
 
 	mrProxy.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
@@ -308,17 +302,8 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 	dr.Close()
-	// if state := <-stateCh; len(state.Addresses) != 4 || !cmp.Equal(expectedState, state) {
-	// 	t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, expectedState)
-	// }
-	// Verify the resolved state.
-	select {
-	case state := <-stateCh:
-		if len(state.Addresses) != len(expectedState.Addresses) || !cmp.Equal(expectedState, state) {
-			t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, expectedState)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("Timed out waiting for state update")
+	if state := <-stateCh; len(state.Addresses) != 4 || !cmp.Equal(expectedState, state) {
+		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, expectedState)
 	}
 
 }
