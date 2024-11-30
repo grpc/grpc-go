@@ -90,8 +90,8 @@ type MetricsOptions struct {
 
 // TraceOptions are the tracing options for OpenTelemetry instrumentation.
 type TraceOptions struct {
-	// TracerProvider provides Tracers that are used by instrumentation code to
-	// trace computational workflows.
+	// TracerProvider is the OpenTelemetry tracer which is required to
+	// record traces/trace spans for instrumentation
 	TracerProvider trace.TracerProvider
 
 	// TextMapPropagator propagates span context through text map carrier.

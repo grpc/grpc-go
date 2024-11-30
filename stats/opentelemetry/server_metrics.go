@@ -208,25 +208,20 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 	}
 
-	var ai *attemptInfo
-	if !isTracingDisabled(h.options.TraceOptions) {
-		ctx, ai = h.traceTagRPC(ctx, info)
-		return setRPCInfo(ctx, &rpcInfo{
-			ai: &attemptInfo{
-				startTime:           time.Now(),
-				method:              removeLeadingSlash(method),
-				traceSpan:           ai.traceSpan,
-				countRecvMsg:        ai.countRecvMsg,
-				countSentMsg:        ai.countSentMsg,
-				previousRPCAttempts: ai.previousRPCAttempts,
-			},
-		})
-	}
-
-	ai = &attemptInfo{
+	ai := &attemptInfo{
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
 	}
+	if !isTracingDisabled(h.options.TraceOptions) {
+		var newAI *attemptInfo
+		ctx, newAI = h.traceTagRPC(ctx, info)
+		// Update the ai with values from updated attempt info.
+		newAI.startTime = ai.startTime
+		newAI.method = ai.method
+
+		ai = newAI
+	}
+
 	ri := &rpcInfo{
 		ai: ai,
 	}

@@ -75,7 +75,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 }
 
 func (h *clientStatsHandler) initializeTracing() {
-	if h.options.TraceOptions.TracerProvider == nil || h.options.TraceOptions.TextMapPropagator == nil {
+	if isTracingDisabled(h.options.TraceOptions) {
 		return
 	}
 
@@ -175,7 +175,7 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 // provided TraceProvider. If TraceProvider is nil, it returns context as is.
 func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
 	if h.options.TraceOptions.TracerProvider == nil {
-		logger.Error("tracing is required but the TracerProvider is not set. Ensure that tracing is enabled in the options.")
+		logger.Error("TraceProvider is not provided in trace options")
 		return ctx, nil
 	}
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
@@ -210,32 +210,28 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	var ai *attemptInfo
+	ai := &attemptInfo{
+		startTime: time.Now(),
+		xdsLabels: labels.TelemetryLabels,
+		method:    info.FullMethodName,
+	}
 	if !isTracingDisabled(h.options.TraceOptions) {
 		callSpan := trace.SpanFromContext(ctx)
 		if info.NameResolutionDelay {
 			callSpan.AddEvent("Delayed name resolution complete")
 		}
-		ctx, ai = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
-		return setRPCInfo(ctx, &rpcInfo{
-			ai: &attemptInfo{
-				startTime:           time.Now(),
-				xdsLabels:           labels.TelemetryLabels,
-				method:              info.FullMethodName,
-				traceSpan:           ai.traceSpan,
-				countSentMsg:        ai.countSentMsg,
-				countRecvMsg:        ai.countRecvMsg,
-				previousRPCAttempts: ai.previousRPCAttempts,
-			},
-		})
+		var newAI *attemptInfo
+		ctx, newAI = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
+		// Update the ai with values from updated attempt info.
+		newAI.startTime = ai.startTime
+		newAI.xdsLabels = ai.xdsLabels
+		newAI.method = ai.method
+
+		ai = newAI
 	}
 
 	return setRPCInfo(ctx, &rpcInfo{
-		ai: &attemptInfo{
-			startTime: time.Now(),
-			xdsLabels: labels.TelemetryLabels,
-			method:    info.FullMethodName,
-		},
+		ai: ai,
 	})
 }
 

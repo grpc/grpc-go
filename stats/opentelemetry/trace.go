@@ -30,8 +30,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// traceTagRPC populates context with a new span, and serializes information
-// about this span into gRPC Metadata.
+// traceTagRPC populates provided context with a new span using the
+// TextMapPropagator supplied in trace options and internal itracing.carrier.
+// It creates a new outgoing carrier which serializes information about this
+// span into gRPC Metadata, if TextMapPropagator is provided in the trace
+// options. if TextMapPropagator is not provided, it returns the context as is.
+
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptInfo) {
 	if h.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
@@ -51,9 +55,13 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	}
 }
 
-// traceTagRPC populates context with new span data, with a parent based on the
-// spanContext deserialized from context passed in (wire data in gRPC metadata)
-// if present.
+// traceTagRPC populates context with new span data using the TextMapPropagator
+// supplied in trace options and internal itracing.Carrier. It creates a new
+// incoming carrier which extracts an existing span context (if present) by
+// deserializing from provided context. If valid span context is extracted, it
+// is set as parent of the new span otherwise new span remains the root span.
+// If TextMapPropagator is not provided in the trace options, it returns context
+// as is.
 func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptInfo) {
 	if h.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
