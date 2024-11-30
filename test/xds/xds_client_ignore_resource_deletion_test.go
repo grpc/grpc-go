@@ -310,6 +310,7 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 		updateCh <- args.Mode
 	})
 	stub := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -321,17 +322,10 @@ func setupGRPCServerWithModeChangeChannelAndServe(t *testing.T, bootstrapContent
 	if err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	t.Cleanup(server.Stop)
-
 	stub.S = server
-	stubserver.StartTestService(t, stub)
+	t.Cleanup(stub.S.Stop)
 
-	// Serve.
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stubserver.StartTestService(t, stub)
 
 	return updateCh
 }

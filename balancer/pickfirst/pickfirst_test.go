@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -55,7 +56,7 @@ func (s) TestPickFirst_InitialResolverError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(Name).Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
 	defer bal.Close()
 	bal.ResolverError(errors.New("resolution failed: test error"))
 
@@ -88,7 +89,7 @@ func (s) TestPickFirst_ResolverErrorinTF(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(Name).Build(cc, balancer.BuildOptions{})
+	bal := balancer.Get(Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
 	defer bal.Close()
 
 	// After sending a valid update, the LB policy should report CONNECTING.

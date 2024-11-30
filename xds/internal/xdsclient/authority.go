@@ -633,13 +633,27 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// Always add the new watcher to the set of watchers.
 		state.watchers[watcher] = true
 
-		// If we have a cached copy of the resource, notify the new watcher.
+		// If we have a cached copy of the resource, notify the new watcher
+		// immediately.
 		if state.cache != nil {
 			if a.logger.V(2) {
 				a.logger.Infof("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
 			}
 			resource := state.cache
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
+		}
+		// If last update was NACK'd, notify the new watcher of error
+		// immediately as well.
+		if state.md.Status == xdsresource.ServiceStatusNACKed {
+			if a.logger.V(2) {
+				a.logger.Infof("Resource type %q with resource name %q was NACKed: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
+			}
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.ErrState.Err, func() {}) })
+		}
+		// If the metadata field is updated to indicate that the management
+		// server does not have this resource, notify the new watcher.
+		if state.md.Status == xdsresource.ServiceStatusNotExist {
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
 		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)
 	}, func() {
