@@ -874,7 +874,6 @@ func checkConnEnd(t *testing.T, d *gotData) {
 
 type event struct {
 	eventType string
-	timestamp time.Time
 }
 
 type statshandler struct {
@@ -896,7 +895,7 @@ func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) conte
 func (h *statshandler) recordEvent(eventType string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.events = append(h.events, event{eventType: eventType, timestamp: time.Now()})
+	h.events = append(h.events, event{eventType: eventType})
 }
 
 func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
