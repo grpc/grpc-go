@@ -11,6 +11,13 @@ not() {
   ! "$@"
 }
 
+# noret_grep will return 0 if zero or more lines were selected, and >1 if an
+# error occurred. Suppresses grep's return code of 1 when there are no matches
+# (for eg, empty file).
+noret_grep() {
+  grep "$@" || [[ $? == 1 ]]
+}
+
 die() {
   echo "$@" >&2
   exit 1
