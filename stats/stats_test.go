@@ -150,10 +150,7 @@ type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 }
 
-func (s *testServer) UnaryCall(
-	ctx context.Context,
-	in *testpb.SimpleRequest,
-) (*testpb.SimpleResponse, error) {
+func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	if err := grpc.SendHeader(ctx, testHeaderMetadata); err != nil {
 		return nil, status.Errorf(
 			status.Code(err),
@@ -210,9 +207,7 @@ func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSe
 	}
 }
 
-func (s *testServer) StreamingInputCall(
-	stream testgrpc.TestService_StreamingInputCallServer,
-) error {
+func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
 		return status.Errorf(
 			status.Code(err),
@@ -240,10 +235,7 @@ func (s *testServer) StreamingInputCall(
 	}
 }
 
-func (s *testServer) StreamingOutputCall(
-	in *testpb.StreamingOutputCallRequest,
-	stream testgrpc.TestService_StreamingOutputCallServer,
-) error {
+func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
 		return status.Errorf(
 			status.Code(err),
@@ -448,9 +440,7 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]proto.Message, []prot
 	return reqs, resps, nil
 }
 
-func (te *test) doClientStreamCall(
-	c *rpcConfig,
-) ([]proto.Message, *testpb.StreamingInputCallResponse, error) {
+func (te *test) doClientStreamCall(c *rpcConfig) ([]proto.Message, *testpb.StreamingInputCallResponse, error) {
 	var (
 		reqs []proto.Message
 		resp *testpb.StreamingInputCallResponse
@@ -483,9 +473,7 @@ func (te *test) doClientStreamCall(
 	return reqs, resp, err
 }
 
-func (te *test) doServerStreamCall(
-	c *rpcConfig,
-) (*testpb.StreamingOutputCallRequest, []proto.Message, error) {
+func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallRequest, []proto.Message, error) {
 	var (
 		req   *testpb.StreamingOutputCallRequest
 		resps []proto.Message
@@ -957,12 +945,7 @@ func checkConnStats(t *testing.T, got []*gotData) {
 	checkConnEnd(t, got[len(got)-1])
 }
 
-func checkServerStats(
-	t *testing.T,
-	got []*gotData,
-	expect *expectedData,
-	checkFuncs []func(t *testing.T, d *gotData, e *expectedData),
-) {
+func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	if len(got) != len(checkFuncs) {
 		for i, g := range got {
 			t.Errorf(" - %v, %T", i, g.s)
@@ -975,12 +958,7 @@ func checkServerStats(
 	}
 }
 
-func testServerStats(
-	t *testing.T,
-	tc *testConfig,
-	cc *rpcConfig,
-	checkFuncs []func(t *testing.T, d *gotData, e *expectedData),
-) {
+func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, []stats.Handler{h})
 	te.startServer(&testServer{})
@@ -1235,12 +1213,7 @@ type checkFuncWithCount struct {
 	c int // expected count
 }
 
-func checkClientStats(
-	t *testing.T,
-	got []*gotData,
-	expect *expectedData,
-	checkFuncs map[int]*checkFuncWithCount,
-) {
+func checkClientStats( t *testing.T, got []*gotData, expect *expectedData, checkFuncs map[int]*checkFuncWithCount) {
 	var expectLen int
 	for _, v := range checkFuncs {
 		expectLen += v.c
@@ -1325,12 +1298,7 @@ func checkClientStats(
 	}
 }
 
-func testClientStats(
-	t *testing.T,
-	tc *testConfig,
-	cc *rpcConfig,
-	checkFuncs map[int]*checkFuncWithCount,
-) {
+func testClientStats( t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
 	h := &statshandler{}
 	te := newTest(t, tc, []stats.Handler{h}, nil)
 	te.startServer(&testServer{})
