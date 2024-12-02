@@ -8,13 +8,6 @@ source "$(dirname $0)/common.sh"
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
 
-# noret_grep will return 0 if zero or more lines were selected, and >1 if an
-# error occurred. Suppresses grep's return code of 1 when there are no matches
-# (for eg, empty file).
-noret_grep() {
-  grep "$@" || [[ $? == 1 ]]
-}
-
 # Undo any edits made by this script.
 cleanup() {
   git reset --hard HEAD
