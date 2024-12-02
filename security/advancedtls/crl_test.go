@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/netip"
 	"os"
 	"path"
 	"strings"
@@ -463,7 +464,7 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 		Subject:               pkix.Name{CommonName: "test-cert"},
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		IPAddresses:           []net.IP{net.ParseIP("::1")},
+		IPAddresses:           []net.IP{netip.MustParseAddr("::1").AsSlice()},
 		CRLDistributionPoints: []string{"http://static.corp.google.com/crl/campus-sln/borg"},
 	}
 

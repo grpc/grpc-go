@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -181,11 +182,11 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 
 	var fakeClientAddr, fakeServerAddr net.Addr
 	fakeClientAddr = &net.IPAddr{
-		IP:   net.ParseIP("10.8.9.10"),
+		IP:   netip.MustParseAddr("10.8.9.10").AsSlice(),
 		Zone: "",
 	}
 	fakeServerAddr = &net.IPAddr{
-		IP:   net.ParseIP("10.8.9.11"),
+		IP:   netip.MustParseAddr("10.8.9.11").AsSlice(),
 		Zone: "",
 	}
 
