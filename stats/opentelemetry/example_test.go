@@ -19,7 +19,7 @@ package opentelemetry_test
 import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -88,7 +88,7 @@ func ExampleMetrics_excludeSome() {
 	// To exclude specific metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
-			Metrics: opentelemetry.DefaultMetrics().Remove(opentelemetry.ClientAttemptDuration, opentelemetry.ClientAttemptRcvdCompressedTotalMessageSize),
+			Metrics: opentelemetry.DefaultMetrics().Remove(opentelemetry.ClientAttemptDurationMetricName, opentelemetry.ClientAttemptRcvdCompressedTotalMessageSizeMetricName),
 		},
 	}
 	do := opentelemetry.DialOption(opts)
@@ -103,7 +103,7 @@ func ExampleMetrics_disableAll() {
 	// To disable all metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
-			Metrics: estats.NewMetrics(), // Distinct to nil, which creates default metrics. This empty set creates no metrics.
+			Metrics: stats.NewMetricSet(), // Distinct to nil, which creates default metrics. This empty set creates no metrics.
 		},
 	}
 	do := opentelemetry.DialOption(opts)
@@ -118,7 +118,7 @@ func ExampleMetrics_enableSome() {
 	// To only create specific metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
-			Metrics: estats.NewMetrics(opentelemetry.ClientAttemptDuration, opentelemetry.ClientAttemptRcvdCompressedTotalMessageSize), // only create these metrics
+			Metrics: stats.NewMetricSet(opentelemetry.ClientAttemptDurationMetricName, opentelemetry.ClientAttemptRcvdCompressedTotalMessageSizeMetricName), // only create these metrics
 		},
 	}
 	do := opentelemetry.DialOption(opts)

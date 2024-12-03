@@ -44,7 +44,7 @@ type TestMetricsRecorder struct {
 	// mu protects data.
 	mu sync.Mutex
 	// data is the most recent update for each metric name.
-	data map[estats.Metric]float64
+	data map[string]float64
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -56,7 +56,7 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		floatHistoCh: testutils.NewChannelWithSize(10),
 		intGaugeCh:   testutils.NewChannelWithSize(10),
 
-		data: make(map[estats.Metric]float64),
+		data: make(map[string]float64),
 	}
 }
 
@@ -65,7 +65,7 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	data, ok := r.data[estats.Metric(name)]
+	data, ok := r.data[name]
 	return data, ok
 }
 
@@ -73,7 +73,7 @@ func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data = make(map[estats.Metric]float64)
+	r.data = make(map[string]float64)
 }
 
 // MetricsData represents data associated with a metric.
