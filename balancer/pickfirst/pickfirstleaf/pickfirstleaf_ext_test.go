@@ -83,10 +83,10 @@ func (s *testServer) resume() {
 	s.lis.Restart()
 }
 
-func newTestServer() (*testServer, error) {
+func newTestServer(t *testing.T) *testServer {
 	l, err := testutils.LocalTCPListener()
 	if err != nil {
-		return nil, err
+		t.Fatalf("Failed to create listener: %v", err)
 	}
 	rl := testutils.NewRestartableListener(l)
 	ss := stubserver.StubServer{
@@ -96,7 +96,7 @@ func newTestServer() (*testServer, error) {
 	return &testServer{
 		StubServer: ss,
 		lis:        rl,
-	}, nil
+	}
 }
 
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
@@ -108,10 +108,7 @@ func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption)
 	addrs := make([]resolver.Address, backendCount)
 
 	for i := 0; i < backendCount; i++ {
-		server, err := newTestServer()
-		if err != nil {
-			t.Fatalf("net.Listen() failed: %v", err)
-		}
+		server := newTestServer(t)
 		backend := stubserver.StartTestService(t, &server.StubServer)
 		t.Cleanup(func() {
 			backend.Stop()
