@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -678,7 +679,7 @@ func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
 
 	// Make an RPC call to transition the channel to CONNECTING.
 	go func() {
-		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testgrpc.Empty{})
+		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
 		if err == nil {
 			t.Errorf("Expected RPC to fail, but it succeeded")
 		}
