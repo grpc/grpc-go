@@ -667,9 +667,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 			// The effective state can be in either IDLE, CONNECTING or
 			// TRANSIENT_FAILURE. If it's  TRANSIENT_FAILURE, stay in
 			// TRANSIENT_FAILURE until it's READY. See A62.
-			// If the SubConn is already reporting CONNECTING, no update is
-			// needed.
-			if sd.effectiveState == connectivity.Idle {
+			if sd.effectiveState != connectivity.TransientFailure {
 				sd.effectiveState = connectivity.Connecting
 				b.updateBalancerState(balancer.State{
 					ConnectivityState: connectivity.Connecting,
@@ -786,7 +784,7 @@ func (b *pickfirstBalancer) updateSubConnHealthState(sd *scData, state balancer.
 }
 
 // updateBalancerState stores the state reported to the channel and calls
-// ClientConn.UpdateState(). As an optimization, it avoid sending duplicate
+// ClientConn.UpdateState(). As an optimization, it avoids sending duplicate
 // updates to the channel.
 func (b *pickfirstBalancer) updateBalancerState(newState balancer.State) {
 	// In case of TransientFailures allow the picker to be updated to update
