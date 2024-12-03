@@ -84,6 +84,7 @@ var (
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
 
+    // Server Stats
 	// Ensure that Unary RPC server stats events are logged in the correct order.
 	expectedUnarySequence = []string{
 		"ConnStats",
@@ -96,8 +97,9 @@ var (
 		"End",
 	}
 
-	// Ensure that the sequence of server-side stats events for a Unary RPC
-	// matches the expected flow.
+    // Server Stats
+	// Ensure that the sequence of server-side stats events for a 
+	// client stream RPC matches the expected flow.
 	expectedClientStreamSequence = []string{
 		"ConnStats",
 		"InHeader",
@@ -108,6 +110,24 @@ var (
 		"InPayload",
 		"InPayload",
 		"InPayload",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
+
+    // Server Stats Test
+	// Ensure that the sequence of server-side stats events for a 
+	// server stream RPC matches the expected flow.
+	expectedServerStreamSequence = []string{
+		"ConnStats",
+        "InHeader",
+		"Begin",
+		"InPayload",
+		"OutHeader",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
 		"OutPayload",
 		"OutTrailer",
 		"End",
@@ -1763,6 +1783,28 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	verifyEventSequence(t, h.events, expectedClientStreamSequence)
+}
+
+// TestServerStatsClientStreamEventSequence tests that the sequence of server-side
+// stats events for a Client Stream RPC matches the expected flow.
+func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
+	h := &statshandler{}
+	te := newTest(t, &testConfig{compress: "gzip"}, nil, []stats.Handler{h})
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	_, _, err := te.doServerStreamCall(
+		&rpcConfig{count: 5, success: true, callType: serverStreamRPC},
+	)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	verifyEventSequence(t, h.events, expectedServerStreamSequence)
 }
 
 // verifyEventSequence verifies that a sequence of recorded events matches

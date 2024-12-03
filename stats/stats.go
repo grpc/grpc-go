@@ -36,10 +36,15 @@ type RPCStats interface {
 	IsClient() bool
 }
 
-// InHeader is the first event handled in the RPC lifecycle.
-// It contains stats when the header is received.
-// This event marks the start of processing for incoming RPCs
-// and must be completed before any other events occur.
+// InHeader contain stats when the header is received.
+//  First event in the server side event sequence.
+//  Follows last OutPayload for server side events.
+// 
+// Server Stats Example Event Ordering:
+//  *InHeader* -> Begin -> InPayload(s) -> OutHeader -> OutPayload(s) -> OutTrailer -> End 
+// 
+// Client Stats Example Event Ordering:
+//  Begin -> OutHeader -> OutPayload(s) -> *InHeader* -> InTrailer -> InPayload(s) -> End
 type InHeader struct {
 	// Client is true if this InHeader is from client side.
 	Client bool
@@ -65,8 +70,14 @@ func (s *InHeader) IsClient() bool { return s.Client }
 func (s *InHeader) isRPCStats() {}
 
 // Begin contains stats when an RPC attempt begins.
-// This event is called AFTER the InHeader event, as headers must
-// be processed before the RPC lifecycle begins
+//  First event in the client-side event sequence.
+//  Follows InHeader for server-side events.
+// 
+// Server Stats Example Event Ordering:
+//  InHeader -> *Begin* -> InPayload(s) -> OutHeader -> OutPayload(s) -> OutTrailer -> End
+// 
+// Client Stats Example Event Ordering:
+//  *Begin* -> OutHeader -> OutPayload(s) -> InHeader -> InTrailer -> InPayload(s) -> End
 //
 // FailFast is only valid if this Begin is from client side.
 type Begin struct {
