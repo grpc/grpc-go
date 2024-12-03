@@ -1091,7 +1091,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
-				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "[fe80::1%eth0]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
 		},
@@ -1107,7 +1107,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 		{Addr: "2.2.2.2:2"},
 		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[fe80::1%eth0]:3333"},
 		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 
@@ -1135,7 +1135,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"}}},
-				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "[fe80::1%eth0]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
 		},
@@ -1150,7 +1150,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 		{Addr: "grpc.io:80"},
 		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[fe80::1%eth0]:3333"},
 		{Addr: "3.3.3.3:3"},
 		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
@@ -1180,7 +1180,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
-				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "[fe80::1%eth0]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "example.com:80"}}}, // not an IP.
 			},
 		},
@@ -1197,7 +1197,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 		{Addr: "2.2.2.2:2"},
 		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[fe80::1%eth0]:3333"},
 		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 

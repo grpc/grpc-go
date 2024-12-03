@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -417,11 +418,14 @@ func addressFamily(address string) ipAddrFamily {
 	if err != nil {
 		return ipAddrFamilyUnknown
 	}
-	ip := net.ParseIP(host)
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return ipAddrFamilyUnknown
+	}
 	switch {
-	case ip.To4() != nil:
+	case ip.Is4() || ip.Is4In6():
 		return ipAddrFamilyV4
-	case ip.To16() != nil:
+	case ip.Is6():
 		return ipAddrFamilyV6
 	default:
 		return ipAddrFamilyUnknown
