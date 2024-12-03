@@ -46,10 +46,13 @@ import (
 func createXDSClientWithBackoff(t *testing.T, bootstrapContents []byte, streamBackoff func(int) time.Duration) xdsclient.XDSClient {
 	t.Helper()
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:                      t.Name(),
 		StreamBackoffAfterFailure: streamBackoff,
-		Contents:                  bootstrapContents,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

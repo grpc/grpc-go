@@ -93,12 +93,11 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	// simplifies the code by eliminating the need for a mutex to protect the
 	// xdsC and xdsClientClose fields.
 	newXDSClient := newXDSClient
-	if s.opts.bootstrapContentsForTesting != nil {
+	if s.opts.clientPoolForTesting != nil {
 		// Bootstrap file contents may be specified as a server option for tests.
 		newXDSClient = func(name string) (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     name,
-				Contents: s.opts.bootstrapContentsForTesting,
+			return s.opts.clientPoolForTesting.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: name,
 			})
 		}
 	}

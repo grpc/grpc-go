@@ -147,9 +147,12 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bc)
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bc)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {

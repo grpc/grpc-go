@@ -111,9 +111,12 @@ func xdsSetupForTests(t *testing.T) (*e2e.ManagementServer, string, chan []strin
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	xdsC, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsC, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatal(err)

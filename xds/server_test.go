@@ -121,14 +121,18 @@ func (s) TestNewServer_Success(t *testing.T) {
 			desc: "without_xds_creds",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(insecure.NewCredentials()),
-				BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)),
+				func() grpc.ServerOption {
+					return BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer))
+				}(),
 			},
 		},
 		{
 			desc: "with_xds_creds",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
-				BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)),
+				func() grpc.ServerOption {
+					return BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer))
+				}(),
 			},
 			wantXDSCredsInUse: true,
 		},
@@ -184,7 +188,9 @@ func (s) TestNewServer_Failure(t *testing.T) {
 			desc: "empty bootstrap config",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
-				BootstrapContentsForTesting([]byte(`{}`)),
+				func() grpc.ServerOption {
+					return BootstrapContentsForTesting([]byte(`{}`))
+				}(),
 			},
 			wantErr: "xDS client creation failed",
 		},

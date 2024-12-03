@@ -37,11 +37,11 @@ func (c *clientImpl) dumpResources() *v3statuspb.ClientConfig {
 
 // DumpResources returns the status and contents of all xDS resources.
 func DumpResources() *v3statuspb.ClientStatusResponse {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
+	DefaultPool.mu.Lock()
+	defer DefaultPool.mu.Unlock()
 
 	resp := &v3statuspb.ClientStatusResponse{}
-	for key, client := range clients {
+	for key, client := range DefaultPool.clients {
 		cfg := client.dumpResources()
 		cfg.ClientScope = key
 		resp.Config = append(resp.Config, cfg)

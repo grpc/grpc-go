@@ -23,11 +23,12 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 type serverOptions struct {
-	modeCallback                ServingModeCallbackFunc
-	bootstrapContentsForTesting []byte
+	modeCallback         ServingModeCallbackFunc
+	clientPoolForTesting *xdsclient.Pool
 }
 
 type serverOption struct {
@@ -58,9 +59,10 @@ type ServingModeChangeArgs struct {
 	Err error
 }
 
-// BootstrapContentsForTesting returns a grpc.ServerOption which allows users
-// to inject a bootstrap configuration used by only this server, instead of the
-// global configuration from the environment variables.
+// BootstrapContentsForTesting returns a grpc.ServerOption with the default
+// pool set with the provided bootstrap congiguration. It allows users to
+// inject a bootstrap configuration to be used by only this server, instead of
+// the global configuration from the environment variables.
 //
 // # Testing Only
 //
@@ -69,8 +71,28 @@ type ServingModeChangeArgs struct {
 //
 // # Experimental
 //
+// Notice: This API is EXPERIMENTAL but kept for backward compatibility. Use
+// `ClientPoolForTesting` to set the pool directly. It will be removed in
+// later release.
+func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
+	err := xdsclient.DefaultPool.SetFallbackBootstrapConfig(bootstrapContents)
+	if err != nil {
+		return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = nil }}
+	}
+	return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = xdsclient.DefaultPool }}
+}
+
+// ClientPoolForTesting returns a grpc.ServerOption with the pool for xds
+// clients. It allows users to set a pool for xds clients sharing the bootstrap
+// contents for this server.
+//
+// # Testing Only
+//
+// This function should ONLY be used for testing and may not work with some
+// other features, including the CSDS service.
+//
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func BootstrapContentsForTesting(contents []byte) grpc.ServerOption {
-	return &serverOption{apply: func(o *serverOptions) { o.bootstrapContentsForTesting = contents }}
+func ClientPoolForTesting(pool *xdsclient.Pool) grpc.ServerOption {
+	return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = pool }}
 }

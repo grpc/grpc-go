@@ -1180,9 +1180,12 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 
 	// Create an xDS client talking to the above management server, configured
 	// with a short watch expiry timeout.
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bootstrapContents,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {

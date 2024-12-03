@@ -285,8 +285,8 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -360,7 +360,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 // involving receipt of an RDS response from the management server. The test
 // verifies that the internal state of the xDS client (parsed resource and
 // metadata) matches expectations.
-func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
+func TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 	const (
 		resourceName1 = "resource-name-1"
 		resourceName2 = "resource-name-2"
@@ -561,8 +561,8 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -798,8 +798,8 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -1147,8 +1147,8 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
