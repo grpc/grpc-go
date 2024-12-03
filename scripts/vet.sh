@@ -82,6 +82,10 @@ git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.
 git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v "credential
 s/google" | grep -v "internal/transport/" | grep -v "xds/internal/" | grep -v "security/advancedtls" | grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
 
+# Disallow usage of net.ParseIP in favour of netip.ParseAddr as the former
+# can't parse link local IPv6 addresses.
+not git grep 'net.ParseIP' -- '*.go'
+
 misspell -error .
 
 # - gofmt, goimports, go vet, go mod tidy.

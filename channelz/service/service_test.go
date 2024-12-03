@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"testing"
@@ -605,8 +606,8 @@ func (s) TestGetSocket(t *testing.T) {
 		lastMessageReceivedTimestamp:     time.Unix(3, 0),
 		localFlowControlWindow:           65536,
 		remoteFlowControlWindow:          1024,
-		localAddr:                        &net.TCPAddr{IP: net.ParseIP("1.0.0.1"), Port: 10001},
-		remoteAddr:                       &net.TCPAddr{IP: net.ParseIP("12.0.0.1"), Port: 10002},
+		localAddr:                        &net.TCPAddr{IP: netip.MustParseAddr("1.0.0.1").AsSlice(), Port: 10001},
+		remoteAddr:                       &net.TCPAddr{IP: netip.MustParseAddr("12.0.0.1").AsSlice(), Port: 10002},
 		remoteName:                       "remote.remote",
 	}), newSocket(czSocket{
 		streamsStarted:                   10,
@@ -637,11 +638,11 @@ func (s) TestGetSocket(t *testing.T) {
 		lastMessageReceivedTimestamp:     time.Unix(0, 0),
 		localFlowControlWindow:           65536,
 		remoteFlowControlWindow:          10240,
-		localAddr:                        &net.IPAddr{IP: net.ParseIP("1.0.0.1")},
-		remoteAddr:                       &net.IPAddr{IP: net.ParseIP("9.0.0.1")},
+		localAddr:                        &net.IPAddr{IP: netip.MustParseAddr("1.0.0.1").AsSlice()},
+		remoteAddr:                       &net.IPAddr{IP: netip.MustParseAddr("9.0.0.1").AsSlice()},
 		remoteName:                       "",
 	}), newSocket(czSocket{
-		localAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		localAddr: &net.TCPAddr{IP: netip.MustParseAddr("127.0.0.1").AsSlice(), Port: 10001},
 	}), newSocket(czSocket{
 		security: &credentials.TLSChannelzSecurityValue{
 			StandardName:      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
