@@ -30,28 +30,11 @@ import (
 	"net/url"
 
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/attributes"
+	"google.golang.org/grpc/resolver"
 )
 
 const proxyAuthHeaderKey = "Proxy-Authorization"
-
-var (
-	// The following variable will be overwritten in the tests.
-	httpProxyFromEnvironment = http.ProxyFromEnvironment
-)
-
-func mapAddress(address string) (*url.URL, error) {
-	req := &http.Request{
-		URL: &url.URL{
-			Scheme: "https",
-			Host:   address,
-		},
-	}
-	url, err := httpProxyFromEnvironment(req)
-	if err != nil {
-		return nil, err
-	}
-	return url, nil
-}
 
 // To read a response from a net.Conn, http.ReadResponse() takes a bufio.Reader.
 // It's possible that this reader reads more than what's need for the response and stores
@@ -72,21 +55,22 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr string, proxyURL *url.URL, grpcUA string) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver.Address, grpcUA string) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
 		}
 	}()
 
+	backendAddr := attributes.ProxyConnectAddr(address)
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: backendAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-	if t := proxyURL.User; t != nil {
-		u := t.Username()
-		p, _ := t.Password()
+	if user := attributes.User(address); user != nil {
+		u := user.Username()
+		p, _ := user.Password()
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
 	}
 
@@ -117,28 +101,14 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 	return conn, nil
 }
 
-// proxyDial dials, connecting to a proxy first if necessary. Checks if a proxy
-// is necessary, dials, does the HTTP CONNECT handshake, and returns the
-// connection.
-func proxyDial(ctx context.Context, addr string, grpcUA string) (net.Conn, error) {
-	newAddr := addr
-	proxyURL, err := mapAddress(addr)
+// proxyDial dials, connecting to a proxy first if necessary. Dials, does the
+// HTTP CONNECT handshake, and returns the connection.
+func proxyDial(ctx context.Context, address resolver.Address, grpcUA string) (net.Conn, error) {
+	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", address.Addr)
 	if err != nil {
 		return nil, err
 	}
-	if proxyURL != nil {
-		newAddr = proxyURL.Host
-	}
-
-	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", newAddr)
-	if err != nil {
-		return nil, err
-	}
-	if proxyURL == nil {
-		// proxy is disabled if proxyURL is nil.
-		return conn, err
-	}
-	return doHTTPConnectHandshake(ctx, conn, addr, proxyURL, grpcUA)
+	return doHTTPConnectHandshake(ctx, conn, address, grpcUA)
 }
 
 func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {

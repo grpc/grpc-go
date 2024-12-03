@@ -225,7 +225,7 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	// At the end of this method, we kick the channel out of idle, rather than
 	// waiting for the first rpc.
-	opts = append([]DialOption{withDefaultScheme("passthrough")}, opts...)
+	opts = append([]DialOption{withDefaultScheme("passthrough"), WithTargetResolutionEnabled()}, opts...)
 	cc, err := NewClient(target, opts...)
 	if err != nil {
 		return nil, err

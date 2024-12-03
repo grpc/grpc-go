@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/attributes"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpclog"
@@ -153,8 +154,13 @@ type http2Client struct {
 	logger       *grpclog.PrefixLogger
 }
 
-func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
+func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, grpcUA string) (net.Conn, error) {
 	address := addr.Addr
+
+	//if the ProxyConnectAddr is set in the aattribute, do a proxy dial.
+	if attributes.ProxyConnectAddr(addr) != "" {
+		return proxyDial(ctx, addr, grpcUA)
+	}
 	networkType, ok := networktype.Get(addr)
 	if fn != nil {
 		// Special handling for unix scheme with custom dialer. Back in the day,
@@ -176,9 +182,6 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	}
 	if !ok {
 		networkType, address = parseDialTarget(address)
-	}
-	if networkType == "tcp" && useProxy {
-		return proxyDial(ctx, address, grpcUA)
 	}
 	return internal.NetDialerWithTCPKeepalive().DialContext(ctx, networkType, address)
 }
@@ -217,7 +220,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	// address specific arbitrary data to reach custom dialers and credential handshakers.
 	connectCtx = icredentials.NewClientHandshakeInfoContext(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 
-	conn, err := dial(connectCtx, opts.Dialer, addr, opts.UseProxy, opts.UserAgent)
+	conn, err := dial(connectCtx, opts.Dialer, addr, opts.UserAgent)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: error while dialing: %v", err)
