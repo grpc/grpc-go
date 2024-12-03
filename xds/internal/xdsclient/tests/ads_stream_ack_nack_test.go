@@ -381,9 +381,12 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bc)
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	pool, err := xdsclient.NewPool(bc)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
