@@ -271,7 +271,8 @@ func (s) TestAuditLogger(t *testing.T) {
 				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
 				grpc.ChainStreamInterceptor(i.StreamInterceptor))
 			defer s.Stop()
-			testgrpc.RegisterTestServiceServer(s, ss)
+			ss.S = s
+			stubserver.StartTestService(t, ss)
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("Error listening: %v", err)
