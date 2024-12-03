@@ -71,6 +71,7 @@ EXAMPLES=(
     "features/orca"
     "features/retry"
     "features/unix_abstract"
+    "features/gracefulstop"
 )
 
 declare -A SERVER_ARGS=(
