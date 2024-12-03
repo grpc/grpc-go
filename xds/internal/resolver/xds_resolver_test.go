@@ -254,9 +254,12 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	closeCh := make(chan struct{})
 	rinternal.NewXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
-		c, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		pool, err := xdsclient.NewPool(bc)
+		if err != nil {
+			t.Fatalf("Failed to create an xDS client pool: %v", err)
+		}
+		c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 			Name:               t.Name(),
-			Contents:           bc,
 			WatchExpiryTimeout: defaultTestTimeout,
 		})
 		return c, grpcsync.OnceFunc(func() {
