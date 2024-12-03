@@ -163,9 +163,12 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 	// Create an xDS client with the above bootstrap configuration and a short
 	// idle channel expiry timeout. This ensures that connections to lower
 	// priority servers get closed quickly, for the test to verify.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
 		IdleChannelExpiryTimeout: defaultTestIdleChannelExpiryTimeout,
 	})
 	if err != nil {
@@ -366,9 +369,12 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	// Create an xDS client with the above bootstrap configuration and a short
 	// idle channel expiry timeout. This ensures that connections to lower
 	// priority servers get closed quickly, for the test to verify.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
 		IdleChannelExpiryTimeout: defaultTestIdleChannelExpiryTimeout,
 	})
 	if err != nil {
@@ -559,9 +565,12 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	// Create an xDS client with the above bootstrap configuration and a short
 	// idle channel expiry timeout. This ensures that connections to lower
 	// priority servers get closed quickly, for the test to verify.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
 		IdleChannelExpiryTimeout: defaultTestIdleChannelExpiryTimeout,
 	})
 	if err != nil {

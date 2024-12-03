@@ -142,7 +142,11 @@ func (s) TestServingModeChanges(t *testing.T) {
 			}
 		},
 	}
-	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
@@ -188,7 +192,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 	// Lookup the xDS client in use based on the dedicated well-known key, as
 	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
+	xdsC, close, err := pool.GetClientForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}
@@ -280,7 +284,11 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 			}
 		},
 	}
-	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
@@ -297,7 +305,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	// Lookup the xDS client in use based on the dedicated well-known key, as
 	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
+	xdsC, close, err := pool.GetClientForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}

@@ -46,7 +46,8 @@ const Scheme = "xds"
 
 // newBuilderWithConfigForTesting creates a new xds resolver builder using a
 // specific xds bootstrap config, so tests can use multiple xds clients in
-// different ClientConns at the same time.
+// different ClientConns at the same time. It creates the new xds client int
+// the default pool with provided config.
 func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
 		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
