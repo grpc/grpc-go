@@ -1100,6 +1100,9 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	}
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
 	rst := s.getState() == streamActive
+	if rst {
+		signalDeadlineExceeded()
+	}
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
 	for _, sh := range t.stats {
 		// Note: The trailer fields are compressed with hpack after this call returns.
@@ -1110,6 +1113,8 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	}
 	return nil
 }
+
+var signalDeadlineExceeded = func() {}
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).

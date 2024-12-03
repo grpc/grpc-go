@@ -348,6 +348,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	st.ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go handleStream(s) },
 	)
+
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
