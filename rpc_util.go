@@ -874,7 +874,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 		return nil, 0, err
 	}
 
-	out, err := mem.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1), pool)
+	out, err := mem.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)), pool)
 	if err != nil {
 		out.Free()
 		return nil, 0, err
