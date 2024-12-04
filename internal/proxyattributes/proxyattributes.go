@@ -16,8 +16,9 @@
  *
  */
 
-// Package attributes contains functions for getting and setting attributes.
-package attributes
+// Package proxyattributes contains functions for getting and setting proxy
+// attributes like the CONNECT address and user info.
+package proxyattributes
 
 import (
 	"net/url"
@@ -34,10 +35,10 @@ type attr struct {
 	addr string
 }
 
-// SetUserAndConnectAddr returns a copy of the provided resolver.Address with
-// attributes containing address to be sent in connect request to proxy and the
-// user info.  It's data should not be mutated after calling SetConnectAddr.
-func SetUserAndConnectAddr(resAddr resolver.Address, user *url.Userinfo, addr string) resolver.Address {
+// Populate returns a copy of addr with attributes containing the
+// provided user and connect address, which are needed during the CONNECT
+// handshake for a proxy connection.
+func Populate(resAddr resolver.Address, user *url.Userinfo, addr string) resolver.Address {
 	resAddr.Attributes = resAddr.Attributes.WithValue(userAndConnectAddrKey, attr{user: user, addr: addr})
 	return resAddr
 }
