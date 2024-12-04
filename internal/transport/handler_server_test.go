@@ -394,7 +394,18 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			return
 		}
 		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
+		// rst flag setting to verify the noop function: signalDeadlineExceeded
+		ch := make(chan struct{}, 1)
+		origSignalDeadlineExceeded := signalDeadlineExceeded
+		signalDeadlineExceeded = func() {
+			ch <- struct{}{}
+		}
+		defer func() {
+			signalDeadlineExceeded = origSignalDeadlineExceeded
+		}()
+
 	}
+
 	ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go runStream(s) },
 	)
