@@ -335,9 +335,9 @@ func TestDecompress(t *testing.T) {
 		{
 			name:                  "failure, empty receive message",
 			compressor:            c,
-			input:                 []byte(""),
+			input:                 []byte{},
 			maxReceiveMessageSize: 10,
-			want:                  nil,
+			want:                  []byte{},
 			error:                 nil,
 		},
 		{
@@ -345,7 +345,7 @@ func TestDecompress(t *testing.T) {
 			compressor:            c,
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 5,
-			want:                  nil,
+			want:                  []byte{},
 			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
 		},
 	}
