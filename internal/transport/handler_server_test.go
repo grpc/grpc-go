@@ -393,7 +393,6 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			t.Errorf("ctx.Err = %v; want %v", err, context.DeadlineExceeded)
 			return
 		}
-		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
 		// rst flag setting to verify the noop function: signalDeadlineExceeded
 		ch := make(chan struct{}, 1)
 		origSignalDeadlineExceeded := signalDeadlineExceeded
@@ -403,9 +402,14 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		defer func() {
 			signalDeadlineExceeded = origSignalDeadlineExceeded
 		}()
-
+		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
+		select {
+		case <-s.ctx.Done():
+		case <-time.After(5 * time.Second):
+			t.Errorf("timeout waiting for ctx.Done")
+			return
+		}
 	}
-
 	ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go runStream(s) },
 	)
