@@ -19,18 +19,15 @@
 package delegatingresolver
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/proxyattributes"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
-	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 type s struct {
@@ -42,257 +39,73 @@ func Test(t *testing.T) {
 }
 
 const (
-	targetTestAddr          = "test.com"
-	resolvedTargetTestAddr  = "1.2.3.4:8080"
-	resolvedTargetTestAddr1 = "1.2.3.5:8080"
-	envProxyAddr            = "proxytest.com"
-	resolvedProxyTestAddr   = "2.3.4.5:7687"
-	resolvedProxyTestAddr1  = "2.3.4.6:7687"
+	targetTestAddr = "test.com"
+	envProxyAddr   = "proxytest.com"
 )
 
 // overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overrideHTTPSProxyFromEnvironment(hpfe func(req *http.Request) (*url.URL, error)) func() {
-	originalHPFE := HTTPSProxyFromEnvironment
-	HTTPSProxyFromEnvironment = hpfe
+	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
 	return func() {
-		HTTPSProxyFromEnvironment = originalHPFE
+		internal.HTTPSProxyFromEnvironmentForTesting = nil
 	}
-}
-
-// createTestResolverClientConn initializes a test ResolverClientConn and
-// returns it along with channels for resolver state updates and errors.
-func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, chan resolver.State, chan error) {
-	stateCh := make(chan resolver.State, 1)
-	errCh := make(chan error, 1)
-
-	tcc := &testutils.ResolverClientConn{
-		Logger:       t,
-		UpdateStateF: func(s resolver.State) error { stateCh <- s; return nil },
-		ReportErrorF: func(err error) { errCh <- err },
-	}
-	return tcc, stateCh, errCh
 }
 
 // Tests that the parsedURLForProxy function correctly resolves the proxy URL
-// for a given target address.
+// for a given target address. Tests all the possible output cases.
 func (s) TestParsedURLForProxyEnv(t *testing.T) {
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == targetTestAddr {
-			return &url.URL{
+	err := errors.New("invalid proxy url")
+	tests := []struct {
+		name     string
+		hpfeFunc func(req *http.Request) (*url.URL, error)
+		wantURL  *url.URL
+		wantErr  error
+	}{
+		{
+			name: "valid proxy url and nil error",
+			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
+				return &url.URL{
+					Scheme: "https",
+					Host:   "proxy.example.com",
+				}, nil
+			},
+			wantURL: &url.URL{
 				Scheme: "https",
-				Host:   envProxyAddr,
-			}, nil
-		}
-		return nil, nil
-	}
-	defer overrideHTTPSProxyFromEnvironment(hpfe)()
-
-	// envTestAddr should be handled by ProxyFromEnvironment.
-	got, err := parsedURLForProxy(targetTestAddr)
-	if err != nil {
-		t.Errorf("Unable to get proxy URL : %v\n", err)
-	}
-	if got.Host != envProxyAddr {
-		t.Errorf("want %v, got %v", envProxyAddr, got)
-	}
-}
-
-// Tests that the delegating resolver correctly
-// sends the resolved target URI to the ClientConn.
-func (s) TestDelegatingResolverNoProxy(t *testing.T) {
-	mr := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
-	target := "test:///" + targetTestAddr
-
-	tcc, stateCh, _ := createTestResolverClientConn(t)
-	// Create a delegating resolver with no proxy configuration
-	_, err := New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, mr, false)
-	if err != nil {
-		t.Fatalf("Failed to create delegating resolver: %v", err)
-	}
-
-	// Update the manual resolver with a test address.
-	mr.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedTargetTestAddr}},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	// Verify that the delegating resolver outputs the same address.
-	wantedState := resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedTargetTestAddr}},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	}
-
-	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(wantedState, state) {
-		t.Fatalf("Unexpected state from delegating resolver: %v, want %v", state, wantedState)
-	}
-}
-
-// setupDNS registers a new manual resolver for the DNS scheme, effectively
-// overwriting the previously registered DNS resolver. This allows the test to
-// mock the DNS resolution for the proxy resolver. It also registers the original
-// DNS resolver after the test is done.
-func setupDNS(t *testing.T) *manual.Resolver {
-	mr := manual.NewBuilderWithScheme("dns")
-
-	dnsResolverBuilder := resolver.Get("dns")
-	resolver.Register(mr)
-
-	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
-	return mr
-}
-
-// Tests that the delegating resolver correctly updates state with resolver
-// proxy address with resolved target URI as attribute of the proxy address when
-// the target URI scheme is DNS and a proxy is configured and target resolution
-// is enabled.
-func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T) {
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == targetTestAddr {
-			return &url.URL{
-				Scheme: "https",
-				Host:   envProxyAddr,
-			}, nil
-		}
-		return nil, nil
-	}
-	defer overrideHTTPSProxyFromEnvironment(hpfe)()
-	mrTarget := setupDNS(t) // Manual resolver to control the target resolution.
-	mrProxy := setupDNS(t)  // Set up a manual DNS resolver to control the proxy address resolution.
-	target := "dns:///" + targetTestAddr
-
-	tcc, stateCh, _ := createTestResolverClientConn(t)
-	_, err := New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, mrTarget, true)
-	if err != nil {
-		t.Fatalf("Failed to create delegating resolver: %v", err)
-	}
-
-	mrTarget.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedTargetTestAddr},
+				Host:   "proxy.example.com",
+			},
+			wantErr: nil,
 		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	mrProxy.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr}},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	// Verify that the delegating resolver outputs the same address.
-	wantedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	wantedAddr = proxyattributes.Populate(wantedAddr, nil, resolvedTargetTestAddr)
-	wantedState := resolver.State{Addresses: []resolver.Address{wantedAddr}}
-
-	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(wantedState, state) {
-		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, wantedState)
-	}
-}
-
-// Tests that the delegating resolver correctly updates state with resolver
-// proxy address with unresolved target URI as attribute of the proxy address
-// when the target URI scheme is DNS and a proxy is configured and default target
-// resolution(that is not enabled.)
-func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == targetTestAddr {
-			return &url.URL{
-				Scheme: "https",
-				Host:   envProxyAddr,
-			}, nil
-		}
-		return nil, nil
-	}
-	defer overrideHTTPSProxyFromEnvironment(hpfe)()
-	mrTarget := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
-	mrProxy := setupDNS(t)                          // Set up a manual DNS resolver to control the proxy address resolution.
-	target := "dns:///" + targetTestAddr
-
-	tcc, stateCh, _ := createTestResolverClientConn(t)
-	_, err := New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, mrTarget, false)
-	if err != nil {
-		t.Fatalf("Failed to create delegating resolver: %v", err)
-	}
-
-	mrProxy.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr}},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	// Verify that the delegating resolver outputs the same address.
-	wantedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	wantedAddr = proxyattributes.Populate(wantedAddr, nil, targetTestAddr)
-	wantedState := resolver.State{Addresses: []resolver.Address{wantedAddr}}
-
-	if state := <-stateCh; len(state.Addresses) != 1 || !cmp.Equal(wantedState, state) {
-		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, wantedState)
-	}
-}
-
-// Tests that the delegating resolver
-// correctly updates state with resolved proxy address and custom resolved target
-// address as the proxyattributes when the target URI scheme is not DNS and a proxy is
-// configured.
-func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == targetTestAddr {
-			return &url.URL{
-				Scheme: "https",
-				Host:   envProxyAddr,
-			}, nil
-		}
-		return nil, nil
-	}
-	defer overrideHTTPSProxyFromEnvironment(hpfe)()
-
-	mrTarget := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
-	mrProxy := setupDNS(t)                          // Set up a manual DNS resolver to control the proxy address resolution.
-	target := "test:///" + targetTestAddr
-
-	tcc, stateCh, _ := createTestResolverClientConn(t)
-	_, err := New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, mrTarget, false)
-	if err != nil {
-		t.Fatalf("Failed to create delegating resolver: %v", err)
-	}
-
-	mrProxy.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedProxyTestAddr},
-			{Addr: resolvedProxyTestAddr1},
+		{
+			name: "invalid proxy url and non-nil error",
+			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
+				return &url.URL{
+					Scheme: "https",
+					Host:   "notproxy.example.com",
+				}, err
+			},
+			wantURL: nil,
+			wantErr: err,
 		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-	mrTarget.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedTargetTestAddr},
-			{Addr: resolvedTargetTestAddr1},
+		{
+			name: "nil proxy url and nil error",
+			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
+				return nil, nil
+			},
+			wantURL: nil,
+			wantErr: nil,
 		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	wantedAddr := resolver.Address{Addr: resolvedProxyTestAddr}
-	wantedAddr = proxyattributes.Populate(wantedAddr, nil, resolvedTargetTestAddr)
-
-	wantedAddr1 := resolver.Address{Addr: resolvedProxyTestAddr}
-	wantedAddr1 = proxyattributes.Populate(wantedAddr1, nil, resolvedTargetTestAddr1)
-
-	wantedAddr2 := resolver.Address{Addr: resolvedProxyTestAddr1}
-	wantedAddr2 = proxyattributes.Populate(wantedAddr2, nil, resolvedTargetTestAddr)
-
-	wantedAddr3 := resolver.Address{Addr: resolvedProxyTestAddr1}
-	wantedAddr3 = proxyattributes.Populate(wantedAddr3, nil, resolvedTargetTestAddr1)
-
-	wantedState := resolver.State{Addresses: []resolver.Address{
-		wantedAddr,
-		wantedAddr1,
-		wantedAddr2,
-		wantedAddr3,
-	},
-		ServiceConfig: &serviceconfig.ParseResult{},
 	}
-
-	if state := <-stateCh; len(state.Addresses) != 4 || !cmp.Equal(wantedState, state) {
-		t.Fatalf("Unexpected state from delegating resolver: %v\n, want %v\n", state, wantedState)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer overrideHTTPSProxyFromEnvironment(tt.hpfeFunc)()
+			got, err := parsedURLForProxy(targetTestAddr)
+			if err != tt.wantErr {
+				t.Errorf("parsedProxyURLForProxy(%v) failed with error :%v, want %v\n", targetTestAddr, err, tt.wantErr)
+			}
+			if !cmp.Equal(got, tt.wantURL) {
+				t.Fatalf("parsedProxyURLForProxy(%v) = %v, want %v\n", targetTestAddr, got, tt.wantURL)
+			}
+		})
 	}
 }

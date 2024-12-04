@@ -238,6 +238,9 @@ var (
 	// SetBufferPoolingThresholdForTesting updates the buffer pooling threshold, for
 	// testing purposes.
 	SetBufferPoolingThresholdForTesting any // func(int)
+
+	// HTTPSProxyFromEnvironmentForTesting returns the URL of the proxy to use for testing purposes. It is used to override the 
+	HTTPSProxyFromEnvironmentForTesting any // func(*http.Request) (*url.URL, error)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

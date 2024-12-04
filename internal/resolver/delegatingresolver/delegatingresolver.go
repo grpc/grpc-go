@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -34,7 +35,7 @@ import (
 
 var (
 	// HTTPSProxyFromEnvironment will be used and overwritten in the tests.
-	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
+	httpProxyFromEnvironmentFunc = http.ProxyFromEnvironment
 
 	logger = grpclog.Component("delegating-resolver")
 )
@@ -64,11 +65,16 @@ type delegatingResolver struct {
 //   - non-nil URL, nil error: A proxy is configured, and the proxy URL was
 //     retrieved successfully without any errors.
 func parsedURLForProxy(address string) (*url.URL, error) {
+	proxyFunc := httpProxyFromEnvironmentFunc
+	if pf := internal.HTTPSProxyFromEnvironmentForTesting; pf != nil {
+		proxyFunc = pf.(func(*http.Request) (*url.URL, error))
+	}
+
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
 		Host:   address,
 	}}
-	url, err := HTTPSProxyFromEnvironment(req)
+	url, err := proxyFunc(req)
 	if err != nil {
 		return nil, err
 	}
