@@ -28,7 +28,7 @@ type ServerConfig struct {
 // Authority provides the functionality required to communicate with
 // management servers corresponding to an authority.
 type Authority struct {
-	XDSServers []*ServerConfig
+	XDSServers []ServerConfig
 
 	Extensions any
 }
