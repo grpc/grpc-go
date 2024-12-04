@@ -20,41 +20,34 @@ package grpctransport
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/bootstrap"
 )
 
-type GRPCTransportServerConfigExtension interface {
-	GRPCTransportServerConfig() *GRPCTransportServerConfig
+// ServerConfigExtension is an interface to extend the `xds.ServerConfig` for
+// gRPC transport builder. Any implementation needs to implement `ServerConfig`
+// method.
+type ServerConfigExtension interface {
+	ServerConfig() *ServerConfig
 }
 
-type GRPCTransportServerConfig struct {
-	ChannelCreds []ChannelCreds
+// ServerConfig contains the configuration for the gRPC transport server.
+type ServerConfig struct {
+	// Credentials is the credential bundle to be used.
+	Credentials credentials.Bundle
 }
 
-func (s *GRPCTransportServerConfig) GRPCTransportServerConfig() *GRPCTransportServerConfig {
+// ServerConfig returns the ServerConfig itself. This method is designed
+// to satisfy interface requirement.
+func (s *ServerConfig) ServerConfig() *ServerConfig {
 	return s
 }
 
-// ChannelCreds contains the credentials to be used while communicating with an
-// xDS server. It is also used to dedup servers with the same server URI.
-type ChannelCreds struct {
-	// Type contains a unique name identifying the credentials type.
-	Type string
-	// Config contains the JSON configuration associated with the credentials.
-	Config json.RawMessage
-}
-
 // Builder provides a way to build a gRPC-based transport to an xDS server.
-type Builder struct {
-	// CredentialsRegistry is a map from credential type name to Credential
-	// builder.
-	CredentialsRegistry map[string]bootstrap.Credentials
-}
+type Builder struct{}
 
 // Build creates a new gRPC-based transport to an xDS server using the provided
 // options. This involves creating a grpc.ClientConn to the server identified by
@@ -66,27 +59,31 @@ func (b *Builder) Build(opts xds.TransportBuildOptions) (xds.Transport, error) {
 	if opts.ServerConfig.Extensions == nil {
 		return nil, fmt.Errorf("ServerConfig Extensions field in opts cannot be nil")
 	}
-	gtsce, ok := opts.ServerConfig.Extensions.(GRPCTransportServerConfigExtension)
+	gtsce, ok := opts.ServerConfig.Extensions.(ServerConfigExtension)
 	if !ok {
 		return nil, fmt.Errorf("ServerConfig field in opts cannot be anything other than GRPCTransportServerConfigExtension")
 	}
-
-	gtsc := gtsce.GRPCTransportServerConfig()
-	for _, cc := range gtsc.ChannelCreds {
-		c := b.CredentialsRegistry[cc.Type]
-		if c == nil {
-			continue
-		}
-		bundle, cancel, err := c.Build(cc.Config)
-		if err != nil {
-			return nil, fmt.Errorf("failed to build credentials bundle from selected creds for %q: %v", cc.Type, err)
-		}
-		defer cancel()
-		credsDialOption := grpc.WithCredentialsBundle(bundle)
-		grpcClient, _ := grpc.NewClient(opts.ServerConfig.ServerURI, credsDialOption)
-		return &grpcTransport{cc: grpcClient}, nil
+	gtsc := gtsce.ServerConfig()
+	if gtsc.Credentials == nil {
+		return nil, fmt.Errorf("ServerConfig Credentials field in opts cannot be nil")
 	}
-	return nil, fmt.Errorf("no valid credentials found for server: %s", opts.ServerConfig.ServerURI)
+
+	// Actual implementation of this function will incorporate reference
+	// count map for existing transports and deduplicate transports based on
+	// server URI and credentials. The deduping logic and reference incr/decr
+	// logic is not shown here for brevity.
+	//
+	// Build() increments the count and returns the existing transport. When
+	// Close() is called on the transport, the reference count is decremented.
+	// The transport will be removed from map only when the reference count
+	// reaches zero.
+
+	cc, err := grpc.NewClient(opts.ServerConfig.ServerURI, grpc.WithCredentialsBundle(gtsc.Credentials))
+	if err != nil {
+		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", opts.ServerConfig.ServerURI, err)
+	}
+	cc.Connect()
+	return &grpcTransport{cc: cc}, nil
 }
 
 type grpcTransport struct {
