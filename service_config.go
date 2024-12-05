@@ -278,8 +278,7 @@ func convertRetryPolicy(jrp *jsonRetryPolicy, maxAttempts int) (p *internalservi
 		jrp.MaxBackoff <= 0 ||
 		jrp.BackoffMultiplier <= 0 ||
 		len(jrp.RetryableStatusCodes) == 0 {
-		logger.Warningf("grpc: ignoring retry policy %v due to illegal configuration", jrp)
-		return nil, nil
+		return nil, fmt.Errorf("invalid retry policy (%v): ", jrp)
 	}
 
 	if jrp.MaxAttempts < maxAttempts {
