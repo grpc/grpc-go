@@ -430,7 +430,16 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	_, _, _, proxyStartedCh := setupProxy(t, backendAddr, true, func(req *http.Request) error {
 		return fmt.Errorf("Proxy server received Connect req %v, but should not", req)
 	})
+	proxyCalled := false
+	hpfe := func(_ *http.Request) (*url.URL, error) {
+		proxyCalled = true
+		return &url.URL{
+			Scheme: "https",
+			Host:   unresolvedProxyURI,
+		}, nil
 
+	}
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 	targetResolver := setupDNS(t)
 	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
@@ -453,6 +462,9 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
 
+	if proxyCalled {
+		t.Error("http.ProxyFromEnvironmentfunction was called, but it shouldn't have been")
+	}
 	// Verify that the proxy was not dialed.
 	select {
 	case <-proxyStartedCh:
@@ -472,6 +484,16 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 		return fmt.Errorf("Proxy server received Connect req %v, but should not", req)
 	})
 
+	proxyCalled := false
+	hpfe := func(_ *http.Request) (*url.URL, error) {
+		proxyCalled = true
+		return &url.URL{
+			Scheme: "https",
+			Host:   unresolvedProxyURI,
+		}, nil
+
+	}
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 	// Create a custom dialer that directly dials the backend.  We'll use this
 	// to bypass any proxy logic.
 	dialerCalled := make(chan bool, 1)
@@ -499,7 +521,9 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
-
+	if proxyCalled {
+		t.Error("http.ProxyFromEnvironmentfunction was called, but it shouldn't have been")
+	}
 	select {
 	case <-dialerCalled:
 		t.Logf("custom dialer was called by grpc.NewClient()")

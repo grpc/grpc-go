@@ -70,7 +70,10 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver
 	}
 	if user := proxyattributes.User(address); user != nil {
 		u := user.Username()
-		p, _ := user.Password()
+		p, pSet := user.Password()
+		if !pSet {
+			logger.Warningf("password not set for basic authentication for proxy dialing")
+		}
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
 	}
 
