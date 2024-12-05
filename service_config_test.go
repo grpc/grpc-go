@@ -465,7 +465,8 @@ func (s) TestParseMethodConfigDuplicatedName(t *testing.T) {
     ],
     "waitForReady": true
   }]
-}`, wantErr: true,
+}`,
+			wantErr: true,
 		},
 	})
 }
@@ -475,17 +476,17 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 		{
 			name: "valid",
 			scjs: `{
-  "methodConfig": [{
-	"name": [{"service": "foo"}],
-    "retryPolicy": {
-		"maxAttempts": 2,
-		"initialBackoff": "2s",
-		"maxBackoff": "10s",
-		"backoffMultiplier": 2,
-		"retryableStatusCodes": ["UNAVAILABLE"]
-	}
-  }]
-}`,
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					"maxAttempts": 2,
+					"initialBackoff": "2s",
+					"maxBackoff": "10s",
+					"backoffMultiplier": 2,
+					"retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
 			wantSC: &ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/": {
@@ -514,7 +515,8 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 					  "retryableStatusCodes": ["UNAVAILABLE"]
 				  }
 				}]
-			  }`, wantErr: true,
+			  }`,
+			wantErr: true,
 		},
 		{
 			name: "missing maxAttempts",
@@ -528,7 +530,8 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 					  "retryableStatusCodes": ["UNAVAILABLE"]
 				  }
 				}]
-			  }`, wantErr: true,
+			  }`,
+			wantErr: true,
 		},
 		{
 			name: "zero initialBackoff",
@@ -543,7 +546,8 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 					  "retryableStatusCodes": ["UNAVAILABLE"]
 				  }
 				}]
-			  }`, wantErr: true,
+			  }`,
+			wantErr: true,
 		},
 		{
 			name: "zero maxBackoff",
@@ -558,7 +562,8 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 					  "retryableStatusCodes": ["UNAVAILABLE"]
 				  }
 				}]
-			  }`, wantErr: true,
+			  }`,
+			wantErr: true,
 		},
 		{
 			name: "zero backoffMultiplier",
@@ -573,7 +578,8 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 					  "retryableStatusCodes": ["UNAVAILABLE"]
 				  }
 				}]
-			  }`, wantErr: true,
+			  }`,
+			wantErr: true,
 		},
 		{
 			name: "no retryable codes",
@@ -588,7 +594,8 @@ func (s) TestParseRetryPolicy(t *testing.T) {
 					  "retryableStatusCodes": []
 				  }
 				}]
-			  }`, wantErr: true,
+			  }`,
+			wantErr: true,
 		},
 	})
 }
