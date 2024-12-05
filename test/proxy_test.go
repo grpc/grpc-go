@@ -116,7 +116,7 @@ func requestCheck(connectAddr string) func(*http.Request) error {
 // Tests grpc.Dial using a proxy and default resolver in the target URI and
 // verifies that it connects to the proxy server and sends unresolved target
 // URI in the HTTP CONNECT request and then connects to the backend server.
-func (s) TestGrpcDialWithProxy(t *testing.T) {
+func (s) TestGRPCDialWithProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	proxyListener, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
@@ -155,7 +155,7 @@ func (s) TestGrpcDialWithProxy(t *testing.T) {
 
 // Tests grpc.Dial with a proxy and ensures DNS resolution of the proxy URI is
 // performed.
-func (s) TestGrpcDialWithProxyAndResolution(t *testing.T) {
+func (s) TestGRPCDialWithProxyAndResolution(t *testing.T) {
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
 	// Set up and start a proxy listener.
@@ -204,7 +204,7 @@ func (s) TestGrpcDialWithProxyAndResolution(t *testing.T) {
 // Tests grpc.NewClient with default i.e DNS resolver for targetURI and a proxy
 // and verifies that it connects to proxy server and sends unresolved target URI
 // in the HTTP CONNECT req and connects to backend.
-func (s) TestGrpcNewClientWithProxy(t *testing.T) {
+func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
 	resolutionCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
@@ -265,7 +265,7 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 	// Verify if OnClientResolution was triggered.
 	select {
 	case <-resolutionCh:
-		t.Error("Client-side resolution was unexpectedly called")
+		t.Error("target resolution happened on client but shouldn't")
 	default:
 		t.Logf("target resolution did not happen on client")
 	}
@@ -275,7 +275,7 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 // verifies that the client connects to the proxy server, includes the resolved
 // target URI in the HTTP CONNECT request, and successfully establishes a
 // connection to the backend server.
-func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
+func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
 	resolutionCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
@@ -338,14 +338,14 @@ func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
 	case <-resolutionCh:
 		t.Logf("target resolution happened on client")
 	default:
-		t.Fatalf("client side resolution should be called but wasn't")
+		t.Fatalf("target resolution did not happen on client")
 	}
 }
 
 // Tests grpc.NewClient with the default "dns" resolver and dial option
-// enabling target resolution on the client and verifies that the resolution
-// happens on client.
-func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
+// grpc.WithTargetResolutionEnabled() set, enabling target resolution on the
+// client and verifies that the resolution happens on client.
+func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	// Temporarily modify ProxyScheme for this test.
 	origProxyScheme := delegatingresolver.ProxyScheme
 	delegatingresolver.ProxyScheme = "whatever"
@@ -417,13 +417,13 @@ func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	case <-resolutionCh:
 		t.Logf("target resolution happened on client")
 	default:
-		t.Fatalf("Client-side resolution should be called but wasn't")
+		t.Fatalf("target resolution did not happen on client")
 	}
 }
 
 // Tests grpc.NewClient with grpc.WithNoProxy() set and verifies that it does
 // not dail to proxy, but directly to backend.
-func (s) TestGrpcNewClientWithNoProxy(t *testing.T) {
+func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
 	// Set up and start a proxy server.
@@ -465,7 +465,7 @@ func (s) TestGrpcNewClientWithNoProxy(t *testing.T) {
 
 // Tests grpc.NewClient with grpc.WithContextDialer() set and verifies that it
 // does not dial to proxy but rather uses the custom dialer.
-func (s) TestGrpcNewClientWithContextDialer(t *testing.T) {
+func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	// Set up and start a proxy server.
 	_, _, _, proxyStartedCh := setupProxy(t, backendAddr, true, func(req *http.Request) error {
@@ -545,7 +545,10 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 		}
 		wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 		if got := req.Header.Get("Proxy-Authorization"); got != wantProxyAuthStr {
-			gotDecoded, _ := base64.StdEncoding.DecodeString(got)
+			gotDecoded, err := base64.StdEncoding.DecodeString(got)
+			if err != nil {
+				return fmt.Errorf("filaeed to decode Proxy-Authorization header %s with error: %v", got, err)
+			}
 			wantDecoded, _ := base64.StdEncoding.DecodeString(wantProxyAuthStr)
 			return fmt.Errorf("unexpected auth %q (%q), want %q (%q)", got, gotDecoded, wantProxyAuthStr, wantDecoded)
 		}
@@ -599,8 +602,8 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	// Verify if OnClientResolution was triggered.
 	select {
 	case <-resolutionCh:
-		t.Error("client-side resolution was unexpectedly called")
+		t.Error("target resolution happened on client but shouldn't")
 	default:
-		t.Logf("client-side resolution was not called")
+		t.Logf("target resolution didn't happen on client")
 	}
 }

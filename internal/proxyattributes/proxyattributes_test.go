@@ -42,7 +42,6 @@ func (s) TestProxyConnectAddr(t *testing.T) {
 		Addr:       "test-address",
 		Attributes: attributes.New(userAndConnectAddrKey, attr{user: nil, addr: "proxy-address"}),
 	}
-
 	// Validate ProxyConnectAddr returns empty string for missing attributes
 	if got, want := ProxyConnectAddr(addr), "proxy-address"; got != want {
 		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want : %v", got, want)
@@ -56,7 +55,6 @@ func (s) TestUser(t *testing.T) {
 		Addr:       "test-address",
 		Attributes: attributes.New(userAndConnectAddrKey, attr{user: user, addr: ""}),
 	}
-
 	// Validate User returns nil for missing attributes
 	if got, want := User(addr), user; got != want {
 		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)
@@ -69,7 +67,6 @@ func (s) TestEmptyProxyAttribute(t *testing.T) {
 	addr := resolver.Address{
 		Addr: "test-address",
 	}
-
 	// Validate ProxyConnectAddr returns empty string for missing attributes
 	if got := ProxyConnectAddr(addr); got != "" {
 		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want empty string", got)
