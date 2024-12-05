@@ -208,24 +208,16 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 	}
 
-	ai := &attemptInfo{
-		startTime: time.Now(),
-		method:    removeLeadingSlash(method),
-	}
+	ai := &attemptInfo{}
+	startTime := time.Now()
 	if !isTracingDisabled(h.options.TraceOptions) {
-		var newAI *attemptInfo
-		ctx, newAI = h.traceTagRPC(ctx, info)
-		// Update the ai with values from updated attempt info.
-		newAI.startTime = ai.startTime
-		newAI.method = ai.method
-
-		ai = newAI
+		ctx, ai = h.traceTagRPC(ctx, info)
 	}
-
-	ri := &rpcInfo{
+	ai.startTime = startTime
+	ai.method = removeLeadingSlash(method)
+	return setRPCInfo(ctx, &rpcInfo{
 		ai: ai,
-	}
-	return setRPCInfo(ctx, ri)
+	})
 }
 
 // HandleRPC implements per RPC tracing and stats implementation.

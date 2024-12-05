@@ -210,26 +210,18 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	ai := &attemptInfo{
-		startTime: time.Now(),
-		xdsLabels: labels.TelemetryLabels,
-		method:    info.FullMethodName,
-	}
+	ai := &attemptInfo{}
+	startTime := time.Now()
 	if !isTracingDisabled(h.options.TraceOptions) {
 		callSpan := trace.SpanFromContext(ctx)
 		if info.NameResolutionDelay {
 			callSpan.AddEvent("Delayed name resolution complete")
 		}
-		var newAI *attemptInfo
-		ctx, newAI = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
-		// Update the ai with values from updated attempt info.
-		newAI.startTime = ai.startTime
-		newAI.xdsLabels = ai.xdsLabels
-		newAI.method = ai.method
-
-		ai = newAI
+		ctx, ai = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
 	}
-
+	ai.startTime = startTime
+	ai.xdsLabels = labels.TelemetryLabels
+	ai.method = info.FullMethodName
 	return setRPCInfo(ctx, &rpcInfo{
 		ai: ai,
 	})

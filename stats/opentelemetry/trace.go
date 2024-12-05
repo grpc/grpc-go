@@ -35,7 +35,6 @@ import (
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *attemptInfo) {
 	if h.options.TraceOptions.TextMapPropagator == nil {
 		return ctx, nil
@@ -44,7 +43,6 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn)
-
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
