@@ -30,7 +30,7 @@ import (
 	"net/url"
 
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/attributes"
+	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -62,13 +62,13 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver
 		}
 	}()
 
-	backendAddr := attributes.ProxyConnectAddr(address)
+	backendAddr := proxyattributes.ProxyConnectAddr(address)
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: backendAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-	if user := attributes.User(address); user != nil {
+	if user := proxyattributes.User(address); user != nil {
 		u := user.Username()
 		p, _ := user.Password()
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
@@ -101,7 +101,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver
 	return conn, nil
 }
 
-// proxyDial dials, connecting to a proxy first if necessary. Dials, does the
+// proxyDial dials, connecting to a proxy first.It dials, does the
 // HTTP CONNECT handshake, and returns the connection.
 func proxyDial(ctx context.Context, address resolver.Address, grpcUA string) (net.Conn, error) {
 	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", address.Addr)

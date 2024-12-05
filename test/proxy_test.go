@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -42,13 +43,12 @@ const (
 	unresolvedProxyURI  = "proxyExample.com"
 )
 
-// overwriteAndRestore temporarily replaces `HTTPSProxyFromEnvironment` with a
-// custom function and returns a function to restore the original.
-func overwriteAndRestore(customFunc func(req *http.Request) (*url.URL, error)) func() {
-	originalFunc := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = customFunc
+// overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
+// returns a function to restore the default values.
+func overrideHTTPSProxyFromEnvironment(hpfe func(req *http.Request) (*url.URL, error)) func() {
+	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
 	return func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalFunc
+		internal.HTTPSProxyFromEnvironmentForTesting = nil
 	}
 }
 
@@ -100,7 +100,7 @@ func setupProxy(t *testing.T, backendAddr string, resolutionOnClient bool, reqCh
 }
 
 // TestGrpcDialWithProxy tests grpc.Dial using a proxy and default
-// resolver in the target URI.and verifies that it connects to the proxy server
+// resolver in the target URI and verifies that it connects to the proxy server
 // and sends unresolved target URI in the HTTP CONNECT request and then
 // connects to the backend server.
 func (s) TestGrpcDialWithProxy(t *testing.T) {
@@ -124,7 +124,7 @@ func (s) TestGrpcDialWithProxy(t *testing.T) {
 		}
 		return nil, nil
 	}
-	defer overwriteAndRestore(hpfe)()
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -175,7 +175,7 @@ func (s) TestGrpcDialWithProxyAndResolution(t *testing.T) {
 		}
 		return nil, nil
 	}
-	defer overwriteAndRestore(hpfe)()
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
 	// Set up a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
@@ -248,7 +248,7 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 		}
 		return nil, nil
 	}
-	defer overwriteAndRestore(hpfe)()
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
 	// Set up a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
@@ -333,7 +333,7 @@ func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
 		}
 		return nil, nil
 	}
-	defer overwriteAndRestore(hpfe)()
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
 	// Dial options for the gRPC client.
 	dopts := []grpc.DialOption{
@@ -426,15 +426,14 @@ func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 		}
 		return nil, nil
 	}
-	defer overwriteAndRestore(hpfe)()
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
-	// Configure manual resolvers for both proxy and target backends.
+	// Configure manual resolvers for both proxy and target backends
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 	proxyResolver := manual.NewBuilderWithScheme("whatever")
 	resolver.Register(proxyResolver)
 	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: proxyLis.Addr().String()}}})
-
-	targetResolver := setupDNS(t)
-	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
 	// Dial options with target resolution enabled.
 	dopts := []grpc.DialOption{
@@ -620,7 +619,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 		}
 		return nil, nil
 	}
-	defer overwriteAndRestore(hpfe)()
+	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
 	// Set up a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)

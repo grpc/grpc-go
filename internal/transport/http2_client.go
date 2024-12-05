@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/attributes"
+	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpclog"
@@ -157,8 +157,8 @@ type http2Client struct {
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, grpcUA string) (net.Conn, error) {
 	address := addr.Addr
 
-	//if the ProxyConnectAddr is set in the aattribute, do a proxy dial.
-	if attributes.ProxyConnectAddr(addr) != "" {
+	//if the ProxyConnectAddr is set in the attribute, do a proxy dial.
+	if proxyattributes.ProxyConnectAddr(addr) != "" {
 		return proxyDial(ctx, addr, grpcUA)
 	}
 	networkType, ok := networktype.Get(addr)

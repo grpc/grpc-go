@@ -36,8 +36,9 @@ import (
 var (
 	// HTTPSProxyFromEnvironment will be used and overwritten in the tests.
 	httpProxyFromEnvironmentFunc = http.ProxyFromEnvironment
-
-	logger = grpclog.Component("delegating-resolver")
+	// ProxyScheme will be ovwewritten in tests
+	ProxyScheme = "dns"
+	logger      = grpclog.Component("delegating-resolver")
 )
 
 // delegatingResolver implements the `resolver.Resolver` interface. It uses child
@@ -81,6 +82,12 @@ func parsedURLForProxy(address string) (*url.URL, error) {
 	return url, nil
 }
 
+// OnClientResolution is a no-op function in non-test code. In tests, it can
+// be overwritten to send a signal to a channel, indicating that client-side
+// name resolution was triggered.  This enables tests to verify that resolution
+// is bypassed when a proxy is in use.
+var OnClientResolution = func(int) { /* no-op */ }
+
 // New creates a new delegating resolver that is used to call the target and
 // proxy child resolver. If proxy is configured, both proxy and target resolvers
 // are used else only target resolver is used.
@@ -109,6 +116,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// proxy is not configured or proxy address excluded using `NO_PROXY` env var,
 	// so only target resolver is used.
 	if r.proxyURL == nil {
+		OnClientResolution(1)
 		return targetResolverBuilder.Build(target, cc, opts)
 	}
 
@@ -123,6 +131,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
 		r.targetResolverReady = true
 	} else {
+		OnClientResolution(1)
 		wcc := &wrappingClientConn{
 			parent:       r,
 			resolverType: targetResolverType,
@@ -142,7 +151,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 // "dns" scheme. It adjusts the proxyURL to conform to the "dns:///" format and
 // builds a resolver with a wrappingClientConn to capture resolved addresses.
 func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resolver.Resolver, error) {
-	proxyBuilder := resolver.Get("dns")
+	proxyBuilder := resolver.Get(ProxyScheme)
 	if proxyBuilder == nil {
 		panic(fmt.Sprintln("delegating_resolver: resolver for proxy not found for scheme dns"))
 	}
