@@ -32,10 +32,9 @@ const defaultTestTimeout = 10 * time.Second
 
 // ProxyServer is a proxy server that is used for testing.
 type ProxyServer struct {
-	lis net.Listener
-	in  net.Conn
-	out net.Conn
-
+	lis          net.Listener
+	in           net.Conn
+	out          net.Conn
 	requestCheck func(*http.Request) error
 }
 
@@ -56,6 +55,8 @@ func NewProxyServer(lis net.Listener, requestCheck func(*http.Request) error, er
 		lis:          lis,
 		requestCheck: requestCheck,
 	}
+
+	// Start the proxy server.
 	go func() {
 		in, err := p.lis.Accept()
 		if err != nil {

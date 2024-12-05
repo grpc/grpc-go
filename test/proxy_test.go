@@ -99,21 +99,26 @@ func setupProxy(t *testing.T, backendAddr string, resolutionOnClient bool, reqCh
 	return proxyListener, errCh, doneCh, proxyStartedCh
 }
 
-// TestGrpcDialWithProxy tests grpc.Dial using a proxy and default
-// resolver in the target URI and verifies that it connects to the proxy server
-// and sends unresolved target URI in the HTTP CONNECT request and then
-// connects to the backend server.
-func (s) TestGrpcDialWithProxy(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	proxyListener, errCh, doneCh, _ := setupProxy(t, backendAddr, false, func(req *http.Request) error {
+// requestCheck returns a function that checks the HTTP CONNECT request for the
+// correct CONNECT method and address.
+func requestCheck(connectAddr string) func(*http.Request) error {
+	return func(req *http.Request) error {
 		if req.Method != http.MethodConnect {
 			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 		}
-		if req.URL.Host != unresolvedTargetURI {
-			return fmt.Errorf("unexpected URL.Host %q, want %q", req.URL.Host, unresolvedTargetURI)
+		if req.URL.Host != connectAddr {
+			return fmt.Errorf("unexpected URL.Host in CONNECT req %q, want %q", req.URL.Host, connectAddr)
 		}
 		return nil
-	})
+	}
+}
+
+// Tests grpc.Dial using a proxy and default resolver in the target URI and
+// verifies that it connects to the proxy server and sends unresolved target
+// URI in the HTTP CONNECT request and then connects to the backend server.
+func (s) TestGrpcDialWithProxy(t *testing.T) {
+	backendAddr := createAndStartBackendServer(t)
+	proxyListener, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
@@ -148,22 +153,13 @@ func (s) TestGrpcDialWithProxy(t *testing.T) {
 	}
 }
 
-// TestGrpcDialWithProxyAndResolution tests grpc.Dial with a proxy and ensures DNS
-// resolution of the proxy URI is performed.
+// Tests grpc.Dial with a proxy and ensures DNS resolution of the proxy URI is
+// performed.
 func (s) TestGrpcDialWithProxyAndResolution(t *testing.T) {
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
-
 	// Set up and start a proxy listener.
-	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, func(req *http.Request) error {
-		if req.Method != http.MethodConnect {
-			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-		}
-		if req.URL.Host != unresolvedTargetURI {
-			return fmt.Errorf("unexpected URL.Host %q, want %q", req.URL.Host, unresolvedTargetURI)
-		}
-		return nil
-	})
+	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
 	// Overwrite the default proxy function and restore it after the test.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -177,15 +173,10 @@ func (s) TestGrpcDialWithProxyAndResolution(t *testing.T) {
 	}
 	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
-	// Set up a manual resolver for proxy resolution.
+	// Set up and update a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
+	mrProxy.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: proxyLis.Addr().String()}}})
 
-	// Update the proxy resolver state with the proxy's address.
-	mrProxy.InitialState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: proxyLis.Addr().String()},
-		},
-	})
 	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -210,13 +201,12 @@ func (s) TestGrpcDialWithProxyAndResolution(t *testing.T) {
 	}
 }
 
-// TestGrpcNewClientWithProxy tests grpc.NewClient with default i.e DNS resolver
-// for targetURI and a proxy and verifies that it connects to proxy server and
-// sends unresolved target URI in the HTTP CONNECT req and connects to backend.
+// Tests grpc.NewClient with default i.e DNS resolver for targetURI and a proxy
+// and verifies that it connects to proxy server and sends unresolved target URI
+// in the HTTP CONNECT req and connects to backend.
 func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
 	resolutionCh := make(chan bool, 1)
-
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
@@ -226,17 +216,8 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
-
 	// Set up and start the proxy server.
-	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, func(req *http.Request) error {
-		if req.Method != http.MethodConnect {
-			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-		}
-		if req.URL.Host != unresolvedTargetURI {
-			return fmt.Errorf("unexpected URL.Host %q, want %q", req.URL.Host, unresolvedTargetURI)
-		}
-		return nil
-	})
+	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
 	// Overwrite the proxy resolution function and restore it afterward.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -250,10 +231,8 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 	}
 	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
-	// Set up a manual resolver for proxy resolution.
+	// Set up and update a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
-
-	// Update the proxy resolver state with the proxy's address.
 	mrProxy.InitialState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: proxyLis.Addr().String()},
@@ -263,7 +242,6 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient failed: %v", err)
@@ -289,18 +267,17 @@ func (s) TestGrpcNewClientWithProxy(t *testing.T) {
 	case <-resolutionCh:
 		t.Error("Client-side resolution was unexpectedly called")
 	default:
-		// Success: OnClientResolution was not called.
+		t.Logf("target resolution did not happen on client")
 	}
 }
 
-// TestGrpcNewClientWithProxyAndCustomResolver tests grpc.NewClient with a
-// resolver other than "dns" mentioned in targetURI with a proxyand verifies
-// that it connects to proxy server and passes resolved target URI in the
-// HTTP CONNECT req and connects to the backend server.
+// Tests grpc.NewClient with a custom targetURI scheme with a proxy and
+// verifies that the client connects to the proxy server, includes the resolved
+// target URI in the HTTP CONNECT request, and successfully establishes a
+// connection to the backend server.
 func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
 	resolutionCh := make(chan bool, 1)
-
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
@@ -310,21 +287,11 @@ func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
 
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
-
 	// Set up and start the proxy server.
-	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, func(req *http.Request) error {
-		if req.Method != http.MethodConnect {
-			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-		}
-		if req.URL.Host != backendAddr {
-			return fmt.Errorf("unexpected URL.Host %q, want %q", req.URL.Host, backendAddr)
-		}
-		return nil
-	})
+	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
 	// Overwrite the proxy resolution function and restore it afterward.
 	hpfe := func(req *http.Request) (*url.URL, error) {
-		fmt.Printf("emchandwani : the request URL host is  %v\n", req.URL.Host)
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
@@ -335,26 +302,18 @@ func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
 	}
 	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
-	// Dial options for the gRPC client.
-	dopts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
-	// Create a custom resolver.
+	// Create and update a custom resolver for target URI.
 	mrTarget := manual.NewBuilderWithScheme("whatever")
 	resolver.Register(mrTarget)
 	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
-
-	// Set up a manual resolver for proxy resolution.
+	// Set up and update a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
-	// Update the proxy resolver state with the proxy's address.
-	mrProxy.InitialState(resolver.State{
-		Addresses: []resolver.Address{{Addr: proxyLis.Addr().String()}}})
+	mrProxy.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: proxyLis.Addr().String()}}})
 
 	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	conn, err := grpc.NewClient(mrTarget.Scheme()+":///"+unresolvedTargetURI, dopts...)
+	conn, err := grpc.NewClient(mrTarget.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
@@ -377,24 +336,23 @@ func (s) TestGrpcNewClientWithProxyAndCustomResolver(t *testing.T) {
 	// Check if client-side resolution signal was sent to the channel.
 	select {
 	case <-resolutionCh:
-		// Success: OnClientResolution was called.
+		t.Logf("target resolution happened on client")
 	default:
-		t.Fatalf("Client side resolution should be called but wasn't")
+		t.Fatalf("client side resolution should be called but wasn't")
 	}
 }
 
-// TestGrpcNewClientWithProxyAndTargetResolutionEnabled tests grpc.NewClient with
-// the default "dns" resolver and dial option enabling target resolution on the
-// client and verifies that the resoltion happens on client.
+// Tests grpc.NewClient with the default "dns" resolver and dial option
+// enabling target resolution on the client and verifies that the resolution
+// happens on client.
 func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
-	// Set up a channel to receive signals from OnClientResolution.
-	resolutionCh := make(chan bool, 1)
-
 	// Temporarily modify ProxyScheme for this test.
 	origProxyScheme := delegatingresolver.ProxyScheme
 	delegatingresolver.ProxyScheme = "whatever"
 	t.Cleanup(func() { delegatingresolver.ProxyScheme = origProxyScheme })
 
+	// Set up a channel to receive signals from OnClientResolution.
+	resolutionCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
@@ -404,17 +362,8 @@ func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
-
 	// Set up the proxy server.
-	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, func(req *http.Request) error {
-		if req.Method != http.MethodConnect {
-			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
-		}
-		if req.URL.Host != backendAddr {
-			return fmt.Errorf("unexpected URL.Host %q, want %q", req.URL.Host, backendAddr)
-		}
-		return nil
-	})
+	proxyLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
 	// Overwrite the proxy resolution function and restore it afterward.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -440,11 +389,9 @@ func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithTargetResolutionEnabled(),
 	}
-
 	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	conn, err := grpc.NewClient(unresolvedTargetURI, dopts...)
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
@@ -468,35 +415,32 @@ func (s) TestGrpcNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	// Check if client-side resolution signal was sent to the channel.
 	select {
 	case <-resolutionCh:
-		// Success: OnClientResolution was called.
+		t.Logf("target resolution happened on client")
 	default:
 		t.Fatalf("Client-side resolution should be called but wasn't")
 	}
 }
 
-// TestGrpcNewClientWithNoProxy tests grpc.NewClient with grpc.WithNoProxy() set
-// and verifies that it does not dail to proxy, but directly to backend.
+// Tests grpc.NewClient with grpc.WithNoProxy() set and verifies that it does
+// not dail to proxy, but directly to backend.
 func (s) TestGrpcNewClientWithNoProxy(t *testing.T) {
 	// Create and start a backend server.
 	backendAddr := createAndStartBackendServer(t)
-
 	// Set up and start a proxy server.
 	_, _, _, proxyStartedCh := setupProxy(t, backendAddr, true, func(req *http.Request) error {
 		return fmt.Errorf("Proxy server received Connect req %v, but should not", req)
 	})
+
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
 	// Dial options with proxy explicitly disabled.
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithNoProxy(), // Disable proxy.
 	}
-
-	targetResolver := setupDNS(t)
-	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
-	// Establish a connection.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	conn, err := grpc.NewClient(unresolvedTargetURI, dopts...)
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
@@ -512,18 +456,17 @@ func (s) TestGrpcNewClientWithNoProxy(t *testing.T) {
 	// Verify that the proxy was not dialed.
 	select {
 	case <-proxyStartedCh:
-		t.Error("Proxy server was dialed, but it should have been bypassed")
+		t.Error("Proxy server was dialed, but it shouldn't have been")
 	default:
+		t.Logf("Proxy server was not dialed")
 	}
 
 }
 
-// TestGrpcNewClientWithContextDialer tests grpc.NewClient with
-// grpc.WithContextDialer() set and verifies that it does not dial to proxy but
-// rather uses the custom dialer.
+// Tests grpc.NewClient with grpc.WithContextDialer() set and verifies that it
+// does not dial to proxy but rather uses the custom dialer.
 func (s) TestGrpcNewClientWithContextDialer(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
-
 	// Set up and start a proxy server.
 	_, _, _, proxyStartedCh := setupProxy(t, backendAddr, true, func(req *http.Request) error {
 		return fmt.Errorf("Proxy server received Connect req %v, but should not", req)
@@ -537,16 +480,15 @@ func (s) TestGrpcNewClientWithContextDialer(t *testing.T) {
 		return net.Dial("tcp", backendAddr)
 	}
 
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(customDialer),
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	targetResolver := setupDNS(t)
-	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
-
 	conn, err := grpc.NewClient(unresolvedTargetURI, dopts...)
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
@@ -557,26 +499,29 @@ func (s) TestGrpcNewClientWithContextDialer(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
+
 	select {
 	case <-dialerCalled:
+		t.Logf("custom dialer was called by grpc.NewClient()")
 	default:
 		t.Errorf("custom dialer was not called by grpc.NewClient()")
 	}
+
 	select {
 	case <-proxyStartedCh:
 		t.Fatalf("Proxy Server was dialled")
 	default:
+		t.Logf("Proxy Server was not dialled")
 	}
 }
 
-// TestBasicAuthInGrpcNewClientWithProxy tests grpc.NewClient with default i.e
-// DNS resolver for targetURI and a proxy and verifies that it connects to proxy
-// server and sends unresolved target URI in the HTTP CONNECT req and connects
-// to backend. Also verifies that correct user info is sent in the CONNECT.
+// Tests grpc.NewClient with default i.e DNS resolver for targetURI and a proxy
+// and verifies that it connects to proxy server and sends unresolved target
+// URI in the HTTP CONNECT req and connects to backend. Also verifies that
+// correct user info is sent in the CONNECT.
 func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
 	resolutionCh := make(chan bool, 1)
-
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
@@ -621,20 +566,16 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	}
 	defer overrideHTTPSProxyFromEnvironment(hpfe)()
 
-	// Set up a manual resolver for proxy resolution.
+	// Set up and update a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
-
-	// Update the proxy resolver state with the proxy's address.
 	mrProxy.InitialState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: proxyLis.Addr().String()},
 		},
 	})
 
-	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient failed: %v", err)
@@ -658,8 +599,8 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	// Verify if OnClientResolution was triggered.
 	select {
 	case <-resolutionCh:
-		t.Error("Client-side resolution was unexpectedly called")
+		t.Error("client-side resolution was unexpectedly called")
 	default:
-		// Success: OnClientResolution was not called.
+		t.Logf("client-side resolution was not called")
 	}
 }

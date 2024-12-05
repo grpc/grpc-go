@@ -94,8 +94,8 @@ type dialOptions struct {
 	idleTimeout                 time.Duration
 	defaultScheme               string
 	maxCallAttempts             int
-	// TargetResolutionEnabled specifies if the target resolution is enabled even
-	// when proxy is enabled.
+	// TargetResolutionEnabled specifies if the target resolution on client is
+	// enabled even when proxy is enabled.
 	TargetResolutionEnabled bool
 	// UseProxy specifies if a proxy should be used.
 	UseProxy bool
