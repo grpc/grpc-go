@@ -413,6 +413,19 @@ func (acbw *acBalancerWrapper) closeProducers() {
 	}
 }
 
+// HealthCheckOptions are the options to configure the health check producer.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type HealthCheckOptions struct {
+	// Name of the gRPC service running on the server for reporting health state.
+	// If the service name is empty, client side health checking will be disabled.
+	HealthServiceName string
+	Listener          func(balancer.SubConnState)
+}
+
 // RegisterHealthListener accepts a health listener from the LB policy. It sends
 // updates to the health listener as long as the SubConn's connectivity state
 // doesn't change and a new health listener is not registered. To invalidate
@@ -432,8 +445,19 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 	// registered health listeners.
 	hd := newHealthData(connectivity.Ready)
 	acbw.healthData = hd
-	if listener == nil {
-		return
+
+	// Client side health checking is enabled when all the following
+	// conditions are satisfied:
+	// 1. The health check config is present in the service config.
+	// 2. Health checking is not disabled using the dial option.
+	// 3. The health package is imported.
+	regHealthLisFn := internal.RegisterClientHealthCheckListener
+	healthCheckEnabled := !acbw.ccb.cc.dopts.disableHealthCheck && regHealthLisFn != nil
+	var cfg *healthCheckConfig
+	if healthCheckEnabled {
+		// Avoid acquiring cc.mu unless necessary.
+		cfg = acbw.ac.cc.healthCheckConfig()
+		healthCheckEnabled = cfg != nil
 	}
 
 	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
@@ -447,6 +471,37 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		if curHD != hd {
 			return
 		}
-		listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		if !healthCheckEnabled {
+			if listener != nil {
+				listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+			}
+			return
+		}
+		// Serialize the health updates from the health producer with
+		// other calls into the LB policy.
+		listenerWrapper := func(scs balancer.SubConnState) {
+			acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
+				if ctx.Err() != nil || acbw.ccb.balancer == nil {
+					return
+				}
+				acbw.healthMu.Lock()
+				curHD := acbw.healthData
+				acbw.healthMu.Unlock()
+				if curHD != hd {
+					return
+				}
+				listener(scs)
+			})
+		}
+
+		if listener == nil {
+			listenerWrapper = nil
+		}
+
+		healthOpts := HealthCheckOptions{
+			HealthServiceName: cfg.ServiceName,
+			Listener:          listenerWrapper,
+		}
+		regHealthLisFn.(func(context.Context, balancer.SubConn, HealthCheckOptions))(ctx, acbw, healthOpts)
 	})
 }

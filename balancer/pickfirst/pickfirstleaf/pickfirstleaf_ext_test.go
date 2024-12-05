@@ -1495,7 +1495,7 @@ func subConnAddresses(ctx context.Context, cc *testutils.BalancerClientConn, sub
 	return addresses, nil
 }
 
-// stateStoringBalancer stores the state of the SubConns being created.
+// stateStoringBalancer stores the state of the subconns being created.
 type stateStoringBalancer struct {
 	balancer.Balancer
 	mu       sync.Mutex
