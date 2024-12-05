@@ -33,6 +33,7 @@ import (
 	"unsafe"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
@@ -150,6 +151,11 @@ type lbCfgUpdate struct {
 	lbCfg *LBConfig
 	// to make sure picker is updated synchronously.
 	done chan struct{}
+}
+
+type scHealthUpdate struct {
+	scw   *subConnWrapper
+	state balancer.SubConnState
 }
 
 type outlierDetectionBalancer struct {
@@ -355,6 +361,9 @@ func (b *outlierDetectionBalancer) updateSubConnState(sc balancer.SubConn, state
 	if state.ConnectivityState == connectivity.Shutdown {
 		delete(b.scWrappers, scw.SubConn)
 	}
+	scw.mu.Lock()
+	defer scw.mu.Unlock()
+	scw.latestReceivedConnectivityState = state.ConnectivityState
 	b.scUpdateCh.Put(&scUpdate{
 		scw:   scw,
 		state: state,
@@ -475,10 +484,11 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 		return nil, err
 	}
 	scw := &subConnWrapper{
-		SubConn:    sc,
-		addresses:  addrs,
-		scUpdateCh: b.scUpdateCh,
-		listener:   oldListener,
+		SubConn:               sc,
+		addresses:             addrs,
+		scUpdateCh:            b.scUpdateCh,
+		listener:              oldListener,
+		healthListenerEnabled: len(addrs) == 1 && pickfirstleaf.IsManagedByPickfirst(addrs[0]),
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -596,13 +606,35 @@ func (b *outlierDetectionBalancer) Target() string {
 // if the SubConn is not ejected.
 func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw := u.scw
-	scw.latestState = u.state
-	if !scw.ejected {
-		if scw.listener != nil {
-			b.childMu.Lock()
-			scw.listener(u.state)
-			b.childMu.Unlock()
-		}
+	scw.mu.Lock()
+	scw.healthListener = nil
+	scw.mu.Unlock()
+
+	if scw.listener == nil {
+		return
+	}
+
+	if !scw.healthListenerEnabled {
+		scw.latestDeleveredState = u.state
+	}
+
+	if scw.healthListenerEnabled || !scw.ejected {
+		b.childMu.Lock()
+		scw.listener(u.state)
+		b.childMu.Unlock()
+	}
+}
+
+func (b *outlierDetectionBalancer) handleSubConnHealthUpdate(u *scHealthUpdate) {
+	scw := u.scw
+	scw.mu.Lock()
+	defer scw.mu.Unlock()
+
+	scw.latestDeleveredState = u.state
+	if !scw.ejected && scw.healthListener != nil {
+		b.childMu.Lock()
+		scw.healthListener(u.state)
+		b.childMu.Unlock()
 	}
 }
 
@@ -613,15 +645,26 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 	scw.ejected = u.isEjected
 	// If scw.latestState has never been written to will default to connectivity
 	// IDLE, which is fine.
-	stateToUpdate := scw.latestState
+	stateToUpdate := scw.latestDeleveredState
 	if u.isEjected {
 		stateToUpdate = balancer.SubConnState{
 			ConnectivityState: connectivity.TransientFailure,
 		}
 	}
-	if scw.listener != nil {
+
+	if !scw.healthListenerEnabled {
+		if scw.listener != nil {
+			b.childMu.Lock()
+			scw.listener(stateToUpdate)
+			b.childMu.Unlock()
+		}
+		return
+	}
+	scw.mu.Lock()
+	defer scw.mu.Unlock()
+	if scw.healthListener != nil {
 		b.childMu.Lock()
-		scw.listener(stateToUpdate)
+		scw.healthListener(stateToUpdate)
 		b.childMu.Unlock()
 	}
 }
@@ -696,6 +739,8 @@ func (b *outlierDetectionBalancer) run() {
 				b.handleSubConnUpdate(u)
 			case *ejectionUpdate:
 				b.handleEjectedUpdate(u)
+			case *scHealthUpdate:
+				b.handleSubConnHealthUpdate(u)
 			}
 		case update, ok := <-b.pickerUpdateCh.Get():
 			if !ok {
