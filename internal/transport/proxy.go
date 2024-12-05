@@ -104,7 +104,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver
 	return conn, nil
 }
 
-// proxyDial dials, connecting to a proxy first.It dials, does the
+// proxyDial dials, connecting to a proxy first. It dials, does the
 // HTTP CONNECT handshake, and returns the connection.
 func proxyDial(ctx context.Context, address resolver.Address, grpcUA string) (net.Conn, error) {
 	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", address.Addr)
