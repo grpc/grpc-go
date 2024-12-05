@@ -355,13 +355,17 @@ func TestDecompress(t *testing.T) {
 				compressedData := compressData(tt.input)
 				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 			}()
-			output, _, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, nil)
+
+			output, numSliceInBuf, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
 			var wantMsg mem.BufferSlice
 			if tt.want != nil {
 				wantMsg = mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
 			}
 			if tt.error != nil && err == nil {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
+			}
+			if numSliceInBuf != wantMsg.Len() {
+				t.Fatalf("decompress() number of slice of Buffer, got err=%v, want err=%v", numSliceInBuf, tt.want)
 			}
 			if wantMsg != nil && output == nil {
 				t.Fatalf("decompress() got = nil, want = non nil")
