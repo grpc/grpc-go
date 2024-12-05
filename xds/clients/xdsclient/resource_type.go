@@ -19,7 +19,7 @@
 package xdsclient
 
 import (
-	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/clients"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -47,7 +47,7 @@ type ResourceType interface {
 // decoding configuration received from the xDS management server.
 type DecodeOptions struct {
 	Config       *Config
-	ServerConfig *xds.ServerConfig
+	ServerConfig *clients.ServerConfig
 }
 
 // DecodeResult is the result of a decode operation.

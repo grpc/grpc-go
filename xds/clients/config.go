@@ -16,7 +16,7 @@
  *
  */
 
-package xds
+package clients
 
 // ServerConfig contains the configuration to connect to a server.
 type ServerConfig struct {
@@ -41,8 +41,6 @@ type Node struct {
 	Metadata         any
 	UserAgentName    string
 	UserAgentVersion string
-
-	Extensions any
 }
 
 // Locality is the representation of the locality field within a node.
@@ -50,6 +48,4 @@ type Locality struct {
 	Region  string
 	Zone    string
 	SubZone string
-
-	Extensions any
 }

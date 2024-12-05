@@ -19,19 +19,19 @@
 package lrsclient
 
 import (
-	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/clients"
 )
 
 // Config contains xDS fields applicable to LRS client.
 // Config can be extended with more attributes in future.
 type Config struct {
-	Node             xds.Node             // Required
-	TransportBuilder xds.TransportBuilder // Required
+	Node             clients.Node             // Required
+	TransportBuilder clients.TransportBuilder // Required
 
 	Extensions any
 }
 
 // NewConfig returns an LRS config configured with mandatory parameters.
-func NewConfig(node xds.Node, transport xds.TransportBuilder) (*Config, error) {
+func NewConfig(node clients.Node, transport clients.TransportBuilder) (*Config, error) {
 	return &Config{Node: node, TransportBuilder: transport}, nil
 }
