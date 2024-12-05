@@ -404,6 +404,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		}()
 		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
 		select {
+		case <-ch: // Signal received, continue with the test
 		case <-s.ctx.Done():
 		case <-time.After(5 * time.Second):
 			t.Errorf("timeout waiting for ctx.Done")
