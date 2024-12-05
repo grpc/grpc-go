@@ -44,7 +44,7 @@ type TestMetricsRecorder struct {
 	// mu protects data.
 	mu sync.Mutex
 	// data is the most recent update for each metric name.
-	data map[estats.Metric]float64
+	data map[string]float64
 }
 
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
@@ -56,14 +56,16 @@ func NewTestMetricsRecorder() *TestMetricsRecorder {
 		floatHistoCh: testutils.NewChannelWithSize(10),
 		intGaugeCh:   testutils.NewChannelWithSize(10),
 
-		data: make(map[estats.Metric]float64),
+		data: make(map[string]float64),
 	}
 }
 
 // Metric returns the most recent data for a metric, and whether this recorder
 // has received data for a metric.
 func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
-	data, ok := r.data[estats.Metric(name)]
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	data, ok := r.data[name]
 	return data, ok
 }
 
@@ -71,7 +73,7 @@ func (r *TestMetricsRecorder) Metric(name string) (float64, bool) {
 func (r *TestMetricsRecorder) ClearMetrics() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data = make(map[estats.Metric]float64)
+	r.data = make(map[string]float64)
 }
 
 // MetricsData represents data associated with a metric.
@@ -97,6 +99,21 @@ func (r *TestMetricsRecorder) WaitForInt64Count(ctx context.Context, metricsData
 	}
 	metricsDataGot := got.(MetricsData)
 	if diff := cmp.Diff(metricsDataGot, metricsDataWant); diff != "" {
+		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
+	}
+	return nil
+}
+
+// WaitForInt64CountIncr waits for an int64 count metric to be recorded and
+// verifies that the recorded metrics data incr matches the expected incr.
+// Returns an error if failed to wait or received wrong data.
+func (r *TestMetricsRecorder) WaitForInt64CountIncr(ctx context.Context, incrWant int64) error {
+	got, err := r.intCountCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for int64Count")
+	}
+	metricsDataGot := got.(MetricsData)
+	if diff := cmp.Diff(metricsDataGot.IntIncr, incrWant); diff != "" {
 		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
 	}
 	return nil

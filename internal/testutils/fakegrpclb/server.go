@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 	"time"
@@ -85,9 +86,9 @@ func NewServer(params ServerParams) (*Server, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse list of backend address %q: %v", addr, err)
 		}
-		ip := net.ParseIP(ipStr)
-		if ip == nil {
-			return nil, fmt.Errorf("failed to parse ip: %q", ipStr)
+		ip, err := netip.ParseAddr(ipStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse ip %q: %v", ipStr, err)
 		}
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
@@ -95,7 +96,7 @@ func NewServer(params ServerParams) (*Server, error) {
 		}
 		logger.Infof("Adding backend ip: %q, port: %d to server list", ip.String(), port)
 		servers = append(servers, &lbpb.Server{
-			IpAddress: ip,
+			IpAddress: ip.AsSlice(),
 			Port:      int32(port),
 		})
 	}

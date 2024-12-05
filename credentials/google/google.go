@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc/internal"
 )
 
+const defaultCloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+
 var logger = grpclog.Component("credentials")
 
 // DefaultCredentialsOptions constructs options to build DefaultCredentials.
@@ -120,7 +122,7 @@ var (
 		return alts.NewClientCreds(alts.DefaultClientOptions())
 	}
 	newADC = func(ctx context.Context) (credentials.PerRPCCredentials, error) {
-		return oauth.NewApplicationDefault(ctx)
+		return oauth.NewApplicationDefault(ctx, defaultCloudPlatformScope)
 	}
 )
 

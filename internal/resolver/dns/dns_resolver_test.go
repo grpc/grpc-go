@@ -755,7 +755,16 @@ func (s) TestIPResolver(t *testing.T) {
 			target:   "[2001:db8::1]:http",
 			wantAddr: []resolver.Address{{Addr: "[2001:db8::1]:http"}},
 		},
-		// TODO(yuxuanli): zone support?
+		{
+			name:     "ipv6 with zone and port",
+			target:   "[fe80::1%25eth0]:1234",
+			wantAddr: []resolver.Address{{Addr: "[fe80::1%eth0]:1234"}},
+		},
+		{
+			name:     "ipv6 with zone and default port",
+			target:   "fe80::1%25eth0",
+			wantAddr: []resolver.Address{{Addr: "[fe80::1%eth0]:443"}},
+		},
 	}
 
 	for _, test := range tests {

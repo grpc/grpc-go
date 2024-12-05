@@ -21,6 +21,7 @@ package xds
 import (
 	"crypto/x509"
 	"net"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"testing"
@@ -142,8 +143,11 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 	inputCert := &x509.Certificate{
 		DNSNames:       []string{"foo.bar.example.com", "bar.baz.test.com", "*.example.com"},
 		EmailAddresses: []string{"foobar@example.com", "barbaz@test.com"},
-		IPAddresses:    []net.IP{net.ParseIP("192.0.0.1"), net.ParseIP("2001:db8::68")},
-		URIs:           []*url.URL{url1, url2},
+		IPAddresses: []net.IP{
+			netip.MustParseAddr("192.0.0.1").AsSlice(),
+			netip.MustParseAddr("2001:db8::68").AsSlice(),
+		},
+		URIs: []*url.URL{url1, url2},
 	}
 
 	tests := []struct {
@@ -214,8 +218,11 @@ func TestMatchingSANExists_Success(t *testing.T) {
 	inputCert := &x509.Certificate{
 		DNSNames:       []string{"baz.test.com", "*.example.com"},
 		EmailAddresses: []string{"foobar@example.com", "barbaz@test.com"},
-		IPAddresses:    []net.IP{net.ParseIP("192.0.0.1"), net.ParseIP("2001:db8::68")},
-		URIs:           []*url.URL{url1, url2},
+		IPAddresses: []net.IP{
+			netip.MustParseAddr("192.0.0.1").AsSlice(),
+			netip.MustParseAddr("2001:db8::68").AsSlice(),
+		},
+		URIs: []*url.URL{url1, url2},
 	}
 
 	tests := []struct {
