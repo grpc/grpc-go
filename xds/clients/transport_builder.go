@@ -16,24 +16,18 @@
  *
  */
 
-package xds
+package clients
 
 import (
 	"context"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // TransportBuilder is an interface for building a new xDS transport.
 type TransportBuilder interface {
-	// Build creates a new xDS transport with the provided options.
-	Build(opts TransportBuildOptions) (Transport, error)
-}
-
-// TransportBuildOptions contains the options for building a new xDS transport.
-type TransportBuildOptions struct {
-	// ServerConfig contains the configuration that controls how the transport
-	// interacts with the xDS server. This includes the server URI and the
-	// credentials to use to connect to the server, among other things.
-	ServerConfig ServerConfig
+	// Build creates a new xDS transport for the provided Server Config.
+	Build(ServerConfig ServerConfig) (Transport, error)
 }
 
 // Transport provides the functionality to communicate with an xDS server using
@@ -42,7 +36,7 @@ type Transport interface {
 	// NewStream creates a new streaming call to the xDS server for
 	// specified method name. The returned Streaming interface can be used
 	// to send and receive messages on the stream.
-	NewStream(context.Context, string) (Stream[any, any], error)
+	NewStream(context.Context, string) (Stream[StreamRequest, any], error)
 
 	// Close closes the underlying connection and cleans up any resources used
 	// by the Transport.
@@ -53,10 +47,16 @@ type Transport interface {
 // messages on a stream. It is generic over both the type of the request message
 // stream and type of response message stream to allow this interface to be used
 // for both ADS and LRS.
-type Stream[Req any, Res any] interface {
+type Stream[Req StreamRequest, Res any] interface {
 	// Send sends the provided message on the stream.
 	Send(Req) error
 
 	// Recv block until the next message is received on the stream.
 	Recv() (Res, error)
+}
+
+// StreamRequest is an interface that enforces that the type is a
+// proto.Message request.
+type StreamRequest interface {
+	proto.Message
 }

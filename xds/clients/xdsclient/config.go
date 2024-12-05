@@ -21,16 +21,16 @@ package xdsclient
 import (
 	"time"
 
-	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/clients"
 )
 
 // Config contains xDS fields applicable to xDS client.
 // Config can be extended with more attributes in future.
 type Config struct {
-	XDSServers       []xds.ServerConfig       // Required
-	Authorities      map[string]xds.Authority // Required
-	Node             xds.Node                 // Required
-	TransportBuilder xds.TransportBuilder     // Required
+	XDSServers       []clients.ServerConfig       // Required
+	Authorities      map[string]clients.Authority // Required
+	Node             clients.Node                 // Required
+	TransportBuilder clients.TransportBuilder     // Required
 
 	Extensions any
 
@@ -41,7 +41,7 @@ type Config struct {
 }
 
 // NewConfig returns an xDS config configured with mandatory parameters.
-func NewConfig(xDSServers []xds.ServerConfig, authorities map[string]xds.Authority, node xds.Node, transport xds.TransportBuilder) (*Config, error) {
+func NewConfig(xDSServers []clients.ServerConfig, authorities map[string]clients.Authority, node clients.Node, transport clients.TransportBuilder) (*Config, error) {
 	return &Config{XDSServers: xDSServers, Authorities: authorities, Node: node, TransportBuilder: transport}, nil
 }
 

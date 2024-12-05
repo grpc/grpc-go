@@ -24,10 +24,16 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/clients"
+	"google.golang.org/protobuf/proto"
+
+	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3adspb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
+	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 )
 
-// ServerConfigExtension is an interface to extend the `xds.ServerConfig` for
+// ServerConfigExtension is an interface to extend the `clients.ServerConfig` for
 // gRPC transport builder. Any implementation needs to implement `ServerConfig`
 // method.
 type ServerConfigExtension interface {
@@ -52,14 +58,14 @@ type Builder struct{}
 // Build creates a new gRPC-based transport to an xDS server using the provided
 // options. This involves creating a grpc.ClientConn to the server identified by
 // the server URI in the provided options.
-func (b *Builder) Build(opts xds.TransportBuildOptions) (xds.Transport, error) {
-	if opts.ServerConfig.ServerURI == "" {
+func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
+	if sc.ServerURI == "" {
 		return nil, fmt.Errorf("ServerConfig Uri field in opts cannot be empty")
 	}
-	if opts.ServerConfig.Extensions == nil {
+	if sc.Extensions == nil {
 		return nil, fmt.Errorf("ServerConfig Extensions field in opts cannot be nil")
 	}
-	gtsce, ok := opts.ServerConfig.Extensions.(ServerConfigExtension)
+	gtsce, ok := sc.Extensions.(ServerConfigExtension)
 	if !ok {
 		return nil, fmt.Errorf("ServerConfig field in opts cannot be anything other than GRPCTransportServerConfigExtension")
 	}
@@ -78,9 +84,9 @@ func (b *Builder) Build(opts xds.TransportBuildOptions) (xds.Transport, error) {
 	// The transport will be removed from map only when the reference count
 	// reaches zero.
 
-	cc, err := grpc.NewClient(opts.ServerConfig.ServerURI, grpc.WithCredentialsBundle(gtsc.Credentials))
+	cc, err := grpc.NewClient(sc.ServerURI, grpc.WithCredentialsBundle(gtsc.Credentials))
 	if err != nil {
-		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", opts.ServerConfig.ServerURI, err)
+		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", sc.ServerURI, err)
 	}
 	cc.Connect()
 	return &grpcTransport{cc: cc}, nil
@@ -90,7 +96,7 @@ type grpcTransport struct {
 	cc *grpc.ClientConn
 }
 
-func (g *grpcTransport) NewStream(ctx context.Context, method string) (xds.Stream[any, any], error) {
+func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream[clients.StreamRequest, any], error) {
 	return nil, nil
 }
 
@@ -98,38 +104,50 @@ func (g *grpcTransport) Close() error {
 	return g.cc.Close()
 }
 
-type ADSStream[Req any, Res any] struct {
-	xds.Stream[any, any]
+type adsStream[Req clients.StreamRequest, Res any] struct {
+	stream v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
 }
 
-func (a *ADSStream[Req, Res]) Send(m *Req) error {
-	return a.Stream.Send(m)
+func (a *adsStream[Req, Res]) Send(msg *Req) error {
+	protoReq, ok := any(msg).(proto.Message)
+	if !ok {
+		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
+	}
+	return a.stream.Send(protoReq.(*v3adspb.DiscoveryRequest))
 }
 
-func (a *ADSStream[Req, Res]) Recv() (*Res, error) {
-	m := new(Res)
-	msg, err := a.Stream.Recv()
+func (a *adsStream[Req, Res]) Recv() (*Res, error) {
+	res, err := a.stream.Recv()
 	if err != nil {
 		return nil, err
 	}
-	*m = msg.(Res)
-	return m, nil
+	typedRes, ok := any(res).(Res)
+	if !ok {
+		return nil, fmt.Errorf("response type mismatch")
+	}
+	return &typedRes, nil
 }
 
-type LRSStream[Req any, Res any] struct {
-	xds.Stream[any, any]
+type lrsStream[Req clients.StreamRequest, Res any] struct {
+	stream v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
 }
 
-func (a *LRSStream[Req, Res]) Send(m *Req) error {
-	return a.Stream.Send(m)
+func (l *lrsStream[Req, Res]) Send(msg *Req) error {
+	protoReq, ok := any(msg).(proto.Message)
+	if !ok {
+		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
+	}
+	return l.stream.Send(protoReq.(*v3lrspb.LoadStatsRequest))
 }
 
-func (a *LRSStream[Req, Res]) Recv() (*Res, error) {
-	m := new(Res)
-	msg, err := a.Stream.Recv()
+func (l *lrsStream[Req, Res]) Recv() (*Res, error) {
+	res, err := l.stream.Recv()
 	if err != nil {
 		return nil, err
 	}
-	*m = msg.(Res)
-	return m, nil
+	typedRes, ok := any(res).(Res)
+	if !ok {
+		return nil, fmt.Errorf("response type mismatch")
+	}
+	return &typedRes, nil
 }

@@ -19,7 +19,7 @@
 package lrsclient
 
 import (
-	"google.golang.org/grpc/xds"
+	"google.golang.org/grpc/xds/clients"
 	"google.golang.org/grpc/xds/clients/lrsclient/load"
 )
 
@@ -42,6 +42,6 @@ type LRSClient struct {
 // when the last reference is removed.
 //
 // The stats from `*load.Store` are reported periodically until cleanup function is // called
-func (c *LRSClient) ReportLoad(server *xds.ServerConfig) (*load.Store, func()) {
+func (c *LRSClient) ReportLoad(server *clients.ServerConfig) (*load.Store, func()) {
 	return load.New(), func() {}
 }
