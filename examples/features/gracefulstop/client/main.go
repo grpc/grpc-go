@@ -67,6 +67,7 @@ func main() {
 		time.Sleep(200 * time.Millisecond)
 		log.Printf(r.Message)
 	}
+	log.Printf("Successful unary requests made by client: %d", unaryRequests)
 
 	r, err := stream.CloseAndRecv()
 	if err != nil {
@@ -75,5 +76,5 @@ func main() {
 	if fmt.Sprintf("%d", unaryRequests) != r.Message {
 		log.Fatalf("Got %s successful unary requests processed from server, want: %d", r.Message, unaryRequests)
 	}
-	log.Printf("Successful unary requests processed by server and made by client are same: %d", unaryRequests)
+	log.Printf("Successful unary requests processed by server and made by client are same.")
 }

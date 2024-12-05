@@ -130,6 +130,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/retry"]="request succeeded count: 4"
     ["features/unix_abstract"]="serving on @abstract-unix-socket"
     ["features/advancedtls"]=""
+    ["features/gracefulstop"]="Server stopped gracefully."
 )
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
@@ -155,6 +156,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/retry"]="UnaryEcho reply: message:\"Try and Success\""
     ["features/unix_abstract"]="calling echo.Echo/UnaryEcho to unix-abstract:abstract-unix-socket"
     ["features/advancedtls"]=""
+    ["features/gracefulstop"]="Successful unary requests processed by server and made by client are same."
 )
 
 cd ./examples
