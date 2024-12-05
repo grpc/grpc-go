@@ -639,7 +639,9 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// a transport is successfully created, but the connection fails
 	// before the SubConn can send the notification for READY. We treat
 	// this as a successful connection and transition to IDLE.
-	if (oldState == connectivity.Ready && newState.ConnectivityState != connectivity.Ready) || (oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle) {
+	// TODO: https://github.com/grpc/grpc-go/issues/7862 - Remove the second
+	// part of the if condition below once the issue is fixed.
+	if oldState == connectivity.Ready || (oldState == connectivity.Connecting && newState.ConnectivityState == connectivity.Idle) {
 		// Once a transport fails, the balancer enters IDLE and starts from
 		// the first address when the picker is used.
 		b.shutdownRemainingLocked(sd)
