@@ -21,12 +21,16 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"math"
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
+	_ "google.golang.org/grpc/encoding/gzip"
 	protoenc "google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
@@ -293,4 +297,83 @@ func BenchmarkGZIPCompressor512KiB(b *testing.B) {
 
 func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
+}
+
+// compressData compresses data using gzip and returns the compressed bytes.
+func compressData(data []byte) []byte {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, _ = gz.Write(data)
+	_ = gz.Close()
+	return buf.Bytes()
+}
+
+// TestDecompress tests the decompress function with various scenarios, including
+// successful decompression, error handling, and edge cases like overflow or
+// premature data end. It ensures that the function behaves correctly with different
+// inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
+
+func TestDecompress(t *testing.T) {
+	c := encoding.GetCompressor("gzip")
+
+	tests := []struct {
+		name                  string
+		compressor            encoding.Compressor
+		input                 []byte
+		maxReceiveMessageSize int
+		want                  []byte
+		error                 error
+	}{
+		{
+			name:                  "Decompresses successfully with sufficient buffer size",
+			compressor:            c,
+			input:                 []byte("decompressed data"),
+			maxReceiveMessageSize: 50,
+			want:                  []byte("decompressed data"),
+			error:                 nil,
+		},
+		{
+			name:                  "failure, empty receive message",
+			compressor:            c,
+			input:                 []byte{},
+			maxReceiveMessageSize: 10,
+			want:                  []byte{},
+			error:                 nil,
+		},
+		{
+			name:                  "overflow failure, receive message exceeds maxReceiveMessageSize",
+			compressor:            c,
+			input:                 []byte("small message"),
+			maxReceiveMessageSize: 5,
+			want:                  []byte{},
+			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compressedMsg := func() mem.BufferSlice {
+				compressedData := compressData(tt.input)
+				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
+			}()
+
+			output, numSliceInBuf, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
+			var wantMsg mem.BufferSlice
+			if tt.want != nil {
+				wantMsg = mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
+			}
+			if tt.error != nil && err == nil {
+				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
+			}
+			if numSliceInBuf != wantMsg.Len() {
+				t.Fatalf("decompress() number of slice of Buffer, got err=%v, want err=%v", numSliceInBuf, tt.want)
+			}
+			if wantMsg != nil && output == nil {
+				t.Fatalf("decompress() got = nil, want = non nil")
+			}
+			if diff := cmp.Diff(wantMsg, output); diff != "" {
+				t.Fatalf("Mismatch in output:\n%s", diff)
+			}
+
+		})
+	}
 }
