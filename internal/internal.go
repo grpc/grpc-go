@@ -32,8 +32,9 @@ var (
 	// HealthCheckFunc is used to provide client-side LB channel health checking
 	HealthCheckFunc HealthChecker
 	// RegisterClientHealthCheckListener is used to provide a listener for
-	// updates from the client-side health checking service.
-	RegisterClientHealthCheckListener any // func(context.Context, balancer.SubConn, grpc.HealthCheckOptions)
+	// updates from the client-side health checking service. It returns a
+	// function that can be called to stop the health producer.
+	RegisterClientHealthCheckListener any // func(context.Context, balancer.SubConn, grpc.HealthCheckOptions) func()
 	// BalancerUnregister is exported by package balancer to unregister a balancer.
 	BalancerUnregister func(name string)
 	// KeepaliveMinPingTime is the minimum ping interval.  This must be 10s by

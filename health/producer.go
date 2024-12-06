@@ -33,7 +33,7 @@ import (
 
 func init() {
 	producerBuilderSingleton = &producerBuilder{}
-	internal.RegisterClientHealthCheckListener = RegisterClientSideHealthCheckListener
+	internal.RegisterClientHealthCheckListener = registerClientSideHealthCheckListener
 }
 
 type producerBuilder struct{}
@@ -68,22 +68,17 @@ type healthServiceProducer struct {
 	cancelDone chan (struct{})
 }
 
-// RegisterClientSideHealthCheckListener accepts a listener to provide server
+// registerClientSideHealthCheckListener accepts a listener to provide server
 // health state via the health service.
-//
-// # Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
-func RegisterClientSideHealthCheckListener(ctx context.Context, sc balancer.SubConn, opts grpc.HealthCheckOptions) {
-	pr, _ := sc.GetOrBuildProducer(producerBuilderSingleton)
+func registerClientSideHealthCheckListener(ctx context.Context, sc balancer.SubConn, opts grpc.HealthCheckOptions) func() {
+	pr, closeFn := sc.GetOrBuildProducer(producerBuilderSingleton)
 	p := pr.(*healthServiceProducer)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cancel()
 	<-p.cancelDone
 	if opts.Listener == nil {
-		return
+		return closeFn
 	}
 
 	p.cancelDone = make(chan struct{})
@@ -91,11 +86,11 @@ func RegisterClientSideHealthCheckListener(ctx context.Context, sc balancer.SubC
 	p.cancel = cancel
 
 	go p.startHealthCheck(ctx, sc, opts, p.cancelDone)
+	return closeFn
 }
 
 func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balancer.SubConn, opts grpc.HealthCheckOptions, closeCh chan struct{}) {
 	defer close(closeCh)
-	serviceName := opts.HealthServiceName
 	newStream := func(method string) (any, error) {
 		return p.cc.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, method)
 	}
@@ -109,7 +104,7 @@ func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balance
 
 	// Call the function through the internal variable as tests use it for
 	// mocking.
-	err := internal.HealthCheckFunc(ctx, newStream, setConnectivityState, serviceName)
+	err := internal.HealthCheckFunc(ctx, newStream, setConnectivityState, opts.ServiceName)
 	if err == nil {
 		return
 	}

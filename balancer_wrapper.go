@@ -277,10 +277,17 @@ type healthData struct {
 	// to the LB policy. This is stored to avoid sending updates when the
 	// SubConn has already exited connectivity state READY.
 	connectivityState connectivity.State
+	// closeHealthProducer stores function to close the ref counted health
+	// producer. The health producer is automatically closed when the SubConn
+	// state changes.
+	closeHealthProducer func()
 }
 
 func newHealthData(s connectivity.State) *healthData {
-	return &healthData{connectivityState: s}
+	return &healthData{
+		connectivityState:   s,
+		closeHealthProducer: func() {},
+	}
 }
 
 // updateState is invoked by grpc to push a subConn state update to the
@@ -420,10 +427,11 @@ func (acbw *acBalancerWrapper) closeProducers() {
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type HealthCheckOptions struct {
-	// Name of the gRPC service running on the server for reporting health state.
-	// If the service name is empty, client side health checking will be disabled.
-	HealthServiceName string
-	Listener          func(balancer.SubConnState)
+	// ServiceName of the gRPC service running on the server for reporting health state.
+	ServiceName string
+	// Listener is called when the health update is received from the health
+	// service running on the server.
+	Listener func(balancer.SubConnState)
 }
 
 // RegisterHealthListener accepts a health listener from the LB policy. It sends
@@ -434,6 +442,7 @@ type HealthCheckOptions struct {
 func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
 	acbw.healthMu.Lock()
 	defer acbw.healthMu.Unlock()
+	acbw.healthData.closeHealthProducer()
 	// listeners should not be registered when the connectivity state
 	// isn't Ready. This may happen when the balancer registers a listener
 	// after the connectivityState is updated, but before it is notified
@@ -445,14 +454,21 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 	// registered health listeners.
 	hd := newHealthData(connectivity.Ready)
 	acbw.healthData = hd
+	if listener == nil {
+		return
+	}
 
 	// Client side health checking is enabled when all the following
 	// conditions are satisfied:
-	// 1. The health check config is present in the service config.
-	// 2. Health checking is not disabled using the dial option.
-	// 3. The health package is imported.
+	// 1. Health checking is not disabled using the dial option.
+	// 2. The health package is imported.
+	// 3. The health check config is present in the service config.
+	healthCheckEnabled := !acbw.ccb.cc.dopts.disableHealthCheck
 	regHealthLisFn := internal.RegisterClientHealthCheckListener
-	healthCheckEnabled := !acbw.ccb.cc.dopts.disableHealthCheck && regHealthLisFn != nil
+	if regHealthLisFn == nil {
+		// The health package is not imported.
+		healthCheckEnabled = false
+	}
 	var cfg *healthCheckConfig
 	if healthCheckEnabled {
 		// Avoid acquiring cc.mu unless necessary.
@@ -467,14 +483,11 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		// Don't send updates if a new listener is registered.
 		acbw.healthMu.Lock()
 		defer acbw.healthMu.Unlock()
-		curHD := acbw.healthData
-		if curHD != hd {
+		if acbw.healthData != hd {
 			return
 		}
 		if !healthCheckEnabled {
-			if listener != nil {
-				listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-			}
+			listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 			return
 		}
 		// Serialize the health updates from the health producer with
@@ -485,23 +498,19 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 					return
 				}
 				acbw.healthMu.Lock()
-				curHD := acbw.healthData
-				acbw.healthMu.Unlock()
-				if curHD != hd {
+				defer acbw.healthMu.Unlock()
+				if acbw.healthData != hd {
 					return
 				}
 				listener(scs)
 			})
 		}
 
-		if listener == nil {
-			listenerWrapper = nil
-		}
-
 		healthOpts := HealthCheckOptions{
-			HealthServiceName: cfg.ServiceName,
-			Listener:          listenerWrapper,
+			ServiceName: cfg.ServiceName,
+			Listener:    listenerWrapper,
 		}
-		regHealthLisFn.(func(context.Context, balancer.SubConn, HealthCheckOptions))(ctx, acbw, healthOpts)
+		fn := regHealthLisFn.(func(context.Context, balancer.SubConn, HealthCheckOptions) func())
+		hd.closeHealthProducer = fn(ctx, acbw, healthOpts)
 	})
 }

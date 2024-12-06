@@ -64,6 +64,8 @@ func init() {
 	// Till dualstack changes are not implemented and round_robin doesn't
 	// delegate to pickfirst, test a fake petiole policy that delegates to
 	// the new pickfirst balancer.
+	// TODO: https://github.com/grpc/grpc-go/issues/7906 - Remove the fake
+	// petiole policy one round robin starts delegating to pickfirst.
 	if envconfig.NewPickFirstEnabled {
 		healthCheckTestPolicyName = healthCheckingPetiolePolicyName
 	}
@@ -72,10 +74,9 @@ func init() {
 type healthCheckingPetiolePolicyBuilder struct{}
 
 func (bb *healthCheckingPetiolePolicyBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	b := &healthCheckingPetiolePolicy{
+	return &healthCheckingPetiolePolicy{
 		Balancer: balancer.Get(pickfirstleaf.Name).Build(cc, opts),
 	}
-	return b
 }
 
 func (bb *healthCheckingPetiolePolicyBuilder) Name() string {
@@ -307,11 +308,11 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -334,11 +335,11 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -412,11 +413,11 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -460,11 +461,11 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	sc := parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))
+		"healthCheckConfig": {
+			"serviceName": "foo"
+		},
+		"loadBalancingConfig": [{"%s":{}}]
+	}`, healthCheckTestPolicyName))
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -542,11 +543,11 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, (fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName)))})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName)))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -609,11 +610,11 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	// back to client immediately upon receiving the request (client should receive no response until
 	// test ends).
 	sc := parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "delay"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))
+		"healthCheckConfig": {
+			"serviceName": "delay"
+		},
+		"loadBalancingConfig": [{"%s":{}}]
+	}`, healthCheckTestPolicyName))
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -674,11 +675,11 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "delay"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "delay"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	select {
 	case <-hcExitChan:
@@ -712,11 +713,11 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -818,11 +819,11 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "channelzSuccess"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "channelzSuccess"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -867,11 +868,11 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-	"healthCheckConfig": {
-		"serviceName": "channelzFailure"
-	},
-	"loadBalancingConfig": [{"%s":{}}]
-}`, healthCheckTestPolicyName))})
+			"healthCheckConfig": {
+				"serviceName": "channelzFailure"
+			},
+			"loadBalancingConfig": [{"%s":{}}]
+		}`, healthCheckTestPolicyName))})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -980,20 +981,12 @@ func testHealthCheckSuccess(t *testing.T, e env) {
 // TestHealthCheckFailure invokes the unary Check() RPC on the health server
 // with an expired context and expects the RPC to fail.
 func (s) TestHealthCheckFailure(t *testing.T) {
-	envs := listTestEnv()
-	if envconfig.NewPickFirstEnabled {
-		envs = append([]env{
-			{name: "tcp-clear", network: "tcp", balancer: healthCheckTestPolicyName},
-			{name: "tcp-tls", network: "tcp", security: "tls", balancer: healthCheckTestPolicyName},
-		}, envs...)
-
+	e := env{
+		name:     "tcp-tls",
+		network:  "tcp",
+		security: "tls",
+		balancer: healthCheckTestPolicyName,
 	}
-	for _, e := range envs {
-		testHealthCheckFailure(t, e)
-	}
-}
-
-func testHealthCheckFailure(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.declareLogNoise(
 		"Failed to dial ",
@@ -1280,13 +1273,14 @@ func (s) TestHealthCheckUnregisterHealthListener(t *testing.T) {
 		t.Fatalf("Context timed out waiting for SubConn to enter READY")
 	}
 
-	// Register a health listener and verify it receives updates.
+	// Health check should start only after a health listener is registered.
 	select {
 	case <-hcEnterChan:
 		t.Fatalf("Health service client created prematurely.")
 	case <-time.After(defaultTestShortTimeout):
 	}
 
+	// Register a health listener and verify it receives updates.
 	healthChan := make(chan balancer.SubConnState, 1)
 	sc.RegisterHealthListener(func(scs balancer.SubConnState) {
 		healthChan <- scs
@@ -1301,6 +1295,7 @@ func (s) TestHealthCheckUnregisterHealthListener(t *testing.T) {
 	for readyReceived := false; !readyReceived; {
 		select {
 		case scs := <-healthChan:
+			t.Logf("Received health update: %v", scs)
 			readyReceived = scs.ConnectivityState == connectivity.Ready
 		case <-ctx.Done():
 			t.Fatalf("Context timed out waiting for healthy backend.")
