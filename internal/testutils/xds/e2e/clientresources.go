@@ -700,6 +700,10 @@ type BackendOptions struct {
 	HealthStatus v3corepb.HealthStatus
 	// Weight sets the backend weight. Defaults to 1.
 	Weight uint32
+	// Additional port number on which the backend is accepting connections.
+	// All backends are expected to run on localhost, hence host name is not
+	// stored here.
+	AdditionalPorts []uint32
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -747,6 +751,18 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 			if b.Weight == 0 {
 				b.Weight = 1
 			}
+			additionalAddresses := make([]*v3endpointpb.Endpoint_AdditionalAddress, len(b.AdditionalPorts))
+			for i, p := range b.AdditionalPorts {
+				additionalAddresses[i] = &v3endpointpb.Endpoint_AdditionalAddress{
+					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
+						SocketAddress: &v3corepb.SocketAddress{
+							Protocol:      v3corepb.SocketAddress_TCP,
+							Address:       opts.Host,
+							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: p},
+						}},
+					},
+				}
+			}
 			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
@@ -756,6 +772,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: b.Port},
 						},
 					}},
+					AdditionalAddresses: additionalAddresses,
 				}},
 				HealthStatus:        b.HealthStatus,
 				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: b.Weight},
