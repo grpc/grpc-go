@@ -30,25 +30,25 @@ type keyType string
 
 const userAndConnectAddrKey = keyType("grpc.resolver.delegatingresolver.userAndConnectAddr")
 
-type attr struct {
-	user *url.Userinfo
-	addr string
+type userAndConnectAddr struct {
+	user        *url.Userinfo
+	ConnectAddr string
 }
 
-// Populate returns a copy of addr with attributes containing the
-// provided user and connect address, which are needed during the CONNECT
-// handshake for a proxy connection.
-func Populate(resAddr resolver.Address, user *url.Userinfo, addr string) resolver.Address {
-	resAddr.Attributes = resAddr.Attributes.WithValue(userAndConnectAddrKey, attr{user: user, addr: addr})
-	return resAddr
+// Populate returns a copy of addr with attributes containing the provided user
+// and connect address, which are needed during the CONNECT handshake for a
+// proxy connection.
+func Populate(addr resolver.Address, user *url.Userinfo, connectAddr string) resolver.Address {
+	addr.Attributes = addr.Attributes.WithValue(userAndConnectAddrKey, userAndConnectAddr{user: user, ConnectAddr: connectAddr})
+	return addr
 }
 
-// ProxyConnectAddr returns the proxy connect address in resolver.Address, or nil
-// if not present. The returned data should not be mutated.
-func ProxyConnectAddr(addr resolver.Address) string {
-	attribute := addr.Attributes.Value(userAndConnectAddrKey)
-	if attribute != nil {
-		return attribute.(attr).addr
+// ConnectAddr returns the proxy connect address in resolver.Address, or nil if
+// not present. The returned data should not be mutated.
+func ConnectAddr(addr resolver.Address) string {
+	a := addr.Attributes.Value(userAndConnectAddrKey)
+	if a != nil {
+		return a.(userAndConnectAddr).ConnectAddr
 	}
 	return ""
 }
@@ -56,9 +56,9 @@ func ProxyConnectAddr(addr resolver.Address) string {
 // User returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
 func User(addr resolver.Address) *url.Userinfo {
-	attribute := addr.Attributes.Value(userAndConnectAddrKey)
-	if attribute != nil {
-		return attribute.(attr).user
+	a := addr.Attributes.Value(userAndConnectAddrKey)
+	if a != nil {
+		return a.(userAndConnectAddr).user
 	}
 	return nil
 }

@@ -35,57 +35,77 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestProxyConnectAddr tests ProxyConnectAddr returns the coorect connect
-// address in the attribute.
-func (s) TestProxyConnectAddr(t *testing.T) {
-	addr := resolver.Address{
-		Addr:       "test-address",
-		Attributes: attributes.New(userAndConnectAddrKey, attr{user: nil, addr: "proxy-address"}),
+// Tests that ConnectAddr returns the correct connect address in the attribute.
+func (s) TestConnectAddr(t *testing.T) {
+	tests := []struct {
+		name string
+		addr resolver.Address
+		want string
+	}{
+		{
+			name: "connect address in attribute",
+			addr: resolver.Address{
+				Addr: "test-address",
+				Attributes: attributes.New(userAndConnectAddrKey, userAndConnectAddr{
+					user:        nil,
+					ConnectAddr: "proxy-address",
+				}),
+			},
+			want: "proxy-address",
+		},
+		{
+			name: "no attribute",
+			addr: resolver.Address{Addr: "test-address"},
+			want: "",
+		},
 	}
-
-	// Validate ProxyConnectAddr returns empty string for missing attributes
-	if got, want := ProxyConnectAddr(addr), "proxy-address"; got != want {
-		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want : %v", got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Validate ConnectAddr returns the correct connect address in the attribute.
+			if got := ConnectAddr(tt.addr); got != tt.want {
+				t.Errorf("ConnetAddr(%v) = %v, want %v ", tt.addr, got, tt.want)
+			}
+		})
 	}
 }
 
-// TestUser tests User returns the correct user in the attribute.
-func (s) TestUser(t *testing.T) {
+// Tests that User returns the correct user in the attribute.
+func TestUser(t *testing.T) {
 	user := url.UserPassword("username", "password")
-	addr := resolver.Address{
-		Addr:       "test-address",
-		Attributes: attributes.New(userAndConnectAddrKey, attr{user: user, addr: ""}),
+	tests := []struct {
+		name string
+		addr resolver.Address
+		want *url.Userinfo
+	}{
+		{
+			name: "user in attribute",
+			addr: resolver.Address{
+				Addr: "test-address",
+				Attributes: attributes.New(userAndConnectAddrKey, userAndConnectAddr{user: user,
+					ConnectAddr: "proxy-address",
+				})},
+			want: user,
+		},
+		{
+			name: "no attribute",
+			addr: resolver.Address{Addr: "test-address"},
+			want: nil,
+		},
 	}
-
-	// Validate User returns nil for missing attributes
-	if got, want := User(addr), user; got != want {
-		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Validate User returns the correct user in the attribute.
+			if got := User(tt.addr); got != tt.want {
+				t.Errorf("User(%v) = %v, want %v ", tt.addr, got, tt.want)
+			}
+		})
 	}
 }
 
-// TestEmptyProxyAttribute tests ProxyConnectAddr and User return empty string
-// and nil respectively when not set.
-func (s) TestEmptyProxyAttribute(t *testing.T) {
-	addr := resolver.Address{
-		Addr: "test-address",
-	}
-
-	// Validate ProxyConnectAddr returns empty string for missing attributes
-	if got := ProxyConnectAddr(addr); got != "" {
-		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want empty string", got)
-	}
-	// Validate User returns nil for missing attributes
-	if got := User(addr); got != nil {
-		t.Errorf("unexpected User proxy attribute = %v, want nil", got)
-	}
-}
-
-// TestPopulate tests Populate returns a copy of addr with attributes
-// containing correct user and connect address.
+// Tests that Populate returns a copy of addr with attributes containing correct
+// user and connect address.
 func (s) TestPopulate(t *testing.T) {
-	addr := resolver.Address{
-		Addr: "test-address",
-	}
+	addr := resolver.Address{Addr: "test-address"}
 	user := url.UserPassword("username", "password")
 	connectAddr := "proxy-address"
 
@@ -93,7 +113,7 @@ func (s) TestPopulate(t *testing.T) {
 	populatedAddr := Populate(addr, user, connectAddr)
 
 	// Verify that the returned address is updated correctly
-	if got, want := ProxyConnectAddr(populatedAddr), connectAddr; got != want {
+	if got, want := ConnectAddr(populatedAddr), connectAddr; got != want {
 		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
 	}
 
