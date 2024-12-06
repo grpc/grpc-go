@@ -588,5 +588,5 @@ func (r *xdsResolver) xDSNodeIDTagForLog() string {
 	if r != nil && r.xdsClient != nil && r.xdsClient.BootstrapConfig() != nil && r.xdsClient.BootstrapConfig().Node() != nil {
 		xDSNodeID = r.xdsClient.BootstrapConfig().Node().GetId()
 	}
-	return fmt.Sprintf("xDS node ID: %s", xDSNodeID)
+	return "xDS node ID: " + xDSNodeID
 }

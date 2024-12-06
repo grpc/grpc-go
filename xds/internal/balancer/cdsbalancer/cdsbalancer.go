@@ -638,7 +638,7 @@ func (b *cdsBalancer) xDSNodeIDTagForLog() string {
 	if b != nil && b.xdsClient != nil && b.xdsClient.BootstrapConfig() != nil && b.xdsClient.BootstrapConfig().Node() != nil {
 		xDSNodeID = b.xdsClient.BootstrapConfig().Node().GetId()
 	}
-	return fmt.Sprintf("xDS node ID: %s", xDSNodeID)
+	return "xDS node ID: " + xDSNodeID
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
