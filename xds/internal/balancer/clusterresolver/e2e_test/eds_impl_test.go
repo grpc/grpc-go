@@ -150,9 +150,12 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -285,9 +288,12 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -449,9 +455,12 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -522,9 +531,12 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -921,9 +933,12 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -993,9 +1008,12 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1065,9 +1083,12 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	// with a short watch expiry timeout.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bc)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
