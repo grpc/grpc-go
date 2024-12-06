@@ -47,9 +47,6 @@ const (
 )
 
 var (
-	errBalancerClosedMsg = "[%s] cds_experimental LB policy is closed"
-	errExceedsMaxDepth   = fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
-
 	// newChildBalancer is a helper function to build a new cluster_resolver
 	// balancer and will be overridden in unittests.
 	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
@@ -324,7 +321,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	onFailure := func() {
 		// The call to Schedule returns false *only* if the serializer has been
 		// closed, which happens only when we receive an update after close.
-		errCh <- fmt.Errorf(errBalancerClosedMsg, b.xDSNodeIDTagForLog())
+		errCh <- fmt.Errorf("[%s] cds_experimental LB policy is closed", b.xDSNodeIDTagForLog())
 	}
 	b.serializer.ScheduleOr(callback, onFailure)
 	return <-errCh
@@ -559,7 +556,7 @@ func (b *cdsBalancer) onClusterResourceNotFound(name string) {
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []clusterresolver.DiscoveryMechanism, clustersSeen map[string]bool) ([]clusterresolver.DiscoveryMechanism, bool, error) {
 	if depth >= aggregateClusterMaxDepth {
-		return dms, false, errExceedsMaxDepth
+		return dms, false, fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
 	}
 
 	if clustersSeen[name] {
