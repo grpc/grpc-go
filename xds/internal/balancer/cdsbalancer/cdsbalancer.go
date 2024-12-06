@@ -47,8 +47,8 @@ const (
 )
 
 var (
-	errBalancerClosed  = fmt.Errorf("cds_experimental LB policy is closed")
-	errExceedsMaxDepth = fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
+	errBalancerClosedMsg = "[%s] cds_experimental LB policy is closed"
+	errExceedsMaxDepth   = fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
 
 	// newChildBalancer is a helper function to build a new cluster_resolver
 	// balancer and will be overridden in unittests.
@@ -294,11 +294,11 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	// something that is received on the wire.
 	lbCfg, ok := state.BalancerConfig.(*lbConfig)
 	if !ok {
-		b.logger.Warningf("Received unexpected balancer config type: %T", state.BalancerConfig)
+		b.logger.Warningf("[%s] Received unexpected balancer config type: %T", b.xDSNodeIDTagForLog(), state.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 	if lbCfg.ClusterName == "" {
-		b.logger.Warningf("Received balancer config with no cluster name")
+		b.logger.Warningf("[%s] Received balancer config with no cluster name", b.xDSNodeIDTagForLog())
 		return balancer.ErrBadResolverState
 	}
 
@@ -324,7 +324,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	onFailure := func() {
 		// The call to Schedule returns false *only* if the serializer has been
 		// closed, which happens only when we receive an update after close.
-		errCh <- errBalancerClosed
+		errCh <- fmt.Errorf(errBalancerClosedMsg, b.xDSNodeIDTagForLog())
 	}
 	b.serializer.ScheduleOr(callback, onFailure)
 	return <-errCh
@@ -348,7 +348,7 @@ func (b *cdsBalancer) ResolverError(err error) {
 
 // UpdateSubConnState handles subConn updates from gRPC.
 func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
+	b.logger.Errorf("[%s] UpdateSubConnState(%v, %+v) called unexpectedly", b.xDSNodeIDTagForLog(), sc, state)
 }
 
 // Closes all registered cluster watchers and removes them from the internal map.
@@ -386,7 +386,7 @@ func (b *cdsBalancer) Close() {
 func (b *cdsBalancer) ExitIdle() {
 	b.serializer.TrySchedule(func(context.Context) {
 		if b.childLB == nil {
-			b.logger.Warningf("Received ExitIdle with no child policy")
+			b.logger.Warningf("[%s] Received ExitIdle with no child policy", b.xDSNodeIDTagForLog())
 			return
 		}
 		// This implementation assumes the child balancer supports
@@ -448,7 +448,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 		if b.childLB == nil {
 			childLB, err := newChildBalancer(b.ccw, b.bOpts)
 			if err != nil {
-				b.logger.Errorf("Failed to create child policy of type %s: %v", clusterresolver.Name, err)
+				b.logger.Errorf("[%s] Failed to create child policy of type %s: %v", b.xDSNodeIDTagForLog(), clusterresolver.Name, err)
 				return
 			}
 			b.childLB = childLB
@@ -466,13 +466,13 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 		cfgJSON, err := json.Marshal(childCfg)
 		if err != nil {
 			// Shouldn't happen, since we just prepared struct.
-			b.logger.Errorf("cds_balancer: error marshalling prepared config: %v", childCfg)
+			b.logger.Errorf("[%s] cds_balancer: error marshalling prepared config: %v", b.xDSNodeIDTagForLog(), childCfg)
 			return
 		}
 
 		var sc serviceconfig.LoadBalancingConfig
 		if sc, err = b.childConfigParser.ParseConfig(cfgJSON); err != nil {
-			b.logger.Errorf("cds_balancer: cluster_resolver config generated %v is invalid: %v", string(cfgJSON), err)
+			b.logger.Errorf("[%s] cds_balancer: cluster_resolver config generated %v is invalid: %v", b.xDSNodeIDTagForLog(), string(cfgJSON), err)
 			return
 		}
 
@@ -481,7 +481,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 			BalancerConfig: sc,
 		}
 		if err := b.childLB.UpdateClientConnState(ccState); err != nil {
-			b.logger.Errorf("Encountered error when sending config {%+v} to child policy: %v", ccState, err)
+			b.logger.Errorf("[%s] Encountered error when sending config {%+v} to child policy: %v", b.xDSNodeIDTagForLog(), ccState, err)
 		}
 	}
 	// We no longer need the clusters that we did not see in this iteration of
@@ -502,7 +502,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterError(name string, err error) {
-	b.logger.Warningf("Cluster resource %q received error update: %v", name, err)
+	b.logger.Warningf("[%s] Cluster resource %q received error update: %v", b.xDSNodeIDTagForLog(), name, err)
 
 	if b.childLB != nil {
 		if xdsresource.ErrType(err) != xdsresource.ErrorTypeConnection {
@@ -526,7 +526,7 @@ func (b *cdsBalancer) onClusterError(name string, err error) {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceNotFound(name string) {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Cluster not found in received response", name)
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "[%s] resource name %q of type Cluster not found in received response", b.xDSNodeIDTagForLog(), name)
 	if b.childLB != nil {
 		b.childLB.ResolverError(err)
 	} else {
@@ -634,6 +634,15 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 	dm.TelemetryLabels = cluster.TelemetryLabels
 
 	return append(dms, dm), true, nil
+}
+
+func (b *cdsBalancer) xDSNodeIDTagForLog() string {
+	xDSNodeID := "<none>"
+	if b != nil && b.xdsClient != nil && b.xdsClient.BootstrapConfig() != nil && b.xdsClient.BootstrapConfig().Node() != nil {
+		xDSNodeID = b.xdsClient.BootstrapConfig().Node().GetId()
+	}
+	// TODO: townba - DO NOT SUBMIT. Remove ANSI escape codes and "townba: ".
+	return fmt.Sprintf("\x1B[41mtownba: xDS node ID: %s\x1B[m", xDSNodeID)
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at

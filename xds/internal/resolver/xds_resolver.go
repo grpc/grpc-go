@@ -157,11 +157,11 @@ func (r *xdsResolver) sanityChecksOnBootstrapConfig(target resolver.Target, _ re
 	if authority := target.URL.Host; authority != "" {
 		authorities := bootstrapConfig.Authorities()
 		if authorities == nil {
-			return "", fmt.Errorf("xds: authority %q specified in dial target %q is not found in the bootstrap file", authority, target)
+			return "", fmt.Errorf("[%s] xds: authority %q specified in dial target %q is not found in the bootstrap file", r.xDSNodeIDTagForLog(), authority, target)
 		}
 		a := authorities[authority]
 		if a == nil {
-			return "", fmt.Errorf("xds: authority %q specified in dial target %q is not found in the bootstrap file", authority, target)
+			return "", fmt.Errorf("[%s] xds: authority %q specified in dial target %q is not found in the bootstrap file", r.xDSNodeIDTagForLog(), authority, target)
 		}
 		if a.ClientListenerResourceNameTemplate != "" {
 			// This check will never be false, because
@@ -277,7 +277,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	sc, err := serviceConfigJSON(r.activeClusters)
 	if err != nil {
 		// JSON marshal error; should never happen.
-		r.logger.Errorf("For Listener resource %q and RouteConfiguration resource %q, failed to marshal newly built service config: %v", r.ldsResourceName, r.rdsResourceName, err)
+		r.logger.Errorf("[%s] For Listener resource %q and RouteConfiguration resource %q, failed to marshal newly built service config: %v", r.xDSNodeIDTagForLog(), r.ldsResourceName, r.rdsResourceName, err)
 		r.cc.ReportError(err)
 		return false
 	}
@@ -414,7 +414,7 @@ func (r *xdsResolver) onResolutionComplete() {
 
 	cs, err := r.newConfigSelector()
 	if err != nil {
-		r.logger.Warningf("Failed to build a config selector for resource %q: %v", r.ldsResourceName, err)
+		r.logger.Warningf("[%s] Failed to build a config selector for resource %q: %v", r.xDSNodeIDTagForLog(), r.ldsResourceName, err)
 		r.cc.ReportError(err)
 		return
 	}
@@ -450,7 +450,7 @@ func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdat
 //
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onError(err error) {
-	r.cc.ReportError(err)
+	r.cc.ReportError(fmt.Errorf("[%s] %w", r.xDSNodeIDTagForLog(), err))
 }
 
 // Contains common functionality to be executed when resources of either type
@@ -581,4 +581,14 @@ func (r *xdsResolver) onRouteConfigResourceNotFound(name string) {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onClusterRefDownToZero() {
 	r.sendNewServiceConfig(r.curConfigSelector)
+}
+
+func (r *xdsResolver) xDSNodeIDTagForLog() string {
+	xDSNodeID := "<none>"
+	// TODO: townba - Where to get this info?
+	if r != nil && r.xdsClient != nil && r.xdsClient.BootstrapConfig() != nil && r.xdsClient.BootstrapConfig().Node() != nil {
+		xDSNodeID = r.xdsClient.BootstrapConfig().Node().GetId()
+	}
+	// TODO: townba - DO NOT SUBMIT. Remove ANSI escape codes and "townba: ".
+	return fmt.Sprintf("\x1B[41mtownba: xDS node ID: %s\x1B[m", xDSNodeID)
 }
