@@ -277,10 +277,17 @@ type healthData struct {
 	// to the LB policy. This is stored to avoid sending updates when the
 	// SubConn has already exited connectivity state READY.
 	connectivityState connectivity.State
+	// closeHealthProducer stores function to close the ref counted health
+	// producer. The health producer is automatically closed when the SubConn
+	// state changes.
+	closeHealthProducer func()
 }
 
 func newHealthData(s connectivity.State) *healthData {
-	return &healthData{connectivityState: s}
+	return &healthData{
+		connectivityState:   s,
+		closeHealthProducer: func() {},
+	}
 }
 
 // updateState is invoked by grpc to push a subConn state update to the
@@ -413,6 +420,20 @@ func (acbw *acBalancerWrapper) closeProducers() {
 	}
 }
 
+// HealthCheckOptions are the options to configure the health check producer.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type HealthCheckOptions struct {
+	// ServiceName of the gRPC service running on the server for reporting health state.
+	ServiceName string
+	// Listener is called when the health update is received from the health
+	// service running on the server.
+	Listener func(balancer.SubConnState)
+}
+
 // RegisterHealthListener accepts a health listener from the LB policy. It sends
 // updates to the health listener as long as the SubConn's connectivity state
 // doesn't change and a new health listener is not registered. To invalidate
@@ -421,6 +442,7 @@ func (acbw *acBalancerWrapper) closeProducers() {
 func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
 	acbw.healthMu.Lock()
 	defer acbw.healthMu.Unlock()
+	acbw.healthData.closeHealthProducer()
 	// listeners should not be registered when the connectivity state
 	// isn't Ready. This may happen when the balancer registers a listener
 	// after the connectivityState is updated, but before it is notified
@@ -436,6 +458,24 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		return
 	}
 
+	// Client side health checking is enabled when all the following
+	// conditions are satisfied:
+	// 1. Health checking is not disabled using the dial option.
+	// 2. The health package is imported.
+	// 3. The health check config is present in the service config.
+	healthCheckEnabled := !acbw.ccb.cc.dopts.disableHealthCheck
+	regHealthLisFn := internal.RegisterClientHealthCheckListener
+	if regHealthLisFn == nil {
+		// The health package is not imported.
+		healthCheckEnabled = false
+	}
+	var cfg *healthCheckConfig
+	if healthCheckEnabled {
+		// Avoid acquiring cc.mu unless necessary.
+		cfg = acbw.ac.cc.healthCheckConfig()
+		healthCheckEnabled = cfg != nil
+	}
+
 	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
@@ -443,10 +483,34 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		// Don't send updates if a new listener is registered.
 		acbw.healthMu.Lock()
 		defer acbw.healthMu.Unlock()
-		curHD := acbw.healthData
-		if curHD != hd {
+		if acbw.healthData != hd {
 			return
 		}
-		listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		if !healthCheckEnabled {
+			listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+			return
+		}
+		// Serialize the health updates from the health producer with
+		// other calls into the LB policy.
+		listenerWrapper := func(scs balancer.SubConnState) {
+			acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
+				if ctx.Err() != nil || acbw.ccb.balancer == nil {
+					return
+				}
+				acbw.healthMu.Lock()
+				defer acbw.healthMu.Unlock()
+				if acbw.healthData != hd {
+					return
+				}
+				listener(scs)
+			})
+		}
+
+		healthOpts := HealthCheckOptions{
+			ServiceName: cfg.ServiceName,
+			Listener:    listenerWrapper,
+		}
+		fn := regHealthLisFn.(func(context.Context, balancer.SubConn, HealthCheckOptions) func())
+		hd.closeHealthProducer = fn(ctx, acbw, healthOpts)
 	})
 }
