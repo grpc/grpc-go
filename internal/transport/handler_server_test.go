@@ -348,6 +348,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	st.ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go handleStream(s) },
 	)
+
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
@@ -392,7 +393,23 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			t.Errorf("ctx.Err = %v; want %v", err, context.DeadlineExceeded)
 			return
 		}
+		// rst flag setting to verify the noop function: signalDeadlineExceeded
+		ch := make(chan struct{}, 1)
+		origSignalDeadlineExceeded := signalDeadlineExceeded
+		signalDeadlineExceeded = func() {
+			ch <- struct{}{}
+		}
+		defer func() {
+			signalDeadlineExceeded = origSignalDeadlineExceeded
+		}()
 		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
+		select {
+		case <-ch: // Signal received, continue with the test
+		case <-s.ctx.Done():
+		case <-time.After(5 * time.Second):
+			t.Errorf("timeout waiting for ctx.Done")
+			return
+		}
 	}
 	ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go runStream(s) },
