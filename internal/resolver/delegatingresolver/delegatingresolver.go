@@ -225,11 +225,11 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 		}
 		wcc.parent.targetAddrs = state.Addresses
 		wcc.parent.targetResolverReady = true
-		// Update curState to include other state information, such as the 
-		// service config, provided by the target resolver. This ensures 
-		// curState contains all necessary information when passed to 
-		// UpdateState. The state update is only sent after both the target and 
-		// proxy resolvers have sent their updates, and curState has been 
+		// Update curState to include other state information, such as the
+		// service config, provided by the target resolver. This ensures
+		// curState contains all necessary information when passed to
+		// UpdateState. The state update is only sent after both the target and
+		// proxy resolvers have sent their updates, and curState has been
 		// updated with the combined addresses.
 		curState = state
 	}
