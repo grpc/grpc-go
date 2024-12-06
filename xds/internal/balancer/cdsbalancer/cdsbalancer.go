@@ -641,8 +641,7 @@ func (b *cdsBalancer) xDSNodeIDTagForLog() string {
 	if b != nil && b.xdsClient != nil && b.xdsClient.BootstrapConfig() != nil && b.xdsClient.BootstrapConfig().Node() != nil {
 		xDSNodeID = b.xdsClient.BootstrapConfig().Node().GetId()
 	}
-	// TODO: townba - DO NOT SUBMIT. Remove ANSI escape codes and "townba: ".
-	return fmt.Sprintf("\x1B[41mtownba: xDS node ID: %s\x1B[m", xDSNodeID)
+	return fmt.Sprintf("xDS node ID: %s", xDSNodeID)
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at

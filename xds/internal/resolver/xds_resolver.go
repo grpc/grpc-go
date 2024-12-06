@@ -585,10 +585,8 @@ func (r *xdsResolver) onClusterRefDownToZero() {
 
 func (r *xdsResolver) xDSNodeIDTagForLog() string {
 	xDSNodeID := "<none>"
-	// TODO: townba - Where to get this info?
 	if r != nil && r.xdsClient != nil && r.xdsClient.BootstrapConfig() != nil && r.xdsClient.BootstrapConfig().Node() != nil {
 		xDSNodeID = r.xdsClient.BootstrapConfig().Node().GetId()
 	}
-	// TODO: townba - DO NOT SUBMIT. Remove ANSI escape codes and "townba: ".
-	return fmt.Sprintf("\x1B[41mtownba: xDS node ID: %s\x1B[m", xDSNodeID)
+	return fmt.Sprintf("xDS node ID: %s", xDSNodeID)
 }
