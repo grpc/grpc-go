@@ -51,12 +51,13 @@ type delegatingResolver struct {
 	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
 	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
 
-	mu                  sync.Mutex         // protects access to the resolver state and addresses during updates
-	targetAddrs         []resolver.Address // resolved or unresolved target addresses, depending on proxy configuration
-	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
-	proxyURL            *url.URL           // proxy URL, derived from proxy environment and target
-	targetResolverReady bool               // indicates if an update from the target resolver has been received
-	proxyResolverReady  bool               // indicates if an update from the proxy resolver has been received
+	mu                  sync.Mutex          // protects access to the resolver state and addresses during updates
+	targetAddrs         []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
+	targetEndpt         []resolver.Endpoint // resolved target endpoint
+	proxyAddrs          []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
+	proxyURL            *url.URL            // proxy URL, derived from proxy environment and target
+	targetResolverReady bool                // indicates if an update from the target resolver has been received
+	proxyResolverReady  bool                // indicates if an update from the proxy resolver has been received
 }
 
 // parsedURLForProxy determines the proxy URL for the given address based on
@@ -181,7 +182,7 @@ func (r *delegatingResolver) Close() {
 // pairing each proxy address with every target address. For each pair, it
 // generates a new [resolver.Address] using the proxy address, and adding the
 // target address as the attribute along with user info.
-func (r *delegatingResolver) generateCombinedAddressesLocked() []resolver.Address {
+func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Address, []resolver.Endpoint) {
 	var addresses []resolver.Address
 	for _, proxyAddr := range r.proxyAddrs {
 		for _, targetAddr := range r.targetAddrs {
@@ -190,7 +191,24 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() []resolver.Addres
 			addresses = append(addresses, newAddr)
 		}
 	}
-	return addresses
+
+	if r.targetEndpt == nil {
+		return addresses, nil
+	}
+
+	var endpoints []resolver.Endpoint
+	for _, proxyAddr := range r.proxyAddrs {
+		for _, endpt := range r.targetEndpt {
+			var addrs []resolver.Address
+			for _, targetAddr := range endpt.Addresses {
+				newAddr := resolver.Address{Addr: proxyAddr.Addr}
+				newAddr = proxyattributes.Populate(newAddr, r.proxyURL.User, targetAddr.Addr)
+				addrs = append(addrs, newAddr)
+			}
+			endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
+		}
+	}
+	return addresses, endpoints
 }
 
 // resolverType is an enum representing the type of resolver (target or proxy).
@@ -224,6 +242,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 			logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 		}
 		wcc.parent.targetAddrs = state.Addresses
+		wcc.parent.targetEndpt = state.Endpoints
 		wcc.parent.targetResolverReady = true
 		// Update curState to include other state information, such as the
 		// service config, provided by the target resolver. This ensures
@@ -233,6 +252,8 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 		// updated with the combined addresses.
 		curState = state
 	}
+	// The proxy resolver is always "dns," so only the address will be
+	// received, not an endpoint.
 	if wcc.resolverType == proxyResolverType {
 		if logger.V(2) {
 			logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
@@ -245,7 +266,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	if !wcc.parent.targetResolverReady || !wcc.parent.proxyResolverReady {
 		return nil
 	}
-	curState.Addresses = wcc.parent.generateCombinedAddressesLocked()
+	curState.Addresses, curState.Endpoints = wcc.parent.generateCombinedAddressesLocked()
 	return wcc.parent.cc.UpdateState(curState)
 }
 
