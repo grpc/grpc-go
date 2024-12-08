@@ -30,15 +30,15 @@ import (
 
 const defaultTestTimeout = 10 * time.Second
 
-// ProxyServer is a proxy server that is used for testing.
+// ProxyServer represents a test proxy server.
 type ProxyServer struct {
 	lis          net.Listener
-	in           net.Conn
-	out          net.Conn
-	requestCheck func(*http.Request) error
+	in           net.Conn                  // The connection from the client to the proxy.
+	out          net.Conn                  // The connection from the proxy to the backend.
+	requestCheck func(*http.Request) error // The function to check the request sent to proxy.
 }
 
-// Stop functions stops and cleans up the proxy server.
+// Stop closes the ProxyServer and its connectionsto client and server.
 func (p *ProxyServer) Stop() {
 	p.lis.Close()
 	if p.in != nil {
@@ -50,10 +50,10 @@ func (p *ProxyServer) Stop() {
 }
 
 // NewProxyServer create and starts a proxy server.
-func NewProxyServer(lis net.Listener, requestCheck func(*http.Request) error, errCh chan error, doneCh chan struct{}, backendAddr string, resolutionOnClient bool, proxyServerStarted func()) *ProxyServer {
+func NewProxyServer(lis net.Listener, reqCheck func(*http.Request) error, errCh chan error, doneCh chan struct{}, backendAddr string, resOnClient bool, proxyStarted func()) *ProxyServer {
 	p := &ProxyServer{
 		lis:          lis,
-		requestCheck: requestCheck,
+		requestCheck: reqCheck,
 	}
 
 	// Start the proxy server.
@@ -63,8 +63,8 @@ func NewProxyServer(lis net.Listener, requestCheck func(*http.Request) error, er
 			return
 		}
 		p.in = in
-		if proxyServerStarted != nil {
-			proxyServerStarted()
+		if proxyStarted != nil {
+			proxyStarted()
 		}
 		req, err := http.ReadRequest(bufio.NewReader(in))
 		if err != nil {
@@ -81,7 +81,7 @@ func NewProxyServer(lis net.Listener, requestCheck func(*http.Request) error, er
 		var out net.Conn
 		// if resolution is done on client,connect to address received in
 		// CONNECT request or else connect to backend address directly.
-		if resolutionOnClient {
+		if resOnClient {
 			out, err = net.Dial("tcp", req.URL.Host)
 		} else {
 			out, err = net.Dial("tcp", backendAddr)

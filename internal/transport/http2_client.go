@@ -157,9 +157,9 @@ type http2Client struct {
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, grpcUA string) (net.Conn, error) {
 	address := addr.Addr
 
-	// If the ProxyConnectAddr is set in the attribute, the proxy is set and we
-	// do a proxy dial.
-	if proxyattributes.ProxyConnectAddr(addr) != "" {
+	// A non-empty ConnectAddr attribute indicates that a proxy is configured,
+	// so initiate a proxy dial.
+	if proxyattributes.ConnectAddr(addr) != "" {
 		return proxyDial(ctx, addr, grpcUA)
 	}
 	networkType, ok := networktype.Get(addr)

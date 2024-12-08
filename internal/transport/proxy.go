@@ -37,10 +37,9 @@ import (
 const proxyAuthHeaderKey = "Proxy-Authorization"
 
 // To read a response from a net.Conn, http.ReadResponse() takes a bufio.Reader.
-// It's possible that this reader reads more than what's need for the response and stores
-// those bytes in the buffer.
-// bufConn wraps the original net.Conn and the bufio.Reader to make sure we don't lose the
-// bytes in the buffer.
+// It's possible that this reader reads more than what's need for the response
+// and stores those bytes in the buffer. bufConn wraps the original net.Conn
+// and the bufio.Reader to make sure we don't lose the bytes in the buffer.
 type bufConn struct {
 	net.Conn
 	r io.Reader
@@ -55,20 +54,20 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver.Address, grpcUA string) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Address, grpcUA string) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
 		}
 	}()
 
-	backendAddr := proxyattributes.ProxyConnectAddr(address)
+	a := proxyattributes.ConnectAddr(addr)
 	req := &http.Request{
 		Method: http.MethodConnect,
-		URL:    &url.URL{Host: backendAddr},
+		URL:    &url.URL{Host: a},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-	if user := proxyattributes.User(address); user != nil {
+	if user := proxyattributes.User(addr); user != nil {
 		u := user.Username()
 		p, pSet := user.Password()
 		if !pSet {
@@ -104,14 +103,13 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, address resolver
 	return conn, nil
 }
 
-// proxyDial dials, connecting to a proxy first. It dials, does the
-// HTTP CONNECT handshake, and returns the connection.
-func proxyDial(ctx context.Context, address resolver.Address, grpcUA string) (net.Conn, error) {
-	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", address.Addr)
+// proxyDial establishes a TCP connection to the specified address and performs an HTTP CONNECT handshake.
+func proxyDial(ctx context.Context, addr resolver.Address, grpcUA string) (net.Conn, error) {
+	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", addr.Addr)
 	if err != nil {
 		return nil, err
 	}
-	return doHTTPConnectHandshake(ctx, conn, address, grpcUA)
+	return doHTTPConnectHandshake(ctx, conn, addr, grpcUA)
 }
 
 func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
