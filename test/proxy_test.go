@@ -435,7 +435,7 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	// Check if client-side resolution signal was sent to the channel.
 	select {
 	case <-resolutionCh:
-		t.Log("target resolution occured on client")
+		t.Log("target resolution occurred on client")
 	default:
 		t.Fatal("target resolution did not occur on client unexpectedly")
 	}
