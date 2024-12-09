@@ -67,6 +67,7 @@ import (
 // goes through a stable OpenTelemetry API with well-defined behavior. This keeps
 // the robustness of assertions over time.
 type traceSpanInfo struct {
+	sc         trace2.SpanContext
 	spanKind   string
 	name       string
 	events     []trace.Event
@@ -687,9 +688,9 @@ func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
 	}
 }
 
-// TestSpan verifies that the gRPC Trace Binary propagator
-// correctly propagates span context between a client and server using the
-// grpc-trace-bin header. It sets up a stub server with OpenTelemetry tracing
+// TestSpan verifies that the gRPC Trace Binary propagator correctly
+// propagates span context between a client and server using the grpc-
+// trace-bin header. It sets up a stub server with OpenTelemetry tracing
 // enabled, makes a unary RPC.
 func (s) TestSpan(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
@@ -730,16 +731,20 @@ func (s) TestSpan(t *testing.T) {
 			spanKind: trace2.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{
@@ -747,13 +752,16 @@ func (s) TestSpan(t *testing.T) {
 					Name: "Inbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -761,13 +769,16 @@ func (s) TestSpan(t *testing.T) {
 					Name: "Outbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -778,16 +789,20 @@ func (s) TestSpan(t *testing.T) {
 			spanKind: trace2.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{
@@ -795,13 +810,16 @@ func (s) TestSpan(t *testing.T) {
 					Name: "Outbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -809,13 +827,16 @@ func (s) TestSpan(t *testing.T) {
 					Name: "Inbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -832,16 +853,20 @@ func (s) TestSpan(t *testing.T) {
 			spanKind: trace2.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{},
@@ -857,16 +882,20 @@ func (s) TestSpan(t *testing.T) {
 			spanKind: trace2.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{},
@@ -912,7 +941,10 @@ func (s) TestSpan(t *testing.T) {
 		}
 		for idx, att := range span.Attributes {
 			if got, want := att.Key, wantSI[index].attributes[idx].Key; got != want {
-				t.Errorf("Got attribute key for span name %q as %q, want %q", span.Name, got, want)
+				t.Errorf("Got attribute key for span name %v as %v, want %v", span.Name, got, want)
+			}
+			if got, want := att.Value, wantSI[index].attributes[idx].Value; got != want {
+				t.Errorf("Got attribute value for span name %v as %v, want %v", span.Name, got, want)
 			}
 		}
 		// events
@@ -923,9 +955,12 @@ func (s) TestSpan(t *testing.T) {
 			if got, want := event.Name, wantSI[index].events[eventIdx].Name; got != want {
 				t.Errorf("Got event name for span name %q as %q, want %q", span.Name, got, want)
 			}
-			for idx, att := range span.Attributes {
-				if got, want := att.Key, wantSI[eventIdx].attributes[idx].Key; got != want {
-					t.Errorf("Got attribute key for span name %q with event name %q, as %q, want %q", span.Name, event.Name, got, want)
+			for idx, att := range event.Attributes {
+				if got, want := att.Key, wantSI[index].events[eventIdx].Attributes[idx].Key; got != want {
+					t.Errorf("Got attribute key for span name %q with event name %v, as %v, want %v", span.Name, event.Name, got, want)
+				}
+				if got, want := att.Value, wantSI[index].events[eventIdx].Attributes[idx].Value; got != want {
+					t.Errorf("Got attribute value for span name %v with event name %v, as %v, want %v", span.Name, event.Name, got, want)
 				}
 			}
 		}
@@ -935,7 +970,7 @@ func (s) TestSpan(t *testing.T) {
 // TestSpan_WithW3CContextPropagator sets up a stub server with  OpenTelemetry tracing
 // enabled makes a unary and a streaming RPC, and then, asserts that the correct
 // number of spans are created with the expected spans.
-func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
+func TestSpan_WithW3CContextPropagator(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 	// Set the W3CContextPropagator as part of TracingOptions.
@@ -976,16 +1011,20 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			spanKind: trace2.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{
@@ -993,13 +1032,16 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Name: "Inbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -1007,13 +1049,16 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Name: "Outbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -1024,16 +1069,20 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			spanKind: trace2.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{
@@ -1041,13 +1090,16 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Name: "Outbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -1055,13 +1107,16 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Name: "Inbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
-							Key: "sequence-number",
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
 						},
 						{
-							Key: "message-size",
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
 						},
 						{
-							Key: "message-size-compressed",
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
 						},
 					},
 				},
@@ -1078,16 +1133,20 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			spanKind: trace2.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{},
@@ -1103,16 +1162,20 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			spanKind: trace2.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
-					Key: "Client",
+					Key:   "Client",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "FailFast",
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
 				},
 				{
-					Key: "previous-rpc-attempts",
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
 				},
 				{
-					Key: "transparent-retry",
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
 				},
 			},
 			events: []trace.Event{},
@@ -1138,7 +1201,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	if got, want := spans[3].Parent.SpanID(), spans[5].SpanContext.SpanID(); got != want {
 		t.Fatal("SpanID mismatch in client span and server span.")
 	}
-
 	for index, span := range spans {
 		// Check that the attempt span has the correct status
 		if got, want := spans[index].Status.Code, otelcodes.Ok; got != want {
@@ -1158,7 +1220,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		}
 		for idx, att := range span.Attributes {
 			if got, want := att.Key, wantSI[index].attributes[idx].Key; got != want {
-				t.Errorf("Got attribute key for span name %q as %q, want %q", span.Name, got, want)
+				t.Errorf("Got attribute key for span name %v as %v, want %v", span.Name, got, want)
 			}
 		}
 		// events
@@ -1169,9 +1231,12 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			if got, want := event.Name, wantSI[index].events[eventIdx].Name; got != want {
 				t.Errorf("Got event name for span name %q as %q, want %q", span.Name, got, want)
 			}
-			for idx, att := range span.Attributes {
-				if got, want := att.Key, wantSI[eventIdx].attributes[idx].Key; got != want {
-					t.Errorf("Got attribute key for span name %q with event name %q, as %q, want %q", span.Name, event.Name, got, want)
+			for idx, att := range event.Attributes {
+				if got, want := att.Key, wantSI[index].events[eventIdx].Attributes[idx].Key; got != want {
+					t.Errorf("Got attribute key for span name %q with event name %v, as %v, want %v", span.Name, event.Name, got, want)
+				}
+				if got, want := att.Value, wantSI[index].events[eventIdx].Attributes[idx].Value; got != want {
+					t.Errorf("Got attribute value for span name %v with event name %v, as %v, want %v", span.Name, event.Name, got, want)
 				}
 			}
 		}
