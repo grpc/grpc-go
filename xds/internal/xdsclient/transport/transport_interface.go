@@ -28,7 +28,7 @@ import (
 // Builder is an interface for building a new xDS transport.
 type Builder interface {
 	// Build creates a new xDS transport with the provided options.
-	Build(opts BuildOptions) (Interface, error)
+	Build(opts BuildOptions) (Transport, error)
 }
 
 // BuildOptions contains the options for building a new xDS transport.
@@ -39,12 +39,9 @@ type BuildOptions struct {
 	ServerConfig *bootstrap.ServerConfig
 }
 
-// Interface provides the functionality to communicate with an xDS server using
+// Transport provides the functionality to communicate with an xDS server using
 // streaming calls.
-//
-// TODO(easwars): Rename this to Transport once the existing Transport type is
-// removed.
-type Interface interface {
+type Transport interface {
 	// CreateStreamingCall creates a new streaming call to the xDS server for the
 	// specified method name. The returned StreamingCall interface can be used to
 	// send and receive messages on the stream.

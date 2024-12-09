@@ -21,7 +21,7 @@ package orca_test
 import (
 	"context"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/orca/internal"
@@ -43,37 +44,6 @@ import (
 )
 
 const requestsMetricKey = "test-service-requests"
-
-// An implementation of grpc_testing.TestService for the purpose of this test.
-// We cannot use the StubServer approach here because we need to register the
-// OpenRCAService as well on the same gRPC server.
-type testServiceImpl struct {
-	mu       sync.Mutex
-	requests int64
-
-	testgrpc.TestServiceServer
-	smr orca.ServerMetricsRecorder
-}
-
-func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	t.mu.Lock()
-	t.requests++
-	t.mu.Unlock()
-
-	t.smr.SetNamedUtilization(requestsMetricKey, float64(t.requests)*0.01)
-	t.smr.SetCPUUtilization(50.0)
-	t.smr.SetMemoryUtilization(0.9)
-	t.smr.SetApplicationUtilization(1.2)
-	return &testpb.SimpleResponse{}, nil
-}
-
-func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	t.smr.DeleteNamedUtilization(requestsMetricKey)
-	t.smr.SetCPUUtilization(0)
-	t.smr.SetMemoryUtilization(0)
-	t.smr.DeleteApplicationUtilization()
-	return &testpb.Empty{}, nil
-}
 
 // TestE2E_CustomBackendMetrics_OutOfBand tests the injection of out-of-band
 // custom backend metrics from the server application, and verifies that
@@ -93,16 +63,36 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval, ServerMetricsProvider: smr}
 	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 
-	// Register the OpenRCAService with a very short metrics reporting interval.
-	s := grpc.NewServer()
-	if err := orca.Register(s, opts); err != nil {
-		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
+	var requests atomic.Int64
+
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			newRequests := requests.Add(1)
+
+			smr.SetNamedUtilization(requestsMetricKey, float64(newRequests)*0.01)
+			smr.SetCPUUtilization(50.0)
+			smr.SetMemoryUtilization(0.9)
+			smr.SetApplicationUtilization(1.2)
+			return &testpb.SimpleResponse{}, nil
+		},
+		EmptyCallF: func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+			smr.DeleteNamedUtilization(requestsMetricKey)
+			smr.SetCPUUtilization(0)
+			smr.SetMemoryUtilization(0)
+			smr.DeleteApplicationUtilization()
+			return &testpb.Empty{}, nil
+		},
 	}
 
-	// Register the test service implementation on the same grpc server, and start serving.
-	testgrpc.RegisterTestServiceServer(s, &testServiceImpl{smr: smr})
-	go s.Serve(lis)
-	defer s.Stop()
+	// Assign the gRPC server to the stub server and start serving.
+	stub.S = grpc.NewServer()
+	// Register the OpenRCAService with a very short metrics reporting interval.
+	if err := orca.Register(stub.S, opts); err != nil {
+		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 	// Dial the test server.
@@ -112,13 +102,13 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Spawn a goroutine which sends 20 unary RPCs to the test server. This
+	// Spawn a goroutine which sends 20 unary RPCs to the stub server. This
 	// will trigger the injection of custom backend metrics from the
-	// testServiceImpl.
-	const numRequests = 20
+	// stubServer.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	testStub := testgrpc.NewTestServiceClient(cc)
+	const numRequests = 20
 	errCh := make(chan error, 1)
 	go func() {
 		for i := 0; i < numRequests; i++ {

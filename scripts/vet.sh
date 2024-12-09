@@ -8,13 +8,6 @@ source "$(dirname $0)/common.sh"
 # Check to make sure it's safe to modify the user's git repo.
 git status --porcelain | fail_on_output
 
-# noret_grep will return 0 if zero or more lines were selected, and >1 if an
-# error occurred. Suppresses grep's return code of 1 when there are no matches
-# (for eg, empty file).
-noret_grep() {
-  grep "$@" || [[ $? == 1 ]]
-}
-
 # Undo any edits made by this script.
 cleanup() {
   git reset --hard HEAD
@@ -88,6 +81,10 @@ git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.
 # See https://github.com/grpc/grpc-go/issues/7304
 git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v "credential
 s/google" | grep -v "internal/transport/" | grep -v "xds/internal/" | grep -v "security/advancedtls" | grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
+
+# Disallow usage of net.ParseIP in favour of netip.ParseAddr as the former
+# can't parse link local IPv6 addresses.
+not git grep 'net.ParseIP' -- '*.go'
 
 misspell -error .
 

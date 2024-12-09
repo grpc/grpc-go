@@ -36,7 +36,10 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -615,4 +618,79 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 			t.Fatalf("Timed out waiting for state update %v: %s", i, want)
 		}
 	}
+}
+
+// TestChannelStateWaitingForFirstResolverUpdate verifies the initial
+// state of the channel when a manual name resolver doesn't provide any updates.
+func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
+	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as Connect() is called. See issue #7686.")
+
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	defer mr.Close()
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
+	defer cc.Close()
+
+	if state := cc.GetState(); state != connectivity.Idle {
+		t.Fatalf("Expected initial state to be IDLE, got %v", state)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// The channel should transition to CONNECTING automatically when Connect()
+	// is called.
+	cc.Connect()
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	// Verify that the channel remains in CONNECTING state for a short time.
+	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Connecting)
+}
+
+func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
+	t.Skip("The channel remains in IDLE until the LB policy updates the state to CONNECTING. This is a bug and the channel should transition to CONNECTING as soon as an RPC call is made. See issue #7686.")
+
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	defer mr.Close()
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
+	defer cc.Close()
+
+	if state := cc.GetState(); state != connectivity.Idle {
+		t.Fatalf("Expected initial state to be IDLE, got %v", state)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make an RPC call to transition the channel to CONNECTING.
+	go func() {
+		_, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+		if err == nil {
+			t.Errorf("Expected RPC to fail, but it succeeded")
+		}
+	}()
+
+	// The channel should transition to CONNECTING automatically when an RPC
+	// is made.
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	// The channel remains in CONNECTING state for a short time.
+	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Connecting)
 }

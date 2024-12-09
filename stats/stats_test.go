@@ -94,6 +94,27 @@ func payloadToID(p *testpb.Payload) int32 {
 	return int32(p.Body[0]) + int32(p.Body[1])<<8 + int32(p.Body[2])<<16 + int32(p.Body[3])<<24
 }
 
+func setIncomingStats(ctx context.Context, mdKey string, b []byte) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.MD{}
+	}
+	md.Set(mdKey, string(b))
+	return metadata.NewIncomingContext(ctx, md)
+}
+
+func getOutgoingStats(ctx context.Context, mdKey string) []byte {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return nil
+	}
+	tagValues := md.Get(mdKey)
+	if len(tagValues) == 0 {
+		return nil
+	}
+	return []byte(tagValues[len(tagValues)-1])
+}
+
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 }
@@ -1312,19 +1333,19 @@ func (s) TestTags(t *testing.T) {
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx := stats.SetTags(tCtx, b)
-	if tg := stats.OutgoingTags(ctx); !reflect.DeepEqual(tg, b) {
-		t.Errorf("OutgoingTags(%v) = %v; want %v", ctx, tg, b)
+	if tg := getOutgoingStats(ctx, "grpc-tags-bin"); !reflect.DeepEqual(tg, b) {
+		t.Errorf("getOutgoingStats(%v, grpc-tags-bin) = %v; want %v", ctx, tg, b)
 	}
 	if tg := stats.Tags(ctx); tg != nil {
 		t.Errorf("Tags(%v) = %v; want nil", ctx, tg)
 	}
 
-	ctx = stats.SetIncomingTags(tCtx, b)
+	ctx = setIncomingStats(tCtx, "grpc-tags-bin", b)
 	if tg := stats.Tags(ctx); !reflect.DeepEqual(tg, b) {
 		t.Errorf("Tags(%v) = %v; want %v", ctx, tg, b)
 	}
-	if tg := stats.OutgoingTags(ctx); tg != nil {
-		t.Errorf("OutgoingTags(%v) = %v; want nil", ctx, tg)
+	if tg := getOutgoingStats(ctx, "grpc-tags-bin"); tg != nil {
+		t.Errorf("getOutgoingStats(%v, grpc-tags-bin) = %v; want nil", ctx, tg)
 	}
 }
 
@@ -1333,19 +1354,19 @@ func (s) TestTrace(t *testing.T) {
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx := stats.SetTrace(tCtx, b)
-	if tr := stats.OutgoingTrace(ctx); !reflect.DeepEqual(tr, b) {
-		t.Errorf("OutgoingTrace(%v) = %v; want %v", ctx, tr, b)
+	if tr := getOutgoingStats(ctx, "grpc-trace-bin"); !reflect.DeepEqual(tr, b) {
+		t.Errorf("getOutgoingStats(%v, grpc-trace-bin) = %v; want %v", ctx, tr, b)
 	}
 	if tr := stats.Trace(ctx); tr != nil {
 		t.Errorf("Trace(%v) = %v; want nil", ctx, tr)
 	}
 
-	ctx = stats.SetIncomingTrace(tCtx, b)
+	ctx = setIncomingStats(tCtx, "grpc-trace-bin", b)
 	if tr := stats.Trace(ctx); !reflect.DeepEqual(tr, b) {
 		t.Errorf("Trace(%v) = %v; want %v", ctx, tr, b)
 	}
-	if tr := stats.OutgoingTrace(ctx); tr != nil {
-		t.Errorf("OutgoingTrace(%v) = %v; want nil", ctx, tr)
+	if tr := getOutgoingStats(ctx, "grpc-trace-bin"); tr != nil {
+		t.Errorf("getOutgoingStats(%v, grpc-trace-bin) = %v; want nil", ctx, tr)
 	}
 }
 

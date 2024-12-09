@@ -40,7 +40,7 @@ type fullReader struct {
 	data []byte
 }
 
-func (f *fullReader) ReadHeader(header []byte) error {
+func (f *fullReader) ReadMessageHeader(header []byte) error {
 	buf, err := f.Read(len(header))
 	defer buf.Free()
 	if err != nil {
@@ -52,6 +52,10 @@ func (f *fullReader) ReadHeader(header []byte) error {
 }
 
 func (f *fullReader) Read(n int) (mem.BufferSlice, error) {
+	if n == 0 {
+		return nil, nil
+	}
+
 	if len(f.data) == 0 {
 		return nil, io.EOF
 	}
@@ -59,13 +63,13 @@ func (f *fullReader) Read(n int) (mem.BufferSlice, error) {
 	if len(f.data) < n {
 		data := f.data
 		f.data = nil
-		return mem.BufferSlice{mem.NewBuffer(&data, nil)}, io.ErrUnexpectedEOF
+		return mem.BufferSlice{mem.SliceBuffer(data)}, io.ErrUnexpectedEOF
 	}
 
 	buf := f.data[:n]
 	f.data = f.data[n:]
 
-	return mem.BufferSlice{mem.NewBuffer(&buf, nil)}, nil
+	return mem.BufferSlice{mem.SliceBuffer(buf)}, nil
 }
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface

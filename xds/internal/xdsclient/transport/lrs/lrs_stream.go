@@ -55,7 +55,7 @@ const perRPCVerbosityLevel = 9
 type StreamImpl struct {
 	// The following fields are initialized when a Stream instance is created
 	// and are read-only afterwards, and hence can be accessed without a mutex.
-	transport transport.Interface     // Transport to use for LRS stream.
+	transport transport.Transport     // Transport to use for LRS stream.
 	backoff   func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto *v3corepb.Node          // Identifies the gRPC application.
 	doneCh    chan struct{}           // To notify exit of LRS goroutine.
@@ -70,7 +70,7 @@ type StreamImpl struct {
 
 // StreamOpts holds the options for creating an lrsStream.
 type StreamOpts struct {
-	Transport transport.Interface     // xDS transport to create the stream on.
+	Transport transport.Transport     // xDS transport to create the stream on.
 	Backoff   func(int) time.Duration // Backoff for retries, after stream failures.
 	NodeProto *v3corepb.Node          // Node proto to identify the gRPC application.
 	LogPrefix string                  // Prefix to be used for log messages.

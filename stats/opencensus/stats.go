@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -86,7 +87,7 @@ func (csh *clientStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 
 	// Populate gRPC Metadata with OpenCensus tag map if set by application.
 	if tm := tag.FromContext(ctx); tm != nil {
-		ctx = stats.SetTags(ctx, tag.Encode(tm))
+		ctx = metadata.AppendToOutgoingContext(ctx, "grpc-tags-bin", string(tag.Encode(tm)))
 	}
 	return ctx, mi
 }
@@ -94,18 +95,21 @@ func (csh *clientStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 // statsTagRPC creates a recording object to derive measurements from in the
 // context, scoping the recordings to per RPC server side (scope of the
 // context). It also deserializes the opencensus tags set in the context's gRPC
-// Metadata, and adds a server method tag to the opencensus tags.
+// Metadata, and adds a server method tag to the opencensus tags. If multiple
+// tags exist, it adds the last one.
 func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) (context.Context, *metricsInfo) {
 	mi := &metricsInfo{
 		startTime: time.Now(),
 		method:    info.FullMethodName,
 	}
 
-	if tagsBin := stats.Tags(ctx); tagsBin != nil {
+	if tgValues := metadata.ValueFromIncomingContext(ctx, "grpc-tags-bin"); len(tgValues) > 0 {
+		tagsBin := []byte(tgValues[len(tgValues)-1])
 		if tags, err := tag.Decode(tagsBin); err == nil {
 			ctx = tag.NewContext(ctx, tags)
 		}
 	}
+
 	// We can ignore the error here because in the error case, the context
 	// passed in is returned. If the call errors, the server side application
 	// layer won't get this key server method information in the tag map, but
