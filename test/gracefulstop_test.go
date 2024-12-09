@@ -42,7 +42,9 @@ type delayListener struct {
 	closeCalled  chan struct{}
 	acceptCalled chan struct{}
 	allowCloseCh chan struct{}
+	mu           sync.Mutex
 	dialed       bool
+	closed       bool
 }
 
 func (d *delayListener) Accept() (net.Conn, error) {
@@ -70,11 +72,16 @@ func (d *delayListener) allowClose() {
 	close(d.allowCloseCh)
 }
 func (d *delayListener) Close() error {
-	close(d.closeCalled)
-	go func() {
-		<-d.allowCloseCh
-		d.Listener.Close()
-	}()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.closed {
+		d.closed = true
+		close(d.closeCalled)
+		go func() {
+			<-d.allowCloseCh
+			d.Listener.Close()
+		}()
+	}
 	return nil
 }
 
@@ -113,6 +120,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	d := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 
 	ss := &stubserver.StubServer{
+		Listener: dlis,
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != nil {
@@ -121,15 +129,14 @@ func (s) TestGracefulStop(t *testing.T) {
 			return stream.Send(&testpb.StreamingOutputCallResponse{})
 		},
 	}
-	s := grpc.NewServer()
-	ss.S = s
+	ss.S = grpc.NewServer()
 	stubserver.StartTestService(t, ss)
 
 	// 1. Start Server
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		s.Serve(dlis)
+		ss.S.Serve(dlis)
 		wg.Done()
 	}()
 
@@ -138,7 +145,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	<-dlis.acceptCalled
 	wg.Add(1)
 	go func() {
-		s.GracefulStop()
+		ss.S.GracefulStop()
 		wg.Done()
 	}()
 
