@@ -348,6 +348,7 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	st.ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go handleStream(s) },
 	)
+
 	wantHeader := http.Header{
 		"Date":         nil,
 		"Content-Type": {"application/grpc"},
@@ -379,6 +380,15 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// rst flag setting to verify the noop function: signalDeadlineExceeded
+	ch := make(chan struct{}, 1)
+	origSignalDeadlineExceeded := signalDeadlineExceeded
+	signalDeadlineExceeded = func() {
+		ch <- struct{}{}
+	}
+	defer func() {
+		signalDeadlineExceeded = origSignalDeadlineExceeded
+	}()
 	runStream := func(s *ServerStream) {
 		defer bodyw.Close()
 		select {
@@ -392,7 +402,9 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 			t.Errorf("ctx.Err = %v; want %v", err, context.DeadlineExceeded)
 			return
 		}
+
 		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
+
 	}
 	ht.HandleStreams(
 		context.Background(), func(s *ServerStream) { go runStream(s) },
@@ -407,6 +419,13 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		"Grpc-Message": {encodeGrpcMessage("too slow")},
 	}
 	checkHeaderAndTrailer(t, rw, wantHeader, wantTrailer)
+	select {
+	case <-ch: // Signal received, continue with the test
+	case <-time.After(5 * time.Second):
+		t.Errorf("timeout waiting for ctx.Done")
+		return
+	}
+
 }
 
 // TestHandlerTransport_HandleStreams_MultiWriteStatus ensures that
