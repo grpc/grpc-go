@@ -28,8 +28,10 @@ import (
 
 type keyType string
 
-const proxyOptionsKey = keyType("grpc.resolver.delegatingresolver.userAndConnectAddr")
+const proxyOptionsKey = keyType("grpc.resolver.delegatingresolver.proxyOptions")
 
+// Options holds the proxy connection details needed during the CONNECT
+// handshake. It includes the user information and the connect address.
 type Options struct {
 	User        *url.Userinfo
 	ConnectAddr string
