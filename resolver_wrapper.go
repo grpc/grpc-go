@@ -85,10 +85,10 @@ func (ccr *ccResolverWrapper) start() error {
 		//   - Client-side resolution is enforced with WithTargetResolutionEnabled.
 		// In these cases, the resolver is built based on the scheme of target,
 		// using the appropriate resolver builder.
-		if ccr.cc.dopts.copts.Dialer != nil || !ccr.cc.dopts.UseProxy {
+		if ccr.cc.dopts.copts.Dialer != nil || !ccr.cc.dopts.useProxy {
 			ccr.resolver, err = ccr.cc.resolverBuilder.Build(ccr.cc.parsedTarget, ccr, opts)
 		} else {
-			ccr.resolver, err = delegatingresolver.New(ccr.cc.parsedTarget, ccr, opts, ccr.cc.resolverBuilder, ccr.cc.dopts.TargetResolutionEnabled)
+			ccr.resolver, err = delegatingresolver.New(ccr.cc.parsedTarget, ccr, opts, ccr.cc.resolverBuilder, ccr.cc.dopts.targetResolutionEnabled)
 		}
 		errCh <- err
 	})

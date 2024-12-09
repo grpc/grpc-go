@@ -28,27 +28,29 @@ import (
 
 type keyType string
 
-const userAndConnectAddrKey = keyType("grpc.resolver.delegatingresolver.userAndConnectAddr")
+const proxyOptionsKey = keyType("grpc.resolver.delegatingresolver.proxyOptions")
 
-type userAndConnectAddr struct {
-	user        *url.Userinfo
+// Options holds the proxy connection details needed during the CONNECT
+// handshake. It includes the user information and the connect address.
+type Options struct {
+	User        *url.Userinfo
 	ConnectAddr string
 }
 
 // Populate returns a copy of addr with attributes containing the provided user
 // and connect address, which are needed during the CONNECT handshake for a
 // proxy connection.
-func Populate(addr resolver.Address, user *url.Userinfo, connectAddr string) resolver.Address {
-	addr.Attributes = addr.Attributes.WithValue(userAndConnectAddrKey, userAndConnectAddr{user: user, ConnectAddr: connectAddr})
+func Populate(addr resolver.Address, opts Options) resolver.Address {
+	addr.Attributes = addr.Attributes.WithValue(proxyOptionsKey, opts)
 	return addr
 }
 
 // ConnectAddr returns the proxy connect address in resolver.Address, or nil if
 // not present. The returned data should not be mutated.
 func ConnectAddr(addr resolver.Address) string {
-	a := addr.Attributes.Value(userAndConnectAddrKey)
+	a := addr.Attributes.Value(proxyOptionsKey)
 	if a != nil {
-		return a.(userAndConnectAddr).ConnectAddr
+		return a.(Options).ConnectAddr
 	}
 	return ""
 }
@@ -56,9 +58,9 @@ func ConnectAddr(addr resolver.Address) string {
 // User returns the user info in the resolver.Address, or nil if not present.
 // The returned data should not be mutated.
 func User(addr resolver.Address) *url.Userinfo {
-	a := addr.Attributes.Value(userAndConnectAddrKey)
+	a := addr.Attributes.Value(proxyOptionsKey)
 	if a != nil {
-		return a.(userAndConnectAddr).user
+		return a.(Options).User
 	}
 	return nil
 }

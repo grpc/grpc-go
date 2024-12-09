@@ -216,11 +216,11 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
-	resolutionCh := make(chan bool, 1)
+	resCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
-		resolutionCh <- true
+		resCh <- true
 	}
 	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
 
@@ -276,7 +276,7 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 
 	// Verify if OnClientResolution was triggered.
 	select {
-	case <-resolutionCh:
+	case <-resCh:
 		t.Fatal("target resolution occurred on client unexpectedly")
 	default:
 		t.Log("target resolution did not occur on the client")
@@ -290,11 +290,11 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
-	resolutionCh := make(chan bool, 1)
+	resCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
-		resolutionCh <- true
+		resCh <- true
 	}
 	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
 
@@ -351,7 +351,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 
 	// Check if client-side resolution signal was sent to the channel.
 	select {
-	case <-resolutionCh:
+	case <-resCh:
 		t.Log("target resolution occurred on client")
 	default:
 		t.Fatal("target resolution did not occur on the client unexpectedly")
@@ -366,11 +366,11 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 // successfully established with the backend server through the proxy.
 func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
-	resolutionCh := make(chan bool, 1)
+	resCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
-		resolutionCh <- true
+		resCh <- true
 	}
 	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
 
@@ -434,7 +434,7 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 
 	// Check if client-side resolution signal was sent to the channel.
 	select {
-	case <-resolutionCh:
+	case <-resCh:
 		t.Log("target resolution occurred on client")
 	default:
 		t.Fatal("target resolution did not occur on client unexpectedly")
@@ -583,11 +583,11 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 // happen on the client.
 func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	// Set up a channel to receive signals from OnClientResolution.
-	resolutionCh := make(chan bool, 1)
+	resCh := make(chan bool, 1)
 	// Overwrite OnClientResolution to send a signal to the channel.
 	origOnClientResolution := delegatingresolver.OnClientResolution
 	delegatingresolver.OnClientResolution = func(int) {
-		resolutionCh <- true
+		resCh <- true
 	}
 	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
 
@@ -665,7 +665,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 
 	// Verify if OnClientResolution was triggered.
 	select {
-	case <-resolutionCh:
+	case <-resCh:
 		t.Fatal("target resolution occurred on client unexpectedly")
 	default:
 		t.Log("target resolution did not occur on the client")
