@@ -159,7 +159,7 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 //
 // Returns a channel on which the newly built cds LB policy is written to.
 func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
-	cdsBuilder := balancer.Get(Name)
+	cdsBuilder := balancer.Get(cdsName)
 	internal.BalancerUnregister(cdsBuilder.Name())
 	cdsBalancerCh := make(chan balancer.Balancer, 1)
 	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
@@ -1030,13 +1030,13 @@ func (s) TestExitIdle(t *testing.T) {
 
 // TestParseConfig verifies the ParseConfig() method in the CDS balancer.
 func (s) TestParseConfig(t *testing.T) {
-	bb := balancer.Get(Name)
+	bb := balancer.Get(cdsName)
 	if bb == nil {
-		t.Fatalf("balancer.Get(%q) returned nil", Name)
+		t.Fatalf("balancer.Get(%q) returned nil", cdsName)
 	}
 	parser, ok := bb.(balancer.ConfigParser)
 	if !ok {
-		t.Fatalf("balancer %q does not implement the ConfigParser interface", Name)
+		t.Fatalf("balancer %q does not implement the ConfigParser interface", cdsName)
 	}
 
 	tests := []struct {

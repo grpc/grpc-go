@@ -55,6 +55,10 @@ var (
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
 	// to "true".
 	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", false)
+	// NewXdsResolverEnabled is set if the new xds resolver is to be used
+	// instead of the existing xds resolver implementation. This can be enabled by
+	// setting the environment variable "GRPC_XDS_RESOLVER" to "true".
+	NewXdsResolverEnabled = boolFromEnv("GRPC_NEW_XDS_RESOLVER", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

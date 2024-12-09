@@ -23,11 +23,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
-	"google.golang.org/grpc/xds/internal/balancer/cdsbalancer"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	rand "math/rand/v2"
 	"sync/atomic"
@@ -58,16 +57,6 @@ const (
 var (
 	errExceedsMaxDepth = fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
 	buildProvider      = buildProviderFunc
-	newCdsBalancer     = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
-		builder := balancer.Get(cdsbalancer.Name)
-		if builder == nil {
-			return nil, fmt.Errorf("xds: no balancer builder with name %v", clusterresolver.Name)
-		}
-		// We directly pass the parent clientConn to the underlying
-		// cluster_resolver balancer because the cdsBalancer does not deal with
-		// subConns.
-		return builder.Build(cc, opts), nil
-	}
 )
 
 // newBuilderWithConfigForTesting creates a new xds resolver builder using a
@@ -156,14 +145,6 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.dataplaneAuthority = opts.Authority
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, target.Endpoint())
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
-	//watcher := newXdsConfigWatcher(r, r.logger, r.serializer)
-	//r.depManager = NewXdsDependencyManager(
-	//	r.xdsClient,
-	//	r.logger,
-	//	r.ldsResourceName,
-	//	r.dataplaneAuthority,
-	//	watcher,
-	//)
 	hi := xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
 	xdsHIPtr := unsafe.Pointer(hi)
 	r.xdsHIPtr = &xdsHIPtr
@@ -486,9 +467,11 @@ func (r *xdsResolver) onResolutionComplete() {
 		return
 	}
 
-	// Start watching clusters referenced in the config selector
-	for clusterName := range cs.clusters {
-		newClusterConfigWatcher(clusterName, r)
+	if envconfig.NewXdsResolverEnabled {
+		// Start watching clusters referenced in the config selector
+		for clusterName := range cs.clusters {
+			newClusterConfigWatcher(clusterName, r)
+		}
 	}
 
 	r.curConfigSelector.stop()
