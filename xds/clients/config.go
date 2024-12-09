@@ -18,9 +18,20 @@
 
 package clients
 
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
+)
+
 // ServerConfig contains the configuration to connect to a server.
 type ServerConfig struct {
-	ServerURI string
+	ServerURI              string
+	IgnoreResourceDeletion bool
 
 	Extensions any
 }
@@ -41,6 +52,8 @@ type Node struct {
 	Metadata         any
 	UserAgentName    string
 	UserAgentVersion string
+
+	clientFeatures []string
 }
 
 // Locality is the representation of the locality field within a node.
@@ -48,4 +61,49 @@ type Locality struct {
 	Region  string
 	Zone    string
 	SubZone string
+}
+
+// Equal reports whether sc and other are considered equal.
+func (sc *ServerConfig) Equal(other *ServerConfig) bool {
+	switch {
+	case sc == nil && other == nil:
+		return true
+	case sc.ServerURI != other.ServerURI:
+		return false
+	}
+	return true
+}
+
+// String returns the string representation of the ServerConfig.
+func (sc *ServerConfig) String() string {
+	return strings.Join([]string{sc.ServerURI, fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
+}
+
+func (n Node) ToProto() *v3corepb.Node {
+	return &v3corepb.Node{
+		Id:      n.ID,
+		Cluster: n.Cluster,
+		Locality: func() *v3corepb.Locality {
+			if n.Locality.IsEmpty() {
+				return nil
+			}
+			return &v3corepb.Locality{
+				Region:  n.Locality.Region,
+				Zone:    n.Locality.Zone,
+				SubZone: n.Locality.SubZone,
+			}
+		}(),
+		Metadata:             proto.Clone(n.Metadata.(*structpb.Struct)).(*structpb.Struct),
+		UserAgentName:        n.UserAgentName,
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
+		ClientFeatures:       slices.Clone(n.clientFeatures),
+	}
+}
+
+func (l Locality) IsEmpty() bool {
+	return l.Equal(Locality{})
+}
+
+func (l Locality) Equal(other Locality) bool {
+	return l.Region == other.Region && l.Zone == other.Zone && l.SubZone == other.SubZone
 }
