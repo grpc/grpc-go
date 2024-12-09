@@ -135,7 +135,10 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // adding the target address as an attribute.
 func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolver.Address {
 	addr := resolver.Address{Addr: proxyAddr}
-	addr = proxyattributes.Populate(addr, nil, targetAddr)
+	addr = proxyattributes.Populate(addr, proxyattributes.Options{
+		User:        nil,
+		ConnectAddr: targetAddr,
+	})
 	return addr
 }
 

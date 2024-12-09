@@ -71,7 +71,7 @@ type delegatingResolver struct {
 func parsedURLForProxy(address string) (*url.URL, error) {
 	proxyFunc := httpProxyFromEnvironmentFunc
 	if pf := internal.HTTPSProxyFromEnvironmentForTesting; pf != nil {
-		proxyFunc = pf.(func(*http.Request) (*url.URL, error))
+		proxyFunc = pf
 	}
 
 	req := &http.Request{URL: &url.URL{
@@ -187,7 +187,10 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 	for _, proxyAddr := range r.proxyAddrs {
 		for _, targetAddr := range r.targetAddrs {
 			newAddr := resolver.Address{Addr: proxyAddr.Addr}
-			newAddr = proxyattributes.Populate(newAddr, r.proxyURL.User, targetAddr.Addr)
+			newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
+				User:        r.proxyURL.User,
+				ConnectAddr: targetAddr.Addr,
+			})
 			addresses = append(addresses, newAddr)
 		}
 	}
@@ -202,7 +205,10 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 			var addrs []resolver.Address
 			for _, targetAddr := range endpt.Addresses {
 				newAddr := resolver.Address{Addr: proxyAddr.Addr}
-				newAddr = proxyattributes.Populate(newAddr, r.proxyURL.User, targetAddr.Addr)
+				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
+					User:        r.proxyURL.User,
+					ConnectAddr: targetAddr.Addr,
+				})
 				addrs = append(addrs, newAddr)
 			}
 			endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
@@ -231,7 +237,10 @@ type wrappingClientConn struct {
 	resolverType resolverType // represents the type of resolver (target or proxy)
 }
 
-// UpdateState intercepts state updates from the target and proxy resolvers.
+// UpdateState processes updates from the target or proxy resolver. It is called
+// twice: once by the target resolver and once by the proxy resolver. It logs
+// received addresses, and combines addresses from both resolvers once updates
+// from both are received, sending the final state to the parent ClientConn.
 func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	wcc.parent.mu.Lock()
 	defer wcc.parent.mu.Unlock()

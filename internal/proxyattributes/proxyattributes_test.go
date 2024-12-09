@@ -46,8 +46,8 @@ func (s) TestConnectAddr(t *testing.T) {
 			name: "connect address in attribute",
 			addr: resolver.Address{
 				Addr: "test-address",
-				Attributes: attributes.New(userAndConnectAddrKey, userAndConnectAddr{
-					user:        nil,
+				Attributes: attributes.New(proxyOptionsKey, Options{
+					User:        nil,
 					ConnectAddr: "proxy-address",
 				}),
 			},
@@ -70,7 +70,7 @@ func (s) TestConnectAddr(t *testing.T) {
 }
 
 // Tests that User returns the correct user in the attribute.
-func TestUser(t *testing.T) {
+func (s) TestUser(t *testing.T) {
 	user := url.UserPassword("username", "password")
 	tests := []struct {
 		name string
@@ -81,7 +81,8 @@ func TestUser(t *testing.T) {
 			name: "user in attribute",
 			addr: resolver.Address{
 				Addr: "test-address",
-				Attributes: attributes.New(userAndConnectAddrKey, userAndConnectAddr{user: user,
+				Attributes: attributes.New(proxyOptionsKey, Options{
+					User:        user,
 					ConnectAddr: "proxy-address",
 				})},
 			want: user,
@@ -106,18 +107,20 @@ func TestUser(t *testing.T) {
 // user and connect address.
 func (s) TestPopulate(t *testing.T) {
 	addr := resolver.Address{Addr: "test-address"}
-	user := url.UserPassword("username", "password")
-	connectAddr := "proxy-address"
+	pOpts := Options{
+		User:        url.UserPassword("username", "password"),
+		ConnectAddr: "proxy-address",
+	}
 
 	// Call Populate and validate attributes
-	populatedAddr := Populate(addr, user, connectAddr)
+	populatedAddr := Populate(addr, pOpts)
 
 	// Verify that the returned address is updated correctly
-	if got, want := ConnectAddr(populatedAddr), connectAddr; got != want {
+	if got, want := ConnectAddr(populatedAddr), pOpts.ConnectAddr; got != want {
 		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
 	}
 
-	if got, want := User(populatedAddr), user; got != want {
+	if got, want := User(populatedAddr), pOpts.User; got != want {
 		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)
 	}
 }
