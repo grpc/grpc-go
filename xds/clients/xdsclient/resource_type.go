@@ -40,7 +40,7 @@ type ResourceType interface {
 
 	// Decode deserializes and validates an xDS resource serialized inside the
 	// provided `any`, as received from the xDS management server.
-	Decode(*DecodeOptions, any) (*DecodeResult, error)
+	Decode(DecodeOptions, any) (*DecodeResult, error)
 }
 
 // DecodeOptions wraps the options required by ResourceType implementation for

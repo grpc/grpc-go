@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,21 @@
  *
  */
 
-package lrsclient
+package xdsclient
 
 import (
-	"google.golang.org/grpc/xds/clients"
+	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-// Config contains xDS fields applicable to LRS client.
-// Config can be extended with more attributes in future.
-type Config struct {
-	Node             clients.Node             // Required
-	TransportBuilder clients.TransportBuilder // Required
+var logger = grpclog.Component("xds")
+
+func prefixLogger(p *XDSClient) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, clientPrefix(p))
 }
 
-// NewConfig returns an LRS config configured with mandatory parameters.
-func NewConfig(node clients.Node, transport clients.TransportBuilder) (*Config, error) {
-	return &Config{Node: node, TransportBuilder: transport}, nil
+func clientPrefix(p *XDSClient) string {
+	return fmt.Sprintf("[xds-client %p] ", p)
 }

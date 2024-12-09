@@ -97,7 +97,13 @@ type grpcTransport struct {
 }
 
 func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream[clients.StreamRequest, any], error) {
-	return nil, nil
+	switch method {
+	case v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResources_FullMethodName:
+		return g.newADSStream(ctx)
+	case v3lrsgrpc.LoadReportingService_StreamLoadStats_FullMethodName:
+		return g.newLRSStream(ctx)
+	}
+	return nil, fmt.Errorf("unsupported method: %v", method)
 }
 
 func (g *grpcTransport) Close() error {
@@ -108,7 +114,7 @@ type adsStream[Req clients.StreamRequest, Res any] struct {
 	stream v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
 }
 
-func (a *adsStream[Req, Res]) Send(msg *Req) error {
+func (a *adsStream[Req, Res]) Send(msg Req) error {
 	protoReq, ok := any(msg).(proto.Message)
 	if !ok {
 		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
@@ -116,23 +122,24 @@ func (a *adsStream[Req, Res]) Send(msg *Req) error {
 	return a.stream.Send(protoReq.(*v3adspb.DiscoveryRequest))
 }
 
-func (a *adsStream[Req, Res]) Recv() (*Res, error) {
+func (a *adsStream[Req, Res]) Recv() (Res, error) {
+	var typedRes Res
 	res, err := a.stream.Recv()
 	if err != nil {
-		return nil, err
+		return typedRes, err
 	}
 	typedRes, ok := any(res).(Res)
 	if !ok {
-		return nil, fmt.Errorf("response type mismatch")
+		return typedRes, fmt.Errorf("response type mismatch")
 	}
-	return &typedRes, nil
+	return typedRes, nil
 }
 
 type lrsStream[Req clients.StreamRequest, Res any] struct {
 	stream v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
 }
 
-func (l *lrsStream[Req, Res]) Send(msg *Req) error {
+func (l *lrsStream[Req, Res]) Send(msg Req) error {
 	protoReq, ok := any(msg).(proto.Message)
 	if !ok {
 		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
@@ -140,14 +147,31 @@ func (l *lrsStream[Req, Res]) Send(msg *Req) error {
 	return l.stream.Send(protoReq.(*v3lrspb.LoadStatsRequest))
 }
 
-func (l *lrsStream[Req, Res]) Recv() (*Res, error) {
+func (l *lrsStream[Req, Res]) Recv() (Res, error) {
+	var typedRes Res
 	res, err := l.stream.Recv()
 	if err != nil {
-		return nil, err
+		return typedRes, err
 	}
 	typedRes, ok := any(res).(Res)
 	if !ok {
-		return nil, fmt.Errorf("response type mismatch")
+		return typedRes, fmt.Errorf("response type mismatch")
 	}
-	return &typedRes, nil
+	return typedRes, nil
+}
+
+func (g *grpcTransport) newADSStream(ctx context.Context) (clients.Stream[clients.StreamRequest, any], error) {
+	stream, err := v3adsgrpc.NewAggregatedDiscoveryServiceClient(g.cc).StreamAggregatedResources(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create an ADS stream: %v", err)
+	}
+	return &adsStream[clients.StreamRequest, any]{stream: stream}, nil
+}
+
+func (g *grpcTransport) newLRSStream(ctx context.Context) (clients.Stream[clients.StreamRequest, any], error) {
+	stream, err := v3lrsgrpc.NewLoadReportingServiceClient(g.cc).StreamLoadStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &lrsStream[clients.StreamRequest, any]{stream: stream}, nil
 }
