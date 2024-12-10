@@ -53,7 +53,7 @@ type delegatingResolver struct {
 
 	mu                  sync.Mutex          // protects access to the resolver state and addresses during updates
 	targetAddrs         []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
-	targetEndpt         []resolver.Endpoint // resolved target endpoint
+	tagetEndpoint       []resolver.Endpoint // resolved target endpoint
 	proxyAddrs          []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
 	proxyURL            *url.URL            // proxy URL, derived from proxy environment and target
 	targetResolverReady bool                // indicates if an update from the target resolver has been received
@@ -71,7 +71,7 @@ type delegatingResolver struct {
 func parsedURLForProxy(address string) (*url.URL, error) {
 	proxyFunc := httpProxyFromEnvironmentFunc
 	if pf := internal.HTTPSProxyFromEnvironmentForTesting; pf != nil {
-		proxyFunc = pf
+		proxyFunc = pf.(func(req *http.Request) (*url.URL, error))
 	}
 
 	req := &http.Request{URL: &url.URL{
@@ -195,13 +195,13 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 		}
 	}
 
-	if r.targetEndpt == nil {
+	if r.tagetEndpoint == nil {
 		return addresses, nil
 	}
 
 	var endpoints []resolver.Endpoint
 	for _, proxyAddr := range r.proxyAddrs {
-		for _, endpt := range r.targetEndpt {
+		for _, endpt := range r.tagetEndpoint {
 			var addrs []resolver.Address
 			for _, targetAddr := range endpt.Addresses {
 				newAddr := resolver.Address{Addr: proxyAddr.Addr}
@@ -237,8 +237,7 @@ type wrappingClientConn struct {
 	resolverType resolverType // represents the type of resolver (target or proxy)
 }
 
-// UpdateState processes updates from the target or proxy resolver. It is called
-// twice: once by the target resolver and once by the proxy resolver. It logs
+// UpdateState processes updates from the target or proxy resolver. It logs
 // received addresses, and combines addresses from both resolvers once updates
 // from both are received, sending the final state to the parent ClientConn.
 func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
@@ -251,7 +250,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 			logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 		}
 		wcc.parent.targetAddrs = state.Addresses
-		wcc.parent.targetEndpt = state.Endpoints
+		wcc.parent.tagetEndpoint = state.Endpoints
 		wcc.parent.targetResolverReady = true
 		// Update curState to include other state information, such as the
 		// service config, provided by the target resolver. This ensures

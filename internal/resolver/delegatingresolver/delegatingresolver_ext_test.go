@@ -32,9 +32,10 @@ import (
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+
+	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
 )
 
 type s struct {
@@ -136,7 +137,6 @@ func setupDNS(t *testing.T) *manual.Resolver {
 func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolver.Address {
 	addr := resolver.Address{Addr: proxyAddr}
 	addr = proxyattributes.Populate(addr, proxyattributes.Options{
-		User:        nil,
 		ConnectAddr: targetAddr,
 	})
 	return addr
@@ -194,12 +194,13 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	})
 
 	// Verify that the delegating resolver outputs the expected address.
-	wantState := resolver.State{Addresses: []resolver.Address{
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
-	},
+	wantState := resolver.State{
+		Addresses: []resolver.Address{
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
+		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 	var gotState resolver.State
@@ -235,8 +236,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		internal.HTTPSProxyFromEnvironmentForTesting = originalhpfe
 	}()
 
-	mrTarget := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
-	target := "dns:///" + targetTestAddr
+	mrTarget := setupDNS(t) // Manual resolver to control the target resolution.
+	target := mrTarget.Scheme() + ":///" + targetTestAddr
 	mrProxy := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
@@ -319,12 +320,13 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
-	wantState := resolver.State{Addresses: []resolver.Address{
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
-	},
+	wantState := resolver.State{
+		Addresses: []resolver.Address{
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
+		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 	var gotState resolver.State

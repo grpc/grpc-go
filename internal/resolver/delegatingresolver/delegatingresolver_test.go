@@ -27,7 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
-	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
 )
 
 type s struct {
