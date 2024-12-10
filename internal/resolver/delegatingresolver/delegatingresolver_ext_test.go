@@ -341,11 +341,11 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	}
 }
 
-// Tests the scenario where a proxy is configured, the target URI scheme is not 
-// "dns," and both the proxy and target resolvers return endpoints. The test 
-// verifies that the delegating resolver combines resolved proxy and target 
-// addresses correctly, returning endpoints with the proxy address populated 
-// and the target address included as an attribute of the proxy address for 
+// Tests the scenario where a proxy is configured, the target URI scheme is not
+// "dns," and both the proxy and target resolvers return endpoints. The test
+// verifies that the delegating resolver combines resolved proxy and target
+// addresses correctly, returning endpoints with the proxy address populated
+// and the target address included as an attribute of the proxy address for
 // each combination of proxy and target endpoints.
 func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 	hpfe := func(req *http.Request) (*url.URL, error) {
