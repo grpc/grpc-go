@@ -146,7 +146,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: ports[0]}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
 	}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -201,7 +201,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: ports[0]}, {Port: ports[1]}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}, {Ports: []uint32{ports[1]}}},
 	}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: ports[1]}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 	}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -228,7 +228,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: ports[2]}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[2]}}},
 	}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -275,12 +275,12 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		{
 			Name:     localityName1,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[0]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
 		},
 		{
 			Name:     localityName2,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[1]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -337,17 +337,17 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		{
 			Name:     localityName1,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[0]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
 		},
 		{
 			Name:     localityName2,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[1]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 		{
 			Name:     localityName3,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[2]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[2]}}},
 		},
 	})
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -363,12 +363,12 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		{
 			Name:     localityName2,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[1]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 		{
 			Name:     localityName3,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[2]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[2]}}},
 		},
 	})
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -385,12 +385,12 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		{
 			Name:     localityName2,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[1]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 		{
 			Name:     localityName3,
 			Weight:   1,
-			Backends: []e2e.BackendOptions{{Port: ports[2]}, {Port: ports[3]}},
+			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[2]}}, {Ports: []uint32{ports[3]}}},
 		},
 	})
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -426,24 +426,24 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 			Name:   localityName1,
 			Weight: 1,
 			Backends: []e2e.BackendOptions{
-				{Port: ports[0], HealthStatus: v3corepb.HealthStatus_UNKNOWN},
-				{Port: ports[1], HealthStatus: v3corepb.HealthStatus_HEALTHY},
-				{Port: ports[2], HealthStatus: v3corepb.HealthStatus_UNHEALTHY},
-				{Port: ports[3], HealthStatus: v3corepb.HealthStatus_DRAINING},
-				{Port: ports[4], HealthStatus: v3corepb.HealthStatus_TIMEOUT},
-				{Port: ports[5], HealthStatus: v3corepb.HealthStatus_DEGRADED},
+				{Ports: []uint32{ports[0]}, HealthStatus: v3corepb.HealthStatus_UNKNOWN},
+				{Ports: []uint32{ports[1]}, HealthStatus: v3corepb.HealthStatus_HEALTHY},
+				{Ports: []uint32{ports[2]}, HealthStatus: v3corepb.HealthStatus_UNHEALTHY},
+				{Ports: []uint32{ports[3]}, HealthStatus: v3corepb.HealthStatus_DRAINING},
+				{Ports: []uint32{ports[4]}, HealthStatus: v3corepb.HealthStatus_TIMEOUT},
+				{Ports: []uint32{ports[5]}, HealthStatus: v3corepb.HealthStatus_DEGRADED},
 			},
 		},
 		{
 			Name:   localityName2,
 			Weight: 1,
 			Backends: []e2e.BackendOptions{
-				{Port: ports[6], HealthStatus: v3corepb.HealthStatus_UNKNOWN},
-				{Port: ports[7], HealthStatus: v3corepb.HealthStatus_HEALTHY},
-				{Port: ports[8], HealthStatus: v3corepb.HealthStatus_UNHEALTHY},
-				{Port: ports[9], HealthStatus: v3corepb.HealthStatus_DRAINING},
-				{Port: ports[10], HealthStatus: v3corepb.HealthStatus_TIMEOUT},
-				{Port: ports[11], HealthStatus: v3corepb.HealthStatus_DEGRADED},
+				{Ports: []uint32{ports[6]}, HealthStatus: v3corepb.HealthStatus_UNKNOWN},
+				{Ports: []uint32{ports[7]}, HealthStatus: v3corepb.HealthStatus_HEALTHY},
+				{Ports: []uint32{ports[8]}, HealthStatus: v3corepb.HealthStatus_UNHEALTHY},
+				{Ports: []uint32{ports[9]}, HealthStatus: v3corepb.HealthStatus_DRAINING},
+				{Ports: []uint32{ports[10]}, HealthStatus: v3corepb.HealthStatus_TIMEOUT},
+				{Ports: []uint32{ports[11]}, HealthStatus: v3corepb.HealthStatus_DEGRADED},
 			},
 		},
 	})
@@ -572,7 +572,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: ports[0]}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{ports[0]}}},
 	}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -916,7 +916,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: testutils.ParsePort(t, server.Address)}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
 	}})
 	resources.Endpoints[0].Endpoints[0].LbEndpoints[0].LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 0}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -989,7 +989,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
 		Name:     localityName1,
 		Weight:   1,
-		Backends: []e2e.BackendOptions{{Port: testutils.ParsePort(t, server.Address)}},
+		Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
 	}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1185,8 +1185,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 
 	t.Logf("Started test service backend at addresses %q, %q, %q", lis1.Addr(), lis2.Addr(), lis3.Addr())
 
-	port := testutils.ParsePort(t, lis1.Addr().String())
-	additionalPorts := []uint32{
+	ports := []uint32{
+		testutils.ParsePort(t, lis1.Addr().String()),
 		testutils.ParsePort(t, lis2.Addr().String()),
 		testutils.ParsePort(t, lis3.Addr().String()),
 	}
@@ -1200,13 +1200,13 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 		{
 			name:                      "flag_enabled",
 			dualstackEndpointsEnabled: true,
-			wantEndpointPorts:         append([]uint32{port}, additionalPorts...),
-			wantAddrPorts:             []uint32{port},
+			wantEndpointPorts:         ports,
+			wantAddrPorts:             ports[:1],
 		},
 		{
 			name:              "flag_disabled",
-			wantEndpointPorts: []uint32{port},
-			wantAddrPorts:     []uint32{port},
+			wantEndpointPorts: ports[:1],
+			wantAddrPorts:     ports[:1],
 		},
 	}
 
@@ -1250,8 +1250,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				Name:   localityName1,
 				Weight: 1,
 				Backends: []e2e.BackendOptions{{
-					Port:            port,
-					AdditionalPorts: additionalPorts}},
+					Ports: ports,
+				}},
 			}})
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)

@@ -692,18 +692,14 @@ type LocalityOptions struct {
 // BackendOptions contains options to configure individual backends in a
 // locality.
 type BackendOptions struct {
-	// Port number on which the backend is accepting connections. All backends
+	// Ports on which the backend is accepting connections. All backends
 	// are expected to run on localhost, hence host name is not stored here.
-	Port uint32
+	Ports []uint32
 	// Health status of the backend. Default is UNKNOWN which is treated the
 	// same as HEALTHY.
 	HealthStatus v3corepb.HealthStatus
 	// Weight sets the backend weight. Defaults to 1.
 	Weight uint32
-	// Additional port number on which the backend is accepting connections.
-	// All backends are expected to run on localhost, hence host name is not
-	// stored here.
-	AdditionalPorts []uint32
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -726,7 +722,7 @@ type EndpointOptions struct {
 func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
 	var bOpts []BackendOptions
 	for _, p := range ports {
-		bOpts = append(bOpts, BackendOptions{Port: p, Weight: 1})
+		bOpts = append(bOpts, BackendOptions{Ports: []uint32{p}, Weight: 1})
 	}
 	return EndpointResourceWithOptions(EndpointOptions{
 		ClusterName: clusterName,
@@ -751,8 +747,8 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 			if b.Weight == 0 {
 				b.Weight = 1
 			}
-			additionalAddresses := make([]*v3endpointpb.Endpoint_AdditionalAddress, len(b.AdditionalPorts))
-			for i, p := range b.AdditionalPorts {
+			additionalAddresses := make([]*v3endpointpb.Endpoint_AdditionalAddress, len(b.Ports)-1)
+			for i, p := range b.Ports[1:] {
 				additionalAddresses[i] = &v3endpointpb.Endpoint_AdditionalAddress{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
 						SocketAddress: &v3corepb.SocketAddress{
@@ -769,7 +765,7 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 						SocketAddress: &v3corepb.SocketAddress{
 							Protocol:      v3corepb.SocketAddress_TCP,
 							Address:       opts.Host,
-							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: b.Port},
+							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: b.Ports[0]},
 						},
 					}},
 					AdditionalAddresses: additionalAddresses,
