@@ -128,22 +128,24 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 
 	r := manual.NewBuilderWithScheme("whatever")
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+
+	r.InitialState(resolver.State{Addresses: addrs})
+
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
 	// Push a resolver update without an LB policy in the service config. The
 	// channel should pick the default LB policy, which is pick_first.
-	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
-	// Push a resolver update with the service config specifying "round_robin".
+	// Push a resolver update with a service config specifying "round_robin".
 	r.UpdateState(resolver.State{
 		Addresses:     addrs,
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
@@ -153,7 +155,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Push a resolver update with the service config specifying "pick_first".
+	// Push another resolver update with a service config specifying "pick_first".
 	r.UpdateState(resolver.State{
 		Addresses:     addrs,
 		ServiceConfig: parseServiceConfig(t, r, pickFirstServiceConfig),
