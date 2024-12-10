@@ -1595,7 +1595,6 @@ func (b *backendManager) resolverAddrs() []resolver.Address {
 	for i, backend := range b.backends {
 		addrs[i] = resolver.Address{
 			Addr: backend.Address,
-			// Attributes: attributes.New(pfinternal.ManagedByPickfirstKeyType{}, true),
 		}
 	}
 	return addrs

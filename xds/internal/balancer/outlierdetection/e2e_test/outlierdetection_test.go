@@ -372,21 +372,21 @@ func (s) TestNoopConfiguration(t *testing.T) {
 	}
 }
 
-// TestPickFirstIsNoop verifies that outlier detection is performed using the
+// Test verifies that outlier detection is performed using the
 // generic health producer when the pickfirstleaf LB policy is used. The test
 // server returns error for consecutive requests and test verifies that the
 // endpoint is not ejected.
-func (s) TestPickFirst(t *testing.T) {
-	backend1 := &stubserver.StubServer{
+func (s) TestPickFirstHealthListenerEnabled(t *testing.T) {
+	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return nil, errors.New("some error")
 		},
 	}
-	if err := backend1.StartServer(); err != nil {
+	if err := backend.StartServer(); err != nil {
 		t.Fatalf("Failed to start backend: %v", err)
 	}
-	defer backend1.Stop()
-	t.Logf("Started bad TestService backend at: %q", backend1.Address)
+	defer backend.Stop()
+	t.Logf("Started bad TestService backend at: %q", backend.Address)
 
 	countingODServiceConfigJSON := fmt.Sprintf(`
 {
@@ -412,7 +412,7 @@ func (s) TestPickFirst(t *testing.T) {
 	mr := manual.NewBuilderWithScheme("od-e2e")
 	// The full list of addresses.
 	mr.InitialState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: backend1.Address}},
+		Addresses:     []resolver.Address{{Addr: backend.Address}},
 		ServiceConfig: sc,
 	})
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -439,6 +439,66 @@ func (s) TestPickFirst(t *testing.T) {
 
 	// The SubConn should be unejected after 100 millis.
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+}
+
+// Test verifies that outlier detection doesn't eject subchannels created by
+// the new pickfirst balancer when pickfirst is a top-level policy.
+func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
+	backend := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return nil, errors.New("some error")
+		},
+	}
+	if err := backend.StartServer(); err != nil {
+		t.Fatalf("Failed to start backend: %v", err)
+	}
+	defer backend.Stop()
+	t.Logf("Started bad TestService backend at: %q", backend.Address)
+
+	countingODServiceConfigJSON := fmt.Sprintf(`
+{
+  "loadBalancingConfig": [
+    {
+      "outlier_detection_experimental": {
+        "interval": "0.025s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
+		"failurePercentageEjection": {
+			"threshold": 50,
+			"enforcementPercentage": 100,
+			"minimumHosts": 0,
+			"requestVolume": 2
+		},
+        "childPolicy": [{"%s": {}}]
+      }
+    }
+  ]
+}`, pickfirstleaf.Name)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(countingODServiceConfigJSON)
+
+	mr := manual.NewBuilderWithScheme("od-e2e")
+
+	mr.InitialState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: backend.Address}},
+		ServiceConfig: sc,
+	})
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+
+	// Failing request should not cause ejection.
+	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+	// Wait for the failure rate algorithm to run once.
+	shortCtx, shortCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer shortCancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Ready)
 }
 
 type healthCheckingPetiolePolicyBuilder struct{}
