@@ -51,13 +51,15 @@ type delegatingResolver struct {
 	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
 	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
 
-	mu                  sync.Mutex          // protects access to the resolver state and addresses during updates
-	targetAddrs         []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
-	tagetEndpoint       []resolver.Endpoint // resolved target endpoint
-	proxyAddrs          []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
-	proxyURL            *url.URL            // proxy URL, derived from proxy environment and target
-	targetResolverReady bool                // indicates if an update from the target resolver has been received
-	proxyResolverReady  bool                // indicates if an update from the proxy resolver has been received
+	mu             sync.Mutex          // protects access to the resolver state and addresses during updates
+	targetAddrs    []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
+	targetEndpoint []resolver.Endpoint // resolved target endpoint
+	proxyAddrs     []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
+	proxyEndpoint  []resolver.Endpoint // resolved proxy endpoints; empty if no proxy is configured
+
+	proxyURL            *url.URL // proxy URL, derived from proxy environment and target
+	targetResolverReady bool     // indicates if an update from the target resolver has been received
+	proxyResolverReady  bool     // indicates if an update from the proxy resolver has been received
 }
 
 // parsedURLForProxy determines the proxy URL for the given address based on
@@ -195,16 +197,17 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 		}
 	}
 
-	if r.tagetEndpoint == nil {
+	if r.targetEndpoint == nil {
 		return addresses, nil
 	}
-
+	
+//
 	var endpoints []resolver.Endpoint
-	for _, proxyAddr := range r.proxyAddrs {
-		for _, endpt := range r.tagetEndpoint {
+	for _, proxyEndpt := range r.proxyEndpoint {
+		for _, endpt := range r.targetEndpoint {
 			var addrs []resolver.Address
 			for _, targetAddr := range endpt.Addresses {
-				newAddr := resolver.Address{Addr: proxyAddr.Addr}
+				newAddr := resolver.Address{Addr: proxyEndpt.Addresses[0].Addr}
 				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
 					User:        r.proxyURL.User,
 					ConnectAddr: targetAddr.Addr,
@@ -250,7 +253,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 			logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 		}
 		wcc.parent.targetAddrs = state.Addresses
-		wcc.parent.tagetEndpoint = state.Endpoints
+		wcc.parent.targetEndpoint = state.Endpoints
 		wcc.parent.targetResolverReady = true
 		// Update curState to include other state information, such as the
 		// service config, provided by the target resolver. This ensures
@@ -267,6 +270,7 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 			logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 		}
 		wcc.parent.proxyAddrs = state.Addresses
+		wcc.parent.proxyEndpoint = state.Endpoints
 		wcc.parent.proxyResolverReady = true
 	}
 
