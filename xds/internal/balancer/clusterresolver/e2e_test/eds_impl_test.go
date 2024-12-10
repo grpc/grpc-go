@@ -1151,10 +1151,15 @@ func waitForProducedZeroAddressesError(ctx context.Context, t *testing.T, client
 func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Start a backend server which provide that listens to multiple ports to simulate
-	// a backend with multiple addresses.
-	servers, cleanup2 := startTestServiceBackends(t, 1)
-	defer cleanup2()
+
+	// Start a backend server which listens to multiple ports to simulate a
+	// backend with multiple addresses.
+	server := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
@@ -1165,14 +1170,25 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis2.Close()
+	lis3, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer lis3.Close()
 
-	go servers[0].S.Serve(lis1)
-	go servers[0].S.Serve(lis2)
+	server.Listener = lis1
+	if err := server.StartServer(); err != nil {
+		t.Fatalf("Failed to start stub server: %v", err)
+	}
+	go server.S.Serve(lis2)
+	go server.S.Serve(lis3)
 
-	addrs, ports := backendAddressesAndPorts(t, servers)
+	t.Logf("Started test service backend at addresses %q, %q, %q", lis1.Addr(), lis2.Addr(), lis3.Addr())
+
+	port := testutils.ParsePort(t, lis1.Addr().String())
 	additionalPorts := []uint32{
-		testutils.ParsePort(t, lis1.Addr().String()),
 		testutils.ParsePort(t, lis2.Addr().String()),
+		testutils.ParsePort(t, lis3.Addr().String()),
 	}
 
 	testCases := []struct {
@@ -1184,13 +1200,13 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 		{
 			name:                      "flag_enabled",
 			dualstackEndpointsEnabled: true,
-			wantEndpointPorts:         append([]uint32{ports[0]}, additionalPorts...),
-			wantAddrPorts:             ports,
+			wantEndpointPorts:         append([]uint32{port}, additionalPorts...),
+			wantAddrPorts:             []uint32{port},
 		},
 		{
 			name:              "flag_disabled",
-			wantEndpointPorts: ports,
-			wantAddrPorts:     ports,
+			wantEndpointPorts: []uint32{port},
+			wantAddrPorts:     []uint32{port},
 		},
 	}
 
@@ -1234,10 +1250,9 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				Name:   localityName1,
 				Weight: 1,
 				Backends: []e2e.BackendOptions{{
-					Port:            ports[0],
+					Port:            port,
 					AdditionalPorts: additionalPorts}},
 			}})
-
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
@@ -1245,9 +1260,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			// Create an xDS client talking to the above management server, configured
 			// with a short watch expiry timeout.
 			xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:               t.Name(),
-				Contents:           bootstrapContents,
-				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Name:     t.Name(),
+				Contents: bootstrapContents,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -1258,18 +1272,18 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			// the cluster_resolver LB policy with a single discovery mechanism.
 			r := manual.NewBuilderWithScheme("whatever")
 			jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cluster_resolver_experimental":{
-					"discoveryMechanisms": [{
-						"cluster": "%s",
-						"type": "EDS",
-						"edsServiceName": "%s",
-						"outlierDetection": {}
-					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
-				}
-			}]
-		}`, clusterName, edsServiceName)
+				"loadBalancingConfig":[{
+					"cluster_resolver_experimental":{
+						"discoveryMechanisms": [{
+							"cluster": "%s",
+							"type": "EDS",
+							"edsServiceName": "%s",
+							"outlierDetection": {}
+						}],
+						"xdsLbPolicy":[{"round_robin":{}}]
+					}
+				}]
+			}`, clusterName, edsServiceName)
 			scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 			r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -1279,7 +1293,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			}
 			defer cc.Close()
 			client := testgrpc.NewTestServiceClient(cc)
-			if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs); err != nil {
+			if err := rrutil.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: lis1.Addr().String()}}); err != nil {
 				t.Fatal(err)
 			}
 
