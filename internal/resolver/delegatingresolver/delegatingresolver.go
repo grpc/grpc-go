@@ -197,17 +197,13 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 		}
 	}
 
-	if r.targetEndpoint == nil {
-		return addresses, nil
-	}
-	
-//
 	var endpoints []resolver.Endpoint
 	for _, proxyEndpt := range r.proxyEndpoint {
+		proxyAddr := proxyEndpt.Addresses[0].Addr
 		for _, endpt := range r.targetEndpoint {
 			var addrs []resolver.Address
 			for _, targetAddr := range endpt.Addresses {
-				newAddr := resolver.Address{Addr: proxyEndpt.Addresses[0].Addr}
+				newAddr := resolver.Address{Addr: proxyAddr}
 				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
 					User:        r.proxyURL.User,
 					ConnectAddr: targetAddr.Addr,
