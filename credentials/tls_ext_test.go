@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
@@ -410,12 +409,6 @@ func (s) TestTLS_CipherSuitesOverridable(t *testing.T) {
 // correctly for a server that doesn't specify the NextProtos field and uses
 // GetConfigForClient to provide the TLS config during the handshake.
 func (s) TestTLS_ServerConfiguresALPNByDefault(t *testing.T) {
-	initialVal := envconfig.EnforceALPNEnabled
-	defer func() {
-		envconfig.EnforceALPNEnabled = initialVal
-	}()
-	envconfig.EnforceALPNEnabled = true
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -452,11 +445,6 @@ func (s) TestTLS_ServerConfiguresALPNByDefault(t *testing.T) {
 // TestTLS_DisabledALPNClient tests the behaviour of TransportCredentials when
 // connecting to a server that doesn't support ALPN.
 func (s) TestTLS_DisabledALPNClient(t *testing.T) {
-	initialVal := envconfig.EnforceALPNEnabled
-	defer func() {
-		envconfig.EnforceALPNEnabled = initialVal
-	}()
-
 	tests := []struct {
 		name         string
 		alpnEnforced bool
@@ -467,15 +455,10 @@ func (s) TestTLS_DisabledALPNClient(t *testing.T) {
 			alpnEnforced: true,
 			wantErr:      true,
 		},
-		{
-			name: "not_enforced",
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			envconfig.EnforceALPNEnabled = tc.alpnEnforced
-
 			listener, err := tls.Listen("tcp", "localhost:0", &tls.Config{
 				Certificates: []tls.Certificate{serverCert},
 				NextProtos:   []string{}, // Empty list indicates ALPN is disabled.
@@ -533,11 +516,6 @@ func (s) TestTLS_DisabledALPNClient(t *testing.T) {
 // TestTLS_DisabledALPNServer tests the behaviour of TransportCredentials when
 // accepting a request from a client that doesn't support ALPN.
 func (s) TestTLS_DisabledALPNServer(t *testing.T) {
-	initialVal := envconfig.EnforceALPNEnabled
-	defer func() {
-		envconfig.EnforceALPNEnabled = initialVal
-	}()
-
 	tests := []struct {
 		name         string
 		alpnEnforced bool
@@ -548,15 +526,10 @@ func (s) TestTLS_DisabledALPNServer(t *testing.T) {
 			alpnEnforced: true,
 			wantErr:      true,
 		},
-		{
-			name: "not_enforced",
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			envconfig.EnforceALPNEnabled = tc.alpnEnforced
-
 			listener, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("Error starting server: %v", err)
