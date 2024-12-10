@@ -143,7 +143,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr1:314",
+							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
@@ -153,7 +153,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr2:159",
+							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
@@ -185,7 +185,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr1:314",
+							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
@@ -195,7 +195,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr2:159",
+							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
@@ -296,10 +296,9 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Address:           "addr1:997",
-							HealthStatus:      EndpointHealthStatusUnhealthy,
-							Weight:            271,
-							AdditionalAddress: []string{"addr1:1000"},
+							Addresses:    []string{"addr1:997", "addr1:1000"},
+							HealthStatus: EndpointHealthStatusUnhealthy,
+							Weight:       271,
 						}},
 						ID:       internal.LocalityID{SubZone: "locality-1"},
 						Priority: 1,
@@ -307,10 +306,9 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Address:           "addr2:998",
-							AdditionalAddress: []string{"addr2:1000"},
-							HealthStatus:      EndpointHealthStatusHealthy,
-							Weight:            828,
+							Addresses:    []string{"addr2:998", "addr2:1000"},
+							HealthStatus: EndpointHealthStatusHealthy,
+							Weight:       828,
 						}},
 						ID:       internal.LocalityID{SubZone: "locality-2"},
 						Priority: 0,
@@ -389,7 +387,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr1:314",
+							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
@@ -399,7 +397,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr2:159",
+							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
@@ -420,7 +418,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Localities: []Locality{
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr1:314",
+							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
@@ -430,7 +428,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					{
 						Endpoints: []Endpoint{{
-							Address:      "addr2:159",
+							Addresses:    []string{"addr2:159"},
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},

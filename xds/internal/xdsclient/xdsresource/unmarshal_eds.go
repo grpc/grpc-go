@@ -94,26 +94,23 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			weight = w.GetValue()
 		}
-		addr := parseAddress(lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress())
-		var additionalAddrs []string
+		addrs := []string{parseAddress(lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress())}
 		if envconfig.XDSDualstackEndpointsEnabled {
-			additionalAddrs = make([]string, len(lbEndpoint.GetEndpoint().GetAdditionalAddresses()))
-			for i, sa := range lbEndpoint.GetEndpoint().GetAdditionalAddresses() {
-				additionalAddrs[i] = parseAddress(sa.GetAddress().GetSocketAddress())
+			for _, sa := range lbEndpoint.GetEndpoint().GetAdditionalAddresses() {
+				addrs = append(addrs, parseAddress(sa.GetAddress().GetSocketAddress()))
 			}
 		}
 
-		for _, a := range append([]string{addr}, additionalAddrs...) {
+		for _, a := range addrs {
 			if uniqueEndpointAddrs[a] {
 				return nil, fmt.Errorf("duplicate endpoint with the same address %s", a)
 			}
 			uniqueEndpointAddrs[a] = true
 		}
 		endpoints = append(endpoints, Endpoint{
-			HealthStatus:      EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
-			Address:           addr,
-			Weight:            weight,
-			AdditionalAddress: additionalAddrs,
+			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
+			Addresses:    addrs,
+			Weight:       weight,
 		})
 	}
 	return endpoints, nil

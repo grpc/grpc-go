@@ -49,10 +49,9 @@ const (
 
 // Endpoint contains information of an endpoint.
 type Endpoint struct {
-	Address           string
-	AdditionalAddress []string
-	HealthStatus      EndpointHealthStatus
-	Weight            uint32
+	Addresses    []string
+	HealthStatus EndpointHealthStatus
+	Weight       uint32
 }
 
 // Locality contains information of a locality.

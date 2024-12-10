@@ -263,7 +263,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				continue
 			}
 			resolverEndpoint := resolver.Endpoint{}
-			for _, as := range append([]string{endpoint.Address}, endpoint.AdditionalAddress...) {
+			for _, as := range endpoint.Addresses {
 				resolverEndpoint.Addresses = append(resolverEndpoint.Addresses, resolver.Address{Addr: as})
 			}
 			resolverEndpoint = hierarchy.SetInEndpoint(resolverEndpoint, []string{priorityName, localityStr})
