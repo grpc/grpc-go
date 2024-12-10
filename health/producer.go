@@ -70,14 +70,14 @@ type healthServiceProducer struct {
 
 // registerClientSideHealthCheckListener accepts a listener to provide server
 // health state via the health service.
-func registerClientSideHealthCheckListener(ctx context.Context, sc balancer.SubConn, opts grpc.HealthCheckOptions) func() {
+func registerClientSideHealthCheckListener(ctx context.Context, sc balancer.SubConn, serviceName string, listener func(balancer.SubConnState)) func() {
 	pr, closeFn := sc.GetOrBuildProducer(producerBuilderSingleton)
 	p := pr.(*healthServiceProducer)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cancel()
 	<-p.cancelDone
-	if opts.Listener == nil {
+	if listener == nil {
 		return closeFn
 	}
 
@@ -85,18 +85,18 @@ func registerClientSideHealthCheckListener(ctx context.Context, sc balancer.SubC
 	ctx, cancel := context.WithCancel(ctx)
 	p.cancel = cancel
 
-	go p.startHealthCheck(ctx, sc, opts, p.cancelDone)
+	go p.startHealthCheck(ctx, sc, serviceName, listener, p.cancelDone)
 	return closeFn
 }
 
-func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balancer.SubConn, opts grpc.HealthCheckOptions, closeCh chan struct{}) {
+func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balancer.SubConn, serviceName string, listener func(balancer.SubConnState), closeCh chan struct{}) {
 	defer close(closeCh)
 	newStream := func(method string) (any, error) {
 		return p.cc.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, method)
 	}
 
 	setConnectivityState := func(state connectivity.State, err error) {
-		opts.Listener(balancer.SubConnState{
+		listener(balancer.SubConnState{
 			ConnectivityState: state,
 			ConnectionError:   err,
 		})
@@ -104,7 +104,7 @@ func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balance
 
 	// Call the function through the internal variable as tests use it for
 	// mocking.
-	err := internal.HealthCheckFunc(ctx, newStream, setConnectivityState, opts.ServiceName)
+	err := internal.HealthCheckFunc(ctx, newStream, setConnectivityState, serviceName)
 	if err == nil {
 		return
 	}

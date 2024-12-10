@@ -1250,11 +1250,11 @@ func (s) TestHealthCheckUnregisterHealthListener(t *testing.T) {
 
 	_, r := setupClient(t, nil)
 	svcCfg := fmt.Sprintf(`{
-	    "healthCheckConfig": {
-		    "serviceName": "foo"
-	    },
-	    "loadBalancingConfig": [{"%s":{}}]
-    }`, t.Name())
+		"healthCheckConfig": {
+			"serviceName": "foo"
+		},
+		"loadBalancingConfig": [{"%s":{}}]
+	}`, t.Name())
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, svcCfg)})

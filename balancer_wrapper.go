@@ -420,18 +420,32 @@ func (acbw *acBalancerWrapper) closeProducers() {
 	}
 }
 
-// HealthCheckOptions are the options to configure the health check producer.
-//
-// # Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
-type HealthCheckOptions struct {
-	// ServiceName of the gRPC service running on the server for reporting health state.
-	ServiceName string
-	// Listener is called when the health update is received from the health
-	// service running on the server.
-	Listener func(balancer.SubConnState)
+// healthProducerRegisterFn is a type alias for the health producer's function
+// for registering listeners.
+type healthProducerRegisterFn = func(context.Context, balancer.SubConn, string, func(balancer.SubConnState)) func()
+
+// healthServiceOpts returns the options for client side health checking.
+// It returns a nil registerHealthListenerFn if client side health checks are
+// disabled.
+// Client side health checking is enabled when all the following
+// conditions are satisfied:
+// 1. Health checking is not disabled using the dial option.
+// 2. The health package is imported.
+// 3. The health check config is present in the service config.
+func (acbw *acBalancerWrapper) healthServiceOpts() (string, healthProducerRegisterFn) {
+	if acbw.ccb.cc.dopts.disableHealthCheck {
+		return "", nil
+	}
+	regHealthLisFn := internal.RegisterClientHealthCheckListener
+	if regHealthLisFn == nil {
+		// The health package is not imported.
+		return "", nil
+	}
+	cfg := acbw.ac.cc.healthCheckConfig()
+	if cfg == nil {
+		return "", nil
+	}
+	return cfg.ServiceName, regHealthLisFn.(healthProducerRegisterFn)
 }
 
 // RegisterHealthListener accepts a health listener from the LB policy. It sends
@@ -458,24 +472,7 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		return
 	}
 
-	// Client side health checking is enabled when all the following
-	// conditions are satisfied:
-	// 1. Health checking is not disabled using the dial option.
-	// 2. The health package is imported.
-	// 3. The health check config is present in the service config.
-	healthCheckEnabled := !acbw.ccb.cc.dopts.disableHealthCheck
-	regHealthLisFn := internal.RegisterClientHealthCheckListener
-	if regHealthLisFn == nil {
-		// The health package is not imported.
-		healthCheckEnabled = false
-	}
-	var cfg *healthCheckConfig
-	if healthCheckEnabled {
-		// Avoid acquiring cc.mu unless necessary.
-		cfg = acbw.ac.cc.healthCheckConfig()
-		healthCheckEnabled = cfg != nil
-	}
-
+	serviceName, registerFn := acbw.healthServiceOpts()
 	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
@@ -486,7 +483,7 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		if acbw.healthData != hd {
 			return
 		}
-		if !healthCheckEnabled {
+		if registerFn == nil {
 			listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 			return
 		}
@@ -506,11 +503,6 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 			})
 		}
 
-		healthOpts := HealthCheckOptions{
-			ServiceName: cfg.ServiceName,
-			Listener:    listenerWrapper,
-		}
-		fn := regHealthLisFn.(func(context.Context, balancer.SubConn, HealthCheckOptions) func())
-		hd.closeHealthProducer = fn(ctx, acbw, healthOpts)
+		hd.closeHealthProducer = registerFn(ctx, acbw, serviceName, listenerWrapper)
 	})
 }
