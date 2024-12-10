@@ -316,6 +316,11 @@ func compressData(data []byte) []byte {
 func TestDecompress(t *testing.T) {
 	c := encoding.GetCompressor("gzip")
 
+	compressInput := func(input []byte) mem.BufferSlice {
+		compressedData := compressData(input)
+		return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
+	}
+
 	tests := []struct {
 		name                  string
 		compressor            encoding.Compressor
@@ -337,7 +342,7 @@ func TestDecompress(t *testing.T) {
 			compressor:            c,
 			input:                 []byte{},
 			maxReceiveMessageSize: 10,
-			want:                  []byte{},
+			want:                  nil,
 			error:                 nil,
 		},
 		{
@@ -345,17 +350,14 @@ func TestDecompress(t *testing.T) {
 			compressor:            c,
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 5,
-			want:                  []byte{},
+			want:                  nil,
 			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compressedMsg := func() mem.BufferSlice {
-				compressedData := compressData(tt.input)
-				return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-			}()
-
+			compressedMsg := compressInput(tt.input)
 			output, numSliceInBuf, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
 			var wantMsg mem.BufferSlice
 			if tt.want != nil {
@@ -364,13 +366,10 @@ func TestDecompress(t *testing.T) {
 			if tt.error != nil && err == nil {
 				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
 			}
-			if numSliceInBuf != wantMsg.Len() {
-				t.Fatalf("decompress() number of slice of Buffer, got err=%v, want err=%v", numSliceInBuf, tt.want)
+			if tt.error == nil && numSliceInBuf != wantMsg.Len() {
+				t.Fatalf("decompress() number of slices mismatch, got = %d, want = %d", numSliceInBuf, wantMsg.Len())
 			}
-			if wantMsg != nil && output == nil {
-				t.Fatalf("decompress() got = nil, want = non nil")
-			}
-			if diff := cmp.Diff(wantMsg, output); diff != "" {
+			if diff := cmp.Diff(wantMsg.Materialize(), output.Materialize()); diff != "" {
 				t.Fatalf("Mismatch in output:\n%s", diff)
 			}
 
