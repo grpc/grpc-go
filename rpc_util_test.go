@@ -21,12 +21,15 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"math"
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
 	protoenc "google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/testutils"
@@ -311,4 +314,65 @@ func compressData(data []byte) []byte {
 // inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
 
 func TestDecompress(t *testing.T) {
+	c := encoding.GetCompressor("gzip")
+
+	compressInput := func(input []byte) mem.BufferSlice {
+		compressedData := compressData(input)
+		return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
+	}
+
+	tests := []struct {
+		name                  string
+		compressor            encoding.Compressor
+		input                 []byte
+		maxReceiveMessageSize int
+		want                  []byte
+		error                 error
+	}{
+		{
+			name:                  "Decompresses successfully with sufficient buffer size",
+			compressor:            c,
+			input:                 []byte("decompressed data"),
+			maxReceiveMessageSize: 50,
+			want:                  []byte("decompressed data"),
+			error:                 nil,
+		},
+		{
+			name:                  "failure, empty receive message",
+			compressor:            c,
+			input:                 []byte{},
+			maxReceiveMessageSize: 10,
+			want:                  nil,
+			error:                 nil,
+		},
+		{
+			name:                  "overflow failure, receive message exceeds maxReceiveMessageSize",
+			compressor:            c,
+			input:                 []byte("small message"),
+			maxReceiveMessageSize: 5,
+			want:                  nil,
+			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compressedMsg := compressInput(tt.input)
+			output, numSliceInBuf, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
+			var wantMsg mem.BufferSlice
+			if tt.want != nil {
+				wantMsg = mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
+			}
+			if tt.error != nil && err == nil {
+				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
+			}
+			if tt.error == nil && numSliceInBuf != wantMsg.Len() {
+				t.Fatalf("decompress() number of slices mismatch, got = %d, want = %d", numSliceInBuf, wantMsg.Len())
+			}
+			if diff := cmp.Diff(wantMsg.Materialize(), output.Materialize()); diff != "" {
+				t.Fatalf("Mismatch in output:\n%s", diff)
+			}
+
+		})
+	}
 }
