@@ -58,11 +58,8 @@ func verifyLabels(desc *estats.MetricDescriptor, labelsRecv ...string) {
 // count associated with the provided handle.
 func (l *MetricsRecorderList) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	verifyLabels(handle.Descriptor(), labels...)
-	fmt.Println("Inside MetricsRecorderList with metric recorders as: ", l.metricsRecorders)
+
 	for _, metricRecorder := range l.metricsRecorders {
-		if metricRecorder == nil {
-			fmt.Println("metric recorder is nil.")
-		}
 		metricRecorder.RecordInt64Count(handle, incr, labels...)
 	}
 }
