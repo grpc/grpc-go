@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -70,6 +71,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
 	}
+	fmt.Println("Setting metrics recorder.")
 	h.MetricsRecorder = rm
 	rm.registerMetrics(metrics, meter)
 }
