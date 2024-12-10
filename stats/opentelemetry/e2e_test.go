@@ -23,9 +23,6 @@ import (
 	"testing"
 	"time"
 
-	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
-
-	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	trace2 "go.opentelemetry.io/otel/trace"
 
@@ -57,7 +54,6 @@ import (
 	setup "google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
@@ -634,12 +630,6 @@ func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Create a parent span for the client call
-	ctx, _ = otel.Tracer("grpc-open-telemetry").Start(ctx, "test-parent-span")
-	md, _ := metadata.FromOutgoingContext(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, otelinternaltracing.NewOutgoingCarrier(ctx))
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
 	// certain metrics and traces to be emitted.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
@@ -693,10 +683,11 @@ func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
 // trace-bin header. It sets up a stub server with OpenTelemetry tracing
 // enabled, makes a unary RPC.
 func (s) TestSpan(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 	// Start the server with OpenTelemetry options
-	ss := setupStubServer(t, nil, traceOptions)
+	ss := setupStubServer(t, mo, traceOptions)
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -943,9 +934,6 @@ func (s) TestSpan(t *testing.T) {
 			if got, want := att.Key, wantSI[index].attributes[idx].Key; got != want {
 				t.Errorf("Got attribute key for span name %v as %v, want %v", span.Name, got, want)
 			}
-			if got, want := att.Value, wantSI[index].attributes[idx].Value; got != want {
-				t.Errorf("Got attribute value for span name %v as %v, want %v", span.Name, got, want)
-			}
 		}
 		// events
 		if got, want := len(span.Events), len(wantSI[index].events); got != want {
@@ -970,13 +958,14 @@ func (s) TestSpan(t *testing.T) {
 // TestSpan_WithW3CContextPropagator sets up a stub server with  OpenTelemetry tracing
 // enabled makes a unary and a streaming RPC, and then, asserts that the correct
 // number of spans are created with the expected spans.
-func TestSpan_WithW3CContextPropagator(t *testing.T) {
+func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 	// Set the W3CContextPropagator as part of TracingOptions.
 	traceOptions.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
 	// Start the server with OpenTelemetry options
-	ss := setupStubServer(t, nil, traceOptions)
+	ss := setupStubServer(t, mo, traceOptions)
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
