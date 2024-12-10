@@ -359,6 +359,7 @@ func TestDecompress(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			compressedMsg := compressInput(tt.input)
 			output, numSliceInBuf, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
+
 			var wantMsg mem.BufferSlice
 			if tt.want != nil {
 				wantMsg = mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
