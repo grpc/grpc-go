@@ -128,6 +128,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 
 	r := manual.NewBuilderWithScheme("whatever")
+
 	r.InitialState(resolver.State{Addresses: addrs})
 
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
