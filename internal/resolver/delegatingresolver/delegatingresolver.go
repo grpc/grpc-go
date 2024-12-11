@@ -197,10 +197,6 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 		}
 	}
 
-	if r.proxyEndpoint == nil || r.targetEndpoint == nil {
-		return addresses, nil
-	}
-
 	// Create a list of combined addresses by pairing each proxy endpoint
 	// with every target endpoint. For each pair, it constructs a new
 	// [resolver.Endpoint] using the first address from the proxy endpoint,
