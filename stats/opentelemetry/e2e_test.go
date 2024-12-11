@@ -84,12 +84,12 @@ func defaultMetricsOptions(_ *testing.T, methodAttributeFilter func(string) bool
 }
 
 // defaultTraceOptions function to create default trace options
-func defaultTraceOptions(_ *testing.T) (*TraceOptions, *tracetest.InMemoryExporter) {
+func defaultTraceOptions(_ *testing.T) (*experimental.TraceOptions, *tracetest.InMemoryExporter) {
 	spanExporter := tracetest.NewInMemoryExporter()
 	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
 	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
 	textMapPropagator := propagation.NewCompositeTextMapPropagator(experimental.GRPCTraceBinPropagator{})
-	traceOptions := &TraceOptions{
+	traceOptions := &experimental.TraceOptions{
 		TracerProvider:    tracerProvider,
 		TextMapPropagator: textMapPropagator,
 	}
@@ -98,7 +98,7 @@ func defaultTraceOptions(_ *testing.T) (*TraceOptions, *tracetest.InMemoryExport
 
 // setupStubServer creates a stub server with OpenTelemetry component configured on client
 // and server side and returns the server.
-func setupStubServer(t *testing.T, metricsOptions *MetricsOptions, traceOptions *TraceOptions) *stubserver.StubServer {
+func setupStubServer(t *testing.T, metricsOptions *MetricsOptions, traceOptions *experimental.TraceOptions) *stubserver.StubServer {
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
