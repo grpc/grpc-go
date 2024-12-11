@@ -422,7 +422,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 	select {
 	case <-ch: // Signal received, continue with the test
 	case <-time.After(5 * time.Second):
-		t.Errorf("timeout waiting for ctx.Done")
+		t.Errorf("timeout waiting for signalDeadlineExceeded")
 		return
 	}
 
