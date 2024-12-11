@@ -16,7 +16,7 @@
  *
  */
 
-package opentelemetry
+package experimental
 
 import (
 	"context"

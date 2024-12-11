@@ -19,6 +19,7 @@ package opentelemetry
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/stats/opentelemetry/experimental"
 	"io"
 	"testing"
 	"time"
@@ -87,7 +88,7 @@ func defaultTraceOptions(_ *testing.T) (*TraceOptions, *tracetest.InMemoryExport
 	spanExporter := tracetest.NewInMemoryExporter()
 	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
 	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
-	textMapPropagator := propagation.NewCompositeTextMapPropagator(GRPCTraceBinPropagator{})
+	textMapPropagator := propagation.NewCompositeTextMapPropagator(experimental.GRPCTraceBinPropagator{})
 	traceOptions := &TraceOptions{
 		TracerProvider:    tracerProvider,
 		TextMapPropagator: textMapPropagator,
