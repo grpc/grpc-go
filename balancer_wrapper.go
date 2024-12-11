@@ -424,9 +424,9 @@ func (acbw *acBalancerWrapper) closeProducers() {
 // for registering listeners.
 type healthProducerRegisterFn = func(context.Context, balancer.SubConn, string, func(balancer.SubConnState)) func()
 
-// healthServiceOpts returns the options for client side health checking.
-// It returns a nil registerHealthListenerFn if client side health checks are
-// disabled.
+// healthServiceOpts returns the service name and a function to register
+// listener for client side health checking. It returns a nil
+// registerHealthListenerFn if client side health checks are disabled.
 // Client side health checking is enabled when all the following
 // conditions are satisfied:
 // 1. Health checking is not disabled using the dial option.
@@ -483,6 +483,8 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		if acbw.healthData != hd {
 			return
 		}
+		// If client side health checks are disabled, send the raw connectivity
+		// state and return.
 		if registerFn == nil {
 			listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 			return
