@@ -16,10 +16,11 @@
  *
  */
 
-package opentelemetry
+package experimental
 
 import (
 	"context"
+	"google.golang.org/grpc/internal/grpctest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -27,6 +28,14 @@ import (
 	"google.golang.org/grpc/metadata"
 	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 var validSpanContext = oteltrace.SpanContext{}.WithTraceID(
 	oteltrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}).WithSpanID(
