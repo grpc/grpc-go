@@ -96,6 +96,7 @@ func (scw *subConnWrapper) String() string {
 }
 
 func (scw *subConnWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
+	fmt.Println("Health listener registered")
 	scw.mu.Lock()
 	defer scw.mu.Unlock()
 
