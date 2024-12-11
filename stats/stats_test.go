@@ -169,20 +169,10 @@ type testServer struct {
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	if err := grpc.SendHeader(ctx, testHeaderMetadata); err != nil {
-		return nil, status.Errorf(
-			status.Code(err),
-			"grpc.SendHeader(_, %v) = %v, want <nil>",
-			testHeaderMetadata,
-			err,
-		)
+		return nil, status.Errorf(status.Code(err), "grpc.SendHeader(_, %v) = %v, want <nil>", testHeaderMetadata, err)
 	}
 	if err := grpc.SetTrailer(ctx, testTrailerMetadata); err != nil {
-		return nil, status.Errorf(
-			status.Code(err),
-			"grpc.SetTrailer(_, %v) = %v, want <nil>",
-			testTrailerMetadata,
-			err,
-		)
+		return nil, status.Errorf(status.Code(err), "grpc.SetTrailer(_, %v) = %v, want <nil>", testTrailerMetadata, err)
 	}
 
 	if id := payloadToID(in.Payload); id == errorID {
@@ -219,14 +209,7 @@ func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallSe
 
 func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
-		return status.Errorf(
-			status.Code(err),
-			"%v.SendHeader(%v) = %v, want %v",
-			stream,
-			testHeaderMetadata,
-			err,
-			nil,
-		)
+		return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
 	}
 	stream.SetTrailer(testTrailerMetadata)
 	for {
@@ -247,14 +230,7 @@ func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInp
 
 func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
-		return status.Errorf(
-			status.Code(err),
-			"%v.SendHeader(%v) = %v, want %v",
-			stream,
-			testHeaderMetadata,
-			err,
-			nil,
-		)
+		return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
 	}
 	stream.SetTrailer(testTrailerMetadata)
 
@@ -314,6 +290,8 @@ func newTest(t *testing.T, tc *testConfig, chs []stats.Handler, shs []stats.Hand
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
+// 
+// Uses deprecated opts rpc.(RPCCompressor, RPCDecompressor, WithBlock, Dial)
 func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testServer = ts
 	lis, err := net.Listen("tcp", "localhost:0")
