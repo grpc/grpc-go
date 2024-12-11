@@ -1077,13 +1077,13 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			wantUpdate: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
 					{
-						Endpoints: []xdsresource.Endpoint{{Address: "addr1:314", Weight: 1}},
+						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr1:314"}, Weight: 1}},
 						ID:        internal.LocalityID{SubZone: "locality-1"},
 						Priority:  1,
 						Weight:    1,
 					},
 					{
-						Endpoints: []xdsresource.Endpoint{{Address: "addr2:159", Weight: 1}},
+						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr2:159"}, Weight: 1}},
 						ID:        internal.LocalityID{SubZone: "locality-2"},
 						Priority:  0,
 						Weight:    1,
@@ -1111,13 +1111,13 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			wantUpdate: xdsresource.EndpointsUpdate{
 				Localities: []xdsresource.Locality{
 					{
-						Endpoints: []xdsresource.Endpoint{{Address: "addr1:314", Weight: 1}},
+						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr1:314"}, Weight: 1}},
 						ID:        internal.LocalityID{SubZone: "locality-1"},
 						Priority:  1,
 						Weight:    1,
 					},
 					{
-						Endpoints: []xdsresource.Endpoint{{Address: "addr2:159", Weight: 1}},
+						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr2:159"}, Weight: 1}},
 						ID:        internal.LocalityID{SubZone: "locality-2"},
 						Priority:  0,
 						Weight:    1,

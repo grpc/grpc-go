@@ -436,7 +436,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 			Host:        "localhost",
 			Localities: []e2e.LocalityOptions{
 				{
-					Backends: []e2e.BackendOptions{{Port: port1}, {Port: port2}},
+					Backends: []e2e.BackendOptions{{Ports: []uint32{port1}}, {Ports: []uint32{port2}}},
 					Weight:   1,
 				},
 			},
@@ -473,7 +473,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	// scheduler.
 	receivedExpectedMetrics := grpcsync.NewEvent()
 	go func() {
-		for !receivedExpectedMetrics.HasFired() {
+		for !receivedExpectedMetrics.HasFired() && ctx.Err() == nil {
 			client.EmptyCall(ctx, &testpb.Empty{})
 			time.Sleep(2 * time.Millisecond)
 		}
