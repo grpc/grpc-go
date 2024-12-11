@@ -24,29 +24,22 @@ package opentelemetry
 
 import (
 	"context"
+	"google.golang.org/grpc/stats/opentelemetry/experimental"
+	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 	"strings"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
-	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 )
-
-func init() {
-	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
-		o.MetricsOptions.pluginOption = po
-	}
-}
 
 var logger = grpclog.Component("otel-plugin")
 
@@ -54,12 +47,18 @@ var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
 var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
+func init() {
+	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
+		o.MetricsOptions.pluginOption = po
+	}
+}
+
 // Options are the options for OpenTelemetry instrumentation.
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
 	MetricsOptions MetricsOptions
 	// TraceOptions are the tracing options for OpenTelemetry instrumentation.
-	TraceOptions TraceOptions
+	TraceOptions experimental.TraceOptions
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -92,16 +91,6 @@ type MetricsOptions struct {
 
 	// pluginOption is used to get labels to attach to certain metrics, if set.
 	pluginOption otelinternal.PluginOption
-}
-
-// TraceOptions are the tracing options for OpenTelemetry instrumentation.
-type TraceOptions struct {
-	// TracerProvider is the OpenTelemetry tracer which is required to
-	// record traces/trace spans for instrumentation
-	TracerProvider trace.TracerProvider
-
-	// TextMapPropagator propagates span context through text map carrier.
-	TextMapPropagator propagation.TextMapPropagator
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -191,7 +180,7 @@ func isMetricsDisabled(mo MetricsOptions) bool {
 	return mo.MeterProvider == nil
 }
 
-func isTracingDisabled(to TraceOptions) bool {
+func isTracingDisabled(to experimental.TraceOptions) bool {
 	return to.TracerProvider == nil || to.TextMapPropagator == nil
 }
 
