@@ -83,7 +83,6 @@ var (
 	}
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
-
     // Server Stats
 	// Ensure that Unary RPC server stats events are logged in the correct order.
 	expectedUnarySequence = []string{
@@ -96,7 +95,6 @@ var (
 		"OutTrailer",
 		"End",
 	}
-
     // Server Stats
 	// Ensure that the sequence of server-side stats events for a 
 	// client stream RPC matches the expected flow.
@@ -114,7 +112,6 @@ var (
 		"OutTrailer",
 		"End",
 	}
-
     // Server Stats Test
 	// Ensure that the sequence of server-side stats events for a 
 	// server stream RPC matches the expected flow.
@@ -197,14 +194,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallServer) error {
 	if err := stream.SendHeader(testHeaderMetadata); err != nil {
-		return status.Errorf(
-			status.Code(err),
-			"%v.SendHeader(%v) = %v, want %v",
-			stream,
-			testHeaderMetadata,
-			err,
-			nil,
-		)
+		return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
 	}
 	stream.SetTrailer(testTrailerMetadata)
 	for {
@@ -1623,12 +1613,10 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
-
 	// Each RPC generates 6 stats events on the client-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 12)
 	}
-
 	// Each connection generates 4 conn events on the client-side, times 2 StatsHandler
 	if len(h.gotConn) != 4 {
 		t.Fatalf("h.gotConn: unexpected amount of ConnStats: %v != %v", len(h.gotConn), 4)
@@ -1669,12 +1657,10 @@ func (s) TestMultipleServerStatsHandler(t *testing.T) {
 		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
-
 	// Each RPC generates 6 stats events on the server-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 12)
 	}
-
 	// Each connection generates 4 conn events on the server-side, times 2 StatsHandler
 	if len(h.gotConn) != 4 {
 		t.Fatalf("h.gotConn: unexpected amount of ConnStats: %v != %v", len(h.gotConn), 4)
@@ -1753,10 +1739,8 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-
 	// Allow time for events to propagate
 	time.Sleep(50 * time.Millisecond)
-
 	// Verify sequence
 	h.mu.Lock()
 	defer h.mu.Unlock()
