@@ -57,7 +57,7 @@ func (s) TestResolverBalancerInteraction(t *testing.T) {
 	rb := manual.NewBuilderWithScheme(name)
 	rb.BuildCallback = func(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) {
 		sc := cc.ParseServiceConfig(`{"loadBalancingConfig": [{"` + name + `":{}}]}`)
-		cc.UpdateState(resolver.State{
+		rb.InitialState(resolver.State{
 			Addresses:     []resolver.Address{{Addr: "test"}},
 			ServiceConfig: sc,
 		})
@@ -66,7 +66,7 @@ func (s) TestResolverBalancerInteraction(t *testing.T) {
 	rb.ResolveNowCallback = func(resolver.ResolveNowOptions) { close(rnCh) }
 	resolver.Register(rb)
 
-	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"`+name+`":{}}]}`))
+	cc, err := grpc.NewClient(name+":///", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient error: %v", err)
 	}
