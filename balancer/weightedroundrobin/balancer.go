@@ -219,7 +219,9 @@ type wrrBalancer struct {
 }
 
 func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	b.logger.Infof("UpdateCCS: %v", ccs)
+	if b.logger.V(2) {
+		b.logger.Infof("UpdateCCS: %v", ccs)
+	}
 	cfg, ok := ccs.BalancerConfig.(*lbConfig)
 	if !ok {
 		return fmt.Errorf("wrr: received nil or illegal BalancerConfig (type %T): %v", ccs.BalancerConfig, ccs.BalancerConfig)
