@@ -197,6 +197,18 @@ func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Addre
 		}
 	}
 
+	if r.proxyEndpoint == nil || r.targetEndpoint == nil {
+		return addresses, nil
+	}
+
+	// Create a list of combined addresses by pairing each proxy endpoint
+	// with every target endpoint. For each pair, it constructs a new
+	// [resolver.Endpoint] using the first address from the proxy endpoint,
+	// as the DNS resolver is expected to return only one address per proxy
+	// endpoint. The target address and user information from the proxy URL
+	// are added as attributes to this address. The resulting list of addresses
+	// is then grouped into endpoints, covering all combinations of proxy and
+	// target endpoints.
 	var endpoints []resolver.Endpoint
 	for _, proxyEndpt := range r.proxyEndpoint {
 		proxyAddr := proxyEndpt.Addresses[0].Addr
