@@ -441,17 +441,15 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 
+	r.InitialState(resolver.State{
+		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
+	})
+
 	cc, err := grpc.NewClient(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
-
-	// Start a goroutine to update the resolver state.
-	go func() {
-		<-time.After(100 * time.Millisecond)
-		r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
