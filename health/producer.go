@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/status"
 )
 
@@ -42,19 +41,14 @@ var producerBuilderSingleton *producerBuilder
 
 // Build constructs and returns a producer and its cleanup function.
 func (*producerBuilder) Build(cci any) (balancer.Producer, func()) {
-	doneCh := make(chan struct{})
 	p := &healthServiceProducer{
-		cc:         cci.(grpc.ClientConnInterface),
-		cancelDone: doneCh,
-		cancel: grpcsync.OnceFunc(func() {
-			close(doneCh)
-		}),
+		cc:     cci.(grpc.ClientConnInterface),
+		cancel: func() {},
 	}
 	return p, func() {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		p.cancel()
-		<-p.cancelDone
 	}
 }
 
@@ -63,9 +57,8 @@ type healthServiceProducer struct {
 	// that and therefore do not need to be guarded by a mutex.
 	cc grpc.ClientConnInterface
 
-	mu         sync.Mutex
-	cancel     func()
-	cancelDone chan (struct{})
+	mu     sync.Mutex
+	cancel func()
 }
 
 // registerClientSideHealthCheckListener accepts a listener to provide server
@@ -76,21 +69,18 @@ func registerClientSideHealthCheckListener(ctx context.Context, sc balancer.SubC
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cancel()
-	<-p.cancelDone
 	if listener == nil {
 		return closeFn
 	}
 
-	p.cancelDone = make(chan struct{})
 	ctx, cancel := context.WithCancel(ctx)
 	p.cancel = cancel
 
-	go p.startHealthCheck(ctx, sc, serviceName, listener, p.cancelDone)
+	go p.startHealthCheck(ctx, sc, serviceName, listener)
 	return closeFn
 }
 
-func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balancer.SubConn, serviceName string, listener func(balancer.SubConnState), closeCh chan struct{}) {
-	defer close(closeCh)
+func (p *healthServiceProducer) startHealthCheck(ctx context.Context, sc balancer.SubConn, serviceName string, listener func(balancer.SubConnState)) {
 	newStream := func(method string) (any, error) {
 		return p.cc.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, method)
 	}

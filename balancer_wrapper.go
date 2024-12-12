@@ -34,7 +34,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var setConnectedAddress = internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
+var (
+	setConnectedAddress = internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
+	// noOpRegisterHealthListenerFn is used when client side health checking is
+	// disabled. It sends a single READY update on the registered listener.
+	noOpRegisterHealthListenerFn = func(_ context.Context, listener func(balancer.SubConnState)) func() {
+		listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		return func() {}
+	}
+)
 
 // ccBalancerWrapper sits between the ClientConn and the Balancer.
 //
@@ -424,28 +432,31 @@ func (acbw *acBalancerWrapper) closeProducers() {
 // for registering listeners.
 type healthProducerRegisterFn = func(context.Context, balancer.SubConn, string, func(balancer.SubConnState)) func()
 
-// healthServiceOpts returns the service name and a function to register
-// listener for client side health checking. It returns a nil
-// registerHealthListenerFn if client side health checks are disabled.
+// healthListenerRegFn returns a function to register a listener for health
+// updates. If client side health checks are disabled, the registered listener
+// will get a single READY (raw connectivity state) update.
+//
 // Client side health checking is enabled when all the following
 // conditions are satisfied:
 // 1. Health checking is not disabled using the dial option.
 // 2. The health package is imported.
 // 3. The health check config is present in the service config.
-func (acbw *acBalancerWrapper) healthServiceOpts() (string, healthProducerRegisterFn) {
+func (acbw *acBalancerWrapper) healthListenerRegFn() func(context.Context, func(balancer.SubConnState)) func() {
 	if acbw.ccb.cc.dopts.disableHealthCheck {
-		return "", nil
+		return noOpRegisterHealthListenerFn
 	}
 	regHealthLisFn := internal.RegisterClientHealthCheckListener
 	if regHealthLisFn == nil {
 		// The health package is not imported.
-		return "", nil
+		return noOpRegisterHealthListenerFn
 	}
 	cfg := acbw.ac.cc.healthCheckConfig()
 	if cfg == nil {
-		return "", nil
+		return noOpRegisterHealthListenerFn
 	}
-	return cfg.ServiceName, regHealthLisFn.(healthProducerRegisterFn)
+	return func(ctx context.Context, listener func(balancer.SubConnState)) func() {
+		return regHealthLisFn.(healthProducerRegisterFn)(ctx, acbw, cfg.ServiceName, listener)
+	}
 }
 
 // RegisterHealthListener accepts a health listener from the LB policy. It sends
@@ -472,7 +483,7 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		return
 	}
 
-	serviceName, registerFn := acbw.healthServiceOpts()
+	registerFn := acbw.healthListenerRegFn()
 	acbw.ccb.serializer.TrySchedule(func(ctx context.Context) {
 		if ctx.Err() != nil || acbw.ccb.balancer == nil {
 			return
@@ -481,12 +492,6 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 		acbw.healthMu.Lock()
 		defer acbw.healthMu.Unlock()
 		if acbw.healthData != hd {
-			return
-		}
-		// If client side health checks are disabled, send the raw connectivity
-		// state and return.
-		if registerFn == nil {
-			listener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 			return
 		}
 		// Serialize the health updates from the health producer with
@@ -505,6 +510,6 @@ func (acbw *acBalancerWrapper) RegisterHealthListener(listener func(balancer.Sub
 			})
 		}
 
-		hd.closeHealthProducer = registerFn(ctx, acbw, serviceName, listenerWrapper)
+		hd.closeHealthProducer = registerFn(ctx, listenerWrapper)
 	})
 }
