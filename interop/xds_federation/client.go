@@ -54,6 +54,7 @@ var (
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
 	soakRequestSize                        = flag.Int("soak_request_size", 271828, "The request size in a soak RPC. The default value is set based on the interop large unary test case.")
 	soakResponseSize                       = flag.Int("soak_response_size", 314159, "The response size in a soak RPC. The default value is set based on the interop large unary test case.")
+	numThreads                             = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	testCase                               = flag.String("test_case", "rpc_soak",
 		`Configure different test cases. Valid options are:
         rpc_soak: sends --soak_iterations large_unary RPCs;
@@ -63,6 +64,7 @@ var (
 )
 
 type clientConfig struct {
+	conn *grpc.ClientConn
 	tc   testgrpc.TestServiceClient
 	opts []grpc.DialOption
 	uri  string
@@ -81,18 +83,24 @@ func main() {
 			logger.Fatalf("Unsupported credentials type: %v", c)
 		}
 	}
-	var resetChannel bool
+	var clients []clientConfig
+	var channelFunc interop.ChannelFunc
 	switch *testCase {
 	case "rpc_soak":
-		resetChannel = false
+		channelFunc = interop.UseSharedChannel
 	case "channel_soak":
-		resetChannel = true
+		channelFunc = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+			for _, client := range clients {
+				return interop.CreateNewChannel(currentChannel, client.uri, client.opts)
+			}
+			return nil, nil
+		}
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}
 
 	// create clients as specified in flags
-	var clients []clientConfig
+	//var clients []clientConfig
 	for i := range uris {
 		var opts []grpc.DialOption
 		switch creds[i] {
@@ -101,12 +109,13 @@ func main() {
 		case insecureCredsName:
 			opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
-		cc, err := grpc.Dial(uris[i], opts...)
+		cc, err := grpc.NewClient(uris[i], opts...)
 		if err != nil {
 			logger.Fatalf("Fail to dial %v: %v", uris[i], err)
 		}
 		defer cc.Close()
 		clients = append(clients, clientConfig{
+			conn: cc,
 			tc:   testgrpc.NewTestServiceClient(cc),
 			opts: opts,
 			uri:  uris[i],
@@ -122,7 +131,20 @@ func main() {
 		go func(c clientConfig) {
 			ctxWithDeadline, cancel := context.WithTimeout(ctx, time.Duration(*soakOverallTimeoutSeconds)*time.Second)
 			defer cancel()
-			interop.DoSoakTest(ctxWithDeadline, c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond)
+			interop.DoSoakTest(
+				ctxWithDeadline,
+				c.conn,
+				c.uri,
+				*numThreads,
+				*soakIterations,
+				*soakMaxFailures,
+				*soakRequestSize,
+				*soakResponseSize,
+				time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond,
+				time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond,
+				*soakOverallTimeoutSeconds,
+				channelFunc,
+			)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
 			wg.Done()
 		}(clients[i])
