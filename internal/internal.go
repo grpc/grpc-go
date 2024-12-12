@@ -239,10 +239,10 @@ var (
 	// testing purposes.
 	SetBufferPoolingThresholdForTesting any // func(int)
 
-	// HTTPSProxyFromEnvironmentForTesting returns the URL of the proxy to use
+	// HTTPSProxyFromEnvironment returns the URL of the proxy to use
 	// for testing purposes. It is used to override the `http.ProxyFromEnvironment`
 	// function for testing purposes.
-	HTTPSProxyFromEnvironmentForTesting any //func(*http.Request) (*url.URL, error)
+	HTTPSProxyFromEnvironment any //func(*http.Request) (*url.URL, error)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

@@ -45,9 +45,9 @@ const (
 // overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overrideHTTPSProxyFromEnvironment(hpfe func(req *http.Request) (*url.URL, error)) func() {
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	internal.HTTPSProxyFromEnvironment = hpfe
 	return func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = nil
+		internal.HTTPSProxyFromEnvironment = nil
 	}
 }
 
@@ -73,7 +73,6 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 				Scheme: "https",
 				Host:   "proxy.example.com",
 			},
-			wantErr: nil,
 		},
 		{
 			name: "invalid proxy url and non-nil error",
@@ -83,7 +82,10 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 					Host:   "notproxy.example.com",
 				}, err
 			},
-			wantURL: nil,
+			wantURL: &url.URL{
+				Scheme: "https",
+				Host:   "notproxy.example.com",
+			},
 			wantErr: err,
 		},
 		{
@@ -91,8 +93,6 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return nil, nil
 			},
-			wantURL: nil,
-			wantErr: nil,
 		},
 	}
 	for _, tt := range tests {

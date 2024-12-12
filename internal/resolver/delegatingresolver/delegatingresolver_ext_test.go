@@ -47,12 +47,6 @@ func Test(t *testing.T) {
 }
 
 const (
-	targetTestAddr          = "test.com"
-	resolvedTargetTestAddr1 = "1.2.3.4:8080"
-	resolvedTargetTestAddr2 = "1.2.3.5:8080"
-	envProxyAddr            = "proxytest.com"
-	resolvedProxyTestAddr1  = "2.3.4.5:7687"
-	resolvedProxyTestAddr2  = "2.3.4.6:7687"
 	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
@@ -78,23 +72,28 @@ func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, 
 // by the target resolver.
 func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 	hpfe := func(req *http.Request) (*url.URL, error) { return nil, nil }
-	originalhpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = originalhpfe
+		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
-	mr := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
-	target := mr.Scheme() + ":///" + targetTestAddr
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.2.3.4:8080"
+		resolvedTargetTestAddr2 = "1.2.3.5:8080"
+	)
+	targetResolver := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
+	target := targetResolver.Scheme() + ":///" + targetTestAddr
 
 	// Create a delegating resolver with no proxy configuration
 	tcc, stateCh, _ := createTestResolverClientConn(t)
-	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, mr, false); err != nil {
+	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
 	// Update the manual resolver with a test address.
-	mr.UpdateState(resolver.State{
+	targetResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: resolvedTargetTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
@@ -113,8 +112,8 @@ func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 
-	if !cmp.Equal(gotState, wantState) {
-		t.Fatalf("Unexpected state from delegating resolver: %s, want %s", pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
 	}
 }
 
@@ -147,6 +146,14 @@ func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolv
 // addresses returned by the delegating resolver combines the addresses
 // returned by the proxy resolver and the target resolver.
 func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T) {
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.2.3.4:8080"
+		resolvedTargetTestAddr2 = "1.2.3.5:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "2.3.4.5:7687"
+		resolvedProxyTestAddr2  = "2.3.4.6:7687"
+	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -154,12 +161,13 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 				Host:   envProxyAddr,
 			}, nil
 		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = originalhpfe
+		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	mrTarget := setupDNS(t) // Manual resolver to control the target resolution.
@@ -210,8 +218,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 
-	if !cmp.Equal(gotState, wantState) {
-		t.Fatalf("Unexpected state from delegating resolver: %s, want %s", pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
 	}
 }
 
@@ -221,6 +229,14 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 // proxy resolver's addresses, with the unresolved target URI as an attribute
 // of the proxy address.
 func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.2.3.4:8080"
+		resolvedTargetTestAddr2 = "1.2.3.5:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "2.3.4.5:7687"
+		resolvedProxyTestAddr2  = "2.3.4.6:7687"
+	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -228,12 +244,13 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 				Host:   envProxyAddr,
 			}, nil
 		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = originalhpfe
+		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	mrTarget := setupDNS(t) // Manual resolver to control the target resolution.
@@ -264,8 +281,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 
-	if !cmp.Equal(gotState, wantState) {
-		t.Fatalf("Unexpected state from delegating resolver: %s, want %s", pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
 	}
 }
 
@@ -274,6 +291,14 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 // resolver include the resolved proxy address and the custom resolved target
 // address as attributes of the proxy address.
 func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.2.3.4:8080"
+		resolvedTargetTestAddr2 = "1.2.3.5:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "2.3.4.5:7687"
+		resolvedProxyTestAddr2  = "2.3.4.6:7687"
+	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -281,12 +306,13 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 				Host:   envProxyAddr,
 			}, nil
 		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = originalhpfe
+		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	mrTarget := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
@@ -336,8 +362,8 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 
-	if !cmp.Equal(gotState, wantState) {
-		t.Fatalf("Unexpected state from delegating resolver: %s, want %s", pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
 	}
 }
 
@@ -348,6 +374,14 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 // and the target address included as an attribute of the proxy address for
 // each combination of proxy and target endpoints.
 func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.2.3.4:8080"
+		resolvedTargetTestAddr2 = "1.2.3.5:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "2.3.4.5:7687"
+		resolvedProxyTestAddr2  = "2.3.4.6:7687"
+	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
 			return &url.URL{
@@ -355,12 +389,13 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 				Host:   envProxyAddr,
 			}, nil
 		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = originalhpfe
+		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	mrTarget := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.

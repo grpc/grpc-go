@@ -45,19 +45,11 @@ func Populate(addr resolver.Address, opts Options) resolver.Address {
 	return addr
 }
 
-// ConnectAddr returns the proxy CONNECT address in resolver.Address, or empty
-// string if not present.
-func ConnectAddr(addr resolver.Address) string {
+// Option returns the Options for the proxy [resolver.Address], or empty struct
+// if not present.
+func Option(addr resolver.Address) Options {
 	if a := addr.Attributes.Value(proxyOptionsKey); a != nil {
-		return a.(Options).ConnectAddr
+		return a.(Options)
 	}
-	return ""
-}
-
-// User returns the user info in the resolver.Address, or nil if not present.
-func User(addr resolver.Address) *url.Userinfo {
-	if a := addr.Attributes.Value(proxyOptionsKey); a != nil {
-		return a.(Options).User
-	}
-	return nil
+	return Options{}
 }
