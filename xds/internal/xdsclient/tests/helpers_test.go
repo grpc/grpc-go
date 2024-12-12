@@ -36,10 +36,9 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestWatchExpiryTimeout       = 500 * time.Millisecond
-	defaultTestIdleChannelExpiryTimeout = 50 * time.Millisecond
-	defaultTestTimeout                  = 10 * time.Second
-	defaultTestShortTimeout             = 10 * time.Millisecond // For events expected to *not* happen.
+	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
+	defaultTestTimeout            = 10 * time.Second
+	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 
 	ldsName         = "xdsclient-test-lds-resource"
 	rdsName         = "xdsclient-test-rds-resource"

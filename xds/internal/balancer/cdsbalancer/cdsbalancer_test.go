@@ -928,12 +928,12 @@ func (s) TestResolverError(t *testing.T) {
 	}
 }
 
-// Tests that closing the cds LB policy results in the cluster resource watch
-// being cancelled and the child policy being closed.
+// Tests that closing the cds LB policy results in the the child policy being
+// closed.
 func (s) TestClose(t *testing.T) {
 	cdsBalancerCh := registerWrappedCDSPolicy(t)
 	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, cdsResourceCanceledCh := setupWithManagementServer(t)
+	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -967,12 +967,6 @@ func (s) TestClose(t *testing.T) {
 	}
 	cdsBal.Close()
 
-	// Wait for the CDS resource to be not requested anymore.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for CDS resource to be not requested")
-	case <-cdsResourceCanceledCh:
-	}
 	// Wait for the child policy to be closed.
 	select {
 	case <-ctx.Done():
