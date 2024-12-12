@@ -1048,7 +1048,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 // containing both the old good update and the latest NACK error. The test
 // verifies that a when a new watch is registered for the same resource, the new
 // watcher receives the good update followed by the NACK error.
-func TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
+func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()

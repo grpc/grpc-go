@@ -459,6 +459,7 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	if _, err := conn.CloseCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when expecting existing connection to be closed: %v", err)
 	}
+	streamRequestCh.Drain()
 
 	// Register a watch for the same listener resource.
 	lw = newListenerWatcher()

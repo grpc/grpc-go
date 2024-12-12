@@ -639,6 +639,9 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			if a.logger.V(2) {
 				a.logger.Infof("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
 			}
+			// state can only be accessed in the context of an
+			// xdsClientSerializer callback. Hence making a copy of the cached
+			// resource here for watchCallbackSerializer.
 			resource := state.cache
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
 		}
@@ -648,7 +651,11 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			if a.logger.V(2) {
 				a.logger.Infof("Resource type %q with resource name %q was NACKed", rType.TypeName(), resourceName)
 			}
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.ErrState.Err, func() {}) })
+			// state can only be accessed in the context of an
+			// xdsClientSerializer callback. Hence making a copy of the error
+			// here for watchCallbackSerializer.
+			err := state.md.ErrState.Err
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(err, func() {}) })
 		}
 		// If the metadata field is updated to indicate that the management
 		// server does not have this resource, notify the new watcher.
