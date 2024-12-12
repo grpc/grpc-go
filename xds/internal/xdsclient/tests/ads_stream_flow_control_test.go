@@ -150,9 +150,12 @@ func overrideADSStreamCreation(t *testing.T) chan *wrappedADSStream {
 func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
 	t.Helper()
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

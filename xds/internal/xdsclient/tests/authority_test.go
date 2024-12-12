@@ -101,9 +101,12 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	pool, err := xdsclient.NewPool(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client pool: %v", err)
+	}
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
 		WatchExpiryTimeout:       defaultTestWatchExpiryTimeout,
 		IdleChannelExpiryTimeout: idleTimeout,
 	})
