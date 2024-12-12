@@ -922,7 +922,7 @@ func DoSoakTest(
 	if totalFailures > maxFailures {
 		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, maxFailures)
 	}
-	closeChannel(sharedChannel)
+	defer closeChannel(sharedChannel)
 }
 
 type testServer struct {
