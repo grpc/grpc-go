@@ -417,11 +417,17 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 
-	s := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
+	stub.S = grpc.NewServer()
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
+
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 	creds := &attrTransportCreds{}
@@ -548,15 +554,16 @@ func (s) TestServersSwap(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error while listening. Err: %v", err)
 		}
-		s := grpc.NewServer()
-		ts := &funcServer{
-			unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+
+		stub := &stubserver.StubServer{
+			Listener: lis,
+			UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
-		testgrpc.RegisterTestServiceServer(s, ts)
-		go s.Serve(lis)
-		return lis.Addr().String(), s.Stop
+		stub.S = grpc.NewServer()
+		stubserver.StartTestService(t, stub)
+		return lis.Addr().String(), stub.S.Stop
 	}
 	const one = "1"
 	addr1, cleanup := reg(one)
@@ -603,16 +610,17 @@ func (s) TestWaitForReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
-	s := grpc.NewServer()
-	defer s.Stop()
+
 	const one = "1"
-	ts := &funcServer{
-		unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testgrpc.RegisterTestServiceServer(s, ts)
-	go s.Serve(lis)
+	stub.S = grpc.NewServer()
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
@@ -740,10 +748,16 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			s := grpc.NewServer()
-			testgrpc.RegisterTestServiceServer(s, &testServer{})
-			go s.Serve(lis)
-			defer s.Stop()
+			stub := &stubserver.StubServer{
+				Listener: lis,
+				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+					return &testpb.Empty{}, nil
+				},
+			}
+			stub.S = grpc.NewServer()
+			stubserver.StartTestService(t, stub)
+			defer stub.S.Stop()
+
 			t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 			r := manual.NewBuilderWithScheme("whatever")
