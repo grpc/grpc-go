@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -808,6 +809,9 @@ func (p *payloadInfo) free() {
 	}
 }
 
+// Global error for message size exceeding the limit
+var ErrMaxMessageSizeExceeded = errors.New("max message size exceeded")
+
 // recvAndDecompress reads a message from the stream, decompressing it if necessary.
 //
 // Cancelling the returned cancel function releases the buffer back to the pool. So the caller should cancel as soon as
@@ -828,7 +832,6 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 		return nil, st.Err()
 	}
 
-	var size int
 	if pf.isCompressed() {
 		defer compressed.Free()
 
@@ -840,18 +843,18 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 			if err == nil {
 				out = mem.BufferSlice{mem.SliceBuffer(uncompressedBuf)}
 			}
-			size = len(uncompressedBuf)
 		} else {
-			out, size, err = decompress(compressor, compressed, maxReceiveMessageSize, p.bufferPool)
+			out, _, err = decompress(compressor, compressed, maxReceiveMessageSize, p.bufferPool)
 		}
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
 		}
-		if size > maxReceiveMessageSize {
+
+		if err == ErrMaxMessageSizeExceeded {
 			out.Free()
 			// TODO: Revisit the error code. Currently keep it consistent with java
 			// implementation.
-			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
+			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", maxReceiveMessageSize)
 		}
 	} else {
 		out = compressed
@@ -867,7 +870,7 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 }
 
 // Using compressor, decompress d, returning data and size.
-// Optionally, if data will be over maxReceiveMessageSize, just return the size.
+// If the decompressed data exceeds maxReceiveMessageSize, it returns nil, 0, and an error.
 func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, int, error) {
 	dcReader, err := compressor.Decompress(d.Reader())
 	if err != nil {
@@ -877,7 +880,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	out, err := mem.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)), pool)
 	if err != nil {
 		out.Free()
-		return nil, 0, err
+		return nil, 0, ErrMaxMessageSizeExceeded
 	}
 	if err = checkReceiveMessageOverflow(int64(out.Len()), int64(maxReceiveMessageSize), dcReader); err != nil {
 		return nil, out.Len() + 1, err
@@ -893,12 +896,13 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 // If additional data is read, or an error other than `io.EOF` is encountered, the function
 // returns an error indicating that the message size has exceeded the permissible limit.
 func checkReceiveMessageOverflow(readBytes, maxReceiveMessageSize int64, dcReader io.Reader) error {
-	if readBytes == maxReceiveMessageSize {
-		b := make([]byte, 1)
-		if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
-			return fmt.Errorf("overflow: received message size is larger than the allowed maxReceiveMessageSize (%d bytes)",
-				maxReceiveMessageSize)
-		}
+	if readBytes < maxReceiveMessageSize {
+		return nil
+	}
+
+	b := make([]byte, 1)
+	if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
+		return fmt.Errorf("overflow: received message size is larger than the allowed maxReceiveMessageSize (%d bytes)", maxReceiveMessageSize)
 	}
 	return nil
 }
