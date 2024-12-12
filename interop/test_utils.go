@@ -685,11 +685,13 @@ func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 	}
 }
 
+// SoakIterationResult represents the result of a single iteration in the soak test.
 type SoakIterationResult struct {
 	LatencyMs int64
 	Status    string // The status of the iteration
 }
 
+// ThreadResults stores the aggregated results for a specific thread during the soak test
 type ThreadResults struct {
 	IterationsDone int
 	Failures       int
@@ -770,6 +772,7 @@ func doOneSoakIteration(
 }
 
 func executeSoakTestInThread(
+	ctx context.Context,
 	soakIterationsPerThread int,
 	startNs int64,
 	minTimeBetweenRPCs time.Duration,
@@ -780,7 +783,6 @@ func executeSoakTestInThread(
 	serverAddr string,
 	threadResults *ThreadResults,
 	mu *sync.Mutex,
-	ctx context.Context,
 	sharedChannel *grpc.ClientConn,
 	threadID int,
 	channelFunc ChannelFunc) {
@@ -870,6 +872,7 @@ func DoSoakTest(
 		go func(threadID int) {
 			defer wg.Done()
 			executeSoakTestInThread(
+				ctx,
 				iterationsPerThread,
 				startNs,
 				minTimeBetweenRPCs,
@@ -880,7 +883,6 @@ func DoSoakTest(
 				serverAddr,
 				&threadResults[threadID],
 				&mu,
-				ctx,
 				sharedChannel,
 				threadID,
 				channelFunc)
