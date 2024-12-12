@@ -21,7 +21,6 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
-	"errors"
 	"io"
 	"math"
 	"reflect"
@@ -351,7 +350,7 @@ func TestDecompress(t *testing.T) {
 			input:                 []byte("small message"),
 			maxReceiveMessageSize: 5,
 			want:                  nil,
-			error:                 errors.New("overflow: received message size is larger than the allowed maxReceiveMessageSize (5 bytes)"),
+			error:                 ErrMaxMessageSizeExceeded,
 		},
 	}
 
@@ -369,8 +368,8 @@ func TestDecompress(t *testing.T) {
 			if tt.error == nil && numSliceInBuf != wantMsg.Len() {
 				t.Fatalf("decompress() number of slices mismatch, got = %d, want = %d", numSliceInBuf, wantMsg.Len())
 			}
-			if diff := cmp.Diff(wantMsg.Materialize(), output.Materialize()); diff != "" {
-				t.Fatalf("Mismatch in output:\n%s", diff)
+			if diff := cmp.Diff(tt.want, output.Materialize()); diff != "" {
+				t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
 			}
 
 		})
