@@ -610,7 +610,6 @@ func (s) TestWaitForReady(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
-
 	const one = "1"
 	stub := &stubserver.StubServer{
 		Listener: lis,
