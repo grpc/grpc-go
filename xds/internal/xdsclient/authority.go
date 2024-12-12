@@ -646,7 +646,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// immediately as well.
 		if state.md.Status == xdsresource.ServiceStatusNACKed {
 			if a.logger.V(2) {
-				a.logger.Infof("Resource type %q with resource name %q was NACKed: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
+				a.logger.Infof("Resource type %q with resource name %q was NACKed", rType.TypeName(), resourceName)
 			}
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.ErrState.Err, func() {}) })
 		}
@@ -687,7 +687,7 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			delete(state.watchers, watcher)
 			if len(state.watchers) > 0 {
 				if a.logger.V(2) {
-					a.logger.Infof("%d more watchers exist for type %q, resource name %q", rType.TypeName(), resourceName)
+					a.logger.Infof("More watchers exist for type %q, resource name %q", rType.TypeName(), resourceName)
 				}
 				return
 			}
