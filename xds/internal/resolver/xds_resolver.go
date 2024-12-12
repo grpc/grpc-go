@@ -21,9 +21,16 @@ package resolver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/tls/certprovider"
+	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	rand "math/rand/v2"
 	"sync/atomic"
+	"unsafe"
 
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
@@ -42,7 +49,15 @@ import (
 //
 // TODO(easwars): Rename this package as xdsresolver so that this is accessed as
 // xdsresolver.Scheme
-const Scheme = "xds"
+const (
+	Scheme                   = "xds"
+	aggregateClusterMaxDepth = 16
+)
+
+var (
+	errExceedsMaxDepth = fmt.Errorf("aggregate cluster graph exceeds max depth (%d)", aggregateClusterMaxDepth)
+	buildProvider      = buildProviderFunc
+)
 
 // newBuilderWithConfigForTesting creates a new xds resolver builder using a
 // specific xds bootstrap config, so tests can use multiple xds clients in
@@ -130,6 +145,20 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.dataplaneAuthority = opts.Authority
 	r.ldsResourceName = bootstrap.PopulateResourceTemplate(template, target.Endpoint())
 	r.listenerWatcher = newListenerWatcher(r.ldsResourceName, r)
+	hi := xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
+	xdsHIPtr := unsafe.Pointer(hi)
+	r.xdsHIPtr = &xdsHIPtr
+
+	var creds credentials.TransportCredentials
+	switch {
+	case opts.DialCreds != nil:
+		creds = opts.DialCreds
+	case opts.CredsBundle != nil:
+		creds = opts.CredsBundle.TransportCredentials()
+	}
+	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
+		r.xdsCredsInUse = true
+	}
 	return r, nil
 }
 
@@ -189,6 +218,7 @@ type xdsResolver struct {
 	// The underlying xdsClient which performs all xDS requests and responses.
 	xdsClient      xdsclient.XDSClient
 	xdsClientClose func()
+	//depManager     *XdsDependencyManager
 	// A random number which uniquely identifies the channel which owns this
 	// resolver.
 	channelID uint64
@@ -223,6 +253,16 @@ type xdsResolver struct {
 	// activeClusters is a map from cluster name to information about the
 	// cluster that includes a ref count and load balancing configuration.
 	activeClusters map[string]*clusterInfo
+	watchers       map[string]*watcherState // Set of watchers and associated state, keyed by cluster name.
+
+	// The certificate providers are cached here to that they can be closed when
+	// a new provider is to be created.
+	cachedRoot     certprovider.Provider
+	cachedIdentity certprovider.Provider
+
+	xdsCredsInUse bool
+
+	xdsHIPtr *unsafe.Pointer // Accessed atomically.
 
 	curConfigSelector *configSelector
 }
@@ -427,6 +467,13 @@ func (r *xdsResolver) onResolutionComplete() {
 		return
 	}
 
+	if envconfig.NewXdsResolverEnabled {
+		// Start watching clusters referenced in the config selector
+		for clusterName := range cs.clusters {
+			newClusterConfigWatcher(clusterName, r)
+		}
+	}
+
 	r.curConfigSelector.stop()
 	r.curConfigSelector = cs
 }
@@ -581,4 +628,237 @@ func (r *xdsResolver) onRouteConfigResourceNotFound(name string) {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onClusterRefDownToZero() {
 	r.sendNewServiceConfig(r.curConfigSelector)
+}
+
+// Handles an error Cluster update from the xDS client. Propagates the error
+// down to the child policy if one exists, or puts the channel in
+// TRANSIENT_FAILURE.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) onClusterError(name string, err error) {
+	r.logger.Warningf("Cluster resource %q received error update: %v", name, err)
+
+	r.onError(err)
+}
+
+// Handles a resource-not-found error from the xDS client. Propagates the error
+// down to the child policy if one exists, or puts the channel in
+// TRANSIENT_FAILURE.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) onClusterResourceNotFound(name string) {
+	if r.logger.V(2) {
+		r.logger.Infof("Received resource-not-found-error for ClusterConfiguration resource %q", name)
+	}
+
+	r.onResourceNotFound()
+}
+
+func (r *xdsResolver) onClusterUpdate(name string, update xdsresource.ClusterUpdate) {
+	// Update the state with the latest cluster update
+	r.watchers[name].lastUpdate = &update
+
+	r.logger.Infof("Received Cluster resource update: %s", pretty.ToJSON(update))
+
+	if err := r.handleSecurityConfig(update.SecurityCfg); err != nil {
+		r.onClusterError(name, fmt.Errorf("invalid security config: %v", err))
+		return
+	}
+
+	// Generate discovery mechanisms for the cluster
+	clustersSeen := make(map[string]bool)
+	_, _, err := r.generateDMsForCluster(name, 0, nil, clustersSeen)
+	if err != nil {
+		r.onClusterError(name, fmt.Errorf("failed to generate discovery mechanisms: %v", err))
+		return
+	}
+
+	// TODO(aranjans): DMS will be used to figure out the endpoints.
+
+	// Clean up watchers for clusters that were not seen in this update
+	for cluster := range clustersSeen {
+		if _, ok := r.activeClusters[cluster]; !ok {
+			r.watchers[cluster].cancelWatch()
+			delete(r.activeClusters, cluster)
+		}
+	}
+}
+
+// Generates discovery mechanisms for the cluster graph rooted at `name`. This
+// method is called recursively if `name` corresponds to an aggregate cluster,
+// with the base case for recursion being a leaf cluster. If a new cluster is
+// encountered when traversing the graph, a watcher is created for it.
+//
+// Inputs:
+// - name: name of the cluster to start from
+// - depth: recursion depth of the current cluster, starting from root
+// - dms: prioritized list of current discovery mechanisms
+// - clustersSeen: cluster names seen so far in the graph traversal
+//
+// Outputs:
+//   - new prioritized list of discovery mechanisms
+//   - boolean indicating if traversal of the aggregate cluster graph is
+//     complete. If false, the above list of discovery mechanisms is ignored.
+//   - error indicating if any error was encountered as part of the graph
+//     traversal. If error is non-nil, the other return values are ignored.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) generateDMsForCluster(name string, depth int, dms []clusterresolver.DiscoveryMechanism, clustersSeen map[string]bool) ([]clusterresolver.DiscoveryMechanism, bool, error) {
+	if depth >= aggregateClusterMaxDepth {
+		return dms, false, errExceedsMaxDepth
+	}
+
+	if clustersSeen[name] {
+		// Discovery mechanism already seen through a different branch.
+		return dms, true, nil
+	}
+	clustersSeen[name] = true
+
+	state, ok := r.watchers[name]
+	if !ok {
+		// If we have not seen this cluster so far, create a watcher for it, add
+		// it to the map, start the watch and return.
+		newClusterConfigWatcher(name, r)
+
+		// And since we just created the watcher, we know that we haven't
+		// resolved the cluster graph yet.
+		return dms, false, nil
+	}
+
+	// A watcher exists, but no update has been received yet.
+	if state.lastUpdate == nil {
+		return dms, false, nil
+	}
+
+	var dm clusterresolver.DiscoveryMechanism
+	cluster := state.lastUpdate
+	switch cluster.ClusterType {
+	case xdsresource.ClusterTypeAggregate:
+		// This boolean is used to track if any of the clusters in the graph is
+		// not yet completely resolved or returns errors, thereby allowing us to
+		// traverse as much of the graph as possible (and start the associated
+		// watches where required) to ensure that clustersSeen contains all
+		// clusters in the graph that we can traverse to.
+		missingCluster := false
+		var err error
+		for _, child := range cluster.PrioritizedClusterNames {
+			var ok bool
+			dms, ok, err = r.generateDMsForCluster(child, depth+1, dms, clustersSeen)
+			if err != nil || !ok {
+				missingCluster = true
+			}
+		}
+		return dms, !missingCluster, err
+	case xdsresource.ClusterTypeEDS:
+		dm = clusterresolver.DiscoveryMechanism{
+			Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
+			Cluster:               cluster.ClusterName,
+			EDSServiceName:        cluster.EDSServiceName,
+			MaxConcurrentRequests: cluster.MaxRequests,
+			LoadReportingServer:   cluster.LRSServerConfig,
+		}
+	case xdsresource.ClusterTypeLogicalDNS:
+		dm = clusterresolver.DiscoveryMechanism{
+			Type:        clusterresolver.DiscoveryMechanismTypeLogicalDNS,
+			Cluster:     cluster.ClusterName,
+			DNSHostname: cluster.DNSHostName,
+		}
+	}
+	odJSON := cluster.OutlierDetection
+	// "In the cds LB policy, if the outlier_detection field is not set in
+	// the Cluster resource, a "no-op" outlier_detection config will be
+	// generated in the corresponding DiscoveryMechanism config, with all
+	// fields unset." - A50
+	if odJSON == nil {
+		// This will pick up top level defaults in Cluster Resolver
+		// ParseConfig, but sre and fpe will be nil still so still a
+		// "no-op" config.
+		odJSON = json.RawMessage(`{}`)
+	}
+	dm.OutlierDetection = odJSON
+
+	dm.TelemetryLabels = cluster.TelemetryLabels
+
+	return append(dms, dm), true, nil
+}
+
+// handleSecurityConfig processes the security configuration received from the
+// management server, creates appropriate certificate provider plugins, and
+// updates the HandshakeInfo which is added as an address attribute in
+// NewSubConn() calls.
+//
+// Only executed in the context of a serializer callback.
+func (r *xdsResolver) handleSecurityConfig(config *xdsresource.SecurityConfig) error {
+	// If xdsCredentials are not in use, i.e, the user did not want to get
+	// security configuration from an xDS server, we should not be acting on the
+	// received security config here. Doing so poses a security threat.
+	if !r.xdsCredsInUse {
+		return nil
+	}
+	var xdsHI *xdsinternal.HandshakeInfo
+
+	// Security config being nil is a valid case where the management server has
+	// not sent any security configuration. The xdsCredentials implementation
+	// handles this by delegating to its fallback credentials.
+	if config == nil {
+		// We need to explicitly set the fields to nil here since this might be
+		// a case of switching from a good security configuration to an empty
+		// one where fallback credentials are to be used.
+		xdsHI = xdsinternal.NewHandshakeInfo(nil, nil, nil, false)
+		atomic.StorePointer(r.xdsHIPtr, unsafe.Pointer(xdsHI))
+		return nil
+	}
+
+	// A root provider is required whether we are using TLS or mTLS.
+	cpc := r.xdsClient.BootstrapConfig().CertProviderConfigs()
+	rootProvider, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
+	if err != nil {
+		return err
+	}
+
+	// The identity provider is only present when using mTLS.
+	var identityProvider certprovider.Provider
+	if name, cert := config.IdentityInstanceName, config.IdentityCertName; name != "" {
+		var err error
+		identityProvider, err = buildProvider(cpc, name, cert, true, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Close the old providers and cache the new ones.
+	if r.cachedRoot != nil {
+		r.cachedRoot.Close()
+	}
+	if r.cachedIdentity != nil {
+		r.cachedIdentity.Close()
+	}
+	r.cachedRoot = rootProvider
+	r.cachedIdentity = identityProvider
+	xdsHI = xdsinternal.NewHandshakeInfo(rootProvider, identityProvider, config.SubjectAltNameMatchers, false)
+	atomic.StorePointer(r.xdsHIPtr, unsafe.Pointer(xdsHI))
+	return nil
+}
+
+func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanceName, certName string, wantIdentity, wantRoot bool) (certprovider.Provider, error) {
+	cfg, ok := configs[instanceName]
+	if !ok {
+		// Defensive programming. If a resource received from the management
+		// server contains a certificate provider instance name that is not
+		// found in the bootstrap, the resource is NACKed by the xDS client.
+		return nil, fmt.Errorf("certificate provider instance %q not found in bootstrap file", instanceName)
+	}
+	provider, err := cfg.Build(certprovider.BuildOptions{
+		CertName:     certName,
+		WantIdentity: wantIdentity,
+		WantRoot:     wantRoot,
+	})
+	if err != nil {
+		// This error is not expected since the bootstrap process parses the
+		// config and makes sure that it is acceptable to the plugin. Still, it
+		// is possible that the plugin parses the config successfully, but its
+		// Build() method errors out.
+		return nil, fmt.Errorf("xds: failed to get security plugin instance (%+v): %v", cfg, err)
+	}
+	return provider, nil
 }
