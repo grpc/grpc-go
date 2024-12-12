@@ -419,7 +419,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -557,7 +557,7 @@ func (s) TestServersSwap(t *testing.T) {
 
 		stub := &stubserver.StubServer{
 			Listener: lis,
-			UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
@@ -614,7 +614,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	const one = "1"
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
@@ -750,7 +750,7 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 
 			stub := &stubserver.StubServer{
 				Listener: lis,
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
 			}
