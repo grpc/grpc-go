@@ -428,6 +428,11 @@ func WithTimeout(d time.Duration) DialOption {
 // returned by f, gRPC checks the error's Temporary() method to decide if it
 // should try to reconnect to the network address.
 //
+// If you want to bypass DNS resolution and connect directly to a specified
+// address, prefix your target address with passthrough:/// when using
+// WithContextDialer. This will cause the passthrough resolver to be used,
+// which avoids any DNS lookups. For example: passthrough:///localhost:50051.
+//
 // Note: All supported releases of Go (as of December 2023) override the OS
 // defaults for TCP keepalive time and interval to 15s. To enable TCP keepalive
 // with OS defaults for keepalive time and interval, use a net.Dialer that sets
