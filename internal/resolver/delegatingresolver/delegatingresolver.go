@@ -121,7 +121,10 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
 		r.targetResolverReady = true
 	} else {
-		wcc := &wrappingClientConn{stateListener: r.updateTargetResolverState}
+		wcc := &wrappingClientConn{
+			stateListener: r.updateTargetResolverState,
+			parent:        r,
+		}
 		if r.targetResolver, err = targetResolverBuilder.Build(target, wcc, opts); err != nil {
 			return nil, fmt.Errorf("delegating_resolver: unable to build the resolver for target %s: %v", target, err)
 		}
@@ -146,7 +149,9 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 	r.proxyURL.Host = "" // Clear the Host field to conform to the "dns:///" format
 
 	proxyTarget := resolver.Target{URL: *r.proxyURL}
-	wcc := &wrappingClientConn{stateListener: r.updateProxyResolverState}
+	wcc := &wrappingClientConn{
+		stateListener: r.updateProxyResolverState,
+		parent:        r}
 	return proxyBuilder.Build(proxyTarget, wcc, opts)
 }
 
