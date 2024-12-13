@@ -29,9 +29,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -430,14 +432,9 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	defer lis.Close()
 
 	cred := &authorityCheckCreds{}
-	stub := &stubserver.StubServer{
-		Listener: lis,
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	stub.S = grpc.NewServer()
-	stubserver.StartTestService(t, stub)
+	s := grpc.NewServer()
+	go s.Serve(lis)
+	defer s.Stop()
 
 	r := manual.NewBuilderWithScheme("whatever")
 
@@ -449,16 +446,12 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	// Perform an RPC to trigger the connection process and use the resolver.
-	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("Test RPC failed: %v", err)
-	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	if cred.got != testAuthority {
 		t.Fatalf("client creds got authority: %q, want: %q", cred.got, testAuthority)
