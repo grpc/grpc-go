@@ -200,21 +200,24 @@ func (r *delegatingResolver) combinedAddressesLocked() ([]resolver.Address, []re
 	// are added as attributes to this address. The resulting list of addresses
 	// is then grouped into endpoints, covering all combinations of proxy and
 	// target endpoints.
-	var endpoints []resolver.Endpoint
+	var proxyAddrs []resolver.Address
 	for _, proxyEndpt := range r.proxyEndpoint {
-		proxyAddr := proxyEndpt.Addresses[0].Addr
-		for _, endpt := range r.targetEndpoint {
-			var addrs []resolver.Address
+		proxyAddrs = append(proxyAddrs, proxyEndpt.Addresses[0])
+	}
+	var endpoints []resolver.Endpoint
+	for _, endpt := range r.targetEndpoint {
+		var addrs []resolver.Address
+		for _, proxyAddr := range proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
-				newAddr := resolver.Address{Addr: proxyAddr}
+				newAddr := resolver.Address{Addr: proxyAddr.Addr}
 				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
 					User:        r.proxyURL.User,
 					ConnectAddr: targetAddr.Addr,
 				})
 				addrs = append(addrs, newAddr)
 			}
-			endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
 		}
+		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
 	}
 	return addresses, endpoints
 }
