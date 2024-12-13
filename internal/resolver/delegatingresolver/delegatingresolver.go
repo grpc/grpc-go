@@ -51,11 +51,11 @@ type delegatingResolver struct {
 	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
 	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
 
-	mu             sync.Mutex          // protects access to the resolver state and addresses during updates
-	targetAddrs    []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
+	mu              sync.Mutex          // protects access to the resolver state and addresses during updates
+	targetAddrs     []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
 	targetEndpoints []resolver.Endpoint // resolved target endpoint
-	proxyAddrs     []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
-	curState       resolver.State      // current resolver state
+	proxyAddrs      []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
+	curState        resolver.State      // current resolver state
 
 	proxyURL            *url.URL // proxy URL, derived from proxy environment and target
 	targetResolverReady bool     // indicates if an update from the target resolver has been received
@@ -228,7 +228,7 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
 	r.proxyAddrs = state.Addresses
-	if r.proxyAddrs==nil && state.Endpoints!=nil{
+	if r.proxyAddrs == nil && state.Endpoints != nil {
 		for _, endpoint := range state.Endpoints {
 			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
 		}
