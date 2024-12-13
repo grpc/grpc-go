@@ -428,7 +428,6 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	cred := &authorityCheckCreds{}
 	s := grpc.NewServer()
 	go s.Serve(lis)
@@ -442,7 +441,6 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	}
 	cc.Connect()
 	defer cc.Close()
-
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
