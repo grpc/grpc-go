@@ -694,7 +694,7 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			delete(state.watchers, watcher)
 			if len(state.watchers) > 0 {
 				if a.logger.V(2) {
-					a.logger.Infof("More watchers exist for type %q, resource name %q", rType.TypeName(), resourceName)
+					a.logger.Infof("Other watchers exist for type %q, resource name %q", rType.TypeName(), resourceName)
 				}
 				return
 			}

@@ -338,8 +338,9 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 //     that an ACK is sent for this resource.
 //  2. The previously requested resource is no longer requested. The test
 //     verifies that the connection to the management server is closed.
-//  3. The same resource is requested again. The test verifies that the request
-//     is sent with an empty version string.
+//  3. The same resource is requested again. The test verifies that a new
+//     request is sent with an empty version string, which corresponds to the
+//     first request on a new connection.
 func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -349,15 +350,17 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	// the test goroutine to verify ACK version and nonce.
 	streamRequestCh := testutils.NewChannel()
 	streamResponseCh := testutils.NewChannel()
-	lis := testutils.NewListenerWrapper(t, nil)
+	streamCloseCh := testutils.NewChannel()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		Listener: lis,
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			streamRequestCh.SendContext(ctx, req)
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
 			streamResponseCh.SendContext(ctx, resp)
+		},
+		OnStreamClosed: func(int64, *v3corepb.Node) {
+			streamCloseCh.SendContext(ctx, struct{}{})
 		},
 	})
 
@@ -391,14 +394,6 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	lw := newListenerWatcher()
 	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
 	defer ldsCancel()
-
-	// Grab the wrapped connection from the listener wrapper. This will be used
-	// to verify the connection is closed.
-	val, err := lis.NewConnCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
-	}
-	conn := val.(*testutils.ConnWrapper)
 
 	// Verify that the initial discovery request matches expectation.
 	r, err := streamRequestCh.Receive(ctx)
@@ -456,9 +451,18 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	// Cancel the watch on the listener resource. This should result in the
 	// existing connection to be management server getting closed.
 	ldsCancel()
-	if _, err := conn.CloseCh.Receive(ctx); err != nil {
+	if _, err := streamCloseCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when expecting existing connection to be closed: %v", err)
 	}
+
+	// There is a race between two events when the last watch on an xdsChannel
+	// is canceled:
+	// - an empty discovery request being sent out
+	// - the ADS stream being closed
+	// To handle this race, we drain the request channel here so that if an
+	// empty discovery request was received, it is pulled out of the request
+	// channel and thereby guaranteeing a clean slate for the next watch
+	// registered below.
 	streamRequestCh.Drain()
 
 	// Register a watch for the same listener resource.
