@@ -53,9 +53,8 @@ type delegatingResolver struct {
 
 	mu             sync.Mutex          // protects access to the resolver state and addresses during updates
 	targetAddrs    []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
-	targetEndpoint []resolver.Endpoint // resolved target endpoint
+	targetEndpoints []resolver.Endpoint // resolved target endpoint
 	proxyAddrs     []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
-	proxyEndpoint  []resolver.Endpoint // resolved proxy endpoints; empty if no proxy is configured
 	curState       resolver.State      // current resolver state
 
 	proxyURL            *url.URL // proxy URL, derived from proxy environment and target
@@ -200,14 +199,10 @@ func (r *delegatingResolver) combinedAddressesLocked() ([]resolver.Address, []re
 	// are added as attributes to this address. The resulting list of addresses
 	// is then grouped into endpoints, covering all combinations of proxy and
 	// target endpoints.
-	var proxyAddrs []resolver.Address
-	for _, proxyEndpt := range r.proxyEndpoint {
-		proxyAddrs = append(proxyAddrs, proxyEndpt.Addresses[0])
-	}
 	var endpoints []resolver.Endpoint
-	for _, endpt := range r.targetEndpoint {
+	for _, endpt := range r.targetEndpoints {
 		var addrs []resolver.Address
-		for _, proxyAddr := range proxyAddrs {
+		for _, proxyAddr := range r.proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
 				newAddr := resolver.Address{Addr: proxyAddr.Addr}
 				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
@@ -233,7 +228,11 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
 	r.proxyAddrs = state.Addresses
-	r.proxyEndpoint = state.Endpoints
+	if r.proxyAddrs==nil && state.Endpoints!=nil{
+		for _, endpoint := range state.Endpoints {
+			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
+		}
+	}
 	r.proxyResolverReady = true
 	r.updateStateIfReadyLocked()
 	return nil
@@ -251,7 +250,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 	}
 	r.targetAddrs = state.Addresses
-	r.targetEndpoint = state.Endpoints
+	r.targetEndpoints = state.Endpoints
 	r.targetResolverReady = true
 	// Update curState to include other state information, such as the
 	// service config, provided by the target resolver. This ensures
