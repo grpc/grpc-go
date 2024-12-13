@@ -40,10 +40,15 @@ type MetricsRecorder interface {
 	RecordInt64Gauge(handle *Int64GaugeHandle, incr int64, labels ...string)
 }
 
+// Metrics is an experimental legacy alias of the now-stable stats.MetricSet.
+// Metrics will be deleted in a future release.
 type Metrics = stats.MetricSet
 
+// Metric was replaced by direct usage of strings.
 type Metric = string
 
+// NewMetrics is an experimental legacy alias of the now-stable
+// stats.NewMetricSet.  NewMetrics will be deleted in a future release.
 func NewMetrics(metrics ...Metric) *Metrics {
 	return stats.NewMetricSet(metrics...)
 }
