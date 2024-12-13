@@ -84,12 +84,12 @@ func main() {
 		}
 	}
 	var clients []clientConfig
-	var channelFunc interop.ChannelFunc
+	var MayCreateNewChannel interop.ManagedChannel
 	switch *testCase {
 	case "rpc_soak":
-		channelFunc = interop.UseSharedChannel
+		MayCreateNewChannel = interop.UseSharedChannel
 	case "channel_soak":
-		channelFunc = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+		MayCreateNewChannel = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 			for _, client := range clients {
 				return interop.CreateNewChannel(currentChannel, client.uri, client.opts)
 			}
@@ -143,7 +143,7 @@ func main() {
 				time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond,
 				time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond,
 				*soakOverallTimeoutSeconds,
-				channelFunc,
+				MayCreateNewChannel,
 			)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
 			wg.Done()

@@ -685,23 +685,23 @@ func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 	}
 }
 
-// SoakIterationResult represents the result of a single iteration in the soak test.
+// SoakIterationResult represents the latency and status results of a single iteration in the soak test.
 type SoakIterationResult struct {
 	LatencyMs int64
 	Status    string // The status of the iteration
 }
 
-// ThreadResults stores the aggregated results for a specific thread during the soak test
+// ThreadResults stores the aggregated results for a specific thread during the soak test.
 type ThreadResults struct {
 	IterationsDone int
 	Failures       int
 	Latencies      *stats.Histogram
 }
 
-// ChannelFunc can be used to customize how the channel is handled (reuse or reset)
-type ChannelFunc func(*grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient)
+// ManagedChannel determines whether a new channel will be created or an existing one reused.
+type ManagedChannel func(*grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient)
 
-// createChannel Initialize the shared channel (once for all threads)
+// createChannel initializes the shared channel (once for all threads).
 func createChannel(serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 	conn, err := grpc.NewClient(serverAddr, dopts...)
 	if err != nil {
@@ -720,14 +720,14 @@ func closeChannel(channel *grpc.ClientConn) {
 	}
 }
 
-// CreateNewChannel Create a new channel by shutting down the current one (for channel soak tests)
+// CreateNewChannel creates a new channel by shutting down the current one (for channel soak tests).
 func CreateNewChannel(currentChannel *grpc.ClientConn, serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 	closeChannel(currentChannel)
 	conn, client := createChannel(serverAddr, dopts)
 	return conn, client
 }
 
-// UseSharedChannel Reuses the provided currentChannel
+// UseSharedChannel reuses the provided currentChannel.
 func UseSharedChannel(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 	client := testgrpc.NewTestServiceClient(currentChannel)
 	return currentChannel, client
@@ -741,29 +741,29 @@ func doOneSoakIteration(
 	copts []grpc.CallOption) (SoakIterationResult, error) {
 	start := time.Now()
 	var err error
-	// Do a large-unary RPC
-	// Create the request payload
+	// Do a large-unary RPC.
+	// Create the request payload.
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, soakRequestSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
 		ResponseSize: int32(soakResponseSize),
 		Payload:      pl,
 	}
-	// Perform the GRPC call
+	// Perform the GRPC call.
 	var reply *testpb.SimpleResponse
 	reply, err = client.UnaryCall(ctx, req, copts...)
 	if err != nil {
 		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
 		return SoakIterationResult{}, err
 	}
-	// validate response
+	// Validate response.
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
 	if t != testpb.PayloadType_COMPRESSABLE || s != soakResponseSize {
 		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, soakResponseSize)
 		return SoakIterationResult{}, err
 	}
-	// Calculate latency and return result
+	// Calculate latency and return result.
 	latency := time.Since(start).Milliseconds()
 	return SoakIterationResult{
 		LatencyMs: latency,
@@ -785,7 +785,7 @@ func executeSoakTestInThread(
 	mu *sync.Mutex,
 	sharedChannel *grpc.ClientConn,
 	threadID int,
-	channelFunc ChannelFunc) {
+	MayCreateNewChannel ManagedChannel) {
 	timeoutDuration := time.Duration(overallTimeoutSeconds) * time.Second
 	currentChannel := sharedChannel
 
@@ -799,8 +799,8 @@ func executeSoakTestInThread(
 			return
 		}
 		earliestNextStart := time.After(minTimeBetweenRPCs)
-		// Get the channel and client from the provided channelFunc (either shared or new)
-		_, client := channelFunc(currentChannel)
+		// Get the channel and client from the provided channelFunc (either shared or new).
+		_, client := MayCreateNewChannel(currentChannel)
 		var p peer.Peer
 		result, err := doOneSoakIteration(
 			ctx,
@@ -831,7 +831,7 @@ func executeSoakTestInThread(
 			<-earliestNextStart
 			continue
 		}
-		// Success: log the details of the iteration
+		// Success: log the details of the iteration.
 		mu.Lock()
 		threadResults.Latencies.Add(latencyMs)
 		threadResults.IterationsDone++
@@ -857,7 +857,7 @@ func DoSoakTest(
 	perIterationMaxAcceptableLatency time.Duration,
 	minTimeBetweenRPCs time.Duration,
 	overallTimeoutSeconds int,
-	channelFunc ChannelFunc) {
+	MayCreateNewChannel ManagedChannel) {
 	if soakIterations%numThreads != 0 {
 		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by numThreads\n")
 	}
@@ -885,14 +885,14 @@ func DoSoakTest(
 				&mu,
 				sharedChannel,
 				threadID,
-				channelFunc)
+				MayCreateNewChannel)
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
+	// Wait for all goroutines to complete.
 	wg.Wait()
 
-	//Handle results
+	//Handle results.
 	totalIterations := 0
 	totalFailures := 0
 	latencies := stats.NewHistogram(stats.HistogramOptions{
@@ -905,7 +905,7 @@ func DoSoakTest(
 		totalIterations += thread.IterationsDone
 		totalFailures += thread.Failures
 		if thread.Latencies != nil {
-			// Add latencies from the thread's Histogram to the main latencies
+			// Add latencies from the thread's Histogram to the main latencies.
 			latencies.Merge(thread.Latencies)
 		}
 	}
