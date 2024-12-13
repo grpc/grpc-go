@@ -428,7 +428,6 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lis.Close()
 
 	cred := &authorityCheckCreds{}
 	s := grpc.NewServer()
@@ -437,16 +436,14 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 
-	r.InitialState(resolver.State{
-		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-	})
-
 	cc, err := grpc.NewClient(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	cc.Connect()
 	defer cc.Close()
+
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -467,20 +464,19 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	cred := &authorityCheckCreds{}
-	defer lis.Close()
-
 	s := grpc.NewServer()
 	go s.Serve(lis)
 	defer s.Stop()
 
 	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String(), ServerName: testServerName}}})
+
 	cc, err := grpc.NewClient(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	cc.Connect()
 	defer cc.Close()
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String(), ServerName: testServerName}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

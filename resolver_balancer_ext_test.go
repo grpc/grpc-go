@@ -57,7 +57,7 @@ func (s) TestResolverBalancerInteraction(t *testing.T) {
 	rb := manual.NewBuilderWithScheme(name)
 	rb.BuildCallback = func(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) {
 		sc := cc.ParseServiceConfig(`{"loadBalancingConfig": [{"` + name + `":{}}]}`)
-		rb.InitialState(resolver.State{
+		cc.UpdateState(resolver.State{
 			Addresses:     []resolver.Address{{Addr: "test"}},
 			ServiceConfig: sc,
 		})
