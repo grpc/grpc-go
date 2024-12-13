@@ -70,6 +70,17 @@ func (c *Channel) ReceiveOrFail() (any, bool) {
 	}
 }
 
+// Drain drains the channel by repeatedly reading from it until it is empty.
+func (c *Channel) Drain() {
+	for {
+		select {
+		case <-c.C:
+		default:
+			return
+		}
+	}
+}
+
 // Receive returns the value received on the underlying channel, or the error
 // returned by ctx if it is closed or cancelled.
 func (c *Channel) Receive(ctx context.Context) (any, error) {
