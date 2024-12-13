@@ -21,6 +21,7 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"math"
 	"reflect"
@@ -326,7 +327,7 @@ func TestDecompress(t *testing.T) {
 		input                 []byte
 		maxReceiveMessageSize int
 		want                  []byte
-		error                 error
+		wantErr               error
 	}{
 		{
 			name:                  "Decompresses successfully with sufficient buffer size",
@@ -334,44 +335,45 @@ func TestDecompress(t *testing.T) {
 			input:                 []byte("decompressed data"),
 			maxReceiveMessageSize: 50,
 			want:                  []byte("decompressed data"),
-			error:                 nil,
+			wantErr:               nil,
 		},
 		{
-			name:                  "failure, empty receive message",
+			name:                  "Fails due to exceeding maxReceiveMessageSize",
 			compressor:            c,
-			input:                 []byte{},
-			maxReceiveMessageSize: 10,
-			want:                  nil,
-			error:                 nil,
-		},
-		{
-			name:                  "overflow failure, receive message exceeds maxReceiveMessageSize",
-			compressor:            c,
-			input:                 []byte("small message"),
+			input:                 []byte("small message that is too large"),
 			maxReceiveMessageSize: 5,
 			want:                  nil,
-			error:                 ErrMaxMessageSizeExceeded,
+			wantErr:               errMaxMessageSizeExceeded,
+		},
+		{
+			name:                  "Decompresses to exactly maxReceiveMessageSize",
+			compressor:            c,
+			input:                 []byte("exact size message"),
+			maxReceiveMessageSize: len("exact size message"),
+			want:                  []byte("exact size message"),
+			wantErr:               nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			compressedMsg := compressInput(tt.input)
-			output, numSliceInBuf, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
-			var wantMsg mem.BufferSlice
-			if tt.want != nil {
-				wantMsg = mem.BufferSlice{mem.NewBuffer(&tt.want, nil)}
+			output, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
+
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("decompress() error = %v, wantErr = %v", err, tt.wantErr)
+				}
+				return
 			}
-			if tt.error != nil && err == nil {
-				t.Fatalf("decompress() error, got err=%v, want err=%v", err, tt.error)
+
+			if err != nil {
+				t.Fatalf("decompress() unexpected error = %v", err)
 			}
-			if tt.error == nil && numSliceInBuf != wantMsg.Len() {
-				t.Fatalf("decompress() number of slices mismatch, got = %d, want = %d", numSliceInBuf, wantMsg.Len())
-			}
+
 			if diff := cmp.Diff(tt.want, output.Materialize()); diff != "" {
 				t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
 			}
-
 		})
 	}
 }
