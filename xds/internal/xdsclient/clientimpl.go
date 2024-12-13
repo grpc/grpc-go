@@ -344,7 +344,9 @@ func (c *clientImpl) releaseChannel(serverConfig *bootstrap.ServerConfig, state 
 		if c.logger.V(2) {
 			c.logger.Infof("Closing xdsChannel [%p] for server config %s", state.channel, serverConfig)
 		}
+		channelToClose := state.channel
 		c.channelsMu.Unlock()
-		state.channel.close()
+
+		channelToClose.close()
 	})
 }
