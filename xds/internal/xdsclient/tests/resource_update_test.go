@@ -283,7 +283,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 				Contents:           bc,
@@ -360,7 +360,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 // involving receipt of an RDS response from the management server. The test
 // verifies that the internal state of the xDS client (parsed resource and
 // metadata) matches expectations.
-func TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
+func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 	const (
 		resourceName1 = "resource-name-1"
 		resourceName2 = "resource-name-2"
@@ -559,7 +559,7 @@ func TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 				Contents:           bc,
@@ -796,7 +796,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 				Contents:           bc,
@@ -1145,7 +1145,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 				Contents:           bc,
