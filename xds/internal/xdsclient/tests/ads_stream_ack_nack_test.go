@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -381,10 +382,11 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bc)
-	pool, err := xdsclient.NewPool(bc)
+	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
 	}
+	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})

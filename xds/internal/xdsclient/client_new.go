@@ -37,26 +37,6 @@ import (
 // value, and is defined in gRFC A71.
 const NameForServer = "#server"
 
-// New returns an xDS client configured with bootstrap configuration specified
-// by the ordered list:
-// - file name containing the configuration specified by GRPC_XDS_BOOTSTRAP
-// - actual configuration specified by GRPC_XDS_BOOTSTRAP_CONFIG
-// - fallback configuration set using bootstrap.SetFallbackBootstrapConfig
-//
-// gRPC client implementations are expected to pass the channel's target URI for
-// the name field, while server implementations are expected to pass a dedicated
-// well-known value "#server", as specified in gRFC A71. The returned client is
-// a reference counted implementation shared among callers using the same name.
-//
-// The second return value represents a close function which releases the
-// caller's reference on the returned client.  The caller is expected to invoke
-// it once they are done using the client. The underlying client will be closed
-// only when all references are released, and it is safe for the caller to
-// invoke this close function multiple times.
-func New(name string) (XDSClient, func(), error) {
-	return DefaultPool.NewClient(name)
-}
-
 // newClientImpl returns a new xdsClient with the given config.
 func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (*clientImpl, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -119,37 +99,16 @@ type OptionsForTesting struct {
 	StreamBackoffAfterFailure func(int) time.Duration
 }
 
-// NewForTesting returns an xDS client configured with the provided options
-// from the default pool.
-//
-// The second return value represents a close function which the caller is
-// expected to invoke once they are done using the client.  It is safe for the
-// caller to invoke this close function multiple times.
-//
-// # Testing Only
-//
-// This function should ONLY be used for testing purposes.
-func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
-	return DefaultPool.NewClientForTesting(opts)
-}
-
-// GetForTesting returns an xDS client created earlier using the given name in
-// the default pool.
-//
-// The second return value represents a close function which the caller is
-// expected to invoke once they are done using the client.  It is safe for the
-// caller to invoke this close function multiple times.
-//
-// # Testing Only
-//
-// This function should ONLY be used for testing purposes.
-func GetForTesting(name string) (XDSClient, func(), error) {
-	return DefaultPool.GetClientForTesting(name)
-}
-
 func init() {
 	internal.TriggerXDSResourceNotFoundForTesting = triggerXDSResourceNotFoundForTesting
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
+	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
+	config, err := bootstrap.GetConfiguration()
+	if err != nil {
+		logger.Warningf("Failed to read xDS bootstrap config from env vars:  %v", err)
+		return
+	}
+	DefaultPool.config = config
 }
 
 func triggerXDSResourceNotFoundForTesting(client XDSClient, typ xdsresource.Type, name string) error {

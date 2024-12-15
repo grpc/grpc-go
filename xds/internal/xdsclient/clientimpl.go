@@ -38,7 +38,7 @@ var _ XDSClient = &clientImpl{}
 // ErrClientClosed is returned when the xDS client is closed.
 var ErrClientClosed = errors.New("xds: the xDS client is closed")
 
-// clientImpl is the real implementation of the xds client. The exported Client
+// clientImpl is the real implementation of the xDS client. The exported Client
 // is a wrapper of this struct with a ref count.
 type clientImpl struct {
 	// The following fields are initialized at creation time and are read-only

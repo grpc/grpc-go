@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -75,15 +76,16 @@ type ServingModeChangeArgs struct {
 // `ClientPoolForTesting` to set the pool directly. It will be removed in
 // later release.
 func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
-	err := xdsclient.DefaultPool.SetFallbackBootstrapConfig(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
 		return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = nil }}
 	}
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = xdsclient.DefaultPool }}
 }
 
 // ClientPoolForTesting returns a grpc.ServerOption with the pool for xds
-// clients. It allows users to set a pool for xds clients sharing the bootstrap
+// clients. It allows users to set a pool for xDS clients sharing the bootstrap
 // contents for this server.
 //
 // # Testing Only

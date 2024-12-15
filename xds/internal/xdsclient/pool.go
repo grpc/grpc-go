@@ -28,52 +28,48 @@ import (
 )
 
 var (
-	// DefaultPool is the default pool for xds clients. It is created at the
-	// init time.
+	// DefaultPool is the default pool for xDS clients. It is created at the
+	// init time by reading bootstrap configuration from env vars.
 	DefaultPool *Pool
 )
 
-// Pool represents pool of xds clients.
+// Pool represents pool of xDS clients who share the same bootstrap
+// configuration.
+//
+// Note that mu should ideally only have to guard clients. But here, we need
+// it to guard config as well since SetFallbackBootstrapConfig writes to
+// config.
 type Pool struct {
 	mu      sync.Mutex
 	clients map[string]*clientRefCounted
 	config  *bootstrap.Config
 }
 
-func init() {
-	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
-}
-
-// NewPool creates a new xds client pool with the given bootstrap contents.
-func NewPool(bootstrapContents []byte) (*Pool, error) {
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
-	if err != nil {
-		return nil, err
-	}
+// NewPool creates a new xDS client pool with the given bootstrap contents.
+func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
 		clients: make(map[string]*clientRefCounted),
 		config:  config,
-	}, nil
+	}
 }
 
-// NewClient returns an xds client with the given name from the pool. If the
-// client doesn't already exist, it creates a new xds client and adds it to the
+// NewClient returns an xDS client with the given name from the pool. If the
+// client doesn't already exist, it creates a new xDS client and adds it to the
 // pool.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string) (XDSClient, func(), error) {
-	config, err := bootstrap.GetConfiguration()
-	if err != nil {
-		return nil, nil, fmt.Errorf("xds: failed to get xDS bootstrap config: %v", err)
+	if p.config == nil {
+		return nil, nil, fmt.Errorf("bootstrap configuration not set in the pool")
 	}
-	return newRefCounted(name, p, config, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff)
+	return p.newRefCounted(name, p.config, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff)
 }
 
-// NewClientForTesting returns an xds client configured with the provided
+// NewClientForTesting returns an xDS client configured with the provided
 // options from the pool. If the client doesn't already exist, it creates a new
-// xds client and adds it to the pool.
+// xDS client and adds it to the pool.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
@@ -97,13 +93,12 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 		if err != nil {
 			return nil, nil, err
 		}
-		return newRefCounted(opts.Name, p, config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
+		return p.newRefCounted(opts.Name, config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
 	}
-
-	return newRefCounted(opts.Name, p, p.config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
+	return p.newRefCounted(opts.Name, p.config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
 }
 
-// GetClientForTesting returns an xds client created earlier using the given
+// GetClientForTesting returns an xDS client created earlier using the given
 // name from the pool.
 //
 // The second return value represents a close function which the caller is
@@ -122,19 +117,15 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 		return nil, nil, fmt.Errorf("xDS client with name %q not found", name)
 	}
 	c.incrRef()
-	return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name, p) }), nil
+	return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 
 // SetFallbackBootstrapConfig to specify a bootstrap configuration to use a
 // fallback when the bootstrap env vars are not specified.
-func (p *Pool) SetFallbackBootstrapConfig(bootstrapContents []byte) error {
+func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
-	if err != nil {
-		return err
-	}
 	p.config = config
 	return nil
 }

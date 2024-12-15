@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
-// Client is a fake implementation of an xds client. It exposes a bunch of
+// Client is a fake implementation of an xDS client. It exposes a bunch of
 // channels to signal the occurrence of various events.
 type Client struct {
 	// Embed XDSClient so this fake client implements the interface, but it's
@@ -89,17 +89,17 @@ func (xdsC *Client) SetBootstrapConfig(cfg *bootstrap.Config) {
 	xdsC.bootstrapCfg = cfg
 }
 
-// Name returns the name of the xds client.
+// Name returns the name of the xDS client.
 func (xdsC *Client) Name() string {
 	return xdsC.name
 }
 
-// NewClient returns a new fake xds client.
+// NewClient returns a new fake xDS client.
 func NewClient() *Client {
 	return NewClientWithName("")
 }
 
-// NewClientWithName returns a new fake xds client with the provided name. This
+// NewClientWithName returns a new fake xDS client with the provided name. This
 // is used in cases where multiple clients are created in the tests and we need
 // to make sure the client is created for the expected balancer name.
 func NewClientWithName(name string) *Client {
