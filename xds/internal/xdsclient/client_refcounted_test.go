@@ -55,7 +55,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 	defer func() { xdsClientImplCloseHook = origClientImplCloseHook }()
 
 	// The first call to New() should create a new client.
-	_, closeFunc, err := New(t.Name())
+	_, closeFunc, err := DefaultPool.NewClient(t.Name())
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -71,7 +71,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 	closeFuncs := make([]func(), count)
 	for i := 0; i < count; i++ {
 		func() {
-			_, closeFuncs[i], err = New(t.Name())
+			_, closeFuncs[i], err = DefaultPool.NewClient(t.Name())
 			if err != nil {
 				t.Fatalf("%d-th call to New() failed with error: %v", i, err)
 			}
@@ -109,7 +109,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 
 	// Calling New() again, after the previous Client was actually closed,
 	// should create a new one.
-	_, closeFunc, err = New(t.Name())
+	_, closeFunc, err = DefaultPool.NewClient(t.Name())
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -147,7 +147,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 
 	// Create two xDS clients.
 	client1Name := t.Name() + "-1"
-	_, closeFunc1, err := New(client1Name)
+	_, closeFunc1, err := DefaultPool.NewClient(client1Name)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -162,7 +162,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 	}
 
 	client2Name := t.Name() + "-2"
-	_, closeFunc2, err := New(client2Name)
+	_, closeFunc2, err := DefaultPool.NewClient(client2Name)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -184,7 +184,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < count; i++ {
 			var err error
-			_, closeFuncs1[i], err = New(client1Name)
+			_, closeFuncs1[i], err = DefaultPool.NewClient(client1Name)
 			if err != nil {
 				t.Errorf("%d-th call to New() failed with error: %v", i, err)
 			}
@@ -194,7 +194,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < count; i++ {
 			var err error
-			_, closeFuncs2[i], err = New(client2Name)
+			_, closeFuncs2[i], err = DefaultPool.NewClient(client2Name)
 			if err != nil {
 				t.Errorf("%d-th call to New() failed with error: %v", i, err)
 			}

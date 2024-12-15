@@ -140,7 +140,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
-	client1, close1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	client1, close1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     client1Name,
 		Contents: bc,
 	})
@@ -149,7 +149,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	}
 	defer close1()
 	client2Name := t.Name() + "-2"
-	client2, close2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	client2, close2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     client2Name,
 		Contents: bc,
 	})
@@ -409,7 +409,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
-	client1, close1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	client1, close1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     client1Name,
 		Contents: bc,
 	})
@@ -418,7 +418,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	}
 	defer close1()
 	client2Name := t.Name() + "-2"
-	client2, close2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	client2, close2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     client2Name,
 		Contents: bc,
 	})

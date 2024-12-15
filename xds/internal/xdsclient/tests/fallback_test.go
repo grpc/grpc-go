@@ -157,10 +157,11 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 	// Create an xDS client with the above bootstrap configuration and a short
 	// idle channel expiry timeout. This ensures that connections to lower
 	// priority servers get closed quickly, for the test to verify.
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})
@@ -357,10 +358,11 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	// Create an xDS client with the above bootstrap configuration and a short
 	// idle channel expiry timeout. This ensures that connections to lower
 	// priority servers get closed quickly, for the test to verify.
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})
@@ -547,10 +549,11 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	// Create an xDS client with the above bootstrap configuration and a short
 	// idle channel expiry timeout. This ensures that connections to lower
 	// priority servers get closed quickly, for the test to verify.
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})

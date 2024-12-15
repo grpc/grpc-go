@@ -241,10 +241,11 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	pool, err := xdsclient.NewPool(bc)
+	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})
@@ -367,10 +368,11 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	pool, err := xdsclient.NewPool(bc)
+	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})

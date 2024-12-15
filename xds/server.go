@@ -42,10 +42,8 @@ import (
 const serverPrefix = "[xds-server %p] "
 
 var (
-	// These new functions will be overridden in unit tests.
-	newXDSClient = func(name string) (xdsclient.XDSClient, func(), error) {
-		return xdsclient.New(name)
-	}
+	// These will be overriden in unit tests.
+	xDSClientPool = xdsclient.DefaultPool
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
 		return grpc.NewServer(opts...)
 	}
@@ -92,16 +90,11 @@ func NewGRPCServer(opts ...grpc.ServerOption) (*GRPCServer, error) {
 	// Initializing the xDS client upfront (instead of at serving time)
 	// simplifies the code by eliminating the need for a mutex to protect the
 	// xdsC and xdsClientClose fields.
-	newXDSClient := newXDSClient
+	xDSClientPool := xDSClientPool
 	if s.opts.clientPoolForTesting != nil {
-		// Bootstrap file contents may be specified as a server option for tests.
-		newXDSClient = func(name string) (xdsclient.XDSClient, func(), error) {
-			return s.opts.clientPoolForTesting.NewClientForTesting(xdsclient.OptionsForTesting{
-				Name: name,
-			})
-		}
+		xDSClientPool = s.opts.clientPoolForTesting
 	}
-	xdsClient, xdsClientClose, err := newXDSClient(xdsclient.NameForServer)
+	xdsClient, xdsClientClose, err := xDSClientPool.NewClient(xdsclient.NameForServer)
 	if err != nil {
 		return nil, fmt.Errorf("xDS client creation failed: %v", err)
 	}

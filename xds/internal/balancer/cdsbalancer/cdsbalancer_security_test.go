@@ -138,10 +138,11 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, serverCreds credentials.TransportCredentials) (*grpc.ClientConn, string) {
 	t.Helper()
 
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})

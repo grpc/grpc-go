@@ -144,10 +144,11 @@ func (s) TestServingModeChanges(t *testing.T) {
 			}
 		},
 	}
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
@@ -225,7 +226,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 // TestServingModeChanges_MultipleServers tests two servers with unique
 // bootstrap configuration are able to serve two different clients with same
-// name if they are in different xds client pools.
+// name if they are in different xDS client pools.
 //
 // It tests the Server's logic as it transitions from Not Ready to Ready, then
 // then to Not Ready. Before it goes Ready, connections should be accepted and
@@ -318,19 +319,21 @@ func (s) TestServingModeChanges_MultipleServers(t *testing.T) {
 		},
 	}
 
-	// Create two xds client pools with different bootstrap contents.
-	pool1, err := xdsclient.NewPool(bootstrapContents1)
+	// Create two xDS client pools with different bootstrap contents.
+	config1, err := bootstrap.NewConfigForTesting(bootstrapContents1)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents1, err)
 	}
+	pool1 := xdsclient.NewPool(config1)
 	sopts1 := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool1)}
 	if stub1.S, err = xds.NewGRPCServer(sopts1...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-	pool2, err := xdsclient.NewPool(bootstrapContents2)
+	config2, err := bootstrap.NewConfigForTesting(bootstrapContents2)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents2, err)
 	}
+	pool2 := xdsclient.NewPool(config2)
 	sopts2 := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool2)}
 	if stub2.S, err = xds.NewGRPCServer(sopts2...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
@@ -414,7 +417,7 @@ func (s) TestServingModeChanges_MultipleServers(t *testing.T) {
 	}
 	defer close2()
 
-	// Compare the bootstrap configurations for both xds clients.
+	// Compare the bootstrap configurations for both xDS clients.
 	if want, _ := bootstrap.NewConfigForTesting(bootstrapContents1); !cmp.Equal(want, xdsC1.BootstrapConfig()) {
 		t.Fatalf("want %v bootstrap config from xdsC1, got %v", want, xdsC1.BootstrapConfig())
 	}
@@ -522,10 +525,11 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 			}
 		},
 	}
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)

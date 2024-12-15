@@ -51,7 +51,7 @@ const Scheme = "xds"
 func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
 		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Name: name, Contents: config})
+			return xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name, Contents: config})
 		},
 	}, nil
 }
@@ -75,7 +75,7 @@ func init() {
 	internal.NewXDSResolverWithClientForTesting = newBuilderWithClientForTesting
 
 	rinternal.NewWRR = wrr.NewRandom
-	rinternal.NewXDSClient = xdsclient.New
+	rinternal.NewXDSClient = xdsclient.DefaultPool.NewClient
 }
 
 type xdsResolverBuilder struct {

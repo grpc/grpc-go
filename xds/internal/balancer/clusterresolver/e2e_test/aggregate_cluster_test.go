@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -1180,10 +1181,11 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 
 	// Create an xDS client talking to the above management server, configured
 	// with a short watch expiry timeout.
-	pool, err := xdsclient.NewPool(bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client pool: %v", err)
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
 	}
+	pool := xdsclient.NewPool(config)
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,

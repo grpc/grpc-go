@@ -38,7 +38,7 @@ var (
 	defaultStreamBackoffFunc = backoff.DefaultExponential.Backoff
 )
 
-func clientRefCountedClose(name string, pool *Pool) {
+func (pool *Pool) clientRefCountedClose(name string) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -59,13 +59,13 @@ func clientRefCountedClose(name string, pool *Pool) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func newRefCounted(name string, pool *Pool, config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+func (pool *Pool) newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	if c := pool.clients[name]; c != nil {
 		c.incrRef()
-		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name, pool) }), nil
+		return c, grpcsync.OnceFunc(func() { pool.clientRefCountedClose(name) }), nil
 	}
 
 	// Create the new client implementation.
@@ -82,7 +82,7 @@ func newRefCounted(name string, pool *Pool, config *bootstrap.Config, watchExpir
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", config.Node().GetId())
-	return client, grpcsync.OnceFunc(func() { clientRefCountedClose(name, pool) }), nil
+	return client, grpcsync.OnceFunc(func() { pool.clientRefCountedClose(name) }), nil
 }
 
 // clientRefCounted is ref-counted, and to be shared by the xds resolver and
