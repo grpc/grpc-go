@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package opentelemetry
+package opentelemetry_test
 
 import (
 	"context"
@@ -59,10 +59,9 @@ import (
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 
-// traceSpanInfo is the information received about the span. This is a subset
-// of information that is important to verify that gRPC has knobs over, which
-// goes through a stable OpenTelemetry API with well-defined behavior. This keeps
-// the robustness of assertions over time.
+// traceSpanInfo is the information received about the trace span. It contains
+// subset of information that is needed to verify if correct trace is being
+// attributed to the rpc.
 type traceSpanInfo struct {
 	sc         trace2.SpanContext
 	spanKind   string
@@ -615,11 +614,17 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 // OpenTelemetry instrumentation component. It then configures a system with a gRPC
 // Client and gRPC server with the OpenTelemetry Dial and Server Option configured
 // specifying all the metrics and traces provided by this package, and makes a Unary
-// RPC and a Streaming RPC. These two RPCs should cause certain recording for each
-// registered metric observed through a Manual Metrics Reader on the provided
-// OpenTelemetry SDK's Meter Provider. It also verifies the traces are recorded
-// correctly.
-func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
+// RPC and a Streaming RPC.
+//
+// Metrics:
+//   - Verifies that certain metrics are recorded for each registered metric
+//     observed through a Manual Metrics Reader on the provided OpenTelemetry SDK's
+//     Meter Provider.
+//
+// Traces:
+//   - Confirms that tracing information is correctly recorded, including span creation,
+//     context propagation, and any relevant attributes associated with the RPC calls.
+func TestServerWithMetricsAndTraceOptions(t *testing.T) {
 	// Create default metrics options
 	mo, reader := defaultMetricsOptions(t, nil)
 	// Create default trace options
@@ -665,24 +670,251 @@ func (s) TestServerWithMetricsAndTraceOptions(t *testing.T) {
 	})
 	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 
+	wantSI := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: trace2.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: trace2.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "grpc.testing.TestService.UnaryCall",
+			spanKind:   trace2.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: trace2.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+		{
+			name:       "grpc.testing.TestService.FullDuplexCall",
+			spanKind:   trace2.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: trace2.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+	}
+
 	// Verify traces
 	spans := exporter.GetSpans()
 	if got, want := len(spans), 6; got != want {
-		t.Fatalf("Got %d spans, want %d", got, want)
+		t.Fatalf("got %d spans, want %d", got, want)
 	}
 
 	// Add assertions for specific span attributes and events as needed.
 	// For example, to check if the server span has the correct status:
 	serverSpan := spans[0]
 	if got, want := serverSpan.Status.Code, otelcodes.Ok; got != want {
-		t.Errorf("Got status code %v, want %v", got, want)
+		t.Errorf("got status code %v, want %v", got, want)
 	}
+
+	for index, span := range spans {
+		// Check that the attempt span has the correct status
+		if got, want := spans[index].Status.Code, otelcodes.Ok; got != want {
+			t.Errorf("Got status code %v, want %v", got, want)
+		}
+		// name
+		if got, want := span.Name, wantSI[index].name; got != want {
+			t.Errorf("Span name is %q, want %q", got, want)
+		}
+		// spanKind
+		if got, want := span.SpanKind.String(), wantSI[index].spanKind; got != want {
+			t.Errorf("Got span kind %q, want %q", got, want)
+		}
+		// attributes
+		if got, want := len(span.Attributes), len(wantSI[index].attributes); got != want {
+			t.Errorf("Got attributes list of size %q, want %q", got, want)
+		}
+		for idx, att := range span.Attributes {
+			if got, want := att.Key, wantSI[index].attributes[idx].Key; got != want {
+				t.Errorf("Got attribute key for span name %v as %v, want %v", span.Name, got, want)
+			}
+		}
+		// events
+		if got, want := len(span.Events), len(wantSI[index].events); got != want {
+			t.Errorf("Event length is %q, want %q", got, want)
+		}
+		for eventIdx, event := range span.Events {
+			if got, want := event.Name, wantSI[index].events[eventIdx].Name; got != want {
+				t.Errorf("Got event name for span name %q as %q, want %q", span.Name, got, want)
+			}
+			for idx, att := range event.Attributes {
+				if got, want := att.Key, wantSI[index].events[eventIdx].Attributes[idx].Key; got != want {
+					t.Errorf("Got attribute key for span name %q with event name %v, as %v, want %v", span.Name, event.Name, got, want)
+				}
+				if got, want := att.Value, wantSI[index].events[eventIdx].Attributes[idx].Value; got != want {
+					t.Errorf("Got attribute value for span name %v with event name %v, as %v, want %v", span.Name, event.Name, got, want)
+				}
+			}
+		}
+	}
+
 }
 
 // TestSpan verifies that the gRPC Trace Binary propagator correctly
 // propagates span context between a client and server using the grpc-
 // trace-bin header. It sets up a stub server with OpenTelemetry tracing
-// enabled, makes a unary RPC.
+// enabled, makes a unary RPC, and streaming RPC as well.
+//
+// Verification:
+//   - Ensures that the span context is correctly propagated from the client
+//     to the server, including the trace ID and span ID.
+//   - Confirms that the server can access the span context and create
+//     child spans as expected during the RPC calls.
+//   - Validates that the tracing information is recorded accurately in
+//     the OpenTelemetry backend.
 func (s) TestSpan(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
@@ -714,7 +946,7 @@ func (s) TestSpan(t *testing.T) {
 	// Get the spans from the exporter
 	spans := spanExporter.GetSpans()
 	if got, want := len(spans), 6; got != want {
-		t.Fatalf("Got %d spans, want %d", got, want)
+		t.Fatalf("got %d spans, want %d", got, want)
 	}
 
 	wantSI := []traceSpanInfo{
@@ -894,7 +1126,7 @@ func (s) TestSpan(t *testing.T) {
 		},
 	}
 
-	// Check that same traceID is used in client and server.
+	// Check that same traceID is used in client and server for unary RPC call.
 	if got, want := spans[0].SpanContext.TraceID(), spans[2].SpanContext.TraceID(); got != want {
 		t.Fatal("TraceID mismatch in client span and server span.")
 	}
@@ -904,7 +1136,7 @@ func (s) TestSpan(t *testing.T) {
 		t.Fatal("SpanID mismatch in client span and server span.")
 	}
 
-	// Check that same traceID is used in client and server.
+	// Check that same traceID is used in client and server for streaming RPC call.
 	if got, want := spans[3].SpanContext.TraceID(), spans[4].SpanContext.TraceID(); got != want {
 		t.Fatal("TraceID mismatch in client span and server span.")
 	}
@@ -956,9 +1188,17 @@ func (s) TestSpan(t *testing.T) {
 	}
 }
 
-// TestSpan_WithW3CContextPropagator sets up a stub server with  OpenTelemetry tracing
-// enabled makes a unary and a streaming RPC, and then, asserts that the correct
+// TestSpan_WithW3CContextPropagator sets up a stub server with OpenTelemetry tracing
+// enabled, makes a unary and a streaming RPC, and then asserts that the correct
 // number of spans are created with the expected spans.
+//
+// Verification:
+//   - Confirms that the correct number of spans are created for both unary and
+//     streaming RPCs.
+//   - Validates that the spans have the expected names and attributes, ensuring
+//     they accurately reflect the operations performed.
+//   - Checks that the trace ID and span ID are correctly assigned and accessible
+//     in the OpenTelemetry backend.
 func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
