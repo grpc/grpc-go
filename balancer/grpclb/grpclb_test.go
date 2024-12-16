@@ -973,7 +973,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if err := resolveNowCh.SendContext(ctx, nil); err != nil {
-			t.Error("timeout when attempting to send on resolverNowCh")
+			t.Error("timeout when attempting to send on resolveNowCh")
 		}
 	}
 
@@ -1010,22 +1010,22 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a newclient to the backend: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
+
+	// Initialize the resolver state with the backend address.
+	r.InitialState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
+		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	for i := 0; i < 2; i++ {
-		// Send an update with only backend address. grpclb should enter
-		// fallback and use the fallback backend.
-		r.UpdateState(resolver.State{
-			Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
-			ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
-		})
 
+	for i := 0; i < 2; i++ {
+		// Ensure the client is using the fallback backend.
 		sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer sCancel()
 		if _, err := resolveNowCh.Receive(sCtx); err != context.DeadlineExceeded {
