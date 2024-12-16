@@ -73,15 +73,18 @@ func (d *delayListener) allowClose() {
 }
 func (d *delayListener) Close() error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	if !d.closed {
-		d.closed = true
-		close(d.closeCalled)
-		go func() {
-			<-d.allowCloseCh
-			d.Listener.Close()
-		}()
+	if d.closed {
+		d.mu.Unlock()
+		return nil
 	}
+	d.closed = true
+	close(d.closeCalled)
+	d.mu.Unlock()
+
+	go func() {
+		<-d.allowCloseCh
+		d.Listener.Close()
+	}()
 	return nil
 }
 
@@ -134,11 +137,6 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	// 1. Start Server
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		ss.S.Serve(dlis)
-		wg.Done()
-	}()
 
 	// 2. GracefulStop() Server after listener's Accept is called, but don't
 	//    allow Accept() to exit when Close() is called on it.
