@@ -255,7 +255,7 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 			addr.BalancerAttributes = endpoints[i].Attributes
 			// If the endpoint has multiple addresses, only the first is added
 			// to the flattened address list. This ensures that LB policies
-			// that doesn't support endpoints, create only one subchannel to a
+			// that don't support endpoints create only one subchannel to a
 			// backend.
 			if j == 0 {
 				flattenedAddrs[i] = addr
