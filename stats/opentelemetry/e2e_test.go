@@ -19,6 +19,8 @@ package opentelemetry_test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/experimental"
 	"io"
 	"testing"
@@ -59,6 +61,16 @@ import (
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 
+var defaultTestTimeout = 5 * time.Second
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 // traceSpanInfo is the information received about the trace span. It contains
 // subset of information that is needed to verify if correct trace is being
 // attributed to the rpc.
@@ -71,12 +83,12 @@ type traceSpanInfo struct {
 }
 
 // defaultMetricsOptions creates default metrics options
-func defaultMetricsOptions(_ *testing.T, methodAttributeFilter func(string) bool) (*MetricsOptions, *metric.ManualReader) {
+func defaultMetricsOptions(_ *testing.T, methodAttributeFilter func(string) bool) (*opentelemetry.MetricsOptions, *metric.ManualReader) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
-	metricsOptions := &MetricsOptions{
+	metricsOptions := &opentelemetry.MetricsOptions{
 		MeterProvider:         provider,
-		Metrics:               DefaultMetrics(),
+		Metrics:               opentelemetry.DefaultMetrics(),
 		MethodAttributeFilter: methodAttributeFilter,
 	}
 	return metricsOptions, reader
@@ -97,7 +109,7 @@ func defaultTraceOptions(_ *testing.T) (*experimental.TraceOptions, *tracetest.I
 
 // setupStubServer creates a stub server with OpenTelemetry component configured on client
 // and server side and returns the server.
-func setupStubServer(t *testing.T, metricsOptions *MetricsOptions, traceOptions *experimental.TraceOptions) *stubserver.StubServer {
+func setupStubServer(t *testing.T, metricsOptions *opentelemetry.MetricsOptions, traceOptions *experimental.TraceOptions) *stubserver.StubServer {
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
@@ -114,7 +126,7 @@ func setupStubServer(t *testing.T, metricsOptions *MetricsOptions, traceOptions 
 		},
 	}
 
-	otelOptions := Options{}
+	otelOptions := opentelemetry.Options{}
 	if metricsOptions != nil {
 		otelOptions.MetricsOptions = *metricsOptions
 	}
@@ -122,8 +134,8 @@ func setupStubServer(t *testing.T, metricsOptions *MetricsOptions, traceOptions 
 		otelOptions.TraceOptions = *traceOptions
 	}
 
-	if err := ss.Start([]grpc.ServerOption{ServerOption(otelOptions)},
-		DialOption(otelOptions)); err != nil {
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)},
+		opentelemetry.DialOption(otelOptions)); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	return ss
@@ -479,14 +491,14 @@ func (s) TestWRRMetrics(t *testing.T) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 
-	mo := MetricsOptions{
+	mo := opentelemetry.MetricsOptions{
 		MeterProvider:  provider,
-		Metrics:        DefaultMetrics().Add("grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"),
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"),
 		OptionalLabels: []string{"grpc.lb.locality"},
 	}
 
 	target := fmt.Sprintf("xds:///%s", serviceName)
-	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver), DialOption(Options{MetricsOptions: mo}))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
 	}
