@@ -19,9 +19,6 @@ package opentelemetry_test
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/stats/opentelemetry"
-	"google.golang.org/grpc/stats/opentelemetry/experimental"
 	"io"
 	"testing"
 	"time"
@@ -51,6 +48,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	itestutils "google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -58,6 +56,8 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/stats/opentelemetry"
+	"google.golang.org/grpc/stats/opentelemetry/experimental"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 

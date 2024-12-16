@@ -20,11 +20,11 @@ package experimental
 
 import (
 	"context"
-	"google.golang.org/grpc/internal/grpctest"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	oteltrace "go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	itracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
