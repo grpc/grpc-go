@@ -1008,18 +1008,18 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
+	// Initialize the resolver state with the backend address.
+	r.InitialState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
+		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
+	})
+
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to create a newclient to the backend: %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
-
-	// Initialize the resolver state with the backend address.
-	r.InitialState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
-		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
-	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
