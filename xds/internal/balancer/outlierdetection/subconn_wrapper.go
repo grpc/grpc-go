@@ -68,14 +68,16 @@ type subConnWrapper struct {
 	// help support any change in address(es)
 	addresses []resolver.Address
 
-	// Access to the following fields are protected by a mutex.
+	// Access to the following fields are protected by a mutex. These fields
+	// should not be accessed from outside this file, instead use methods
+	// defined on the struct.
 	mu             sync.Mutex
 	healthListener func(balancer.SubConnState)
-	// latestReceivedConnectivityState is the SubConn's most recent connectivity
+	// latestConnectivityState is the SubConn's most recent connectivity
 	// state received. It may not be delivered to the child balancer yet. It is
 	// used to ensure a health listener is registered with the SubConn only when
 	// the SubConn is READY.
-	latestReceivedConnectivityState connectivity.State
+	latestConnectivityState connectivity.State
 }
 
 // eject causes the wrapper to report a state update with the TRANSIENT_FAILURE
@@ -118,7 +120,7 @@ func (scw *subConnWrapper) RegisterHealthListener(listener func(balancer.SubConn
 	scw.mu.Lock()
 	defer scw.mu.Unlock()
 
-	if scw.latestReceivedConnectivityState != connectivity.Ready {
+	if scw.latestConnectivityState != connectivity.Ready {
 		return
 	}
 	scw.healthListener = listener
@@ -132,4 +134,24 @@ func (scw *subConnWrapper) RegisterHealthListener(listener func(balancer.SubConn
 			})
 		})
 	}
+}
+
+func (scw *subConnWrapper) updateHealthState(scs balancer.SubConnState) {
+	scw.mu.Lock()
+	if scw.healthListener != nil {
+		scw.healthListener(scs)
+	}
+	scw.mu.Unlock()
+}
+
+func (scw *subConnWrapper) clearHealthListener() {
+	scw.mu.Lock()
+	scw.healthListener = nil
+	scw.mu.Unlock()
+}
+
+func (scw *subConnWrapper) setLatestConnectivityState(state connectivity.State) {
+	scw.mu.Lock()
+	scw.latestConnectivityState = state
+	scw.mu.Unlock()
 }
