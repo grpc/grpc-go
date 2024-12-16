@@ -24,8 +24,6 @@ package opentelemetry
 
 import (
 	"context"
-	"google.golang.org/grpc/stats/opentelemetry/experimental"
-	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 	"strings"
 	"time"
 
@@ -39,6 +37,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/stats/opentelemetry/experimental"
+	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 )
 
 var logger = grpclog.Component("otel-plugin")
