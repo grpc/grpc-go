@@ -75,14 +75,15 @@ func New(config Config) (*XDSClient, error) {
 // determines how xDS responses are received, are deserialized
 // and validated. Upon receipt of a response from the management
 // server, an appropriate callback on the watcher is invoked.
-func (c *XDSClient) WatchResource(rType ResourceType, resourceName string, watcher ResourceWatcher) (cancel func()) {
+func (c *XDSClient) WatchResource(rTypeUrl string, resourceName string, watcher ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	if c == nil || c.done.HasFired() {
-		logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeName(), resourceName)
+		logger.Warningf("Watch registered for name %q of type %q, but client is closed", rTypeUrl, resourceName)
 		return func() {}
 	}
 
-	if _, ok := c.resourceTypes[rType.TypeURL()]; !ok {
+	var rType ResourceType
+	if rType, ok := c.resourceTypes[rTypeUrl]; !ok {
 		logger.Warningf("Watch registered for name %q of type %q, but resource type implementation is not present", rType.TypeName(), resourceName)
 		c.serializer.TrySchedule(func(context.Context) {
 			watcher.OnError(fmt.Errorf("resource type %q not found in provided resource type implementations", rType.TypeURL()), func() {})

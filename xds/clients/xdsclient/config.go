@@ -49,8 +49,8 @@ type Config struct {
 }
 
 // NewConfig returns an xDS config configured with mandatory parameters.
-func NewConfig(defaultAuthority clients.Authority, authorities map[string]clients.Authority, node clients.Node, transport clients.TransportBuilder, resourceTypes map[string]ResourceType) *Config {
-	c := &Config{DefaultAuthority: defaultAuthority, Authorities: authorities, Node: node, TransportBuilder: transport, ResourceTypes: resourceTypes}
+func NewConfig(defaultAuthority clients.Authority, authorities map[string]clients.Authority, node clients.Node, transport clients.TransportBuilder, resourceTypes map[string]ResourceType) Config {
+	c := Config{DefaultAuthority: defaultAuthority, Authorities: authorities, Node: node, TransportBuilder: transport, ResourceTypes: resourceTypes}
 	c.idleChannelExpiryTimeout = defaultIdleChannelExpiryTimeout
 	c.watchExpiryTimeOut = defaultWatchExpiryTimeout
 	c.streamBackOffTimeout = defaultStreamBackoffFunc
