@@ -33,7 +33,7 @@ const proxyOptionsKey = keyType("grpc.resolver.delegatingresolver.proxyOptions")
 // Options holds the proxy connection details needed during the CONNECT
 // handshake. It includes the user information and the connect address.
 type Options struct {
-	User        *url.Userinfo
+	User        url.Userinfo
 	ConnectAddr string
 }
 
@@ -45,11 +45,11 @@ func Populate(addr resolver.Address, opts Options) resolver.Address {
 	return addr
 }
 
-// Option returns the Options for the proxy [resolver.Address], or empty struct
-// if not present.
-func Option(addr resolver.Address) Options {
+// Option returns the Options for the proxy [resolver.Address] and a boolean
+// value representing if the attribute is valid or not.
+func Option(addr resolver.Address) (Options, bool) {
 	if a := addr.Attributes.Value(proxyOptionsKey); a != nil {
-		return a.(Options)
+		return a.(Options), true
 	}
-	return Options{}
+	return Options{}, false
 }

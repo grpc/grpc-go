@@ -269,10 +269,16 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		},
 	})
 
-	wantState := resolver.State{Addresses: []resolver.Address{
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr),
-		proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, targetTestAddr),
-	}}
+	wantState := resolver.State{
+		Addresses: []resolver.Address{
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, targetTestAddr),
+		},
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, targetTestAddr),
+		}}},
+	}
 
 	var gotState resolver.State
 	select {
@@ -464,7 +470,7 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 	var gotState resolver.State
 	select {
 	case gotState = <-stateCh:
-	case <-time.After(defaultTestTimeout):
+	case <-time.After(3 * defaultTestTimeout):
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 

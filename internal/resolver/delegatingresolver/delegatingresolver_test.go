@@ -51,9 +51,9 @@ func overrideHTTPSProxyFromEnvironment(hpfe func(req *http.Request) (*url.URL, e
 	}
 }
 
-// Tests that the parsedURLForProxy function correctly resolves the proxy URL
+// Tests that the proxyURLForTarget function correctly resolves the proxy URL
 // for a given target address. Tests all the possible output cases.
-func (s) TestParsedURLForProxyEnv(t *testing.T) {
+func (s) TestproxyURLForTargetEnv(t *testing.T) {
 	err := errors.New("invalid proxy url")
 	tests := []struct {
 		name     string
@@ -98,7 +98,7 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer overrideHTTPSProxyFromEnvironment(tt.hpfeFunc)()
-			got, err := parsedURLForProxy(targetTestAddr)
+			got, err := proxyURLForTarget(targetTestAddr)
 			if err != tt.wantErr {
 				t.Errorf("parsedProxyURLForProxy(%v) failed with error :%v, want %v\n", targetTestAddr, err, tt.wantErr)
 			}
