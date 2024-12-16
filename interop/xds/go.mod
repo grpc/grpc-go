@@ -1,23 +1,20 @@
 module google.golang.org/grpc/interop/xds
 
-go 1.21.0
+go 1.21
 
 replace google.golang.org/grpc => ../..
-
-replace google.golang.org/grpc/stats/opentelemetry => ../../stats/opentelemetry
 
 require (
 	github.com/prometheus/client_golang v1.20.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.50.0
 	go.opentelemetry.io/otel/sdk/metric v1.28.0
 	google.golang.org/grpc v1.66.0
-	google.golang.org/grpc/stats/opentelemetry v0.0.0-20240816220358-f8d98a477c22
 )
 
 require (
 	cel.dev/expr v0.16.0 // indirect
-	cloud.google.com/go/compute/metadata v0.5.0 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.1 // indirect
+	cloud.google.com/go/compute/metadata v0.5.2 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -41,7 +38,7 @@ require (
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.22.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.24.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
