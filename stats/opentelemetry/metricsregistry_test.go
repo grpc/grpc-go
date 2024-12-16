@@ -31,7 +31,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
 )
 
-var defaultTestTimeout = 5 * time.Second
+var DefaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -130,7 +130,7 @@ func (s) TestMetricsRegistryMetrics(t *testing.T) {
 		Default:        true,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTestTimeout)
 	defer cancel()
 
 	// Only float optional labels are configured, so only float optional labels should show up.
