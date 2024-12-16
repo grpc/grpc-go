@@ -16,6 +16,11 @@
  *
  */
 
+// # Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
+
 package experimental
 
 import (

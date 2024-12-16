@@ -6,11 +6,6 @@ import (
 )
 
 // TraceOptions are the tracing options for OpenTelemetry instrumentation.
-//
-// # Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
 type TraceOptions struct {
 	// TracerProvider is the OpenTelemetry tracer which is required to
 	// record traces/trace spans for instrumentation

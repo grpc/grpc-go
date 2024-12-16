@@ -70,7 +70,7 @@ func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
-	// Span then the newly-created Span will be a child of that span,
+	// span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
 	ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
 	return ctx, &attemptInfo{
