@@ -614,15 +614,24 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 		return
 	}
 
-	if !scw.healthListenerEnabled {
-		scw.latestDeleveredState = u.state
-	}
-
-	if scw.healthListenerEnabled || !scw.ejected {
+	// If the health listener is being used for ejection, forward the
+	// connectivity updates unconditionally.
+	if scw.healthListenerEnabled {
 		b.childMu.Lock()
 		scw.listener(u.state)
 		b.childMu.Unlock()
+		return
 	}
+
+	// Raw connectivity listener is being used for ejection.
+	scw.stateForUnjection = u.state
+	if scw.ejected {
+		return
+	}
+	b.childMu.Lock()
+	scw.listener(u.state)
+	b.childMu.Unlock()
+
 }
 
 func (b *outlierDetectionBalancer) handleSubConnHealthUpdate(u *scHealthUpdate) {
@@ -630,7 +639,7 @@ func (b *outlierDetectionBalancer) handleSubConnHealthUpdate(u *scHealthUpdate) 
 	scw.mu.Lock()
 	defer scw.mu.Unlock()
 
-	scw.latestDeleveredState = u.state
+	scw.stateForUnjection = u.state
 	if !scw.ejected && scw.healthListener != nil {
 		b.childMu.Lock()
 		scw.healthListener(u.state)
@@ -645,7 +654,7 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 	scw.ejected = u.isEjected
 	// If scw.latestState has never been written to will default to connectivity
 	// IDLE, which is fine.
-	stateToUpdate := scw.latestDeleveredState
+	stateToUpdate := scw.stateForUnjection
 	if u.isEjected {
 		stateToUpdate = balancer.SubConnState{
 			ConnectivityState: connectivity.TransientFailure,

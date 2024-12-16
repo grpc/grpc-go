@@ -385,7 +385,12 @@ func (s) TestNoopConfiguration(t *testing.T) {
 }
 
 // Test verifies that outlier detection doesn't eject subchannels created by
-// the new pickfirst balancer when pickfirst is a top-level policy.
+// the new pickfirst balancer when pickfirst is a petiole policy itself. When
+// pickfirst is not under a petiole policy, it will not register a health
+// listener. pickfirst will still set the address attribute to disable ejection
+// through the raw connectivity listener. When Outlier Detection processes a
+// health update and sees the health listener is enabled but a health listener
+// is not registered, it will drop the ejection update.
 func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {

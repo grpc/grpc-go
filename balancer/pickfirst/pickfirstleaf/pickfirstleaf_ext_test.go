@@ -1491,7 +1491,6 @@ func subConnAddresses(ctx context.Context, cc *testutils.BalancerClientConn, sub
 			if len(sc.Addresses) != 1 {
 				return nil, fmt.Errorf("new subchannel created with %d addresses, want 1", len(sc.Addresses))
 			}
-			sc.Addresses[0].Attributes = nil
 			addresses = append(addresses, sc.Addresses[0])
 			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 			sc.UpdateState(balancer.SubConnState{
@@ -1593,9 +1592,7 @@ func (b *backendManager) stopAllExcept(index int) {
 func (b *backendManager) resolverAddrs() []resolver.Address {
 	addrs := make([]resolver.Address, len(b.backends))
 	for i, backend := range b.backends {
-		addrs[i] = resolver.Address{
-			Addr: backend.Address,
-		}
+		addrs[i] = resolver.Address{Addr: backend.Address}
 	}
 	return addrs
 }

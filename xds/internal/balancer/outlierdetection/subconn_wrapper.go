@@ -37,24 +37,6 @@ type subConnWrapper struct {
 	// that.
 
 	listener func(balancer.SubConnState)
-
-	// addressInfo is a pointer to the subConnWrapper's corresponding address
-	// map entry, if the map entry exists.
-	addressInfo unsafe.Pointer // *addressInfo
-	// These two pieces of state will reach eventual consistency due to sync in
-	// run(), and child will always have the correctly updated SubConnState.
-	// latestDeleveredState is the latest state update from the underlying SubConn. This
-	// is used whenever a SubConn gets unejected. This will be the health state
-	// if a health listener is being used, otherwise it will be the connectivity
-	// state.
-	latestDeleveredState balancer.SubConnState
-	ejected              bool
-
-	scUpdateCh *buffer.Unbounded
-
-	// addresses is the list of address(es) this SubConn was created with to
-	// help support any change in address(es)
-	addresses []resolver.Address
 	// healthListenerEnabled indicates whether the leaf LB policy is using a
 	// generic health listener. When enabled, ejection updates are sent via the
 	// health listener instead of the connectivity listener. Once Dualstack
@@ -62,13 +44,37 @@ type subConnWrapper struct {
 	// uses the health listener.
 	healthListenerEnabled bool
 
+	// addressInfo is a pointer to the subConnWrapper's corresponding address
+	// map entry, if the map entry exists.
+	addressInfo unsafe.Pointer // *addressInfo
+
+	// The following fields are only referenced in the context of a work
+	// serializing buffer and don't need to be protected by a mutex.
+
+	// These two pieces of state will reach eventual consistency due to sync in
+	// run(), and child will always have the correctly updated SubConnState.
+
+	// stateForUnjection is the latest state update from the underlying
+	// SubConn that was processed through the serializer. This is used whenever
+	// a SubConn gets unejected. This will be the health state if a health
+	// listener is being used, otherwise it will be the connectivity
+	// state.
+	stateForUnjection balancer.SubConnState
+	ejected           bool
+
+	scUpdateCh *buffer.Unbounded
+
+	// addresses is the list of address(es) this SubConn was created with to
+	// help support any change in address(es)
+	addresses []resolver.Address
+
 	// Access to the following fields are protected by a mutex.
 	mu             sync.Mutex
 	healthListener func(balancer.SubConnState)
-	// latestReceivedConnectivityState is the SubConn most recent connectivity
-	// state received from the subchannel. It may not be delivered to the child
-	// balancer yet. It is used to ensure a health listener is registered only
-	// when the subchannel is READY.
+	// latestReceivedConnectivityState is the SubConn's most recent connectivity
+	// state received. It may not be delivered to the child balancer yet. It is
+	// used to ensure a health listener is registered with the SubConn only when
+	// the SubConn is READY.
 	latestReceivedConnectivityState connectivity.State
 }
 
@@ -96,13 +102,21 @@ func (scw *subConnWrapper) String() string {
 }
 
 func (scw *subConnWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
-	scw.mu.Lock()
-	defer scw.mu.Unlock()
-
+	// gRPC currently supports two mechanisms that provide a health signal for
+	// a connection: client-side health checking and outlier detection. Earlier
+	// both these mechanisms signaled unhealthiness by setting the subchannel
+	// state to TRANSIENT_FAILURE. As part of the dualstack changes to make
+	// pick_first the universal leaf policy (see A61), both these mechanisms
+	// started using the new health listener to make health signal visible to
+	// the petiole policies without affecting the underlying connectivity
+	// management of the pick_first policy
 	if !scw.healthListenerEnabled {
 		logger.Errorf("Health listener unexpectedly registered on SubConn %v.", scw)
 		return
 	}
+
+	scw.mu.Lock()
+	defer scw.mu.Unlock()
 
 	if scw.latestReceivedConnectivityState != connectivity.Ready {
 		return
