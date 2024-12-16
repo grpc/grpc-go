@@ -48,64 +48,81 @@ func (lw *listenerWatcher) OnResourceDoesNotExist(onDone xdsclient.OnResourcePro
 	onDone()
 }
 
-// listenerResourceType provides the resource-type specific functionality for a
+// ldsResourceType provides the resource-type specific functionality for a
 // Listener resource.
 //
 // Implements the xdsclient.ResourceType interface.
-type listenerResourceType struct{}
+type ldsResourceType struct{}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (listenerResourceType) Decode(opts xdsclient.DecodeOptions, resource any) (*xdsclient.DecodeResult, error) {
+func (ldsResourceType) Decode(opts xdsclient.DecodeOptions, resource any) (*xdsclient.DecodeResult, error) {
 	return nil, nil
 }
 
-func (listenerResourceType) AllResourcesRequiredInSotW() bool {
+func (ldsResourceType) AllResourcesRequiredInSotW() bool {
 	return true
 }
 
-func (listenerResourceType) TypeName() string {
-	return "ListenerResource"
+func (ldsResourceType) TypeName() string {
+	return "ldsResource"
 }
 
-func (listenerResourceType) TypeURL() string {
+func (ldsResourceType) TypeURL() string {
 	return version.V3ListenerURL
 }
 
+// TestLDSWatch covers the case where a single watcher is registered for a
+// single listener resource using the generic xDS client.
 func TestLDSWatch(t *testing.T) {
-	ldsName := "xdsclient-test-lds-resource"
-	rdsName := "xdsclient-test-rds-resource"
-
-	resource := e2e.DefaultClientListener(ldsName, rdsName)
-
+	// Start an xDS management server which xDS client will connect to.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
+	// Create node and authorities for xDS client.
+	//
+	// defaultAuthority represents the fallback authority used when a requested
+	// xDS resource name doesn't explicitly specify an authority.
+	//
+	// authorities allows you to define multiple xDS management servers and
+	// associate them with different parts of your application's configuration.
+	// When a resource name explicitly includes an authority, the client uses
+	// the corresponding configuration from this map.
 	node := clients.Node{ID: uuid.New().String()}
 	defaultAthourity := clients.Authority{XDSServers: []clients.ServerConfig{{ServerURI: mgmtServer.Address}}}
 	authorities := map[string]clients.Authority{"": defaultAthourity}
 
+	// Create gRPC transport builder for xDS client with server config to
+	// mangement server uri and credentials as part of extension.
 	serverConfig := clients.ServerConfig{ServerURI: mgmtServer.Address}
 	grpcServerConfig := grpctransport.ServerConfig{Credentials: insecure.NewBundle()}
 	serverConfig.Extensions = grpcServerConfig
 	grpcTransportBuilder := &grpctransport.Builder{}
 
-	listenerResourceType := listenerResourceType{}
+	// Create map of resource type implementations for the xDS client to refer.
+	// to.
+	ldsResourceType := ldsResourceType{}
 	resourceTypes := map[string]xdsclient.ResourceType{}
-	resourceTypes[listenerResourceType.TypeURL()] = listenerResourceType
+	resourceTypes[ldsResourceType.TypeURL()] = ldsResourceType
 
+	// Create xDS client config with all the above parameters.
 	config := xdsclient.NewConfig(defaultAthourity, authorities, node, grpcTransportBuilder, resourceTypes)
 
+	// Create xDS client usign the config.
 	xdsClient, _ := xdsclient.New(config)
 
-	listenerWatcher := newListenerWatcher()
+	// Name of the listener resource to be watcher using the xDS client
+	ldsName := "xdsclient-test-lds-resource"
+	rdsName := "xdsclient-test-rds-resource"
 
+	// Register new listener watcher for the above lds resource.
+	listenerWatcher := newListenerWatcher()
 	ldsCancel := xdsClient.WatchResource(version.V3ListenerURL, ldsName, listenerWatcher)
 
 	// Configure the management server to return a single listener
 	// resource, corresponding to the one we registered a watch for.
 	resources := e2e.UpdateOptions{
 		NodeID:         node.ID,
-		Listeners:      []*v3listenerpb.Listener{resource},
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

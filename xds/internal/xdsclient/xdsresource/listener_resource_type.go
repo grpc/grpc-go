@@ -45,8 +45,6 @@ var (
 			allResourcesRequiredInSotW: true,
 		},
 	}
-
-	ExportListenerType = listenerType
 )
 
 // listenerResourceType provides the resource-type specific functionality for a

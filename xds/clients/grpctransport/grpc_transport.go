@@ -26,11 +26,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/xds/clients"
 	"google.golang.org/protobuf/proto"
-
-	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	v3adspb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	v3lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
-	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 )
 
 // ServerConfigExtension is an interface to extend the `clients.ServerConfig` for
@@ -97,81 +92,34 @@ type grpcTransport struct {
 }
 
 func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream[clients.StreamRequest, any], error) {
-	switch method {
-	case v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResources_FullMethodName:
-		return g.newADSStream(ctx)
-	case v3lrsgrpc.LoadReportingService_StreamLoadStats_FullMethodName:
-		return g.newLRSStream(ctx)
+	s, err := g.cc.NewStream(ctx, &grpc.StreamDesc{StreamName: method, ClientStreams: true, ServerStreams: true}, method)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("unsupported method: %v", method)
+	return &stream[clients.StreamRequest, any]{stream: s}, nil
 }
 
 func (g *grpcTransport) Close() error {
 	return g.cc.Close()
 }
 
-type adsStream[Req clients.StreamRequest, Res any] struct {
-	stream v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+type stream[Req clients.StreamRequest, Res any] struct {
+	stream grpc.ClientStream
 }
 
-func (a *adsStream[Req, Res]) Send(msg Req) error {
+func (s *stream[Req, Res]) Send(msg Req) error {
 	protoReq, ok := any(msg).(proto.Message)
 	if !ok {
 		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
 	}
-	return a.stream.Send(protoReq.(*v3adspb.DiscoveryRequest))
+	return s.stream.SendMsg(protoReq)
 }
 
-func (a *adsStream[Req, Res]) Recv() (Res, error) {
+func (s *stream[Req, Res]) Recv() (Res, error) {
 	var typedRes Res
-	res, err := a.stream.Recv()
+	err := s.stream.RecvMsg(&typedRes)
 	if err != nil {
 		return typedRes, err
 	}
-	typedRes, ok := any(res).(Res)
-	if !ok {
-		return typedRes, fmt.Errorf("response type mismatch")
-	}
 	return typedRes, nil
-}
-
-type lrsStream[Req clients.StreamRequest, Res any] struct {
-	stream v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
-}
-
-func (l *lrsStream[Req, Res]) Send(msg Req) error {
-	protoReq, ok := any(msg).(proto.Message)
-	if !ok {
-		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
-	}
-	return l.stream.Send(protoReq.(*v3lrspb.LoadStatsRequest))
-}
-
-func (l *lrsStream[Req, Res]) Recv() (Res, error) {
-	var typedRes Res
-	res, err := l.stream.Recv()
-	if err != nil {
-		return typedRes, err
-	}
-	typedRes, ok := any(res).(Res)
-	if !ok {
-		return typedRes, fmt.Errorf("response type mismatch")
-	}
-	return typedRes, nil
-}
-
-func (g *grpcTransport) newADSStream(ctx context.Context) (clients.Stream[clients.StreamRequest, any], error) {
-	stream, err := v3adsgrpc.NewAggregatedDiscoveryServiceClient(g.cc).StreamAggregatedResources(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create an ADS stream: %v", err)
-	}
-	return &adsStream[clients.StreamRequest, any]{stream: stream}, nil
-}
-
-func (g *grpcTransport) newLRSStream(ctx context.Context) (clients.Stream[clients.StreamRequest, any], error) {
-	stream, err := v3lrsgrpc.NewLoadReportingServiceClient(g.cc).StreamLoadStats(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &lrsStream[clients.StreamRequest, any]{stream: stream}, nil
 }
