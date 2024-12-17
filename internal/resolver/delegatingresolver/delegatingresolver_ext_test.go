@@ -94,14 +94,20 @@ func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 
 	// Update the manual resolver with a test address.
 	targetResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedTargetTestAddr1}},
+		Addresses: []resolver.Address{
+			{Addr: resolvedTargetTestAddr1},
+			{Addr: resolvedTargetTestAddr2},
+		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
 	// Verify that the delegating resolver outputs the same addresses, as returned
 	// by the target resolver.
 	wantState := resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedTargetTestAddr1}},
+		Addresses: []resolver.Address{
+			{Addr: resolvedTargetTestAddr1},
+			{Addr: resolvedTargetTestAddr2},
+		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
@@ -135,9 +141,7 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // adding the target address as an attribute.
 func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolver.Address {
 	addr := resolver.Address{Addr: proxyAddr}
-	addr = proxyattributes.Populate(addr, proxyattributes.Options{
-		ConnectAddr: targetAddr,
-	})
+	addr = proxyattributes.Populate(addr, proxyattributes.Options{ConnectAddr: targetAddr})
 	return addr
 }
 
@@ -152,7 +156,6 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 		resolvedTargetTestAddr2 = "2.2.2.2:8080"
 		envProxyAddr            = "proxytest.com"
 		resolvedProxyTestAddr1  = "11.11.11.11:7687"
-		resolvedProxyTestAddr2  = "22.22.22.22:7687"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
@@ -180,9 +183,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	}
 
 	proxyResolver.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedProxyTestAddr1},
-		},
+		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -227,12 +228,9 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 // of the proxy address.
 func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
 	const (
-		targetTestAddr          = "test.com"
-		resolvedTargetTestAddr1 = "1.1.1.1:8080"
-		resolvedTargetTestAddr2 = "2.2.2.2:8080"
-		envProxyAddr            = "proxytest.com"
-		resolvedProxyTestAddr1  = "11.11.11.11:7687"
-		resolvedProxyTestAddr2  = "22.22.22.22:7687"
+		targetTestAddr         = "test.com"
+		envProxyAddr           = "proxytest.com"
+		resolvedProxyTestAddr1 = "11.11.11.11:7687"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
@@ -262,18 +260,12 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 	proxyResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: resolvedProxyTestAddr1},
-			{Addr: resolvedProxyTestAddr2},
 		},
 	})
 
 	wantState := resolver.State{
-		Addresses: []resolver.Address{
-			proxyAddressWithTargetAttribute(envProxyAddr, targetTestAddr),
-		},
-		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{
-			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr),
-			proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, targetTestAddr),
-		}}},
+		Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr)},
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr)}}},
 	}
 
 	var gotState resolver.State
@@ -293,6 +285,186 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 // resolver include the resolved proxy address and the custom resolved target
 // address as attributes of the proxy address.
 func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.1.1.1:8080"
+		resolvedTargetTestAddr2 = "2.2.2.2:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "11.11.11.11:7687"
+	)
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		if req.URL.Host == targetTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
+		return nil, nil
+	}
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
+	defer func() {
+		internal.HTTPSProxyFromEnvironment = originalhpfe
+	}()
+
+	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
+	target := targetResolver.Scheme() + ":///" + targetTestAddr
+	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+
+	tcc, stateCh, _ := createTestResolverClientConn(t)
+	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
+		t.Fatalf("Failed to create delegating resolver: %v", err)
+	}
+
+	proxyResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	select {
+	case <-stateCh:
+		t.Fatalf("Delegating resolver invoked UpdateState before both the proxy and target resolvers had updated their states.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	targetResolver.UpdateState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: resolvedTargetTestAddr1},
+			{Addr: resolvedTargetTestAddr2},
+		},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	wantState := resolver.State{
+		Addresses: []resolver.Address{
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
+			proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
+		},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	}
+	var gotState resolver.State
+	select {
+	case gotState = <-stateCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
+	}
+
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+	}
+}
+
+// Tests the scenario where a proxy is configured, the target URI scheme is not
+// "dns," and both the proxy and target resolvers return endpoints. The test
+// verifies that the delegating resolver combines resolved proxy and target
+// addresses correctly, returning endpoints with the proxy address populated
+// and the target address included as an attribute of the proxy address for
+// each combination of proxy and target endpoints.
+func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
+	const (
+		targetTestAddr          = "test.com"
+		resolvedTargetTestAddr1 = "1.1.1.1:8080"
+		resolvedTargetTestAddr2 = "2.2.2.2:8080"
+		resolvedTargetTestAddr3 = "3.3.3.3:8080"
+		resolvedTargetTestAddr4 = "4.4.4.4:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "11.11.11.11:7687"
+		resolvedProxyTestAddr2  = "22.22.22.22:7687"
+	)
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		if req.URL.Host == targetTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
+		return nil, nil
+	}
+	originalhpfe := internal.HTTPSProxyFromEnvironment
+	internal.HTTPSProxyFromEnvironment = hpfe
+	defer func() {
+		internal.HTTPSProxyFromEnvironment = originalhpfe
+	}()
+
+	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
+	target := targetResolver.Scheme() + ":///" + targetTestAddr
+	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+
+	tcc, stateCh, _ := createTestResolverClientConn(t)
+	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
+		t.Fatalf("Failed to create delegating resolver: %v", err)
+	}
+
+	proxyResolver.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr1}}},
+			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr2}}},
+		},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	select {
+	case <-stateCh:
+		t.Fatalf("Delegating resolver invoked UpdateState before both the proxy and target resolvers had updated their states.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+	targetResolver.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{
+				Addresses: []resolver.Address{
+					{Addr: resolvedTargetTestAddr1},
+					{Addr: resolvedTargetTestAddr2}},
+			},
+			{
+				Addresses: []resolver.Address{
+					{Addr: resolvedTargetTestAddr3},
+					{Addr: resolvedTargetTestAddr4}},
+			},
+		},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	wantState := resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{
+				Addresses: []resolver.Address{
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
+				},
+			},
+			{
+				Addresses: []resolver.Address{
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr3),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr4),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr3),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr4),
+				},
+			},
+		},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	}
+	var gotState resolver.State
+	select {
+	case gotState = <-stateCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
+	}
+
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+	}
+}
+
+// Tests the scenario where a proxy is configured, the target URI scheme is not
+// "dns," and both the proxy and target resolvers return multiple addresses.
+// The test verifies that the delegating resolver combines unresolved proxy
+// host and target addresses correctly, returning addresses with the proxy host
+// populated and the target address included as an attribute.
+func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 	const (
 		targetTestAddr          = "test.com"
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
@@ -352,112 +524,6 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		Addresses: []resolver.Address{
 			proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr1),
 			proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2),
-		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	}
-	var gotState resolver.State
-	select {
-	case gotState = <-stateCh:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
-	}
-
-	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
-	}
-}
-
-// Tests the scenario where a proxy is configured, the target URI scheme is not
-// "dns," and both the proxy and target resolvers return endpoints. The test
-// verifies that the delegating resolver combines resolved proxy and target
-// addresses correctly, returning endpoints with the proxy address populated
-// and the target address included as an attribute of the proxy address for
-// each combination of proxy and target endpoints.
-func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
-	const (
-		targetTestAddr          = "test.com"
-		resolvedTargetTestAddr1 = "1.1.1.1:8080"
-		resolvedTargetTestAddr2 = "2.2.2.2:8080"
-		envProxyAddr            = "proxytest.com"
-		resolvedProxyTestAddr1  = "11.11.11.11:7687"
-		resolvedProxyTestAddr2  = "22.22.22.22:7687"
-	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == targetTestAddr {
-			return &url.URL{
-				Scheme: "https",
-				Host:   envProxyAddr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
-		return nil, nil
-	}
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
-	}()
-
-	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
-	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
-
-	tcc, stateCh, _ := createTestResolverClientConn(t)
-	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
-		t.Fatalf("Failed to create delegating resolver: %v", err)
-	}
-
-	proxyResolver.UpdateState(resolver.State{
-		Endpoints: []resolver.Endpoint{
-			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr1}}},
-			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr2}}},
-		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	select {
-	case <-stateCh:
-		t.Fatalf("Delegating resolver invoked UpdateState before both the proxy and target resolvers had updated their states.")
-	case <-time.After(defaultTestShortTimeout):
-	}
-	const (
-		resolvedTargetTestAddr3 = "1.2.3.6:8080"
-		resolvedTargetTestAddr4 = "1.2.3.7:8080"
-	)
-	targetResolver.UpdateState(resolver.State{
-		Endpoints: []resolver.Endpoint{
-			{
-				Addresses: []resolver.Address{
-					{Addr: resolvedTargetTestAddr1},
-					{Addr: resolvedTargetTestAddr2}},
-			},
-			{
-				Addresses: []resolver.Address{
-					{Addr: resolvedTargetTestAddr3},
-					{Addr: resolvedTargetTestAddr4}},
-			},
-		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	wantState := resolver.State{
-		Endpoints: []resolver.Endpoint{
-			{
-				Addresses: []resolver.Address{
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
-				},
-			},
-			{
-				Addresses: []resolver.Address{
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr3),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr4),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr3),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr4),
-				},
-			},
 		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
