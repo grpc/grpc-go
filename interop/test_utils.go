@@ -711,17 +711,17 @@ type SoakIterationConfig struct {
 
 // SoakTestConfig holds the configuration for the entire soak test.
 type SoakTestConfig struct {
-	SoakRequestSize                   int
-	SoakResponseSize                  int
-	PerIterationMaxAcceptableLatency  time.Duration
-	MinTimeBetweenRPCs                time.Duration
-	OverallTimeoutSeconds             int
-	ServerAddr                        string
-	SoakNumThreads                    int
-	SoakIterations                    int
-	MaxFailures                       int
-	SharedChannel                     *grpc.ClientConn
-	MayCreateNewChannel               ManagedChannel
+	SoakRequestSize                  int
+	SoakResponseSize                 int
+	PerIterationMaxAcceptableLatency time.Duration
+	MinTimeBetweenRPCs               time.Duration
+	OverallTimeoutSeconds            int
+	ServerAddr                       string
+	SoakNumThreads                   int
+	SoakIterations                   int
+	MaxFailures                      int
+	SharedChannel                    *grpc.ClientConn
+	MayCreateNewChannel              ManagedChannel
 }
 
 // createChannel initializes the shared channel (once for all threads).
@@ -857,18 +857,18 @@ func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
 // TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
-func DoSoakTest(	ctx context.Context,
-		conn *grpc.ClientConn,
-		serverAddr string,
-		soakNumThreads int,
-		soakIterations int,
-		maxFailures int,
-		soakRequestSize int,
-		soakResponseSize int,
-		perIterationMaxAcceptableLatency time.Duration,
-		minTimeBetweenRPCs time.Duration,
-		overallTimeoutSeconds int,
-		channelFunc ManagedChannel) {
+func DoSoakTest(ctx context.Context,
+	conn *grpc.ClientConn,
+	serverAddr string,
+	soakNumThreads int,
+	soakIterations int,
+	maxFailures int,
+	soakRequestSize int,
+	soakResponseSize int,
+	perIterationMaxAcceptableLatency time.Duration,
+	minTimeBetweenRPCs time.Duration,
+	overallTimeoutSeconds int,
+	channelFunc ManagedChannel) {
 	if soakIterations%soakNumThreads != 0 {
 		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumThreads\n")
 	}
@@ -882,19 +882,19 @@ func DoSoakTest(	ctx context.Context,
 		go func(threadID int) {
 			defer wg.Done()
 			config := SoakTestConfig{
-				SoakRequestSize:                   soakRequestSize,
-				SoakResponseSize:                  soakResponseSize,
-				PerIterationMaxAcceptableLatency:  perIterationMaxAcceptableLatency,
-				MinTimeBetweenRPCs:                minTimeBetweenRPCs,
-				OverallTimeoutSeconds:             overallTimeoutSeconds,
-				ServerAddr:                        serverAddr,
-				SoakNumThreads:                    soakNumThreads,
-				SoakIterations:                    soakIterations,
-				MaxFailures:                       maxFailures,
-				SharedChannel:                     sharedChannel,
-				MayCreateNewChannel:               channelFunc,
+				SoakRequestSize:                  soakRequestSize,
+				SoakResponseSize:                 soakResponseSize,
+				PerIterationMaxAcceptableLatency: perIterationMaxAcceptableLatency,
+				MinTimeBetweenRPCs:               minTimeBetweenRPCs,
+				OverallTimeoutSeconds:            overallTimeoutSeconds,
+				ServerAddr:                       serverAddr,
+				SoakNumThreads:                   soakNumThreads,
+				SoakIterations:                   soakIterations,
+				MaxFailures:                      maxFailures,
+				SharedChannel:                    sharedChannel,
+				MayCreateNewChannel:              channelFunc,
 			}
-			executeSoakTestInThread(ctx, config, startNs,threadID, &threadResults[threadID], &mu)
+			executeSoakTestInThread(ctx, config, startNs, threadID, &threadResults[threadID], &mu)
 		}(i)
 	}
 	// Wait for all goroutines to complete.
