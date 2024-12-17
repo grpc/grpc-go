@@ -43,7 +43,7 @@ func (s) TestOption(t *testing.T) {
 		addr            resolver.Address
 		wantConnectAddr string
 		wantUser        url.Userinfo
-		wantAttrPresent       bool
+		wantAttrPresent bool
 	}{
 		{
 			name: "connect_address_in_attribute",
@@ -54,7 +54,7 @@ func (s) TestOption(t *testing.T) {
 				}),
 			},
 			wantConnectAddr: "proxy-address",
-			wantAttrPresent:       true,
+			wantAttrPresent: true,
 		},
 		{
 			name: "user_in_attribute",
@@ -64,12 +64,12 @@ func (s) TestOption(t *testing.T) {
 					User: *user,
 				}),
 			},
-			wantUser:  *user,
+			wantUser:        *user,
 			wantAttrPresent: true,
 		},
 		{
-			name:      "no_attribute",
-			addr:      resolver.Address{Addr: "test-address"},
+			name:            "no_attribute",
+			addr:            resolver.Address{Addr: "test-address"},
 			wantAttrPresent: false,
 		},
 	}
