@@ -47,6 +47,7 @@ type subConnWrapper struct {
 	// addressInfo is a pointer to the subConnWrapper's corresponding address
 	// map entry, if the map entry exists.
 	addressInfo unsafe.Pointer // *addressInfo
+	scUpdateCh  *buffer.Unbounded
 
 	// The following fields are only referenced in the context of a work
 	// serializing buffer and don't need to be protected by a mutex.
@@ -54,30 +55,28 @@ type subConnWrapper struct {
 	// These two pieces of state will reach eventual consistency due to sync in
 	// run(), and child will always have the correctly updated SubConnState.
 
-	// stateForUnjection is the latest state update from the underlying
-	// SubConn that was processed through the serializer. This is used whenever
-	// a SubConn gets unejected. This will be the health state if a health
-	// listener is being used, otherwise it will be the connectivity
-	// state.
-	stateForUnjection balancer.SubConnState
-	ejected           bool
-
-	scUpdateCh *buffer.Unbounded
+	ejected bool
 
 	// addresses is the list of address(es) this SubConn was created with to
 	// help support any change in address(es)
 	addresses []resolver.Address
+	// latestHealthState is tracked to update the child policy during
+	// unejection.
+	latestHealthState balancer.SubConnState
+	// latestRawConnectivityState is tracked to update the child policy during
+	// unejection.
+	latestRawConnectivityState balancer.SubConnState
 
 	// Access to the following fields are protected by a mutex. These fields
 	// should not be accessed from outside this file, instead use methods
 	// defined on the struct.
 	mu             sync.Mutex
 	healthListener func(balancer.SubConnState)
-	// latestConnectivityState is the SubConn's most recent connectivity
+	// latestReceivedConnectivityState is the SubConn's most recent connectivity
 	// state received. It may not be delivered to the child balancer yet. It is
 	// used to ensure a health listener is registered with the SubConn only when
 	// the SubConn is READY.
-	latestConnectivityState connectivity.State
+	latestReceivedConnectivityState connectivity.State
 }
 
 // eject causes the wrapper to report a state update with the TRANSIENT_FAILURE
@@ -120,38 +119,82 @@ func (scw *subConnWrapper) RegisterHealthListener(listener func(balancer.SubConn
 	scw.mu.Lock()
 	defer scw.mu.Unlock()
 
-	if scw.latestConnectivityState != connectivity.Ready {
+	if scw.latestReceivedConnectivityState != connectivity.Ready {
 		return
 	}
 	scw.healthListener = listener
 	if listener == nil {
 		scw.SubConn.RegisterHealthListener(nil)
-	} else {
-		scw.SubConn.RegisterHealthListener(func(scs balancer.SubConnState) {
-			scw.scUpdateCh.Put(&scHealthUpdate{
-				scw:   scw,
-				state: scs,
-			})
-		})
+		return
 	}
+
+	scw.SubConn.RegisterHealthListener(func(scs balancer.SubConnState) {
+		scw.scUpdateCh.Put(&scHealthUpdate{
+			scw:   scw,
+			state: scs,
+		})
+	})
 }
 
-func (scw *subConnWrapper) updateHealthState(scs balancer.SubConnState) {
+// updateSubConnHealthState stores the latest health state for unejection and
+// sends updates the health listener.
+func (scw *subConnWrapper) updateSubConnHealthState(scs balancer.SubConnState) {
+	scw.latestHealthState = scs
 	scw.mu.Lock()
+	defer scw.mu.Unlock()
 	if scw.healthListener != nil {
 		scw.healthListener(scs)
 	}
-	scw.mu.Unlock()
+}
+
+// updateSubConnConnectivityState stores the latest connectivity state for
+// unejection and updates the raw connectivity listener.
+func (scw *subConnWrapper) updateSubConnConnectivityState(scs balancer.SubConnState) {
+	scw.latestRawConnectivityState = scs
+	if scw.listener != nil {
+		scw.listener(scs)
+	}
 }
 
 func (scw *subConnWrapper) clearHealthListener() {
 	scw.mu.Lock()
+	defer scw.mu.Unlock()
 	scw.healthListener = nil
-	scw.mu.Unlock()
+}
+
+func (scw *subConnWrapper) handleUnejection() {
+	scw.ejected = false
+	if !scw.healthListenerEnabled {
+		// If scw.latestRawConnectivityState has never been written to will
+		// default to connectivity IDLE, which is fine.
+		scw.updateSubConnConnectivityState(scw.latestRawConnectivityState)
+		return
+	}
+	// If scw.latestHealthState has never been written to will use the health
+	// state CONNECTING set during object creation.
+	scw.updateSubConnHealthState(scw.latestHealthState)
+}
+
+func (scw *subConnWrapper) handleEjection() {
+	scw.ejected = true
+	stateToUpdate := balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+	}
+	if !scw.healthListenerEnabled {
+		if scw.listener != nil {
+			scw.listener(stateToUpdate)
+		}
+		return
+	}
+	scw.mu.Lock()
+	defer scw.mu.Unlock()
+	if scw.healthListener != nil {
+		scw.healthListener(stateToUpdate)
+	}
 }
 
 func (scw *subConnWrapper) setLatestConnectivityState(state connectivity.State) {
 	scw.mu.Lock()
-	scw.latestConnectivityState = state
-	scw.mu.Unlock()
+	defer scw.mu.Unlock()
+	scw.latestReceivedConnectivityState = state
 }

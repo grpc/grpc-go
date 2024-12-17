@@ -193,8 +193,8 @@ type outlierDetectionBalancer struct {
 	// which uses addrs. This balancer waits for the interval timer algorithm to
 	// finish before making the update to the addrs map.
 	//
-	// This mutex is never held at the same time as childMu (within the context
-	// of a single goroutine).
+	// This mutex is never held when calling methods on the child policy
+	// (within the context of a single goroutine).
 	mu                    sync.Mutex
 	addrs                 map[string]*addressInfo
 	cfg                   *LBConfig
@@ -468,11 +468,13 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 		return nil, err
 	}
 	scw := &subConnWrapper{
-		SubConn:               sc,
-		addresses:             addrs,
-		scUpdateCh:            b.scUpdateCh,
-		listener:              oldListener,
-		healthListenerEnabled: len(addrs) == 1 && pickfirstleaf.IsManagedByPickfirst(addrs[0]),
+		SubConn:                    sc,
+		addresses:                  addrs,
+		scUpdateCh:                 b.scUpdateCh,
+		listener:                   oldListener,
+		latestRawConnectivityState: balancer.SubConnState{ConnectivityState: connectivity.Idle},
+		latestHealthState:          balancer.SubConnState{ConnectivityState: connectivity.Connecting},
+		healthListenerEnabled:      len(addrs) == 1 && pickfirstleaf.IsManagedByPickfirst(addrs[0]),
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -604,7 +606,6 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	}
 
 	// Raw connectivity listener is being used for ejection.
-	scw.stateForUnjection = u.state
 	if scw.ejected {
 		return
 	}
@@ -612,7 +613,6 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 }
 
 func (b *outlierDetectionBalancer) handleSubConnHealthUpdate(u *scHealthUpdate) {
-	u.scw.stateForUnjection = u.state
 	if !u.scw.ejected {
 		b.child.updateSubConnHealthState(u.scw, u.state)
 	}
@@ -621,22 +621,7 @@ func (b *outlierDetectionBalancer) handleSubConnHealthUpdate(u *scHealthUpdate) 
 // handleEjectedUpdate handles any SubConns that get ejected/unejected, and
 // forwards the appropriate corresponding subConnState to the child policy.
 func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
-	scw := u.scw
-	scw.ejected = u.isEjected
-	// If scw.latestState has never been written to will default to connectivity
-	// IDLE, which is fine.
-	stateToUpdate := scw.stateForUnjection
-	if u.isEjected {
-		stateToUpdate = balancer.SubConnState{
-			ConnectivityState: connectivity.TransientFailure,
-		}
-	}
-
-	if !scw.healthListenerEnabled {
-		b.child.updateSubConnState(scw, stateToUpdate)
-		return
-	}
-	b.child.updateSubConnHealthState(scw, stateToUpdate)
+	b.child.handleEjectionUpdate(u)
 }
 
 // handleChildStateUpdate forwards the picker update wrapped in a wrapped picker
@@ -895,7 +880,7 @@ func (b *outlierDetectionBalancer) unejectAddress(addrInfo *addressInfo) {
 	}
 }
 
-// synchronizingBalancerWrapper serialized calls into balancer (to uphold the
+// synchronizingBalancerWrapper serializes calls into balancer (to uphold the
 // balancer.Balancer API guarantee of synchronous calls). It also ensures a
 // consistent order of locking mutexes when using SubConn listeners to avoid
 // deadlocks.
@@ -920,34 +905,42 @@ func (sbw *synchronizingBalancerWrapper) updateClientConnState(state balancer.Cl
 
 func (sbw *synchronizingBalancerWrapper) resolverError(err error) {
 	sbw.mu.Lock()
+	defer sbw.mu.Unlock()
 	sbw.lb.ResolverError(err)
-	sbw.mu.Unlock()
 }
 
 func (sbw *synchronizingBalancerWrapper) closeLB() {
 	sbw.mu.Lock()
+	defer sbw.mu.Unlock()
 	sbw.lb.Close()
-	sbw.mu.Unlock()
 }
 
 func (sbw *synchronizingBalancerWrapper) exitIdle() {
 	sbw.mu.Lock()
+	defer sbw.mu.Unlock()
 	sbw.lb.ExitIdle()
-	sbw.mu.Unlock()
 }
 
 func (sbw *synchronizingBalancerWrapper) updateSubConnHealthState(scw *subConnWrapper, scs balancer.SubConnState) {
 	sbw.mu.Lock()
-	scw.updateHealthState(scs)
-	sbw.mu.Unlock()
+	defer sbw.mu.Unlock()
+	scw.updateSubConnHealthState(scs)
 }
 
 func (sbw *synchronizingBalancerWrapper) updateSubConnState(scw *subConnWrapper, scs balancer.SubConnState) {
 	sbw.mu.Lock()
-	if scw.listener != nil {
-		scw.listener(scs)
+	defer sbw.mu.Unlock()
+	scw.updateSubConnConnectivityState(scs)
+}
+
+func (sbw *synchronizingBalancerWrapper) handleEjectionUpdate(u *ejectionUpdate) {
+	sbw.mu.Lock()
+	defer sbw.mu.Unlock()
+	if u.isEjected {
+		u.scw.handleEjection()
+	} else {
+		u.scw.handleUnejection()
 	}
-	sbw.mu.Unlock()
 }
 
 // addressInfo contains the runtime information about an address that pertains
