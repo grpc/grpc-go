@@ -422,9 +422,8 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
+		S: grpc.NewServer(),
 	}
-
-	stub.S = grpc.NewServer()
 	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()
 
@@ -560,8 +559,8 @@ func (s) TestServersSwap(t *testing.T) {
 			UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
+			S: grpc.NewServer(),
 		}
-		stub.S = grpc.NewServer()
 		stubserver.StartTestService(t, stub)
 		return lis.Addr().String(), stub.S.Stop
 	}
@@ -616,8 +615,8 @@ func (s) TestWaitForReady(t *testing.T) {
 		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
+		S: grpc.NewServer(),
 	}
-	stub.S = grpc.NewServer()
 	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()
 
@@ -752,8 +751,8 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 				EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					return &testpb.Empty{}, nil
 				},
+				S: grpc.NewServer(),
 			}
-			stub.S = grpc.NewServer()
 			stubserver.StartTestService(t, stub)
 			defer stub.S.Stop()
 
