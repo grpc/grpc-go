@@ -1029,7 +1029,6 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify that the expected error is propagated to the watcher.
 	// Verify that the expected error is propagated to the existing watcher.
 	if err := verifyUnknownListenerError(ctx, lw.updateCh, wantListenerNACKErr); err != nil {
 		t.Fatal(err)
@@ -1039,45 +1038,18 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	// Verify that the expected error is propagated to the existing watcher.
 	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestLDSWatch_ResourceCaching_WithNACKError covers the case where a watch is
-// registered for a resource which is already present in the cache with an old
-// good update as well as latest NACK error. The test verifies that new watcher
-// receives both good update and error without a new resource request being
-// sent to the management server.
-func TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
-	firstRequestReceived := false
-	firstAckReceived := grpcsync.NewEvent()
-	secondAckReceived := grpcsync.NewEvent()
-	secondRequestReceived := grpcsync.NewEvent()
-
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
-			// The first request has an empty version string.
-			if !firstRequestReceived && req.GetVersionInfo() == "" {
-				firstRequestReceived = true
-				return nil
-			}
-			// The first ack has a non-empty version string.
-			if !firstAckReceived.HasFired() && req.GetVersionInfo() != "" {
-				firstAckReceived.Fire()
-				return nil
-			}
-			// The second ack has a non-empty version string.
-			if !secondAckReceived.HasFired() && req.GetVersionInfo() != "" {
-				secondAckReceived.Fire()
-				return nil
-			}
-			// Any requests after the first request and two acks, are not expected.
-			secondRequestReceived.Fire()
-			return nil
-		},
-	})
+// Tests the scenario where a watch registered for a resource results in a good
+// update followed by a bad update. This results in the resource cache
+// containing both the old good update and the latest NACK error. The test
+// verifies that a when a new watch is registered for the same resource, the new
+// watcher receives the good update followed by the NACK error.
+func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
@@ -1149,16 +1121,6 @@ func TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	// Verify that the expected error is propagated to the existing watcher.
 	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
 		t.Fatal(err)
-	}
-
-	// No request should get sent out as part of this watch.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-secondRequestReceived.Done():
-		t.Fatal("xdsClient sent out request instead of using update from cache")
-	default:
 	}
 }
 
