@@ -374,9 +374,6 @@ func main() {
 		}
 		interop.DoSoakTest(ctxWithDeadline, conn, soakTestConfig)
 		logger.Infoln("RpcSoak done")
-		//interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
-		//	time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
-		//	interop.UseSharedChannel)
 	case "channel_soak":
 		soakTestConfig := interop.SoakTestConfig{
 			SoakRequestSize:               *soakRequestSize,
@@ -395,11 +392,6 @@ func main() {
 		}
 		interop.DoSoakTest(ctxWithDeadline, conn, soakTestConfig)
 		logger.Infoln("ChannelSoak done")
-		//interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
-		//	time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
-		//	func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-		//		return interop.CreateNewChannel(currentChannel, serverAddr, opts)
-		//	})
 	case "orca_per_rpc":
 		interop.DoORCAPerRPCTest(ctx, tc)
 		logger.Infoln("ORCAPerRPC done")
