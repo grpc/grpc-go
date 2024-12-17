@@ -68,8 +68,8 @@ func (s) TestOption(t *testing.T) {
 			wantValid: true,
 		},
 		{
-			name: "no_attribute",
-			addr: resolver.Address{Addr: "test-address"},
+			name:      "no_attribute",
+			addr:      resolver.Address{Addr: "test-address"},
 			wantValid: false,
 		},
 	}
