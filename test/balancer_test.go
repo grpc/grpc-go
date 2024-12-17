@@ -426,7 +426,6 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()
-
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 	creds := &attrTransportCreds{}
@@ -755,7 +754,6 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 			}
 			stubserver.StartTestService(t, stub)
 			defer stub.S.Stop()
-
 			t.Logf("Started gRPC server at %s...", lis.Addr().String())
 
 			r := manual.NewBuilderWithScheme("whatever")
