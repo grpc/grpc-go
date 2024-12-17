@@ -24,7 +24,7 @@ import (
 	"time"
 
 	otelcodes "go.opentelemetry.io/otel/codes"
-	trace2 "go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -685,11 +685,11 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 // enabled, makes a unary RPC, and streaming RPC as well.
 //
 // Verification:
-//   - Ensures that the span context is correctly propagated from the client
+//   - Verifies that the span context is correctly propagated from the client
 //     to the server, including the trace ID and span ID.
-//   - Confirms that the server can access the span context and create
+//   - Verifies that the server can access the span context and create
 //     child spans as expected during the RPC calls.
-//   - Validates that the tracing information is recorded accurately in
+//   - Verifies that the tracing information is recorded accurately in
 //     the OpenTelemetry backend.
 func (s) TestSpan(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
@@ -713,11 +713,11 @@ func (s) TestSpan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
 	}
-
 	stream.CloseSend()
 	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 	}
+
 	// Get the spans from the exporter
 	spans := spanExporter.GetSpans()
 	if got, want := len(spans), 6; got != want {
@@ -727,7 +727,7 @@ func (s) TestSpan(t *testing.T) {
 	wantSI := []traceSpanInfo{
 		{
 			name:     "grpc.testing.TestService.UnaryCall",
-			spanKind: trace2.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -785,7 +785,7 @@ func (s) TestSpan(t *testing.T) {
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: trace2.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -843,13 +843,13 @@ func (s) TestSpan(t *testing.T) {
 		},
 		{
 			name:       "grpc.testing.TestService.UnaryCall",
-			spanKind:   trace2.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: []attribute.KeyValue{},
 			events:     []trace.Event{},
 		},
 		{
 			name:     "grpc.testing.TestService.FullDuplexCall",
-			spanKind: trace2.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -872,13 +872,13 @@ func (s) TestSpan(t *testing.T) {
 		},
 		{
 			name:       "grpc.testing.TestService.FullDuplexCall",
-			spanKind:   trace2.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: []attribute.KeyValue{},
 			events:     []trace.Event{},
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: trace2.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -968,11 +968,11 @@ func (s) TestSpan(t *testing.T) {
 // number of spans are created with the expected spans.
 //
 // Verification:
-//   - Confirms that the correct number of spans are created for both unary and
+//   - Verifies that the correct number of spans are created for both unary and
 //     streaming RPCs.
-//   - Validates that the spans have the expected names and attributes, ensuring
+//   - Verifies that the spans have the expected names and attributes, ensuring
 //     they accurately reflect the operations performed.
-//   - Checks that the trace ID and span ID are correctly assigned and accessible
+//   - Verifies that the trace ID and span ID are correctly assigned and accessible
 //     in the OpenTelemetry backend.
 func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
@@ -1012,7 +1012,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	wantSI := []traceSpanInfo{
 		{
 			name:     "grpc.testing.TestService.UnaryCall",
-			spanKind: trace2.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -1070,7 +1070,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: trace2.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -1128,13 +1128,13 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		},
 		{
 			name:       "grpc.testing.TestService.UnaryCall",
-			spanKind:   trace2.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: []attribute.KeyValue{},
 			events:     []trace.Event{},
 		},
 		{
 			name:     "grpc.testing.TestService.FullDuplexCall",
-			spanKind: trace2.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",
@@ -1157,13 +1157,13 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		},
 		{
 			name:       "grpc.testing.TestService.FullDuplexCall",
-			spanKind:   trace2.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: []attribute.KeyValue{},
 			events:     []trace.Event{},
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: trace2.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal.String(),
 			attributes: []attribute.KeyValue{
 				{
 					Key:   "Client",

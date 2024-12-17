@@ -218,7 +218,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
-	var newStream = func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+	newStream := func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
 		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, cc.nameResolutionDelayed, opts...)
 	}
 
