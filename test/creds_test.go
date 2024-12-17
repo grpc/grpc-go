@@ -439,8 +439,8 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
-	cc.Connect()
 	defer cc.Close()
+	cc.Connect()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -472,8 +472,8 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
-	cc.Connect()
 	defer cc.Close()
+	cc.Connect()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String(), ServerName: testServerName}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -528,8 +528,8 @@ func (s) TestServerCredsDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
-	cc.Connect()
 	defer cc.Close()
+	cc.Connect()
 
 	rawConn := cred.getRawConn()
 	// Give grpc a chance to see the error and potentially close the connection.
