@@ -121,8 +121,8 @@ func (s) TestGracefulStop(t *testing.T) {
 			}
 			return stream.Send(&testpb.StreamingOutputCallResponse{})
 		},
+		S: grpc.NewServer(),
 	}
-	ss.S = grpc.NewServer()
 	stubserver.StartTestService(t, ss)
 
 	// 1. Start Server
