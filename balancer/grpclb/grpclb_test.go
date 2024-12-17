@@ -460,7 +460,7 @@ func (s) TestGRPCLB_Basic(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 
@@ -517,7 +517,7 @@ func (s) TestGRPCLB_Weighted(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 
@@ -597,7 +597,7 @@ func (s) TestGRPCLB_DropRequest(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -769,7 +769,7 @@ func (s) TestGRPCLB_BalancerDisconnects(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -940,7 +940,7 @@ func (s) TestGRPCLB_ExplicitFallback(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -1010,7 +1010,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -1105,7 +1105,7 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient: %v", err)
+		t.Fatalf("Failed to create a client for the backend: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1200,7 +1200,7 @@ func (s) TestGRPCLB_BackendConnectionErrorPropagation(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
-		t.Fatalf("Failed to create new client to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend: %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -1245,7 +1245,7 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1320,7 +1320,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 		grpc.WithContextDialer(fakeNameDialer),
 		grpc.WithUserAgent(testUserAgent))
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -1427,7 +1427,7 @@ func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats,
 		grpc.WithPerRPCCredentials(failPreRPCCred{}),
 		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
-		t.Fatalf("Failed to create a newclient to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
