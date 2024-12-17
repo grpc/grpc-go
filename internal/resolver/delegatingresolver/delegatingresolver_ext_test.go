@@ -173,7 +173,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
-	targetResolver := setupDNS(t) // Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
 
@@ -248,7 +248,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		internal.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
-	targetResolver := setupDNS(t) // Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
 

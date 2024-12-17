@@ -183,20 +183,27 @@ func (r *delegatingResolver) combinedAddressesIfReadyLocked() ([]resolver.Addres
 	if !r.targetResolverReady || !r.proxyResolverReady {
 		return nil, nil, false
 	}
-	var addresses []resolver.Address
-	var proxyAddr string
+
+	// If multiple resolved proxy addresses are present, we send only the
+	// unresolved proxy host. Sending all resolved addresses would increase the
+	// number of addresses passed to the ClientConn and subsequently to load
+	// balancing (LB) policies like Round Robin, leading to additional TCP
+	// connections. However, if there's only one resolved proxy address, we
+	// send it directly, as it doesn't affect the address count returned by the
+	// target resolver and the address count sent to the ClientConn.
+	var proxyAddr resolver.Address
 	if len(r.proxyAddrs) == 1 {
-		proxyAddr = r.proxyAddrs[0].Addr
+		proxyAddr = r.proxyAddrs[0]
 	} else {
-		proxyAddr = r.proxyURL.Host
+		proxyAddr = resolver.Address{Addr: r.proxyURL.Host}
 	}
+	var addresses []resolver.Address
 	for _, targetAddr := range r.targetResolverState.Addresses {
-		newAddr := resolver.Address{Addr: proxyAddr}
 		var user url.Userinfo
 		if r.proxyURL.User != nil {
 			user = *r.proxyURL.User
 		}
-		addresses = append(addresses, proxyattributes.Populate(newAddr, proxyattributes.Options{
+		addresses = append(addresses, proxyattributes.Populate(proxyAddr, proxyattributes.Options{
 			User:        user,
 			ConnectAddr: targetAddr.Addr,
 		}))
@@ -215,16 +222,14 @@ func (r *delegatingResolver) combinedAddressesIfReadyLocked() ([]resolver.Addres
 		var addrs []resolver.Address
 		for _, proxyAddr := range r.proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
-				newAddr := resolver.Address{Addr: proxyAddr.Addr}
 				var user url.Userinfo
 				if r.proxyURL.User != nil {
 					user = *r.proxyURL.User
 				}
-				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
+				addrs = append(addrs, proxyattributes.Populate(proxyAddr, proxyattributes.Options{
 					User:        user,
 					ConnectAddr: targetAddr.Addr,
-				})
-				addrs = append(addrs, newAddr)
+				}))
 			}
 		}
 		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
@@ -243,14 +248,20 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 	if logger.V(2) {
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
-	r.proxyAddrs = state.Addresses
-	if r.proxyAddrs == nil && state.Endpoints != nil {
+	if state.Endpoints != nil {
 		for _, endpoint := range state.Endpoints {
 			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
 		}
+	} else {
+		r.proxyAddrs = state.Addresses
 	}
 	r.proxyResolverReady = true
 	addrs, endpoints, ready := r.combinedAddressesIfReadyLocked()
+	// Another possible approach was to block until updates are received from
+	// both resolvers. But this is not used because calling `New()` triggers
+	// `Build()`  for the first resolver, which calls `UpdateState()`. And the
+	// second resolver hasn't sent an update yet, so it would cause `New()` to
+	// block indefinitely.
 	if ready {
 		r.curState.Addresses = addrs
 		r.curState.Endpoints = endpoints
