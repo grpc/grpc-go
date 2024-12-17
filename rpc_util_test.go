@@ -353,6 +353,14 @@ func TestDecompress(t *testing.T) {
 			want:                  []byte("exact size message"),
 			wantErr:               nil,
 		},
+		{
+			name:                  "Handles maxReceiveMessageSize as MaxInt64",
+			compressor:            c,
+			input:                 []byte("small message"),
+			maxReceiveMessageSize: math.MaxInt64,
+			want:                  []byte("small message"),
+			wantErr:               nil,
+		},
 	}
 
 	for _, tt := range tests {
