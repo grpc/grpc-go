@@ -75,7 +75,6 @@ func Test(t *testing.T) {
 // subset of information that is needed to verify if correct trace is being
 // attributed to the rpc.
 type traceSpanInfo struct {
-	sc         trace2.SpanContext
 	spanKind   string
 	name       string
 	events     []trace.Event
@@ -627,11 +626,11 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 // correct emission of metrics during a Unary RPC and a Streaming RPC, ensuring that
 // the metrics reflect the operations performed, including the size of the compressed
 // message.
-func TestServerWithMetricsAndTraceOptions(t *testing.T) {
+func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	// Create default metrics options
 	mo, reader := defaultMetricsOptions(t, nil)
 	// Create default trace options
-	to, _ := defaultTraceOptions(t)
+	to, exporter := defaultTraceOptions(t)
 
 	ss := setupStubServer(t, mo, to)
 	defer ss.Stop()
@@ -672,6 +671,12 @@ func TestServerWithMetricsAndTraceOptions(t *testing.T) {
 		UnaryCompressedMessageSize: float64(57),
 	})
 	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+
+	// Verify traces
+	spans := exporter.GetSpans()
+	if got, want := len(spans), 6; got != want {
+		t.Fatalf("got %d spans, want %d", got, want)
+	}
 }
 
 // TestSpan verifies that the gRPC Trace Binary propagator correctly
@@ -687,11 +692,10 @@ func TestServerWithMetricsAndTraceOptions(t *testing.T) {
 //   - Validates that the tracing information is recorded accurately in
 //     the OpenTelemetry backend.
 func (s) TestSpan(t *testing.T) {
-	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 	// Start the server with OpenTelemetry options
-	ss := setupStubServer(t, mo, traceOptions)
+	ss := setupStubServer(t, nil, traceOptions)
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -971,13 +975,12 @@ func (s) TestSpan(t *testing.T) {
 //   - Checks that the trace ID and span ID are correctly assigned and accessible
 //     in the OpenTelemetry backend.
 func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
-	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	traceOptions, spanExporter := defaultTraceOptions(t)
 	// Set the W3CContextPropagator as part of TracingOptions.
 	traceOptions.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
 	// Start the server with OpenTelemetry options
-	ss := setupStubServer(t, mo, traceOptions)
+	ss := setupStubServer(t, nil, traceOptions)
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
