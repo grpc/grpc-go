@@ -802,13 +802,20 @@ func executeSoakTestInThread(
 			soakRequestSize,
 			soakResponseSize,
 			[]grpc.CallOption{grpc.Peer(&p)})
+		addrStr := "nil"
 		if p.Addr != nil {
-			fmt.Fprintf(os.Stderr, "Peer address: %q\n", p.Addr)
+			addrStr = p.Addr.String()
 		} else {
 			fmt.Fprintf(os.Stderr, "No peer address available for this RPC.\n")
 		}
+		//if p.Addr != nil {
+		//	fmt.Fprintf(os.Stderr, "Peer address: %q\n", p.Addr)
+		//} else {
+		//	fmt.Fprintf(os.Stderr, "No peer address available for this RPC.\n")
+		//}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s failed: %s\n", threadID, i, 0, p.Addr, serverAddr, err)
+			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s failed: %s\n", threadID, i, 0, addrStr, serverAddr, err)
+			//fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s failed: %s\n", threadID, i, 0, p.Addr, serverAddr, err)
 			mu.Lock()
 			threadResults.Failures++
 			mu.Unlock()
@@ -817,7 +824,8 @@ func executeSoakTestInThread(
 		}
 		latencyMs := result.LatencyMs
 		if latencyMs > perIterationMaxAcceptableLatency.Milliseconds() {
-			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s exceeds max acceptable latency: %d\n", threadID, i, latencyMs, p.Addr, serverAddr, perIterationMaxAcceptableLatency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s exceeds max acceptable latency: %d\n", threadID, i, latencyMs, addrStr, serverAddr, perIterationMaxAcceptableLatency.Milliseconds())
+			//fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s exceeds max acceptable latency: %d\n", threadID, i, latencyMs, p.Addr, serverAddr, perIterationMaxAcceptableLatency.Milliseconds())
 			mu.Lock()
 			threadResults.Failures++
 			mu.Unlock()
@@ -829,7 +837,8 @@ func executeSoakTestInThread(
 		threadResults.Latencies.Add(latencyMs)
 		threadResults.IterationsDone++
 		mu.Unlock()
-		fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s succeeded\n", threadID, i, latencyMs, p.Addr, serverAddr)
+		fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s succeeded\n", threadID, i, latencyMs, addrStr, serverAddr)
+		//fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s succeeded\n", threadID, i, latencyMs, p.Addr, serverAddr)
 		<-earliestNextStart
 	}
 }
