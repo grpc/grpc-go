@@ -801,7 +801,9 @@ func (f *fakeCompressor) Decompress(io.Reader) (io.Reader, error) {
 }
 
 func (f *fakeCompressor) Name() string {
-	return "fake-compressor"
+	// Use the name of an existing compressor to avoid interactions with other
+	// tests since compressors can't be un-registered.
+	return "gzip"
 }
 
 type nopWriteCloser struct {
@@ -817,13 +819,17 @@ func (nopWriteCloser) Close() error {
 // max receive message size restricted to 99 bytes. The test verifies that the
 // client receives a ResourceExhausted response from the server.
 func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
+	oldC := encoding.GetCompressor("gzip")
+	defer func() {
+		encoding.RegisterCompressor(oldC)
+	}()
+	messageLen := 100
+	encoding.RegisterCompressor(&fakeCompressor{decompressedMessageSize: messageLen})
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	messageLen := 100
-	encoding.RegisterCompressor(&fakeCompressor{decompressedMessageSize: messageLen})
 	if err := ss.Start([]grpc.ServerOption{grpc.MaxRecvMsgSize(messageLen - 1)}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
@@ -837,7 +843,7 @@ func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
 		t.Fatalf("Unexpected error from newPayload: %v", err)
 	}
 	req := &testpb.SimpleRequest{Payload: p}
-	_, err = ss.Client.UnaryCall(ctx, req, grpc.UseCompressor("fake-compressor"))
+	_, err = ss.Client.UnaryCall(ctx, req, grpc.UseCompressor("gzip"))
 	if err == nil {
 		t.Errorf("Client.UnaryCall(%+v) = nil, want %v", req, codes.ResourceExhausted)
 	}
