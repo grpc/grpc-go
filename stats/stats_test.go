@@ -59,10 +59,8 @@ func init() {
 	grpc.EnableTracing = false
 }
 
-type (
-	connCtxKey struct{}
-	rpcCtxKey  struct{}
-)
+type connCtxKey struct{}
+type rpcCtxKey  struct{}
 
 var (
 	// For headers sent to server:
@@ -83,8 +81,8 @@ var (
 	}
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
-    // Server Stats
-	// Ensure that Unary RPC server stats events are logged in the correct order.
+	// To verify if the Unary RPC server stats events are logged in the 
+    // correct order.
 	expectedUnarySequence = []string{
 		"ConnStats",
 		"InHeader",
@@ -95,9 +93,8 @@ var (
 		"OutTrailer",
 		"End",
 	}
-    // Server Stats
-	// Ensure that the sequence of server-side stats events for a 
-	// client stream RPC matches the expected flow.
+	// To verify if the Client Stream RPC server stats events are logged in the 
+    // correct order.
 	expectedClientStreamSequence = []string{
 		"ConnStats",
 		"InHeader",
@@ -112,9 +109,8 @@ var (
 		"OutTrailer",
 		"End",
 	}
-    // Server Stats Test
-	// Ensure that the sequence of server-side stats events for a 
-	// server stream RPC matches the expected flow.
+	// To verify if the Server Stream RPC server stats events are logged in the 
+    // correct order.
 	expectedServerStreamSequence = []string{
 		"ConnStats",
         "InHeader",
@@ -376,11 +372,7 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, err = tc.UnaryCall(
-		metadata.NewOutgoingContext(tCtx, testMetadata),
-		req,
-		grpc.WaitForReady(!c.failfast),
-	)
+	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
 	return req, resp, err
 }
 
