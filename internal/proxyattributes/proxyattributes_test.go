@@ -43,7 +43,7 @@ func (s) TestOption(t *testing.T) {
 		addr            resolver.Address
 		wantConnectAddr string
 		wantUser        url.Userinfo
-		wantValid       bool
+		wantAttrPresent       bool
 	}{
 		{
 			name: "connect_address_in_attribute",
@@ -54,7 +54,7 @@ func (s) TestOption(t *testing.T) {
 				}),
 			},
 			wantConnectAddr: "proxy-address",
-			wantValid:       true,
+			wantAttrPresent:       true,
 		},
 		{
 			name: "user_in_attribute",
@@ -65,20 +65,20 @@ func (s) TestOption(t *testing.T) {
 				}),
 			},
 			wantUser:  *user,
-			wantValid: true,
+			wantAttrPresent: true,
 		},
 		{
 			name:      "no_attribute",
 			addr:      resolver.Address{Addr: "test-address"},
-			wantValid: false,
+			wantAttrPresent: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotOption, valid := Option(tt.addr)
-			if valid != tt.wantValid {
-				t.Errorf("Option(%v) = %v, want %v", tt.addr, valid, tt.wantValid)
+			gotOption, attrPresent := Option(tt.addr)
+			if attrPresent != tt.wantAttrPresent {
+				t.Errorf("Option(%v) = %v, want %v", tt.addr, attrPresent, tt.wantAttrPresent)
 			}
 
 			if gotOption.ConnectAddr != tt.wantConnectAddr {
@@ -103,9 +103,9 @@ func (s) TestPopulate(t *testing.T) {
 
 	// Call Populate and validate attributes
 	populatedAddr := Populate(addr, pOpts)
-	gotOption, valid := Option(populatedAddr)
-	if !valid {
-		t.Errorf("Option(%v) = %v, want %v ", populatedAddr, valid, true)
+	gotOption, attrPresent := Option(populatedAddr)
+	if !attrPresent {
+		t.Errorf("Option(%v) = %v, want %v ", populatedAddr, attrPresent, true)
 	}
 	if got, want := gotOption.ConnectAddr, pOpts.ConnectAddr; got != want {
 		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
