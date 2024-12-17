@@ -140,6 +140,9 @@ func (scw *subConnWrapper) RegisterHealthListener(listener func(balancer.SubConn
 // sends updates the health listener.
 func (scw *subConnWrapper) updateSubConnHealthState(scs balancer.SubConnState) {
 	scw.latestHealthState = scs
+	if scw.ejected {
+		return
+	}
 	scw.mu.Lock()
 	defer scw.mu.Unlock()
 	if scw.healthListener != nil {
@@ -151,6 +154,11 @@ func (scw *subConnWrapper) updateSubConnHealthState(scs balancer.SubConnState) {
 // unejection and updates the raw connectivity listener.
 func (scw *subConnWrapper) updateSubConnConnectivityState(scs balancer.SubConnState) {
 	scw.latestRawConnectivityState = scs
+	// If the raw connectivity listener is used for ejection, and the SubConn is
+	// ejected, don't send the update.
+	if scw.ejected && !scw.healthListenerEnabled {
+		return
+	}
 	if scw.listener != nil {
 		scw.listener(scs)
 	}

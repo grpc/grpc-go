@@ -593,29 +593,11 @@ func (b *outlierDetectionBalancer) Target() string {
 func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw := u.scw
 	scw.clearHealthListener()
-
-	if scw.listener == nil {
-		return
-	}
-
-	// If the health listener is being used for ejection, forward the
-	// connectivity updates unconditionally.
-	if scw.healthListenerEnabled {
-		b.child.updateSubConnState(scw, u.state)
-		return
-	}
-
-	// Raw connectivity listener is being used for ejection.
-	if scw.ejected {
-		return
-	}
 	b.child.updateSubConnState(scw, u.state)
 }
 
 func (b *outlierDetectionBalancer) handleSubConnHealthUpdate(u *scHealthUpdate) {
-	if !u.scw.ejected {
-		b.child.updateSubConnHealthState(u.scw, u.state)
-	}
+	b.child.updateSubConnHealthState(u.scw, u.state)
 }
 
 // handleEjectedUpdate handles any SubConns that get ejected/unejected, and
