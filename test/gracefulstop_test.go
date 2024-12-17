@@ -42,9 +42,7 @@ type delayListener struct {
 	closeCalled  chan struct{}
 	acceptCalled chan struct{}
 	allowCloseCh chan struct{}
-	mu           sync.Mutex
 	dialed       bool
-	closed       bool
 }
 
 func (d *delayListener) Accept() (net.Conn, error) {
@@ -72,15 +70,7 @@ func (d *delayListener) allowClose() {
 	close(d.allowCloseCh)
 }
 func (d *delayListener) Close() error {
-	d.mu.Lock()
-	if d.closed {
-		d.mu.Unlock()
-		return nil
-	}
-	d.closed = true
 	close(d.closeCalled)
-	d.mu.Unlock()
-
 	go func() {
 		<-d.allowCloseCh
 		d.Listener.Close()
