@@ -54,7 +54,7 @@ var (
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
 	soakRequestSize                        = flag.Int("soak_request_size", 271828, "The request size in a soak RPC. The default value is set based on the interop large unary test case.")
 	soakResponseSize                       = flag.Int("soak_response_size", 314159, "The response size in a soak RPC. The default value is set based on the interop large unary test case.")
-	numThreads                             = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
+	soakNumThreads                             = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	testCase                               = flag.String("test_case", "rpc_soak",
 		`Configure different test cases. Valid options are:
         rpc_soak: sends --soak_iterations large_unary RPCs;
@@ -99,8 +99,6 @@ func main() {
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}
 
-	// create clients as specified in flags
-	//var clients []clientConfig
 	for i := range uris {
 		var opts []grpc.DialOption
 		switch creds[i] {
@@ -135,7 +133,7 @@ func main() {
 				ctxWithDeadline,
 				c.conn,
 				c.uri,
-				*numThreads,
+				*soakNumThreads,
 				*soakIterations,
 				*soakMaxFailures,
 				*soakRequestSize,

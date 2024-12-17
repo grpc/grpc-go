@@ -79,7 +79,7 @@ var (
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
 	soakRequestSize                        = flag.Int("soak_request_size", 271828, "The request size in a soak RPC. The default value is set based on the interop large unary test case.")
 	soakResponseSize                       = flag.Int("soak_response_size", 314159, "The response size in a soak RPC. The default value is set based on the interop large unary test case.")
-	numThreads                             = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
+	soakNumThreads                             = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	additionalMetadata                     = flag.String("additional_metadata", "", "Additional metadata to send in each request, as a semicolon-separated list of key:value pairs.")
 	testCase                               = flag.String("test_case", "large_unary",
@@ -359,12 +359,12 @@ func main() {
 		interop.DoPickFirstUnary(ctx, tc)
 		logger.Infoln("PickFirstUnary done")
 	case "rpc_soak":
-		interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *numThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
+		interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
 			time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
 			interop.UseSharedChannel)
 		logger.Infoln("RpcSoak done")
 	case "channel_soak":
-		interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *numThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
+		interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
 			time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
 			func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 				return interop.CreateNewChannel(currentChannel, serverAddr, opts)

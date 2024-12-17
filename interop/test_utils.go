@@ -733,14 +733,8 @@ func UseSharedChannel(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgr
 	return currentChannel, client
 }
 
-func doOneSoakIteration(
-	ctx context.Context,
-	client testgrpc.TestServiceClient,
-	soakRequestSize int,
-	soakResponseSize int,
-	copts []grpc.CallOption) (SoakIterationResult, error) {
+func doOneSoakIteration(ctx context.Context, client testgrpc.TestServiceClient, soakRequestSize int, soakResponseSize int, copts []grpc.CallOption) (SoakIterationResult, error) {
 	start := time.Now()
-	var err error
 	// Do a large-unary RPC.
 	// Create the request payload.
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, soakRequestSize)
@@ -751,7 +745,7 @@ func doOneSoakIteration(
 	}
 	// Perform the GRPC call.
 	var reply *testpb.SimpleResponse
-	reply, err = client.UnaryCall(ctx, req, copts...)
+	reply, err := client.UnaryCall(ctx, req, copts...)
 	if err != nil {
 		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
 		return SoakIterationResult{}, err
@@ -808,14 +802,13 @@ func executeSoakTestInThread(
 			soakRequestSize,
 			soakResponseSize,
 			[]grpc.CallOption{grpc.Peer(&p)})
-		addrStr := "nil"
 		if p.Addr != nil {
-			addrStr = p.Addr.String()
+			fmt.Fprintf(os.Stderr, "Peer address: %q\n", p.Addr)
 		} else {
 			fmt.Fprintf(os.Stderr, "No peer address available for this RPC.\n")
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s failed: %s\n", threadID, i, 0, addrStr, serverAddr, err)
+			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s failed: %s\n", threadID, i, 0, p.Addr, serverAddr, err)
 			mu.Lock()
 			threadResults.Failures++
 			mu.Unlock()
@@ -824,7 +817,7 @@ func executeSoakTestInThread(
 		}
 		latencyMs := result.LatencyMs
 		if latencyMs > perIterationMaxAcceptableLatency.Milliseconds() {
-			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s exceeds max acceptable latency: %d\n", threadID, i, latencyMs, addrStr, serverAddr, perIterationMaxAcceptableLatency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s exceeds max acceptable latency: %d\n", threadID, i, latencyMs, p.Addr, serverAddr, perIterationMaxAcceptableLatency.Milliseconds())
 			mu.Lock()
 			threadResults.Failures++
 			mu.Unlock()
@@ -836,7 +829,7 @@ func executeSoakTestInThread(
 		threadResults.Latencies.Add(latencyMs)
 		threadResults.IterationsDone++
 		mu.Unlock()
-		fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s succeeded\n", threadID, i, latencyMs, addrStr, serverAddr)
+		fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %q server_uri: %s succeeded\n", threadID, i, latencyMs, p.Addr, serverAddr)
 		<-earliestNextStart
 	}
 }
@@ -849,7 +842,7 @@ func DoSoakTest(
 	ctx context.Context,
 	conn *grpc.ClientConn,
 	serverAddr string,
-	numThreads int,
+	soakNumThreads int,
 	soakIterations int,
 	maxFailures int,
 	soakRequestSize int,
@@ -858,16 +851,16 @@ func DoSoakTest(
 	minTimeBetweenRPCs time.Duration,
 	overallTimeoutSeconds int,
 	MayCreateNewChannel ManagedChannel) {
-	if soakIterations%numThreads != 0 {
-		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by numThreads\n")
+	if soakIterations%soakNumThreads != 0 {
+		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumThreads\n")
 	}
 	sharedChannel := conn
 	startNs := time.Now().UnixNano()
 	var wg sync.WaitGroup
 	mu := sync.Mutex{}
-	threadResults := make([]ThreadResults, numThreads)
-	iterationsPerThread := soakIterations / numThreads
-	for i := 0; i < numThreads; i++ {
+	threadResults := make([]ThreadResults, soakNumThreads)
+	iterationsPerThread := soakIterations / soakNumThreads
+	for i := 0; i < soakNumThreads; i++ {
 		wg.Add(1)
 		go func(threadID int) {
 			defer wg.Done()
