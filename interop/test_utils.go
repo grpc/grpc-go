@@ -857,19 +857,43 @@ func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
 // TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
-func DoSoakTest(ctx context.Context, conn *grpc.ClientConn, config SoakTestConfig) {
-	if config.SoakIterations%config.SoakNumThreads != 0 {
+func DoSoakTest(	ctx context.Context,
+		conn *grpc.ClientConn,
+		serverAddr string,
+		soakNumThreads int,
+		soakIterations int,
+		maxFailures int,
+		soakRequestSize int,
+		soakResponseSize int,
+		perIterationMaxAcceptableLatency time.Duration,
+		minTimeBetweenRPCs time.Duration,
+		overallTimeoutSeconds int,
+		channelFunc ManagedChannel) {
+	if soakIterations%soakNumThreads != 0 {
 		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumThreads\n")
 	}
 	sharedChannel := conn
 	startNs := time.Now().UnixNano()
 	var wg sync.WaitGroup
 	mu := sync.Mutex{}
-	threadResults := make([]ThreadResults, config.SoakNumThreads)
-	for i := 0; i < config.SoakNumThreads; i++ {
+	threadResults := make([]ThreadResults, soakNumThreads)
+	for i := 0; i < soakNumThreads; i++ {
 		wg.Add(1)
 		go func(threadID int) {
 			defer wg.Done()
+			config := SoakTestConfig{
+				SoakRequestSize:                   soakRequestSize,
+				SoakResponseSize:                  soakResponseSize,
+				PerIterationMaxAcceptableLatency:  perIterationMaxAcceptableLatency,
+				MinTimeBetweenRPCs:                minTimeBetweenRPCs,
+				OverallTimeoutSeconds:             overallTimeoutSeconds,
+				ServerAddr:                        serverAddr,
+				SoakNumThreads:                    soakNumThreads,
+				SoakIterations:                    soakIterations,
+				MaxFailures:                       maxFailures,
+				SharedChannel:                     sharedChannel,
+				MayCreateNewChannel:               channelFunc,
+			}
 			executeSoakTestInThread(ctx, config, startNs,threadID, &threadResults[threadID], &mu)
 		}(i)
 	}
@@ -897,14 +921,14 @@ func DoSoakTest(ctx context.Context, conn *grpc.ClientConn, config SoakTestConfi
 	latencies.Print(&b)
 	fmt.Fprintf(os.Stderr,
 		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
-		config.ServerAddr, totalIterations, config.SoakIterations, totalFailures, b.String())
+		serverAddr, totalIterations, soakIterations, totalFailures, b.String())
 
-	if totalIterations != config.SoakIterations {
-		fmt.Fprintf(os.Stderr, "Soak test consumed all %d seconds of time and quit early, ran %d out of %d iterations.\n", config.OverallTimeoutSeconds, totalIterations, config.SoakIterations)
+	if totalIterations != soakIterations {
+		fmt.Fprintf(os.Stderr, "Soak test consumed all %d seconds of time and quit early, ran %d out of %d iterations.\n", overallTimeoutSeconds, totalIterations, soakIterations)
 	}
 
-	if totalFailures > config.MaxFailures {
-		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, config.MaxFailures)
+	if totalFailures > maxFailures {
+		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, maxFailures)
 	}
 	defer closeChannel(sharedChannel)
 }
