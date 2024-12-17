@@ -142,11 +142,12 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 	if proxyBuilder == nil {
 		panic("delegating_resolver: resolver for proxy not found for scheme dns")
 	}
-	r.proxyURL.Scheme = "dns"
-	r.proxyURL.Path = "/" + r.proxyURL.Host
-	r.proxyURL.Host = "" // Clear the Host field to conform to the "dns:///" format
+	url := *r.proxyURL
+	url.Scheme = "dns"
+	url.Path = "/" + r.proxyURL.Host
+	url.Host = "" // Clear the Host field to conform to the "dns:///" format
 
-	proxyTarget := resolver.Target{URL: *r.proxyURL}
+	proxyTarget := resolver.Target{URL: url}
 	wcc := &wrappingClientConn{
 		stateListener: r.updateProxyResolverState,
 		parent:        r,
@@ -183,19 +184,22 @@ func (r *delegatingResolver) combinedAddressesIfReadyLocked() ([]resolver.Addres
 		return nil, nil, false
 	}
 	var addresses []resolver.Address
-	for _, proxyAddr := range r.proxyAddrs {
-		for _, targetAddr := range r.targetResolverState.Addresses {
-			newAddr := resolver.Address{Addr: proxyAddr.Addr}
-			var user url.Userinfo
-			if r.proxyURL.User != nil {
-				user = *r.proxyURL.User
-			}
-			newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
-				User:        user,
-				ConnectAddr: targetAddr.Addr,
-			})
-			addresses = append(addresses, newAddr)
+	var proxyAddr string
+	if len(r.proxyAddrs) == 1 {
+		proxyAddr = r.proxyAddrs[0].Addr
+	} else {
+		proxyAddr = r.proxyURL.Host
+	}
+	for _, targetAddr := range r.targetResolverState.Addresses {
+		newAddr := resolver.Address{Addr: proxyAddr}
+		var user url.Userinfo
+		if r.proxyURL.User != nil {
+			user = *r.proxyURL.User
 		}
+		addresses = append(addresses, proxyattributes.Populate(newAddr, proxyattributes.Options{
+			User:        user,
+			ConnectAddr: targetAddr.Addr,
+		}))
 	}
 
 	// Create a list of combined addresses by pairing each proxy endpoint
@@ -246,10 +250,10 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		}
 	}
 	r.proxyResolverReady = true
-	addr, endpt, ready := r.combinedAddressesIfReadyLocked()
+	addrs, endpoints, ready := r.combinedAddressesIfReadyLocked()
 	if ready {
-		r.curState.Addresses = addr
-		r.curState.Endpoints = endpt
+		r.curState.Addresses = addrs
+		r.curState.Endpoints = endpoints
 		if err := r.cc.UpdateState(r.curState); err != nil {
 			r.targetResolver.ResolveNow(resolver.ResolveNowOptions{})
 			return err
@@ -279,10 +283,10 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	// proxy resolvers have sent their updates, and curState has been
 	// updated with the combined addresses.
 	r.curState = state
-	addr, endpt, ready := r.combinedAddressesIfReadyLocked()
+	addrs, endpoints, ready := r.combinedAddressesIfReadyLocked()
 	if ready {
-		r.curState.Addresses = addr
-		r.curState.Endpoints = endpt
+		r.curState.Addresses = addrs
+		r.curState.Endpoints = endpoints
 		if err := r.cc.UpdateState(r.curState); err != nil {
 			r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
 			return err

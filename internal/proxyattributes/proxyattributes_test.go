@@ -36,7 +36,7 @@ func Test(t *testing.T) {
 }
 
 // Tests that Option returns a valid proxy attribute.
-func (s) TestOptions(t *testing.T) {
+func (s) TestOption(t *testing.T) {
 	user := url.UserPassword("username", "password")
 	tests := []struct {
 		name            string

@@ -46,7 +46,7 @@ func Populate(addr resolver.Address, opts Options) resolver.Address {
 }
 
 // Option returns the Options for the proxy [resolver.Address] and a boolean
-// value representing if the attribute is valid or not.
+// value representing if the attribute is present or not.
 func Option(addr resolver.Address) (Options, bool) {
 	if a := addr.Attributes.Value(proxyOptionsKey); a != nil {
 		return a.(Options), true

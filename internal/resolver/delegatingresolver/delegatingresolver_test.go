@@ -62,7 +62,7 @@ func (s) TestproxyURLForTargetEnv(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			name: "valid proxy url and nil error",
+			name: "valid_proxy_url_and_nil_error",
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return &url.URL{
 					Scheme: "https",
@@ -75,7 +75,7 @@ func (s) TestproxyURLForTargetEnv(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid proxy url and non-nil error",
+			name: "invalid_proxy_url_and_non-nil_error",
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return &url.URL{
 					Scheme: "https",
@@ -89,7 +89,7 @@ func (s) TestproxyURLForTargetEnv(t *testing.T) {
 			wantErr: err,
 		},
 		{
-			name: "nil proxy url and nil error",
+			name: "nil_proxy_url_and_nil_error",
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return nil, nil
 			},
