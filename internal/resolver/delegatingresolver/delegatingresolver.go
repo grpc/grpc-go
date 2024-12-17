@@ -185,12 +185,14 @@ func (r *delegatingResolver) combinedAddressesIfReadyLocked() ([]resolver.Addres
 	}
 
 	// If multiple resolved proxy addresses are present, we send only the
-	// unresolved proxy host. Sending all resolved addresses would increase the
-	// number of addresses passed to the ClientConn and subsequently to load
-	// balancing (LB) policies like Round Robin, leading to additional TCP
-	// connections. However, if there's only one resolved proxy address, we
-	// send it directly, as it doesn't affect the address count returned by the
-	// target resolver and the address count sent to the ClientConn.
+	// unresolved proxy host and let net.Dial handle the proxy host name
+	// resolution when creating the transport. Sending all resolved addresses
+	// would increase the number of addresses passed to the ClientConn and
+	// subsequently to load balancing (LB) policies like Round Robin, leading
+	// to additional TCP connections. However, if there's only one resolved
+	// proxy address, we send it directly, as it doesn't affect the address
+	// count returned by the target resolver and the address count sent to the
+	// ClientConn.
 	var proxyAddr resolver.Address
 	if len(r.proxyAddrs) == 1 {
 		proxyAddr = r.proxyAddrs[0]
