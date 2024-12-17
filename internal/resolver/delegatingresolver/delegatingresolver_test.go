@@ -93,6 +93,7 @@ func (s) TestproxyURLForTargetEnv(t *testing.T) {
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return nil, nil
 			},
+			wantURL: nil,
 		},
 	}
 	for _, tt := range tests {

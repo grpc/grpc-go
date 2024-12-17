@@ -70,6 +70,7 @@ func (s) TestOption(t *testing.T) {
 		{
 			name: "no_attribute",
 			addr: resolver.Address{Addr: "test-address"},
+			wantValid: false,
 		},
 	}
 
