@@ -796,7 +796,6 @@ func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs
 		if ctx.Err() != nil {
 			return
 		}
-
 		if time.Since(time.Unix(0, startNs)) >= timeoutDuration {
 			fmt.Printf("Test exceeded overall timeout of %d seconds, stopping...\n", config.OverallTimeoutSeconds)
 			return
