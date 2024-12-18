@@ -308,7 +308,7 @@ func (s) TestStaticPolicyEnd2End(t *testing.T) {
 				UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{}, nil
 				},
-				StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+				ClientStreamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 					for {
 						_, err := stream.Recv()
 						if err == io.EOF {
@@ -527,7 +527,7 @@ func (s) TestFileWatcherEnd2End(t *testing.T) {
 				UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{}, nil
 				},
-				StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+				ClientStreamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 					for {
 						_, err := stream.Recv()
 						if err == io.EOF {
