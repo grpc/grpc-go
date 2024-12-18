@@ -1007,27 +1007,25 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-			checkInHeader,
-			checkBegin,
-			checkInPayload,
-			checkOutHeader,
-			checkOutPayload,
-			checkOutTrailer,
-			checkEnd,
-		},
-	)
+        checkInHeader,
+        checkBegin,
+        checkInPayload,
+        checkOutHeader,
+        checkOutPayload,
+        checkOutTrailer,
+        checkEnd,
+    })
 }
 
 func (s) TestServerStatsUnaryRPCError(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-			checkInHeader,
-			checkBegin,
-			checkInPayload,
-			checkOutHeader,
-			checkOutTrailer,
-			checkEnd,
-		},
-	)
+        checkInHeader,
+        checkBegin,
+        checkInPayload,
+        checkOutHeader,
+        checkOutTrailer,
+        checkEnd,
+    })
 }
 
 func (s) TestServerStatsClientStreamRPC(t *testing.T) {
@@ -1054,14 +1052,13 @@ func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 	count := 1
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-			checkInHeader,
-			checkBegin,
-			checkOutHeader,
-			checkInPayload,
-			checkOutTrailer,
-			checkEnd,
-		},
-	)
+        checkInHeader,
+        checkBegin,
+        checkOutHeader,
+        checkInPayload,
+        checkOutTrailer,
+        checkEnd,
+    })
 }
 
 func (s) TestServerStatsServerStreamRPC(t *testing.T) {
@@ -1088,14 +1085,13 @@ func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-			checkInHeader,
-			checkBegin,
-			checkInPayload,
-			checkOutHeader,
-			checkOutTrailer,
-			checkEnd,
-		},
-	)
+        checkInHeader,
+        checkBegin,
+        checkInPayload,
+        checkOutHeader,
+        checkOutTrailer,
+        checkEnd,
+    })
 }
 
 func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
@@ -1122,14 +1118,13 @@ func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-			checkInHeader,
-			checkBegin,
-			checkOutHeader,
-			checkInPayload,
-			checkOutTrailer,
-			checkEnd,
-		},
-	)
+        checkInHeader,
+        checkBegin,
+        checkOutHeader,
+        checkInPayload,
+        checkOutTrailer,
+        checkEnd,
+    })
 }
 
 type checkFuncWithCount struct {
@@ -1488,10 +1483,12 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
+
 	// Each RPC generates 6 stats events on the client-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 12)
 	}
+
 	// Each connection generates 4 conn events on the client-side, times 2 StatsHandler
 	if len(h.gotConn) != 4 {
 		t.Fatalf("h.gotConn: unexpected amount of ConnStats: %v != %v", len(h.gotConn), 4)
@@ -1532,10 +1529,12 @@ func (s) TestMultipleServerStatsHandler(t *testing.T) {
 		h.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
+
 	// Each RPC generates 6 stats events on the server-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 12)
 	}
+
 	// Each connection generates 4 conn events on the server-side, times 2 StatsHandler
 	if len(h.gotConn) != 4 {
 		t.Fatalf("h.gotConn: unexpected amount of ConnStats: %v != %v", len(h.gotConn), 4)
