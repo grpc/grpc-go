@@ -283,10 +283,10 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -559,10 +559,10 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -796,10 +796,10 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -1145,10 +1145,10 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
-				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)

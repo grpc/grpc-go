@@ -121,14 +121,18 @@ func (s) TestNewServer_Success(t *testing.T) {
 			desc: "without_xds_creds",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(insecure.NewCredentials()),
-				BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)),
+				func() grpc.ServerOption {
+					return BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer))
+				}(),
 			},
 		},
 		{
 			desc: "with_xds_creds",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
-				BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)),
+				func() grpc.ServerOption {
+					return BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer))
+				}(),
 			},
 			wantXDSCredsInUse: true,
 		},
@@ -177,14 +181,14 @@ func (s) TestNewServer_Failure(t *testing.T) {
 	}{
 		{
 			desc:       "bootstrap env var not set",
-			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds)},
-			wantErr:    "failed to get xDS bootstrap config",
+			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds), ClientPoolForTesting(xdsclient.NewPool(nil))},
+			wantErr:    "bootstrap configuration not set in the pool",
 		},
 		{
 			desc: "empty bootstrap config",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
-				BootstrapContentsForTesting([]byte(`{}`)),
+				ClientPoolForTesting(xdsclient.NewPool(nil)),
 			},
 			wantErr: "xDS client creation failed",
 		},
@@ -474,11 +478,9 @@ func (s) TestServeSuccess(t *testing.T) {
 // TestNewServer_ClientCreationFailure tests the case where the xDS client
 // creation fails and verifies that the call to NewGRPCServer() fails.
 func (s) TestNewServer_ClientCreationFailure(t *testing.T) {
-	origNewXDSClient := newXDSClient
-	newXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
-		return nil, nil, errors.New("xdsClient creation failed")
-	}
-	defer func() { newXDSClient = origNewXDSClient }()
+	origXDSClientPool := xDSClientPool
+	xDSClientPool = xdsclient.NewPool(nil)
+	defer func() { xDSClientPool = origXDSClientPool }()
 
 	if _, err := NewGRPCServer(); err == nil {
 		t.Fatal("NewGRPCServer() succeeded when expected to fail")

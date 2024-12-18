@@ -254,9 +254,16 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	closeCh := make(chan struct{})
 	rinternal.NewXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
-		c, cancel, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		config, err := bootstrap.NewConfigForTesting(bc)
+		if err != nil {
+			t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		}
+		pool := xdsclient.NewPool(config)
+		if err != nil {
+			t.Fatalf("Failed to create an xDS client pool: %v", err)
+		}
+		c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 			Name:               t.Name(),
-			Contents:           bc,
 			WatchExpiryTimeout: defaultTestTimeout,
 		})
 		return c, grpcsync.OnceFunc(func() {
@@ -333,7 +340,7 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 // returned by the resolver matches expectations, and that the config selector
 // returned by the resolver picks clusters based on the route configuration
 // received from the management server.
-func (s) TestResolverGoodServiceUpdate(t *testing.T) {
+func TestResolverGoodServiceUpdate(t *testing.T) {
 	for _, tt := range []struct {
 		name              string
 		routeConfig       *v3routepb.RouteConfiguration

@@ -224,7 +224,7 @@ func (s) TestCSDS(t *testing.T) {
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
-	xdsClient1, xdsClose1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	xdsClient1, xdsClose1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     xdsClient1Name,
 		Contents: bootstrapContents,
 	})
@@ -233,7 +233,7 @@ func (s) TestCSDS(t *testing.T) {
 	}
 	defer xdsClose1()
 	const xdsClient2Name = "xds-csds-client-2"
-	xdsClient2, xdsClose2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	xdsClient2, xdsClose2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     xdsClient2Name,
 		Contents: bootstrapContents,
 	})
@@ -421,7 +421,7 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
-	xdsClient1, xdsClose1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	xdsClient1, xdsClose1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     xdsClient1Name,
 		Contents: bootstrapContents,
 	})
@@ -430,7 +430,7 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	}
 	defer xdsClose1()
 	const xdsClient2Name = "xds-csds-client-2"
-	xdsClient2, xdsClose2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	xdsClient2, xdsClose2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:     xdsClient2Name,
 		Contents: bootstrapContents,
 	})
