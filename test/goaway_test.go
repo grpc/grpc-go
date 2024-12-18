@@ -595,7 +595,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 			}
 			return err
 		},
-		S: grpc.NewServer(), // Server for the second instance
+		S: grpc.NewServer(),
 	}
 	defer ss2.S.Stop()
 	stubserver.StartTestService(t, ss2)
@@ -630,8 +630,6 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	if _, err = stream.Recv(); err != nil {
 		t.Fatalf("unexpected error from first recv: %v", err)
 	}
-
-	//go ss2.S.Serve(lis2)
 
 	t.Log("Gracefully stopping server 1.")
 	go ss.S.GracefulStop()
@@ -734,9 +732,7 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
-	/*s := grpc.NewServer()
-	defer s.Stop()
-	go s.Serve(lis)*/
+
 	ss := &stubserver.StubServer{
 		Listener: lis,
 		S:        grpc.NewServer(),

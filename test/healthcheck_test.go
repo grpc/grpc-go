@@ -151,15 +151,12 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 	} else {
 		ts = newTestHealthServer()
 	}
-	//s := grpc.NewServer()
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		S:        grpc.NewServer(),
 	}
 	healthgrpc.RegisterHealthServer(stub.S, ts)
-	//testgrpc.RegisterTestServiceServer(s, &testServer{})
 	stubserver.StartTestService(t, stub)
-	//go s.Serve(lis)
 	t.Cleanup(func() { stub.Stop() })
 	return stub.S.(*grpc.Server), lis, ts
 }
@@ -256,13 +253,12 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 // If Watch returns Unimplemented, then the ClientConn should go into READY state.
 func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	grpctest.TLogger.ExpectError("Subchannel health check is unimplemented at server side, thus health check is disabled")
-	//s := grpc.NewServer()
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("failed to listen due to err: %v", err)
 	}
-	//go s.Serve(lis)
-	//defer s.Stop()
+
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		S:        grpc.NewServer(),

@@ -432,6 +432,7 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	cred := &authorityCheckCreds{}
+
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		S:        grpc.NewServer(),
@@ -466,6 +467,7 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	cred := &authorityCheckCreds{}
+
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		S:        grpc.NewServer(),
