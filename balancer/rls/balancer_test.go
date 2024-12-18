@@ -801,9 +801,9 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	// Setting the size to 1 will cause the entries to be
 	// evicted.
 	scJSON1 := fmt.Sprintf(`
- {
-   "loadBalancingConfig": [
-	{
+{
+  "loadBalancingConfig": [
+    {
       "%s": {
 		"routeLookupConfig": {
 			"grpcKeybuilders": [{
