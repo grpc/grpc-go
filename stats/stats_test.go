@@ -385,10 +385,7 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]proto.Message, []prot
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := tc.FullDuplexCall(
-		metadata.NewOutgoingContext(tCtx, testMetadata),
-		grpc.WaitForReady(!c.failfast),
-	)
+	stream, err := tc.FullDuplexCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return reqs, resps, err
 	}
@@ -429,10 +426,7 @@ func (te *test) doClientStreamCall(c *rpcConfig) ([]proto.Message, *testpb.Strea
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := tc.StreamingInputCall(
-		metadata.NewOutgoingContext(tCtx, testMetadata),
-		grpc.WaitForReady(!c.failfast),
-	)
+	stream, err := tc.StreamingInputCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return reqs, resp, err
 	}
@@ -469,11 +463,7 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallReq
 	req = &testpb.StreamingOutputCallRequest{Payload: idToPayload(startID)}
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := tc.StreamingOutputCall(
-		metadata.NewOutgoingContext(tCtx, testMetadata),
-		req,
-		grpc.WaitForReady(!c.failfast),
-	)
+	stream, err := tc.StreamingOutputCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return req, resps, err
 	}
@@ -568,12 +558,7 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 		// expected headers keys have the expected header values.
 		for key := range testHeaderMetadata {
 			if !reflect.DeepEqual(st.Header.Get(key), testHeaderMetadata.Get(key)) {
-				t.Fatalf(
-					"st.Header[%s] = %v, want %v",
-					key,
-					st.Header.Get(key),
-					testHeaderMetadata.Get(key),
-				)
+				t.Fatalf("st.Header[%s] = %v, want %v", key, st.Header.Get(key), testHeaderMetadata.Get(key))
 			}
 		}
 	} else {
@@ -697,12 +682,7 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 		// expected headers keys have the expected header values.
 		for key := range testMetadata {
 			if !reflect.DeepEqual(st.Header.Get(key), testMetadata.Get(key)) {
-				t.Fatalf(
-					"st.Header[%s] = %v, want %v",
-					key,
-					st.Header.Get(key),
-					testMetadata.Get(key),
-				)
+				t.Fatalf("st.Header[%s] = %v, want %v", key, st.Header.Get(key), testMetadata.Get(key))
 			}
 		}
 
@@ -1026,11 +1006,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 }
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
-	testServerStats(
-		t,
-		&testConfig{compress: ""},
-		&rpcConfig{success: true, callType: unaryRPC},
-		[]func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 			checkInHeader,
 			checkBegin,
 			checkInPayload,
@@ -1043,11 +1019,7 @@ func (s) TestServerStatsUnaryRPC(t *testing.T) {
 }
 
 func (s) TestServerStatsUnaryRPCError(t *testing.T) {
-	testServerStats(
-		t,
-		&testConfig{compress: ""},
-		&rpcConfig{success: false, callType: unaryRPC},
-		[]func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 			checkInHeader,
 			checkBegin,
 			checkInPayload,
@@ -1076,21 +1048,12 @@ func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 		checkOutTrailer,
 		checkEnd,
 	)
-	testServerStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: true, callType: clientStreamRPC},
-		checkFuncs,
-	)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: clientStreamRPC}, checkFuncs)
 }
 
 func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 	count := 1
-	testServerStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: false, callType: clientStreamRPC},
-		[]func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 			checkInHeader,
 			checkBegin,
 			checkOutHeader,
@@ -1119,21 +1082,12 @@ func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 		checkOutTrailer,
 		checkEnd,
 	)
-	testServerStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: true, callType: serverStreamRPC},
-		checkFuncs,
-	)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: serverStreamRPC}, checkFuncs)
 }
 
 func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 	count := 5
-	testServerStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: false, callType: serverStreamRPC},
-		[]func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 			checkInHeader,
 			checkBegin,
 			checkInPayload,
@@ -1162,21 +1116,12 @@ func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 		checkOutTrailer,
 		checkEnd,
 	)
-	testServerStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: true, callType: fullDuplexStreamRPC},
-		checkFuncs,
-	)
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, callType: fullDuplexStreamRPC}, checkFuncs)
 }
 
 func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
-	testServerStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC},
-		[]func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 			checkInHeader,
 			checkBegin,
 			checkOutHeader,
@@ -1370,11 +1315,7 @@ func testClientStats( t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs ma
 }
 
 func (s) TestClientStatsUnaryRPC(t *testing.T) {
-	testClientStats(
-		t,
-		&testConfig{compress: ""},
-		&rpcConfig{success: true, failfast: false, callType: unaryRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			outPayload: {checkOutPayload, 1},
@@ -1387,11 +1328,7 @@ func (s) TestClientStatsUnaryRPC(t *testing.T) {
 }
 
 func (s) TestClientStatsUnaryRPCError(t *testing.T) {
-	testClientStats(
-		t,
-		&testConfig{compress: ""},
-		&rpcConfig{success: false, failfast: false, callType: unaryRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			outPayload: {checkOutPayload, 1},
@@ -1404,11 +1341,7 @@ func (s) TestClientStatsUnaryRPCError(t *testing.T) {
 
 func (s) TestClientStatsClientStreamRPC(t *testing.T) {
 	count := 5
-	testClientStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: true, failfast: false, callType: clientStreamRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			inHeader:   {checkInHeader, 1},
@@ -1422,11 +1355,7 @@ func (s) TestClientStatsClientStreamRPC(t *testing.T) {
 
 func (s) TestClientStatsClientStreamRPCError(t *testing.T) {
 	count := 1
-	testClientStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: false, failfast: false, callType: clientStreamRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			inHeader:   {checkInHeader, 1},
@@ -1439,11 +1368,7 @@ func (s) TestClientStatsClientStreamRPCError(t *testing.T) {
 
 func (s) TestClientStatsServerStreamRPC(t *testing.T) {
 	count := 5
-	testClientStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: true, failfast: false, callType: serverStreamRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			outPayload: {checkOutPayload, 1},
@@ -1457,11 +1382,7 @@ func (s) TestClientStatsServerStreamRPC(t *testing.T) {
 
 func (s) TestClientStatsServerStreamRPCError(t *testing.T) {
 	count := 5
-	testClientStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: false, failfast: false, callType: serverStreamRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			outPayload: {checkOutPayload, 1},
@@ -1474,11 +1395,7 @@ func (s) TestClientStatsServerStreamRPCError(t *testing.T) {
 
 func (s) TestClientStatsFullDuplexRPC(t *testing.T) {
 	count := 5
-	testClientStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			outPayload: {checkOutPayload, count},
@@ -1492,11 +1409,7 @@ func (s) TestClientStatsFullDuplexRPC(t *testing.T) {
 
 func (s) TestClientStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
-	testClientStats(
-		t,
-		&testConfig{compress: "gzip"},
-		&rpcConfig{count: count, success: false, failfast: false, callType: fullDuplexStreamRPC},
-		map[int]*checkFuncWithCount{
+	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
 			begin:      {checkBegin, 1},
 			outHeader:  {checkOutHeader, 1},
 			outPayload: {checkOutPayload, 1},
@@ -1671,9 +1584,7 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 				t.Errorf("DoesNotExistCall should not be a registered method according to server")
 			}
 			if isRegisteredMethod(server, "/unknownService/UnaryCall") {
-				t.Errorf(
-					"/unknownService/UnaryCall should not be a registered method according to server",
-				)
+				t.Errorf("/unknownService/UnaryCall should not be a registered method according to server")
 			}
 			wg.Done()
 			return ctx
@@ -1725,9 +1636,7 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 	te.startServer(&testServer{})
 	defer te.tearDown()
 
-	_, _, err := te.doClientStreamCall(
-		&rpcConfig{count: 5, success: true, callType: clientStreamRPC},
-	)
+	_, _, err := te.doClientStreamCall(&rpcConfig{count: 5, success: true, callType: clientStreamRPC})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -1747,9 +1656,7 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 	te.startServer(&testServer{})
 	defer te.tearDown()
 
-	_, _, err := te.doServerStreamCall(
-		&rpcConfig{count: 5, success: true, callType: serverStreamRPC},
-	)
+	_, _, err := te.doServerStreamCall(&rpcConfig{count: 5, success: true, callType: serverStreamRPC})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -1770,12 +1677,7 @@ func verifyEventSequence(t *testing.T, got []event, expected []string) {
 
 	for i, e := range got {
 		if e.eventType != expected[i] {
-			t.Errorf(
-				"Unexpected event at position %d. Got: %s, Expected: %s",
-				i,
-				e.eventType,
-				expected[i],
-			)
+			t.Errorf( "Unexpected event at position %d. Got: %s, Expected: %s", i, e.eventType, expected[i])
 		}
 	}
 }
