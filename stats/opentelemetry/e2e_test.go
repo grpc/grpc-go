@@ -240,8 +240,8 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-	// certain metrics to be emitted, which should be able to be observed
-	// through the Metric Reader.
+	// certain metrics to be emitted, which should be observed through the
+	// Metric Reader.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name)); err != nil { // Deterministic compression.
@@ -621,11 +621,12 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 	return fmt.Errorf("error waiting for metrics %v: %v", wantMetrics, ctx.Err())
 }
 
-// TestServerWithMetricsAndTraceOptions verifies the integration of metrics and traces
-// emitted by the OpenTelemetry instrumentation in a gRPC environment. It tests the
-// correct emission of metrics during a Unary RPC and a Streaming RPC, ensuring that
-// the metrics reflect the operations performed, including the size of the compressed
-// message.
+// TestMetricsAndTracesOptionEnabled verifies the integration of metrics and traces
+// emitted by the OpenTelemetry instrumentation in a gRPC environment. It sets up a
+// stub server with both metrics and traces enabled, and tests the correct emission
+// of metrics during a Unary RPC and a Streaming RPC. The test ensures that the
+// emitted metrics reflect the operations performed, including the size of the
+// compressed message, and verifies that tracing information is correctly recorded.
 func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	// Create default metrics options
 	mo, reader := defaultMetricsOptions(t, nil)
@@ -677,6 +678,244 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	if got, want := len(spans), 6; got != want {
 		t.Fatalf("got %d spans, want %d", got, want)
 	}
+
+	wantSI := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+		{
+			name:       "grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+	}
+
+	// Check that same traceID is used in client and server for unary RPC call.
+	if got, want := spans[0].SpanContext.TraceID(), spans[2].SpanContext.TraceID(); got != want {
+		t.Fatal("TraceID mismatch in client span and server span.")
+	}
+	// Check that the attempt span id of client matches the span id of server
+	// SpanContext.
+	if got, want := spans[0].Parent.SpanID(), spans[1].SpanContext.SpanID(); got != want {
+		t.Fatal("SpanID mismatch in client span and server span.")
+	}
+
+	// Check that same traceID is used in client and server for streaming RPC call.
+	if got, want := spans[3].SpanContext.TraceID(), spans[4].SpanContext.TraceID(); got != want {
+		t.Fatal("TraceID mismatch in client span and server span.")
+	}
+	// Check that the attempt span id of client matches the span id of server
+	// SpanContext.
+	if got, want := spans[3].Parent.SpanID(), spans[5].SpanContext.SpanID(); got != want {
+		t.Fatal("SpanID mismatch in client span and server span.")
+	}
+
+	for index, span := range spans {
+		// Check that the attempt span has the correct status
+		if got, want := spans[index].Status.Code, otelcodes.Ok; got != want {
+			t.Errorf("Got status code %v, want %v", got, want)
+		}
+		// name
+		if got, want := span.Name, wantSI[index].name; got != want {
+			t.Errorf("Span name is %q, want %q", got, want)
+		}
+		// spanKind
+		if got, want := span.SpanKind.String(), wantSI[index].spanKind; got != want {
+			t.Errorf("Got span kind %q, want %q", got, want)
+		}
+		// attributes
+		if got, want := len(span.Attributes), len(wantSI[index].attributes); got != want {
+			t.Errorf("Got attributes list of size %q, want %q", got, want)
+		}
+		for idx, att := range span.Attributes {
+			if got, want := att.Key, wantSI[index].attributes[idx].Key; got != want {
+				t.Errorf("Got attribute key for span name %v as %v, want %v", span.Name, got, want)
+			}
+		}
+		// events
+		if got, want := len(span.Events), len(wantSI[index].events); got != want {
+			t.Errorf("Event length is %q, want %q", got, want)
+		}
+		for eventIdx, event := range span.Events {
+			if got, want := event.Name, wantSI[index].events[eventIdx].Name; got != want {
+				t.Errorf("Got event name for span name %q as %q, want %q", span.Name, got, want)
+			}
+			for idx, att := range event.Attributes {
+				if got, want := att.Key, wantSI[index].events[eventIdx].Attributes[idx].Key; got != want {
+					t.Errorf("Got attribute key for span name %q with event name %v, as %v, want %v", span.Name, event.Name, got, want)
+				}
+				if got, want := att.Value, wantSI[index].events[eventIdx].Attributes[idx].Value; got != want {
+					t.Errorf("Got attribute value for span name %v with event name %v, as %v, want %v", span.Name, event.Name, got, want)
+				}
+			}
+		}
+	}
 }
 
 // TestSpan verifies that the gRPC Trace Binary propagator correctly
@@ -692,9 +931,9 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 //   - Verifies that the tracing information is recorded accurately in
 //     the OpenTelemetry backend.
 func (s) TestSpan(t *testing.T) {
-	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
+	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter.
 	traceOptions, spanExporter := defaultTraceOptions(t)
-	// Start the server with OpenTelemetry options
+	// Start the server with trace options.
 	ss := setupStubServer(t, nil, traceOptions)
 	defer ss.Stop()
 
@@ -702,8 +941,8 @@ func (s) TestSpan(t *testing.T) {
 	defer cancel()
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-	// certain metrics to be emitted, which should be able to be observed
-	// through the Metric Reader.
+	// certain metrics to be emitted, which should be observed through the
+	// Metric Reader.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}); err != nil {
@@ -987,8 +1226,8 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	defer cancel()
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-	// certain metrics to be emitted, which should be able to be observed
-	// through the Metric Reader.
+	// certain metrics to be emitted, which should be observed through the
+	// Metric Reader.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}); err != nil {
