@@ -823,7 +823,7 @@ func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
 	defer func() {
 		encoding.RegisterCompressor(oldC)
 	}()
-	messageLen := 100
+	const messageLen = 100
 	encoding.RegisterCompressor(&fakeCompressor{decompressedMessageSize: messageLen})
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -838,17 +838,9 @@ func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	p, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(50))
-	if err != nil {
-		t.Fatalf("Unexpected error from newPayload: %v", err)
-	}
-	req := &testpb.SimpleRequest{Payload: p}
-	_, err = ss.Client.UnaryCall(ctx, req, grpc.UseCompressor("gzip"))
-	if err == nil {
-		t.Errorf("Client.UnaryCall(%+v) = nil, want %v", req, codes.ResourceExhausted)
-	}
-
+	req := &testpb.SimpleRequest{Payload: &testpb.Payload{}}
+	_, err := ss.Client.UnaryCall(ctx, req, grpc.UseCompressor("gzip"))
 	if got, want := status.Code(err), codes.ResourceExhausted; got != want {
-		t.Errorf("Client.UnaryCall(%+v) returned stats %v, want %v", req, got, want)
+		t.Errorf("Client.UnaryCall(%+v) returned status %v, want %v", req, got, want)
 	}
 }
