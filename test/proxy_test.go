@@ -111,6 +111,21 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
+	// hpfe := func(req *http.Request) (*url.URL, error) {
+	// 	if req.URL.Host == unresolvedTargetURI {
+	// 		return &url.URL{
+	// 			Scheme: "https",
+	// 			Host:   pLis.Addr().String(),
+	// 		}, nil
+	// 	}
+	// 	return nil, nil
+	// }
+	// orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	// delegatingresolver.HTTPSProxyFromEnvironment = hpfe
+	// defer func() {
+	// 	delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
+	// }()
+
 	// Overwrite the proxy environment and restore it after the test.
 	proxyEnv := os.Getenv("HTTPS_PROXY")
 	os.Setenv("HTTPS_PROXY", pLis.Addr().String())
