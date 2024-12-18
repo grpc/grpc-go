@@ -26,7 +26,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
+	_ "google.golang.org/grpc/encoding/gzip"
 	protoenc "google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
@@ -293,4 +297,79 @@ func BenchmarkGZIPCompressor512KiB(b *testing.B) {
 
 func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
+}
+
+// mustCompress compresses the input data and returns a BufferSlice.
+func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(input); err != nil {
+		t.Fatalf("compressInput() failed to write data: %v", err)
+	}
+
+	if err := gz.Close(); err != nil {
+		t.Fatalf("compressInput() failed to close gzip writer: %v", err)
+	}
+
+	compressedData := buf.Bytes()
+	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
+}
+
+// TestDecompress tests the decompress function with various scenarios, including
+// successful decompression, error handling, and edge cases like overflow or
+// premature data end. It ensures that the function behaves correctly with different
+// inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
+func (s) TestDecompress(t *testing.T) {
+	c := encoding.GetCompressor("gzip")
+
+	testCases := []struct {
+		name                  string
+		input                 mem.BufferSlice
+		maxReceiveMessageSize int
+		want                  []byte
+		wantErr               error
+	}{
+		{
+			name:                  "Decompresses successfully with sufficient buffer size",
+			input:                 mustCompress(t, []byte("decompressed data")),
+			maxReceiveMessageSize: 50,
+			want:                  []byte("decompressed data"),
+			wantErr:               nil,
+		},
+		{
+			name:                  "Fails due to exceeding maxReceiveMessageSize",
+			input:                 mustCompress(t, []byte("message that is too large")),
+			maxReceiveMessageSize: len("message that is too large") - 1,
+			want:                  nil,
+			wantErr:               errMaxMessageSizeExceeded,
+		},
+		{
+			name:                  "Decompresses to exactly maxReceiveMessageSize",
+			input:                 mustCompress(t, []byte("exact size message")),
+			maxReceiveMessageSize: len("exact size message"),
+			want:                  []byte("exact size message"),
+			wantErr:               nil,
+		},
+		{
+			name:                  "Handles large buffer size (MaxInt)",
+			input:                 mustCompress(t, []byte("large message")),
+			maxReceiveMessageSize: math.MaxInt,
+			want:                  []byte("large message"),
+			wantErr:               nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			output, err := decompress(c, tc.input, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
+
+			if !cmp.Equal(err, tc.wantErr, cmpopts.EquateErrors()) {
+				t.Fatalf("decompress() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+
+			if !cmp.Equal(tc.want, output.Materialize()) {
+				t.Fatalf("decompress() output mismatch: Got = %v, Want = %v", output.Materialize(), tc.want)
+			}
+		})
+	}
 }
