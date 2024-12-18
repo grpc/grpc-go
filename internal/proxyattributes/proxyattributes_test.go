@@ -35,92 +35,82 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// Tests that ConnectAddr returns the correct connect address in the attribute.
-func (s) TestConnectAddr(t *testing.T) {
+// Tests that ExtractOptions returns a valid proxy attribute.
+func (s) TestExtractOptions(t *testing.T) {
+	user := url.UserPassword("username", "password")
 	tests := []struct {
-		name string
-		addr resolver.Address
-		want string
+		name            string
+		addr            resolver.Address
+		wantConnectAddr string
+		wantUser        url.Userinfo
+		wantAttrPresent bool
 	}{
 		{
-			name: "connect address in attribute",
+			name: "connect_address_in_attribute",
 			addr: resolver.Address{
 				Addr: "test-address",
 				Attributes: attributes.New(proxyOptionsKey, Options{
-					User:        nil,
 					ConnectAddr: "proxy-address",
 				}),
 			},
-			want: "proxy-address",
+			wantConnectAddr: "proxy-address",
+			wantAttrPresent: true,
 		},
 		{
-			name: "no attribute",
-			addr: resolver.Address{Addr: "test-address"},
-			want: "",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Validate ConnectAddr returns the correct connect address in the attribute.
-			if got := ConnectAddr(tt.addr); got != tt.want {
-				t.Errorf("ConnetAddr(%v) = %v, want %v ", tt.addr, got, tt.want)
-			}
-		})
-	}
-}
-
-// Tests that User returns the correct user in the attribute.
-func (s) TestUser(t *testing.T) {
-	user := url.UserPassword("username", "password")
-	tests := []struct {
-		name string
-		addr resolver.Address
-		want *url.Userinfo
-	}{
-		{
-			name: "user in attribute",
+			name: "user_in_attribute",
 			addr: resolver.Address{
 				Addr: "test-address",
 				Attributes: attributes.New(proxyOptionsKey, Options{
-					User:        user,
-					ConnectAddr: "proxy-address",
-				})},
-			want: user,
+					User: *user,
+				}),
+			},
+			wantUser:        *user,
+			wantAttrPresent: true,
 		},
 		{
-			name: "no attribute",
-			addr: resolver.Address{Addr: "test-address"},
-			want: nil,
+			name:            "no_attribute",
+			addr:            resolver.Address{Addr: "test-address"},
+			wantAttrPresent: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Validate User returns the correct user in the attribute.
-			if got := User(tt.addr); got != tt.want {
-				t.Errorf("User(%v) = %v, want %v ", tt.addr, got, tt.want)
+			gotOption, attrPresent := ExtractOptions(tt.addr)
+			if attrPresent != tt.wantAttrPresent {
+				t.Errorf("ExtractOptions(%v) = %v, want %v", tt.addr, attrPresent, tt.wantAttrPresent)
+			}
+
+			if gotOption.ConnectAddr != tt.wantConnectAddr {
+				t.Errorf("ConnectAddr(%v) = %v, want %v", tt.addr, gotOption.ConnectAddr, tt.wantConnectAddr)
+			}
+
+			if gotOption.User != tt.wantUser {
+				t.Errorf("User(%v) = %v, want %v", tt.addr, gotOption.User, tt.wantUser)
 			}
 		})
 	}
 }
 
-// Tests that Populate returns a copy of addr with attributes containing correct
+// Tests that SetOptions returns a copy of addr with attributes containing correct
 // user and connect address.
-func (s) TestPopulate(t *testing.T) {
+func (s) TestSetOptions(t *testing.T) {
 	addr := resolver.Address{Addr: "test-address"}
 	pOpts := Options{
-		User:        url.UserPassword("username", "password"),
+		User:        *url.UserPassword("username", "password"),
 		ConnectAddr: "proxy-address",
 	}
 
-	// Call Populate and validate attributes
-	populatedAddr := Populate(addr, pOpts)
-
-	// Verify that the returned address is updated correctly
-	if got, want := ConnectAddr(populatedAddr), pOpts.ConnectAddr; got != want {
+	// Call SetOptions and validate attributes
+	populatedAddr := SetOptions(addr, pOpts)
+	gotOption, attrPresent := ExtractOptions(populatedAddr)
+	if !attrPresent {
+		t.Errorf("ExtractOptions(%v) = %v, want %v ", populatedAddr, attrPresent, true)
+	}
+	if got, want := gotOption.ConnectAddr, pOpts.ConnectAddr; got != want {
 		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
 	}
-
-	if got, want := User(populatedAddr), pOpts.User; got != want {
+	if got, want := gotOption.User, pOpts.User; got != want {
 		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)
 	}
 }

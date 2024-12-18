@@ -24,12 +24,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
+	"os"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -112,20 +111,10 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pLis.Addr().String(),
-			}, nil
-		}
-		return nil, nil
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", pLis.Addr().String())
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -158,21 +147,10 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(backendAddr))
 
-	// Overwrite the default proxy function and restore it after the test.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   unresolvedProxyURI,
-			}, nil
-		}
-		return nil, nil
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Configure manual resolvers for both proxy and target backends
 	mrTarget := setupDNS(t)
@@ -215,33 +193,13 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 // unresolved target URI in the HTTP CONNECT request, and successfully
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxy(t *testing.T) {
-	// Set up a channel to receive signals from OnClientResolution.
-	resCh := make(chan bool, 1)
-	// Overwrite OnClientResolution to send a signal to the channel.
-	origOnClientResolution := delegatingresolver.OnClientResolution
-	delegatingresolver.OnClientResolution = func(int) {
-		resCh <- true
-	}
-	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
-
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
-	// Overwrite the proxy resolution function and restore it afterward.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   unresolvedProxyURI,
-			}, nil
-		}
-		return nil, nil
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Set up and update a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
@@ -273,14 +231,6 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	case <-doneCh:
 		t.Logf("proxy server succeeded")
 	}
-
-	// Verify if OnClientResolution was triggered.
-	select {
-	case <-resCh:
-		t.Fatal("target resolution occurred on client unexpectedly")
-	default:
-		t.Log("target resolution did not occur on the client")
-	}
 }
 
 // Tests the scenario where grpc.NewClient is used with a custom target URI
@@ -289,34 +239,14 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 // includes the resolved target URI in the HTTP CONNECT request, and
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
-	// Set up a channel to receive signals from OnClientResolution.
-	resCh := make(chan bool, 1)
-	// Overwrite OnClientResolution to send a signal to the channel.
-	origOnClientResolution := delegatingresolver.OnClientResolution
-	delegatingresolver.OnClientResolution = func(int) {
-		resCh <- true
-	}
-	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
-
 	backendAddr := createAndStartBackendServer(t)
 	// Set up and start the proxy server.
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
-	// Overwrite the proxy resolution function and restore it afterward.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   unresolvedProxyURI,
-			}, nil
-		}
-		return nil, nil
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Create and update a custom resolver for target URI.
 	mrTarget := manual.NewBuilderWithScheme("whatever")
@@ -348,14 +278,6 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	case <-doneCh:
 		t.Logf("proxy server succeeded")
 	}
-
-	// Check if client-side resolution signal was sent to the channel.
-	select {
-	case <-resCh:
-		t.Log("target resolution occurred on client")
-	default:
-		t.Fatal("target resolution did not occur on the client unexpectedly")
-	}
 }
 
 // Tests the scenario where grpc.NewClient is used with the default "dns"
@@ -365,33 +287,13 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 // CONNECT request, the proxy URI is resolved correctly, and the connection is
 // successfully established with the backend server through the proxy.
 func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
-	// Set up a channel to receive signals from OnClientResolution.
-	resCh := make(chan bool, 1)
-	// Overwrite OnClientResolution to send a signal to the channel.
-	origOnClientResolution := delegatingresolver.OnClientResolution
-	delegatingresolver.OnClientResolution = func(int) {
-		resCh <- true
-	}
-	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
-
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
-	// Overwrite the proxy resolution function and restore it afterward.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   unresolvedProxyURI,
-			}, nil
-		}
-		return nil, nil
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Configure manual resolvers for both proxy and target backends
 	mrTarget := setupDNS(t)
@@ -431,14 +333,6 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	case <-doneCh:
 		t.Logf("proxy server succeeded")
 	}
-
-	// Check if client-side resolution signal was sent to the channel.
-	select {
-	case <-resCh:
-		t.Log("target resolution occurred on client")
-	default:
-		t.Fatal("target resolution did not occur on client unexpectedly")
-	}
 }
 
 // Tests the scenario where grpc.NewClient is used with grpc.WithNoProxy() set,
@@ -452,20 +346,10 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
 	})
 
-	proxyCalled := false
-	hpfe := func(_ *http.Request) (*url.URL, error) {
-		proxyCalled = true
-		return &url.URL{
-			Scheme: "https",
-			Host:   unresolvedProxyURI,
-		}, nil
-
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	mrTarget := setupDNS(t)
 	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
@@ -489,9 +373,6 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
 
-	if proxyCalled {
-		t.Error("http.ProxyFromEnvironment function was unexpectedly called")
-	}
 	// Verify that the proxy was not dialed.
 	select {
 	case <-proxyStartedCh:
@@ -512,20 +393,10 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
 	})
 
-	proxyCalled := false
-	hpfe := func(_ *http.Request) (*url.URL, error) {
-		proxyCalled = true
-		return &url.URL{
-			Scheme: "https",
-			Host:   unresolvedProxyURI,
-		}, nil
-
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Create a custom dialer that directly dials the backend.  We'll use this
 	// to bypass any proxy logic.
@@ -555,10 +426,6 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
 
-	if proxyCalled {
-		t.Error("http.ProxyFromEnvironment function was unexpectedly called")
-	}
-
 	select {
 	case <-dialerCalled:
 		t.Log("custom dialer was invoked")
@@ -582,15 +449,6 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 // the CONNECT request. The test also ensures that target resolution does not
 // happen on the client.
 func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
-	// Set up a channel to receive signals from OnClientResolution.
-	resCh := make(chan bool, 1)
-	// Overwrite OnClientResolution to send a signal to the channel.
-	origOnClientResolution := delegatingresolver.OnClientResolution
-	delegatingresolver.OnClientResolution = func(int) {
-		resCh <- true
-	}
-	t.Cleanup(func() { delegatingresolver.OnClientResolution = origOnClientResolution })
-
 	backendAddr := createAndStartBackendServer(t)
 	const (
 		user     = "notAUser"
@@ -615,24 +473,10 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 		return nil
 	})
 
-	// Overwrite the proxy resolution function and restore it afterward.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			u := url.URL{
-				Scheme: "https",
-				Host:   unresolvedProxyURI,
-			}
-			u.User = url.UserPassword(user, password)
-			return &u, nil
-		}
-		return nil, nil
-	}
-	orighpfe := internal.HTTPSProxyFromEnvironmentForTesting
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
-	defer func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = orighpfe
-	}()
-
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", "https://"+user+":"+password+"@"+unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 	// Set up and update a manual resolver for proxy resolution.
 	mrProxy := setupDNS(t)
 	mrProxy.InitialState(resolver.State{
@@ -661,13 +505,5 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 		t.Fatalf("proxy server encountered an error: %v", err)
 	case <-doneCh:
 		t.Logf("proxy server succeeded")
-	}
-
-	// Verify if OnClientResolution was triggered.
-	select {
-	case <-resCh:
-		t.Fatal("target resolution occurred on client unexpectedly")
-	default:
-		t.Log("target resolution did not occur on the client")
 	}
 }

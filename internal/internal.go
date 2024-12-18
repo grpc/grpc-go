@@ -22,8 +22,6 @@ package internal
 
 import (
 	"context"
-	"net/http"
-	"net/url"
 	"time"
 
 	"google.golang.org/grpc/connectivity"
@@ -240,11 +238,6 @@ var (
 	// SetBufferPoolingThresholdForTesting updates the buffer pooling threshold, for
 	// testing purposes.
 	SetBufferPoolingThresholdForTesting any // func(int)
-
-	// HTTPSProxyFromEnvironmentForTesting returns the URL of the proxy to use
-	// for testing purposes. It is used to override the `http.ProxyFromEnvironment`
-	// function for testing purposes.
-	HTTPSProxyFromEnvironmentForTesting func(*http.Request) (*url.URL, error)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

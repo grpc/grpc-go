@@ -61,20 +61,20 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Ad
 		}
 	}()
 
-	a := proxyattributes.ConnectAddr(addr)
+	a, _ := proxyattributes.ExtractOptions(addr)
 	req := &http.Request{
 		Method: http.MethodConnect,
-		URL:    &url.URL{Host: a},
+		URL:    &url.URL{Host: a.ConnectAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-	if user := proxyattributes.User(addr); user != nil {
-		u := user.Username()
-		p, pSet := user.Password()
-		if !pSet {
-			logger.Warningf("password not set for basic authentication for proxy dialing")
-		}
-		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
+	user := a.User
+	u := user.Username()
+	p, pSet := user.Password()
+	if !pSet {
+		logger.Warningf("password not set for basic authentication for proxy dialing")
 	}
+
+	req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
 
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {
 		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)

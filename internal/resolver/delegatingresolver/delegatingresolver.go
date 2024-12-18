@@ -27,23 +27,22 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
 var (
-	// HTTPSProxyFromEnvironment will be used and overwritten in the tests.
-	httpProxyFromEnvironmentFunc = http.ProxyFromEnvironment
-	// ProxyScheme will be ovwewritten in tests
-	ProxyScheme = "dns"
-	logger      = grpclog.Component("delegating-resolver")
+	logger = grpclog.Component("delegating-resolver")
+	//HTTPSProxyFromEnvironment will be overwritten in the tests
+	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
+	// ProxyScheme will be overwritten in tests
+	ProxyScheme="dns"
 )
 
 // delegatingResolver manages both target URI and proxy address resolution by
 // delegating these tasks to separate child resolvers. Essentially, it acts as
-// a middleman between the gRPC ClientConn and the child resolvers.
+// a intermediary between the gRPC ClientConn and the child resolvers.
 //
 // It implements the [resolver.Resolver] interface.
 type delegatingResolver struct {
@@ -51,17 +50,17 @@ type delegatingResolver struct {
 	cc             resolver.ClientConn // gRPC ClientConn
 	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
 	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
+	proxyURL       *url.URL            // proxy URL, derived from proxy environment and target
 
-	mu                  sync.Mutex          // protects access to the resolver state and addresses during updates
-	targetAddrs         []resolver.Address  // resolved or unresolved target addresses, depending on proxy configuration
-	targetEndpt         []resolver.Endpoint // resolved target endpoint
-	proxyAddrs          []resolver.Address  // resolved proxy addresses; empty if no proxy is configured
-	proxyURL            *url.URL            // proxy URL, derived from proxy environment and target
-	targetResolverReady bool                // indicates if an update from the target resolver has been received
-	proxyResolverReady  bool                // indicates if an update from the proxy resolver has been received
+	mu                  sync.Mutex         // protects all the fields below
+	targetResolverState resolver.State     // state of the target resolver
+	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
+	curState            resolver.State     // current resolver state
+	targetResolverReady bool               // indicates if an update from the target resolver has been received
+	proxyResolverReady  bool               // indicates if an update from the proxy resolver has been received
 }
 
-// parsedURLForProxy determines the proxy URL for the given address based on
+// proxyURLForTarget determines the proxy URL for the given address based on
 // the environment. It can return the following:
 //   - nil URL, nil error: No proxy is configured or the address is excluded
 //     using the `NO_PROXY` environment variable or if req.URL.Host is
@@ -69,28 +68,13 @@ type delegatingResolver struct {
 //   - nil URL, non-nil error: An error occurred while retrieving the proxy URL.
 //   - non-nil URL, nil error: A proxy is configured, and the proxy URL was
 //     retrieved successfully without any errors.
-func parsedURLForProxy(address string) (*url.URL, error) {
-	proxyFunc := httpProxyFromEnvironmentFunc
-	if pf := internal.HTTPSProxyFromEnvironmentForTesting; pf != nil {
-		proxyFunc = pf
-	}
-
+func proxyURLForTarget(address string) (*url.URL, error) {
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
 		Host:   address,
 	}}
-	url, err := proxyFunc(req)
-	if err != nil {
-		return nil, err
-	}
-	return url, nil
+	return HTTPSProxyFromEnvironment(req)
 }
-
-// OnClientResolution is a no-op function in non-test code. In tests, it can
-// be overwritten to send a signal to a channel, indicating that client-side
-// name resolution was triggered.  This enables tests to verify that resolution
-// on client side is bypassed when a proxy is in use.
-var OnClientResolution = func(int) { /* no-op */ }
 
 // New creates a new delegating resolver that can create up to two child
 // resolvers:
@@ -110,7 +94,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	}
 
 	var err error
-	r.proxyURL, err = parsedURLForProxy(target.Endpoint())
+	r.proxyURL, err = proxyURLForTarget(target.Endpoint())
 	if err != nil {
 		return nil, fmt.Errorf("delegating_resolver: failed to determine proxy URL for target %s: %v", target, err)
 	}
@@ -118,7 +102,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// proxy is not configured or proxy address excluded using `NO_PROXY` env
 	// var, so only target resolver is used.
 	if r.proxyURL == nil {
-		OnClientResolution(1)
 		return targetResolverBuilder.Build(target, cc, opts)
 	}
 
@@ -130,13 +113,13 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		r.targetAddrs = []resolver.Address{{Addr: target.Endpoint()}}
+		r.targetResolverState.Addresses = []resolver.Address{{Addr: target.Endpoint()}}
+		r.targetResolverState.Endpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}}
 		r.targetResolverReady = true
 	} else {
-		OnClientResolution(1)
 		wcc := &wrappingClientConn{
-			parent:       r,
-			resolverType: targetResolverType,
+			stateListener: r.updateTargetResolverState,
+			parent:        r,
 		}
 		if r.targetResolver, err = targetResolverBuilder.Build(target, wcc, opts); err != nil {
 			return nil, fmt.Errorf("delegating_resolver: unable to build the resolver for target %s: %v", target, err)
@@ -155,16 +138,17 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resolver.Resolver, error) {
 	proxyBuilder := resolver.Get(ProxyScheme)
 	if proxyBuilder == nil {
-		panic(fmt.Sprintln("delegating_resolver: resolver for proxy not found for scheme dns"))
+		panic("delegating_resolver: resolver for proxy not found for scheme dns")
 	}
-	r.proxyURL.Scheme = "dns"
-	r.proxyURL.Path = "/" + r.proxyURL.Host
-	r.proxyURL.Host = "" // Clear the Host field to conform to the "dns:///" format
+	url := *r.proxyURL
+	url.Scheme = "dns"
+	url.Path = "/" + r.proxyURL.Host
+	url.Host = "" // Clear the Host field to conform to the "dns:///" format
 
-	proxyTarget := resolver.Target{URL: *r.proxyURL}
+	proxyTarget := resolver.Target{URL: url}
 	wcc := &wrappingClientConn{
-		parent:       r,
-		resolverType: proxyResolverType,
+		stateListener: r.updateProxyResolverState,
+		parent:        r,
 	}
 	return proxyBuilder.Build(proxyTarget, wcc, opts)
 }
@@ -181,111 +165,153 @@ func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 func (r *delegatingResolver) Close() {
 	if r.targetResolver != nil {
 		r.targetResolver.Close()
+		r.targetResolver = nil
 	}
 	if r.proxyResolver != nil {
 		r.proxyResolver.Close()
+		r.proxyResolver = nil
 	}
 }
 
-// generateCombinedAddressesLocked creates a list of combined addresses by
+// combineAndUpdateClientConnStateLocked creates a list of combined addresses by
 // pairing each proxy address with every target address. For each pair, it
 // generates a new [resolver.Address] using the proxy address, and adding the
-// target address as the attribute along with user info.
-func (r *delegatingResolver) generateCombinedAddressesLocked() ([]resolver.Address, []resolver.Endpoint) {
+// target address as the attribute along with user info. It also returns a
+// boolen representing if updates from both the resolvers have been received.
+func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
+	if !r.targetResolverReady || !r.proxyResolverReady {
+		return nil
+	}
+
+	// If multiple resolved proxy addresses are present, we send only the
+	// unresolved proxy host and let net.Dial handle the proxy host name
+	// resolution when creating the transport. Sending all resolved addresses
+	// would increase the number of addresses passed to the ClientConn and
+	// subsequently to load balancing (LB) policies like Round Robin, leading
+	// to additional TCP connections. However, if there's only one resolved
+	// proxy address, we send it directly, as it doesn't affect the address
+	// count returned by the target resolver and the address count sent to the
+	// ClientConn.
+	var proxyAddr resolver.Address
+	if len(r.proxyAddrs) == 1 {
+		proxyAddr = r.proxyAddrs[0]
+	} else {
+		proxyAddr = resolver.Address{Addr: r.proxyURL.Host}
+	}
 	var addresses []resolver.Address
-	for _, proxyAddr := range r.proxyAddrs {
-		for _, targetAddr := range r.targetAddrs {
-			newAddr := resolver.Address{Addr: proxyAddr.Addr}
-			newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
-				User:        r.proxyURL.User,
-				ConnectAddr: targetAddr.Addr,
-			})
-			addresses = append(addresses, newAddr)
-		}
+	var user url.Userinfo
+	if r.proxyURL.User != nil {
+		user = *r.proxyURL.User
+	}
+	for _, targetAddr := range r.targetResolverState.Addresses {
+		addresses = append(addresses, proxyattributes.SetOptions(proxyAddr, proxyattributes.Options{
+			User:        user,
+			ConnectAddr: targetAddr.Addr,
+		}))
 	}
 
-	if r.targetEndpt == nil {
-		return addresses, nil
-	}
-
+	// Create a list of combined endpoints by pairing all proxy endpoints
+	// with every target endpoint. Each time, it constructs a new
+	// [resolver.Endpoint] using the all address from all the proxy endpoint
+	// and the target addresses from one endpoint. The target address and user
+	// information from the proxy URL are added as attributes to the proxy
+	// address.The resulting list of addresses is then grouped into endpoints,
+	// covering all combinations of proxy and target endpoints.
 	var endpoints []resolver.Endpoint
-	for _, proxyAddr := range r.proxyAddrs {
-		for _, endpt := range r.targetEndpt {
-			var addrs []resolver.Address
-			for _, targetAddr := range endpt.Addresses {
-				newAddr := resolver.Address{Addr: proxyAddr.Addr}
-				newAddr = proxyattributes.Populate(newAddr, proxyattributes.Options{
-					User:        r.proxyURL.User,
-					ConnectAddr: targetAddr.Addr,
-				})
-				addrs = append(addrs, newAddr)
-			}
-			endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
+	for _, endpt := range r.targetResolverState.Endpoints {
+		var addrs []resolver.Address
+		var user url.Userinfo
+		if r.proxyURL.User != nil {
+			user = *r.proxyURL.User
 		}
+		for _, proxyAddr := range r.proxyAddrs {
+			for _, targetAddr := range endpt.Addresses {
+				addrs = append(addrs, proxyattributes.SetOptions(proxyAddr, proxyattributes.Options{
+					User:        user,
+					ConnectAddr: targetAddr.Addr,
+				}))
+			}
+		}
+		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
 	}
-	return addresses, endpoints
+	r.curState.Addresses = addresses
+	r.curState.Endpoints = endpoints
+	return r.cc.UpdateState(r.curState)
 }
 
-// resolverType is an enum representing the type of resolver (target or proxy).
-type resolverType int
+// updateProxyResolverState updates the proxy resolver state by storing proxy
+// addresses and endpoints, marking the resolver as ready, and triggering a
+// state update if both proxy and target resolvers are ready. If the ClientConn
+// returns a non-nil error, it calls `ResolveNow()` on the target resolver.  It
+// is a StateListener function of wrappingClientConn passed to the proxy resolver.
+func (r *delegatingResolver) updateProxyResolverState(state resolver.State) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if logger.V(2) {
+		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
+	}
+	if state.Endpoints != nil {
+		r.proxyAddrs = []resolver.Address{}
+		for _, endpoint := range state.Endpoints {
+			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
+		}
+	} else {
+		r.proxyAddrs = state.Addresses
+	}
+	r.proxyResolverReady = true
+	err := r.combineAndUpdateClientConnStateLocked()
+	// Another possible approach was to block until updates are received from
+	// both resolvers. But this is not used because calling `New()` triggers
+	// `Build()`  for the first resolver, which calls `UpdateState()`. And the
+	// second resolver hasn't sent an update yet, so it would cause `New()` to
+	// block indefinitely.
+	if err != nil {
+		r.targetResolver.ResolveNow(resolver.ResolveNowOptions{})
+	}
+	return err
+}
 
-const (
-	targetResolverType resolverType = iota
-	proxyResolverType
-)
+// updateTargetResolverState updates the target resolver state by storing target
+// addresses, endpoints, and service config, marking the resolver as ready, and
+// triggering a state update if both resolvers are ready. If the ClientConn
+// returns a non-nil error, it calls `ResolveNow()` on the proxy resolver. It
+// is a StateListener function of wrappingClientConn passed to the target resolver.
+func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if logger.V(2) {
+		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
+	}
+	r.targetResolverState = state
+	r.targetResolverReady = true
+	// Update curState to include other state information, such as the
+	// service config, provided by the target resolver. This ensures
+	// curState contains all necessary information when passed to
+	// UpdateState. The state update is only sent after both the target and
+	// proxy resolvers have sent their updates, and curState has been
+	// updated with the combined addresses.
+	r.curState = state
+	err := r.combineAndUpdateClientConnStateLocked()
+	if err != nil {
+		r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
+	}
+	return nil
+}
 
 // wrappingClientConn serves as an intermediary between the parent ClientConn
 // and the child resolvers created here. It implements the resolver.ClientConn
 // interface and is passed in that capacity to the child resolvers.
-//
-// Its primary function is to aggregate addresses returned by the child
-// resolvers before passing them to the parent ClientConn. Any errors returned
-// by the child resolvers are propagated verbatim to the parent ClientConn.
 type wrappingClientConn struct {
-	parent       *delegatingResolver
-	resolverType resolverType // represents the type of resolver (target or proxy)
+	// Callback to deliver resolver state updates
+	stateListener func(state resolver.State) error
+	parent        *delegatingResolver
 }
 
-// UpdateState processes updates from the target or proxy resolver. It is called
-// twice: once by the target resolver and once by the proxy resolver. It logs
-// received addresses, and combines addresses from both resolvers once updates
-// from both are received, sending the final state to the parent ClientConn.
+// UpdateState receives resolver state updates and forwards them to the
+// appropriate listener function (either for the proxy or target resolver).
 func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
-	wcc.parent.mu.Lock()
-	defer wcc.parent.mu.Unlock()
-
-	var curState resolver.State
-	if wcc.resolverType == targetResolverType {
-		if logger.V(2) {
-			logger.Infof("Addresses received from target resolver: %v", state.Addresses)
-		}
-		wcc.parent.targetAddrs = state.Addresses
-		wcc.parent.targetEndpt = state.Endpoints
-		wcc.parent.targetResolverReady = true
-		// Update curState to include other state information, such as the
-		// service config, provided by the target resolver. This ensures
-		// curState contains all necessary information when passed to
-		// UpdateState. The state update is only sent after both the target and
-		// proxy resolvers have sent their updates, and curState has been
-		// updated with the combined addresses.
-		curState = state
-	}
-	// The proxy resolver is always "dns," so only the address will be
-	// received, not an endpoint.
-	if wcc.resolverType == proxyResolverType {
-		if logger.V(2) {
-			logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
-		}
-		wcc.parent.proxyAddrs = state.Addresses
-		wcc.parent.proxyResolverReady = true
-	}
-
-	// Proceed only if updates from both resolvers have been received.
-	if !wcc.parent.targetResolverReady || !wcc.parent.proxyResolverReady {
-		return nil
-	}
-	curState.Addresses, curState.Endpoints = wcc.parent.generateCombinedAddressesLocked()
-	return wcc.parent.cc.UpdateState(curState)
+	return wcc.stateListener(state)
 }
 
 // ReportError intercepts errors from the child resolvers and passes them to ClientConn.

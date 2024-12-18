@@ -25,9 +25,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
-	_ "google.golang.org/grpc/resolver/dns" // To register dns resolver.
 )
 
 type s struct {
@@ -46,15 +44,15 @@ const (
 // overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overrideHTTPSProxyFromEnvironment(hpfe func(req *http.Request) (*url.URL, error)) func() {
-	internal.HTTPSProxyFromEnvironmentForTesting = hpfe
+	HTTPSProxyFromEnvironment = hpfe
 	return func() {
-		internal.HTTPSProxyFromEnvironmentForTesting = nil
+		HTTPSProxyFromEnvironment = nil
 	}
 }
 
-// Tests that the parsedURLForProxy function correctly resolves the proxy URL
+// Tests that the proxyURLForTarget function correctly resolves the proxy URL
 // for a given target address. Tests all the possible output cases.
-func (s) TestParsedURLForProxyEnv(t *testing.T) {
+func (s) TestproxyURLForTargetEnv(t *testing.T) {
 	err := errors.New("invalid proxy url")
 	tests := []struct {
 		name     string
@@ -63,7 +61,7 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			name: "valid proxy url and nil error",
+			name: "valid_proxy_url_and_nil_error",
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return &url.URL{
 					Scheme: "https",
@@ -74,32 +72,33 @@ func (s) TestParsedURLForProxyEnv(t *testing.T) {
 				Scheme: "https",
 				Host:   "proxy.example.com",
 			},
-			wantErr: nil,
 		},
 		{
-			name: "invalid proxy url and non-nil error",
+			name: "invalid_proxy_url_and_non-nil_error",
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return &url.URL{
 					Scheme: "https",
 					Host:   "notproxy.example.com",
 				}, err
 			},
-			wantURL: nil,
+			wantURL: &url.URL{
+				Scheme: "https",
+				Host:   "notproxy.example.com",
+			},
 			wantErr: err,
 		},
 		{
-			name: "nil proxy url and nil error",
+			name: "nil_proxy_url_and_nil_error",
 			hpfeFunc: func(_ *http.Request) (*url.URL, error) {
 				return nil, nil
 			},
 			wantURL: nil,
-			wantErr: nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer overrideHTTPSProxyFromEnvironment(tt.hpfeFunc)()
-			got, err := parsedURLForProxy(targetTestAddr)
+			got, err := proxyURLForTarget(targetTestAddr)
 			if err != tt.wantErr {
 				t.Errorf("parsedProxyURLForProxy(%v) failed with error :%v, want %v\n", targetTestAddr, err, tt.wantErr)
 			}
