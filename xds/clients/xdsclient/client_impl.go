@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -32,10 +33,13 @@ import (
 // ErrClientClosed is returned when the xDS client is closed.
 var ErrClientClosed = errors.New("xds: the xDS client is closed")
 
+var c *XDSClient
+var mu sync.Mutex
+
 // newClientImpl returns a new xdsClient with the given config.
 func newXDSClient(config *Config) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &XDSClient{
+	c = &XDSClient{
 		done:               grpcsync.NewEvent(),
 		authorities:        make(map[string]*authorityState),
 		config:             config,
