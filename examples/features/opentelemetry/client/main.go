@@ -37,9 +37,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
-const (
-	defaultName = "world"
-)
+const defaultName = "world"
 
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
@@ -70,7 +68,7 @@ func main() {
 	for {
 		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
 		if err != nil {
-			log.Fatalf("UnaryEcho failed: %v", err)
+			log.Fatalf("Could not greet: %v", err)
 		}
 		fmt.Println(r)
 		time.Sleep(time.Second)
