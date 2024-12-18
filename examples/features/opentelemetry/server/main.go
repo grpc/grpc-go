@@ -22,13 +22,12 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
 
 	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -41,13 +40,15 @@ var (
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint")
 )
 
-type echoServer struct {
-	pb.UnimplementedEchoServer
+type server struct {
+	pb.UnimplementedGreeterServer
 	addr string
 }
 
-func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, s.addr)}, nil
+// SayHello implements helloworld.GreeterServer
+func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+	log.Printf("Received: %v", in.GetName())
+	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
 }
 
 func main() {
@@ -65,7 +66,7 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	s := grpc.NewServer(so)
-	pb.RegisterEchoServer(s, &echoServer{addr: *addr})
+	pb.RegisterGreeterServer(s, &server{addr: *addr})
 
 	log.Printf("Serving on %s\n", *addr)
 
