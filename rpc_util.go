@@ -882,7 +882,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 		return nil, err
 	}
 
-	if doesReceiveMessageOverflow(int64(out.Len()), int64(maxReceiveMessageSize), dcReader) {
+	if doesReceiveMessageOverflow(out.Len(), maxReceiveMessageSize, dcReader) {
 		return nil, errMaxMessageSizeExceeded
 	}
 	return out, nil
@@ -896,7 +896,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 // If additional data is read, or an error other than `io.EOF` is encountered, the function
 // returns `true` to indicate that the message size has exceeded the permissible limit.
 // Otherwise, it returns `false` indicating no overflow.
-func doesReceiveMessageOverflow(readBytes, maxReceiveMessageSize int64, dcReader io.Reader) bool {
+func doesReceiveMessageOverflow(readBytes, maxReceiveMessageSize int, dcReader io.Reader) bool {
 	if readBytes < maxReceiveMessageSize {
 		return false
 	}
