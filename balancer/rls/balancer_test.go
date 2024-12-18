@@ -733,41 +733,41 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := manual.NewBuilderWithScheme("rls-e2e")
 	headers := `
-	 [
-		 {
-			 "key": "k1",
-			 "names": [
-				 "n1"
-			 ]
-		 },
-		 {
-			 "key": "k2",
-			 "names": [
-				 "n2"
-			 ]
-		 }
-	 ]
-	 `
+    [
+        {
+            "key": "k1",
+            "names": [
+                "n1"
+            ]
+        },
+        {
+            "key": "k2",
+            "names": [
+                "n2"
+            ]
+        }
+    ]
+    `
 
 	configJSON := `
-	 {
-	   "loadBalancingConfig": [
-		 {
-		   "%s": {
-			 "routeLookupConfig": {
-				 "grpcKeybuilders": [{
-					 "names": [{"service": "grpc.testing.TestService"}],
-					 "headers": %s
-				 }],
-				 "lookupService": "%s",
-				 "cacheSizeBytes": %d
-			 },
-			 "childPolicy": [{"%s": {}}],
-			 "childPolicyConfigTargetFieldName": "Backend"
-		   }
-		 }
-	   ]
-	 }`
+	{
+	  "loadBalancingConfig": [
+		{
+		  "%s": {
+			"routeLookupConfig": {
+				"grpcKeybuilders": [{
+					"names": [{"service": "grpc.testing.TestService"}],
+					"headers": %s
+				}],
+				"lookupService": "%s",
+				"cacheSizeBytes": %d
+			},
+			"childPolicy": [{"%s": {}}],
+			"childPolicyConfigTargetFieldName": "Backend"
+		  }
+		}
+	  ]
+	}`
 	scJSON := fmt.Sprintf(configJSON, topLevelBalancerName, headers, rlsServer.Address, 1000, childPolicyName)
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.InitialState(resolver.State{ServiceConfig: sc})
@@ -803,22 +803,22 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	scJSON1 := fmt.Sprintf(`
  {
    "loadBalancingConfig": [
-	 {
-	   "%s": {
-		 "routeLookupConfig": {
-			 "grpcKeybuilders": [{
-				 "names": [{"service": "grpc.testing.TestService"}],
-				 "headers": %s
-			 }],
-			 "lookupService": "%s",
-			 "cacheSizeBytes": 2
-		 },
-		 "childPolicy": [{"%s": {}}],
-		 "childPolicyConfigTargetFieldName": "Backend"
-	   }
-	 }
-   ]
- }`, topLevelBalancerName, headers, rlsServer.Address, childPolicyName)
+	{
+      "%s": {
+		"routeLookupConfig": {
+			"grpcKeybuilders": [{
+				"names": [{"service": "grpc.testing.TestService"}],
+				"headers": %s
+			}],
+			"lookupService": "%s",
+			"cacheSizeBytes": 2
+		},
+		"childPolicy": [{"%s": {}}],
+		"childPolicyConfigTargetFieldName": "Backend"
+      }
+    }
+  ]
+}`, topLevelBalancerName, headers, rlsServer.Address, childPolicyName)
 	sc1 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON1)
 	r.UpdateState(resolver.State{ServiceConfig: sc1})
 	<-clientConnUpdateDone
@@ -1135,23 +1135,23 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := manual.NewBuilderWithScheme("rls-e2e")
 	scJSON := fmt.Sprintf(`
- {
-   "loadBalancingConfig": [
-	 {
-	   "%s": {
-		 "routeLookupConfig": {
-			 "grpcKeybuilders": [{
-				 "names": [{"service": "grpc.testing.TestService"}]
-			 }],
-			 "lookupService": "%s",
-			 "cacheSizeBytes": 1000
-		 },
-		 "childPolicy": [{"%s": {}}],
-		 "childPolicyConfigTargetFieldName": "Backend"
-	   }
-	 }
-   ]
- }`, topLevelBalancerName, rlsServer.Address, childPolicyName)
+{
+  "loadBalancingConfig": [
+    {
+      "%s": {
+		"routeLookupConfig": {
+			"grpcKeybuilders": [{
+				"names": [{"service": "grpc.testing.TestService"}]
+			}],
+			"lookupService": "%s",
+			"cacheSizeBytes": 1000
+		},
+		"childPolicy": [{"%s": {}}],
+		"childPolicyConfigTargetFieldName": "Backend"
+      }
+    }
+  ]
+}`, topLevelBalancerName, rlsServer.Address, childPolicyName)
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.InitialState(resolver.State{ServiceConfig: sc})
 
@@ -1224,26 +1224,26 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	// scenario which we are interesting in testing here, i.e child policies get
 	// config updates as part of the parent policy getting its config update.
 	scJSON = fmt.Sprintf(`
- {
-   "loadBalancingConfig": [
-	 {
-	   "%s": {
-		 "routeLookupConfig": {
-			 "grpcKeybuilders": [{
-				 "names": [
-					 {"service": "grpc.testing.TestService"},
-					 {"service": "grpc.health.v1.Health"}
-				 ]
-			 }],
-			 "lookupService": "%s",
-			 "cacheSizeBytes": 1000
-		 },
-		 "childPolicy": [{"%s": {}}],
-		 "childPolicyConfigTargetFieldName": "Backend"
-	   }
-	 }
-   ]
- }`, topLevelBalancerName, rlsServer.Address, childPolicyName)
+{
+  "loadBalancingConfig": [
+    {
+      "%s": {
+		"routeLookupConfig": {
+			"grpcKeybuilders": [{
+				"names": [
+					{"service": "grpc.testing.TestService"},
+					{"service": "grpc.health.v1.Health"}
+				]
+			}],
+			"lookupService": "%s",
+			"cacheSizeBytes": 1000
+		},
+		"childPolicy": [{"%s": {}}],
+		"childPolicyConfigTargetFieldName": "Backend"
+      }
+    }
+  ]
+}`, topLevelBalancerName, rlsServer.Address, childPolicyName)
 	sc = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 
