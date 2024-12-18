@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -79,11 +78,6 @@ func waitForRPCsToReachBackend(ctx context.Context, client testgrpc.TestServiceC
 // to it. The test also verifies that when all requested resources are cached
 // from the primary, fallback is not triggered when the connection goes down.
 func (s) TestFallback_OnStartup(t *testing.T) {
-	// Enable fallback env var.
-	origFallbackEnv := envconfig.XDSFallbackSupport
-	envconfig.XDSFallbackSupport = true
-	defer func() { envconfig.XDSFallbackSupport = origFallbackEnv }()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
 
@@ -248,11 +242,6 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 
 // Tests fallback when the primary management server fails during an update.
 func (s) TestFallback_MidUpdate(t *testing.T) {
-	// Enable fallback env var.
-	origFallbackEnv := envconfig.XDSFallbackSupport
-	envconfig.XDSFallbackSupport = true
-	defer func() { envconfig.XDSFallbackSupport = origFallbackEnv }()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
 
@@ -454,11 +443,6 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 
 // Tests fallback when the primary management server fails during startup.
 func (s) TestFallback_MidStartup(t *testing.T) {
-	// Enable fallback env var.
-	origFallbackEnv := envconfig.XDSFallbackSupport
-	envconfig.XDSFallbackSupport = true
-	defer func() { envconfig.XDSFallbackSupport = origFallbackEnv }()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
 
