@@ -1316,108 +1316,100 @@ func testClientStats( t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs ma
 
 func (s) TestClientStatsUnaryRPC(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			outPayload: {checkOutPayload, 1},
-			inHeader:   {checkInHeader, 1},
-			inPayload:  {checkInPayload, 1},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        outPayload: {checkOutPayload, 1},
+        inHeader:   {checkInHeader, 1},
+        inPayload:  {checkInPayload, 1},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsUnaryRPCError(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			outPayload: {checkOutPayload, 1},
-			inHeader:   {checkInHeader, 1},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        outPayload: {checkOutPayload, 1},
+        inHeader:   {checkInHeader, 1},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsClientStreamRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			inHeader:   {checkInHeader, 1},
-			outPayload: {checkOutPayload, count},
-			inTrailer:  {checkInTrailer, 1},
-			inPayload:  {checkInPayload, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        inHeader:   {checkInHeader, 1},
+        outPayload: {checkOutPayload, count},
+        inTrailer:  {checkInTrailer, 1},
+        inPayload:  {checkInPayload, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsClientStreamRPCError(t *testing.T) {
 	count := 1
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			inHeader:   {checkInHeader, 1},
-			outPayload: {checkOutPayload, 1},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        inHeader:   {checkInHeader, 1},
+        outPayload: {checkOutPayload, 1},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsServerStreamRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			outPayload: {checkOutPayload, 1},
-			inHeader:   {checkInHeader, 1},
-			inPayload:  {checkInPayload, count},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        outPayload: {checkOutPayload, 1},
+        inHeader:   {checkInHeader, 1},
+        inPayload:  {checkInPayload, count},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsServerStreamRPCError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			outPayload: {checkOutPayload, 1},
-			inHeader:   {checkInHeader, 1},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        outPayload: {checkOutPayload, 1},
+        inHeader:   {checkInHeader, 1},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsFullDuplexRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			outPayload: {checkOutPayload, count},
-			inHeader:   {checkInHeader, 1},
-			inPayload:  {checkInPayload, count},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        outPayload: {checkOutPayload, count},
+        inHeader:   {checkInHeader, 1},
+        inPayload:  {checkInPayload, count},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestClientStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
-			begin:      {checkBegin, 1},
-			outHeader:  {checkOutHeader, 1},
-			outPayload: {checkOutPayload, 1},
-			inHeader:   {checkInHeader, 1},
-			inTrailer:  {checkInTrailer, 1},
-			end:        {checkEnd, 1},
-		},
-	)
+        begin:      {checkBegin, 1},
+        outHeader:  {checkOutHeader, 1},
+        outPayload: {checkOutPayload, 1},
+        inHeader:   {checkInHeader, 1},
+        inTrailer:  {checkInTrailer, 1},
+        end:        {checkEnd, 1},
+    })
 }
 
 func (s) TestTags(t *testing.T) {
