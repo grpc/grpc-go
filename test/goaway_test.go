@@ -57,21 +57,20 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
 
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-
-	s := grpc.NewServer(grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionAge: maxConnAge}))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, ss)
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	go s.Serve(lis)
+
+	ss := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionAge: maxConnAge})),
+	}
+	defer ss.S.Stop()
+	stubserver.StartTestService(t, ss)
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -551,13 +550,13 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
-	s1 := grpc.NewServer()
-	defer s1.Stop()
-	ts := &funcServer{
-		unaryCall: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+
+	ss := &stubserver.StubServer{
+		Listener: lis1,
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
-		fullDuplexCall: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
 				t.Errorf("unexpected error from send: %v", err)
 				return err
@@ -569,18 +568,37 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 			}
 			return err
 		},
+		S: grpc.NewServer(),
 	}
-	testgrpc.RegisterTestServiceServer(s1, ts)
-	go s1.Serve(lis1)
+	defer ss.S.Stop()
+	stubserver.StartTestService(t, ss)
 
 	conn2Established := grpcsync.NewEvent()
 	lis2, err := listenWithNotifyingListener("tcp", "localhost:0", conn2Established)
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
-	s2 := grpc.NewServer()
-	defer s2.Stop()
-	testgrpc.RegisterTestServiceServer(s2, ts)
+	ss2 := &stubserver.StubServer{
+		Listener: lis2,
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+				t.Errorf("unexpected error from send: %v", err)
+				return err
+			}
+			// Wait forever.
+			_, err := stream.Recv()
+			if err == nil {
+				t.Error("expected to never receive any message")
+			}
+			return err
+		},
+		S: grpc.NewServer(), // Server for the second instance
+	}
+	defer ss2.S.Stop()
+	stubserver.StartTestService(t, ss2)
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{
@@ -613,10 +631,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatalf("unexpected error from first recv: %v", err)
 	}
 
-	go s2.Serve(lis2)
+	//go ss2.S.Serve(lis2)
 
 	t.Log("Gracefully stopping server 1.")
-	go s1.GracefulStop()
+	go ss.S.GracefulStop()
 
 	t.Log("Waiting for the ClientConn to enter IDLE state.")
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
@@ -637,7 +655,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	lis2.Close()
 
 	t.Log("Hard closing connection 1.")
-	s1.Stop()
+	ss.S.Stop()
 
 	t.Log("Waiting for the first stream to error.")
 	if _, err = stream.Recv(); err == nil {
@@ -716,10 +734,15 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 		t.Fatalf("Failed to listen: %v", err)
 	}
 	defer lis.Close()
-	s := grpc.NewServer()
+	/*s := grpc.NewServer()
 	defer s.Stop()
-	go s.Serve(lis)
-
+	go s.Serve(lis)*/
+	ss := &stubserver.StubServer{
+		Listener: lis,
+		S:        grpc.NewServer(),
+	}
+	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
@@ -745,7 +768,7 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 	}()
 	gsDone := testutils.NewChannel()
 	go func() {
-		s.GracefulStop()
+		ss.S.GracefulStop()
 		gsDone.Send(nil)
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
