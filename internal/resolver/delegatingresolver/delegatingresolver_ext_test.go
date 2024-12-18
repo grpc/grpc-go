@@ -139,7 +139,7 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // adding the target address as an attribute.
 func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolver.Address {
 	addr := resolver.Address{Addr: proxyAddr}
-	addr = proxyattributes.SetOptions(addr, proxyattributes.Options{ConnectAddr: targetAddr})
+	addr = proxyattributes.Set(addr, proxyattributes.Options{ConnectAddr: targetAddr})
 	return addr
 }
 

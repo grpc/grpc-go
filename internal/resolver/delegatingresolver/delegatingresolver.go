@@ -58,6 +58,13 @@ type delegatingResolver struct {
 	proxyResolverReady  bool               // indicates if an update from the proxy resolver has been received
 }
 
+// nopResolver is a resolver that does nothing.
+type nopResolver struct{}
+
+func (nopResolver) ResolveNow(resolver.ResolveNowOptions) {}
+
+func (nopResolver) Close() {}
+
 // proxyURLForTarget determines the proxy URL for the given address based on
 // the environment. It can return the following:
 //   - nil URL, nil error: No proxy is configured or the address is excluded
@@ -127,6 +134,13 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	if r.proxyResolver, err = r.proxyURIResolver(opts); err != nil {
 		return nil, fmt.Errorf("delegating_resolver: failed to build resolver for proxy URL %q: %v", r.proxyURL, err)
 	}
+
+	if r.targetResolver == nil {
+		r.targetResolver = nopResolver{}
+	}
+	if r.proxyResolver == nil {
+		r.proxyResolver = nopResolver{}
+	}
 	return r, nil
 }
 
@@ -152,23 +166,16 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 }
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
-	if r.targetResolver != nil {
-		r.targetResolver.ResolveNow(o)
-	}
-	if r.proxyResolver != nil {
-		r.proxyResolver.ResolveNow(o)
-	}
+	r.targetResolver.ResolveNow(o)
+	r.proxyResolver.ResolveNow(o)
 }
 
 func (r *delegatingResolver) Close() {
-	if r.targetResolver != nil {
-		r.targetResolver.Close()
-		r.targetResolver = nil
-	}
-	if r.proxyResolver != nil {
-		r.proxyResolver.Close()
-		r.proxyResolver = nil
-	}
+	r.targetResolver.Close()
+	r.targetResolver = nil
+
+	r.proxyResolver.Close()
+	r.proxyResolver = nil
 }
 
 // combineAndUpdateClientConnStateLocked creates a list of combined addresses by
@@ -202,7 +209,7 @@ func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
 		user = *r.proxyURL.User
 	}
 	for _, targetAddr := range r.targetResolverState.Addresses {
-		addresses = append(addresses, proxyattributes.SetOptions(proxyAddr, proxyattributes.Options{
+		addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 			User:        user,
 			ConnectAddr: targetAddr.Addr,
 		}))
@@ -224,7 +231,7 @@ func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
 		}
 		for _, proxyAddr := range r.proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
-				addrs = append(addrs, proxyattributes.SetOptions(proxyAddr, proxyattributes.Options{
+				addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 					User:        user,
 					ConnectAddr: targetAddr.Addr,
 				}))
