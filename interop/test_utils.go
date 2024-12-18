@@ -815,7 +815,6 @@ func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs
 		addrStr := "nil"
 		if p.Addr != nil {
 			addrStr = p.Addr.String()
-			fmt.Fprintf(os.Stderr, "Peer address: %q\n", p.Addr)
 		} else {
 			fmt.Fprintf(os.Stderr, "No peer address available for this RPC.\n")
 		}
