@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
@@ -71,10 +70,10 @@ func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, 
 // by the target resolver.
 func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 	hpfe := func(req *http.Request) (*url.URL, error) { return nil, nil }
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	const (
@@ -140,7 +139,7 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // adding the target address as an attribute.
 func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolver.Address {
 	addr := resolver.Address{Addr: proxyAddr}
-	addr = proxyattributes.Populate(addr, proxyattributes.Options{ConnectAddr: targetAddr})
+	addr = proxyattributes.SetOptions(addr, proxyattributes.Options{ConnectAddr: targetAddr})
 	return addr
 }
 
@@ -166,10 +165,10 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	targetResolver := manual.NewBuilderWithScheme("dns") // Manual resolver to control the target resolution.
@@ -241,10 +240,10 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	targetResolver := manual.NewBuilderWithScheme("dns")
@@ -301,10 +300,10 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
@@ -381,10 +380,10 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
@@ -482,10 +481,10 @@ func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
 		return nil, nil
 	}
-	originalhpfe := internal.HTTPSProxyFromEnvironment
-	internal.HTTPSProxyFromEnvironment = hpfe
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		internal.HTTPSProxyFromEnvironment = originalhpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
 	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.

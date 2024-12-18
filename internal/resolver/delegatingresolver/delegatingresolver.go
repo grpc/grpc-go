@@ -27,18 +27,16 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
-var logger = grpclog.Component("delegating-resolver")
-
-func init() {
-	// internal.HTTPSProxyFromEnvironment will be overwritten in the tests
-	internal.HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
-}
+var (
+	logger = grpclog.Component("delegating-resolver")
+	//HTTPSProxyFromEnvironment will be overwritten in the tests
+	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
+)
 
 // delegatingResolver manages both target URI and proxy address resolution by
 // delegating these tasks to separate child resolvers. Essentially, it acts as
@@ -69,13 +67,11 @@ type delegatingResolver struct {
 //   - non-nil URL, nil error: A proxy is configured, and the proxy URL was
 //     retrieved successfully without any errors.
 func proxyURLForTarget(address string) (*url.URL, error) {
-	pf := (internal.HTTPSProxyFromEnvironment).(func(req *http.Request) (*url.URL, error))
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
 		Host:   address,
 	}}
-
-	return pf(req)
+	return HTTPSProxyFromEnvironment(req)
 }
 
 // New creates a new delegating resolver that can create up to two child
@@ -206,7 +202,7 @@ func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
 		user = *r.proxyURL.User
 	}
 	for _, targetAddr := range r.targetResolverState.Addresses {
-		addresses = append(addresses, proxyattributes.Populate(proxyAddr, proxyattributes.Options{
+		addresses = append(addresses, proxyattributes.SetOptions(proxyAddr, proxyattributes.Options{
 			User:        user,
 			ConnectAddr: targetAddr.Addr,
 		}))
@@ -228,7 +224,7 @@ func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
 		}
 		for _, proxyAddr := range r.proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
-				addrs = append(addrs, proxyattributes.Populate(proxyAddr, proxyattributes.Options{
+				addrs = append(addrs, proxyattributes.SetOptions(proxyAddr, proxyattributes.Options{
 					User:        user,
 					ConnectAddr: targetAddr.Addr,
 				}))

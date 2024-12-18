@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -45,9 +44,9 @@ const (
 // overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
 func overrideHTTPSProxyFromEnvironment(hpfe func(req *http.Request) (*url.URL, error)) func() {
-	internal.HTTPSProxyFromEnvironment = hpfe
+	HTTPSProxyFromEnvironment = hpfe
 	return func() {
-		internal.HTTPSProxyFromEnvironment = nil
+		HTTPSProxyFromEnvironment = nil
 	}
 }
 

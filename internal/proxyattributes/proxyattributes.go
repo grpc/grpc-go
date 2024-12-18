@@ -37,17 +37,17 @@ type Options struct {
 	ConnectAddr string
 }
 
-// Populate returns a copy of addr with attributes containing the provided user
+// SetOptions returns a copy of addr with attributes containing the provided user
 // and connect address, which are needed during the CONNECT handshake for a
 // proxy connection.
-func Populate(addr resolver.Address, opts Options) resolver.Address {
+func SetOptions(addr resolver.Address, opts Options) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(proxyOptionsKey, opts)
 	return addr
 }
 
-// Option returns the Options for the proxy [resolver.Address] and a boolean
+// ExtractOptions returns the Options for the proxy [resolver.Address] and a boolean
 // value representing if the attribute is present or not.
-func Option(addr resolver.Address) (Options, bool) {
+func ExtractOptions(addr resolver.Address) (Options, bool) {
 	if a := addr.Attributes.Value(proxyOptionsKey); a != nil {
 		return a.(Options), true
 	}
