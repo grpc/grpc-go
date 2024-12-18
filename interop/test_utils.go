@@ -861,19 +861,6 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		wg.Add(1)
 		go func(threadID int) {
 			defer wg.Done()
-			//config := SoakTestConfig{
-			//	SoakRequestSize:                  soakRequestSize,
-			//	SoakResponseSize:                 soakResponseSize,
-			//	PerIterationMaxAcceptableLatency: perIterationMaxAcceptableLatency,
-			//	MinTimeBetweenRPCs:               minTimeBetweenRPCs,
-			//	OverallTimeoutSeconds:            overallTimeoutSeconds,
-			//	ServerAddr:                       serverAddr,
-			//	SoakNumThreads:                   soakNumThreads,
-			//	SoakIterations:                   soakIterations,
-			//	MaxFailures:                      maxFailures,
-			//	SharedChannel:                    sharedChannel,
-			//	MayCreateNewChannel:              channelFunc,
-			//}
 			executeSoakTestInThread(ctx, soakConfig, startNs, threadID, &threadResults[threadID], &mu)
 		}(i)
 	}

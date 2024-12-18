@@ -143,18 +143,6 @@ func main() {
 				MayCreateNewChannel:              MayCreateNewChannel,
 			}
 			interop.DoSoakTest(ctxWithDeadline, soakConfig)
-			//interop.DoSoakTest(ctxWithDeadline,
-			//	c.conn,
-			//	c.uri,
-			//	*soakNumThreads,
-			//	*soakIterations,
-			//	*soakMaxFailures,
-			//	*soakRequestSize,
-			//	*soakResponseSize,
-			//	time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond,
-			//	time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond,
-			//	*soakOverallTimeoutSeconds,
-			//	MayCreateNewChannel)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
 			wg.Done()
 		}(clients[i])
