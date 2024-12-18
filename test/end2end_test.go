@@ -609,7 +609,7 @@ func (te *test) listenAndServe(ts testgrpc.TestServiceServer, listen func(networ
 	if te.serverInitialConnWindowSize > 0 {
 		sopts = append(sopts, grpc.InitialConnWindowSize(te.serverInitialConnWindowSize))
 	}
-	la := "localhost:0"
+	la := ":0"
 	switch te.e.network {
 	case "unix":
 		la = "/tmp/testsock" + fmt.Sprintf("%d", time.Now().UnixNano())
