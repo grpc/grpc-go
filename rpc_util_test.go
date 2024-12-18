@@ -21,13 +21,13 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
-	"errors"
 	"io"
 	"math"
 	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
@@ -300,26 +300,32 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 }
 
 // compressData compresses data using gzip and returns the compressed bytes.
-func compressData(data []byte) []byte {
+// It now accepts *testing.T to handle errors during compression.
+func compressData(t *testing.T, data []byte) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
-	_, _ = gz.Write(data)
-	_ = gz.Close()
+	if _, err := gz.Write(data); err != nil {
+		t.Fatalf("compressData() failed to write data: %v", err)
+	}
+
+	if err := gz.Close(); err != nil {
+		t.Fatalf("compressData() failed to close gzip writer: %v", err)
+	}
 	return buf.Bytes()
+}
+
+// compressInput compresses input data and returns a BufferSlice.
+func compressInput(input []byte) mem.BufferSlice {
+	compressedData := compressData(nil, input)
+	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 }
 
 // TestDecompress tests the decompress function with various scenarios, including
 // successful decompression, error handling, and edge cases like overflow or
 // premature data end. It ensures that the function behaves correctly with different
 // inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
-
 func TestDecompress(t *testing.T) {
 	c := encoding.GetCompressor("gzip")
-
-	compressInput := func(input []byte) mem.BufferSlice {
-		compressedData := compressData(input)
-		return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
-	}
 
 	tests := []struct {
 		name                  string
@@ -354,10 +360,10 @@ func TestDecompress(t *testing.T) {
 			wantErr:               nil,
 		},
 		{
-			name:                  "Handles maxReceiveMessageSize as MaxInt64",
+			name:                  "Handles maxReceiveMessageSize as MaxInt",
 			compressor:            c,
 			input:                 []byte("small message"),
-			maxReceiveMessageSize: math.MaxInt64,
+			maxReceiveMessageSize: math.MaxInt,
 			want:                  []byte("small message"),
 			wantErr:               nil,
 		},
@@ -368,15 +374,8 @@ func TestDecompress(t *testing.T) {
 			compressedMsg := compressInput(tt.input)
 			output, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
 
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Fatalf("decompress() error = %v, wantErr = %v", err, tt.wantErr)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("decompress() unexpected error = %v", err)
+			if !cmp.Equal(err, tt.wantErr, cmpopts.EquateErrors()) {
+				t.Fatalf("decompress() error = %v, wantErr = %v", err, tt.wantErr)
 			}
 
 			if diff := cmp.Diff(tt.want, output.Materialize()); diff != "" {

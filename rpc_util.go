@@ -845,16 +845,15 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 			}
 		} else {
 			out, err = decompress(compressor, compressed, maxReceiveMessageSize, p.bufferPool)
+			if err == errMaxMessageSizeExceeded {
+				out.Free()
+				// TODO: Revisit the error code. Currently keep it consistent with java
+				// implementation.
+				return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", maxReceiveMessageSize)
+			}
 		}
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
-		}
-
-		if err == errMaxMessageSizeExceeded {
-			out.Free()
-			// TODO: Revisit the error code. Currently keep it consistent with java
-			// implementation.
-			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", maxReceiveMessageSize)
 		}
 	} else {
 		out = compressed
