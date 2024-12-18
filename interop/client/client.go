@@ -359,47 +359,48 @@ func main() {
 		interop.DoPickFirstUnary(ctx, tc)
 		logger.Infoln("PickFirstUnary done")
 	case "rpc_soak":
-		//soakTestConfig := interop.SoakTestConfig{
-		//	SoakRequestSize:               *soakRequestSize,
-		//	SoakResponseSize:              *soakResponseSize,
-		//	PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond,
-		//	MinTimeBetweenRPCs:            time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond,
-		//	OverallTimeoutSeconds:         *soakOverallTimeoutSeconds,
-		//	ServerAddr:                    serverAddr,
-		//	SoakNumThreads:                *soakNumThreads,
-		//	SoakIterations:                *soakIterations,
-		//	MaxFailures:                   *soakMaxFailures,
-		//	SharedChannel:                 conn,
-		//	MayCreateNewChannel:           interop.UseSharedChannel,
-		//}
-		//interop.DoSoakTest(ctxWithDeadline, conn, soakTestConfig)
-		interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
-			time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
-			interop.UseSharedChannel)
+		rpcSoakConfig := interop.SoakTestConfig{
+			SoakRequestSize:                  *soakRequestSize,
+			SoakResponseSize:                 *soakResponseSize,
+			PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs) * time.Millisecond,
+			MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
+			OverallTimeoutSeconds:            *soakOverallTimeoutSeconds,
+			ServerAddr:                       serverAddr,
+			SoakNumThreads:                   *soakNumThreads,
+			SoakIterations:                   *soakIterations,
+			MaxFailures:                      *soakMaxFailures,
+			SharedChannel:                    conn,
+			MayCreateNewChannel:              interop.UseSharedChannel,
+		}
+		interop.DoSoakTest(ctxWithDeadline, rpcSoakConfig)
+
+		//interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
+		//	time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
+		//	interop.UseSharedChannel)
 		logger.Infoln("RpcSoak done")
 	case "channel_soak":
-		//soakTestConfig := interop.SoakTestConfig{
-		//	SoakRequestSize:               *soakRequestSize,
-		//	SoakResponseSize:              *soakResponseSize,
-		//	PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond,
-		//	MinTimeBetweenRPCs:            time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond,
-		//	OverallTimeoutSeconds:         *soakOverallTimeoutSeconds,
-		//	ServerAddr:                    serverAddr,
-		//	SoakNumThreads:                *soakNumThreads,
-		//	SoakIterations:                *soakIterations,
-		//	MaxFailures:                   *soakMaxFailures,
-		//	SharedChannel:                 conn,
-		//	MayCreateNewChannel: func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-		//		return interop.CreateNewChannel(currentChannel, serverAddr, opts)
-		//	},
-		//}
-		//interop.DoSoakTest(ctxWithDeadline, conn, soakTestConfig)
-
-		interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
-			time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
-			func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+		channelSoakConfig := interop.SoakTestConfig{
+			SoakRequestSize:                  *soakRequestSize,
+			SoakResponseSize:                 *soakResponseSize,
+			PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs) * time.Millisecond,
+			MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
+			OverallTimeoutSeconds:            *soakOverallTimeoutSeconds,
+			ServerAddr:                       serverAddr,
+			SoakNumThreads:                   *soakNumThreads,
+			SoakIterations:                   *soakIterations,
+			MaxFailures:                      *soakMaxFailures,
+			SharedChannel:                    conn,
+			MayCreateNewChannel: func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 				return interop.CreateNewChannel(currentChannel, serverAddr, opts)
-			})
+			},
+		}
+		interop.DoSoakTest(ctxWithDeadline, channelSoakConfig)
+
+		//interop.DoSoakTest(ctxWithDeadline, conn, serverAddr, *soakNumThreads, *soakIterations, *soakMaxFailures, *soakRequestSize, *soakResponseSize,
+		//	time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, *soakOverallTimeoutSeconds,
+		//	func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+		//		return interop.CreateNewChannel(currentChannel, serverAddr, opts)
+		//	})
 		logger.Infoln("ChannelSoak done")
 	case "orca_per_rpc":
 		interop.DoORCAPerRPCTest(ctx, tc)
