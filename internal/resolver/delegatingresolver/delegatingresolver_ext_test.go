@@ -27,7 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/testutils"
@@ -119,7 +118,7 @@ func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
 
@@ -217,7 +216,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	}
 
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
 
@@ -276,7 +275,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 	}
 
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
 
@@ -351,7 +350,7 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
 
@@ -455,7 +454,7 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
 
@@ -535,6 +534,6 @@ func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v\n got state : %s, want state %s\n", diff, pretty.ToJSON(gotState), pretty.ToJSON(wantState))
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
