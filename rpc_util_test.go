@@ -299,24 +299,19 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
 }
 
-// compressData compresses data using gzip and returns the compressed bytes.
-// It now accepts *testing.T to handle errors during compression.
-func compressData(t *testing.T, data []byte) []byte {
+// compressInput compresses the input data and returns a BufferSlice.
+func compressInput(t *testing.T, input []byte) mem.BufferSlice {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
-	if _, err := gz.Write(data); err != nil {
-		t.Fatalf("compressData() failed to write data: %v", err)
+	if _, err := gz.Write(input); err != nil {
+		t.Fatalf("compressInput() failed to write data: %v", err)
 	}
 
 	if err := gz.Close(); err != nil {
-		t.Fatalf("compressData() failed to close gzip writer: %v", err)
+		t.Fatalf("compressInput() failed to close gzip writer: %v", err)
 	}
-	return buf.Bytes()
-}
 
-// compressInput compresses input data and returns a BufferSlice.
-func compressInput(input []byte) mem.BufferSlice {
-	compressedData := compressData(nil, input)
+	compressedData := buf.Bytes()
 	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 }
 
@@ -371,15 +366,15 @@ func TestDecompress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compressedMsg := compressInput(tt.input)
+			compressedMsg := compressInput(t, tt.input)
 			output, err := decompress(tt.compressor, compressedMsg, tt.maxReceiveMessageSize, mem.DefaultBufferPool())
 
 			if !cmp.Equal(err, tt.wantErr, cmpopts.EquateErrors()) {
 				t.Fatalf("decompress() error = %v, wantErr = %v", err, tt.wantErr)
 			}
 
-			if diff := cmp.Diff(tt.want, output.Materialize()); diff != "" {
-				t.Fatalf("decompress() mismatch (-want +got):\n%s", diff)
+			if !cmp.Equal(tt.want, output.Materialize()) {
+				t.Fatalf("decompress() mismatch (-want +got):\nwant = %v\ngot = %v", tt.want, output.Materialize())
 			}
 		})
 	}
