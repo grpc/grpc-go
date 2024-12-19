@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/sdk/metric"
 	"sync/atomic"
 	"time"
 
@@ -38,27 +39,34 @@ type serverStatsHandler struct {
 	serverMetrics serverMetrics
 }
 
-func (h *serverStatsHandler) initializeMetrics() {
-	// Will set no metrics to record, logically making this stats handler a
-	// no-op.
-	if h.options.MetricsOptions.MeterProvider == nil {
-		return
-	}
-
+func (h *serverStatsHandler) setServerMetrics() (*estats.Metrics, otelmetric.Meter) {
 	meter := h.options.MetricsOptions.MeterProvider.Meter("grpc-go", otelmetric.WithInstrumentationVersion(grpc.Version))
 	if meter == nil {
-		return
+		return nil, nil
 	}
 	metrics := h.options.MetricsOptions.Metrics
 	if metrics == nil {
 		metrics = DefaultMetrics()
 	}
-
 	h.serverMetrics.callStarted = createInt64Counter(metrics.Metrics(), "grpc.server.call.started", meter, otelmetric.WithUnit("call"), otelmetric.WithDescription("Number of server calls started."))
 	h.serverMetrics.callSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.server.call.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.serverMetrics.callRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.server.call.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per server call."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.serverMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a call from server transport's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
+	return metrics, meter
+}
+
+func (h *serverStatsHandler) initializeMetrics() {
+	// Will set no metrics to record, logically making this stats handler a
+	// no-op.
+	if h.options.MetricsOptions.MeterProvider == nil {
+		h.MetricsRecorder = &NoopMetricsRecorder{}
+		h.options.MetricsOptions.MeterProvider = metric.NewMeterProvider()
+		h.setServerMetrics()
+		return
+	}
+
+	metrics, meter := h.setServerMetrics()
 	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
 	}

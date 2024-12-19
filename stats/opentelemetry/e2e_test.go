@@ -582,3 +582,51 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 
 	return fmt.Errorf("error waiting for metrics %v: %v", wantMetrics, ctx.Err())
 }
+
+// TestMetricsDisabled verifies that RPCs call succeed as expected when
+// metrics option is disabled in the OpenTelemetry instrumentation.
+func (s) TestMetricsDisabled(t *testing.T) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{
+				Body: make([]byte, len(in.GetPayload().GetBody())),
+			}}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+
+	otelOptions := opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{},
+	}
+
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)}, opentelemetry.DialOption(otelOptions)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make two RPCs, a unary RPC and a streaming RPC.
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
+		Body: make([]byte, 10000),
+	}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
+	}
+
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
+	}
+}

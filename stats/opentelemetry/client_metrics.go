@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/sdk/metric"
 	"sync/atomic"
 	"time"
 
@@ -38,29 +39,35 @@ type clientStatsHandler struct {
 	clientMetrics clientMetrics
 }
 
-func (h *clientStatsHandler) initializeMetrics() {
-	// Will set no metrics to record, logically making this stats handler a
-	// no-op.
-	if h.options.MetricsOptions.MeterProvider == nil {
-		return
-	}
-
+func (h *clientStatsHandler) setClientMetrics() (*estats.Metrics, otelmetric.Meter) {
 	meter := h.options.MetricsOptions.MeterProvider.Meter("grpc-go", otelmetric.WithInstrumentationVersion(grpc.Version))
 	if meter == nil {
-		return
+		return nil, nil
 	}
 
 	metrics := h.options.MetricsOptions.Metrics
 	if metrics == nil {
 		metrics = DefaultMetrics()
 	}
-
 	h.clientMetrics.attemptStarted = createInt64Counter(metrics.Metrics(), "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
 	h.clientMetrics.attemptDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	return metrics, meter
+}
 
+func (h *clientStatsHandler) initializeMetrics() {
+	// Will set no metrics to record, logically making this stats handler a
+	// no-op.
+	if h.options.MetricsOptions.MeterProvider == nil {
+		h.MetricsRecorder = &NoopMetricsRecorder{}
+		h.options.MetricsOptions.MeterProvider = metric.NewMeterProvider()
+		h.setClientMetrics()
+		return
+	}
+
+	metrics, meter := h.setClientMetrics()
 	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
 	}
