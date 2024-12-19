@@ -44,6 +44,7 @@ var (
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint")
 )
 
+// server is used to implement helloworld.GreeterServer.
 type server struct {
 	pb.UnimplementedGreeterServer
 	addr string
