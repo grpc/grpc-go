@@ -262,7 +262,7 @@ func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	defer te.tearDown()
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(clientAlwaysFailCred{})}
-	cc, err := grpc.NewClient(te.srvAddr, opts...)
+	cc, err := grpc.Dial(te.srvAddr, opts...)
 	if err != nil {
 		t.Fatalf("NewClient(_) = %v, want %v", err, nil)
 	}

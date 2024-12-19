@@ -60,7 +60,7 @@ func (h *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
 	if h.options.MetricsOptions.MeterProvider == nil {
-		h.MetricsRecorder = &NoopMetricsRecorder{}
+		h.MetricsRecorder = &OtelNoopMetricsRecorder{}
 		h.options.MetricsOptions.MeterProvider = metric.NewMeterProvider()
 		h.setServerMetrics()
 		return
