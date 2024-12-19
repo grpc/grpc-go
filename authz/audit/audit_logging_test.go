@@ -24,7 +24,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -271,17 +270,13 @@ func (s) TestAuditLogger(t *testing.T) {
 				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
 				grpc.ChainStreamInterceptor(i.StreamInterceptor))
 			defer s.Stop()
-			testgrpc.RegisterTestServiceServer(s, ss)
-			lis, err := net.Listen("tcp", "localhost:0")
-			if err != nil {
-				t.Fatalf("Error listening: %v", err)
-			}
-			go s.Serve(lis)
+			ss.S = s
+			stubserver.StartTestService(t, ss)
 
 			// Setup gRPC test client with certificates containing a SPIFFE Id.
-			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+			clientConn, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(clientCreds))
 			if err != nil {
-				t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
+				t.Fatalf("grpc.NewClient(%v) failed: %v", ss.Address, err)
 			}
 			defer clientConn.Close()
 			client := testgrpc.NewTestServiceClient(clientConn)
