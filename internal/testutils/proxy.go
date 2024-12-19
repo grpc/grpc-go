@@ -79,8 +79,9 @@ func NewProxyServer(lis net.Listener, reqCheck func(*http.Request) error, errCh 
 			return
 		}
 		var out net.Conn
-		// if resolution is done on client,connect to address received in
-		// CONNECT request or else connect to backend address directly.
+		// If resolution is done on client,connect to address received in
+		// CONNECT request or else connect to backend address directly. This is
+		// to mimick the name resolution on proxy server.
 		if resOnClient {
 			out, err = net.Dial("tcp", req.URL.Host)
 		} else {
@@ -92,13 +93,13 @@ func NewProxyServer(lis net.Listener, reqCheck func(*http.Request) error, errCh 
 			return
 		}
 		out.SetDeadline(time.Now().Add(defaultTestTimeout))
-		//response OK to client
+		// Response OK to client
 		resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
 		var buf bytes.Buffer
 		resp.Write(&buf)
 		p.in.Write(buf.Bytes())
 		p.out = out
-		// perform the proxy function, i.e pass the data from client to server and server to client.
+		// Perform the proxy function, i.e pass the data from client to server and server to client.
 		go io.Copy(p.in, p.out)
 		go io.Copy(p.out, p.in)
 		close(doneCh)

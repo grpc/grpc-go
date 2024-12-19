@@ -168,22 +168,23 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Configure manual resolvers for both proxy and target backends
-	mrTarget := setupDNS(t)
-	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+
 	// Temporarily modify ProxyScheme for this test.
 	origScheme := delegatingresolver.ProxyScheme
-	delegatingresolver.ProxyScheme = "whatever"
+	delegatingresolver.ProxyScheme = "test"
 	t.Cleanup(func() { delegatingresolver.ProxyScheme = origScheme })
-	mrProxy := manual.NewBuilderWithScheme("whatever")
-	resolver.Register(mrProxy)
-	mrProxy.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
-	// Dial to the proxy server.
+	proxyResolver := manual.NewBuilderWithScheme("test")
+	resolver.Register(proxyResolver)
+	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	conn, err := grpc.Dial(mrTarget.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", mrTarget.Scheme()+":///"+unresolvedTargetURI, err)
+		t.Fatalf("grpc.Dial(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
 	}
 	defer conn.Close()
 
@@ -204,7 +205,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 
 // Tests the scenario where grpc.NewClient is used with the default DNS
 // resolver for the target URI and a proxy is configured. The test verifies
-// that the client. resolves proxy URI, connects to the proxy server, sends the
+// that the client resolves proxy URI, connects to the proxy server, sends the
 // unresolved target URI in the HTTP CONNECT request, and successfully
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxy(t *testing.T) {
@@ -217,8 +218,8 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Set up and update a manual resolver for proxy resolution.
-	mrProxy := setupDNS(t)
-	mrProxy.InitialState(resolver.State{
+	proxyResolver := setupDNS(t)
+	proxyResolver.InitialState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: pLis.Addr().String()},
 		},
@@ -264,19 +265,20 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Create and update a custom resolver for target URI.
-	mrTarget := manual.NewBuilderWithScheme("whatever")
-	resolver.Register(mrTarget)
-	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+	targetResolver := manual.NewBuilderWithScheme("test")
+	resolver.Register(targetResolver)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+
 	// Set up and update a manual resolver for proxy resolution.
-	mrProxy := setupDNS(t)
-	mrProxy.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+	proxyResolver := setupDNS(t)
+	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
 	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	conn, err := grpc.NewClient(mrTarget.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%s) failed: %v", mrTarget.Scheme()+":///"+unresolvedTargetURI, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
 	}
 	t.Cleanup(func() { conn.Close() })
 
@@ -298,7 +300,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 // Tests the scenario where grpc.NewClient is used with the default "dns"
 // resolver and the dial option grpc.WithTargetResolutionEnabled() is set,
 // enabling target resolution on the client. The test verifies that target
-// resolution happens on the client by sending resolved target URi in HTTP
+// resolution happens on the client by sending resolved target URI in HTTP
 // CONNECT request, the proxy URI is resolved correctly, and the connection is
 // successfully established with the backend server through the proxy.
 func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
@@ -311,15 +313,17 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
 	// Configure manual resolvers for both proxy and target backends
-	mrTarget := setupDNS(t)
-	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+
 	// Temporarily modify ProxyScheme for this test.
 	origScheme := delegatingresolver.ProxyScheme
-	delegatingresolver.ProxyScheme = "whatever"
+	delegatingresolver.ProxyScheme = "test"
 	t.Cleanup(func() { delegatingresolver.ProxyScheme = origScheme })
-	mrProxy := manual.NewBuilderWithScheme("whatever")
-	resolver.Register(mrProxy)
-	mrProxy.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+
+	proxyResolver := manual.NewBuilderWithScheme("test")
+	resolver.Register(proxyResolver)
+	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
 	// Dial options with target resolution enabled.
 	dopts := []grpc.DialOption{
@@ -366,8 +370,8 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	mrTarget := setupDNS(t)
-	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
 	// Dial options with proxy explicitly disabled.
 	dopts := []grpc.DialOption{
@@ -415,14 +419,14 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 
 	// Create a custom dialer that directly dials the backend.  We'll use this
 	// to bypass any proxy logic.
-	dialerCalled := make(chan bool, 1)
+	dialerCalled := make(chan struct{})
 	customDialer := func(_ context.Context, backendAddr string) (net.Conn, error) {
-		dialerCalled <- true
+		close(dialerCalled)
 		return net.Dial("tcp", backendAddr)
 	}
 
-	mrTarget := setupDNS(t)
-	mrTarget.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+	targetResolver := setupDNS(t)
+	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -493,8 +497,8 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", "https://"+user+":"+password+"@"+unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 	// Set up and update a manual resolver for proxy resolution.
-	mrProxy := setupDNS(t)
-	mrProxy.InitialState(resolver.State{
+	proxyResolver := setupDNS(t)
+	proxyResolver.InitialState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: pLis.Addr().String()},
 		},
