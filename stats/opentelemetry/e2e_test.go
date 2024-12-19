@@ -624,9 +624,9 @@ func pollForWantMetrics(ctx context.Context, t *testing.T, reader *metric.Manual
 // TestMetricsAndTracesOptionEnabled verifies the integration of metrics and traces
 // emitted by the OpenTelemetry instrumentation in a gRPC environment. It sets up a
 // stub server with both metrics and traces enabled, and tests the correct emission
-// of metrics during a Unary RPC and a Streaming RPC. The test ensures that the
-// emitted metrics reflect the operations performed, including the size of the
-// compressed message, and verifies that tracing information is correctly recorded.
+// of metrics and traces during a Unary RPC and a Streaming RPC. The test ensures
+// that the emitted metrics reflect the operations performed, including the size of
+// the compressed message, and verifies that tracing information is correctly recorded.
 func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	// Create default metrics options
 	mo, reader := defaultMetricsOptions(t, nil)
@@ -640,7 +640,8 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	defer cancel()
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-	// certain metrics and traces to be emitted.
+	// certain metrics and traces to be emitted which should be observed
+	// through metrics reader and span exporter respectively.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}, grpc.UseCompressor(gzip.Name)); err != nil { // Deterministic compression.
@@ -931,18 +932,19 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 //   - Verifies that the tracing information is recorded accurately in
 //     the OpenTelemetry backend.
 func (s) TestSpan(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter.
-	traceOptions, spanExporter := defaultTraceOptions(t)
+	to, spanExporter := defaultTraceOptions(t)
 	// Start the server with trace options.
-	ss := setupStubServer(t, nil, traceOptions)
+	ss := setupStubServer(t, mo, to)
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-	// certain metrics to be emitted, which should be observed through the
-	// Metric Reader.
+	// certain traces to be emitted, which should be observed through the
+	// span exporter.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}); err != nil {
@@ -1214,20 +1216,21 @@ func (s) TestSpan(t *testing.T) {
 //   - Verifies that the trace ID and span ID are correctly assigned and accessible
 //     in the OpenTelemetry backend.
 func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
-	traceOptions, spanExporter := defaultTraceOptions(t)
+	to, spanExporter := defaultTraceOptions(t)
 	// Set the W3CContextPropagator as part of TracingOptions.
-	traceOptions.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
+	to.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
 	// Start the server with OpenTelemetry options
-	ss := setupStubServer(t, nil, traceOptions)
+	ss := setupStubServer(t, mo, to)
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
-	// certain metrics to be emitted, which should be observed through the
-	// Metric Reader.
+	// certain traces to be emitted, which should be observed through the
+	// span exporter.
 	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 		Body: make([]byte, 10000),
 	}}); err != nil {
@@ -1483,5 +1486,49 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestMetricsAndTracesDisabled verifies that RPCs call succeed as expected
+// when metrics and traces are disabled in the OpenTelemetry instrumentation.
+func (s) TestMetricsAndTracesDisabled(t *testing.T) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{Payload: &testpb.Payload{
+				Body: make([]byte, len(in.GetPayload().GetBody())),
+			}}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make two RPCs, a unary RPC and a streaming RPC.
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
+		Body: make([]byte, 10000),
+	}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
+	}
+
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
 	}
 }
