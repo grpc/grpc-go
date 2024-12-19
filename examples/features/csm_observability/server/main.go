@@ -66,7 +66,7 @@ func main() {
 	cleanup := csm.EnableObservability(context.Background(), opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 	defer cleanup()
 
-	lis, err := net.Listen("tcp", ":"+*port)
+	lis, err := net.Listen("tcp4", "0.0.0.0:"+*port)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}

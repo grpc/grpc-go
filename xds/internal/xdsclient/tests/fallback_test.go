@@ -160,13 +160,10 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	// Create an xDS client with the above bootstrap configuration and a short
-	// idle channel expiry timeout. This ensures that connections to lower
-	// priority servers get closed quickly, for the test to verify.
+	// Create an xDS client with the above bootstrap configuration.
 	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
-		IdleChannelExpiryTimeout: defaultTestIdleChannelExpiryTimeout,
+		Name:     t.Name(),
+		Contents: bootstrapContents,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -363,13 +360,10 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	// Create an xDS client with the above bootstrap configuration and a short
-	// idle channel expiry timeout. This ensures that connections to lower
-	// priority servers get closed quickly, for the test to verify.
+	// Create an xDS client with the above bootstrap configuration.
 	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
-		IdleChannelExpiryTimeout: defaultTestIdleChannelExpiryTimeout,
+		Name:     t.Name(),
+		Contents: bootstrapContents,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -556,13 +550,10 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	// Create an xDS client with the above bootstrap configuration and a short
-	// idle channel expiry timeout. This ensures that connections to lower
-	// priority servers get closed quickly, for the test to verify.
+	// Create an xDS client with the above bootstrap configuration.
 	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:                     t.Name(),
-		Contents:                 bootstrapContents,
-		IdleChannelExpiryTimeout: defaultTestIdleChannelExpiryTimeout,
+		Name:     t.Name(),
+		Contents: bootstrapContents,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
