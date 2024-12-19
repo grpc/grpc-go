@@ -42,6 +42,10 @@ type subConnWrapper struct {
 	// health listener instead of the connectivity listener. Once Dualstack
 	// changes are complete, all SubConns will be created by pickfirst which
 	// uses the health listener.
+	// TODO: https://github.com/grpc/grpc-go/issues/7915 - Once Dualstack
+	// changes are complete, all SubConns will be created by pick_first and
+	// outlier detection will only use the health listener for ejection and
+	// this field can be removed.
 	healthListenerEnabled bool
 
 	// addressInfo is a pointer to the subConnWrapper's corresponding address

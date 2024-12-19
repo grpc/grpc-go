@@ -235,7 +235,7 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.updateEndpointsLocked(ccs.ResolverState.Endpoints)
 	b.mu.Unlock()
 
-	// Make children pickfirst use health listeners for outlier detection to
+	// Make pickfirst children use health listeners for outlier detection to
 	// work.
 	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
 	// This causes child to update picker inline and will thus cause inline
