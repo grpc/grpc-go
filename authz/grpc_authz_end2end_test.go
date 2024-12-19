@@ -696,7 +696,7 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	}
 }
 
-func TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
+func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	valid1 := authzTests["DeniesRPCMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "recovers_from_reload_failure", []byte(valid1.authzPolicy))
 	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
