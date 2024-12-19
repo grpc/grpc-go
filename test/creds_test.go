@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -431,10 +432,12 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	cred := &authorityCheckCreds{}
-	s := grpc.NewServer()
-	go s.Serve(lis)
-	defer s.Stop()
-
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		S:        grpc.NewServer(),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 	r := manual.NewBuilderWithScheme("whatever")
 
 	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))
@@ -463,10 +466,13 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	cred := &authorityCheckCreds{}
-	s := grpc.NewServer()
-	go s.Serve(lis)
-	defer s.Stop()
 
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		S:        grpc.NewServer(),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 	r := manual.NewBuilderWithScheme("whatever")
 
 	cc, err := grpc.Dial(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))

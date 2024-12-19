@@ -41,7 +41,13 @@ import (
 )
 
 func testLocalCredsE2ESucceed(network, address string) error {
+
+	lis, err := net.Listen(network, address)
+	if err != nil {
+		return fmt.Errorf("Failed to create listener: %v", err)
+	}
 	ss := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			pr, ok := peer.FromContext(ctx)
 			if !ok {
@@ -69,20 +75,12 @@ func testLocalCredsE2ESucceed(network, address string) error {
 			}
 			return &testpb.Empty{}, nil
 		},
+		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
 	}
 
-	sopts := []grpc.ServerOption{grpc.Creds(local.NewCredentials())}
-	s := grpc.NewServer(sopts...)
-	defer s.Stop()
+	defer ss.S.Stop()
 
-	testgrpc.RegisterTestServiceServer(s, ss)
-
-	lis, err := net.Listen(network, address)
-	if err != nil {
-		return fmt.Errorf("Failed to create listener: %v", err)
-	}
-
-	go s.Serve(lis)
+	stubserver.StartTestService(nil, ss)
 
 	var cc *grpc.ClientConn
 	lisAddr := lis.Addr().String()
@@ -167,13 +165,11 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
+		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
 	}
 
-	sopts := []grpc.ServerOption{grpc.Creds(local.NewCredentials())}
-	s := grpc.NewServer(sopts...)
-	defer s.Stop()
-
-	testgrpc.RegisterTestServiceServer(s, ss)
+	defer ss.S.Stop()
+	stubserver.StartTestService(nil, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -190,7 +186,7 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 		Zone: "",
 	}
 
-	go s.Serve(spoofListener(lis, fakeClientAddr))
+	go ss.S.Serve(spoofListener(lis, fakeClientAddr))
 
 	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {
