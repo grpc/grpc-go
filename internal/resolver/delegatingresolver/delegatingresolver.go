@@ -178,12 +178,13 @@ func (r *delegatingResolver) Close() {
 	r.proxyResolver = nil
 }
 
-// combineAndUpdateClientConnStateLocked creates a list of combined addresses by
+// updateClientConnStateLocked creates a list of combined addresses by
 // pairing each proxy address with every target address. For each pair, it
 // generates a new [resolver.Address] using the proxy address, and adding the
-// target address as the attribute along with user info. It also returns a
-// boolen representing if updates from both the resolvers have been received.
-func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
+// target address as the attribute along with user info. It returns nil if
+// either resolver has not sent update even once and returns the error from
+// ClientConn update once both resolvers have sent update atleast once.
+func (r *delegatingResolver) updateClientConnStateLocked() error {
 	if !r.targetResolverReady || !r.proxyResolverReady {
 		return nil
 	}
@@ -225,10 +226,6 @@ func (r *delegatingResolver) combineAndUpdateClientConnStateLocked() error {
 	var endpoints []resolver.Endpoint
 	for _, endpt := range r.targetResolverState.Endpoints {
 		var addrs []resolver.Address
-		var user url.Userinfo
-		if r.proxyURL.User != nil {
-			user = *r.proxyURL.User
-		}
 		for _, proxyAddr := range r.proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
 				addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
@@ -255,8 +252,8 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 	if logger.V(2) {
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
-	if state.Endpoints != nil {
-		r.proxyAddrs = []resolver.Address{}
+	if len(state.Endpoints) > 0 {
+		r.proxyAddrs = nil
 		for _, endpoint := range state.Endpoints {
 			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
 		}
@@ -264,7 +261,7 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		r.proxyAddrs = state.Addresses
 	}
 	r.proxyResolverReady = true
-	err := r.combineAndUpdateClientConnStateLocked()
+	err := r.updateClientConnStateLocked()
 	// Another possible approach was to block until updates are received from
 	// both resolvers. But this is not used because calling `New()` triggers
 	// `Build()`  for the first resolver, which calls `UpdateState()`. And the
@@ -297,7 +294,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	// proxy resolvers have sent their updates, and curState has been
 	// updated with the combined addresses.
 	r.curState = state
-	err := r.combineAndUpdateClientConnStateLocked()
+	err := r.updateClientConnStateLocked()
 	if err != nil {
 		r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
 	}
