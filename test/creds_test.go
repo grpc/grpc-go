@@ -434,7 +434,10 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	cred := &authorityCheckCreds{}
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		S:        grpc.NewServer(),
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(),
 	}
 	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()
@@ -469,7 +472,10 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		S:        grpc.NewServer(),
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(),
 	}
 	stubserver.StartTestService(t, stub)
 	defer stub.S.Stop()

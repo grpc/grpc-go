@@ -154,7 +154,10 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		S:        grpc.NewServer(),
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(),
 	}
 	healthgrpc.RegisterHealthServer(stub.S, ts)
 	stubserver.StartTestService(t, stub)
@@ -260,7 +263,10 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	}
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		S:        grpc.NewServer(),
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(),
 	}
 	defer stub.S.Stop()
 

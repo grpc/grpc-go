@@ -734,7 +734,10 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 	defer lis.Close()
 	ss := &stubserver.StubServer{
 		Listener: lis,
-		S:        grpc.NewServer(),
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(),
 	}
 	stubserver.StartTestService(t, ss)
 	defer ss.S.Stop()
