@@ -18,7 +18,6 @@ package opentelemetry
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/sdk/metric"
 	"sync/atomic"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 type clientStatsHandler struct {
