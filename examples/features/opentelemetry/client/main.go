@@ -29,7 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,12 +37,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
-const defaultName = "world"
-
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9465", "the Prometheus exporter endpoint")
-	name               = flag.String("name", defaultName, "Name to greet")
 )
 
 func main() {
@@ -61,14 +58,14 @@ func main() {
 		log.Fatalf("Failed to start NewClient: %v", err)
 	}
 	defer cc.Close()
-	c := pb.NewGreeterClient(cc)
+	c := echo.NewEchoClient(cc)
 
 	// Make an RPC every second. This should trigger telemetry to be emitted from
 	// the client and the server.
 	for {
-		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
+		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
 		if err != nil {
-			log.Fatalf("Could not greet: %v", err)
+			log.Fatalf("UnaryEcho failed: %v", err)
 		}
 		fmt.Println(r)
 		time.Sleep(time.Second)
