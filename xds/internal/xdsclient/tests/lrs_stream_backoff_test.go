@@ -21,6 +21,7 @@ package xdsclient_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,14 +87,27 @@ func (s) TestLRS_BackoffAfterStreamFailure(t *testing.T) {
     bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
     testutils.CreateBootstrapFileForTesting(t, bc)
     client := createXDSClientWithBackoff(t, bc, streamBackoff)
-    // Explicit resource watch.
+
+    const listenerName = "listener"
     lw := newListenerWatcher()
-    ldsCancel := xdsresource.WatchListener(client, "resource-name", lw)
+    ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
     defer ldsCancel()
+
     // Verify resource request.
-    if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{"resource-name"}); err != nil {
+    if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{listenerName}); err != nil {
         t.Fatal(err)
     }
+
+	// Verify that the received stream error is reported to the watcher.
+	u, err := lw.updateCh.Receive(ctx)
+	if err != nil {
+		t.Fatal("Timeout when waiting for an error callback on the listener watcher")
+	}
+	gotErr := u.(listenerUpdateErrTuple).err
+	if !strings.Contains(gotErr.Error(), streamErr.Error()) {
+		t.Fatalf("Received stream error: %v, wantErr: %v", gotErr, streamErr)
+	}
+
     // Verify stream closure.
     select {
     case <-streamCloseCh:
@@ -109,7 +123,7 @@ func (s) TestLRS_BackoffAfterStreamFailure(t *testing.T) {
         t.Fatal("Timeout waiting for backoff signal")
     }
     // Verify re-request.
-    if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{"resource-name"}); err != nil {
+    if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{listenerName}); err != nil {
         t.Fatal(err)
     }
 }
@@ -198,6 +212,9 @@ func (s) TestLRS_BackoffAfterBrokenStream(t *testing.T) {
     }
 }
 
+// Tests the case where a stream breaks because the server goes down. Verifies
+// that when the server comes back up, the same resources are re-requested, this
+// time with the previously acked version and an empty nonce.
 func (s) TestLRS_RetriesAfterBrokenStream(t *testing.T) {
 	// Channels used for verifying different events in the test.
 	streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1)   // Discovery request is received.
@@ -367,5 +384,108 @@ func (s) TestLRS_RetriesAfterBrokenStream(t *testing.T) {
 	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
 		t.Fatalf("Unexpected diff in received discovery request, diff (-got, +want):\n%s", diff)
 	}
+}
+
+// Tests the case where a resource is requested before the a valid ADS stream
+// exists. Verifies that the a discovery request is sent out for the previously
+// requested resource once a valid stream is created.
+func (s) TestLRS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
+    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+    defer cancel()
+
+    // Channels for verifying different events in the test.
+    streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1)
+
+    // Create an xDS management server listening on a local port.
+    l, err := testutils.LocalTCPListener()
+    if err != nil {
+        t.Fatalf("Failed to create a local listener: %v", err)
+    }
+    defer l.Close()
+
+    lis := testutils.NewRestartableListener(l)
+    defer lis.Stop()
+
+    streamErr := errors.New("LRS stream error")
+
+    mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+        Listener: lis,
+        SupportLoadReportingService: true,
+        OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+            // Capture only LoadStats requests.
+            if req.GetTypeUrl() == version.V3ListenerURL {
+                select {
+                case streamRequestCh <- req:
+                default:
+                }
+            }
+            return streamErr
+        },
+    })
+    // defer mgmtServer.Stop()
+
+    // Bring down the management server before creating the transport.
+    lis.Stop()
+
+    // Override backoff to minimize test time.
+    backoffCh := make(chan struct{}, 1)
+    unblockBackoffCh := make(chan struct{})
+    streamBackoff := func(v int) time.Duration {
+        select {
+        case backoffCh <- struct{}{}:
+        default:
+        }
+        <-unblockBackoffCh
+        return 0
+    }
+
+    // Create an xDS client with bootstrap pointing to the above server.
+    nodeID := uuid.New().String()
+    bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+    testutils.CreateBootstrapFileForTesting(t, bc)
+    client := createXDSClientWithBackoff(t, bc, streamBackoff)
+    if client == nil {
+        t.Fatalf("Failed to create xDS client")
+    }
+
+    // Register a listener watch for the "load-report" resource.
+    const listenerName = "load-report"
+    lw := newListenerWatcher()
+    ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+    defer ldsCancel()
+
+    // Wait for backoff to kick in.
+    select {
+    case <-backoffCh:
+    case <-ctx.Done():
+        t.Fatal("Timeout waiting for stream backoff")
+    }
+
+    // Bring up the connection to the management server and unblock the backoff.
+    lis.Restart()
+    close(unblockBackoffCh)
+
+    // Verify that the initial discovery request matches expectations.
+    var gotReq *v3discoverypb.DiscoveryRequest
+    select {
+    case gotReq = <-streamRequestCh:
+    case <-ctx.Done():
+        t.Fatalf("Timeout waiting for discovery request on the stream")
+    }
+    wantReq := &v3discoverypb.DiscoveryRequest{
+        VersionInfo: "",
+        Node: &v3corepb.Node{
+            Id:                   nodeID,
+            UserAgentName:        "gRPC Go",
+            UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+            ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
+        },
+        ResourceNames: []string{listenerName},
+        TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+        ResponseNonce: "",
+    }
+    if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+        t.Fatalf("Unexpected diff in received discovery request, diff (-got, +want):\n%s", diff)
+    }
 }
 
