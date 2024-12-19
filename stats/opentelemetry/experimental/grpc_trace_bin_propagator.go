@@ -16,7 +16,12 @@
  *
  */
 
-package opentelemetry
+// # Experimental
+//
+// Notice: package experimental is EXPERIMENTAL and may be changed or removed in a
+// later release.
+
+package experimental
 
 import (
 	"context"
