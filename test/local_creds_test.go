@@ -167,7 +167,6 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 		},
 		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
 	}
-
 	defer ss.S.Stop()
 	stubserver.StartTestService(nil, ss)
 
