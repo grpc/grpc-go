@@ -115,8 +115,11 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		(*r.targetResolverState).Addresses = []resolver.Address{{Addr: target.Endpoint()}}
-		r.targetResolverState.Endpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}}
+		state := resolver.State{
+			Addresses: []resolver.Address{{Addr: target.Endpoint()}},
+			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
+		}
+		r.targetResolverState = &state
 	} else {
 		wcc := &wrappingClientConn{
 			stateListener: r.updateTargetResolverState,
