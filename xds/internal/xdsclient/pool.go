@@ -88,13 +88,6 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
 	}
-	if opts.Contents != nil {
-		config, err := bootstrap.NewConfigForTesting(opts.Contents)
-		if err != nil {
-			return nil, nil, err
-		}
-		return p.newRefCounted(opts.Name, config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
-	}
 	return p.newRefCounted(opts.Name, p.config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
 }
 

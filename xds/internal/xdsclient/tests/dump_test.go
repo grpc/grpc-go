@@ -136,13 +136,16 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+	}
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
 	client1, close1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:     client1Name,
-		Contents: bc,
+		Name: client1Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -150,8 +153,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	defer close1()
 	client2Name := t.Name() + "-2"
 	client2, close2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:     client2Name,
-		Contents: bc,
+		Name: client2Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -405,13 +407,16 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+	}
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
 	client1, close1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:     client1Name,
-		Contents: bc,
+		Name: client1Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -419,8 +424,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	defer close1()
 	client2Name := t.Name() + "-2"
 	client2, close2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:     client2Name,
-		Contents: bc,
+		Name: client2Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

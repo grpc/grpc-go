@@ -42,7 +42,7 @@ import (
 const serverPrefix = "[xds-server %p] "
 
 var (
-	// These will be overriden in unit tests.
+	// These will be overridden in unit tests.
 	xDSClientPool = xdsclient.DefaultPool
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
 		return grpc.NewServer(opts...)

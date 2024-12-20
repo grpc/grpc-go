@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -56,6 +57,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/balancer"          // Register the balancers.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 	_ "google.golang.org/grpc/xds/internal/resolver"          // Register the xds_resolver.
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -86,7 +88,11 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32) {
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+	}
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create a local listener.
 	lis, err := testutils.LocalTCPListener()

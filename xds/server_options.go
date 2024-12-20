@@ -80,8 +80,7 @@ func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 	if err != nil {
 		return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = nil }}
 	}
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
-	return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = xdsclient.DefaultPool }}
+	return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = xdsclient.NewPool(config) }}
 }
 
 // ClientPoolForTesting returns a grpc.ServerOption with the pool for xds

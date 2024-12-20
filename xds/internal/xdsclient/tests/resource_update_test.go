@@ -283,10 +283,14 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			config, err := bootstrap.NewConfigForTesting(bc)
+			if err != nil {
+				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+			}
+			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -559,10 +563,14 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			config, err := bootstrap.NewConfigForTesting(bc)
+			if err != nil {
+				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+			}
+			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -796,10 +804,14 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			config, err := bootstrap.NewConfigForTesting(bc)
+			if err != nil {
+				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+			}
+			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -886,7 +898,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 // involving receipt of a CDS response from the management server. The test
 // verifies that the internal state of the xDS client (parsed resource and
 // metadata) matches expectations.
-func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
+func TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 	const (
 		resourceName1 = "resource-name-1"
 		resourceName2 = "resource-name-2"
@@ -1145,10 +1157,14 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			config, err := bootstrap.NewConfigForTesting(bc)
+			if err != nil {
+				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+			}
+			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-				Contents:           bc,
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)

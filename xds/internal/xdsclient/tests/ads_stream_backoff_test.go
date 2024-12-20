@@ -115,7 +115,6 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
 	// Register a watch for a listener resource.
@@ -226,7 +225,6 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
 	// Register a watch for a listener resource.
@@ -388,7 +386,6 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
 	// Register a watch for a listener resource.

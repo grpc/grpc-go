@@ -168,7 +168,7 @@ func (s) TestNewServer_Success(t *testing.T) {
 	}
 }
 
-func (s) TestNewServer_Failure(t *testing.T) {
+func TestNewServer_Failure(t *testing.T) {
 	xdsCreds, err := xds.NewServerCredentials(xds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatalf("failed to create xds server credentials: %v", err)
@@ -181,14 +181,14 @@ func (s) TestNewServer_Failure(t *testing.T) {
 	}{
 		{
 			desc:       "bootstrap env var not set",
-			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds), ClientPoolForTesting(xdsclient.NewPool(nil))},
+			serverOpts: []grpc.ServerOption{grpc.Creds(xdsCreds), BootstrapContentsForTesting(nil)},
 			wantErr:    "bootstrap configuration not set in the pool",
 		},
 		{
 			desc: "empty bootstrap config",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
-				ClientPoolForTesting(xdsclient.NewPool(nil)),
+				BootstrapContentsForTesting(nil),
 			},
 			wantErr: "xDS client creation failed",
 		},

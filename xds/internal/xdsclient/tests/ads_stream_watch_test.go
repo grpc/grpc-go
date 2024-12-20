@@ -56,7 +56,6 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClient(t, bc)
 
 	// Create a watch for the first listener resource and verify that the timer
@@ -147,7 +146,6 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	// short resource expiry timeout.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
 		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
