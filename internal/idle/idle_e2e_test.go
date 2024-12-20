@@ -148,7 +148,6 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 	go func() {
 		_ = cc.Invoke(ctx, "/test/method", nil, nil)
 	}()
-
 	// Verify that the ClientConn moves to READY.
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
