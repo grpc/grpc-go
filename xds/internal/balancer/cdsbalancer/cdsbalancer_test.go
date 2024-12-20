@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -202,11 +203,18 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 //   - a channel used to signal that previously requested cluster resources are
 //     no longer requested
 func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
+	return setupWithManagementServerAndListener(t, nil)
+}
+
+// Same as setupWithManagementServer, but also allows the caller to specify
+// a listener to be used by the management server.
+func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
 	t.Helper()
 
 	cdsResourceRequestedCh := make(chan []string, 1)
 	cdsResourceCanceledCh := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		Listener: lis,
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3ClusterURL {
 				switch len(req.GetResourceNames()) {
@@ -807,11 +815,20 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 //     TRANSIENT_FAILURE. It is also expected to cancel the CDS watch.
 func (s) TestResolverError(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
+	lis := testutils.NewListenerWrapper(t, nil)
+	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerAndListener(t, lis)
 
-	// Verify that the specified cluster resource is requested.
+	// Grab the wrapped connection from the listener wrapper. This will be used
+	// to verify the connection is closed.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	val, err := lis.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
+	}
+	conn := val.(*testutils.ConnWrapper)
+
+	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
 	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
@@ -831,7 +848,7 @@ func (s) TestResolverError(t *testing.T) {
 
 	// Ensure that the resolver error is propagated to the RPC caller.
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if code := status.Code(err); code != codes.Unavailable {
 		t.Fatalf("EmptyCall() failed with code: %v, want %v", code, codes.Unavailable)
 	}
@@ -901,11 +918,14 @@ func (s) TestResolverError(t *testing.T) {
 	resolverErr = xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error")
 	r.ReportError(resolverErr)
 
-	// Wait for the CDS resource to be not requested anymore.
+	// Wait for the CDS resource to be not requested anymore, or the connection
+	// to the management server to be closed (which happens as part of the last
+	// resource watch being canceled).
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for CDS resource to be not requested")
 	case <-cdsResourceCanceledCh:
+	case <-conn.CloseCh.C:
 	}
 
 	// Verify that the resolver error is pushed to the child policy.
@@ -928,12 +948,12 @@ func (s) TestResolverError(t *testing.T) {
 	}
 }
 
-// Tests that closing the cds LB policy results in the cluster resource watch
-// being cancelled and the child policy being closed.
+// Tests that closing the cds LB policy results in the the child policy being
+// closed.
 func (s) TestClose(t *testing.T) {
 	cdsBalancerCh := registerWrappedCDSPolicy(t)
 	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, cdsResourceCanceledCh := setupWithManagementServer(t)
+	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -967,12 +987,6 @@ func (s) TestClose(t *testing.T) {
 	}
 	cdsBal.Close()
 
-	// Wait for the CDS resource to be not requested anymore.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for CDS resource to be not requested")
-	case <-cdsResourceCanceledCh:
-	}
 	// Wait for the child policy to be closed.
 	select {
 	case <-ctx.Done():

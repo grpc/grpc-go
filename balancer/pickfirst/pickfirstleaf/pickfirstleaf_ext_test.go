@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -67,20 +68,54 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// testServer is a server than can be stopped and resumed without closing
+// the listener. This guarantees the same port number (and address) is used
+// after restart. When a server is stopped, it accepts and closes all tcp
+// connections from clients.
+type testServer struct {
+	stubserver.StubServer
+	lis *testutils.RestartableListener
+}
+
+func (s *testServer) stop() {
+	s.lis.Stop()
+}
+
+func (s *testServer) resume() {
+	s.lis.Restart()
+}
+
+func newTestServer(t *testing.T) *testServer {
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	rl := testutils.NewRestartableListener(l)
+	ss := stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+		Listener:   rl,
+	}
+	return &testServer{
+		StubServer: ss,
+		lis:        rl,
+	}
+}
+
 // setupPickFirstLeaf performs steps required for pick_first tests. It starts a
 // bunch of backends exporting the TestService, and creates a ClientConn to them.
 func setupPickFirstLeaf(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, *backendManager) {
 	t.Helper()
 	r := manual.NewBuilderWithScheme("whatever")
-	backends := make([]*stubserver.StubServer, backendCount)
+	backends := make([]*testServer, backendCount)
 	addrs := make([]resolver.Address, backendCount)
 
 	for i := 0; i < backendCount; i++ {
-		backend := stubserver.StartTestService(t, nil)
+		server := newTestServer(t)
+		backend := stubserver.StartTestService(t, &server.StubServer)
 		t.Cleanup(func() {
 			backend.Stop()
 		})
-		backends[i] = backend
+		backends[i] = server
 		addrs[i] = resolver.Address{Addr: backend.Address}
 	}
 
@@ -264,8 +299,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
-	bm.backends[0].S.Stop()
-	bm.backends[0].S = nil
+	bm.backends[0].stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -287,8 +321,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
-	bm.backends[2].S.Stop()
-	bm.backends[2].S = nil
+	bm.backends[2].stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[2], addrs[3]}})
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[3]); err != nil {
@@ -327,8 +360,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
-	bm.backends[0].S.Stop()
-	bm.backends[0].S = nil
+	bm.backends[0].stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -350,8 +382,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
-	bm.backends[2].S.Stop()
-	bm.backends[2].S = nil
+	bm.backends[2].stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[2], addrs[1]}})
 
 	// Verify that the ClientConn stays in READY.
@@ -391,8 +422,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
-	bm.backends[0].S.Stop()
-	bm.backends[0].S = nil
+	bm.backends[0].stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -414,11 +444,9 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
-	bm.backends[2].S.Stop()
-	bm.backends[2].S = nil
-	if err := bm.backends[0].StartServer(); err != nil {
-		t.Fatalf("Failed to re-start test backend: %v", err)
-	}
+	bm.backends[2].stop()
+	bm.backends[0].resume()
+
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[2]}})
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
@@ -456,8 +484,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 	stateSubscriber := &ccStateSubscriber{}
 	internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc, stateSubscriber)
 
-	bm.backends[0].S.Stop()
-	bm.backends[0].S = nil
+	bm.backends[0].stop()
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0], addrs[1]}})
 	var bal *stateStoringBalancer
 	select {
@@ -554,14 +581,11 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 	}
 
 	// Shut down the connected server.
-	bm.backends[0].S.Stop()
-	bm.backends[0].S = nil
+	bm.backends[0].stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
-	if err := bm.backends[0].StartServer(); err != nil {
-		t.Fatalf("Failed to start server: %v", err)
-	}
+	bm.backends[0].resume()
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
@@ -620,14 +644,11 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 	}
 
 	// Shut down the connected server.
-	bm.backends[1].S.Stop()
-	bm.backends[1].S = nil
+	bm.backends[1].stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
-	if err := bm.backends[1].StartServer(); err != nil {
-		t.Fatalf("Failed to start server: %v", err)
-	}
+	bm.backends[1].resume()
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
@@ -692,14 +713,11 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 	}
 
 	// Shut down the connected server.
-	bm.backends[1].S.Stop()
-	bm.backends[1].S = nil
+	bm.backends[1].stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
-	if err := bm.backends[0].StartServer(); err != nil {
-		t.Fatalf("Failed to start server: %v", err)
-	}
+	bm.backends[0].resume()
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
@@ -763,14 +781,11 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 	}
 
 	// Shut down the connected server.
-	bm.backends[0].S.Stop()
-	bm.backends[0].S = nil
+	bm.backends[0].stop()
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
 
 	// Start the new target server.
-	if err := bm.backends[1].StartServer(); err != nil {
-		t.Fatalf("Failed to start server: %v", err)
-	}
+	bm.backends[1].resume()
 
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
@@ -1091,7 +1106,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
-				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "[fe80::1%eth0]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
 		},
@@ -1107,7 +1122,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 		{Addr: "2.2.2.2:2"},
 		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[fe80::1%eth0]:3333"},
 		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 
@@ -1135,7 +1150,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"}}},
-				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "[fe80::1%eth0]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "grpc.io:80"}}}, // not an IP.
 			},
 		},
@@ -1150,7 +1165,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 		{Addr: "grpc.io:80"},
 		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:2222"},
 		{Addr: "2.2.2.2:2"},
-		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[fe80::1%eth0]:3333"},
 		{Addr: "3.3.3.3:3"},
 		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
@@ -1180,7 +1195,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 				{Addresses: []resolver.Address{{Addr: "[::FFFF:192.168.0.1]:2222"}}},
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
 				{Addresses: []resolver.Address{{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"}}},
-				{Addresses: []resolver.Address{{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"}}},
+				{Addresses: []resolver.Address{{Addr: "[fe80::1%eth0]:3333"}}},
 				{Addresses: []resolver.Address{{Addr: "example.com:80"}}}, // not an IP.
 			},
 		},
@@ -1197,7 +1212,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 		{Addr: "2.2.2.2:2"},
 		{Addr: "[0002:0002:0002:0002:0002:0002:0002:0002]:8080"},
 		{Addr: "3.3.3.3:3"},
-		{Addr: "[0003:0003:0003:0003:0003:0003:0003:0003]:3333"},
+		{Addr: "[fe80::1%eth0]:3333"},
 		{Addr: "[::FFFF:192.168.0.1]:2222"},
 	}
 
@@ -1208,6 +1223,253 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
 		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// Test verifies that pickfirst balancer transitions to READY when the health
+// listener is enabled. Since client side health checking is not enabled in
+// the service config, the health listener will send a health update for READY
+// after registering the listener.
+func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, resolver.Address{Addr: backend.Address}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Test verifies that a health listener is not registered when pickfirst is not
+// under a petiole policy.
+func (s) TestPickFirstLeaf_HealthListenerNotEnabled(t *testing.T) {
+	// Wrap the clientconn to intercept NewSubConn.
+	// Capture the health list by wrapping the SC.
+	// Wrap the picker to unwrap the SC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	healthListenerCh := make(chan func(balancer.SubConnState))
+
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccw := &healthListenerCapturingCCWrapper{
+				ClientConn:       bd.ClientConn,
+				healthListenerCh: healthListenerCh,
+				subConnStateCh:   make(chan balancer.SubConnState, 5),
+			}
+			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			// Functions like a non-petiole policy by not configuring the use
+			// of health listeners.
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+	cc.Connect()
+
+	select {
+	case <-healthListenerCh:
+		t.Fatal("Health listener registered when not enabled.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+}
+
+// Test mocks the updates sent to the health listener and verifies that the
+// balancer correctly reports the health state once the SubConn's connectivity
+// state becomes READY.
+func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
+	// Wrap the clientconn to intercept NewSubConn.
+	// Capture the health list by wrapping the SC.
+	// Wrap the picker to unwrap the SC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	healthListenerCh := make(chan func(balancer.SubConnState))
+	scConnectivityStateCh := make(chan balancer.SubConnState, 5)
+
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			ccw := &healthListenerCapturingCCWrapper{
+				ClientConn:       bd.ClientConn,
+				healthListenerCh: healthListenerCh,
+				subConnStateCh:   scConnectivityStateCh,
+			}
+			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+	}
+
+	stub.Register(t.Name(), bf)
+	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(svcCfg),
+	}
+	cc, err := grpc.NewClient(backend.Address, opts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", backend.Address, err)
+
+	}
+	defer cc.Close()
+	cc.Connect()
+
+	var healthListener func(balancer.SubConnState)
+	select {
+	case healthListener = <-healthListenerCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for health listener to be registered.")
+	}
+
+	// Wait for the raw connectivity state to become READY. The LB policy should
+	// wait for the health updates before transitioning the channel to READY.
+	for {
+		var scs balancer.SubConnState
+		select {
+		case scs = <-scConnectivityStateCh:
+		case <-ctx.Done():
+			t.Fatal("Context timed out waiting for the SubConn connectivity state to become READY.")
+		}
+		if scs.ConnectivityState == connectivity.Ready {
+			break
+		}
+	}
+
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Connecting)
+
+	// The LB policy should update the channel state based on the health state.
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   fmt.Errorf("test health check failure"),
+	})
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.Connecting,
+		ConnectionError:   balancer.ErrNoSubConnAvailable,
+	})
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.Ready,
+	})
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, resolver.Address{Addr: backend.Address}); err != nil {
+		t.Fatal(err)
+	}
+
+	// When the health check fails, the channel should transition to TF.
+	healthListener(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   fmt.Errorf("test health check failure"),
+	})
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+}
+
+// healthListenerCapturingCCWrapper is used to capture the health listener so
+// that health updates can be mocked for testing.
+type healthListenerCapturingCCWrapper struct {
+	balancer.ClientConn
+	healthListenerCh chan func(balancer.SubConnState)
+	subConnStateCh   chan balancer.SubConnState
+}
+
+func (ccw *healthListenerCapturingCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	oldListener := opts.StateListener
+	opts.StateListener = func(scs balancer.SubConnState) {
+		ccw.subConnStateCh <- scs
+		if oldListener != nil {
+			oldListener(scs)
+		}
+	}
+	sc, err := ccw.ClientConn.NewSubConn(addrs, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &healthListenerCapturingSCWrapper{
+		SubConn:    sc,
+		listenerCh: ccw.healthListenerCh,
+	}, nil
+}
+
+func (ccw *healthListenerCapturingCCWrapper) UpdateState(state balancer.State) {
+	state.Picker = &unwrappingPicker{state.Picker}
+	ccw.ClientConn.UpdateState(state)
+}
+
+type healthListenerCapturingSCWrapper struct {
+	balancer.SubConn
+	listenerCh chan func(balancer.SubConnState)
+}
+
+func (scw *healthListenerCapturingSCWrapper) RegisterHealthListener(listener func(balancer.SubConnState)) {
+	scw.listenerCh <- listener
+}
+
+// unwrappingPicker unwraps SubConns because the channel expects SubConns to be
+// addrConns.
+type unwrappingPicker struct {
+	balancer.Picker
+}
+
+func (pw *unwrappingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	pr, err := pw.Picker.Pick(info)
+	if pr.SubConn != nil {
+		pr.SubConn = pr.SubConn.(*healthListenerCapturingSCWrapper).SubConn
+	}
+	return pr, err
 }
 
 // subConnAddresses makes the pickfirst balancer create the requested number of
@@ -1308,14 +1570,13 @@ type scState struct {
 }
 
 type backendManager struct {
-	backends []*stubserver.StubServer
+	backends []*testServer
 }
 
 func (b *backendManager) stopAllExcept(index int) {
 	for idx, b := range b.backends {
 		if idx != index {
-			b.S.Stop()
-			b.S = nil
+			b.stop()
 		}
 	}
 }

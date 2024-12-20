@@ -182,7 +182,7 @@ func backendOptions(t *testing.T, serverAddrs []string) []e2e.BackendOptions {
 
 	var backendOpts []e2e.BackendOptions
 	for _, addr := range serverAddrs {
-		backendOpts = append(backendOpts, e2e.BackendOptions{Port: testutils.ParsePort(t, addr)})
+		backendOpts = append(backendOpts, e2e.BackendOptions{Ports: []uint32{testutils.ParsePort(t, addr)}})
 	}
 	return backendOpts
 }
@@ -872,9 +872,9 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 
 	const clusterName = "cluster"
 	backendOpts := []e2e.BackendOptions{
-		{Port: testutils.ParsePort(t, backends[0])},
-		{Port: testutils.ParsePort(t, backends[1])},
-		{Port: testutils.ParsePort(t, backends[2]), Weight: 2},
+		{Ports: []uint32{testutils.ParsePort(t, backends[0])}},
+		{Ports: []uint32{testutils.ParsePort(t, backends[1])}},
+		{Ports: []uint32{testutils.ParsePort(t, backends[2])}, Weight: 2},
 	}
 
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
@@ -1209,14 +1209,14 @@ func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWei
 		Localities: []e2e.LocalityOptions{
 			{
 				Backends: []e2e.BackendOptions{{
-					Port:   testutils.ParsePort(t, backends[0]),
+					Ports:  []uint32{testutils.ParsePort(t, backends[0])},
 					Weight: endpoint1Weight,
 				}},
 				Weight: locality1Weight,
 			},
 			{
 				Backends: []e2e.BackendOptions{{
-					Port:   testutils.ParsePort(t, backends[1]),
+					Ports:  []uint32{testutils.ParsePort(t, backends[1])},
 					Weight: endpoint2Weight,
 				}},
 				Weight: locality2Weight,

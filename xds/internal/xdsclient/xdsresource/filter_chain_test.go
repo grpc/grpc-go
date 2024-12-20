@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -2438,7 +2439,7 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: FilterChainLookupParams{
 				IsUnspecifiedListener: true,
-				DestAddr:              net.ParseIP("2001:68::db8"),
+				DestAddr:              netip.MustParseAddr("2001:68::db8").AsSlice(),
 				SourceAddr:            net.IPv4(10, 1, 1, 1),
 				SourcePort:            1,
 			},
@@ -2468,8 +2469,8 @@ func (s) TestLookup_Successes(t *testing.T) {
 			lis:  lisWithoutDefaultChain,
 			params: FilterChainLookupParams{
 				IsUnspecifiedListener: true,
-				DestAddr:              net.ParseIP("2001:68::1"),
-				SourceAddr:            net.ParseIP("2001:68::2"),
+				DestAddr:              netip.MustParseAddr("2001:68::1").AsSlice(),
+				SourceAddr:            netip.MustParseAddr("2001:68::2").AsSlice(),
 				SourcePort:            1,
 			},
 			wantFC: &FilterChain{
