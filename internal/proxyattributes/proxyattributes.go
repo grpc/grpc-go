@@ -31,15 +31,13 @@ type keyType string
 const proxyOptionsKey = keyType("grpc.resolver.delegatingresolver.proxyOptions")
 
 // Options holds the proxy connection details needed during the CONNECT
-// handshake. It includes the user information and the connect address.
+// handshake.
 type Options struct {
 	User        url.Userinfo
 	ConnectAddr string
 }
 
-// Set returns a copy of addr with attributes containing the provided user
-// and connect address, which are needed during the CONNECT handshake for a
-// proxy connection.
+// Set returns a copy of addr with opts set in its attributes.
 func Set(addr resolver.Address, opts Options) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(proxyOptionsKey, opts)
 	return addr

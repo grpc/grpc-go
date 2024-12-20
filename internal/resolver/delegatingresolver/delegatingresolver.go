@@ -188,12 +188,6 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		return nil
 	}
 
-	// Update curState to include target resolver's state information, such as
-	// the service config, provided by the target resolver. This ensures
-	// curState contains all necessary information when passed to UpdateState.
-	// The state update is only sent after both the target and proxy resolvers
-	// have sent their updates, and curState has been updated with the combined
-	// addresses.
 	curState := *r.targetResolverState
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
@@ -242,6 +236,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		}
 		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
 	}
+	// Use the targetResolverState for its service config and attributes contents.
 	curState.Addresses = addresses
 	curState.Endpoints = endpoints
 	return r.cc.UpdateState(curState)
@@ -259,12 +254,17 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
 	if len(state.Endpoints) > 0 {
+
+		// We expect exactly one address per endpoint because the proxy
+		// resolver uses "dns" resolution.
 		r.proxyAddrs = make([]resolver.Address, 0, len(state.Endpoints))
 		for _, endpoint := range state.Endpoints {
 			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
 		}
-	} else {
+	} else if state.Addresses != nil {
 		r.proxyAddrs = state.Addresses
+	} else {
+		r.proxyAddrs = []resolver.Address{} // ensure proxyAddrs is non-nil to indicate an update has been received
 	}
 	err := r.updateClientConnStateLocked()
 	// Another possible approach was to block until updates are received from
