@@ -270,6 +270,8 @@ func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	tc := testgrpc.NewTestServiceClient(cc)
+	// Use a short context as WaitForReady waits for context expiration before
+	// failing the RPC.
 	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
