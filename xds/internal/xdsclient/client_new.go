@@ -85,10 +85,6 @@ type OptionsForTesting struct {
 	// Name is a unique name for this xDS client.
 	Name string
 
-	// Contents contain a JSON representation of the bootstrap configuration to
-	// be used when creating the xDS client.
-	Contents []byte
-
 	// WatchExpiryTimeout is the timeout for xDS resource watch expiry. If
 	// unspecified, uses the default value used in non-test code.
 	WatchExpiryTimeout time.Duration
