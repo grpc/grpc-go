@@ -53,9 +53,6 @@ type delegatingResolver struct {
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState resolver.State     // state of the target resolver
 	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
-	curState            resolver.State     // current resolver state
-	targetResolverReady bool               // indicates if an update from the target resolver has been received
-	proxyResolverReady  bool               // indicates if an update from the proxy resolver has been received
 }
 
 // nopResolver is a resolver that does nothing.
@@ -120,7 +117,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
 		r.targetResolverState.Addresses = []resolver.Address{{Addr: target.Endpoint()}}
 		r.targetResolverState.Endpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}}
-		r.targetResolverReady = true
 	} else {
 		wcc := &wrappingClientConn{
 			stateListener: r.updateTargetResolverState,
@@ -185,10 +181,17 @@ func (r *delegatingResolver) Close() {
 // either resolver has not sent update even once and returns the error from
 // ClientConn update once both resolvers have sent update atleast once.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
-	if !r.targetResolverReady || !r.proxyResolverReady {
+	if (r.targetResolverState.Addresses == nil && r.targetResolverState.Endpoints == nil) || r.proxyAddrs == nil {
 		return nil
 	}
 
+	// Update curState to include target resolver's state information, such as
+	// the service config, provided by the target resolver. This ensures
+	// curState contains all necessary information when passed to UpdateState.
+	// The state update is only sent after both the target and proxy resolvers
+	// have sent their updates, and curState has been updated with the combined
+	// addresses.
+	curState := r.targetResolverState
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
 	// resolution when creating the transport. Sending all resolved addresses
@@ -236,9 +239,9 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		}
 		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
 	}
-	r.curState.Addresses = addresses
-	r.curState.Endpoints = endpoints
-	return r.cc.UpdateState(r.curState)
+	curState.Addresses = addresses
+	curState.Endpoints = endpoints
+	return r.cc.UpdateState(curState)
 }
 
 // updateProxyResolverState updates the proxy resolver state by storing proxy
@@ -253,14 +256,13 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
 	if len(state.Endpoints) > 0 {
-		r.proxyAddrs = nil
+		r.proxyAddrs = make([]resolver.Address, 0, len(state.Endpoints))
 		for _, endpoint := range state.Endpoints {
 			r.proxyAddrs = append(r.proxyAddrs, endpoint.Addresses...)
 		}
 	} else {
 		r.proxyAddrs = state.Addresses
 	}
-	r.proxyResolverReady = true
 	err := r.updateClientConnStateLocked()
 	// Another possible approach was to block until updates are received from
 	// both resolvers. But this is not used because calling `New()` triggers
@@ -286,14 +288,6 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 	}
 	r.targetResolverState = state
-	r.targetResolverReady = true
-	// Update curState to include other state information, such as the
-	// service config, provided by the target resolver. This ensures
-	// curState contains all necessary information when passed to
-	// UpdateState. The state update is only sent after both the target and
-	// proxy resolvers have sent their updates, and curState has been
-	// updated with the combined addresses.
-	r.curState = state
 	err := r.updateClientConnStateLocked()
 	if err != nil {
 		r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
