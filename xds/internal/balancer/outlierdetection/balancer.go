@@ -279,7 +279,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 	// the balancer.Balancer API, so it is guaranteed to be called in a
 	// synchronous manner, so it cannot race with this read.
 	if b.cfg == nil || b.cfg.ChildPolicy.Name != lbCfg.ChildPolicy.Name {
-
 		if err := b.child.switchTo(bb); err != nil {
 			return fmt.Errorf("outlier detection: error switching to child of type %q: %v", lbCfg.ChildPolicy.Name, err)
 		}

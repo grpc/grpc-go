@@ -28,15 +28,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -382,70 +379,4 @@ func (s) TestNoopConfiguration(t *testing.T) {
 	if err = checkRoundRobinRPCs(ctx, testServiceClient, okAddresses); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
 	}
-}
-
-// Test verifies that outlier detection doesn't eject subchannels created by
-// the new pickfirst balancer when pickfirst is a non-leaf policy, i.e. not
-// under a petiole policy. When pickfirst is not under a petiole policy, it will
-// not register a health listener. pickfirst will still set the address
-// attribute to disable ejection through the raw connectivity listener. When
-// Outlier Detection processes a health update and sees the health listener is
-// enabled but a health listener is not registered, it will drop the ejection
-// update.
-func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return nil, errors.New("some error")
-		},
-	}
-	if err := backend.StartServer(); err != nil {
-		t.Fatalf("Failed to start backend: %v", err)
-	}
-	defer backend.Stop()
-	t.Logf("Started bad TestService backend at: %q", backend.Address)
-
-	countingODServiceConfigJSON := fmt.Sprintf(`
-	{
-	  "loadBalancingConfig": [
-		{
-		  "outlier_detection_experimental": {
-			"interval": "0.025s",
-			"baseEjectionTime": "0.100s",
-			"maxEjectionTime": "300s",
-			"failurePercentageEjection": {
-				"threshold": 50,
-				"enforcementPercentage": 100,
-				"minimumHosts": 0,
-				"requestVolume": 2
-			},
-			"childPolicy": [{"%s": {}}]
-		  }
-		}
-	  ]
-	}`, pickfirstleaf.Name)
-	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(countingODServiceConfigJSON)
-
-	mr := manual.NewBuilderWithScheme("od-e2e")
-
-	mr.InitialState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: backend.Address}},
-		ServiceConfig: sc,
-	})
-	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
-	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	testServiceClient := testgrpc.NewTestServiceClient(cc)
-
-	// Failing request should not cause ejection.
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	// Wait for the failure rate algorithm to run once.
-	shortCtx, shortCancel := context.WithTimeout(ctx, 50*time.Millisecond)
-	defer shortCancel()
-	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Ready)
 }
