@@ -33,9 +33,11 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -224,7 +226,11 @@ func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID stri
 
 	// Create a bootstrap configuration specifying the above management server.
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+	}
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh
 }
 

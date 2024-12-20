@@ -46,11 +46,17 @@ const Scheme = "xds"
 
 // newBuilderWithConfigForTesting creates a new xds resolver builder using a
 // specific xds bootstrap config, so tests can use multiple xds clients in
-// different ClientConns at the same time.
+// different ClientConns at the same time. It creates the new xds client in
+// the default pool with provided config.
 func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
 		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
-			return xdsclient.NewForTesting(xdsclient.OptionsForTesting{Name: name, Contents: config})
+			config, err := bootstrap.NewConfigForTesting(config)
+			if err != nil {
+				return nil, nil, err
+			}
+			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+			return xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name})
 		},
 	}, nil
 }
@@ -74,7 +80,7 @@ func init() {
 	internal.NewXDSResolverWithClientForTesting = newBuilderWithClientForTesting
 
 	rinternal.NewWRR = wrr.NewRandom
-	rinternal.NewXDSClient = xdsclient.New
+	rinternal.NewXDSClient = xdsclient.DefaultPool.NewClient
 }
 
 type xdsResolverBuilder struct {

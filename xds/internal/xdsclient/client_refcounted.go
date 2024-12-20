@@ -38,11 +38,11 @@ var (
 	defaultStreamBackoffFunc = backoff.DefaultExponential.Backoff
 )
 
-func clientRefCountedClose(name string) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
+func (p *Pool) clientRefCountedClose(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	client, ok := clients[name]
+	client, ok := p.clients[name]
 	if !ok {
 		logger.Errorf("Attempt to close a non-existent xDS client with name %s", name)
 		return
@@ -52,34 +52,37 @@ func clientRefCountedClose(name string) {
 	}
 	client.clientImpl.close()
 	xdsClientImplCloseHook(name)
-	delete(clients, name)
+	delete(p.clients, name)
 
 }
 
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
+func (p *Pool) newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if c := clients[name]; c != nil {
+	if c := p.clients[name]; c != nil {
 		c.incrRef()
-		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
+		return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
 	// Create the new client implementation.
+	if p.config == nil {
+		p.config = config
+	}
 	c, err := newClientImpl(config, watchExpiryTimeout, streamBackoff)
 	if err != nil {
 		return nil, nil, err
 	}
 	c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, config)
 	client := &clientRefCounted{clientImpl: c, refCount: 1}
-	clients[name] = client
+	p.clients[name] = client
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", config.Node().GetId())
-	return client, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
+	return client, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 
 // clientRefCounted is ref-counted, and to be shared by the xds resolver and
