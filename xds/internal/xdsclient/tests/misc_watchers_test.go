@@ -123,7 +123,6 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)

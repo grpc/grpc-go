@@ -86,7 +86,6 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClient(t, bc)
 
 	// Register a watch for a listener resource.
@@ -273,7 +272,6 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClient(t, bc)
 
 	// Register a watch for a listener resource.
@@ -381,7 +379,6 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
 		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)

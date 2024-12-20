@@ -51,7 +51,12 @@ const Scheme = "xds"
 func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
 		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
-			return xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name, Contents: config})
+			config, err := bootstrap.NewConfigForTesting(config)
+			if err != nil {
+				return nil, nil, err
+			}
+			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+			return xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name})
 		},
 	}, nil
 }

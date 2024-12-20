@@ -263,7 +263,6 @@ func (s) TestLDSWatch(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap configuration: %v", err)
 			}
-			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
 			config, err := bootstrap.NewConfigForTesting(bc)
@@ -417,7 +416,6 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap configuration: %v", err)
 			}
-			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
 			config, err := bootstrap.NewConfigForTesting(bc)
@@ -525,7 +523,6 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -621,7 +618,6 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -699,7 +695,6 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -743,7 +738,6 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -831,7 +825,6 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -1030,7 +1023,6 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -1191,7 +1183,6 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -1284,7 +1275,6 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
@@ -1293,8 +1283,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
