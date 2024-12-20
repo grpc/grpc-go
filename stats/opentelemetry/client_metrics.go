@@ -213,11 +213,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	ai := &attemptInfo{}
 	startTime := time.Now()
 	if !isTracingDisabled(h.options.TraceOptions) {
-		callSpan := trace.SpanFromContext(ctx)
-		if info.NameResolutionDelay {
-			callSpan.AddEvent("Delayed name resolution complete")
-		}
-		ctx, ai = h.traceTagRPC(trace.ContextWithSpan(ctx, callSpan), info)
+		ctx, ai = h.traceTagRPC(ctx, info)
 	}
 	ai.startTime = startTime
 	ai.xdsLabels = labels.TelemetryLabels
