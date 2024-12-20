@@ -51,7 +51,7 @@ type delegatingResolver struct {
 	proxyURL       *url.URL            // proxy URL, derived from proxy environment and target
 
 	mu                  sync.Mutex         // protects all the fields below
-	targetResolverState resolver.State     // state of the target resolver
+	targetResolverState *resolver.State    // state of the target resolver
 	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
 }
 
@@ -115,7 +115,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		r.targetResolverState.Addresses = []resolver.Address{{Addr: target.Endpoint()}}
+		(*r.targetResolverState).Addresses = []resolver.Address{{Addr: target.Endpoint()}}
 		r.targetResolverState.Endpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}}
 	} else {
 		wcc := &wrappingClientConn{
@@ -181,7 +181,7 @@ func (r *delegatingResolver) Close() {
 // either resolver has not sent update even once and returns the error from
 // ClientConn update once both resolvers have sent update atleast once.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
-	if (r.targetResolverState.Addresses == nil && r.targetResolverState.Endpoints == nil) || r.proxyAddrs == nil {
+	if r.targetResolverState == nil || r.proxyAddrs == nil {
 		return nil
 	}
 
@@ -191,7 +191,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	// The state update is only sent after both the target and proxy resolvers
 	// have sent their updates, and curState has been updated with the combined
 	// addresses.
-	curState := r.targetResolverState
+	curState := *r.targetResolverState
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
 	// resolution when creating the transport. Sending all resolved addresses
@@ -212,7 +212,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	if r.proxyURL.User != nil {
 		user = *r.proxyURL.User
 	}
-	for _, targetAddr := range r.targetResolverState.Addresses {
+	for _, targetAddr := range (*r.targetResolverState).Addresses {
 		addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 			User:        user,
 			ConnectAddr: targetAddr.Addr,
@@ -227,7 +227,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	// address.The resulting list of addresses is then grouped into endpoints,
 	// covering all combinations of proxy and target endpoints.
 	var endpoints []resolver.Endpoint
-	for _, endpt := range r.targetResolverState.Endpoints {
+	for _, endpt := range (*r.targetResolverState).Endpoints {
 		var addrs []resolver.Address
 		for _, proxyAddr := range r.proxyAddrs {
 			for _, targetAddr := range endpt.Addresses {
@@ -287,7 +287,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	if logger.V(2) {
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 	}
-	r.targetResolverState = state
+	(*r.targetResolverState) = state
 	err := r.updateClientConnStateLocked()
 	if err != nil {
 		r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
