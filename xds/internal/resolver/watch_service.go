@@ -90,3 +90,56 @@ func (r *routeConfigWatcher) stop() {
 	r.cancel()
 	r.parent.logger.Infof("Canceling watch on RouteConfiguration resource %q", r.resourceName)
 }
+
+// clusterWatcher implements the xdsresource.ClusterWatcher interface, and is
+// passed to the xDS client as part of the WatchResource() API.
+//
+// It watches a single cluster and handles callbacks from the xDS client by
+// scheduling them on the parent LB policy's serializer.
+type clusterWatcher struct {
+	resourceName string
+	cancel       func()
+	parent       *xdsResolver
+}
+
+// A convenience method to create a watcher for cluster `name`. It also
+// registers the watch with the xDS client, and adds the newly created watcher
+// to the list of watchers maintained by the LB policy.
+func newClusterConfigWatcher(resourceName string, parent *xdsResolver) *clusterWatcher {
+	w := &clusterWatcher{
+		resourceName: resourceName,
+		parent:       parent,
+	}
+	ws := &watcherState{
+		watcher:     w,
+		cancelWatch: xdsresource.WatchCluster(parent.xdsClient, resourceName, w),
+	}
+	parent.watchers[resourceName] = ws
+	return w
+}
+func (cw *clusterWatcher) OnUpdate(u *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.resourceName, u.Resource); onDone() }
+	cw.parent.serializer.ScheduleOr(handleUpdate, onDone)
+}
+
+func (cw *clusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	handleError := func(context.Context) { cw.parent.onClusterError(cw.resourceName, err); onDone() }
+	cw.parent.serializer.ScheduleOr(handleError, onDone)
+}
+
+func (cw *clusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	handleNotFound := func(context.Context) { cw.parent.onClusterResourceNotFound(cw.resourceName); onDone() }
+	cw.parent.serializer.ScheduleOr(handleNotFound, onDone)
+}
+
+func (cw *clusterWatcher) stop() {
+	cw.cancel()
+	cw.parent.logger.Infof("Canceling watch on ClusterConfiguration resource %q", cw.resourceName)
+}
+
+// watcherState groups the state associated with a clusterWatcher.
+type watcherState struct {
+	watcher     *clusterWatcher            // The underlying watcher.
+	cancelWatch func()                     // Cancel func to cancel the watch.
+	lastUpdate  *xdsresource.ClusterUpdate // Most recent update received for this cluster.
+}
