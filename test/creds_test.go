@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -257,6 +258,14 @@ func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 }
 
 func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
+	// SRV lookup is enabled because of the grpclb import in other test files.
+	// It is disabled since it can take more than 10 millis causing test
+	// flakiness.
+	originalEnableSRV := dns.EnableSRVLookups
+	defer func() {
+		dns.EnableSRVLookups = originalEnableSRV
+	}()
+	dns.EnableSRVLookups = false
 	te := newTest(t, env{name: "bad-cred", network: "tcp", security: "empty", balancer: "round_robin"})
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
