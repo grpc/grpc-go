@@ -108,7 +108,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	}
 
 	if logger.V(2) {
-		logger.Info("Proxy URL detected : %s", r.proxyURL)
+		logger.Infof("Proxy URL detected : %s", r.proxyURL)
 	}
 
 	// When the scheme is 'dns' and target resolution on client is not enabled,
@@ -287,7 +287,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	if logger.V(2) {
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 	}
-	(*r.targetResolverState) = state
+	r.targetResolverState = &state
 	err := r.updateClientConnStateLocked()
 	if err != nil {
 		r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
