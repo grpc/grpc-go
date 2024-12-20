@@ -243,15 +243,8 @@ func (s) TestFailFastRPCErrorOnBadCertificates(t *testing.T) {
 	defer cc.Close()
 
 	tc := testgrpc.NewTestServiceClient(cc)
-	for i := 0; i < 1000; i++ {
-		// This loop runs for at most 1 second. The first several RPCs will fail
-		// with Unavailable because the connection hasn't started. When the
-		// first connection failed with creds error, the next RPC should also
-		// fail with the expected error.
-		if _, err = tc.EmptyCall(ctx, &testpb.Empty{}); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
-			return
-		}
-		time.Sleep(time.Millisecond)
+	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}); strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
+		return
 	}
 	te.t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
 }
@@ -268,8 +261,18 @@ func (s) TestWaitForReadyRPCErrorOnBadCertificates(t *testing.T) {
 	}
 	defer cc.Close()
 
+	// The DNS resolver may take more than defaultTestShortTimeout, we let the
+	// channel enter TransientFailure signalling that the first resolver state
+	// has been produced.
+	cc.Connect()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
 	tc := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	// Use a short context as WaitForReady waits for context expiration before
+	// failing the RPC.
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	if _, err = tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); !strings.Contains(err.Error(), clientAlwaysFailCredErrorMsg) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want err.Error() contains %q", err, clientAlwaysFailCredErrorMsg)
