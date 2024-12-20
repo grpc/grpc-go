@@ -56,11 +56,11 @@ type StubServer struct {
 	testgrpc.TestServiceServer
 
 	// Customizable implementations of server handlers.
-	EmptyCallF                func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
-	UnaryCallF                func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
-	FullDuplexCallF           func(stream testgrpc.TestService_FullDuplexCallServer) error
-	ClientStreamingInputCall  func(stream testgrpc.TestService_StreamingInputCallServer) error
-	ClientStreamingOutputCall func(req *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error
+	EmptyCallF           func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
+	UnaryCallF           func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
+	FullDuplexCallF      func(stream testgrpc.TestService_FullDuplexCallServer) error
+	StreamingInputCallF  func(stream testgrpc.TestService_StreamingInputCallServer) error                                          // ClientStreaming
+	StreamingOutputCallF func(req *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error // ServerStreaming
 
 	// A client connected to this service the test may use.  Created in Start().
 	Client testgrpc.TestServiceClient
@@ -105,12 +105,12 @@ func (ss *StubServer) FullDuplexCall(stream testgrpc.TestService_FullDuplexCallS
 
 // StreamingInputCall is the handler for testpb.StreamingInputCall
 func (ss *StubServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
-	return ss.ClientStreamingInputCall(stream)
+	return ss.StreamingInputCallF(stream)
 }
 
 // StreamingOutputCall is the handler for testpb.StreamingOutputCall
 func (ss *StubServer) StreamingOutputCall(req *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
-	return ss.ClientStreamingOutputCall(req, stream)
+	return ss.StreamingOutputCallF(req, stream)
 }
 
 // Start starts the server and creates a client connected to it.
