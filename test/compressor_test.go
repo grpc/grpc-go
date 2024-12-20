@@ -785,3 +785,62 @@ func (s) TestGzipBadChecksum(t *testing.T) {
 		t.Errorf("ss.Client.UnaryCall(_) = _, %v\n\twant: _, status(codes.Internal, contains %q)", err, gzip.ErrChecksum)
 	}
 }
+
+// fakeCompressor returns a messages of a configured size, irrespective of the
+// input.
+type fakeCompressor struct {
+	decompressedMessageSize int
+}
+
+func (f *fakeCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	return nopWriteCloser{w}, nil
+}
+
+func (f *fakeCompressor) Decompress(io.Reader) (io.Reader, error) {
+	return bytes.NewReader(make([]byte, f.decompressedMessageSize)), nil
+}
+
+func (f *fakeCompressor) Name() string {
+	// Use the name of an existing compressor to avoid interactions with other
+	// tests since compressors can't be un-registered.
+	return "gzip"
+}
+
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (nopWriteCloser) Close() error {
+	return nil
+}
+
+// TestDecompressionExceedsMaxMessageSize uses a fake compressor that produces
+// messages of size 100 bytes on decompression. A server is started with the
+// max receive message size restricted to 99 bytes. The test verifies that the
+// client receives a ResourceExhausted response from the server.
+func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
+	oldC := encoding.GetCompressor("gzip")
+	defer func() {
+		encoding.RegisterCompressor(oldC)
+	}()
+	const messageLen = 100
+	encoding.RegisterCompressor(&fakeCompressor{decompressedMessageSize: messageLen})
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.MaxRecvMsgSize(messageLen - 1)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	req := &testpb.SimpleRequest{Payload: &testpb.Payload{}}
+	_, err := ss.Client.UnaryCall(ctx, req, grpc.UseCompressor("gzip"))
+	if got, want := status.Code(err), codes.ResourceExhausted; got != want {
+		t.Errorf("Client.UnaryCall(%+v) returned status %v, want %v", req, got, want)
+	}
+}
