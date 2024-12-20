@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"testing"
 
 	"golang.org/x/net/http/httpproxy"
@@ -115,39 +116,24 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
-	// hpfe := func(req *http.Request) (*url.URL, error) {
-	// 	if req.URL.Host == unresolvedTargetURI {
-	// 		return &url.URL{
-	// 			Scheme: "https",
-	// 			Host:   pLis.Addr().String(),
-	// 		}, nil
-	// 	}
-	// 	return nil, nil
-	// }
-	// orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	// delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	// defer func() {
-	// 	delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	// }()
-
 	// Overwrite the proxy environment and restore it after the test.
-	// proxyEnv := os.Getenv("HTTPS_PROXY")
-	// os.Setenv("HTTPS_PROXY", pLis.Addr().String())
-	// defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", pLis.Addr().String())
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: pLis.Addr().String(),
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -180,19 +166,24 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(backendAddr))
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Configure manual resolvers for both proxy and target backends
 	targetResolver := setupDNS(t)
@@ -239,19 +230,24 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, false, requestCheck(unresolvedTargetURI))
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Set up and update a manual resolver for proxy resolution.
 	proxyResolver := setupDNS(t)
@@ -295,19 +291,24 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	// Set up and start the proxy server.
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Create and update a custom resolver for target URI.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -352,19 +353,24 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) 
 	// Set up and start the proxy server.
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Create and update a custom resolver for target URI.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -408,19 +414,24 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Configure manual resolvers for both proxy and target backends
 	targetResolver := setupDNS(t)
@@ -475,19 +486,24 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
 	})
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	targetResolver := setupDNS(t)
 	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
@@ -531,19 +547,24 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
 	})
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Create a custom dialer that directly dials the backend.  We'll use this
 	// to bypass any proxy logic.
@@ -620,19 +641,24 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 		return nil
 	})
 
+	// Overwrite the proxy environment and restore it after the test.
+	proxyEnv := os.Getenv("HTTPS_PROXY")
+	os.Setenv("HTTPS_PROXY", user+":"+password+"@"+unresolvedProxyURI)
+	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
+
+	// Use the httpproxy package instead of http.ProxyFromEnvironment because
+	// the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running multiple tests
+	// with different proxy configurations, as changes to environment variables
+	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	}
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
-
-	proxyConfig := httpproxy.Config{
-		HTTPSProxy: user + ":" + password + "@" + unresolvedProxyURI,
-		NoProxy:    "",
-	}
-
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return proxyConfig.ProxyFunc()(req.URL)
-	}
 
 	// Set up and update a manual resolver for proxy resolution.
 	proxyResolver := setupDNS(t)

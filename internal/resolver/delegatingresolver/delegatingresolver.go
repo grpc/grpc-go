@@ -34,10 +34,10 @@ import (
 
 var (
 	logger = grpclog.Component("delegating-resolver")
-	//HTTPSProxyFromEnvironment will be overwritten in the tests
+	// HTTPSProxyFromEnvironment will be overwritten in the tests
 	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
 	// ProxyScheme will be overwritten in tests
-	ProxyScheme="dns"
+	ProxyScheme = "dns"
 )
 
 // delegatingResolver manages both target URI and proxy address resolution by
