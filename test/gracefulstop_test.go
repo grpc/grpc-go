@@ -113,6 +113,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	d := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 
 	ss := &stubserver.StubServer{
+		Listener: dlis,
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != nil {
@@ -120,24 +121,19 @@ func (s) TestGracefulStop(t *testing.T) {
 			}
 			return stream.Send(&testpb.StreamingOutputCallResponse{})
 		},
+		S: grpc.NewServer(),
 	}
-	s := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(s, ss)
+	stubserver.StartTestService(t, ss)
 
 	// 1. Start Server
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		s.Serve(dlis)
-		wg.Done()
-	}()
 
 	// 2. GracefulStop() Server after listener's Accept is called, but don't
 	//    allow Accept() to exit when Close() is called on it.
 	<-dlis.acceptCalled
 	wg.Add(1)
 	go func() {
-		s.GracefulStop()
+		ss.S.GracefulStop()
 		wg.Done()
 	}()
 
