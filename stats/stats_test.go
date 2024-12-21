@@ -60,7 +60,7 @@ func init() {
 }
 
 type connCtxKey struct{}
-type rpcCtxKey  struct{}
+type rpcCtxKey struct{}
 
 var (
 	// For headers sent to server:
@@ -82,7 +82,7 @@ var (
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
 	// To verify if the Unary RPC server stats events are logged in the
-    // correct order.
+	// correct order.
 	expectedUnarySequence = []string{
 		"ConnStats",
 		"InHeader",
@@ -94,7 +94,7 @@ var (
 		"End",
 	}
 	// To verify if the Client Stream RPC server stats events are logged in the
-    // correct order.
+	// correct order.
 	expectedClientStreamSequence = []string{
 		"ConnStats",
 		"InHeader",
@@ -110,10 +110,10 @@ var (
 		"End",
 	}
 	// To verify if the Server Stream RPC server stats events are logged in the
-    // correct order.
+	// correct order.
 	expectedServerStreamSequence = []string{
 		"ConnStats",
-        "InHeader",
+		"InHeader",
 		"Begin",
 		"InPayload",
 		"OutHeader",
@@ -1007,25 +1007,25 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-        checkInHeader,
-        checkBegin,
-        checkInPayload,
-        checkOutHeader,
-        checkOutPayload,
-        checkOutTrailer,
-        checkEnd,
-    })
+		checkInHeader,
+		checkBegin,
+		checkInPayload,
+		checkOutHeader,
+		checkOutPayload,
+		checkOutTrailer,
+		checkEnd,
+	})
 }
 
 func (s) TestServerStatsUnaryRPCError(t *testing.T) {
 	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-        checkInHeader,
-        checkBegin,
-        checkInPayload,
-        checkOutHeader,
-        checkOutTrailer,
-        checkEnd,
-    })
+		checkInHeader,
+		checkBegin,
+		checkInPayload,
+		checkOutHeader,
+		checkOutTrailer,
+		checkEnd,
+	})
 }
 
 func (s) TestServerStatsClientStreamRPC(t *testing.T) {
@@ -1052,13 +1052,13 @@ func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 	count := 1
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-        checkInHeader,
-        checkBegin,
-        checkOutHeader,
-        checkInPayload,
-        checkOutTrailer,
-        checkEnd,
-    })
+		checkInHeader,
+		checkBegin,
+		checkOutHeader,
+		checkInPayload,
+		checkOutTrailer,
+		checkEnd,
+	})
 }
 
 func (s) TestServerStatsServerStreamRPC(t *testing.T) {
@@ -1085,13 +1085,13 @@ func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-        checkInHeader,
-        checkBegin,
-        checkInPayload,
-        checkOutHeader,
-        checkOutTrailer,
-        checkEnd,
-    })
+		checkInHeader,
+		checkBegin,
+		checkInPayload,
+		checkOutHeader,
+		checkOutTrailer,
+		checkEnd,
+	})
 }
 
 func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
@@ -1118,13 +1118,13 @@ func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
 	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
-        checkInHeader,
-        checkBegin,
-        checkOutHeader,
-        checkInPayload,
-        checkOutTrailer,
-        checkEnd,
-    })
+		checkInHeader,
+		checkBegin,
+		checkOutHeader,
+		checkInPayload,
+		checkOutTrailer,
+		checkEnd,
+	})
 }
 
 type checkFuncWithCount struct {
@@ -1132,7 +1132,7 @@ type checkFuncWithCount struct {
 	c int // expected count
 }
 
-func checkClientStats( t *testing.T, got []*gotData, expect *expectedData, checkFuncs map[int]*checkFuncWithCount) {
+func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs map[int]*checkFuncWithCount) {
 	var expectLen int
 	for _, v := range checkFuncs {
 		expectLen += v.c
@@ -1217,7 +1217,7 @@ func checkClientStats( t *testing.T, got []*gotData, expect *expectedData, check
 	}
 }
 
-func testClientStats( t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
+func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map[int]*checkFuncWithCount) {
 	h := &statshandler{}
 	te := newTest(t, tc, []stats.Handler{h}, nil)
 	te.startServer(&testServer{})
@@ -1311,100 +1311,100 @@ func testClientStats( t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs ma
 
 func (s) TestClientStatsUnaryRPC(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        outPayload: {checkOutPayload, 1},
-        inHeader:   {checkInHeader, 1},
-        inPayload:  {checkInPayload, 1},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsUnaryRPCError(t *testing.T) {
 	testClientStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, failfast: false, callType: unaryRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        outPayload: {checkOutPayload, 1},
-        inHeader:   {checkInHeader, 1},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsClientStreamRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        inHeader:   {checkInHeader, 1},
-        outPayload: {checkOutPayload, count},
-        inTrailer:  {checkInTrailer, 1},
-        inPayload:  {checkInPayload, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		inHeader:   {checkInHeader, 1},
+		outPayload: {checkOutPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		inPayload:  {checkInPayload, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsClientStreamRPCError(t *testing.T) {
 	count := 1
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: clientStreamRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        inHeader:   {checkInHeader, 1},
-        outPayload: {checkOutPayload, 1},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		inHeader:   {checkInHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsServerStreamRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        outPayload: {checkOutPayload, 1},
-        inHeader:   {checkInHeader, 1},
-        inPayload:  {checkInPayload, count},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsServerStreamRPCError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: serverStreamRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        outPayload: {checkOutPayload, 1},
-        inHeader:   {checkInHeader, 1},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsFullDuplexRPC(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: true, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        outPayload: {checkOutPayload, count},
-        inHeader:   {checkInHeader, 1},
-        inPayload:  {checkInPayload, count},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, count},
+		inHeader:   {checkInHeader, 1},
+		inPayload:  {checkInPayload, count},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestClientStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
 	testClientStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, failfast: false, callType: fullDuplexStreamRPC}, map[int]*checkFuncWithCount{
-        begin:      {checkBegin, 1},
-        outHeader:  {checkOutHeader, 1},
-        outPayload: {checkOutPayload, 1},
-        inHeader:   {checkInHeader, 1},
-        inTrailer:  {checkInTrailer, 1},
-        end:        {checkEnd, 1},
-    })
+		begin:      {checkBegin, 1},
+		outHeader:  {checkOutHeader, 1},
+		outPayload: {checkOutPayload, 1},
+		inHeader:   {checkInHeader, 1},
+		inTrailer:  {checkInTrailer, 1},
+		end:        {checkEnd, 1},
+	})
 }
 
 func (s) TestTags(t *testing.T) {
@@ -1668,7 +1668,7 @@ func verifyEventSequence(t *testing.T, got []event, expected []string) {
 
 	for i, e := range got {
 		if e.eventType != expected[i] {
-			t.Errorf( "Unexpected event at position %d. Got: %s, Expected: %s", i, e.eventType, expected[i])
+			t.Errorf("Unexpected event at position %d. Got: %s, Expected: %s", i, e.eventType, expected[i])
 		}
 	}
 }
