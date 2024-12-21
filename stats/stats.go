@@ -36,38 +36,7 @@ type RPCStats interface {
 	IsClient() bool
 }
 
-// InHeader is the first event handled in the RPC lifecycle.
-// It contains stats when the header is received.
-// This event marks the start of processing for incoming RPCs
-// and must be completed before any other events occur.
-type InHeader struct {
-	// Client is true if this InHeader is from client side.
-	Client bool
-	// WireLength is the wire length of header.
-	WireLength int
-	// Compression is the compression algorithm used for the RPC.
-	Compression string
-	// Header contains the header metadata received.
-	Header metadata.MD
-
-	// The following fields are valid only if Client is false.
-	// FullMethod is the full RPC method string, i.e., /package.service/method.
-	FullMethod string
-	// RemoteAddr is the remote address of the corresponding connection.
-	RemoteAddr net.Addr
-	// LocalAddr is the local address of the corresponding connection.
-	LocalAddr net.Addr
-}
-
-// IsClient indicates if the stats information is from client side.
-func (s *InHeader) IsClient() bool { return s.Client }
-
-func (s *InHeader) isRPCStats() {}
-
 // Begin contains stats when an RPC attempt begins.
-// This event is called AFTER the InHeader event, as headers must
-// be processed before the RPC lifecycle begins
-//
 // FailFast is only valid if this Begin is from client side.
 type Begin struct {
 	// Client is true if this Begin is from client side.
@@ -128,6 +97,31 @@ type InPayload struct {
 func (s *InPayload) IsClient() bool { return s.Client }
 
 func (s *InPayload) isRPCStats() {}
+
+// InHeader contains stats when a header is received.
+type InHeader struct {
+	// Client is true if this InHeader is from client side.
+	Client bool
+	// WireLength is the wire length of header.
+	WireLength int
+	// Compression is the compression algorithm used for the RPC.
+	Compression string
+	// Header contains the header metadata received.
+	Header metadata.MD
+
+	// The following fields are valid only if Client is false.
+	// FullMethod is the full RPC method string, i.e., /package.service/method.
+	FullMethod string
+	// RemoteAddr is the remote address of the corresponding connection.
+	RemoteAddr net.Addr
+	// LocalAddr is the local address of the corresponding connection.
+	LocalAddr net.Addr
+}
+
+// IsClient indicates if the stats information is from client side.
+func (s *InHeader) IsClient() bool { return s.Client }
+
+func (s *InHeader) isRPCStats() {}
 
 // InTrailer contains stats when a trailer is received.
 type InTrailer struct {
