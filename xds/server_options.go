@@ -60,10 +60,10 @@ type ServingModeChangeArgs struct {
 	Err error
 }
 
-// BootstrapContentsForTesting returns a grpc.ServerOption with the default
-// pool set with the provided bootstrap congiguration. It allows users to
-// inject a bootstrap configuration to be used by only this server, instead of
-// the global configuration from the environment variables.
+// BootstrapContentsForTesting returns a grpc.ServerOption with a new pool set
+// with the provided bootstrap configuration. It allows users to inject a
+// bootstrap configuration to be used by only this server, instead of the
+// global configuration from the environment variables.
 //
 // # Testing Only
 //
@@ -72,8 +72,7 @@ type ServingModeChangeArgs struct {
 //
 // # Experimental
 //
-// Notice: This API is EXPERIMENTAL but kept for backward compatibility. Use
-// `ClientPoolForTesting` to set the pool directly. It will be removed in
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
@@ -91,6 +90,8 @@ func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 //
 // This function should ONLY be used for testing and may not work with some
 // other features, including the CSDS service.
+//
+// # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.

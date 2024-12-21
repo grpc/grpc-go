@@ -85,6 +85,7 @@ func init() {
 
 	rinternal.NewWRR = wrr.NewRandom
 	rinternal.NewXDSClient = func(name string) (xdsclient.XDSClient, func(), error) { return xdsClientPool.NewClient(name) }
+
 }
 
 type xdsResolverBuilder struct {

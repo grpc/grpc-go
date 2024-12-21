@@ -121,18 +121,14 @@ func (s) TestNewServer_Success(t *testing.T) {
 			desc: "without_xds_creds",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(insecure.NewCredentials()),
-				func() grpc.ServerOption {
-					return BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer))
-				}(),
+				BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)),
 			},
 		},
 		{
 			desc: "with_xds_creds",
 			serverOpts: []grpc.ServerOption{
 				grpc.Creds(xdsCreds),
-				func() grpc.ServerOption {
-					return BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer))
-				}(),
+				BootstrapContentsForTesting(generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)),
 			},
 			wantXDSCredsInUse: true,
 		},

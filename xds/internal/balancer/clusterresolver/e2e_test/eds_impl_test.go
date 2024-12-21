@@ -1272,6 +1272,11 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			// Create bootstrap configuration pointing to the above management server.
 			nodeID := uuid.New().String()
 			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+			if err != nil {
+				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+			}
+			pool := xdsclient.NewPool(config)
 
 			// Create xDS resources for consumption by the test. We start off with a
 			// single backend in a single EDS locality.
@@ -1288,9 +1293,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 
 			// Create an xDS client talking to the above management server, configured
 			// with a short watch expiry timeout.
-			xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     t.Name(),
-				Contents: bootstrapContents,
+			xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(),
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
