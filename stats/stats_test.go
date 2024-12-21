@@ -81,7 +81,7 @@ var (
 	}
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
-	// To verify if the Unary RPC server stats events are logged in the 
+	// To verify if the Unary RPC server stats events are logged in the
     // correct order.
 	expectedUnarySequence = []string{
 		"ConnStats",
@@ -93,7 +93,7 @@ var (
 		"OutTrailer",
 		"End",
 	}
-	// To verify if the Client Stream RPC server stats events are logged in the 
+	// To verify if the Client Stream RPC server stats events are logged in the
     // correct order.
 	expectedClientStreamSequence = []string{
 		"ConnStats",
@@ -109,7 +109,7 @@ var (
 		"OutTrailer",
 		"End",
 	}
-	// To verify if the Server Stream RPC server stats events are logged in the 
+	// To verify if the Server Stream RPC server stats events are logged in the
     // correct order.
 	expectedServerStreamSequence = []string{
 		"ConnStats",
@@ -286,7 +286,7 @@ func newTest(t *testing.T, tc *testConfig, chs []stats.Handler, shs []stats.Hand
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-// 
+//
 // Uses deprecated opts rpc.(RPCCompressor, RPCDecompressor, WithBlock, Dial)
 func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testServer = ts

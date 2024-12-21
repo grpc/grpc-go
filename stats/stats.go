@@ -36,8 +36,8 @@ type RPCStats interface {
 	IsClient() bool
 }
 
-// Begin contains stats when an RPC attempt begins. This event is called after 
-// the InHeader event, as headers must be processed before the RPC lifecycle 
+// Begin contains stats when an RPC attempt begins. This event is called after
+// the InHeader event, as headers must be processed before the RPC lifecycle
 // begins.
 //
 // FailFast is only valid if this Begin is from client side.
@@ -101,7 +101,7 @@ func (s *InPayload) IsClient() bool { return s.Client }
 
 func (s *InPayload) isRPCStats() {}
 
-// InHeader contain stats when the header is received. It is the first event in 
+// InHeader contain stats when the header is received. It is the first event in
 // the server after receiving the RPC. It is followed by the OutPayload
 // server event.
 type InHeader struct {
