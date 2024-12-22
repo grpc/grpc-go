@@ -59,15 +59,17 @@ func TestResolver(t *testing.T) {
 	})
 
 	t.Run("happy_path", func(t *testing.T) {
-		_, err := grpc.Dial("whatever://localhost",
+		r.InitialState(resolver.State{Addresses: []resolver.Address{
+			{Addr: "ok"},
+		}})
+		cc, err := grpc.NewClient("whatever://localhost",
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithResolvers(r))
 		if err != nil {
-			t.Errorf("dial setup error: %v", err)
+			t.Errorf("grpc.NewClient() failed: %v", err)
 		}
-		r.UpdateState(resolver.State{Addresses: []resolver.Address{
-			{Addr: "ok"},
-		}})
+		defer cc.Close()
+		cc.Connect()
 		r.ReportError(errors.New("example"))
 	})
 }
