@@ -598,7 +598,6 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 		t.Fatalf("error listening: %v", err)
 	}
 	defer lis.Close()
-
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -651,7 +650,6 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 		t.Fatalf("error listening: %v", err)
 	}
 	defer lis.Close()
-
 	stub := &stubserver.StubServer{
 		Listener: lis,
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
