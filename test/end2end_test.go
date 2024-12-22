@@ -4692,7 +4692,7 @@ func (s) TestTapTimeout(t *testing.T) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			<-ctx.Done()
-			return nil, status.Errorf(codes.Canceled, ctx.Err().Error())
+			return nil, status.Error(codes.Canceled, ctx.Err().Error())
 		},
 	}
 	if err := ss.Start(sopts); err != nil {
@@ -5104,7 +5104,7 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return nil, status.Errorf(codes.Internal, origMsg)
+			return nil, status.Error(codes.Internal, origMsg)
 		},
 	}
 	if err := ss.Start(nil); err != nil {
