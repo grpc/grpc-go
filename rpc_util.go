@@ -841,8 +841,15 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 			var uncompressedBuf []byte
 			uncompressedBuf, err = dc.Do(compressed.Reader())
 			if err == nil {
+				if size := len(uncompressedBuf); size > maxReceiveMessageSize {
+					out.Free()
+					// TODO: Revisit the error code. Currently keep it consistent with java
+					// implementation.
+					return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
+				}
 				out = mem.BufferSlice{mem.SliceBuffer(uncompressedBuf)}
 			}
+
 		} else {
 			out, err = decompress(compressor, compressed, maxReceiveMessageSize, p.bufferPool)
 			if err == errMaxMessageSizeExceeded {
@@ -889,7 +896,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 }
 
 // doesReceiveMessageOverflow checks if the number of bytes read from the stream
-// exceeds the maximum receive message size allowed by the client. If the `readBytes`
+// exceed the maximum receive message size allowed by the receiver. If the `readBytes`
 // is greater than or equal to `maxReceiveMessageSize`, the function attempts to read
 // one more byte from the `dcReader` to detect if there's an overflow.
 //

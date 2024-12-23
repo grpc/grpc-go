@@ -301,6 +301,7 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 
 // mustCompress compresses the input data and returns a BufferSlice.
 func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
+	t.Helper()
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	if _, err := gz.Write(input); err != nil {
@@ -320,7 +321,7 @@ func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
 // premature data end. It ensures that the function behaves correctly with different
 // inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
 func (s) TestDecompress(t *testing.T) {
-	c := encoding.GetCompressor("gzip")
+	compressor := encoding.GetCompressor("gzip")
 
 	testCases := []struct {
 		name                  string
@@ -351,7 +352,7 @@ func (s) TestDecompress(t *testing.T) {
 			wantErr:               nil,
 		},
 		{
-			name:                  "Handles large buffer size (MaxInt)",
+			name:                  "Handles large buffer size MaxInt",
 			input:                 mustCompress(t, []byte("large message")),
 			maxReceiveMessageSize: math.MaxInt,
 			want:                  []byte("large message"),
@@ -361,14 +362,14 @@ func (s) TestDecompress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := decompress(c, tc.input, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
+			output, err := decompress(compressor, tc.input, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
 
 			if !cmp.Equal(err, tc.wantErr, cmpopts.EquateErrors()) {
 				t.Fatalf("decompress() error = %v, wantErr = %v", err, tc.wantErr)
 			}
 
 			if !cmp.Equal(tc.want, output.Materialize()) {
-				t.Fatalf("decompress() output mismatch: Got = %v, Want = %v", output.Materialize(), tc.want)
+				t.Fatalf("decompress() output mismatch: got = %v, want = %v", output.Materialize(), tc.want)
 			}
 		})
 	}
