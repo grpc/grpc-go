@@ -186,7 +186,7 @@ type methodTestCreds struct{}
 
 func (m *methodTestCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
-	return nil, status.Errorf(codes.Unknown, ri.Method)
+	return nil, status.Error(codes.Unknown, ri.Method)
 }
 
 func (m *methodTestCreds) RequireTransportSecurity() bool { return false }
