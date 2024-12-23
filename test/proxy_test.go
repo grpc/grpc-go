@@ -19,21 +19,24 @@
 package test
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"golang.org/x/net/http/httpproxy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -70,6 +73,86 @@ func setupDNS(t *testing.T) *manual.Resolver {
 	return mr
 }
 
+// proxyServer represents a test proxy server.
+type proxyServer struct {
+	lis          net.Listener
+	in           net.Conn                  // Connection from the client to the proxy.
+	out          net.Conn                  // Connection from the proxy to the backend.
+	requestCheck func(*http.Request) error // Function to check the request sent to proxy.
+}
+
+// Stop closes the ProxyServer and its connections to client and server.
+func (p *proxyServer) stop() {
+	p.lis.Close()
+	if p.in != nil {
+		p.in.Close()
+	}
+	if p.out != nil {
+		p.out.Close()
+	}
+}
+
+// Creates and starts a proxy server.
+func newProxyServer(lis net.Listener, reqCheck func(*http.Request) error, errCh chan error, doneCh chan struct{}, backendAddr string, resOnClient bool, proxyStarted func()) *proxyServer {
+	p := &proxyServer{
+		lis:          lis,
+		requestCheck: reqCheck,
+	}
+
+	// Start the proxy server.
+	go func() {
+		in, err := p.lis.Accept()
+		if err != nil {
+			return
+		}
+		p.in = in
+		// This will be used in tests to check if the proxy server is started.
+		if proxyStarted != nil {
+			proxyStarted()
+		}
+		req, err := http.ReadRequest(bufio.NewReader(in))
+		if err != nil {
+			errCh <- fmt.Errorf("failed to read CONNECT req: %v", err)
+			return
+		}
+		if err := p.requestCheck(req); err != nil {
+			resp := http.Response{StatusCode: http.StatusMethodNotAllowed}
+			resp.Write(p.in)
+			p.in.Close()
+			errCh <- fmt.Errorf("get wrong CONNECT req: %+v, error: %v", req, err)
+			return
+		}
+		var out net.Conn
+		// If resolution is done on client,connect to address received in
+		// CONNECT request or else connect to backend address directly. This is
+		// to mimick the name resolution on proxy server.
+		if resOnClient {
+			out, err = net.Dial("tcp", req.URL.Host)
+		} else {
+			out, err = net.Dial("tcp", backendAddr)
+		}
+		if err != nil {
+			errCh <- fmt.Errorf("failed to dial to server: %v", err)
+			return
+		}
+		out.SetDeadline(time.Now().Add(defaultTestTimeout))
+
+		// Response OK to client
+		resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
+		var buf bytes.Buffer
+		resp.Write(&buf)
+		p.in.Write(buf.Bytes())
+		p.out = out
+
+		// Perform the proxy function, i.e pass the data from client to server
+		// and server to client.
+		go io.Copy(p.in, p.out)
+		go io.Copy(p.out, p.in)
+		close(doneCh)
+	}()
+	return p
+}
+
 // setupProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns the proxy's listener and helper channels.
 func setupProxy(t *testing.T, backendAddr string, resolutionOnClient bool, reqCheck func(*http.Request) error) (net.Listener, chan error, chan struct{}, chan struct{}) {
@@ -86,8 +169,8 @@ func setupProxy(t *testing.T, backendAddr string, resolutionOnClient bool, reqCh
 		close(errCh)
 	})
 
-	proxyServer := testutils.NewProxyServer(pLis, reqCheck, errCh, doneCh, backendAddr, resolutionOnClient, func() { close(proxyStartedCh) })
-	t.Cleanup(proxyServer.Stop)
+	proxyServer := newProxyServer(pLis, reqCheck, errCh, doneCh, backendAddr, resolutionOnClient, func() { close(proxyStartedCh) })
+	t.Cleanup(proxyServer.stop)
 
 	return pLis, errCh, doneCh, proxyStartedCh
 }

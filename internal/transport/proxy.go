@@ -54,14 +54,13 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Address, grpcUA string) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Address, grpcUA string, opts proxyattributes.Options) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
 		}
 	}()
 
-	opts, _ := proxyattributes.Get(addr)
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: opts.ConnectAddr},
@@ -104,12 +103,12 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Ad
 }
 
 // proxyDial establishes a TCP connection to the specified address and performs an HTTP CONNECT handshake.
-func proxyDial(ctx context.Context, addr resolver.Address, grpcUA string) (net.Conn, error) {
+func proxyDial(ctx context.Context, addr resolver.Address, grpcUA string, opts proxyattributes.Options) (net.Conn, error) {
 	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", addr.Addr)
 	if err != nil {
 		return nil, err
 	}
-	return doHTTPConnectHandshake(ctx, conn, addr, grpcUA)
+	return doHTTPConnectHandshake(ctx, conn, addr, grpcUA, opts)
 }
 
 func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {

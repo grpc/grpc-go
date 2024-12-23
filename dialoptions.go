@@ -94,8 +94,8 @@ type dialOptions struct {
 	idleTimeout                 time.Duration
 	defaultScheme               string
 	maxCallAttempts             int
-	targetResolutionEnabled     bool // Specifies if client should perform target resolution when proxy is enabled.
-	useProxy                    bool // Specifies if a proxy should be used.
+	targetResolutionEnabled     bool // Specifies if target hostnames should be resolved when proxying is enabled.
+	useProxy                    bool // Specifies if a server should be connected via proxy.
 }
 
 // DialOption configures how we set up the connection.
@@ -384,7 +384,8 @@ func WithNoProxy() DialOption {
 }
 
 // WithTargetResolutionEnabled returns a DialOption which enables target
-// resolution on client. This is ignored if WithNoProxy is used.
+// resolution on client even when "dns" scheme is used. This is ignored if
+// WithNoProxy is used.
 //
 // # Experimental
 //

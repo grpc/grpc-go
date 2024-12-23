@@ -157,8 +157,8 @@ type http2Client struct {
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, grpcUA string) (net.Conn, error) {
 	address := addr.Addr
 
-	if _, present := proxyattributes.Get(addr); present {
-		return proxyDial(ctx, addr, grpcUA)
+	if opts, present := proxyattributes.Get(addr); present {
+		return proxyDial(ctx, addr, grpcUA, opts)
 	}
 	networkType, ok := networktype.Get(addr)
 	if fn != nil {
