@@ -633,13 +633,34 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// Always add the new watcher to the set of watchers.
 		state.watchers[watcher] = true
 
-		// If we have a cached copy of the resource, notify the new watcher.
+		// If we have a cached copy of the resource, notify the new watcher
+		// immediately.
 		if state.cache != nil {
 			if a.logger.V(2) {
 				a.logger.Infof("Resource type %q with resource name %q found in cache: %s", rType.TypeName(), resourceName, state.cache.ToJSON())
 			}
+			// state can only be accessed in the context of an
+			// xdsClientSerializer callback. Hence making a copy of the cached
+			// resource here for watchCallbackSerializer.
 			resource := state.cache
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
+		}
+		// If last update was NACK'd, notify the new watcher of error
+		// immediately as well.
+		if state.md.Status == xdsresource.ServiceStatusNACKed {
+			if a.logger.V(2) {
+				a.logger.Infof("Resource type %q with resource name %q was NACKed", rType.TypeName(), resourceName)
+			}
+			// state can only be accessed in the context of an
+			// xdsClientSerializer callback. Hence making a copy of the error
+			// here for watchCallbackSerializer.
+			err := state.md.ErrState.Err
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(err, func() {}) })
+		}
+		// If the metadata field is updated to indicate that the management
+		// server does not have this resource, notify the new watcher.
+		if state.md.Status == xdsresource.ServiceStatusNotExist {
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
 		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)
 	}, func() {
@@ -673,7 +694,7 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			delete(state.watchers, watcher)
 			if len(state.watchers) > 0 {
 				if a.logger.V(2) {
-					a.logger.Infof("%d more watchers exist for type %q, resource name %q", rType.TypeName(), resourceName)
+					a.logger.Infof("Other watchers exist for type %q, resource name %q", rType.TypeName(), resourceName)
 				}
 				return
 			}

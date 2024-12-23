@@ -52,6 +52,7 @@ const (
 // createTestResolverClientConn initializes a [testutils.ResolverClientConn] and
 // returns it along with channels for resolver state updates and errors.
 func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, chan resolver.State, chan error) {
+	t.Helper()
 	stateCh := make(chan resolver.State, 1)
 	errCh := make(chan error, 1)
 
@@ -81,7 +82,9 @@ func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
 		resolvedTargetTestAddr2 = "2.2.2.2:8080"
 	)
-	targetResolver := manual.NewBuilderWithScheme("test") // Set up a manual resolver to control the address resolution.
+
+	// Set up a manual resolver to control the address resolution.
+	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 
 	// Create a delegating resolver with no proxy configuration
@@ -126,6 +129,7 @@ func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 // mock the DNS resolution for the proxy resolver. It also registers the
 // original DNS resolver after the test is done.
 func setupDNS(t *testing.T) *manual.Resolver {
+	t.Helper()
 	mr := manual.NewBuilderWithScheme("dns")
 
 	dnsResolverBuilder := resolver.Get("dns")
@@ -139,7 +143,7 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // adding the target address as an attribute.
 func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolver.Address {
 	addr := resolver.Address{Addr: proxyAddr}
-	addr = proxyattributes.SetOptions(addr, proxyattributes.Options{ConnectAddr: targetAddr})
+	addr = proxyattributes.Set(addr, proxyattributes.Options{ConnectAddr: targetAddr})
 	return addr
 }
 
@@ -170,10 +174,11 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	defer func() {
 		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
-
-	targetResolver := manual.NewBuilderWithScheme("dns") // Manual resolver to control the target resolution.
+	// Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, true); err != nil {
@@ -248,7 +253,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 
 	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -306,9 +312,11 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
-	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
+	// Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -386,9 +394,11 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
-	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
+	// Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -487,9 +497,11 @@ func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
 	}()
 
-	targetResolver := manual.NewBuilderWithScheme("test") // Manual resolver to control the target resolution.
+	// Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	proxyResolver := setupDNS(t) // Set up a manual DNS resolver to control the proxy address resolution.
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {

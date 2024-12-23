@@ -29,6 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/csm"
@@ -56,7 +57,13 @@ func main() {
 	cleanup := csm.EnableObservability(context.Background(), opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 	defer cleanup()
 
-	cc, err := grpc.NewClient(*target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Set up xds credentials that fall back to insecure as described in:
+	// https://cloud.google.com/service-mesh/docs/service-routing/security-proxyless-setup#workloads_are_unable_to_communicate_in_the_security_setup.
+	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		log.Fatalf("Failed to create xDS credentials: %v", err)
+	}
+	cc, err := grpc.NewClient(*target, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Fatalf("Failed to start NewClient: %v", err)
 	}

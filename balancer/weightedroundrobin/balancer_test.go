@@ -460,6 +460,65 @@ func (s) TestBalancer_TwoAddresses_OOBThenPerCall(t *testing.T) {
 	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 1})
 }
 
+// TestEndpoints_SharedAddress tests the case where two endpoints have the same
+// address. The expected behavior is undefined, however the program should not
+// crash.
+func (s) TestEndpoints_SharedAddress(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	srv := startServer(t, reportCall)
+	sc := svcConfig(t, perCallConfig)
+	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	endpointsSharedAddress := []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: srv.Address}}}, {Addresses: []resolver.Address{{Addr: srv.Address}}}}
+	srv.R.UpdateState(resolver.State{Endpoints: endpointsSharedAddress})
+
+	// Make some RPC's and make sure doesn't crash. It should go to one of the
+	// endpoints addresses, it's undefined which one it will choose and the load
+	// reporting might not work, but it should be able to make an RPC.
+	for i := 0; i < 10; i++ {
+		if _, err := srv.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			t.Fatalf("EmptyCall failed with err: %v", err)
+		}
+	}
+}
+
+// TestEndpoints_MultipleAddresses tests WRR on endpoints with numerous
+// addresses. It configures WRR with two endpoints with one bad address followed
+// by a good address. It configures two backends that each report per call
+// metrics, each corresponding to the two endpoints good address. It then
+// asserts load is distributed as expected corresponding to the call metrics
+// received.
+func (s) TestEndpoints_MultipleAddresses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	srv1 := startServer(t, reportCall)
+	srv2 := startServer(t, reportCall)
+
+	srv1.callMetrics.SetQPS(10.0)
+	srv1.callMetrics.SetApplicationUtilization(.1)
+
+	srv2.callMetrics.SetQPS(10.0)
+	srv2.callMetrics.SetApplicationUtilization(1.0)
+
+	sc := svcConfig(t, perCallConfig)
+	if err := srv1.StartClient(grpc.WithDefaultServiceConfig(sc)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+
+	twoEndpoints := []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "bad-address-1"}, {Addr: srv1.Address}}}, {Addresses: []resolver.Address{{Addr: "bad-address-2"}, {Addr: srv2.Address}}}}
+	srv1.R.UpdateState(resolver.State{Endpoints: twoEndpoints})
+
+	// Call each backend once to ensure the weights have been received.
+	ensureReached(ctx, t, srv1.Client, 2)
+	// Wait for the weight update period to allow the new weights to be processed.
+	time.Sleep(weightUpdatePeriod)
+	checkWeights(ctx, t, srvWeight{srv1, 10}, srvWeight{srv2, 1})
+}
+
 // Tests two addresses with OOB ORCA reporting enabled and a non-zero error
 // penalty applied.
 func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {

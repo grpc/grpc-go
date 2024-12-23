@@ -71,22 +71,47 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+func (lw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (cw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (lw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
-	cw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+	lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
 	onDone()
 }
 
-func (cw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+func (lw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	lw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	onDone()
+}
+
+type listenerWatcherMultiple struct {
+	updateCh *testutils.Channel
+}
+
+// TODO: delete this once `newListenerWatcher` is modified to handle multiple
+// updates (https://github.com/grpc/grpc-go/issues/7864).
+func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
+	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
+}
+
+func (lw *listenerWatcherMultiple) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+	onDone()
+}
+
+func (lw *listenerWatcherMultiple) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	lw.updateCh.Send(listenerUpdateErrTuple{err: err})
+	onDone()
+}
+
+func (lw *listenerWatcherMultiple) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	lw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
@@ -151,6 +176,18 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unexpected diff in the listener resource update: (-want, got):\n%s", diff)
+	}
+	return nil
+}
+
+func verifyUnknownListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr string) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
+	}
+	gotErr := u.(listenerUpdateErrTuple).err
+	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
 	}
 	return nil
 }
@@ -871,9 +908,91 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 }
 
+// TestLDSWatch_NewWatcherForRemovedResource covers the case where a new
+// watcher registers for a resource that has been removed. The test verifies
+// the following scenarios:
+//  1. When a resource is deleted by the management server, any active
+//     watchers of that resource should be notified with a "resource removed"
+//     error through their watch callback.
+//  2. If a new watcher attempts to register for a resource that has already
+//     been deleted, its watch callback should be immediately invoked with a
+//     "resource removed" error.
+func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create an xDS client with the above bootstrap contents.
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Register watch for the listener resource and have the
+	// callbacks push the received updates on to a channel.
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, ldsName, lw1)
+	defer ldsCancel1()
+
+	// Configure the management server to return listener resource,
+	// corresponding to the registered watch.
+	resource := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resource); err != nil {
+		t.Fatalf("Failed to update management server with resource: %v, err: %v", resource, err)
+	}
+
+	// Verify the contents of the received update for existing watch.
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
+			RouteConfigName: rdsName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+	}
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove the listener resource on the management server.
+	resource = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resource); err != nil {
+		t.Fatalf("Failed to update management server with resource: %v, err: %v", resource, err)
+	}
+
+	// The existing watcher should receive a resource removed error.
+	updateError := listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, updateError); err != nil {
+		t.Fatal(err)
+	}
+
+	// New watchers attempting to register for a deleted resource should also
+	// receive a "resource removed" error.
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
+	defer ldsCancel2()
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, updateError); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestLDSWatch_NACKError covers the case where an update from the management
-// server is NACK'ed by the xdsclient. The test verifies that the error is
-// propagated to the watcher.
+// server is NACKed by the xdsclient. The test verifies that the error is
+// propagated to the existing watcher. After NACK, if a new watcher registers
+// for the resource, error is propagated to the new watcher as well.
 func (s) TestLDSWatch_NACKError(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -910,20 +1029,104 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify that the expected error is propagated to the watcher.
-	u, err := lw.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+
+	// Verify that the expected error is propagated to the new watcher as well.
+	lw2 := newListenerWatcher()
+	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
+	defer ldsCancel2()
+	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Tests the scenario where a watch registered for a resource results in a good
+// update followed by a bad update. This results in the resource cache
+// containing both the old good update and the latest NACK error. The test
+// verifies that a when a new watch is registered for the same resource, the new
+// watcher receives the good update followed by the NACK error.
+func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create an xDS client with the above bootstrap contents.
+	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     t.Name(),
+		Contents: bc,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Register a watch for a listener resource and have the watch
+	// callback push the received update on to a channel.
+	lw1 := newListenerWatcher()
+	ldsCancel1 := xdsresource.WatchListener(client, ldsName, lw1)
+	defer ldsCancel1()
+
+	// Configure the management server to return a single listener
+	// resource, corresponding to the one we registered a watch for.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify the contents of the received update.
+	wantUpdate := listenerUpdateErrTuple{
+		update: xdsresource.ListenerUpdate{
+			RouteConfigName: rdsName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+	}
+	if err := verifyListenerUpdate(ctx, lw1.updateCh, wantUpdate); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure the management server to return a single listener resource
+	// which is expected to be NACKed by the client.
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{badListenerResource(t, ldsName)},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
+	}
+
+	// Register another watch for the same resource. This should get the update
+	// and error from the cache.
+	lw2 := newListenerWatcherMultiple(2)
+	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
+	defer ldsCancel2()
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
+		t.Fatal(err)
+	}
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
 }
 
 // TestLDSWatch_PartialValid covers the case where a response from the
 // management server contains both valid and invalid resources and is expected
-// to be NACK'ed by the xdsclient. The test verifies that watchers corresponding
+// to be NACKed by the xdsclient. The test verifies that watchers corresponding
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
 func (s) TestLDSWatch_PartialValid(t *testing.T) {
@@ -990,13 +1193,9 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
-	u, err := lw1.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	// Verify that the expected error is propagated to the existing watcher.
+	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that the watcher watching the good resource receives a good

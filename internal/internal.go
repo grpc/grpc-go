@@ -31,6 +31,10 @@ import (
 var (
 	// HealthCheckFunc is used to provide client-side LB channel health checking
 	HealthCheckFunc HealthChecker
+	// RegisterClientHealthCheckListener is used to provide a listener for
+	// updates from the client-side health checking service. It returns a
+	// function that can be called to stop the health producer.
+	RegisterClientHealthCheckListener any // func(ctx context.Context, sc balancer.SubConn, serviceName string, listener func(balancer.SubConnState)) func()
 	// BalancerUnregister is exported by package balancer to unregister a balancer.
 	BalancerUnregister func(name string)
 	// KeepaliveMinPingTime is the minimum ping interval.  This must be 10s by
@@ -267,3 +271,9 @@ const (
 // It currently has an experimental suffix which would be removed once
 // end-to-end testing of the policy is completed.
 const RLSLoadBalancingPolicyName = "rls_experimental"
+
+// EnforceSubConnEmbedding is used to enforce proper SubConn implementation
+// embedding.
+type EnforceSubConnEmbedding interface {
+	enforceSubConnEmbedding()
+}

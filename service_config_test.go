@@ -26,11 +26,15 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/serviceconfig"
+
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 )
 
 type parseTestCase struct {
+	name    string
 	scjs    string
 	wantSC  *ServiceConfig
 	wantErr bool
@@ -59,7 +63,11 @@ func lbConfigFor(t *testing.T, name string, cfg serviceconfig.LoadBalancingConfi
 func runParseTests(t *testing.T, testCases []parseTestCase) {
 	t.Helper()
 	for i, c := range testCases {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
+		name := c.name
+		if name == "" {
+			name = fmt.Sprint(i)
+		}
+		t.Run(name, func(t *testing.T) {
 			scpr := parseServiceConfig(c.scjs, defaultMaxCallAttempts)
 			var sc *ServiceConfig
 			sc, _ = scpr.Config.(*ServiceConfig)
@@ -104,14 +112,14 @@ func init() {
 func (s) TestParseLBConfig(t *testing.T) {
 	testcases := []parseTestCase{
 		{
-			`{
+			scjs: `{
     "loadBalancingConfig": [{"pbb": { "foo": "hi" } }]
 }`,
-			&ServiceConfig{
+			wantSC: &ServiceConfig{
 				Methods:  make(map[string]MethodConfig),
 				lbConfig: lbConfigFor(t, "pbb", pbbData{Foo: "hi"}),
 			},
-			false,
+			wantErr: false,
 		},
 	}
 	runParseTests(t, testcases)
@@ -137,7 +145,7 @@ func (s) TestParseNoLBConfigSupported(t *testing.T) {
 func (s) TestParseLoadBalancer(t *testing.T) {
 	testcases := []parseTestCase{
 		{
-			`{
+			scjs: `{
     "loadBalancingPolicy": "round_robin",
     "methodConfig": [
         {
@@ -151,7 +159,7 @@ func (s) TestParseLoadBalancer(t *testing.T) {
         }
     ]
 }`,
-			&ServiceConfig{
+			wantSC: &ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(true),
@@ -159,10 +167,10 @@ func (s) TestParseLoadBalancer(t *testing.T) {
 				},
 				lbConfig: lbConfigFor(t, "round_robin", nil),
 			},
-			false,
+			wantErr: false,
 		},
 		{
-			`{
+			scjs: `{
     "loadBalancingPolicy": 1,
     "methodConfig": [
         {
@@ -176,8 +184,7 @@ func (s) TestParseLoadBalancer(t *testing.T) {
         }
     ]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 	}
 	runParseTests(t, testcases)
@@ -186,7 +193,7 @@ func (s) TestParseLoadBalancer(t *testing.T) {
 func (s) TestParseWaitForReady(t *testing.T) {
 	testcases := []parseTestCase{
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -199,7 +206,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
         }
     ]
 }`,
-			&ServiceConfig{
+			wantSC: &ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(true),
@@ -207,10 +214,9 @@ func (s) TestParseWaitForReady(t *testing.T) {
 				},
 				lbConfig: lbConfigFor(t, "", nil),
 			},
-			false,
 		},
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -223,7 +229,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
         }
     ]
 }`,
-			&ServiceConfig{
+			wantSC: &ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						WaitForReady: newBool(false),
@@ -231,10 +237,9 @@ func (s) TestParseWaitForReady(t *testing.T) {
 				},
 				lbConfig: lbConfigFor(t, "", nil),
 			},
-			false,
 		},
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -256,8 +261,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
         }
     ]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 	}
 
@@ -267,7 +271,7 @@ func (s) TestParseWaitForReady(t *testing.T) {
 func (s) TestParseTimeOut(t *testing.T) {
 	testcases := []parseTestCase{
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -280,7 +284,7 @@ func (s) TestParseTimeOut(t *testing.T) {
         }
     ]
 }`,
-			&ServiceConfig{
+			wantSC: &ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						Timeout: newDuration(time.Second),
@@ -288,10 +292,9 @@ func (s) TestParseTimeOut(t *testing.T) {
 				},
 				lbConfig: lbConfigFor(t, "", nil),
 			},
-			false,
 		},
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -304,11 +307,10 @@ func (s) TestParseTimeOut(t *testing.T) {
         }
     ]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -330,8 +332,7 @@ func (s) TestParseTimeOut(t *testing.T) {
         }
     ]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 	}
 
@@ -341,7 +342,7 @@ func (s) TestParseTimeOut(t *testing.T) {
 func (s) TestParseMsgSize(t *testing.T) {
 	testcases := []parseTestCase{
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -355,7 +356,7 @@ func (s) TestParseMsgSize(t *testing.T) {
         }
     ]
 }`,
-			&ServiceConfig{
+			wantSC: &ServiceConfig{
 				Methods: map[string]MethodConfig{
 					"/foo/Bar": {
 						MaxReqSize:  newInt(1024),
@@ -364,10 +365,9 @@ func (s) TestParseMsgSize(t *testing.T) {
 				},
 				lbConfig: lbConfigFor(t, "", nil),
 			},
-			false,
 		},
 		{
-			`{
+			scjs: `{
     "methodConfig": [
         {
             "name": [
@@ -391,8 +391,7 @@ func (s) TestParseMsgSize(t *testing.T) {
         }
     ]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 	}
 
@@ -408,54 +407,49 @@ func (s) TestParseDefaultMethodConfig(t *testing.T) {
 
 	runParseTests(t, []parseTestCase{
 		{
-			`{
+			scjs: `{
   "methodConfig": [{
     "name": [{}],
     "waitForReady": true
   }]
 }`,
-			dc,
-			false,
+			wantSC: dc,
 		},
 		{
-			`{
+			scjs: `{
   "methodConfig": [{
     "name": [{"service": null}],
     "waitForReady": true
   }]
 }`,
-			dc,
-			false,
+			wantSC: dc,
 		},
 		{
-			`{
+			scjs: `{
   "methodConfig": [{
     "name": [{"service": ""}],
     "waitForReady": true
   }]
 }`,
-			dc,
-			false,
+			wantSC: dc,
 		},
 		{
-			`{
+			scjs: `{
   "methodConfig": [{
     "name": [{"method": "Bar"}],
     "waitForReady": true
   }]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 		{
-			`{
+			scjs: `{
   "methodConfig": [{
     "name": [{"service": "", "method": "Bar"}],
     "waitForReady": true
   }]
 }`,
-			nil,
-			true,
+			wantErr: true,
 		},
 	})
 }
@@ -463,7 +457,7 @@ func (s) TestParseDefaultMethodConfig(t *testing.T) {
 func (s) TestParseMethodConfigDuplicatedName(t *testing.T) {
 	runParseTests(t, []parseTestCase{
 		{
-			`{
+			scjs: `{
   "methodConfig": [{
     "name": [
       {"service": "foo"},
@@ -471,7 +465,137 @@ func (s) TestParseMethodConfigDuplicatedName(t *testing.T) {
     ],
     "waitForReady": true
   }]
-}`, nil, true,
+}`,
+			wantErr: true,
+		},
+	})
+}
+
+func (s) TestParseRetryPolicy(t *testing.T) {
+	runParseTests(t, []parseTestCase{
+		{
+			name: "valid",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					"maxAttempts": 2,
+					"initialBackoff": "2s",
+					"maxBackoff": "10s",
+					"backoffMultiplier": 2,
+					"retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
+			wantSC: &ServiceConfig{
+				Methods: map[string]MethodConfig{
+					"/foo/": {
+						RetryPolicy: &internalserviceconfig.RetryPolicy{
+							MaxAttempts:          2,
+							InitialBackoff:       2 * time.Second,
+							MaxBackoff:           10 * time.Second,
+							BackoffMultiplier:    2,
+							RetryableStatusCodes: map[codes.Code]bool{codes.Unavailable: true},
+						},
+					},
+				},
+				lbConfig: lbConfigFor(t, "", nil),
+			},
+		},
+		{
+			name: "negative maxAttempts",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					  "maxAttempts": -1,
+					  "initialBackoff": "2s",
+					  "maxBackoff": "10s",
+					  "backoffMultiplier": 2,
+					  "retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
+			wantErr: true,
+		},
+		{
+			name: "missing maxAttempts",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					  "initialBackoff": "2s",
+					  "maxBackoff": "10s",
+					  "backoffMultiplier": 2,
+					  "retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
+			wantErr: true,
+		},
+		{
+			name: "zero initialBackoff",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					  "maxAttempts": 2,
+					  "initialBackoff": "0s",
+					  "maxBackoff": "10s",
+					  "backoffMultiplier": 2,
+					  "retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
+			wantErr: true,
+		},
+		{
+			name: "zero maxBackoff",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					  "maxAttempts": 2,
+					  "initialBackoff": "2s",
+					  "maxBackoff": "0s",
+					  "backoffMultiplier": 2,
+					  "retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
+			wantErr: true,
+		},
+		{
+			name: "zero backoffMultiplier",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					  "maxAttempts": 2,
+					  "initialBackoff": "2s",
+					  "maxBackoff": "10s",
+					  "backoffMultiplier": 0,
+					  "retryableStatusCodes": ["UNAVAILABLE"]
+				  }
+				}]
+			  }`,
+			wantErr: true,
+		},
+		{
+			name: "no retryable codes",
+			scjs: `{
+				"methodConfig": [{
+				  "name": [{"service": "foo"}],
+				  "retryPolicy": {
+					  "maxAttempts": 2,
+					  "initialBackoff": "2s",
+					  "maxBackoff": "10s",
+					  "backoffMultiplier": 2,
+					  "retryableStatusCodes": []
+				  }
+				}]
+			  }`,
+			wantErr: true,
 		},
 	})
 }
