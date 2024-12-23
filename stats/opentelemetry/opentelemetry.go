@@ -33,19 +33,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	experimental "google.golang.org/grpc/experimental/opentelemetry"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/stats/opentelemetry/experimental"
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 )
-
-var logger = grpclog.Component("otel-plugin")
-
-var canonicalString = internal.CanonicalString.(func(codes.Code) string)
-
-var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 
 func init() {
 	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
@@ -53,12 +47,26 @@ func init() {
 	}
 }
 
+var (
+	logger          = grpclog.Component("otel-plugin")
+	canonicalString = internal.CanonicalString.(func(codes.Code) string)
+	joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
+)
+
 // Options are the options for OpenTelemetry instrumentation.
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
 	MetricsOptions MetricsOptions
 	// TraceOptions are the tracing options for OpenTelemetry instrumentation.
 	TraceOptions experimental.TraceOptions
+}
+
+func (o *Options) isMetricsEnabled() bool {
+	return o.MetricsOptions.MeterProvider != nil
+}
+
+func (o *Options) isTracingEnabled() bool {
+	return !(o.TraceOptions.TracerProvider == nil || o.TraceOptions.TextMapPropagator == nil)
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -174,14 +182,6 @@ func getRPCInfo(ctx context.Context) *rpcInfo {
 
 func removeLeadingSlash(mn string) string {
 	return strings.TrimLeft(mn, "/")
-}
-
-func isMetricsDisabled(mo MetricsOptions) bool {
-	return mo.MeterProvider == nil
-}
-
-func isTracingDisabled(to experimental.TraceOptions) bool {
-	return to.TracerProvider == nil || to.TextMapPropagator == nil
 }
 
 // attemptInfo is RPC information scoped to the RPC attempt life span client
