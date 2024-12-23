@@ -236,7 +236,10 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		}
 		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
 	}
-	// Use the targetResolverState for its service config and attributes contents.
+	// Use the targetResolverState for its service config and attributes
+	// contents. The state update is only sent after both the target and proxy
+	// resolvers have sent their updates, and curState has been updated with
+	// the combined addresses.
 	curState.Addresses = addresses
 	curState.Endpoints = endpoints
 	return r.cc.UpdateState(curState)
@@ -254,7 +257,6 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
 	if len(state.Endpoints) > 0 {
-
 		// We expect exactly one address per endpoint because the proxy
 		// resolver uses "dns" resolution.
 		r.proxyAddrs = make([]resolver.Address, 0, len(state.Endpoints))
