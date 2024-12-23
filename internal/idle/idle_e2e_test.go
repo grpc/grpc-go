@@ -136,19 +136,16 @@ func (s) TestChannelIdleness_Disabled_NoActivity(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 
 	// Start a test backend and push an address update via the resolver.
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Trigger the resolver by initiating an RPC.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go func() {
-		_ = cc.Invoke(ctx, "/test/method", nil, nil)
-	}()
-	// Verify that the ClientConn moves to READY.
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that the ClientConn stays in READY.
@@ -186,20 +183,16 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Start a test backend and push an address update via the resolver.
 	lis := testutils.NewListenerWrapper(t, nil)
 	backend := stubserver.StartTestService(t, &stubserver.StubServer{Listener: lis})
 	defer backend.Stop()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Verify that the ClientConn moves to READY and trigger the resolver by
-	//  initiating an RPC.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go func() {
-		_ = cc.Invoke(ctx, "/test/method", nil, nil)
-	}()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Retrieve the wrapped conn from the listener.
@@ -278,7 +271,7 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 				t.Fatalf("grpc.NewClient() failed: %v", err)
 			}
 			defer cc.Close()
-
+			cc.Connect()
 			// Start a test backend that keeps the RPC call active by blocking
 			// on a channel that is closed by the test later on.
 			blockCh := make(chan struct{})
@@ -299,15 +292,11 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 
 			// Push an address update containing the address of the above
 			// backend via the manual resolver.
-			r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+			r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-			// Verify that the ClientConn moves to READY and trigger the resolver by
-			//  initiating an RPC.
+			// Verify that the ClientConn moves to READY.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			go func() {
-				_ = cc.Invoke(ctx, "/test/method", nil, nil)
-			}()
 			testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 			// Spawn a goroutine to check for expected behavior while a blocking
@@ -371,19 +360,15 @@ func (s) TestChannelIdleness_Enabled_ActiveSinceLastCheck(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Start a test backend and push an address update via the resolver.
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backend.Address}}})
 
-	// Verify that the ClientConn moves to READY and trigger the resolver by
-	//  initiating an RPC.
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go func() {
-		_ = cc.Invoke(ctx, "/test/method", nil, nil)
-	}()
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// For a duration of three times the configured idle timeout, making RPCs
@@ -444,15 +429,10 @@ func (s) TestChannelIdleness_Enabled_ExitIdleOnRPC(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
-	// Verify that the ClientConn moves to READY and trigger the resolver by
-	// initiating an RPC.
+	cc.Connect()
+	// Verify that the ClientConn moves to READY.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	go func() {
-		_ = cc.Invoke(ctx, "/test/method", nil, nil)
-	}()
-
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// Verify that the ClientConn moves to IDLE as there is no activity.

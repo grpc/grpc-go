@@ -194,12 +194,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	//
 	// Append "localhost" before calling net.Dial, in case net.Dial on certain
 	// platforms doesn't work well for address without the IP.
-	cc, err := grpc.NewClient(":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-		if len(addr) > 0 && addr[0] == ':' {
-			addr = "localhost" + addr
-		}
-		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
-	}))
+	cc, err := grpc.NewClient(":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", ss.Target, err)
 	}

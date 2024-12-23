@@ -266,7 +266,7 @@ func (s) TestRoundRobin_UpdateAddressAttributes(t *testing.T) {
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(rrServiceConfig),
 	}
-	// Send a resolver update with no address attributes.
+	// Set an initial resolver update with no address attributes.
 	addr := resolver.Address{Addr: backend.Address}
 	r.InitialState(resolver.State{Addresses: []resolver.Address{addr}})
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)

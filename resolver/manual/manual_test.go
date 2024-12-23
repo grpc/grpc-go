@@ -59,9 +59,6 @@ func TestResolver(t *testing.T) {
 	})
 
 	t.Run("happy_path", func(t *testing.T) {
-		r.InitialState(resolver.State{Addresses: []resolver.Address{
-			{Addr: "ok"},
-		}})
 		cc, err := grpc.NewClient("whatever://localhost",
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithResolvers(r))
@@ -70,6 +67,9 @@ func TestResolver(t *testing.T) {
 		}
 		defer cc.Close()
 		cc.Connect()
+		r.UpdateState(resolver.State{Addresses: []resolver.Address{
+			{Addr: "ok"},
+		}})
 		r.ReportError(errors.New("example"))
 	})
 }
