@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -1160,17 +1159,17 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	lis1, err := net.Listen("tcp", "localhost:0")
+	lis1, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis1.Close()
-	lis2, err := net.Listen("tcp", "localhost:0")
+	lis2, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis2.Close()
-	lis3, err := net.Listen("tcp", "localhost:0")
+	lis3, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
@@ -1241,25 +1240,24 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				},
 			})
 
+			edsWatchCreated := make(chan struct{})
 			// Spin up a management server to receive xDS resources from.
-			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+				OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+					if req.GetTypeUrl() != "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment" {
+						return nil
+					}
+					if req.ResponseNonce == "" {
+						t.Logf("Got initial ClusterLoadAssignment request: %+v", req)
+						close(edsWatchCreated)
+					}
+					return nil
+				},
+			})
 
 			// Create bootstrap configuration pointing to the above management server.
 			nodeID := uuid.New().String()
 			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
-			// Create xDS resources for consumption by the test. We start off with a
-			// single backend in a single EDS locality.
-			resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
-				Name:   localityName1,
-				Weight: 1,
-				Backends: []e2e.BackendOptions{{
-					Ports: ports,
-				}},
-			}})
-			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
-			}
 
 			// Create an xDS client talking to the above management server, configured
 			// with a short watch expiry timeout.
@@ -1296,6 +1294,25 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				t.Fatalf("failed to create new client for local test server: %v", err)
 			}
 			defer cc.Close()
+			cc.Connect()
+
+			select {
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for EDS watch to be created.")
+			case <-edsWatchCreated:
+			}
+			// Create xDS resources for consumption by the test.
+			resources := clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{{
+				Name:   localityName1,
+				Weight: 1,
+				Backends: []e2e.BackendOptions{{
+					Ports: ports,
+				}},
+			}})
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
 			client := testgrpc.NewTestServiceClient(cc)
 			if err := rrutil.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: lis1.Addr().String()}}); err != nil {
 				t.Fatal(err)
