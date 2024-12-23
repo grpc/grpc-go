@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1160,17 +1160,17 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	lis1, err := net.Listen("tcp", "localhost:0")
+	lis1, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis1.Close()
-	lis2, err := net.Listen("tcp", "localhost:0")
+	lis2, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis2.Close()
-	lis3, err := net.Listen("tcp", "localhost:0")
+	lis3, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
@@ -1223,7 +1223,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			defer func() {
 				balancer.Register(originalRRBuilder)
 			}()
-			resolverUpdateCh := make(chan resolver.State, 1)
+			resolverStateMu := sync.Mutex{}
+			resolverState := resolver.State{}
 			stub.Register(roundrobin.Name, stub.BalancerFuncs{
 				Init: func(bd *stub.BalancerData) {
 					bd.Data = originalRRBuilder.Build(bd.ClientConn, bd.BuildOptions)
@@ -1232,7 +1233,9 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 					bd.Data.(balancer.Balancer).Close()
 				},
 				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-					resolverUpdateCh <- ccs.ResolverState
+					resolverStateMu.Lock()
+					defer resolverStateMu.Unlock()
+					resolverState = ccs.ResolverState
 					return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 				},
 			})
@@ -1297,15 +1300,12 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var rs resolver.State
-			select {
-			case rs = <-resolverUpdateCh:
-			case <-ctx.Done():
-				t.Fatalf("Context timed out waiting for resolver update.")
-			}
+			resolverStateMu.Lock()
+			gotState := resolverState
+			resolverStateMu.Unlock()
 
 			gotEndpointPorts := []uint32{}
-			for _, a := range rs.Endpoints[0].Addresses {
+			for _, a := range gotState.Endpoints[0].Addresses {
 				gotEndpointPorts = append(gotEndpointPorts, testutils.ParsePort(t, a.Addr))
 			}
 			if diff := cmp.Diff(gotEndpointPorts, tc.wantEndpointPorts); diff != "" {
@@ -1313,7 +1313,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			}
 
 			gotAddrPorts := []uint32{}
-			for _, a := range rs.Addresses {
+			for _, a := range gotState.Addresses {
 				gotAddrPorts = append(gotAddrPorts, testutils.ParsePort(t, a.Addr))
 			}
 			if diff := cmp.Diff(gotAddrPorts, tc.wantAddrPorts); diff != "" {
