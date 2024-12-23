@@ -429,6 +429,10 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			origFallbackEnv := envconfig.XDSFallbackSupport
+			envconfig.XDSFallbackSupport = true
+			defer func() { envconfig.XDSFallbackSupport = origFallbackEnv }()
+
 			testGetConfigurationWithFileNameEnv(t, test.name, false, test.wantConfig)
 			testGetConfigurationWithFileContentEnv(t, test.name, false, test.wantConfig)
 		})
@@ -1198,9 +1202,9 @@ func (s) TestNode_ToProto(t *testing.T) {
 // Tests the case where the xDS fallback env var is set to false, and verifies
 // that only the first server from the list of server configurations is used.
 func (s) TestGetConfiguration_FallbackDisabled(t *testing.T) {
-	origFallbackEnv := envconfig.XDSFallbackSupport
-	envconfig.XDSFallbackSupport = false
-	defer func() { envconfig.XDSFallbackSupport = origFallbackEnv }()
+	// TODO(easwars): Default value of "GRPC_EXPERIMENTAL_XDS_FALLBACK"
+	// env var is currently false. When the default is changed to true,
+	// explicitly set it to false here.
 
 	cancel := setupBootstrapOverride(map[string]string{
 		"multipleXDSServers": `
