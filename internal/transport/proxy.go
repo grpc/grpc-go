@@ -54,7 +54,7 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Address, grpcUA string, opts proxyattributes.Options) (_ net.Conn, err error) {
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, opts proxyattributes.Options) (_ net.Conn, err error) {
 	defer func() {
 		if err != nil {
 			conn.Close()
