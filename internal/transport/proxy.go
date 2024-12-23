@@ -61,7 +61,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Ad
 		}
 	}()
 
-	opts, _ := proxyattributes.ExtractOptions(addr)
+	opts, _ := proxyattributes.Get(addr)
 	req := &http.Request{
 		Method: http.MethodConnect,
 		URL:    &url.URL{Host: opts.ConnectAddr},

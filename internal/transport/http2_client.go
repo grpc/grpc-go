@@ -159,7 +159,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 
 	// A non-empty ConnectAddr attribute indicates that a proxy is configured,
 	// so initiate a proxy dial.
-	if _, present := proxyattributes.ExtractOptions(addr); present {
+	if _, present := proxyattributes.Get(addr); present {
 		return proxyDial(ctx, addr, grpcUA)
 	}
 	networkType, ok := networktype.Get(addr)
