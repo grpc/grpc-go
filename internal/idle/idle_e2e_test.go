@@ -183,6 +183,7 @@ func (s) TestChannelIdleness_Enabled_NoActivity(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
+
 	cc.Connect()
 	// Start a test backend and push an address update via the resolver.
 	lis := testutils.NewListenerWrapper(t, nil)
