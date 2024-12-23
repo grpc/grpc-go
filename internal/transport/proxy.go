@@ -71,7 +71,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Ad
 	if user := opts.User; user != (url.Userinfo{}) {
 		u := user.Username()
 		p, pSet := user.Password()
-		if !pSet {
+		if !pSet && logger.V(2) {
 			logger.Warningf("password not set for basic authentication for proxy dialing")
 		}
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
