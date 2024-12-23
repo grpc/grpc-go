@@ -33,12 +33,12 @@ const defaultTestTimeout = 10 * time.Second
 // ProxyServer represents a test proxy server.
 type ProxyServer struct {
 	lis          net.Listener
-	in           net.Conn                  // The connection from the client to the proxy.
-	out          net.Conn                  // The connection from the proxy to the backend.
-	requestCheck func(*http.Request) error // The function to check the request sent to proxy.
+	in           net.Conn                  // Connection from the client to the proxy.
+	out          net.Conn                  // Connection from the proxy to the backend.
+	requestCheck func(*http.Request) error // Function to check the request sent to proxy.
 }
 
-// Stop closes the ProxyServer and its connectionsto client and server.
+// Stop closes the ProxyServer and its connections to client and server.
 func (p *ProxyServer) Stop() {
 	p.lis.Close()
 	if p.in != nil {
@@ -63,6 +63,7 @@ func NewProxyServer(lis net.Listener, reqCheck func(*http.Request) error, errCh 
 			return
 		}
 		p.in = in
+		// This will be used in tests to check if the proxy server is started.
 		if proxyStarted != nil {
 			proxyStarted()
 		}
@@ -87,19 +88,21 @@ func NewProxyServer(lis net.Listener, reqCheck func(*http.Request) error, errCh 
 		} else {
 			out, err = net.Dial("tcp", backendAddr)
 		}
-
 		if err != nil {
 			errCh <- fmt.Errorf("failed to dial to server: %v", err)
 			return
 		}
 		out.SetDeadline(time.Now().Add(defaultTestTimeout))
+
 		// Response OK to client
 		resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
 		var buf bytes.Buffer
 		resp.Write(&buf)
 		p.in.Write(buf.Bytes())
 		p.out = out
-		// Perform the proxy function, i.e pass the data from client to server and server to client.
+
+		// Perform the proxy function, i.e pass the data from client to server
+		// and server to client.
 		go io.Copy(p.in, p.out)
 		go io.Copy(p.out, p.in)
 		close(doneCh)

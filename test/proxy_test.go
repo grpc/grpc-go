@@ -44,8 +44,6 @@ const (
 	unresolvedProxyURI  = "proxyexample.com"
 )
 
-// createAndStartBackendServer creates and starts a test backend server,
-// registering a cleanup to stop it.
 func createAndStartBackendServer(t *testing.T) string {
 	t.Helper()
 	backend := &stubserver.StubServer{
@@ -121,11 +119,11 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", pLis.Addr().String())
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
+	// Use the httpproxy package functions instead of `http.ProxyFromEnvironment`
+	// because the latter reads proxy-related environment variables only once at
 	// initialization. This behavior causes issues when running multiple tests
 	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
+	// during tests would be ignored. By using `httpproxy.FromEnvironment()`, we
 	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
@@ -143,6 +141,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	}
 	defer conn.Close()
 
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall failed: %v", err)
@@ -171,12 +170,6 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -206,7 +199,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Send an RPC to the backend through the proxy.
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall failed: %v", err)
@@ -235,12 +228,6 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -251,13 +238,8 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 
 	// Set up and update a manual resolver for proxy resolution.
 	proxyResolver := setupDNS(t)
-	proxyResolver.InitialState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: pLis.Addr().String()},
-		},
-	})
+	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
-	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -266,7 +248,7 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Send an RPC to the backend through the proxy.
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall failed: %v", err)
@@ -288,7 +270,6 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
-	// Set up and start the proxy server.
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
 	// Overwrite the proxy environment and restore it after the test.
@@ -296,12 +277,6 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -328,13 +303,13 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	// Create a test service client and make an RPC call.
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
 
-	// Check if the proxy encountered any errors.
+	// Verify if the proxy encountered any errors.
 	select {
 	case err := <-errCh:
 		t.Fatalf("proxy server encountered an error: %v", err)
@@ -350,7 +325,6 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 // HTTP CONNECT request, and establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) {
 	backendAddr := createAndStartBackendServer(t)
-	// Set up and start the proxy server.
 	pLis, errCh, doneCh, _ := setupProxy(t, backendAddr, true, requestCheck(backendAddr))
 
 	// Overwrite the proxy environment and restore it after the test.
@@ -358,12 +332,6 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) 
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -376,6 +344,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) 
 	targetResolver := manual.NewBuilderWithScheme("test")
 	resolver.Register(targetResolver)
 	targetResolver.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backendAddr}}}}})
+
 	// Set up and update a manual resolver for proxy resolution.
 	proxyResolver := setupDNS(t)
 	proxyResolver.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}}}})
@@ -389,7 +358,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) 
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	// Create a test service client and make an RPC call.
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall() failed: %v", err)
@@ -419,12 +388,6 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -446,12 +409,10 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	resolver.Register(proxyResolver)
 	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
-	// Dial options with target resolution enabled.
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithTargetResolutionEnabled(),
+		grpc.WithTargetResolutionEnabled(), // Target resolution on client enabled.
 	}
-	// Dial to the proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	conn, err := grpc.NewClient(unresolvedTargetURI, dopts...)
@@ -460,7 +421,7 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	// Create a test service client and make an RPC call.
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall() failed: %v", err)
@@ -491,12 +452,6 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -508,10 +463,9 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	targetResolver := setupDNS(t)
 	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
-	// Dial options with proxy explicitly disabled.
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithNoProxy(), // Disable proxy.
+		grpc.WithNoProxy(), // Diable proxy.
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -527,7 +481,7 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
 
-	// Verify that the proxy was not dialed.
+	// Verify that the proxy server was not dialed.
 	select {
 	case <-proxyStartedCh:
 		t.Fatal("unexpected dial to proxy server")
@@ -552,12 +506,6 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -566,8 +514,7 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
 
-	// Create a custom dialer that directly dials the backend.  We'll use this
-	// to bypass any proxy logic.
+	// Create a custom dialer that directly dials the backend.ß
 	dialerCalled := make(chan struct{})
 	customDialer := func(_ context.Context, backendAddr string) (net.Conn, error) {
 		close(dialerCalled)
@@ -579,7 +526,7 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(customDialer),
+		grpc.WithContextDialer(customDialer), // Use a custom dialer.
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -646,12 +593,6 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	os.Setenv("HTTPS_PROXY", user+":"+password+"@"+unresolvedProxyURI)
 	defer func() { os.Setenv("HTTPS_PROXY", proxyEnv) }()
 
-	// Use the httpproxy package instead of http.ProxyFromEnvironment because
-	// the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using httpproxy.FromEnvironment(), we
-	// ensure proxy settings are read dynamically in each test execution.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
@@ -676,7 +617,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Send an RPC to the backend through the proxy.
+	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall failed: %v", err)

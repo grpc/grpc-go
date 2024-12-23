@@ -61,14 +61,14 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, addr resolver.Ad
 		}
 	}()
 
-	a, _ := proxyattributes.ExtractOptions(addr)
+	opts, _ := proxyattributes.ExtractOptions(addr)
 	req := &http.Request{
 		Method: http.MethodConnect,
-		URL:    &url.URL{Host: a.ConnectAddr},
+		URL:    &url.URL{Host: opts.ConnectAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
 
-	if user := a.User; user != (url.Userinfo{}) {
+	if user := opts.User; user != (url.Userinfo{}) {
 		u := user.Username()
 		p, pSet := user.Password()
 		if !pSet {

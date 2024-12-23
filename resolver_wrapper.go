@@ -82,7 +82,6 @@ func (ccr *ccResolverWrapper) start() error {
 		// The delegating resolver is used unless:
 		//   - A custom dialer is provided via WithContextDialer dialoption.
 		//   - Proxy usage is disabled through WithNoProxy dialoption.
-		//   - Client-side resolution is enforced with WithTargetResolutionEnabled.
 		// In these cases, the resolver is built based on the scheme of target,
 		// using the appropriate resolver builder.
 		if ccr.cc.dopts.copts.Dialer != nil || !ccr.cc.dopts.useProxy {
