@@ -218,7 +218,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 
 	// Create a list of combined endpoints by pairing all proxy endpoints
 	// with every target endpoint. Each time, it constructs a new
-	// [resolver.Endpoint] using the all address from all the proxy endpoint
+	// [resolver.Endpoint] using the all addresses from all the proxy endpoint
 	// and the target addresses from one endpoint. The target address and user
 	// information from the proxy URL are added as attributes to the proxy
 	// address.The resulting list of addresses is then grouped into endpoints,
