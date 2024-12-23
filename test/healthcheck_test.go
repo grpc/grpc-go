@@ -224,10 +224,11 @@ func setupClient(t *testing.T, c *clientConfig) (*grpc.ClientConn, *manual.Resol
 		opts = append(opts, c.extraDialOption...)
 	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", opts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", opts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 	return cc, r
 }
@@ -253,11 +254,11 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"round_robin":{}}]
-}`)})
+	 "healthCheckConfig": {
+		 "serviceName": "foo"
+	 },
+	 "loadBalancingConfig": [{"round_robin":{}}]
+ }`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -308,11 +309,11 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "foo"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -335,11 +336,11 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "foo"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -413,11 +414,11 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "foo"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -461,11 +462,11 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	sc := parseServiceConfig(t, r, fmt.Sprintf(`{
-		"healthCheckConfig": {
-			"serviceName": "foo"
-		},
-		"loadBalancingConfig": [{"%s":{}}]
-	}`, healthCheckTestPolicyName))
+		 "healthCheckConfig": {
+			 "serviceName": "foo"
+		 },
+		 "loadBalancingConfig": [{"%s":{}}]
+	 }`, healthCheckTestPolicyName))
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -543,11 +544,11 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, (fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName)))})
+			 "healthCheckConfig": {
+				 "serviceName": "foo"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName)))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -610,11 +611,11 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	// back to client immediately upon receiving the request (client should receive no response until
 	// test ends).
 	sc := parseServiceConfig(t, r, fmt.Sprintf(`{
-		"healthCheckConfig": {
-			"serviceName": "delay"
-		},
-		"loadBalancingConfig": [{"%s":{}}]
-	}`, healthCheckTestPolicyName))
+		 "healthCheckConfig": {
+			 "serviceName": "delay"
+		 },
+		 "loadBalancingConfig": [{"%s":{}}]
+	 }`, healthCheckTestPolicyName))
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -675,11 +676,11 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "delay"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "delay"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	select {
 	case <-hcExitChan:
@@ -713,11 +714,11 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "foo"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -745,11 +746,11 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	"healthCheckConfig": {
-		"serviceName": "foo"
-	},
-	"loadBalancingConfig": [{"pick_first":{}}]
-}`)})
+	 "healthCheckConfig": {
+		 "serviceName": "foo"
+	 },
+	 "loadBalancingConfig": [{"pick_first":{}}]
+ }`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -819,11 +820,11 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "channelzSuccess"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "channelzSuccess"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -868,11 +869,11 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, fmt.Sprintf(`{
-			"healthCheckConfig": {
-				"serviceName": "channelzFailure"
-			},
-			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+			 "healthCheckConfig": {
+				 "serviceName": "channelzFailure"
+			 },
+			 "loadBalancingConfig": [{"%s":{}}]
+		 }`, healthCheckTestPolicyName))})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -1250,11 +1251,11 @@ func (s) TestHealthCheckUnregisterHealthListener(t *testing.T) {
 
 	_, r := setupClient(t, nil)
 	svcCfg := fmt.Sprintf(`{
-		"healthCheckConfig": {
-			"serviceName": "foo"
-		},
-		"loadBalancingConfig": [{"%s":{}}]
-	}`, t.Name())
+		 "healthCheckConfig": {
+			 "serviceName": "foo"
+		 },
+		 "loadBalancingConfig": [{"%s":{}}]
+	 }`, t.Name())
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, svcCfg)})
