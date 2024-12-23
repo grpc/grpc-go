@@ -33,6 +33,9 @@ import (
 // whether or not this SubConn is ejected.
 type subConnWrapper struct {
 	balancer.SubConn
+	// addressInfo is a pointer to the subConnWrapper's corresponding address
+	// map entry, if the map entry exists. It is accessed atomically.
+	addressInfo unsafe.Pointer // *addressInfo
 	// The following fields are set during object creation and read-only after
 	// that.
 
@@ -48,10 +51,7 @@ type subConnWrapper struct {
 	// this field can be removed.
 	healthListenerEnabled bool
 
-	// addressInfo is a pointer to the subConnWrapper's corresponding address
-	// map entry, if the map entry exists.
-	addressInfo unsafe.Pointer // *addressInfo
-	scUpdateCh  *buffer.Unbounded
+	scUpdateCh *buffer.Unbounded
 
 	// The following fields are only referenced in the context of a work
 	// serializing buffer and don't need to be protected by a mutex.

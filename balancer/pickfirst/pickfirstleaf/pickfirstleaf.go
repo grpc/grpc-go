@@ -55,8 +55,8 @@ func init() {
 }
 
 type (
-	// enableHealthListenerKeyType is a unique key type used in resolver attributes
-	// to indicate whether the health listener usage is enabled.
+	// enableHealthListenerKeyType is a unique key type used in resolver
+	// attributes to indicate whether the health listener usage is enabled.
 	enableHealthListenerKeyType struct{}
 	// managedByPickfirstKeyType is an attribute key type to inform Outlier
 	// Detection that the generic health listener is being used.
