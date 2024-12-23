@@ -31,24 +31,17 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
-
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -1574,93 +1567,4 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	od.Close()
 	close(finished)
 	wg.Wait()
-}
-
-// Test verifies that outlier detection doesn't eject subchannels created by
-// the new pickfirst balancer when pickfirst is a non-leaf policy, i.e. not
-// under a petiole policy. When pickfirst is not under a petiole policy, it will
-// not register a health listener. pickfirst will still set the address
-// attribute to disable ejection through the raw connectivity listener. When
-// Outlier Detection processes a health update and sees the health listener is
-// enabled but a health listener is not registered, it will drop the ejection
-// update.
-func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return nil, errors.New("some error")
-		},
-	}
-	if err := backend.StartServer(); err != nil {
-		t.Fatalf("Failed to start backend: %v", err)
-	}
-	defer backend.Stop()
-	t.Logf("Started bad TestService backend at: %q", backend.Address)
-
-	// The interval is intentionally kept very large, the interval algorithm
-	// will be triggered manually.
-	odCfg := &LBConfig{
-		Interval:         iserviceconfig.Duration(300 * time.Second),
-		BaseEjectionTime: iserviceconfig.Duration(300 * time.Second),
-		MaxEjectionTime:  iserviceconfig.Duration(500 * time.Second),
-		FailurePercentageEjection: &FailurePercentageEjection{
-			Threshold:             50,
-			EnforcementPercentage: 100,
-			MinimumHosts:          0,
-			RequestVolume:         2,
-		},
-		MaxEjectionPercent: 100,
-		ChildPolicy: &iserviceconfig.BalancerConfig{
-			Name: pickfirstleaf.Name,
-		},
-	}
-
-	lbChan := make(chan *outlierDetectionBalancer, 1)
-	bf := stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
-			lbChan <- bd.Data.(*outlierDetectionBalancer)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			ccs.BalancerConfig = odCfg
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
-		},
-	}
-
-	stub.Register(t.Name(), bf)
-
-	opts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())),
-	}
-	cc, err := grpc.NewClient(backend.Address, opts...)
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
-	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	testServiceClient := testgrpc.NewTestServiceClient(cc)
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-
-	// Failing request should not cause ejection.
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-	testServiceClient.EmptyCall(ctx, &testpb.Empty{})
-
-	// Run the interval algorithm.
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for the outlier detection LB policy to be built.")
-	case od := <-lbChan:
-		od.intervalTimerAlgorithm()
-	}
-
-	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer shortCancel()
-	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Ready)
 }

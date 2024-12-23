@@ -28,10 +28,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
@@ -45,18 +43,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/balancer/outlierdetection" // To register helper functions which register/unregister Outlier Detection LB Policy.
 )
 
-var (
-	defaultTestTimeout = 5 * time.Second
-	leafPolicyName     = "round_robin"
-)
-
-func init() {
-	// Test the health listener code path for ejection when the experimental
-	// pickfirst is enabled.
-	if envconfig.NewPickFirstEnabled {
-		leafPolicyName = weightedroundrobin.Name
-	}
-}
+var defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -168,50 +155,50 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 	}{
 		{
 			name: "Success Rate Algorithm",
-			odscJSON: fmt.Sprintf(`
-			{
-			  "loadBalancingConfig": [
-				{
-				  "outlier_detection_experimental": {
-					"interval": "0.050s",
-					"baseEjectionTime": "0.100s",
-					"maxEjectionTime": "300s",
-					"maxEjectionPercent": 33,
-					"successRateEjection": {
-						"stdevFactor": 50,
-						"enforcementPercentage": 100,
-						"minimumHosts": 3,
-						"requestVolume": 5
-					},
-					"childPolicy": [{"%s": {}}]
-				  }
-				}
-			  ]
-			}`, leafPolicyName),
+			odscJSON: `
+{
+  "loadBalancingConfig": [
+    {
+      "outlier_detection_experimental": {
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
+		"maxEjectionPercent": 33,
+		"successRateEjection": {
+			"stdevFactor": 50,
+			"enforcementPercentage": 100,
+			"minimumHosts": 3,
+			"requestVolume": 5
+		},
+        "childPolicy": [{"round_robin": {}}]
+      }
+    }
+  ]
+}`,
 		},
 		{
 			name: "Failure Percentage Algorithm",
-			odscJSON: fmt.Sprintf(`
-			{
-			  "loadBalancingConfig": [
-				{
-				  "outlier_detection_experimental": {
-					"interval": "0.050s",
-					"baseEjectionTime": "0.100s",
-					"maxEjectionTime": "300s",
-					"maxEjectionPercent": 33,
-					"failurePercentageEjection": {
-						"threshold": 50,
-						"enforcementPercentage": 100,
-						"minimumHosts": 3,
-						"requestVolume": 5
-					},
-					"childPolicy": [{"%s": {}}
-					]
-				  }
-				}
-			  ]
-			}`, leafPolicyName),
+			odscJSON: `
+{
+  "loadBalancingConfig": [
+    {
+      "outlier_detection_experimental": {
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
+		"maxEjectionPercent": 33,
+		"failurePercentageEjection": {
+			"threshold": 50,
+			"enforcementPercentage": 100,
+			"minimumHosts": 3,
+			"requestVolume": 5
+		},
+        "childPolicy": [{"round_robin": {}}
+		]
+      }
+    }
+  ]
+}`,
 		},
 	}
 	for _, test := range tests {
@@ -286,20 +273,20 @@ func (s) TestNoopConfiguration(t *testing.T) {
 	mr := manual.NewBuilderWithScheme("od-e2e")
 	defer mr.Close()
 
-	noopODServiceConfigJSON := fmt.Sprintf(`
-	{
-	  "loadBalancingConfig": [
-		{
-		  "outlier_detection_experimental": {
-			"interval": "0.050s",
-			"baseEjectionTime": "0.100s",
-			"maxEjectionTime": "300s",
-			"maxEjectionPercent": 33,
-			"childPolicy": [{"%s": {}}]
-		  }
-		}
-	  ]
-	}`, leafPolicyName)
+	noopODServiceConfigJSON := `
+{
+  "loadBalancingConfig": [
+    {
+      "outlier_detection_experimental": {
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
+		"maxEjectionPercent": 33,
+        "childPolicy": [{"round_robin": {}}]
+      }
+    }
+  ]
+}`
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(noopODServiceConfigJSON)
 	// The full list of addresses.
 	fullAddresses := []resolver.Address{
@@ -334,26 +321,26 @@ func (s) TestNoopConfiguration(t *testing.T) {
 	// specifies to count RPC's and eject upstreams. Due to the balancer no
 	// longer being a noop, it should eject any unhealthy addresses as specified
 	// by the failure percentage portion of the configuration.
-	countingODServiceConfigJSON := fmt.Sprintf(`
-	{
-	  "loadBalancingConfig": [
-		{
-		  "outlier_detection_experimental": {
-			"interval": "0.050s",
-			"baseEjectionTime": "0.100s",
-			"maxEjectionTime": "300s",
-			"maxEjectionPercent": 33,
-			"failurePercentageEjection": {
-				"threshold": 50,
-				"enforcementPercentage": 100,
-				"minimumHosts": 3,
-				"requestVolume": 5
-			},
-			"childPolicy": [{"%s": {}}]
-		  }
-		}
-	  ]
-	}`, leafPolicyName)
+	countingODServiceConfigJSON := `
+{
+  "loadBalancingConfig": [
+    {
+      "outlier_detection_experimental": {
+        "interval": "0.050s",
+		"baseEjectionTime": "0.100s",
+		"maxEjectionTime": "300s",
+		"maxEjectionPercent": 33,
+		"failurePercentageEjection": {
+			"threshold": 50,
+			"enforcementPercentage": 100,
+			"minimumHosts": 3,
+			"requestVolume": 5
+		},
+        "childPolicy": [{"round_robin": {}}]
+      }
+    }
+  ]
+}`
 	sc = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(countingODServiceConfigJSON)
 
 	mr.UpdateState(resolver.State{

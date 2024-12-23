@@ -35,9 +35,11 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -46,7 +48,11 @@ import (
 var PickFirstConfig string
 
 func init() {
-	PickFirstConfig = fmt.Sprintf("[{%q: {}}]", pickfirstleaf.Name)
+	name := pickfirst.Name
+	if !envconfig.NewPickFirstEnabled {
+		name = pickfirstleaf.Name
+	}
+	PickFirstConfig = fmt.Sprintf("[{%q: {}}]", name)
 }
 
 // ChildState is the balancer state of a child along with the endpoint which

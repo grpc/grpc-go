@@ -58,13 +58,7 @@ const (
 	stateStoringBalancerName = "state_storing"
 )
 
-var (
-	stateStoringServiceConfig = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateStoringBalancerName)
-	ignoreBalAttributesOpt    = cmp.Transformer("IgnoreBalancerAttributes", func(a resolver.Address) resolver.Address {
-		a.BalancerAttributes = nil
-		return a
-	})
-)
+var stateStoringServiceConfig = fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateStoringBalancerName)
 
 type s struct {
 	grpctest.Tester
@@ -183,7 +177,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerReady(t *testing.T) {
 	wantSCStates := []scState{
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Ready},
 	}
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -225,7 +219,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerUnReady(t *testing.T)
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Shutdown},
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -270,7 +264,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_DuplicateAddrs(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Shutdown},
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -323,7 +317,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -340,7 +334,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[3]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -384,7 +378,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -404,7 +398,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -446,7 +440,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -464,7 +458,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -508,7 +502,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -527,7 +521,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -582,7 +576,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -597,7 +591,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -645,7 +639,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -666,7 +660,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Shutdown},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -714,7 +708,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -735,7 +729,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -782,7 +776,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 		{Addrs: []resolver.Address{addrs[0]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -802,7 +796,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 		{Addrs: []resolver.Address{addrs[1]}, State: connectivity.Ready},
 	}
 
-	if diff := cmp.Diff(wantSCStates, bal.subConnStates(), ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantSCStates, bal.subConnStates()); diff != "" {
 		t.Errorf("SubConn states mismatch (-want +got):\n%s", diff)
 	}
 
@@ -1136,7 +1130,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if diff := cmp.Diff(wantAddrs, gotAddrs, ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
 		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -1180,7 +1174,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if diff := cmp.Diff(wantAddrs, gotAddrs, ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
 		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -1226,7 +1220,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if diff := cmp.Diff(wantAddrs, gotAddrs, ignoreBalAttributesOpt); diff != "" {
+	if diff := cmp.Diff(wantAddrs, gotAddrs); diff != "" {
 		t.Errorf("SubConn creation order mismatch (-want +got):\n%s", diff)
 	}
 }

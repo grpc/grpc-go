@@ -29,7 +29,6 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/balancer/weightedroundrobin/internal"
 	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
@@ -219,9 +218,7 @@ type wrrBalancer struct {
 }
 
 func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	if b.logger.V(2) {
-		b.logger.Infof("UpdateCCS: %v", ccs)
-	}
+	b.logger.Infof("UpdateCCS: %v", ccs)
 	cfg, ok := ccs.BalancerConfig.(*lbConfig)
 	if !ok {
 		return fmt.Errorf("wrr: received nil or illegal BalancerConfig (type %T): %v", ccs.BalancerConfig, ccs.BalancerConfig)
@@ -235,9 +232,6 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.updateEndpointsLocked(ccs.ResolverState.Endpoints)
 	b.mu.Unlock()
 
-	// Make pickfirst children use health listeners for outlier detection to
-	// work.
-	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
 	// This causes child to update picker inline and will thus cause inline
 	// picker update.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
