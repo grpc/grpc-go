@@ -108,7 +108,7 @@ func proxyDial(ctx context.Context, addr resolver.Address, grpcUA string, opts p
 	if err != nil {
 		return nil, err
 	}
-	return doHTTPConnectHandshake(ctx, conn, addr, grpcUA, opts)
+	return doHTTPConnectHandshake(ctx, conn, grpcUA, opts)
 }
 
 func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
