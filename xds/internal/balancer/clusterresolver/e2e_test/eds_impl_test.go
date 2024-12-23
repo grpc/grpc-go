@@ -1232,11 +1232,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 					bd.Data.(balancer.Balancer).Close()
 				},
 				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-					select {
-					case resolverUpdateCh <- ccs.ResolverState:
-					default:
-						// Don't block forever in case of multiple updates.
-					}
+					resolverUpdateCh <- ccs.ResolverState
 					return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 				},
 			})
