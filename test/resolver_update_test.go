@@ -205,15 +205,15 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	addrs := []resolver.Address{{Addr: backend.Address}}
 	const lbCfg = "wrapping balancer LB policy config"
 	goodSC := r.CC.ParseServiceConfig(fmt.Sprintf(`
- {
-   "loadBalancingConfig": [
-	 {
-	   "%v": {
-		 "config": "%s"
-	   }
-	 }
-   ]
- }`, t.Name(), lbCfg))
+{
+  "loadBalancingConfig": [
+    {
+      "%v": {
+        "config": "%s"
+      }
+    }
+  ]
+}`, t.Name(), lbCfg))
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: goodSC})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
