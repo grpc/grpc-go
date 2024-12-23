@@ -189,11 +189,8 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	authorityMu.Lock()
 	expectedAuthority = "localhost:" + port
 	authorityMu.Unlock()
-	// ss.Start dials, but not the ":[port]" target that is being tested here.
-	// Dial again, with ":[port]" as the target.
-	//
-	// Append "localhost" before calling net.Dial, in case net.Dial on certain
-	// platforms doesn't work well for address without the IP.
+	// ss.Start dials the server, but we explicitly test with ":[port]"
+	// as the target.
 	cc, err := grpc.NewClient(":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", ss.Target, err)
