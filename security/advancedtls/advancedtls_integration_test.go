@@ -104,12 +104,12 @@ func callAndVerifyWithClientConn(connCtx context.Context, address string, msg st
 	// If we want the test to fail, we establish a non-blocking connection to
 	// avoid it hangs and killed by the context.
 	if shouldFail {
-		conn, err = grpc.DialContext(connCtx, address, grpc.WithTransportCredentials(creds))
+		conn, err = grpc.NewClient(address, grpc.WithTransportCredentials(creds))
 		if err != nil {
 			return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
 		}
 	} else {
-		conn, err = grpc.DialContext(connCtx, address, grpc.WithTransportCredentials(creds), grpc.WithBlock())
+		conn, err = grpc.NewClient(address, grpc.WithTransportCredentials(creds), grpc.WithBlock())
 		if err != nil {
 			return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
 		}
