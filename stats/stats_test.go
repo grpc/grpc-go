@@ -81,6 +81,50 @@ var (
 	}
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
+	// To verify if the Unary RPC server stats events are logged in the
+	// correct order.
+	expectedUnarySequence = []string{
+		"ConnStats",
+		"InHeader",
+		"Begin",
+		"InPayload",
+		"OutHeader",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
+	// To verify if the Client Stream RPC server stats events are logged in the
+	// correct order.
+	expectedClientStreamSequence = []string{
+		"ConnStats",
+		"InHeader",
+		"Begin",
+		"OutHeader",
+		"InPayload",
+		"InPayload",
+		"InPayload",
+		"InPayload",
+		"InPayload",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
+	// To verify if the Server Stream RPC server stats events are logged in the
+	// correct order.
+	expectedServerStreamSequence = []string{
+		"ConnStats",
+		"InHeader",
+		"Begin",
+		"InPayload",
+		"OutHeader",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
 )
 
 func idToPayload(id int32) *testpb.Payload {
@@ -242,6 +286,8 @@ func newTest(t *testing.T, tc *testConfig, chs []stats.Handler, shs []stats.Hand
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
+//
+// Uses deprecated opts rpc.(RPCCompressor, RPCDecompressor, WithBlock, Dial)
 func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testServer = ts
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -786,8 +832,13 @@ func checkConnEnd(t *testing.T, d *gotData) {
 	st.IsClient() // TODO remove this.
 }
 
+type event struct {
+	eventType string
+}
+
 type statshandler struct {
 	mu      sync.Mutex
+	events  []event
 	gotRPC  []*gotData
 	gotConn []*gotData
 }
@@ -800,13 +851,41 @@ func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) conte
 	return context.WithValue(ctx, rpcCtxKey{}, info)
 }
 
+// recordEvent records an event in the statshandler along with a timestamp.
+func (h *statshandler) recordEvent(eventType string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.events = append(h.events, event{eventType: eventType})
+}
+
 func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+	h.recordEvent("ConnStats")
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.gotConn = append(h.gotConn, &gotData{ctx, s.IsClient(), s})
 }
 
 func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	switch s.(type) {
+	case *stats.Begin:
+		h.recordEvent("Begin")
+	case *stats.InHeader:
+		h.recordEvent("InHeader")
+	case *stats.InPayload:
+		h.recordEvent("InPayload")
+	case *stats.OutHeader:
+		h.recordEvent("OutHeader")
+	case *stats.OutPayload:
+		h.recordEvent("OutPayload")
+	case *stats.InTrailer:
+		h.recordEvent("InTrailer")
+	case *stats.OutTrailer:
+		h.recordEvent("OutTrailer")
+	case *stats.End:
+		h.recordEvent("End")
+	}
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
@@ -1518,4 +1597,78 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	wg.Wait()
+}
+
+// TestServerStatsUnaryRPCEventSequence tests that the sequence of server-side stats
+// events for a Unary RPC matches the expected flow.
+func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
+	h := &statshandler{}
+	te := newTest(t, &testConfig{compress: ""}, nil, []stats.Handler{h})
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	_, _, err := te.doUnaryCall(&rpcConfig{success: true, callType: unaryRPC})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	// Allow time for events to propagate
+	time.Sleep(50 * time.Millisecond)
+	// Verify sequence
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	verifyEventSequence(t, h.events, expectedUnarySequence)
+}
+
+// TestServerStatsClientStreamEventSequence tests that the sequence of server-side
+// stats events for a Client Stream RPC matches the expected flow.
+func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
+	h := &statshandler{}
+	te := newTest(t, &testConfig{compress: "gzip"}, nil, []stats.Handler{h})
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	_, _, err := te.doClientStreamCall(&rpcConfig{count: 5, success: true, callType: clientStreamRPC})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	verifyEventSequence(t, h.events, expectedClientStreamSequence)
+}
+
+// TestServerStatsClientStreamEventSequence tests that the sequence of server-side
+// stats events for a Client Stream RPC matches the expected flow.
+func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
+	h := &statshandler{}
+	te := newTest(t, &testConfig{compress: "gzip"}, nil, []stats.Handler{h})
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	_, _, err := te.doServerStreamCall(&rpcConfig{count: 5, success: true, callType: serverStreamRPC})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	verifyEventSequence(t, h.events, expectedServerStreamSequence)
+}
+
+// verifyEventSequence verifies that a sequence of recorded events matches
+// the expected sequence.
+func verifyEventSequence(t *testing.T, got []event, expected []string) {
+	if len(got) != len(expected) {
+		t.Fatalf("Event count mismatch. Got: %d, Expected: %d", len(got), len(expected))
+	}
+
+	for i, e := range got {
+		if e.eventType != expected[i] {
+			t.Errorf("Unexpected event at position %d. Got: %s, Expected: %s", i, e.eventType, expected[i])
+		}
+	}
 }
