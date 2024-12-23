@@ -21,11 +21,9 @@ package xdsclient
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclientinternal "google.golang.org/grpc/xds/internal/xdsclient/internal"
@@ -38,30 +36,6 @@ import (
 // client from xDS-enabled gRPC servers. This is a well-known dedicated key
 // value, and is defined in gRFC A71.
 const NameForServer = "#server"
-
-// New returns an xDS client configured with bootstrap configuration specified
-// by the ordered list:
-// - file name containing the configuration specified by GRPC_XDS_BOOTSTRAP
-// - actual configuration specified by GRPC_XDS_BOOTSTRAP_CONFIG
-// - fallback configuration set using bootstrap.SetFallbackBootstrapConfig
-//
-// gRPC client implementations are expected to pass the channel's target URI for
-// the name field, while server implementations are expected to pass a dedicated
-// well-known value "#server", as specified in gRFC A71. The returned client is
-// a reference counted implementation shared among callers using the same name.
-//
-// The second return value represents a close function which releases the
-// caller's reference on the returned client.  The caller is expected to invoke
-// it once they are done using the client. The underlying client will be closed
-// only when all references are released, and it is safe for the caller to
-// invoke this close function multiple times.
-func New(name string) (XDSClient, func(), error) {
-	config, err := bootstrap.GetConfiguration()
-	if err != nil {
-		return nil, nil, fmt.Errorf("xds: failed to get xDS bootstrap config: %v", err)
-	}
-	return newRefCounted(name, config, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff)
-}
 
 // newClientImpl returns a new xdsClient with the given config.
 func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (*clientImpl, error) {
@@ -111,10 +85,6 @@ type OptionsForTesting struct {
 	// Name is a unique name for this xDS client.
 	Name string
 
-	// Contents contain a JSON representation of the bootstrap configuration to
-	// be used when creating the xDS client.
-	Contents []byte
-
 	// WatchExpiryTimeout is the timeout for xDS resource watch expiry. If
 	// unspecified, uses the default value used in non-test code.
 	WatchExpiryTimeout time.Duration
@@ -125,57 +95,16 @@ type OptionsForTesting struct {
 	StreamBackoffAfterFailure func(int) time.Duration
 }
 
-// NewForTesting returns an xDS client configured with the provided options.
-//
-// The second return value represents a close function which the caller is
-// expected to invoke once they are done using the client.  It is safe for the
-// caller to invoke this close function multiple times.
-//
-// # Testing Only
-//
-// This function should ONLY be used for testing purposes.
-func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
-	if opts.Name == "" {
-		return nil, nil, fmt.Errorf("opts.Name field must be non-empty")
-	}
-	if opts.WatchExpiryTimeout == 0 {
-		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
-	}
-	if opts.StreamBackoffAfterFailure == nil {
-		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
-	}
-
-	config, err := bootstrap.NewConfigForTesting(opts.Contents)
-	if err != nil {
-		return nil, nil, err
-	}
-	return newRefCounted(opts.Name, config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
-}
-
-// GetForTesting returns an xDS client created earlier using the given name.
-//
-// The second return value represents a close function which the caller is
-// expected to invoke once they are done using the client.  It is safe for the
-// caller to invoke this close function multiple times.
-//
-// # Testing Only
-//
-// This function should ONLY be used for testing purposes.
-func GetForTesting(name string) (XDSClient, func(), error) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-
-	c, ok := clients[name]
-	if !ok {
-		return nil, nil, fmt.Errorf("xDS client with name %q not found", name)
-	}
-	c.incrRef()
-	return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
-}
-
 func init() {
 	internal.TriggerXDSResourceNotFoundForTesting = triggerXDSResourceNotFoundForTesting
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
+	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
+	config, err := bootstrap.GetConfiguration()
+	if err != nil {
+		logger.Warningf("Failed to read xDS bootstrap config from env vars:  %v", err)
+		return
+	}
+	DefaultPool.config = config
 }
 
 func triggerXDSResourceNotFoundForTesting(client XDSClient, typ xdsresource.Type, name string) error {
@@ -193,8 +122,3 @@ func resourceWatchStateForTesting(client XDSClient, typ xdsresource.Type, name s
 	}
 	return crc.clientImpl.resourceWatchStateForTesting(typ, name)
 }
-
-var (
-	clients   = map[string]*clientRefCounted{}
-	clientsMu sync.Mutex
-)

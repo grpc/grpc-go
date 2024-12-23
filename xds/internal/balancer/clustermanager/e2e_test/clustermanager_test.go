@@ -97,6 +97,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create bootstrap configuration pointing to the above management server.
+
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	testutils.CreateBootstrapFileForTesting(t, bc)
