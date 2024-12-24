@@ -26,15 +26,6 @@ import (
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
-func (h *serverStatsHandler) initializeTracing() {
-	if !h.options.isTracingEnabled() {
-		return
-	}
-
-	otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
-	otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
-}
-
 // traceTagRPC populates context with new span data using the TextMapPropagator
 // supplied in trace options and internal itracing.Carrier. It creates a new
 // incoming carrier which extracts an existing span context (if present) by
