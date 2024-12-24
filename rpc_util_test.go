@@ -307,11 +307,9 @@ func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
 	if _, err := gz.Write(input); err != nil {
 		t.Fatalf("compressInput() failed to write data: %v", err)
 	}
-
 	if err := gz.Close(); err != nil {
 		t.Fatalf("compressInput() failed to close gzip writer: %v", err)
 	}
-
 	compressedData := buf.Bytes()
 	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 }
