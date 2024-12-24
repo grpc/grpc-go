@@ -41,6 +41,7 @@ var (
 		cmp.AllowUnexported(testutils.TestSubConn{}, ringEntry{}, subConn{}),
 		cmpopts.IgnoreFields(subConn{}, "mu"),
 		cmpopts.IgnoreFields(testutils.TestSubConn{}, "connectCalled"),
+		cmpopts.IgnoreFields(testutils.TestSubConn{}, "HealthUpdateDelivered"),
 	}
 )
 

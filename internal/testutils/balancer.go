@@ -33,12 +33,13 @@ import (
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
 	balancer.SubConn
-	tcc           *BalancerClientConn // the CC that owns this SubConn
-	id            string
-	ConnectCh     chan struct{}
-	stateListener func(balancer.SubConnState)
-	connectCalled *grpcsync.Event
-	Addresses     []resolver.Address
+	tcc                   *BalancerClientConn // the CC that owns this SubConn
+	id                    string
+	ConnectCh             chan struct{}
+	stateListener         func(balancer.SubConnState)
+	connectCalled         *grpcsync.Event
+	Addresses             []resolver.Address
+	HealthUpdateDelivered *grpcsync.Event
 }
 
 // NewTestSubConn returns a newly initialized SubConn.  Typically, subconns
@@ -46,9 +47,10 @@ type TestSubConn struct {
 // for some tests.
 func NewTestSubConn(id string) *TestSubConn {
 	return &TestSubConn{
-		ConnectCh:     make(chan struct{}, 1),
-		connectCalled: grpcsync.NewEvent(),
-		id:            id,
+		ConnectCh:             make(chan struct{}, 1),
+		connectCalled:         grpcsync.NewEvent(),
+		HealthUpdateDelivered: grpcsync.NewEvent(),
+		id:                    id,
 	}
 }
 
@@ -93,8 +95,15 @@ func (tsc *TestSubConn) String() string {
 	return tsc.id
 }
 
-// RegisterHealthListener is a no-op.
-func (*TestSubConn) RegisterHealthListener(func(balancer.SubConnState)) {}
+// RegisterHealthListener is send a READY update to mock a situation when no
+// health checking mechanisms are configured.
+func (tsc *TestSubConn) RegisterHealthListener(lis func(balancer.SubConnState)) {
+	// Call the listener in a separate gorouting to avoid deadlocks.
+	go func() {
+		lis(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		tsc.HealthUpdateDelivered.Fire()
+	}()
+}
 
 // BalancerClientConn is a mock balancer.ClientConn used in tests.
 type BalancerClientConn struct {
@@ -131,12 +140,13 @@ func NewBalancerClientConn(t *testing.T) *BalancerClientConn {
 // NewSubConn creates a new SubConn.
 func (tcc *BalancerClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc := &TestSubConn{
-		tcc:           tcc,
-		id:            fmt.Sprintf("sc%d", tcc.subConnIdx),
-		ConnectCh:     make(chan struct{}, 1),
-		stateListener: o.StateListener,
-		connectCalled: grpcsync.NewEvent(),
-		Addresses:     a,
+		tcc:                   tcc,
+		id:                    fmt.Sprintf("sc%d", tcc.subConnIdx),
+		ConnectCh:             make(chan struct{}, 1),
+		stateListener:         o.StateListener,
+		connectCalled:         grpcsync.NewEvent(),
+		HealthUpdateDelivered: grpcsync.NewEvent(),
+		Addresses:             a,
 	}
 	tcc.subConnIdx++
 	tcc.logger.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)
