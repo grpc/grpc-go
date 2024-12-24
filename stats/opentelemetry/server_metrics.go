@@ -33,6 +33,7 @@ import (
 )
 
 type serverStatsHandler struct {
+	statsHandler
 	estats.MetricsRecorder
 	options       Options
 	serverMetrics serverMetrics
@@ -201,10 +202,12 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
 	}
-	ri := &rpcInfo{
-		ai: ai,
+	if h.options.isTracingEnabled() {
+		ctx, ai = h.traceTagRPC(ctx, info, ai)
 	}
-	return setRPCInfo(ctx, ri)
+	return setRPCInfo(ctx, &rpcInfo{
+		ai: ai,
+	})
 }
 
 // HandleRPC implements per RPC tracing and stats implementation.
@@ -214,7 +217,12 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	h.processRPCData(ctx, rs, ri.ai)
+	if h.options.isTracingEnabled() {
+		h.populateSpan(ctx, rs, ri.ai)
+	}
+	if h.options.isMetricsEnabled() {
+		h.processRPCData(ctx, rs, ri.ai)
+	}
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
