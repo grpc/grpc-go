@@ -890,6 +890,7 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMes
 	}
 
 	if doesReceiveMessageOverflow(out.Len(), maxReceiveMessageSize, dcReader) {
+		out.Free()
 		return nil, errMaxMessageSizeExceeded
 	}
 	return out, nil

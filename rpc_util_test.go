@@ -299,8 +299,8 @@ func BenchmarkGZIPCompressor1MiB(b *testing.B) {
 	bmCompressor(b, 1024*1024, NewGZIPCompressor())
 }
 
-// mustCompress compresses the input data and returns a BufferSlice.
-func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
+// compressWithDeterministicError compresses the input data and returns a BufferSlice.
+func compressWithDeterministicError(t *testing.T, input []byte) mem.BufferSlice {
 	t.Helper()
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -314,10 +314,10 @@ func mustCompress(t *testing.T, input []byte) mem.BufferSlice {
 	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 }
 
-// TestDecompress tests the decompress function with various scenarios, including
-// successful decompression, error handling, and edge cases like overflow or
-// premature data end. It ensures that the function behaves correctly with different
-// inputs, buffer sizes, and error conditions, using the "gzip" compressor for testing.
+// TestDecompress tests the decompress function behaves correctly for following scenarios
+// decompress successfully when message is <= maxReceiveMessageSize
+// errors when message > maxReceiveMessageSize
+// decompress successfully when maxReceiveMessageSize is MaxInt.
 func (s) TestDecompress(t *testing.T) {
 	compressor := encoding.GetCompressor("gzip")
 
@@ -330,28 +330,28 @@ func (s) TestDecompress(t *testing.T) {
 	}{
 		{
 			name:                  "Decompresses successfully with sufficient buffer size",
-			input:                 mustCompress(t, []byte("decompressed data")),
+			input:                 compressWithDeterministicError(t, []byte("decompressed data")),
 			maxReceiveMessageSize: 50,
 			want:                  []byte("decompressed data"),
 			wantErr:               nil,
 		},
 		{
 			name:                  "Fails due to exceeding maxReceiveMessageSize",
-			input:                 mustCompress(t, []byte("message that is too large")),
+			input:                 compressWithDeterministicError(t, []byte("message that is too large")),
 			maxReceiveMessageSize: len("message that is too large") - 1,
 			want:                  nil,
 			wantErr:               errMaxMessageSizeExceeded,
 		},
 		{
 			name:                  "Decompresses to exactly maxReceiveMessageSize",
-			input:                 mustCompress(t, []byte("exact size message")),
+			input:                 compressWithDeterministicError(t, []byte("exact size message")),
 			maxReceiveMessageSize: len("exact size message"),
 			want:                  []byte("exact size message"),
 			wantErr:               nil,
 		},
 		{
-			name:                  "Handles large buffer size MaxInt",
-			input:                 mustCompress(t, []byte("large message")),
+			name:                  "Decompresses successfully with maxReceiveMessageSize MaxInt",
+			input:                 compressWithDeterministicError(t, []byte("large message")),
 			maxReceiveMessageSize: math.MaxInt,
 			want:                  []byte("large message"),
 			wantErr:               nil,
