@@ -363,11 +363,9 @@ func (s) TestDecompress(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			output, err := decompress(compressor, tc.input, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
-
 			if !cmp.Equal(err, tc.wantErr, cmpopts.EquateErrors()) {
-				t.Fatalf("decompress() error = %v, wantErr = %v", err, tc.wantErr)
+				t.Fatalf("decompress() err = %v, wantErr = %v", err, tc.wantErr)
 			}
-
 			if !cmp.Equal(tc.want, output.Materialize()) {
 				t.Fatalf("decompress() output mismatch: got = %v, want = %v", output.Materialize(), tc.want)
 			}
