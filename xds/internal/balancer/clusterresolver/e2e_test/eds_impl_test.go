@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1223,8 +1223,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			defer func() {
 				balancer.Register(originalRRBuilder)
 			}()
-			resolverStateMu := sync.Mutex{}
-			resolverState := resolver.State{}
+			resolverState := atomic.Pointer[resolver.State]{}
+			resolverState.Store(&resolver.State{})
 			stub.Register(roundrobin.Name, stub.BalancerFuncs{
 				Init: func(bd *stub.BalancerData) {
 					bd.Data = originalRRBuilder.Build(bd.ClientConn, bd.BuildOptions)
@@ -1233,9 +1233,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 					bd.Data.(balancer.Balancer).Close()
 				},
 				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-					resolverStateMu.Lock()
-					defer resolverStateMu.Unlock()
-					resolverState = ccs.ResolverState
+					resolverState.Store(&ccs.ResolverState)
 					return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 				},
 			})
@@ -1300,9 +1298,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			resolverStateMu.Lock()
-			gotState := resolverState
-			resolverStateMu.Unlock()
+			gotState := resolverState.Load()
 
 			gotEndpointPorts := []uint32{}
 			for _, a := range gotState.Endpoints[0].Addresses {
