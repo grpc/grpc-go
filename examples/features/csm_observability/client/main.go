@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	"google.golang.org/grpc/examples/features/proto/echo"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/csm"
 	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
@@ -40,9 +40,12 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
+const defaultName = "world"
+
 var (
 	target             = flag.String("target", "xds:///helloworld:50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint")
+	name               = flag.String("name", defaultName, "Name to greet")
 )
 
 func main() {
@@ -68,15 +71,15 @@ func main() {
 		log.Fatalf("Failed to start NewClient: %v", err)
 	}
 	defer cc.Close()
-	c := echo.NewEchoClient(cc)
+	c := pb.NewGreeterClient(cc)
 
 	// Make an RPC every second. This should trigger telemetry to be emitted from
 	// the client and the server.
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
+		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
 		if err != nil {
-			log.Printf("UnaryEcho failed: %v", err)
+			log.Fatalf("Could not greet: %v", err)
 		}
 		fmt.Println(r)
 		time.Sleep(time.Second)
