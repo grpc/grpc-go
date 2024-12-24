@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
@@ -100,6 +101,8 @@ func defaultTraceOptions(_ *testing.T) (*experimental.TraceOptions, *tracetest.I
 	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
 	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
 	textMapPropagator := propagation.NewCompositeTextMapPropagator(expstats.GRPCTraceBinPropagator{})
+	otel.SetTextMapPropagator(textMapPropagator)
+	otel.SetTracerProvider(tracerProvider)
 	traceOptions := &experimental.TraceOptions{
 		TracerProvider:    tracerProvider,
 		TextMapPropagator: textMapPropagator,
