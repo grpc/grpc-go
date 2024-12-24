@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
@@ -41,26 +42,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
-func (s *testServer) UnaryCall(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{}, nil
-}
-
-func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
-	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			return stream.SendAndClose(&testpb.StreamingInputCallResponse{})
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
 
 type s struct {
 	grpctest.Tester
@@ -313,17 +294,33 @@ func (s) TestStaticPolicyEnd2End(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Start a gRPC server with gRPC authz unary and stream server interceptors.
 			i, _ := authz.NewStatic(test.authzPolicy)
-			s := grpc.NewServer(
-				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
-				grpc.ChainStreamInterceptor(i.StreamInterceptor))
-			defer s.Stop()
-			testgrpc.RegisterTestServiceServer(s, &testServer{})
 
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("error listening: %v", err)
 			}
-			go s.Serve(lis)
+			stub := &stubserver.StubServer{
+				Listener: lis,
+				UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
+				},
+				StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+					for {
+						_, err := stream.Recv()
+						if err == io.EOF {
+							return stream.SendAndClose(&testpb.StreamingInputCallResponse{})
+						}
+						if err != nil {
+							return err
+						}
+					}
+				},
+				S: grpc.NewServer(
+					grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
+					grpc.ChainStreamInterceptor(i.StreamInterceptor)),
+			}
+			stubserver.StartTestService(t, stub)
+			defer stub.S.Stop()
 
 			// Establish a connection to the server.
 			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -383,17 +380,22 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnTLSAuthenticatedConnection(t *
 	if err != nil {
 		t.Fatalf("failed to generate credentials: %v", err)
 	}
-	s := grpc.NewServer(
-		grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
-	go s.Serve(lis)
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		S: grpc.NewServer(
+			grpc.Creds(creds),
+			grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	// Establish a connection to the server.
 	creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
@@ -448,17 +450,22 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t 
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    certPool,
 	})
-	s := grpc.NewServer(
-		grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
-	go s.Serve(lis)
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		S: grpc.NewServer(
+			grpc.Creds(creds),
+			grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	// Establish a connection to the server.
 	cert, err = tls.LoadX509KeyPair(testdata.Path("x509/client1_cert.pem"), testdata.Path("x509/client1_key.pem"))
@@ -501,19 +508,34 @@ func (s) TestFileWatcherEnd2End(t *testing.T) {
 			i, _ := authz.NewFileWatcher(file, 1*time.Second)
 			defer i.Close()
 
-			// Start a gRPC server with gRPC authz unary and stream server interceptors.
-			s := grpc.NewServer(
-				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
-				grpc.ChainStreamInterceptor(i.StreamInterceptor))
-			defer s.Stop()
-			testgrpc.RegisterTestServiceServer(s, &testServer{})
-
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("error listening: %v", err)
 			}
 			defer lis.Close()
-			go s.Serve(lis)
+			stub := &stubserver.StubServer{
+				Listener: lis,
+				UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
+				},
+				StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+					for {
+						_, err := stream.Recv()
+						if err == io.EOF {
+							return stream.SendAndClose(&testpb.StreamingInputCallResponse{})
+						}
+						if err != nil {
+							return err
+						}
+					}
+				},
+				// Start a gRPC server with gRPC authz unary and stream server interceptors.
+				S: grpc.NewServer(
+					grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
+					grpc.ChainStreamInterceptor(i.StreamInterceptor)),
+			}
+			stubserver.StartTestService(t, stub)
+			defer stub.S.Stop()
 
 			// Establish a connection to the server.
 			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -571,18 +593,22 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
 
-	// Start a gRPC server with gRPC authz unary server interceptor.
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
 	defer lis.Close()
-	go s.Serve(lis)
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		// Start a gRPC server with gRPC authz unary server interceptor.
+		S: grpc.NewServer(
+			grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	// Establish a connection to the server.
 	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -619,18 +645,22 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	i, _ := authz.NewFileWatcher(file, 20*time.Millisecond)
 	defer i.Close()
 
-	// Start a gRPC server with gRPC authz unary server interceptors.
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
 	defer lis.Close()
-	go s.Serve(lis)
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		// Start a gRPC server with gRPC authz unary server interceptors.
+		S: grpc.NewServer(
+			grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	// Establish a connection to the server.
 	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -670,18 +700,22 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
 
-	// Start a gRPC server with gRPC authz unary server interceptors.
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
 	defer lis.Close()
-	go s.Serve(lis)
+
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		S: grpc.NewServer(
+			grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
+	stubserver.StartTestService(t, stub)
+	defer stub.S.Stop()
 
 	// Establish a connection to the server.
 	clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
