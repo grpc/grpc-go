@@ -78,7 +78,9 @@ func TestClusterPicks(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
+	})
 
 	configJSON1 := `{
 "children": {
@@ -97,9 +99,9 @@ func TestClusterPicks(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -120,6 +122,7 @@ func TestClusterPicks(t *testing.T) {
 		m1[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -157,7 +160,9 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
+	})
 
 	configJSON1 := `{
 "children": {
@@ -176,9 +181,9 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -199,6 +204,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 		m1[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -244,10 +250,10 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}
 	wantAddrs = append(wantAddrs, resolver.Address{Addr: testBackendAddrStrs[2], BalancerAttributes: nil})
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
-			hierarchy.Set(wantAddrs[2], []string{"cds:cluster_3"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[2]}}, []string{"cds:cluster_3"}),
 		}},
 		BalancerConfig: config2,
 	}); err != nil {
@@ -315,7 +321,9 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
+	})
 
 	configJSON1 := `{
 "children": {
@@ -334,9 +342,9 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -357,6 +365,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		m1[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -418,9 +427,9 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	// Resend the previous config with clusters
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -441,6 +450,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		m2[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p3 := <-cc.NewPickerCh
@@ -484,6 +494,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	bOpts := balancer.BuildOptions{
 		DialCreds:       insecure.NewCredentials(),
 		CustomUserAgent: userAgent,
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
 	}
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
@@ -560,7 +571,9 @@ func TestInitialIdle(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
+	})
 
 	configJSON1 := `{
 "children": {
@@ -577,8 +590,8 @@ func TestInitialIdle(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -607,7 +620,9 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
+	})
 	defer bal.Close()
 
 	configJSON1 := `{
@@ -624,8 +639,8 @@ func TestClusterGracefulSwitch(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"csp:cluster"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"csp:cluster"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -635,6 +650,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	<-sc1.HealthUpdateDelivered.Done()
 	p1 := <-cc.NewPickerCh
 	pi := balancer.PickInfo{
 		Ctx: SetPickedCluster(context.Background(), "csp:cluster"),
@@ -666,8 +682,8 @@ func TestClusterGracefulSwitch(t *testing.T) {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[1], []string{"csp:cluster"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"csp:cluster"}),
 		}},
 		BalancerConfig: config2,
 	}); err != nil {
@@ -735,7 +751,9 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{
+		MetricsRecorder: &stats.NoopMetricsRecorder{},
+	})
 	defer bal.Close()
 
 	configJSON1 := `{
@@ -753,8 +771,8 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {

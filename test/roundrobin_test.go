@@ -51,6 +51,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 
 	const backendCount = 5
 	backends := make([]*stubserver.StubServer, backendCount)
+	endpoints := make([]resolver.Endpoint, backendCount)
 	addrs := make([]resolver.Address, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
@@ -64,6 +65,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 
 		backends[i] = backend
 		addrs[i] = resolver.Address{Addr: backend.Address}
+		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{addrs[i]}}
 	}
 
 	dopts := []grpc.DialOption{
@@ -87,7 +89,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 		t.Fatalf("EmptyCall() = %s, want %s", status.Code(err), codes.DeadlineExceeded)
 	}
 
-	r.UpdateState(resolver.State{Addresses: addrs})
+	r.UpdateState(resolver.State{Endpoints: endpoints})
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs); err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +117,10 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{}})
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	const msgWant = "produced zero addresses"
+	const msgWant = "no children to pick from"
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); !strings.Contains(status.Convert(err).Message(), msgWant) {
 		t.Fatalf("EmptyCall() = %v, want Contains(Message(), %q)", err, msgWant)
@@ -137,7 +139,7 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{}})
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	client := testgrpc.NewTestServiceClient(cc)
@@ -173,7 +175,9 @@ func (s) TestRoundRobin_NewAddressWhileBlocking(t *testing.T) {
 
 	// Send a resolver update with a valid backend to push the channel to Ready
 	// and unblock the above RPC.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: backends[0].Address}}},
+	}})
 
 	select {
 	case <-ctx.Done():
@@ -268,7 +272,9 @@ func (s) TestRoundRobin_UpdateAddressAttributes(t *testing.T) {
 	}
 	// Set an initial resolver update with no address attributes.
 	addr := resolver.Address{Addr: backend.Address}
-	r.InitialState(resolver.State{Addresses: []resolver.Address{addr}})
+	r.InitialState(resolver.State{Endpoints: []resolver.Endpoint{
+		{Addresses: []resolver.Address{addr}},
+	}})
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
@@ -293,7 +299,9 @@ func (s) TestRoundRobin_UpdateAddressAttributes(t *testing.T) {
 
 	// Send a resolver update with address attributes.
 	addrWithAttributes := imetadata.Set(addr, metadata.Pairs(testMDKey, testMDValue))
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrWithAttributes}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{
+		{Addresses: []resolver.Address{addrWithAttributes}},
+	}})
 
 	// Make an RPC and ensure it contains the metadata we are looking for. The
 	// resolver update isn't processed synchronously, so we wait some time before
