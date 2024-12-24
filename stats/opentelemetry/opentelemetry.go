@@ -115,6 +115,7 @@ type MetricsOptions struct {
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
+	csh.initializeMetrics()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
@@ -134,6 +135,7 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
+	ssh.initializeMetrics()
 	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 }
 
