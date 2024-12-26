@@ -244,7 +244,7 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 // is created with a dial target containing an authority which is not specified
 // in the bootstrap configuration. The test verifies that RPCs on the ClientConn
 // fail with an appropriate error.
-func TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
+func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	// Setting up the management server is not *really* required for this test
 	// case. All we need is a bootstrap configuration which does not contain the
 	// authority mentioned in the dial target. But setting up the management
@@ -288,11 +288,10 @@ func TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
 	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
 	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
-	cc, err = grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.NewClient(%q) returned %v, want: %s", target, err, wantErr)
+		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
 	}
-	defer cc.Close()
 }
 
 // TestFederation_UnknownAuthorityInReceivedResponse tests the case where the
