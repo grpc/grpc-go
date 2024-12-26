@@ -114,7 +114,7 @@ func createTestConn() *grpc.ClientConn {
 	}
 	conn, err := grpc.NewClient(*serverURI, opts...)
 	if err != nil {
-		errorLog.Fatalf("NewClient() failed: %v", err)
+		errorLog.Fatalf("Failed to create a client: %v", err)
 	}
 	return conn
 }

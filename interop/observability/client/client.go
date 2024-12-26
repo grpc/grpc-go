@@ -59,7 +59,7 @@ func main() {
 	}
 	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("NewClient() failed: %v", err)
+		log.Fatalf("Failed to create a client: %v", err)
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)

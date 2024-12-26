@@ -439,7 +439,7 @@ func main() {
 	for i := 0; i < *numChannels; i++ {
 		conn, err := grpc.NewClient(*server, grpc.WithTransportCredentials(creds))
 		if err != nil {
-			logger.Fatalf("NewClient() failed: %v", err)
+			logger.Fatalf("Failed to create a client: %v", err)
 		}
 		defer conn.Close()
 		clients[i] = testgrpc.NewTestServiceClient(conn)

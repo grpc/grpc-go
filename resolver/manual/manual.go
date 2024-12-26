@@ -110,7 +110,7 @@ func (r *Resolver) UpdateState(s resolver.State) {
 	defer r.mu.Unlock()
 	var err error
 	if r.CC == nil {
-		panic("cannot update state as grpc.NewClient with resolver has not been called")
+		panic("cannot update state as channel has not exited IDLE state")
 	}
 	err = r.CC.UpdateState(s)
 	r.lastSeenState = &s

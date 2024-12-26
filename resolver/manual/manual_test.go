@@ -38,7 +38,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("update_state_panics", func(t *testing.T) {
 		defer func() {
-			want := "cannot update state as grpc.NewClient with resolver has not been called"
+			want := "cannot update state as channel has not exited IDLE state"
 			if r := recover(); r != want {
 				t.Errorf("expected panic %q, got %q", want, r)
 			}

@@ -81,7 +81,7 @@ func remoteCommand() error {
 	logger.Infof("dialing %s", *flagAddress)
 	cc, err := grpc.NewClient(*flagAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		logger.Errorf("NewClient() failed %s: %v", *flagAddress, err)
+		logger.Errorf("Failed to create a client for server %q: %v", *flagAddress, err)
 		return err
 	}
 	defer cc.Close()
