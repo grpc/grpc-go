@@ -435,9 +435,16 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 		for {
 			buf := ht.bufferPool.Get(http2MaxFrameLen)
 			n, err := req.Body.Read(*buf)
-			if n > 0 {
+			if n > http2MaxFrameLen/4 {
+				// size is big enough, just use the buffer
 				*buf = (*buf)[:n]
 				s.buf.put(recvMsg{buffer: mem.NewBuffer(buf, ht.bufferPool)})
+			} else if n > 0 {
+				// move to a smaller buffer and put back the original buffer
+				newBuf := ht.bufferPool.Get(n)
+				copy(*newBuf, (*buf)[:n])
+				ht.bufferPool.Put(buf)
+				s.buf.put(recvMsg{buffer: mem.NewBuffer(newBuf, ht.bufferPool)})
 			} else {
 				ht.bufferPool.Put(buf)
 			}
