@@ -577,7 +577,7 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
 	cc.Connect()
 	// Subscribe to state updates.  Use a buffer size of 1 to allow the
