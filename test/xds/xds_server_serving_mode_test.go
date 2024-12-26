@@ -247,7 +247,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Create a ClientConn to the first listener and make a successful RPCs.
 	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
 	defer cc1.Close()
 	waitForSuccessfulRPC(ctx, t, cc1)
@@ -255,7 +255,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Create a ClientConn to the second listener and make a successful RPCs.
 	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
 	defer cc2.Close()
 	waitForSuccessfulRPC(ctx, t, cc2)
@@ -309,14 +309,11 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	waitForFailedRPC(ctx, t, cc1)
 	waitForFailedRPC(ctx, t, cc2)
 
-	// Make sure new connection attempts to "not-serving" servers fail. We use a
-	// short timeout since we expect this to fail.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := grpc.DialContext(sCtx, lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())); err == nil {
-		t.Fatal("successfully created clientConn to a server in \"not-serving\" state")
+	// Make sure new connection attempts to "not-serving" servers fail.
+	if cc1, err = grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()); err != nil {
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
-
+	defer cc1.Close()
 	// Update the management server with both listener resources.
 	if err := managementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
