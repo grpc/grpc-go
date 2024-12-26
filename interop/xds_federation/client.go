@@ -101,9 +101,9 @@ func main() {
 		case insecureCredsName:
 			opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
-		cc, err := grpc.Dial(uris[i], opts...)
+		cc, err := grpc.NewClient(uris[i], opts...)
 		if err != nil {
-			logger.Fatalf("Fail to dial %v: %v", uris[i], err)
+			logger.Fatalf("NewClient() failed %v: %v", uris[i], err)
 		}
 		defer cc.Close()
 		clients = append(clients, clientConfig{

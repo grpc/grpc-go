@@ -261,9 +261,9 @@ func main() {
 		}
 		opts = append(opts, grpc.WithUnaryInterceptor(unaryAddMd), grpc.WithStreamInterceptor(streamingAddMd))
 	}
-	conn, err := grpc.Dial(serverAddr, opts...)
+	conn, err := grpc.NewClient(serverAddr, opts...)
 	if err != nil {
-		logger.Fatalf("Fail to dial: %v", err)
+		logger.Fatalf("NewClient() failed: %v", err)
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)

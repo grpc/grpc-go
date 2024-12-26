@@ -68,7 +68,7 @@ func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 		server.Serve(lis)
 	}()
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}

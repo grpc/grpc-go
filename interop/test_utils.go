@@ -689,7 +689,7 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 	client := tc
 	if resetChannel {
 		var conn *grpc.ClientConn
-		conn, err = grpc.Dial(serverAddr, dopts...)
+		conn, err = grpc.NewClient(serverAddr, dopts...)
 		if err != nil {
 			return
 		}
