@@ -40,8 +40,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-
-	pAddr, _ := SetupProxy(t, RequestCheck(blis.Addr().String()), true)
+	pLis, _ := SetupProxy(t, map[string]string{}, RequestCheck(blis.Addr().String()), true)
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))
@@ -62,7 +61,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		return &url.URL{
 			Scheme: "https",
-			Host:   pAddr,
+			Host:   pLis.Addr().String(),
 		}, nil
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
@@ -74,7 +73,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	// Dial to proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, err := proxyDial(ctx, resolver.Address{Addr: pAddr}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
+	c, err := proxyDial(ctx, resolver.Address{Addr: pLis.Addr().String()}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
 	if err != nil {
 		t.Fatalf("HTTP connect Dial failed: %v", err)
 	}

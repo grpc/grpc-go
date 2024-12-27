@@ -27,8 +27,6 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/internal/testutils"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -67,7 +65,7 @@ func (p *ProxyServer) stop() {
 }
 
 // Creates and starts a proxy server.
-func newProxyServer(t *testing.T, lis net.Listener, reqCheck func(*http.Request) error, proxyStarted func(), waitForServerHello bool) *ProxyServer {
+func newProxyServer(t *testing.T, lis net.Listener, dnsCache map[string]string, reqCheck func(*http.Request) error, proxyStarted func(), waitForServerHello bool) *ProxyServer {
 	t.Helper()
 	p := &ProxyServer{
 		lis:          lis,
@@ -97,8 +95,11 @@ func newProxyServer(t *testing.T, lis net.Listener, reqCheck func(*http.Request)
 			t.Errorf("get wrong CONNECT req: %+v, error: %v", req, err)
 			return
 		}
-
-		out, err := net.Dial("tcp", req.URL.Host)
+		addr := dnsCache[req.URL.Host]
+		if addr == "" {
+			addr = req.URL.Host
+		}
+		out, err := net.Dial("tcp", addr)
 		if err != nil {
 			t.Errorf("failed to dial to server: %v", err)
 			return
@@ -133,7 +134,7 @@ func newProxyServer(t *testing.T, lis net.Listener, reqCheck func(*http.Request)
 
 // SetupProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns the proxy's listener and helper channels.
-func SetupProxy(t *testing.T, reqCheck func(*http.Request) error, waitForServerHello bool) (string, chan struct{}) {
+func SetupProxy(t *testing.T, dnsCache map[string]string, reqCheck func(*http.Request) error, waitForServerHello bool) (net.Listener, chan struct{}) {
 	t.Helper()
 	pLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -142,8 +143,8 @@ func SetupProxy(t *testing.T, reqCheck func(*http.Request) error, waitForServerH
 
 	proxyStartedCh := make(chan struct{})
 
-	proxyServer := newProxyServer(t, pLis, reqCheck, func() { close(proxyStartedCh) }, waitForServerHello)
+	proxyServer := newProxyServer(t, pLis, dnsCache, reqCheck, func() { close(proxyStartedCh) }, waitForServerHello)
 	t.Cleanup(proxyServer.stop)
 
-	return fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())), proxyStartedCh
+	return pLis, proxyStartedCh
 }
