@@ -384,8 +384,8 @@ func WithNoProxy() DialOption {
 }
 
 // WithTargetResolutionEnabled returns a DialOption which enables target
-// resolution on client even when "dns" scheme is used. This is ignored if
-// WithNoProxy is used.
+// resolution on client when a proxy is used along with the the "dns" scheme.
+// This is ignored if WithNoProxy is used.
 //
 // # Experimental
 //

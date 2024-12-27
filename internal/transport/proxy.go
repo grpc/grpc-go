@@ -69,10 +69,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 
 	if user := opts.User; user != (url.Userinfo{}) {
 		u := user.Username()
-		p, pSet := user.Password()
-		if !pSet && logger.V(2) {
-			logger.Warningf("password not set for basic authentication for proxy dialing")
-		}
+		p, _ := user.Password()
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
 	}
 	if err := sendHTTPRequest(ctx, req, conn); err != nil {
@@ -104,6 +101,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 
 // proxyDial establishes a TCP connection to the specified address and performs an HTTP CONNECT handshake.
 func proxyDial(ctx context.Context, addr resolver.Address, grpcUA string, opts proxyattributes.Options) (net.Conn, error) {
+	fmt.Printf("\nemchandwani : address : %v\n", addr.Addr)
 	conn, err := internal.NetDialerWithTCPKeepalive().DialContext(ctx, "tcp", addr.Addr)
 	if err != nil {
 		return nil, err
