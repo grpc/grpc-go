@@ -153,12 +153,17 @@ func (s) TestProducer(t *testing.T) {
 	li := &listenerInfo{scChan: make(chan balancer.SubConn, 1), listener: oobLis, opts: lisOpts}
 	addr := setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, li)
 	r.InitialState(resolver.State{Addresses: []resolver.Address{addr}})
-	cc, err := grpc.Dial("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dopts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`),
+		grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	cc, err := grpc.NewClient("whatever:///whatever", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	// Set a few metrics and wait for them on the client side.
 	smr.SetCPUUtilization(10)
 	smr.SetMemoryUtilization(0.1)
@@ -319,10 +324,16 @@ func (s) TestProducerBackoff(t *testing.T) {
 	lisOpts := orca.OOBListenerOptions{ReportInterval: reportInterval}
 	li := &listenerInfo{scChan: make(chan balancer.SubConn, 1), listener: oobLis, opts: lisOpts}
 	r.InitialState(resolver.State{Addresses: []resolver.Address{setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, li)}})
-	cc, err := grpc.Dial("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.Dial failed: %v", err)
+	dopts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`),
+		grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
+	cc, err := grpc.NewClient("whatever:///whatever", dopts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient failed: %v", err)
+	}
+	cc.Connect()
 	defer cc.Close()
 
 	// Define a load report to send and expect the client to see.
@@ -431,10 +442,11 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	lisOpts1 := orca.OOBListenerOptions{ReportInterval: reportInterval1}
 	li := &listenerInfo{scChan: make(chan balancer.SubConn, 1), listener: oobLis1, opts: lisOpts1}
 	r.InitialState(resolver.State{Addresses: []resolver.Address{setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, li)}})
-	cc, err := grpc.Dial("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	// Ensure the OOB listener is stopped before the client is closed to avoid

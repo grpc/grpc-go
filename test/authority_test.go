@@ -165,7 +165,7 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 	}
 }
 
-// TestColonPortAuthority does an end to end test with the target for grpc.Dial
+// TestColonPortAuthority does an end to end test with the target for grpc.NewClient
 // being ":[port]". Ensures authority is "localhost:[port]".
 func (s) TestColonPortAuthority(t *testing.T) {
 	expectedAuthority := ""
@@ -189,16 +189,11 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	authorityMu.Lock()
 	expectedAuthority = "localhost:" + port
 	authorityMu.Unlock()
-	// ss.Start dials, but not the ":[port]" target that is being tested here.
-	// Dial again, with ":[port]" as the target.
-	//
-	// Append "localhost" before calling net.Dial, in case net.Dial on certain
-	// platforms doesn't work well for address without the IP.
-	cc, err := grpc.Dial(":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "tcp", "localhost"+addr)
-	}))
+	// ss.Start dials the server, but we explicitly test with ":[port]"
+	// as the target.
+	cc, err := grpc.NewClient(":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%q) = %v", ss.Target, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", ss.Target, err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
