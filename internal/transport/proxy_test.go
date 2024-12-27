@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/http/httpproxy"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/resolver"
@@ -58,16 +59,14 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   pLis.Addr().String(),
-		}, nil
+	t.Setenv("HTTPS_PROXY", pLis.Addr().String())
+
+	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
 	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
+		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
 
 	// Dial to proxy server.
