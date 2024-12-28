@@ -1663,7 +1663,7 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 // verifyEventSequence verifies that a sequence of recorded events matches
 // the expected sequence.
 func verifyEventSequence(t *testing.T, got []event, expected []string) {
-    t.Helper() 
+    t.Helper()
     // Extract event types from `got` for comparison.
 	gotEventTypes := make([]string, len(got))
 	for i, e := range got {
