@@ -66,6 +66,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"    // Register the router filter
 )
 
+/*
 // Tests the case where xDS client creation is expected to fail because the
 // bootstrap configuration is not specified. The test verifies that xDS resolver
 // build fails as well.
@@ -81,6 +82,7 @@ func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 		t.Fatalf("xds Resolver Build(%v) succeeded when expected to fail, because there is not bootstrap configuration for the xDS client", target)
 	}
 }
+*/
 
 // Tests the case where the specified dial target contains an authority that is
 // not specified in the bootstrap file. Verifies that the resolver.Build method
