@@ -81,50 +81,6 @@ var (
 	}
 	// The id for which the service handler should return error.
 	errorID int32 = 32202
-	// To verify if the Unary RPC server stats events are logged in the
-	// correct order.
-	expectedUnarySequence = []string{
-		"ConnStats",
-		"InHeader",
-		"Begin",
-		"InPayload",
-		"OutHeader",
-		"OutPayload",
-		"OutTrailer",
-		"End",
-	}
-	// To verify if the Client Stream RPC server stats events are logged in the
-	// correct order.
-	expectedClientStreamSequence = []string{
-		"ConnStats",
-		"InHeader",
-		"Begin",
-		"OutHeader",
-		"InPayload",
-		"InPayload",
-		"InPayload",
-		"InPayload",
-		"InPayload",
-		"OutPayload",
-		"OutTrailer",
-		"End",
-	}
-	// To verify if the Server Stream RPC server stats events are logged in the
-	// correct order.
-	expectedServerStreamSequence = []string{
-		"ConnStats",
-		"InHeader",
-		"Begin",
-		"InPayload",
-		"OutHeader",
-		"OutPayload",
-		"OutPayload",
-		"OutPayload",
-		"OutPayload",
-		"OutPayload",
-		"OutTrailer",
-		"End",
-	}
 )
 
 func idToPayload(id int32) *testpb.Payload {
@@ -1616,7 +1572,19 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 	// Verify sequence
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	verifyEventSequence(t, h.events, expectedUnarySequence)
+    // To verify if the Unary RPC server stats events are logged in the
+	// correct order.
+    wantedUnarySequence := []string{
+		"ConnStats",
+		"InHeader",
+		"Begin",
+		"InPayload",
+		"OutHeader",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
+	verifyEventSequence(t, h.events, wantedUnarySequence)
 }
 
 // TestServerStatsClientStreamEventSequence tests that the sequence of server-side
@@ -1636,7 +1604,23 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	verifyEventSequence(t, h.events, expectedClientStreamSequence)
+    // To verify if the Client Stream RPC server stats events are logged in the
+	// correct order.
+    wantedClientStreamSequence := []string{
+		"ConnStats",
+		"InHeader",
+		"Begin",
+		"OutHeader",
+		"InPayload",
+		"InPayload",
+		"InPayload",
+		"InPayload",
+		"InPayload",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
+	verifyEventSequence(t, h.events, wantedClientStreamSequence)
 }
 
 // TestServerStatsClientStreamEventSequence tests that the sequence of server-side
@@ -1656,19 +1640,37 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	verifyEventSequence(t, h.events, expectedServerStreamSequence)
+
+    // To verify if the Server Stream RPC server stats events are logged in the
+	// correct order.
+    wantedServerStreamSequence := []string{
+		"ConnStats",
+		"InHeader",
+		"Begin",
+		"InPayload",
+		"OutHeader",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutPayload",
+		"OutTrailer",
+		"End",
+	}
+	verifyEventSequence(t, h.events, wantedServerStreamSequence)
 }
 
 // verifyEventSequence verifies that a sequence of recorded events matches
 // the expected sequence.
 func verifyEventSequence(t *testing.T, got []event, expected []string) {
-	if len(got) != len(expected) {
-		t.Fatalf("Event count mismatch. Got: %d, Expected: %d", len(got), len(expected))
+    // Extract event types from `got` for comparison.
+	gotEventTypes := make([]string, len(got))
+	for i, e := range got {
+		gotEventTypes[i] = e.eventType
 	}
 
-	for i, e := range got {
-		if e.eventType != expected[i] {
-			t.Errorf("Unexpected event at position %d. Got: %s, Expected: %s", i, e.eventType, expected[i])
-		}
+	// Use cmp.Equal to compare the slices.
+	if !cmp.Equal(gotEventTypes, expected) {
+		t.Errorf("Event sequence mismatch (-got +expected):\n%s", cmp.Diff(gotEventTypes, expected))
 	}
 }
