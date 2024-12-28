@@ -1572,9 +1572,9 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 	// Verify sequence
 	h.mu.Lock()
 	defer h.mu.Unlock()
-    // To verify if the Unary RPC server stats events are logged in the
+	// To verify if the Unary RPC server stats events are logged in the
 	// correct order.
-    wantedUnarySequence := []string{
+	wantedUnarySequence := []string{
 		"ConnStats",
 		"InHeader",
 		"Begin",
@@ -1604,9 +1604,9 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-    // To verify if the Client Stream RPC server stats events are logged in the
+	// To verify if the Client Stream RPC server stats events are logged in the
 	// correct order.
-    wantedClientStreamSequence := []string{
+	wantedClientStreamSequence := []string{
 		"ConnStats",
 		"InHeader",
 		"Begin",
@@ -1641,9 +1641,9 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-    // To verify if the Server Stream RPC server stats events are logged in the
+	// To verify if the Server Stream RPC server stats events are logged in the
 	// correct order.
-    wantedServerStreamSequence := []string{
+	wantedServerStreamSequence := []string{
 		"ConnStats",
 		"InHeader",
 		"Begin",
@@ -1663,8 +1663,8 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 // verifyEventSequence verifies that a sequence of recorded events matches
 // the expected sequence.
 func verifyEventSequence(t *testing.T, got []event, expected []string) {
-    t.Helper()
-    // Extract event types from `got` for comparison.
+	t.Helper()
+	// Extract event types from `got` for comparison.
 	gotEventTypes := make([]string, len(got))
 	for i, e := range got {
 		gotEventTypes[i] = e.eventType
