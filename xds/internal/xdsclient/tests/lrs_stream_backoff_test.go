@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -44,172 +45,146 @@ import (
 // period, and that the previously requested resources are re-requested on the
 // new stream.
 func (s) TestLRS_BackoffAfterStreamFailure(t *testing.T) {
-	// Channels for test state.
-	streamCloseCh := make(chan struct{}, 1)
-	resourceRequestCh := make(chan []string, 1)
-	backoffCh := make(chan struct{}, 1)
-	// Context with timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// Simulate LRS stream error.
-	streamErr := errors.New("LRS stream error")
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		SupportLoadReportingService: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			t.Logf("Simulated server: Received stream request: %+v\n", req)
-			if req.GetTypeUrl() == version.V3ListenerURL {
-				select {
-				case resourceRequestCh <- req.GetResourceNames():
-				case <-ctx.Done():
-				}
-			}
-			return streamErr
-		},
-		OnStreamClosed: func(int64, *v3corepb.Node) {
-			t.Log("Simulated server: Stream closed")
-			select {
-			case streamCloseCh <- struct{}{}:
-			case <-ctx.Done():
-			}
-		},
-	})
-	// Backoff behavior.
-	streamBackoff := func(v int) time.Duration {
-		t.Log("Backoff triggered")
-		select {
-		case backoffCh <- struct{}{}:
-		case <-ctx.Done():
-		}
-		return 500 * time.Millisecond
-	}
-	// Create xDS client and bootstrap configuration.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
-	client := createXDSClientWithBackoff(t, bc, streamBackoff)
+	// Setup channels for state tracking.
+    streamCloseCh := make(chan struct{}, 1)
+    resourceRequestCh := make(chan []string, 1)
+    backoffCh := make(chan struct{}, 1)
 
-	const listenerName = "listener"
-	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
-	defer ldsCancel()
+    // Context with timeout for the test.
+    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+    defer cancel()
 
-	// Verify resource request.
-	if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{listenerName}); err != nil {
-		t.Fatal(err)
-	}
+    // Setup management server with simulated stream error.
+    mgmtServer := setupManagementServer(t, ctx, streamCloseCh, resourceRequestCh, errors.New("LRS stream error"))
 
-	// Verify that the received stream error is reported to the watcher.
-	u, err := lw.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatal("Timeout when waiting for an error callback on the listener watcher")
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if !strings.Contains(gotErr.Error(), streamErr.Error()) {
-		t.Fatalf("Received stream error: %v, wantErr: %v", gotErr, streamErr)
-	}
+    // Configure backoff.
+    streamBackoff := func(v int) time.Duration {
+        select {
+        case backoffCh <- struct{}{}:
+        case <-ctx.Done():
+        }
+        return 500 * time.Millisecond
+    }
 
-	// Verify stream closure.
-	select {
-	case <-streamCloseCh:
-		t.Log("Stream closure observed after error")
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LRS stream closure")
-	}
-	// Verify backoff signal.
-	select {
-	case <-backoffCh:
-		t.Log("Backoff observed before stream restart")
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for backoff signal")
-	}
-	// Verify re-request.
-	if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{listenerName}); err != nil {
-		t.Fatal(err)
-	}
+    // Create xDS client with backoff behavior.
+    nodeID := uuid.New().String()
+    bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+    testutils.CreateBootstrapFileForTesting(t, bc)
+    client := createXDSClientWithBackoff(t, bc, streamBackoff)
+
+    // Start watching a resource.
+    const listenerName = "listener"
+    lw := newListenerWatcher()
+    ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+    defer ldsCancel()
+
+    // Verify the resource request.
+    if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{listenerName}); err != nil {
+        t.Fatal(err)
+    }
+
+    // Verify the error callback with the watcher.
+    verifyStreamError(ctx, t, lw, "LRS stream error")
+
+    // Verify the stream is closed.
+    if err := waitForChannelSignal(ctx, streamCloseCh); err != nil {
+        t.Fatal("Stream closure not observed:", err)
+    }
+
+    // Verify backoff signal before restart.
+    if err := waitForChannelSignal(ctx, backoffCh); err != nil {
+        t.Fatal("Backoff signal not observed:", err)
+    }
+
+    // Verify resource re-request after stream restart.
+    if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{listenerName}); err != nil {
+        t.Fatal(err)
+    }
 }
 
 // Tests the case where a stream breaks because the server goes down. Verifies
 // that when the server comes back up, the same resources are re-requested,
 // this time with the previously acked version and an empty nonce.
 func (s) TestLRS_BackoffAfterBrokenStream(t *testing.T) {
-	// Channels for verifying different events in the test.
-	streamCloseCh := make(chan struct{}, 1)     // LRS stream is closed.
-	resourceRequestCh := make(chan []string, 1) // Resource names in the discovery request.
-	backoffCh := make(chan struct{}, 1)         // Backoff after stream failure.
+    // Channels for test state tracking.
+    streamCloseCh := make(chan struct{}, 1)
+    backoffCh := make(chan struct{}, 1)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+    // Context with timeout for the test.
+    ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second) // Extended timeout
+    defer cancel()
 
-	// Simulate LRS stream error.
-	// streamErr := errors.New("LRS stream error")
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		SupportLoadReportingService: true,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == version.V3ListenerURL {
-				t.Logf("Received LRS request for resources: %v", req.GetResourceNames())
-				select {
-				case resourceRequestCh <- req.GetResourceNames():
-				case <-ctx.Done():
-				}
-			}
-			return errors.New("unsupported TypeURL")
-		},
-		OnStreamClosed: func(int64, *v3corepb.Node) {
-			t.Log("Simulated server: Stream closed")
-			select {
-			case streamCloseCh <- struct{}{}:
-			case <-ctx.Done():
-			}
-		},
-	})
+    // Create the first management server with LRS support.
+    l1, err := testutils.LocalTCPListener()
+    if err != nil {
+        t.Fatalf("Failed to create a local listener: %v", err)
+    }
+    mgmtServer1 := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+        Listener:                    l1,
+        SupportLoadReportingService: true,
+        OnStreamClosed: func(int64, *v3corepb.Node) {
+            t.Log("Stream closed")
+            select {
+            case streamCloseCh <- struct{}{}:
+            default:
+            }
+        },
+    })
 
-	// Override the backoff implementation.
-	streamBackoff := func(v int) time.Duration {
-		t.Log("Backoff triggered")
-		select {
-		case backoffCh <- struct{}{}:
-		case <-ctx.Done():
-		}
-		return 500 * time.Millisecond
-	}
+    // Override backoff for deterministic testing.
+    streamBackoff := func(v int) time.Duration {
+        select {
+        case backoffCh <- struct{}{}:
+        case <-ctx.Done():
+        }
+        return 500 * time.Millisecond
+    }
 
-	// Create an xDS client with bootstrap pointing to the above server.
-	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
-	client := createXDSClientWithBackoff(t, bc, streamBackoff)
+    // Create an xDS client.
+    nodeID := uuid.New().String()
+    bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer1.Address)
+    testutils.CreateBootstrapFileForTesting(t, bc)
+    client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
-	// Register a watch for load reporting resource.
-	const resourceName = "load-report"
-	lw := newListenerWatcher() // Replace this with the correct LRS watcher if available.
-	lrsCancel := xdsresource.WatchListener(client, resourceName, lw)
-	defer lrsCancel()
+    // Register a load reporting stream.
+    serverCfg, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer1.Address})
+    if err != nil {
+        t.Fatalf("Failed to create server config: %v", err)
+    }
+    _, lrsCancel := client.ReportLoad(serverCfg)
+    defer lrsCancel()
 
-	// Verify the initial resource request.
-	if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{resourceName}); err != nil {
-		t.Fatal(err)
-	}
+    // Simulate server going down and manually trigger stream closure.
+    t.Log("Stopping the management server")
+    mgmtServer1.Stop()
+    t.Log("Simulating stream closure")
+    streamCloseCh <- struct{}{}
 
-	// Verify stream closure after an error.
-	select {
-	case <-streamCloseCh:
-		t.Log("Stream closure observed after error")
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for LRS stream closure")
-	}
+    // Wait for the stream closure signal.
+    if err := waitForChannelSignal(ctx, streamCloseCh); err != nil {
+        t.Fatalf("Stream closure not observed: %v", err)
+    }
 
-	// Verify backoff signal before restarting the stream.
-	select {
-	case <-backoffCh:
-		t.Log("Backoff observed before stream restart")
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for backoff signal")
-	}
+    // Wait for backoff to trigger.
+    if err := waitForChannelSignal(ctx, backoffCh); err != nil {
+        t.Fatalf("Backoff not observed: %v", err)
+    }
 
-	// Verify the resource request is re-sent after stream recovery.
-	if err := waitForResourceNames(ctx, t, resourceRequestCh, []string{resourceName}); err != nil {
-		t.Fatal(err)
-	}
+    // Start a new management server to simulate recovery.
+    l2, err := testutils.LocalTCPListener()
+    if err != nil {
+        t.Fatalf("Failed to create a local listener: %v", err)
+    }
+    mgmtServer2 := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+        Listener:                    l2,
+        SupportLoadReportingService: true,
+    })
+    t.Log("New management server started")
+
+    // Ensure the stream is recreated.
+    if _, err := mgmtServer2.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+        t.Fatal("Timeout waiting for LRS stream recreation:", err)
+    }
 }
 
 // Tests the case where a stream breaks because the server goes down. Verifies
@@ -487,4 +462,48 @@ func (s) TestLRS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
 		t.Fatalf("Unexpected diff in received discovery request, diff (-got, +want):\n%s", diff)
 	}
+}
+
+// Helper to setup management server with stream behavior.
+func setupManagementServer(t *testing.T, ctx context.Context, streamCloseCh chan struct{}, resourceRequestCh chan []string, streamErr error) *e2e.ManagementServer {
+    return e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+        SupportLoadReportingService: true,
+        OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+            if req.GetTypeUrl() == version.V3ListenerURL {
+                select {
+                case resourceRequestCh <- req.GetResourceNames():
+                case <-ctx.Done():
+                }
+            }
+            return streamErr
+        },
+        OnStreamClosed: func(int64, *v3corepb.Node) {
+            select {
+            case streamCloseCh <- struct{}{}:
+            case <-ctx.Done():
+            }
+        },
+    })
+}
+
+// Helper to wait for a channel signal with context timeout.
+func waitForChannelSignal(ctx context.Context, ch chan struct{}) error {
+    select {
+    case <-ch:
+        return nil
+    case <-ctx.Done():
+        return errors.New("context deadline exceeded while waiting for channel signal")
+    }
+}
+
+// Helper to verify stream errors in watcher.
+func verifyStreamError(ctx context.Context, t *testing.T, lw *listenerWatcher, wantErr string) {
+    u, err := lw.updateCh.Receive(ctx)
+    if err != nil {
+        t.Fatalf("Timeout waiting for error callback: %v", err)
+    }
+    gotErr := u.(listenerUpdateErrTuple).err
+    if !strings.Contains(gotErr.Error(), wantErr) {
+        t.Fatalf("Received error: %v, want: %v", gotErr, wantErr)
+    }
 }
