@@ -1663,13 +1663,12 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 // verifyEventSequence verifies that a sequence of recorded events matches
 // the expected sequence.
 func verifyEventSequence(t *testing.T, got []event, expected []string) {
+    t.Helper() 
     // Extract event types from `got` for comparison.
 	gotEventTypes := make([]string, len(got))
 	for i, e := range got {
 		gotEventTypes[i] = e.eventType
 	}
-
-	// Use cmp.Equal to compare the slices.
 	if !cmp.Equal(gotEventTypes, expected) {
 		t.Errorf("Event sequence mismatch (-got +expected):\n%s", cmp.Diff(gotEventTypes, expected))
 	}
