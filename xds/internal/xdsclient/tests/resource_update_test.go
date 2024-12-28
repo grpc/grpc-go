@@ -898,7 +898,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 // involving receipt of a CDS response from the management server. The test
 // verifies that the internal state of the xDS client (parsed resource and
 // metadata) matches expectations.
-func TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
+func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 	const (
 		resourceName1 = "resource-name-1"
 		resourceName2 = "resource-name-2"

@@ -164,7 +164,7 @@ func (s) TestNewServer_Success(t *testing.T) {
 	}
 }
 
-func TestNewServer_Failure(t *testing.T) {
+func (s) TestNewServer_Failure(t *testing.T) {
 	xdsCreds, err := xds.NewServerCredentials(xds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
 	if err != nil {
 		t.Fatalf("failed to create xds server credentials: %v", err)
