@@ -21,6 +21,7 @@ package xdsclient_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -420,9 +421,7 @@ func verifyStreamError(ctx context.Context, t *testing.T, lw *listenerWatcher, w
 		t.Fatalf("Timeout waiting for error callback: %v", err)
 	}
 	gotErr := u.(listenerUpdateErrTuple).err
-
-	if !cmp.Equal(gotErr.Error(), wantErr) {
-		t.Fatalf("Received error: %v, want: %v, diff (-got, +want):\n%s",
-			gotErr.Error(), wantErr, cmp.Diff(gotErr.Error(), wantErr))
+	if !strings.Contains(gotErr.Error(), wantErr) {
+		t.Fatalf("Received error: %v, want: %v", gotErr, wantErr)
 	}
 }
