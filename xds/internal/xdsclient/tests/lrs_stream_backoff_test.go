@@ -380,6 +380,8 @@ func (s) TestLRS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 
 // Helper to setup management server with stream behavior.
 func setupManagementServer(t *testing.T, ctx context.Context, streamCloseCh chan struct{}, resourceRequestCh chan []string, streamErr error) *e2e.ManagementServer {
+	t.Helper()
+
 	return e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		SupportLoadReportingService: true,
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
@@ -412,6 +414,8 @@ func waitForChannelSignal(ctx context.Context, ch chan struct{}) error {
 
 // Helper to verify stream errors in watcher.
 func verifyStreamError(ctx context.Context, t *testing.T, lw *listenerWatcher, wantErr string) {
+	t.Helper()
+
 	u, err := lw.updateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout waiting for error callback: %v", err)
