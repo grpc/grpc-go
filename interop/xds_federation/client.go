@@ -130,14 +130,14 @@ func main() {
 			ctxWithDeadline, cancel := context.WithTimeout(ctx, time.Duration(*soakOverallTimeoutSeconds)*time.Second)
 			defer cancel()
 			soakConfig := interop.SoakTestConfig{
-				RequestSize:                  *soakRequestSize,
-				ResponseSize:                 *soakResponseSize,
+				RequestSize:                      *soakRequestSize,
+				ResponseSize:                     *soakResponseSize,
 				PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs) * time.Millisecond,
 				MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
 				OverallTimeoutSeconds:            time.Duration(*soakOverallTimeoutSeconds) * time.Second,
 				ServerAddr:                       c.uri,
-				NumWorkers:                   *soakNumWorkers,
-				Iterations:                   *soakIterations,
+				NumWorkers:                       *soakNumWorkers,
+				Iterations:                       *soakIterations,
 				MaxFailures:                      *soakMaxFailures,
 				SharedChannel:                    c.conn,
 				MayCreateNewChannel:              MayCreateNewChannel,

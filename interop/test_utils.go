@@ -699,13 +699,13 @@ type ManagedChannel func(*grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServi
 type SoakIterationConfig struct {
 	RequestSize  int                        // The size of the request payload in bytes.
 	ResponseSize int                        // The expected size of the response payload in bytes.
-	Client           testgrpc.TestServiceClient // The gRPC client to make the call.
-	CallOptions      []grpc.CallOption          // Call options for the RPC.
+	Client       testgrpc.TestServiceClient // The gRPC client to make the call.
+	CallOptions  []grpc.CallOption          // Call options for the RPC.
 }
 
 // SoakTestConfig holds the configuration for the entire soak test.
 type SoakTestConfig struct {
-  RequestSize                      int
+	RequestSize                      int
 	ResponseSize                     int
 	PerIterationMaxAcceptableLatency time.Duration
 	MinTimeBetweenRPCs               time.Duration
@@ -797,8 +797,8 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 		iterationConfig := SoakIterationConfig{
 			RequestSize:  config.RequestSize,
 			ResponseSize: config.ResponseSize,
-			Client:           client,
-			CallOptions:      []grpc.CallOption{grpc.Peer(&p)},
+			Client:       client,
+			CallOptions:  []grpc.CallOption{grpc.Peer(&p)},
 		}
 		latencyMs, err := doOneSoakIteration(ctx, iterationConfig)
 		if p.Addr != nil {
