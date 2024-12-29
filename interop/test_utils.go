@@ -709,7 +709,7 @@ type SoakTestConfig struct {
 	ResponseSize                     int
 	PerIterationMaxAcceptableLatency time.Duration
 	MinTimeBetweenRPCs               time.Duration
-	OverallTimeoutSeconds            time.Duration
+	OverallTimeout                   time.Duration
 	ServerAddr                       string
 	NumWorkers                       int
 	Iterations                       int
@@ -779,7 +779,7 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 }
 
 func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, workerResults *WorkerResults) {
-	timeoutDuration := config.OverallTimeoutSeconds
+	timeoutDuration := config.OverallTimeout
 	currentChannel := config.SharedChannel
 	soakIterationsPerWorker := config.Iterations / config.NumWorkers
 	for i := 0; i < soakIterationsPerWorker; i++ {
@@ -787,7 +787,7 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			return
 		}
 		if time.Since(startTime) >= timeoutDuration {
-			fmt.Printf("Test exceeded overall timeout of %v, stopping...\n", config.OverallTimeoutSeconds)
+			fmt.Printf("Test exceeded overall timeout of %v, stopping...\n", config.OverallTimeout)
 			return
 		}
 		earliestNextStart := time.After(config.MinTimeBetweenRPCs)
@@ -872,7 +872,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		soakConfig.ServerAddr, totalIterations, soakConfig.Iterations, totalFailures, b.String())
 
 	if totalIterations != soakConfig.Iterations {
-		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeoutSeconds, totalIterations, soakConfig.Iterations)
+		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalIterations, soakConfig.Iterations)
 	}
 
 	if totalFailures > soakConfig.MaxFailures {

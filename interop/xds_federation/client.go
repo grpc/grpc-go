@@ -134,7 +134,7 @@ func main() {
 				ResponseSize:                     *soakResponseSize,
 				PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs) * time.Millisecond,
 				MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
-				OverallTimeoutSeconds:            time.Duration(*soakOverallTimeoutSeconds) * time.Second,
+				OverallTimeout:                   time.Duration(*soakOverallTimeoutSeconds) * time.Second,
 				ServerAddr:                       c.uri,
 				NumWorkers:                       *soakNumWorkers,
 				Iterations:                       *soakIterations,
