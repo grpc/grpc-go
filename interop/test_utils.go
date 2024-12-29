@@ -685,14 +685,8 @@ func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 	}
 }
 
-// SoakIterationResult represents the latency and status results of a single iteration in the soak test.
-type SoakIterationResult struct {
-	LatencyMs int64
-	Status    string // The status of the iteration
-}
-
-// ThreadResults stores the aggregated results for a specific thread during the soak test.
-type ThreadResults struct {
+// WorkerResults stores the aggregated results for a specific worker during the soak test.
+type WorkerResults struct {
 	IterationsDone int
 	Failures       int
 	Latencies      *stats.Histogram
@@ -703,28 +697,28 @@ type ManagedChannel func(*grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServi
 
 // SoakIterationConfig holds the parameters required for a single soak iteration.
 type SoakIterationConfig struct {
-	SoakRequestSize  int                        // The size of the request payload in bytes.
-	SoakResponseSize int                        // The expected size of the response payload in bytes.
+	RequestSize  int                        // The size of the request payload in bytes.
+	ResponseSize int                        // The expected size of the response payload in bytes.
 	Client           testgrpc.TestServiceClient // The gRPC client to make the call.
 	CallOptions      []grpc.CallOption          // Call options for the RPC.
 }
 
 // SoakTestConfig holds the configuration for the entire soak test.
 type SoakTestConfig struct {
-	SoakRequestSize                  int
-	SoakResponseSize                 int
+  RequestSize                      int
+	ResponseSize                     int
 	PerIterationMaxAcceptableLatency time.Duration
 	MinTimeBetweenRPCs               time.Duration
-	OverallTimeoutSeconds            int
+	OverallTimeoutSeconds            time.Duration
 	ServerAddr                       string
-	SoakNumThreads                   int
-	SoakIterations                   int
+	NumWorkers                       int
+	Iterations                       int
 	MaxFailures                      int
 	SharedChannel                    *grpc.ClientConn
 	MayCreateNewChannel              ManagedChannel
 }
 
-// createChannel initializes the shared channel (once for all threads).
+// createChannel initializes the shared channel (once for all workers).
 func createChannel(serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 	conn, err := grpc.NewClient(serverAddr, dopts...)
 	if err != nil {
@@ -746,8 +740,7 @@ func closeChannel(channel *grpc.ClientConn) {
 // CreateNewChannel creates a new channel by shutting down the current one (for channel soak tests).
 func CreateNewChannel(currentChannel *grpc.ClientConn, serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 	closeChannel(currentChannel)
-	conn, client := createChannel(serverAddr, dopts)
-	return conn, client
+	return createChannel(serverAddr, dopts)
 }
 
 // UseSharedChannel reuses the provided currentChannel.
@@ -756,48 +749,45 @@ func UseSharedChannel(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgr
 	return currentChannel, client
 }
 
-func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (SoakIterationResult, error) {
+func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latencyMs int64, err error) {
 	start := time.Now()
 	// Do a large-unary RPC.
 	// Create the request payload.
-	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, config.SoakRequestSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, config.RequestSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,
-		ResponseSize: int32(config.SoakResponseSize),
+		ResponseSize: int32(config.ResponseSize),
 		Payload:      pl,
 	}
 	// Perform the GRPC call.
 	var reply *testpb.SimpleResponse
-	reply, err := config.Client.UnaryCall(ctx, req, config.CallOptions...)
+	reply, err = config.Client.UnaryCall(ctx, req, config.CallOptions...)
 	if err != nil {
 		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
-		return SoakIterationResult{}, err
+		return 0, err
 	}
 	// Validate response.
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != config.SoakResponseSize {
-		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, config.SoakResponseSize)
-		return SoakIterationResult{}, err
+	if t != testpb.PayloadType_COMPRESSABLE || s != config.ResponseSize {
+		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, config.ResponseSize)
+		return 0, err
 	}
 	// Calculate latency and return result.
-	latency := time.Since(start).Milliseconds()
-	return SoakIterationResult{
-		LatencyMs: latency,
-		Status:    "OK",
-	}, nil
+	latencyMs = time.Since(start).Milliseconds()
+	return latencyMs, nil
 }
 
-func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs int64, threadID int, threadResults *ThreadResults, mu *sync.Mutex) {
-	timeoutDuration := time.Duration(config.OverallTimeoutSeconds) * time.Second
+func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, workerResults *WorkerResults) {
+	timeoutDuration := config.OverallTimeoutSeconds
 	currentChannel := config.SharedChannel
-	soakIterationsPerThread := config.SoakIterations / config.SoakNumThreads
-	for i := 0; i < soakIterationsPerThread; i++ {
+	soakIterationsPerWorker := config.Iterations / config.NumWorkers
+	for i := 0; i < soakIterationsPerWorker; i++ {
 		if ctx.Err() != nil {
 			return
 		}
-		if time.Since(time.Unix(0, startNs)) >= timeoutDuration {
-			fmt.Printf("Test exceeded overall timeout of %d seconds, stopping...\n", config.OverallTimeoutSeconds)
+		if time.Since(startTime) >= timeoutDuration {
+			fmt.Printf("Test exceeded overall timeout of %v, stopping...\n", config.OverallTimeoutSeconds)
 			return
 		}
 		earliestNextStart := time.After(config.MinTimeBetweenRPCs)
@@ -805,40 +795,33 @@ func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs
 		_, client := config.MayCreateNewChannel(currentChannel)
 		var p peer.Peer
 		iterationConfig := SoakIterationConfig{
-			SoakRequestSize:  config.SoakRequestSize,
-			SoakResponseSize: config.SoakResponseSize,
+			RequestSize:  config.RequestSize,
+			ResponseSize: config.ResponseSize,
 			Client:           client,
 			CallOptions:      []grpc.CallOption{grpc.Peer(&p)},
 		}
-		result, err := doOneSoakIteration(ctx, iterationConfig)
+		latencyMs, err := doOneSoakIteration(ctx, iterationConfig)
 		if p.Addr != nil {
 			fmt.Fprintf(os.Stderr, "Peer address: %v\n", p.Addr)
 		} else {
 			fmt.Fprintf(os.Stderr, "No peer address available for this RPC.\n")
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s failed: %s\n", threadID, i, 0, p.Addr, config.ServerAddr, err)
-			mu.Lock()
-			threadResults.Failures++
-			mu.Unlock()
+			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s failed: %s\n", workerID, i, 0, p.Addr, config.ServerAddr, err)
+			workerResults.Failures++
 			<-earliestNextStart
 			continue
 		}
-		latencyMs := result.LatencyMs
 		if latencyMs > config.PerIterationMaxAcceptableLatency.Milliseconds() {
-			fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", threadID, i, latencyMs, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
-			mu.Lock()
-			threadResults.Failures++
-			mu.Unlock()
+			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latencyMs, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
+			workerResults.Failures++
 			<-earliestNextStart
 			continue
 		}
 		// Success: log the details of the iteration.
-		mu.Lock()
-		threadResults.Latencies.Add(latencyMs)
-		threadResults.IterationsDone++
-		mu.Unlock()
-		fmt.Fprintf(os.Stderr, "Thread %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", threadID, i, latencyMs, p.Addr, config.ServerAddr)
+		workerResults.Latencies.Add(latencyMs)
+		workerResults.IterationsDone++
+		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latencyMs, p.Addr, config.ServerAddr)
 		<-earliestNextStart
 	}
 }
@@ -848,19 +831,18 @@ func executeSoakTestInThread(ctx context.Context, config SoakTestConfig, startNs
 // stub that is created with the provided server address and dial options.
 // TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
 func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
-	if soakConfig.SoakIterations%soakConfig.SoakNumThreads != 0 {
-		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumThreads\n")
+	if soakConfig.Iterations%soakConfig.NumWorkers != 0 {
+		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumWorkers\n")
 	}
 	//sharedChannel := conn
-	startNs := time.Now().UnixNano()
+	startTime := time.Now()
 	var wg sync.WaitGroup
-	mu := sync.Mutex{}
-	threadResults := make([]ThreadResults, soakConfig.SoakNumThreads)
-	for i := 0; i < soakConfig.SoakNumThreads; i++ {
+	workerResults := make([]WorkerResults, soakConfig.NumWorkers)
+	for i := 0; i < soakConfig.NumWorkers; i++ {
 		wg.Add(1)
-		go func(threadID int) {
+		go func(workerID int) {
 			defer wg.Done()
-			executeSoakTestInThread(ctx, soakConfig, startNs, threadID, &threadResults[threadID], &mu)
+			executeSoakTestInWorker(ctx, soakConfig, startTime, workerID, &workerResults[workerID])
 		}(i)
 	}
 	// Wait for all goroutines to complete.
@@ -875,22 +857,22 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		BaseBucketSize: 1,
 		MinValue:       0,
 	})
-	for _, thread := range threadResults {
-		totalIterations += thread.IterationsDone
-		totalFailures += thread.Failures
-		if thread.Latencies != nil {
-			// Add latencies from the thread's Histogram to the main latencies.
-			latencies.Merge(thread.Latencies)
+	for _, worker := range workerResults {
+		totalIterations += worker.IterationsDone
+		totalFailures += worker.Failures
+		if worker.Latencies != nil {
+			// Add latencies from the worker's Histogram to the main latencies.
+			latencies.Merge(worker.Latencies)
 		}
 	}
 	var b bytes.Buffer
 	latencies.Print(&b)
 	fmt.Fprintf(os.Stderr,
 		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
-		soakConfig.ServerAddr, totalIterations, soakConfig.SoakIterations, totalFailures, b.String())
+		soakConfig.ServerAddr, totalIterations, soakConfig.Iterations, totalFailures, b.String())
 
-	if totalIterations != soakConfig.SoakIterations {
-		fmt.Fprintf(os.Stderr, "Soak test consumed all %d seconds of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeoutSeconds, totalIterations, soakConfig.SoakIterations)
+	if totalIterations != soakConfig.Iterations {
+		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeoutSeconds, totalIterations, soakConfig.Iterations)
 	}
 
 	if totalFailures > soakConfig.MaxFailures {
