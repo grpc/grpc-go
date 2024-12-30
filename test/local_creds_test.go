@@ -40,7 +40,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-func testLocalCredsE2ESucceed(network, address string) error {
+func testLocalCredsE2ESucceed(t *testing.T, network, address string) error {
 
 	lis, err := net.Listen(network, address)
 	if err != nil {
@@ -80,7 +80,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 
 	defer ss.S.Stop()
 
-	stubserver.StartTestService(nil, ss)
+	stubserver.StartTestService(t, ss)
 
 	var cc *grpc.ClientConn
 	lisAddr := lis.Addr().String()
@@ -112,14 +112,14 @@ func testLocalCredsE2ESucceed(network, address string) error {
 }
 
 func (s) TestLocalCredsLocalhost(t *testing.T) {
-	if err := testLocalCredsE2ESucceed("tcp", "localhost:0"); err != nil {
+	if err := testLocalCredsE2ESucceed(t, "tcp", "localhost:0"); err != nil {
 		t.Fatalf("Failed e2e test for localhost: %v", err)
 	}
 }
 
 func (s) TestLocalCredsUDS(t *testing.T) {
 	addr := fmt.Sprintf("/tmp/grpc_fullstck_test%d", time.Now().UnixNano())
-	if err := testLocalCredsE2ESucceed("unix", addr); err != nil {
+	if err := testLocalCredsE2ESucceed(t, "unix", addr); err != nil {
 		t.Fatalf("Failed e2e test for UDS: %v", err)
 	}
 }
@@ -160,7 +160,7 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 	}
 }
 
-func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
+func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -168,7 +168,7 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
 	}
 	defer ss.S.Stop()
-	stubserver.StartTestService(nil, ss)
+	stubserver.StartTestService(t, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -205,11 +205,11 @@ func isExpected(got, want error) bool {
 	return status.Code(got) == status.Code(want) && strings.Contains(status.Convert(got).Message(), status.Convert(want).Message())
 }
 
-func (s) TestLocalCredsClientFail(t *testing.T) {
+func TestLocalCredsClientFail(t *testing.T) {
 	// Use local creds at client-side which should lead to client-side failure.
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(local.NewCredentials())}
 	want := status.Error(codes.Unavailable, "transport: authentication handshake failed: local credentials rejected connection to non-local address")
-	if err := testLocalCredsE2EFail(opts); !isExpected(err, want) {
+	if err := testLocalCredsE2EFail(t, opts); !isExpected(err, want) {
 		t.Fatalf("testLocalCredsE2EFail() = %v; want %v", err, want)
 	}
 }
@@ -217,7 +217,7 @@ func (s) TestLocalCredsClientFail(t *testing.T) {
 func (s) TestLocalCredsServerFail(t *testing.T) {
 	// Use insecure at client-side which should lead to server-side failure.
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	if err := testLocalCredsE2EFail(opts); status.Code(err) != codes.Unavailable {
+	if err := testLocalCredsE2EFail(t, opts); status.Code(err) != codes.Unavailable {
 		t.Fatalf("testLocalCredsE2EFail() = %v; want %v", err, codes.Unavailable)
 	}
 }
