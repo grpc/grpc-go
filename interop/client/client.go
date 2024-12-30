@@ -375,39 +375,11 @@ func main() {
 		interop.DoPickFirstUnary(ctx, tc)
 		logger.Infoln("PickFirstUnary done")
 	case "rpc_soak":
-		//rpcSoakConfig := interop.SoakTestConfig{
-		//	RequestSize:                      *soakRequestSize,
-		//	ResponseSize:                     *soakResponseSize,
-		//	PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs) * time.Millisecond,
-		//	MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
-		//	OverallTimeout:                   time.Duration(*soakOverallTimeoutSeconds) * time.Second,
-		//	ServerAddr:                       serverAddr,
-		//	NumWorkers:                       *soakNumWorkers,
-		//	Iterations:                       *soakIterations,
-		//	MaxFailures:                      *soakMaxFailures,
-		//	SharedChannel:                    conn,
-		//	MayCreateNewChannel:              interop.UseSharedChannel,
-		//}
 		rpcSoakConfig := createBaseSoakConfig(serverAddr, conn)
 		rpcSoakConfig.MayCreateNewChannel = interop.UseSharedChannel
 		interop.DoSoakTest(ctxWithDeadline, rpcSoakConfig)
 		logger.Infoln("RpcSoak done")
 	case "channel_soak":
-		//channelSoakConfig := interop.SoakTestConfig{
-		//	RequestSize:                      *soakRequestSize,
-		//	ResponseSize:                     *soakResponseSize,
-		//	PerIterationMaxAcceptableLatency: time.Duration(*soakPerIterationMaxAcceptableLatencyMs) * time.Millisecond,
-		//	MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
-		//	OverallTimeout:                   time.Duration(*soakOverallTimeoutSeconds) * time.Second,
-		//	ServerAddr:                       serverAddr,
-		//	NumWorkers:                       *soakNumWorkers,
-		//	Iterations:                       *soakIterations,
-		//	MaxFailures:                      *soakMaxFailures,
-		//	SharedChannel:                    conn,
-		//	MayCreateNewChannel: func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-		//		return interop.CreateNewChannel(currentChannel, serverAddr, opts)
-		//	},
-		//}
 		channelSoakConfig := createBaseSoakConfig(serverAddr, conn)
 		channelSoakConfig.MayCreateNewChannel = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
 			return interop.CreateNewChannel(currentChannel, serverAddr, opts)
