@@ -207,11 +207,11 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"round_robin":{}}]
+		}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -289,11 +289,11 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"round_robin":{}}]
+		}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -367,11 +367,11 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+			"healthCheckConfig": {
+				"serviceName": "foo"
+			},
+			"loadBalancingConfig": [{"round_robin":{}}]
+		}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -415,11 +415,11 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	cc, r := setupClient(t, &clientConfig{})
 	tc := testgrpc.NewTestServiceClient(cc)
 	sc := parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -497,11 +497,11 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -564,11 +564,11 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	// back to client immediately upon receiving the request (client should receive no response until
 	// test ends).
 	sc := parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "delay"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)
+	"healthCheckConfig": {
+		"serviceName": "delay"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -629,11 +629,11 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "delay"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+	"healthCheckConfig": {
+		"serviceName": "delay"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	select {
 	case <-hcExitChan:
@@ -667,11 +667,11 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -699,11 +699,11 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "foo"
-	 },
-	 "loadBalancingConfig": [{"pick_first":{}}]
- }`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"pick_first":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -773,11 +773,11 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "channelzSuccess"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+	"healthCheckConfig": {
+		"serviceName": "channelzSuccess"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -822,11 +822,11 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-	 "healthCheckConfig": {
-		 "serviceName": "channelzFailure"
-	 },
-	 "loadBalancingConfig": [{"round_robin":{}}]
- }`)})
+	"healthCheckConfig": {
+		"serviceName": "channelzFailure"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
