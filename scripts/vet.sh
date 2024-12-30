@@ -162,6 +162,7 @@ XXXXX gRPC internal usage deprecation errors:
 : v1alphareflectionpb.
 BalancerAttributes is deprecated:
 CredsBundle is deprecated:
+GetMetadata is deprecated:
 internal.Logger is deprecated:
 Metadata is deprecated: use Attributes instead.
 NewSubConn is deprecated:
