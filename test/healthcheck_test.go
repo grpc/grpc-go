@@ -207,11 +207,11 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"round_robin":{}}]
-		}`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -262,11 +262,11 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"round_robin":{}}]
-		}`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -289,11 +289,11 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"round_robin":{}}]
-		}`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -367,11 +367,11 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: parseServiceConfig(t, r, `{
-			"healthCheckConfig": {
-				"serviceName": "foo"
-			},
-			"loadBalancingConfig": [{"round_robin":{}}]
-		}`)})
+	"healthCheckConfig": {
+		"serviceName": "foo"
+	},
+	"loadBalancingConfig": [{"round_robin":{}}]
+}`)})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
