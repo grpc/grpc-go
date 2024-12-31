@@ -65,7 +65,7 @@ func main() {
 		}
 		unaryRequests++
 		time.Sleep(200 * time.Millisecond)
-		log.Printf(r.Message)
+		log.Print(r.Message)
 	}
 	log.Printf("Successful unary requests made by client: %d", unaryRequests)
 

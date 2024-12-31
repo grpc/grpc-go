@@ -141,7 +141,7 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 			Host:        "localhost",
 			Localities: []e2e.LocalityOptions{
 				{
-					Backends: []e2e.BackendOptions{{Port: testutils.ParsePort(t, server.Address)}},
+					Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
 					Weight:   1,
 				},
 			},
@@ -252,13 +252,13 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 			Localities: []e2e.LocalityOptions{
 				{
 					Backends: []e2e.BackendOptions{
-						{Port: testutils.ParsePort(t, server1.Address)},
+						{Ports: []uint32{testutils.ParsePort(t, server1.Address)}},
 					},
 					Weight: 1,
 				},
 				{
 					Backends: []e2e.BackendOptions{
-						{Port: testutils.ParsePort(t, server2.Address)},
+						{Ports: []uint32{testutils.ParsePort(t, server2.Address)}},
 					},
 					Weight: 2,
 				},

@@ -22,7 +22,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -30,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
+	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/csm"
 	"google.golang.org/grpc/xds"
@@ -45,13 +44,15 @@ var (
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint")
 )
 
-type echoServer struct {
-	pb.UnimplementedEchoServer
+// server is used to implement helloworld.GreeterServer.
+type server struct {
+	pb.UnimplementedGreeterServer
 	addr string
 }
 
-func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, s.addr)}, nil
+// SayHello implements helloworld.GreeterServer
+func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
 }
 
 func main() {
@@ -66,7 +67,7 @@ func main() {
 	cleanup := csm.EnableObservability(context.Background(), opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 	defer cleanup()
 
-	lis, err := net.Listen("tcp", ":"+*port)
+	lis, err := net.Listen("tcp4", "0.0.0.0:"+*port)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -80,7 +81,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to start xDS Server: %v", err)
 	}
-	pb.RegisterEchoServer(s, &echoServer{addr: ":" + *port})
+	pb.RegisterGreeterServer(s, &server{addr: ":" + *port})
 
 	log.Printf("Serving on %s\n", *port)
 
