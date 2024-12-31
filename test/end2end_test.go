@@ -6412,12 +6412,12 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	defer ss.Stop()
 
 	lbCfgJSON := `{
-		"loadBalancingConfig": [
-		  {
-				"triggerRPCBlockBalancer": {}
-		  }
-	  ]
-  }`
+  		"loadBalancingConfig": [
+    		{
+      			"triggerRPCBlockBalancer": {}
+    		}
+		]
+	}`
 
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lbCfgJSON)
 	mr := manual.NewBuilderWithScheme("pickerupdatedbalancer")
