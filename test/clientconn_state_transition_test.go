@@ -181,6 +181,9 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
 
+	// Wait for the test balancer to be built before capturing it's state
+	// notification channel.
+	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	for i := 0; i < len(want); i++ {
 		select {
@@ -193,6 +196,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		}
 	}
 
+	// Clean up the connection.
 	connMu.Lock()
 	defer connMu.Unlock()
 	if conn != nil {
