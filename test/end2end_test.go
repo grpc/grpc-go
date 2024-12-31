@@ -5546,18 +5546,18 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 		r.UpdateState(resolver.State{
 			Addresses: []resolver.Address{{Addr: te.srvAddr}},
 			ServiceConfig: parseServiceConfig(t, r, `{
-			 "methodConfig": [
-				 {
-					 "name": [
-						 {
-							 "service": "grpc.testing.TestService",
-							 "method": "UnaryCall"
-						 }
-					 ],
-					 "maxRequestMessageBytes": 0
-				 }
-			 ]
-		 }`)})
+		    "methodConfig": [
+		        {
+		            "name": [
+		                {
+		                    "service": "grpc.testing.TestService",
+		                    "method": "UnaryCall"
+		                }
+		            ],
+                    "maxRequestMessageBytes": 0
+		        }
+		    ]
+		}`)})
 	}()
 	// We wait a second before providing a service config and resolving
 	// addresses.  So this will wait for that and then honor the
@@ -6412,12 +6412,12 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 	defer ss.Stop()
 
 	lbCfgJSON := `{
-		   "loadBalancingConfig": [
-			 {
-				   "triggerRPCBlockBalancer": {}
-			 }
-		 ]
-	 }`
+		"loadBalancingConfig": [
+		  {
+				"triggerRPCBlockBalancer": {}
+		  }
+	  ]
+  }`
 
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lbCfgJSON)
 	mr := manual.NewBuilderWithScheme("pickerupdatedbalancer")
