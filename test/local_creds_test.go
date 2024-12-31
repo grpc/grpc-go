@@ -89,7 +89,10 @@ func testLocalCredsE2ESucceed(network, address string) error {
 
 	switch network {
 	case "unix":
-		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
+		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
+			func(_ context.Context, addr string) (net.Conn, error) {
+				return net.Dial("unix", addr)
+			}))
 	case "tcp":
 		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	default:

@@ -288,9 +288,9 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
 	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
 	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
-	_, err = grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.NewClient(%q) returned %v, want: %s", target, err, wantErr)
+		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
 	}
 }
 
