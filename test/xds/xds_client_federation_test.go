@@ -290,13 +290,13 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
 	cc, err = grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("Expected error while creating ClientConn: %v", err)
+		t.Fatalf("Unexpected error while creating ClientConn: %v", err)
 	}
 	defer cc.Close()
 	client = testgrpc.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("Expected error containing %q, got: %v", wantErr, err)
+		t.Fatalf("EmptyCall(_, _) = _, %v; want _, %q", wantErr, err)
 	}
 }
 

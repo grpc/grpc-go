@@ -315,7 +315,7 @@ func (s) TestBuildXDS(t *testing.T) {
 func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	useCleanUniverseDomain(t)
 	uri := "google-c2p://an-authority/resource"
-	cc, err := grpc.Dial(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	defer func() {
 		if cc != nil {
 			cc.Close()
@@ -323,7 +323,7 @@ func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	}()
 	wantErr := "google-c2p URI scheme does not support authorities"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.Dial(%s) returned error: %v, want: %v", uri, err, wantErr)
+		t.Fatalf("grpc.NewClient(%s) returned error: %v, want: %v", uri, err, wantErr)
 	}
 }
 

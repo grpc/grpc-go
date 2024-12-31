@@ -1041,7 +1041,7 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	rb := manual.NewBuilderWithScheme("whatever")
 	rb.InitialState(resolver.State{Addresses: addrsList})
 
-	client, err := Dial("whatever:///this-gets-overwritten",
+	client, err := NewClient("whatever:///this-gets-overwritten",
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(rb),
 		WithConnectParams(ConnectParams{

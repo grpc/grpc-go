@@ -111,7 +111,7 @@ func (s) TestServer_MaxHandlers(t *testing.T) {
 func (s) TestStreamWorkers_RPCsAndStop(t *testing.T) {
 	ss := stubserver.StartTestService(t, nil, grpc.NumStreamWorkers(uint32(runtime.NumCPU())))
 	// This deferred stop takes care of stopping the server when one of the
-	// below grpc.Dials fail, and the test exits early.
+	// below grpc.NewClient fail, and the test exits early.
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
