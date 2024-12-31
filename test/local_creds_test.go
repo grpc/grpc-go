@@ -89,7 +89,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 
 	switch network {
 	case "unix":
-		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
+		cc, err = grpc.NewClient("passthrough:///"+lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	case "tcp":
 		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	default:
