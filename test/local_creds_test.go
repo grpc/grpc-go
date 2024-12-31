@@ -161,19 +161,11 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 }
 
 func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return fmt.Errorf("Failed to create listener: %v", err)
 	}
-	ss := &stubserver.StubServer{
-		Listener: lis,
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
-	}
-	defer ss.S.Stop()
-	stubserver.StartTestService(t, ss)
 
 	var fakeClientAddr, fakeServerAddr net.Addr
 	fakeClientAddr = &net.IPAddr{
@@ -184,8 +176,27 @@ func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
 		IP:   netip.MustParseAddr("10.8.9.11").AsSlice(),
 		Zone: "",
 	}
+	ss := &stubserver.StubServer{
+		Listener: spoofListener(lis, fakeClientAddr),
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
+	}
+	defer ss.S.Stop()
+	stubserver.StartTestService(t, ss)
 
-	go ss.S.Serve(spoofListener(lis, fakeClientAddr))
+	/*var fakeClientAddr, fakeServerAddr net.Addr
+	fakeClientAddr = &net.IPAddr{
+		IP:   netip.MustParseAddr("10.8.9.10").AsSlice(),
+		Zone: "",
+	}
+	fakeServerAddr = &net.IPAddr{
+		IP:   netip.MustParseAddr("10.8.9.11").AsSlice(),
+		Zone: "",
+	}*/
+
+	//go ss.S.Serve(spoofListener(lis, fakeClientAddr))
 
 	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {
