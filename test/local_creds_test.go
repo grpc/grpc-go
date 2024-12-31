@@ -161,7 +161,12 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 }
 
 func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return fmt.Errorf("Failed to create listener: %v", err)
+	}
 	ss := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -169,11 +174,6 @@ func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
 	}
 	defer ss.S.Stop()
 	stubserver.StartTestService(t, ss)
-
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return fmt.Errorf("Failed to create listener: %v", err)
-	}
 
 	var fakeClientAddr, fakeServerAddr net.Addr
 	fakeClientAddr = &net.IPAddr{

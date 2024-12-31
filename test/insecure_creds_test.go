@@ -182,6 +182,7 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}
 	ss := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
