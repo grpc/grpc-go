@@ -89,10 +89,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 
 	switch network {
 	case "unix":
-		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
-			func(_ context.Context, addr string) (net.Conn, error) {
-				return net.Dial("unix", addr)
-			}))
+		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	case "tcp":
 		cc, err = grpc.NewClient(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()))
 	default:
@@ -102,7 +99,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 		return fmt.Errorf("Failed to dial server: %v, %v", err, lisAddr)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	c := testgrpc.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
