@@ -27,8 +27,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/interop"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
 )
@@ -59,14 +61,20 @@ func (s) TestPeerForClientStatsHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(s, interop.NewTestServer())
+	ss := &stubserver.StubServer{
+		Listener: l,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(),
+	}
+	stubserver.StartTestService(t, ss)
 	errCh := make(chan error)
 	go func() {
-		errCh <- s.Serve(l)
+		errCh <- ss.S.Serve(ss.Listener)
 	}()
 	defer func() {
-		s.Stop()
+		ss.S.Stop()
 		if err := <-errCh; err != nil {
 			t.Error(err)
 		}

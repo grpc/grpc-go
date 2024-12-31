@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -40,6 +41,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -196,12 +198,36 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 	} else {
 		ts = newTestHealthServer()
 	}
-	s := grpc.NewServer()
-	healthgrpc.RegisterHealthServer(s, ts)
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	go s.Serve(lis)
-	t.Cleanup(func() { s.Stop() })
-	return s, lis, ts
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				req, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return fmt.Errorf("error receiving from stream: %v", err)
+				}
+				t.Logf("Received message: %v", req)
+				resp := &testpb.StreamingOutputCallResponse{
+					Payload: req.Payload,
+				}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("error sending to stream: %v", err)
+				}
+				t.Logf("Sent response: %v", resp)
+			}
+		},
+		S: grpc.NewServer(),
+	}
+	healthgrpc.RegisterHealthServer(stub.S, ts)
+	stubserver.StartTestService(t, stub)
+	t.Cleanup(func() { stub.Stop() })
+	return stub.S.(*grpc.Server), lis, ts
 }
 
 type clientConfig struct {
