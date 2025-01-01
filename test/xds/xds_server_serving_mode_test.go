@@ -310,7 +310,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	waitForFailedRPC(ctx, t, cc2)
 
 	// Make sure new connection attempts to "not-serving" servers fail.
-	if cc1, err = grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()); err != nil {
+	if cc1, err = grpc.NewClient(lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
 		t.Fatal("successfully created clientConn to a server in \"not-serving\" state")
 	}
 	defer cc1.Close()
