@@ -311,7 +311,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 
 	// Make sure new connection attempts to "not-serving" servers fail.
 	if cc1, err = grpc.NewClient(lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
-		t.Fatal("successfully created clientConn to a server in \"not-serving\" state")
+		t.Fatal("failed to create clientConn to a server in \"not-serving\" state")
 	}
 	defer cc1.Close()
 	// Update the management server with both listener resources.
