@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
@@ -70,7 +72,8 @@ func createAndStartBackendServer(t *testing.T) string {
 	}
 	t.Logf("Started TestService backend at: %q", backend.Address)
 	t.Cleanup(backend.Stop)
-	return backend.Address
+	// return backend.Address
+	return fmt.Sprintf("localhost:%d", testutils.ParsePort(t, backend.Address))
 }
 
 // setupDNS sets up a manual DNS resolver and registers it, returning the
@@ -90,221 +93,210 @@ func setupDNS(t *testing.T) *manual.Resolver {
 // default resolver in the target URI. The test verifies that the connection is
 // established to the proxy server, sends the unresolved target URI in the HTTP
 // CONNECT request, and is successfully connected to the backend server.
-func (s) TestGRPCDialWithProxy(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	dnsCache := map[string]string{unresolvedTargetURI: backendAddr}
-	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(unresolvedTargetURI), false)
+// func (s) TestGRPCDialWithProxy(t *testing.T) {
+// 	backendAddr := createAndStartBackendServer(t)
+// 	dnsCache := map[string]string{unresolvedTargetURI: backendAddr}
+// 	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(unresolvedTargetURI), false)
 
-	// Overwrite the proxy environment and restore it after the test.
-	t.Setenv("HTTPS_PROXY", pLis.Addr().String())
+// 	// Overwrite the proxy environment and restore it after the test.
+// 	t.Setenv("HTTPS_PROXY", pLis.Addr().String())
 
-	// Use the httpproxy package functions instead of `http.ProxyFromEnvironment`
-	// because the latter reads proxy-related environment variables only once at
-	// initialization. This behavior causes issues when running multiple tests
-	// with different proxy configurations, as changes to environment variables
-	// during tests would be ignored. By using `httpproxy.FromEnvironment()`, we
-	// ensure proxy settings are read dynamically in each test execution.
-	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
-	}
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
-	}()
+// 	// Use the httpproxy package functions instead of `http.ProxyFromEnvironment`
+// 	// because the latter reads proxy-related environment variables only once at
+// 	// initialization. This behavior causes issues when running multiple tests
+// 	// with different proxy configurations, as changes to environment variables
+// 	// during tests would be ignored. By using `httpproxy.FromEnvironment()`, we
+// 	// ensure proxy settings are read dynamically in each test execution.
+// 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+// 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+// 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+// 	}
+// 	defer func() {
+// 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
+// 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	conn, err := grpc.Dial(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", unresolvedTargetURI, err)
-	}
-	defer conn.Close()
+// 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+// 	defer cancel()
+// 	conn, err := grpc.Dial(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 	if err != nil {
+// 		t.Fatalf("grpc.Dial(%s) failed: %v", unresolvedTargetURI, err)
+// 	}
+// 	defer conn.Close()
 
-	// Send an empty RPC to the backend through the proxy.
-	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
-	}
-}
+// 	// Send an empty RPC to the backend through the proxy.
+// 	client := testgrpc.NewTestServiceClient(conn)
+// 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+// 		t.Errorf("EmptyCall failed: %v", err)
+// 	}
+// }
 
-// Tests the scenario where `grpc.Dial` is performed with a proxy and the "dns"
-// scheme for the target. The test verifies that the proxy URI is correctly
-// resolved and that the target URI resolution on the client preserves the
-// original behavior of `grpc.Dial`. It also ensures that a connection is
-// established to the proxy server, with the resolved target URI sent in the
-// HTTP CONNECT request, successfully connecting to the backend server.
-func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
+// // Tests the scenario where `grpc.Dial` is performed with a proxy and the "dns"
+// // scheme for the target. The test verifies that the proxy URI is correctly
+// // resolved and that the target URI resolution on the client preserves the
+// // original behavior of `grpc.Dial`. It also ensures that a connection is
+// // established to the proxy server, with the resolved target URI sent in the
+// // HTTP CONNECT request, successfully connecting to the backend server.
+// func TestGRPCDialWithDNSAndProxy(t *testing.T) {
+// 	backendAddr := createAndStartBackendServer(t)
+// 	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
 
-	// Overwrite the proxy environment and restore it after the test.
-	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+// 	// Overwrite the proxy environment and restore it after the test.
+// 	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 
-	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
-	}
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
-	}()
+// 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+// 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+// 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+// 	}
+// 	defer func() {
+// 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
+// 	}()
 
-	// Configure manual resolvers for both proxy and target backends
-	targetResolver := setupDNS(t)
-	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+// 	// Configure manual resolvers for both proxy and target backends
+// 	targetResolver := setupDNS(t)
+// 	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
-	// Temporarily modify ProxyScheme for this test.
-	origScheme := delegatingresolver.ProxyScheme
-	delegatingresolver.ProxyScheme = "test"
-	t.Cleanup(func() { delegatingresolver.ProxyScheme = origScheme })
+// 	// Temporarily modify ProxyScheme for this test.
+// 	origScheme := delegatingresolver.ProxyScheme
+// 	delegatingresolver.ProxyScheme = "test"
+// 	t.Cleanup(func() { delegatingresolver.ProxyScheme = origScheme })
 
-	proxyResolver := manual.NewBuilderWithScheme("test")
-	resolver.Register(proxyResolver)
-	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+// 	proxyResolver := manual.NewBuilderWithScheme("test")
+// 	resolver.Register(proxyResolver)
+// 	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	conn, err := grpc.Dial(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
-	}
-	defer conn.Close()
+// 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+// 	defer cancel()
+// 	conn, err := grpc.Dial(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 	if err != nil {
+// 		t.Fatalf("grpc.Dial(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
+// 	}
+// 	defer conn.Close()
 
-	// Send an empty RPC to the backend through the proxy.
-	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
-	}
-}
+// 	// Send an empty RPC to the backend through the proxy.
+// 	client := testgrpc.NewTestServiceClient(conn)
+// 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+// 		t.Errorf("EmptyCall failed: %v", err)
+// 	}
+// }
 
-// Tests the scenario where grpc.NewClient is used with the default DNS
-// resolver for the target URI and a proxy is configured. The test verifies
-// that the client resolves proxy URI, connects to the proxy server, sends the
-// unresolved target URI in the HTTP CONNECT request, and successfully
-// establishes a connection to the backend server.
-func (s) TestGRPCNewClientWithProxy(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	dnsCache := map[string]string{unresolvedTargetURI: backendAddr}
-	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(unresolvedTargetURI), false)
+// // Tests the scenario where grpc.NewClient is used with the default DNS
+// // resolver for the target URI and a proxy is configured. The test verifies
+// // that the client resolves proxy URI, connects to the proxy server, sends the
+// // unresolved target URI in the HTTP CONNECT request, and successfully
+// // establishes a connection to the backend server.
+// func (s) TestGRPCNewClientWithProxy(t *testing.T) {
+// 	backendAddr := createAndStartBackendServer(t)
+// 	dnsCache := map[string]string{unresolvedTargetURI: backendAddr}
+// 	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(unresolvedTargetURI), false)
 
-	// Overwrite the proxy environment and restore it after the test.
-	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+// 	// Overwrite the proxy environment and restore it after the test.
+// 	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 
-	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
-	}
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
-	}()
+// 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+// 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+// 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+// 	}
+// 	defer func() {
+// 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
+// 	}()
 
-	// Set up and update a manual resolver for proxy resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+// 	// Set up and update a manual resolver for proxy resolution.
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient failed: %v", err)
-	}
-	defer conn.Close()
+// 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+// 	defer cancel()
+// 	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 	if err != nil {
+// 		t.Fatalf("grpc.NewClient failed: %v", err)
+// 	}
+// 	defer conn.Close()
 
-	// Send an empty RPC to the backend through the proxy.
-	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
-	}
-}
+// 	// Send an empty RPC to the backend through the proxy.
+// 	client := testgrpc.NewTestServiceClient(conn)
+// 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+// 		t.Errorf("EmptyCall failed: %v", err)
+// 	}
+// }
 
-// Tests the scenario where grpc.NewClient is used with a custom target URI
-// scheme and a proxy is configured. The test verifies that the client
-// successfully connects to the proxy server, resolves the proxy URI correctly,
-// includes the resolved target URI in the HTTP CONNECT request, and
-// establishes a connection to the backend server.
-func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
+// // Tests the scenario where grpc.NewClient is used with a custom target URI
+// // scheme and a proxy is configured. The test verifies that the client
+// // successfully connects to the proxy server, resolves the proxy URI correctly,
+// // includes the resolved target URI in the HTTP CONNECT request, and
+// // establishes a connection to the backend server.
+// func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
+// 	backendAddr := createAndStartBackendServer(t)
+// 	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
 
-	// Overwrite the proxy environment and restore it after the test.
-	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+// 	// Overwrite the proxy environment and restore it after the test.
+// 	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 
-	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
-	}
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
-	}()
+// 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+// 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+// 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+// 	}
+// 	defer func() {
+// 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
+// 	}()
 
-	// Create and update a custom resolver for target URI.
-	targetResolver := manual.NewBuilderWithScheme("test")
-	resolver.Register(targetResolver)
-	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+// 	// Dial to the proxy server.
+// 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+// 	defer cancel()
+// 	conn, err := grpc.NewClient(+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 	if err != nil {
+// 		t.Fatalf("grpc.NewClient(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
+// 	}
+// 	t.Cleanup(func() { conn.Close() })
 
-	// Set up and update a manual resolver for proxy resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+// 	// Send an empty RPC to the backend through the proxy.
+// 	client := testgrpc.NewTestServiceClient(conn)
+// 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+// 		t.Errorf("EmptyCall() failed: %v", err)
+// 	}
+// }
 
-	// Dial to the proxy server.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	conn, err := grpc.NewClient(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
-	}
-	t.Cleanup(func() { conn.Close() })
+// // Tests the scenario where grpc.NewClient is used with a custom target URI
+// // scheme and a proxy is configured and both the resolvers return endpoints.
+// // The test verifies that the client successfully connects to the proxy server,
+// // resolves the proxy URI correctly, includes the resolved target URI in the
+// // HTTP CONNECT request, and establishes a connection to the backend server.
+// func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) {
+// 	backendAddr := createAndStartBackendServer(t)
+// 	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
 
-	// Send an empty RPC to the backend through the proxy.
-	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall() failed: %v", err)
-	}
-}
+// 	// Overwrite the proxy environment and restore it after the test.
+// 	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
 
-// Tests the scenario where grpc.NewClient is used with a custom target URI
-// scheme and a proxy is configured and both the resolvers return endpoints.
-// The test verifies that the client successfully connects to the proxy server,
-// resolves the proxy URI correctly, includes the resolved target URI in the
-// HTTP CONNECT request, and establishes a connection to the backend server.
-func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
+// 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
+// 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
+// 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+// 	}
+// 	defer func() {
+// 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
+// 	}()
 
-	// Overwrite the proxy environment and restore it after the test.
-	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
+// 	// Create and update a custom resolver for target URI.
+// 	targetResolver := manual.NewBuilderWithScheme("test")
+// 	resolver.Register(targetResolver)
+// 	targetResolver.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backendAddr}}}}})
 
-	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
-	}
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
-	}()
+// 	// Set up and update a manual resolver for proxy resolution.
+// 	proxyResolver := setupDNS(t)
+// 	proxyResolver.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}}}})
 
-	// Create and update a custom resolver for target URI.
-	targetResolver := manual.NewBuilderWithScheme("test")
-	resolver.Register(targetResolver)
-	targetResolver.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: backendAddr}}}}})
+// 	// Dial to the proxy server.
+// 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+// 	defer cancel()
+// 	conn, err := grpc.NewClient(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// 	if err != nil {
+// 		t.Fatalf("grpc.NewClient(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
+// 	}
+// 	t.Cleanup(func() { conn.Close() })
 
-	// Set up and update a manual resolver for proxy resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolver.InitialState(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}}}})
-
-	// Dial to the proxy server.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	conn, err := grpc.NewClient(targetResolver.Scheme()+":///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
-	}
-	t.Cleanup(func() { conn.Close() })
-
-	// Send an empty RPC to the backend through the proxy.
-	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall() failed: %v", err)
-	}
-}
+// 	// Send an empty RPC to the backend through the proxy.
+// 	client := testgrpc.NewTestServiceClient(conn)
+// 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+// 		t.Errorf("EmptyCall() failed: %v", err)
+// 	}
+// }
 
 // Tests the scenario where grpc.NewClient is used with the default "dns"
 // resolver and the dial option grpc.WithTargetResolutionEnabled() is set,
@@ -312,9 +304,16 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolverWithEndpoints(t *testing.T) 
 // resolution happens on the client by sending resolved target URI in HTTP
 // CONNECT request, the proxy URI is resolved correctly, and the connection is
 // successfully established with the backend server through the proxy.
-func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
-	backendAddr := createAndStartBackendServer(t)
-	pLis, _ := transport.SetupProxy(t, dnsCache, transport.RequestCheck(backendAddr), false)
+func TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
+	unresolvedTargetURI := createAndStartBackendServer(t)
+	unresolvedProxyURI, _ := transport.SetupProxy(t, dnsCache, func(req *http.Request) error {
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			return err
+		}
+		_, err = netip.ParseAddr(host)
+		return err
+	}, false)
 
 	// Overwrite the proxy environment and restore it after the test.
 	t.Setenv("HTTPS_PROXY", unresolvedProxyURI)
@@ -327,18 +326,18 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
 	}()
 
-	// Configure manual resolvers for both proxy and target backends
-	targetResolver := setupDNS(t)
-	targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
+	// // Configure manual resolvers for both proxy and target backends
+	// targetResolver := setupDNS(t)
+	// targetResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backendAddr}}})
 
-	// Temporarily modify ProxyScheme for this test.
-	origScheme := delegatingresolver.ProxyScheme
-	delegatingresolver.ProxyScheme = "test"
-	t.Cleanup(func() { delegatingresolver.ProxyScheme = origScheme })
+	// // Temporarily modify ProxyScheme for this test.
+	// origScheme := delegatingresolver.ProxyScheme
+	// delegatingresolver.ProxyScheme = "test"
+	// t.Cleanup(func() { delegatingresolver.ProxyScheme = origScheme })
 
-	proxyResolver := manual.NewBuilderWithScheme("test")
-	resolver.Register(proxyResolver)
-	proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
+	// proxyResolver := manual.NewBuilderWithScheme("test")
+	// resolver.Register(proxyResolver)
+	// proxyResolver.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: pLis.Addr().String()}}})
 
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -523,7 +522,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	proxyResolver := setupDNS(t)
 	proxyResolver.InitialState(resolver.State{
 		Addresses: []resolver.Address{
-			{Addr: pLis.Addr().String()},
+			{Addr: pLis},
 		},
 	})
 

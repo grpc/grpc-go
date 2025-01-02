@@ -59,7 +59,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
-	t.Setenv("HTTPS_PROXY", pLis.Addr().String())
+	t.Setenv("HTTPS_PROXY", pLis)
 
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
@@ -72,7 +72,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	// Dial to proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, err := proxyDial(ctx, resolver.Address{Addr: pLis.Addr().String()}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
+	c, err := proxyDial(ctx, resolver.Address{Addr: pLis}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
 	if err != nil {
 		t.Fatalf("HTTP connect Dial failed: %v", err)
 	}

@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/testutils"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -63,6 +65,60 @@ func (p *ProxyServer) stop() {
 		p.out.Close()
 	}
 }
+func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func(), waitForServerHello bool) {
+	p.in = in
+	// This will be used in tests to check if the proxy server is started.
+	// if proxyStarted != nil {
+	// 	proxyStarted()
+	// }
+	req, err := http.ReadRequest(bufio.NewReader(in))
+	if err != nil {
+		t.Errorf("failed to read CONNECT req: %v", err)
+		return
+	}
+	if err := p.requestCheck(req); err != nil {
+		resp := http.Response{StatusCode: http.StatusMethodNotAllowed}
+		resp.Write(p.in)
+		p.in.Close()
+		t.Errorf("get wrong CONNECT req: %+v, error: %v", req, err)
+		return
+	}
+
+	// addr := dnsCache[req.URL.Host]
+	// if addr == "" {
+	// 	addr = req.URL.Host
+	// }
+	t.Logf("Dialing to %s", req.URL.Host)
+	out, err := net.Dial("tcp", req.URL.Host)
+	if err != nil {
+		t.Errorf("failed to dial to server: %v", err)
+		return
+	}
+	out.SetDeadline(time.Now().Add(defaultTestTimeout))
+	resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
+	var buf bytes.Buffer
+	resp.Write(&buf)
+
+	if waitForServerHello {
+		// Batch the first message from the server with the http connect
+		// response. This is done to test the cases in which the grpc client has
+		// the response to the connect request and proxied packets from the
+		// destination server when it reads the transport.
+		b := make([]byte, 50)
+		bytesRead, err := out.Read(b)
+		if err != nil {
+			t.Errorf("Got error while reading server hello: %v", err)
+			in.Close()
+			out.Close()
+			return
+		}
+		buf.Write(b[0:bytesRead])
+	}
+	p.in.Write(buf.Bytes())
+	p.out = out
+	go io.Copy(p.in, p.out)
+	go io.Copy(p.out, p.in)
+}
 
 // Creates and starts a proxy server.
 func newProxyServer(t *testing.T, lis net.Listener, dnsCache map[string]string, reqCheck func(*http.Request) error, proxyStarted func(), waitForServerHello bool) *ProxyServer {
@@ -74,67 +130,25 @@ func newProxyServer(t *testing.T, lis net.Listener, dnsCache map[string]string, 
 
 	// Start the proxy server.
 	go func() {
-		in, err := p.lis.Accept()
-		if err != nil {
-			return
-		}
-		p.in = in
-		// This will be used in tests to check if the proxy server is started.
-		if proxyStarted != nil {
-			proxyStarted()
-		}
-		req, err := http.ReadRequest(bufio.NewReader(in))
-		if err != nil {
-			t.Errorf("failed to read CONNECT req: %v", err)
-			return
-		}
-		if err := p.requestCheck(req); err != nil {
-			resp := http.Response{StatusCode: http.StatusMethodNotAllowed}
-			resp.Write(p.in)
-			p.in.Close()
-			t.Errorf("get wrong CONNECT req: %+v, error: %v", req, err)
-			return
-		}
-		addr := dnsCache[req.URL.Host]
-		if addr == "" {
-			addr = req.URL.Host
-		}
-		out, err := net.Dial("tcp", addr)
-		if err != nil {
-			t.Errorf("failed to dial to server: %v", err)
-			return
-		}
-		out.SetDeadline(time.Now().Add(defaultTestTimeout))
-		resp := http.Response{StatusCode: http.StatusOK, Proto: "HTTP/1.0"}
-		var buf bytes.Buffer
-		resp.Write(&buf)
-
-		if waitForServerHello {
-			// Batch the first message from the server with the http connect
-			// response. This is done to test the cases in which the grpc client has
-			// the response to the connect request and proxied packets from the
-			// destination server when it reads the transport.
-			b := make([]byte, 50)
-			bytesRead, err := out.Read(b)
+		// var err error
+		// var in net.Conn
+		for {
+			in, err := p.lis.Accept()
 			if err != nil {
-				t.Errorf("Got error while reading server hello: %v", err)
-				in.Close()
-				out.Close()
+				t.Logf("Shutting down proxy server: %v ", err)
 				return
 			}
-			buf.Write(b[0:bytesRead])
+			// not called in a go routine because the proxy can currently handle only one connection.
+			p.handleRequest(t, in, proxyStarted, waitForServerHello)
+
 		}
-		p.in.Write(buf.Bytes())
-		p.out = out
-		go io.Copy(p.in, p.out)
-		go io.Copy(p.out, p.in)
 	}()
 	return p
 }
 
 // SetupProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns the proxy's listener and helper channels.
-func SetupProxy(t *testing.T, dnsCache map[string]string, reqCheck func(*http.Request) error, waitForServerHello bool) (net.Listener, chan struct{}) {
+func SetupProxy(t *testing.T, dnsCache map[string]string, reqCheck func(*http.Request) error, waitForServerHello bool) (string, chan struct{}) {
 	t.Helper()
 	pLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -146,5 +160,5 @@ func SetupProxy(t *testing.T, dnsCache map[string]string, reqCheck func(*http.Re
 	proxyServer := newProxyServer(t, pLis, dnsCache, reqCheck, func() { close(proxyStartedCh) }, waitForServerHello)
 	t.Cleanup(proxyServer.stop)
 
-	return pLis, proxyStartedCh
+	return fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())), proxyStartedCh
 }
