@@ -107,39 +107,42 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 // RouteConfigWatcher wraps the callbacks to be invoked for different
 // events corresponding to the route configuration resource being watched.
 type RouteConfigWatcher interface {
-	// OnUpdate is invoked to report an update for the resource being watched.
-	OnUpdate(*RouteConfigResourceData, OnDoneFunc)
-
-	// OnError is invoked under different error conditions including but not
+	// OnResourceChanged is invoked to notify the watcher of a new version of
+	// the resource received from the xDS server or an error indicating the
+	// reason why the resource cannot be obtained.
+	//
+	// It is invoked under different error conditions including but not
 	// limited to the following:
-	//	- authority mentioned in the resource is not found
-	//	- resource name parsing error
-	//	- resource deserialization error
-	//	- resource validation error
-	//	- ADS stream failure
-	//	- connection failure
-	OnError(error, OnDoneFunc)
+	//      - authority mentioned in the resource is not found
+	//      - resource name parsing error
+	//      - resource validation error (if resource is not cached)
+	//      - ADS stream failure (if resource is not cached)
+	//      - connection failure (if resource is not cached)
+	OnResourceChanged(*RouteConfigResourceData, error, OnDoneFunc)
 
-	// OnResourceDoesNotExist is invoked for a specific error condition where
-	// the requested resource is not found on the xDS management server.
-	OnResourceDoesNotExist(OnDoneFunc)
+	// If resource is already cached, it is invoked under different error
+	// conditions including but not limited to the following:
+	//      - resource validation error
+	//      - ADS stream failure
+	//      - connection failure
+	OnAmbientError(error, OnDoneFunc)
 }
 
 type delegatingRouteConfigWatcher struct {
 	watcher RouteConfigWatcher
 }
 
-func (d *delegatingRouteConfigWatcher) OnUpdate(data ResourceData, onDone OnDoneFunc) {
+func (d *delegatingRouteConfigWatcher) OnResourceChanged(data ResourceData, err error, onDone OnDoneFunc) {
+	if err != nil {
+		d.watcher.OnResourceChanged(nil, err, onDone)
+		return
+	}
 	rc := data.(*RouteConfigResourceData)
-	d.watcher.OnUpdate(rc, onDone)
+	d.watcher.OnResourceChanged(rc, nil, onDone)
 }
 
-func (d *delegatingRouteConfigWatcher) OnError(err error, onDone OnDoneFunc) {
-	d.watcher.OnError(err, onDone)
-}
-
-func (d *delegatingRouteConfigWatcher) OnResourceDoesNotExist(onDone OnDoneFunc) {
-	d.watcher.OnResourceDoesNotExist(onDone)
+func (d *delegatingRouteConfigWatcher) OnAmbientError(err error, onDone OnDoneFunc) {
+	d.watcher.OnAmbientError(err, onDone)
 }
 
 // WatchRouteConfig uses xDS to discover the configuration associated with the

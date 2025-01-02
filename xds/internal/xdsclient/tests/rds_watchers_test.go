@@ -43,13 +43,10 @@ import (
 
 type noopRouteConfigWatcher struct{}
 
-func (noopRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (noopRouteConfigWatcher) OnResourceChanged(_ *xdsresource.RouteConfigResourceData, _ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (noopRouteConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (noopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (noopRouteConfigWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
@@ -66,22 +63,22 @@ func newRouteConfigWatcher() *routeConfigWatcher {
 	return &routeConfigWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (rw *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (rw *routeConfigWatcher) OnResourceChanged(update *xdsresource.RouteConfigResourceData, err error, onDone xdsresource.OnDoneFunc) {
+	if err != nil {
+		rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
+		onDone()
+		return
+	}
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (rw *routeConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (rw *routeConfigWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
-	onDone()
-}
-
-func (rw *routeConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
 	onDone()
 }
 

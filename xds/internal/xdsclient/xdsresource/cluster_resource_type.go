@@ -110,39 +110,42 @@ func (c *ClusterResourceData) Raw() *anypb.Any {
 // ClusterWatcher wraps the callbacks to be invoked for different events
 // corresponding to the cluster resource being watched.
 type ClusterWatcher interface {
-	// OnUpdate is invoked to report an update for the resource being watched.
-	OnUpdate(*ClusterResourceData, OnDoneFunc)
-
-	// OnError is invoked under different error conditions including but not
+	// OnResourceChanged is invoked to notify the watcher of a new version of
+	// the resource received from the xDS server or an error indicating the
+	// reason why the resource cannot be obtained.
+	//
+	// It is invoked under different error conditions including but not
 	// limited to the following:
-	//	- authority mentioned in the resource is not found
-	//	- resource name parsing error
-	//	- resource deserialization error
-	//	- resource validation error
-	//	- ADS stream failure
-	//	- connection failure
-	OnError(error, OnDoneFunc)
+	//      - authority mentioned in the resource is not found
+	//      - resource name parsing error
+	//      - resource validation error (if resource is not cached)
+	//      - ADS stream failure (if resource is not cached)
+	//      - connection failure (if resource is not cached)
+	OnResourceChanged(*ClusterResourceData, error, OnDoneFunc)
 
-	// OnResourceDoesNotExist is invoked for a specific error condition where
-	// the requested resource is not found on the xDS management server.
-	OnResourceDoesNotExist(OnDoneFunc)
+	// If resource is already cached, it is invoked under different error
+	// conditions including but not limited to the following:
+	//      - resource validation error
+	//      - ADS stream failure
+	//      - connection failure
+	OnAmbientError(error, OnDoneFunc)
 }
 
 type delegatingClusterWatcher struct {
 	watcher ClusterWatcher
 }
 
-func (d *delegatingClusterWatcher) OnUpdate(data ResourceData, onDone OnDoneFunc) {
+func (d *delegatingClusterWatcher) OnResourceChanged(data ResourceData, err error, onDone OnDoneFunc) {
+	if err != nil {
+		d.watcher.OnResourceChanged(nil, err, onDone)
+		return
+	}
 	c := data.(*ClusterResourceData)
-	d.watcher.OnUpdate(c, onDone)
+	d.watcher.OnResourceChanged(c, nil, onDone)
 }
 
-func (d *delegatingClusterWatcher) OnError(err error, onDone OnDoneFunc) {
-	d.watcher.OnError(err, onDone)
-}
-
-func (d *delegatingClusterWatcher) OnResourceDoesNotExist(onDone OnDoneFunc) {
-	d.watcher.OnResourceDoesNotExist(onDone)
+func (d *delegatingClusterWatcher) OnAmbientError(err error, onDone OnDoneFunc) {
+	d.watcher.OnAmbientError(err, onDone)
 }
 
 // WatchCluster uses xDS to discover the configuration associated with the

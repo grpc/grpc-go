@@ -60,7 +60,28 @@ func newBLockingListenerWatcher() *blockingListenerWatcher {
 	}
 }
 
-func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.OnDoneFunc) {
+func (lw *blockingListenerWatcher) OnResourceChanged(update *xdsresource.ListenerResourceData, err error, done xdsresource.OnDoneFunc) {
+	if err != nil {
+		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+			// Notify receipt of resource not found.
+			select {
+			case lw.notFoundCh <- struct{}{}:
+			default:
+			}
+		} else {
+			select {
+			case lw.errorCh <- struct{}{}:
+			default:
+			}
+		}
+
+		select {
+		case lw.doneNotifierCh <- done:
+		default:
+		}
+
+		return
+	}
 	// Notify receipt of the update.
 	select {
 	case lw.updateCh <- struct{}{}:
@@ -73,23 +94,10 @@ func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResource
 	}
 }
 
-func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.OnDoneFunc) {
+func (lw *blockingListenerWatcher) OnAmbientError(err error, done xdsresource.OnDoneFunc) {
 	// Notify receipt of an error.
 	select {
 	case lw.errorCh <- struct{}{}:
-	default:
-	}
-
-	select {
-	case lw.doneNotifierCh <- done:
-	default:
-	}
-}
-
-func (lw *blockingListenerWatcher) OnResourceDoesNotExist(done xdsresource.OnDoneFunc) {
-	// Notify receipt of resource not found.
-	select {
-	case lw.notFoundCh <- struct{}{}:
 	default:
 	}
 

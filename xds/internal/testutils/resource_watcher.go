@@ -35,10 +35,27 @@ type TestResourceWatcher struct {
 	ResourceDoesNotExistCh chan struct{}
 }
 
-// OnUpdate is invoked by the xDS client to report the latest update on the resource
-// being watched.
-func (w *TestResourceWatcher) OnUpdate(data xdsresource.ResourceData, onDone xdsresource.OnDoneFunc) {
+// OnResourceChanged is invoked by the xDS client to report the latest update
+// or an error on the resource being watched.
+func (w *TestResourceWatcher) OnResourceChanged(data xdsresource.ResourceData, err error, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
+	if err != nil {
+		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+			select {
+			case <-w.ResourceDoesNotExistCh:
+			default:
+			}
+			w.ResourceDoesNotExistCh <- struct{}{}
+			return
+		}
+		select {
+		case <-w.ErrorCh:
+		default:
+		}
+		w.ErrorCh <- err
+		return
+
+	}
 	select {
 	case <-w.UpdateCh:
 	default:
@@ -46,25 +63,14 @@ func (w *TestResourceWatcher) OnUpdate(data xdsresource.ResourceData, onDone xds
 	w.UpdateCh <- &data
 }
 
-// OnError is invoked by the xDS client to report the latest error.
-func (w *TestResourceWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+// OnAmbientError is invoked by the xDS client to report the latest error.
+func (w *TestResourceWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
 	select {
 	case <-w.ErrorCh:
 	default:
 	}
 	w.ErrorCh <- err
-}
-
-// OnResourceDoesNotExist is used by the xDS client to report that the resource
-// being watched no longer exists.
-func (w *TestResourceWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	defer onDone()
-	select {
-	case <-w.ResourceDoesNotExistCh:
-	default:
-	}
-	w.ResourceDoesNotExistCh <- struct{}{}
 }
 
 // NewTestResourceWatcher returns a TestResourceWatcher to watch for resources

@@ -44,13 +44,10 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+func (noopClusterWatcher) OnResourceChanged(_ *xdsresource.ClusterResourceData, _ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (noopClusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (noopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (noopClusterWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
@@ -67,22 +64,22 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcher) OnResourceChanged(update *xdsresource.ClusterResourceData, err error, onDone xdsresource.OnDoneFunc) {
+	if err != nil {
+		cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
+		onDone()
+		return
+	}
 	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (cw *clusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
-	onDone()
-}
-
-func (cw *clusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
 	onDone()
 }
 
