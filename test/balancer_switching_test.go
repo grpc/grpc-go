@@ -223,15 +223,15 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
+	// Set the initial resolver state to simulate the channel starting with the
+	// "pick_first" balancer.
+	r.InitialState(resolver.State{Addresses: addrs[1:]})
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
-	// Push a resolver update containing no grpclb server address. This should
-	// lead to the channel using the default LB policy which is pick_first.
-	r.UpdateState(resolver.State{Addresses: addrs[1:]})
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {

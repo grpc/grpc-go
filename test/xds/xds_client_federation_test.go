@@ -296,7 +296,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	client = testgrpc.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("EmptyCall(_, _) = _, %v; want _, %q", wantErr, err)
+		t.Fatalf("EmptyCall(_, _) = _, %v; want _, %q", err, wantErr)
 	}
 }
 

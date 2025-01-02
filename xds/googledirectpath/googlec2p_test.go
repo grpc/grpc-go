@@ -19,6 +19,7 @@
 package googledirectpath
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -31,6 +32,8 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -316,11 +319,18 @@ func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	useCleanUniverseDomain(t)
 	uri := "google-c2p://an-authority/resource"
 	cc, err := grpc.NewClient(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to create a client for server: %v", err)
+	}
 	defer func() {
 		if cc != nil {
 			cc.Close()
 		}
 	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	wantErr := "google-c2p URI scheme does not support authorities"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("grpc.NewClient(%s) returned error: %v, want: %v", uri, err, wantErr)

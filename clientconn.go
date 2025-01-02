@@ -163,11 +163,6 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 		return nil, err
 	}
 
-	// validation for the google-c2p scheme.
-	if cc.parsedTarget.URL.Scheme == "google-c2p" && cc.parsedTarget.URL.Host != "" {
-		return nil, fmt.Errorf("google-c2p URI scheme does not support authorities")
-	}
-
 	for _, opt := range globalPerTargetDialOptions {
 		opt.DialOptionForTarget(cc.parsedTarget.URL).apply(&cc.dopts)
 	}
