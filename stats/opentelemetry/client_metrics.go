@@ -18,11 +18,9 @@ package opentelemetry
 
 import (
 	"context"
-	"strings"
 	"sync/atomic"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -160,19 +158,6 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 		))
 		h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
 	}
-}
-
-// createCallTraceSpan creates a call span to put in the provided context using
-// provided TraceProvider. If TraceProvider is nil, it returns context as is.
-func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
-	if h.options.TraceOptions.TracerProvider == nil {
-		logger.Error("TraceProvider is not provided in trace options")
-		return ctx, nil
-	}
-	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
-	tracer := otel.Tracer("grpc-open-telemetry")
-	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
-	return ctx, &span
 }
 
 // TagConn exists to satisfy stats.Handler.

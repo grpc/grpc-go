@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/trace"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -42,4 +43,17 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagI
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 	ai.traceSpan = span
 	return carrier.Context(), ai
+}
+
+// createCallTraceSpan creates a call span to put in the provided context using
+// provided TraceProvider. If TraceProvider is nil, it returns context as is.
+func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
+	if h.options.TraceOptions.TracerProvider == nil {
+		logger.Error("TraceProvider is not provided in trace options")
+		return ctx, nil
+	}
+	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+	tracer := otel.Tracer("grpc-open-telemetry")
+	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	return ctx, &span
 }
