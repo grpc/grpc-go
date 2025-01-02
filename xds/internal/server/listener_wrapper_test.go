@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -219,15 +219,14 @@ func (s) TestConnsCleanup(t *testing.T) {
 			t.Fatalf("mode change received: %v, want: %v", mode, connectivity.ServingModeServing)
 		}
 	}
-
-	server := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
-	testgrpc.RegisterTestServiceServer(server, &testService{})
-	wg := sync.WaitGroup{}
-	go func() {
-		if err := server.Serve(lw); err != nil {
-			t.Errorf("failed to serve: %v", err)
-		}
-	}()
+	ss := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
+	}
+	stubserver.StartTestService(t, ss)
 
 	// Make 100 connections to the server, and make an RPC on each one.
 	for i := 0; i < 100; i++ {
@@ -255,6 +254,5 @@ func (s) TestConnsCleanup(t *testing.T) {
 		t.Fatalf("timeout waiting for lis wrapper conns to clear, size: %v", lenConns)
 	}
 
-	server.Stop()
-	wg.Wait()
+	ss.S.Stop()
 }
