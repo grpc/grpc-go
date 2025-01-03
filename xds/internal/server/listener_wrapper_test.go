@@ -159,14 +159,6 @@ func (s) TestListenerWrapper(t *testing.T) {
 	}
 }
 
-type testService struct {
-	testgrpc.TestServiceServer
-}
-
-func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	return &testpb.Empty{}, nil
-}
-
 // TestConnsCleanup tests that the listener wrapper clears it's connection
 // references when connections close. It sets up a listener wrapper and gRPC
 // Server, and connects to the server 100 times and makes an RPC each time, and
@@ -221,7 +213,7 @@ func (s) TestConnsCleanup(t *testing.T) {
 	}
 	ss := &stubserver.StubServer{
 		Listener: lis,
-		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
