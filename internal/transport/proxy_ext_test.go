@@ -66,7 +66,7 @@ func createAndStartBackendServer(t *testing.T) string {
 // Tests the scenario where grpc.Dial is performed using a proxy with the
 // default resolver in the target URI. The test verifies that the connection is
 // established to the proxy server, sends the unresolved target URI in the HTTP
-// CONNECT request, and is successfully connected to the backend server.
+// CONNECT request and is successfully connected to the backend server.
 func (s) TestGRPCDialWithProxy(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
 	unresolvedProxyURI, _ := transport.SetupProxy(t, transport.RequestCheck(false), false)
