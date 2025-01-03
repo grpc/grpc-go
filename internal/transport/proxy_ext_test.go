@@ -355,7 +355,7 @@ func TestGRPCNewClientWithContextDialer(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Errorf("EmptyCall() failed: %v", err)
 	}
-	
+
 	select {
 	case <-proxyStartedCh:
 		t.Fatal("unexpected dial to proxy server")
