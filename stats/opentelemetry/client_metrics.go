@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/metric/noop"
 	"sync/atomic"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 type clientStatsHandler struct {
@@ -61,9 +61,12 @@ func (h *clientStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
 	if h.options.MetricsOptions.MeterProvider == nil {
-		h.MetricsRecorder = &OtelNoopMetricsRecorder{}
-		h.options.MetricsOptions.MeterProvider = metric.NewMeterProvider()
-		h.setClientMetrics()
+		h.clientMetrics.attemptStarted = noop.Int64Counter{}
+		h.clientMetrics.attemptDuration = noop.Float64Histogram{}
+		h.clientMetrics.attemptSentTotalCompressedMessageSize = noop.Int64Histogram{}
+		h.clientMetrics.attemptRcvdTotalCompressedMessageSize = noop.Int64Histogram{}
+		h.clientMetrics.callDuration = noop.Float64Histogram{}
+		h.MetricsRecorder = &registryMetrics{}
 		return
 	}
 
