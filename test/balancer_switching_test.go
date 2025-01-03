@@ -47,6 +47,7 @@ const (
 	wantGRPCLBTraceDesc     = `Channel switches to new LB policy "grpclb"`
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
 	pickFirstServiceConfig  = `{"loadBalancingConfig": [{"pick_first":{}}]}`
+	grpclbServiceConfig     = `{"loadBalancingConfig": [{"grpclb":{}}]}`
 
 	// This is the number of stub backends set up at the start of each test. The
 	// first backend is used for the "grpclb" policy and the rest are used for
@@ -241,7 +242,7 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
 	// switch to the "grpclb" balancer, which returns a single backend address.
-	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := parseServiceConfig(t, r, grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 	client := testgrpc.NewTestServiceClient(cc)
@@ -286,7 +287,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	// If we use the `loadBalancingPolicy` field, the switch to "grpclb" later on
 	// in the test will not happen as the ClientConn will continue to use the LB
 	// policy received in the first update.
-	scpr := parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`)
+	scpr := parseServiceConfig(t, r, rrServiceConfig)
 
 	// Push a resolver update with the service config specifying "round_robin".
 	r.InitialState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
@@ -308,7 +309,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	// pointing to the grpclb server we created above. This will cause the
 	// channel to switch to the "grpclb" balancer, which returns a single
 	// backend address.
-	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := parseServiceConfig(t, r, grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
