@@ -226,7 +226,7 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 	}
 	healthgrpc.RegisterHealthServer(stub.S, ts)
 	stubserver.StartTestService(t, stub)
-	t.Cleanup(func() { stub.Stop() })
+	t.Cleanup(func() { stub.S.Stop() })
 	return stub.S.(*grpc.Server), lis, ts
 }
 

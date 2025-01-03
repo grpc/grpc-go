@@ -69,16 +69,7 @@ func (s) TestPeerForClientStatsHandler(t *testing.T) {
 		S: grpc.NewServer(),
 	}
 	stubserver.StartTestService(t, ss)
-	errCh := make(chan error)
-	go func() {
-		errCh <- ss.S.Serve(ss.Listener)
-	}()
-	defer func() {
-		ss.S.Stop()
-		if err := <-errCh; err != nil {
-			t.Error(err)
-		}
-	}()
+	defer ss.S.Stop()
 
 	// Create client with stats handler and do some calls.
 	cc, err := grpc.NewClient(
