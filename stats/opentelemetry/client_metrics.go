@@ -18,10 +18,10 @@ package opentelemetry
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/metric/noop"
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
