@@ -40,9 +40,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 )
 
-const (
-	defaultTestTimeout = 10 * time.Second
-)
+const defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -97,7 +95,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }
 
@@ -135,7 +133,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }
 
@@ -172,7 +170,7 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }
 
@@ -216,7 +214,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall() failed: %v", err)
+		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
 
@@ -250,13 +248,12 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 		t.Fatalf("grpc.NewClient(%s) failed: %v", unresolvedTargetURI, err)
 	}
 	defer conn.Close()
-	t.Logf("emchadnwani : sending RPC")
+
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
-	t.Logf("emcahdwnai : RPC done")
 }
 
 // Tests the scenario where grpc.NewClient is used with grpc.WithNoProxy() set,
@@ -298,7 +295,7 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	// Create a test service client and make an RPC call.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall() failed: %v", err)
+		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
 	// Verify that the proxy server was not dialed.
@@ -315,7 +312,7 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 // custom dialer instead. It ensures that the proxy server is never dialed, the
 // proxy resolution function is not triggered, and the custom dialer is invoked
 // as expected.
-func TestGRPCNewClientWithContextDialer(t *testing.T) {
+func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
 	unresolvedProxyURI, proxyStartedCh := transport.SetupProxy(t, func(req *http.Request) error {
 		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
@@ -353,7 +350,7 @@ func TestGRPCNewClientWithContextDialer(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall() failed: %v", err)
+		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
 	select {
@@ -421,6 +418,6 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Errorf("EmptyCall failed: %v", err)
+		t.Fatalf("EmptyCall failed: %v", err)
 	}
 }

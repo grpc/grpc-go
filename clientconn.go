@@ -123,7 +123,7 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 //
 // The target name syntax is defined in
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.  e.g. to use dns
-// resolver, a  prefix should be applied to the target.
+// resolver, a "dns:///" prefix should be applied to the target.
 //
 // The DialOptions returned by WithBlock, WithTimeout,
 // WithReturnConnectionError, and FailOnNonTempDialError are ignored by this
@@ -1327,7 +1327,6 @@ func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, c
 		if err == nil {
 			return nil
 		}
-		channelz.Infof(logger, ac.channelz, " Attempt failed %q to connect", addr.Addr)
 
 		if firstConnErr == nil {
 			firstConnErr = err

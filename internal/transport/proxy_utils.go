@@ -69,7 +69,6 @@ type ProxyServer struct {
 
 // Stop closes the ProxyServer and its connections to client and server.
 func (p *ProxyServer) stop() {
-	fmt.Println("emchadnwani :stopping proxy")
 	p.lis.Close()
 	if p.in != nil {
 		p.in.Close()
@@ -80,8 +79,6 @@ func (p *ProxyServer) stop() {
 }
 
 func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func(), waitForServerHello bool) {
-	p.in = in
-
 	// This will be used in tests to check if the proxy server is started.
 	if proxyStarted != nil {
 		proxyStarted()
@@ -102,8 +99,7 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func
 	t.Logf("Dialing to %s", req.URL.Host)
 	out, err := net.Dial("tcp", req.URL.Host)
 	if err != nil {
-		p.in.Close()
-		p.in = nil
+		in.Close()
 		t.Logf("failed to dial to server: %v", err)
 		return
 	}
@@ -127,6 +123,7 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func
 		}
 		buf.Write(b[0:bytesRead])
 	}
+	p.in = in
 	p.in.Write(buf.Bytes())
 	p.out = out
 	wg := sync.WaitGroup{}
@@ -140,7 +137,6 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func
 		wg.Done()
 	}()
 	wg.Wait()
-	t.Logf("emchadnwani: proxy go routine exits")
 }
 
 // Creates and starts a proxy server.
@@ -155,9 +151,7 @@ func newProxyServer(t *testing.T, lis net.Listener, reqCheck func(*http.Request)
 	go func() {
 		for {
 			in, err := p.lis.Accept()
-			fmt.Printf("emchandwani1 : %v\n", err)
 			if err != nil {
-				// t.Logf("Shutting down proxy server: %v ", err)
 				return
 			}
 			// p.handleRequest is not invoked in a goroutine because the test
@@ -179,12 +173,12 @@ func SetupProxy(t *testing.T, reqCheck func(*http.Request) error, waitForServerH
 	}
 
 	proxyStartedCh := make(chan struct{})
-	// var once sync.Once
+	var once sync.Once
 	fmt.Printf("emchadnwani proxy staring at : %v", pLis.Addr().String())
 	proxyServer := newProxyServer(t, pLis, reqCheck, func() {
-		// once.Do(func() {
-		// 	close(proxyStartedCh)
-		// })
+		once.Do(func() {
+			close(proxyStartedCh)
+		})
 	}, waitForServerHello)
 	t.Cleanup(proxyServer.stop)
 	pAddr := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String()))
