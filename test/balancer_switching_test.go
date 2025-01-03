@@ -508,7 +508,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// report a ready picker until we ask it to do so.
 	r.UpdateState(resolver.State{
 		Addresses:     addrs[:1],
-		ServiceConfig: r.CC.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
+		ServiceConfig: r.CC.ParseServiceConfig(pickFirstServiceConfig),
 	})
 	select {
 	case <-ctx.Done():
