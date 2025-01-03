@@ -29,7 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/http/httpproxy"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/resolver"
@@ -41,7 +40,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	pLis, _ := SetupProxy(t, map[string]string{}, RequestCheck(blis.Addr().String()), true)
+	proxyAddr, _ := SetupProxy(t, RequestCheck(true), true)
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))
@@ -59,20 +58,22 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
-	t.Setenv("HTTPS_PROXY", pLis)
-
-	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
-		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		return &url.URL{
+			Scheme: "https",
+			Host:   proxyAddr,
+		}, nil
 	}
+	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = origHTTPSProxyFromEnvironment
+		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
 	}()
 
 	// Dial to proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, err := proxyDial(ctx, resolver.Address{Addr: pLis}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
+	c, err := proxyDial(ctx, resolver.Address{Addr: proxyAddr}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
 	if err != nil {
 		t.Fatalf("HTTP connect Dial failed: %v", err)
 	}

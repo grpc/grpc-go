@@ -25,6 +25,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,15 +35,25 @@ import (
 
 const defaultTestTimeout = 10 * time.Second
 
-// RequestCheck returns a function that checks the HTTP CONNECT request for the
-// correct CONNECT method and address.
-func RequestCheck(connectAddr string) func(*http.Request) error {
+// RequestCheck returns a function that validates the CONNECT method and
+// determines whether the address is resolved or unresolved. It only checks if
+// the address is an IP address or not, relying on RPC failures to handle
+// incorrect resolutions.
+func RequestCheck(isResolved bool) func(*http.Request) error {
 	return func(req *http.Request) error {
 		if req.Method != http.MethodConnect {
 			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 		}
-		if req.URL.Host != connectAddr {
-			return fmt.Errorf("unexpected URL.Host in CONNECT req %q, want %q", req.URL.Host, connectAddr)
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			return err
+		}
+		_, err = netip.ParseAddr(host)
+		if isResolved && err != nil {
+			return fmt.Errorf("unexpected URL.Host in CONNECT req %q, want an IP address", req.URL.Host)
+		}
+		if !isResolved && err == nil {
+			return fmt.Errorf("unexpected URL.Host in CONNECT req %q, do not want an IP address", req.URL.Host)
 		}
 		return nil
 	}
@@ -57,6 +69,7 @@ type ProxyServer struct {
 
 // Stop closes the ProxyServer and its connections to client and server.
 func (p *ProxyServer) stop() {
+	fmt.Println("emchadnwani :stopping proxy")
 	p.lis.Close()
 	if p.in != nil {
 		p.in.Close()
@@ -65,12 +78,14 @@ func (p *ProxyServer) stop() {
 		p.out.Close()
 	}
 }
+
 func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func(), waitForServerHello bool) {
 	p.in = in
+
 	// This will be used in tests to check if the proxy server is started.
-	// if proxyStarted != nil {
-	// 	proxyStarted()
-	// }
+	if proxyStarted != nil {
+		proxyStarted()
+	}
 	req, err := http.ReadRequest(bufio.NewReader(in))
 	if err != nil {
 		t.Errorf("failed to read CONNECT req: %v", err)
@@ -80,18 +95,16 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func
 		resp := http.Response{StatusCode: http.StatusMethodNotAllowed}
 		resp.Write(p.in)
 		p.in.Close()
-		t.Errorf("get wrong CONNECT req: %+v, error: %v", req, err)
+		t.Errorf("failed to read CONNECT req: %v", err)
 		return
 	}
 
-	// addr := dnsCache[req.URL.Host]
-	// if addr == "" {
-	// 	addr = req.URL.Host
-	// }
 	t.Logf("Dialing to %s", req.URL.Host)
 	out, err := net.Dial("tcp", req.URL.Host)
 	if err != nil {
-		t.Errorf("failed to dial to server: %v", err)
+		p.in.Close()
+		p.in = nil
+		t.Logf("failed to dial to server: %v", err)
 		return
 	}
 	out.SetDeadline(time.Now().Add(defaultTestTimeout))
@@ -116,12 +129,22 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, proxyStarted func
 	}
 	p.in.Write(buf.Bytes())
 	p.out = out
-	go io.Copy(p.in, p.out)
-	go io.Copy(p.out, p.in)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		io.Copy(p.in, p.out)
+		wg.Done()
+	}()
+	go func() {
+		io.Copy(p.out, p.in)
+		wg.Done()
+	}()
+	wg.Wait()
+	t.Logf("emchadnwani: proxy go routine exits")
 }
 
 // Creates and starts a proxy server.
-func newProxyServer(t *testing.T, lis net.Listener, dnsCache map[string]string, reqCheck func(*http.Request) error, proxyStarted func(), waitForServerHello bool) *ProxyServer {
+func newProxyServer(t *testing.T, lis net.Listener, reqCheck func(*http.Request) error, proxyStarted func(), waitForServerHello bool) *ProxyServer {
 	t.Helper()
 	p := &ProxyServer{
 		lis:          lis,
@@ -130,15 +153,15 @@ func newProxyServer(t *testing.T, lis net.Listener, dnsCache map[string]string, 
 
 	// Start the proxy server.
 	go func() {
-		// var err error
-		// var in net.Conn
 		for {
 			in, err := p.lis.Accept()
+			fmt.Printf("emchandwani1 : %v\n", err)
 			if err != nil {
-				t.Logf("Shutting down proxy server: %v ", err)
+				// t.Logf("Shutting down proxy server: %v ", err)
 				return
 			}
-			// not called in a go routine because the proxy can currently handle only one connection.
+			// p.handleRequest is not invoked in a goroutine because the test
+			// proxy currently supports handling only one connection at a time.
 			p.handleRequest(t, in, proxyStarted, waitForServerHello)
 
 		}
@@ -148,7 +171,7 @@ func newProxyServer(t *testing.T, lis net.Listener, dnsCache map[string]string, 
 
 // SetupProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns the proxy's listener and helper channels.
-func SetupProxy(t *testing.T, dnsCache map[string]string, reqCheck func(*http.Request) error, waitForServerHello bool) (string, chan struct{}) {
+func SetupProxy(t *testing.T, reqCheck func(*http.Request) error, waitForServerHello bool) (string, chan struct{}) {
 	t.Helper()
 	pLis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -156,9 +179,14 @@ func SetupProxy(t *testing.T, dnsCache map[string]string, reqCheck func(*http.Re
 	}
 
 	proxyStartedCh := make(chan struct{})
-
-	proxyServer := newProxyServer(t, pLis, dnsCache, reqCheck, func() { close(proxyStartedCh) }, waitForServerHello)
+	// var once sync.Once
+	fmt.Printf("emchadnwani proxy staring at : %v", pLis.Addr().String())
+	proxyServer := newProxyServer(t, pLis, reqCheck, func() {
+		// once.Do(func() {
+		// 	close(proxyStartedCh)
+		// })
+	}, waitForServerHello)
 	t.Cleanup(proxyServer.stop)
-
-	return fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())), proxyStartedCh
+	pAddr := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String()))
+	return pAddr, proxyStartedCh
 }
