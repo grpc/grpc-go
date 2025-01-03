@@ -58,7 +58,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	}()
 
 	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
+	hpfe := func(_ *http.Request) (*url.URL, error) {
 		return &url.URL{
 			Scheme: "https",
 			Host:   proxyAddr,
