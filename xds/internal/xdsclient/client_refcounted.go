@@ -19,12 +19,12 @@
 package xdsclient
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 const defaultWatchExpiryTimeout = 15 * time.Second
@@ -59,29 +59,29 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.config == nil {
+		return nil, nil, fmt.Errorf("bootstrap configuration not set in the pool")
+	}
 
 	if c := p.clients[name]; c != nil {
 		c.incrRef()
 		return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	// Create the new client implementation.
-	if p.config == nil {
-		p.config = config
-	}
-	c, err := newClientImpl(config, watchExpiryTimeout, streamBackoff)
+	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff)
 	if err != nil {
 		return nil, nil, err
 	}
-	c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, config)
+	c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
 	client := &clientRefCounted{clientImpl: c, refCount: 1}
 	p.clients[name] = client
 	xdsClientImplCreateHook(name)
 
-	logger.Infof("xDS node ID: %s", config.Node().GetId())
+	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
 	return client, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 

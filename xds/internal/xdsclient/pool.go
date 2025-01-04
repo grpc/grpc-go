@@ -61,10 +61,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string) (XDSClient, func(), error) {
-	if p.config == nil {
-		return nil, nil, fmt.Errorf("bootstrap configuration not set in the pool")
-	}
-	return p.newRefCounted(name, p.config, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff)
+	return p.newRefCounted(name, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -88,7 +85,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
 	}
-	return p.newRefCounted(opts.Name, p.config, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
+	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
 }
 
 // GetClientForTesting returns an xDS client created earlier using the given
@@ -115,10 +112,9 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 
 // SetFallbackBootstrapConfig to specify a bootstrap configuration to use a
 // fallback when the bootstrap env vars are not specified.
-func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) error {
+func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.config = config
-	return nil
 }
