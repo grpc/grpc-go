@@ -247,7 +247,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Create a ClientConn to the first listener and make a successful RPCs.
 	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create a client for server: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer cc1.Close()
 	waitForSuccessfulRPC(ctx, t, cc1)
@@ -255,7 +255,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Create a ClientConn to the second listener and make a successful RPCs.
 	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create a client for server: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer cc2.Close()
 	waitForSuccessfulRPC(ctx, t, cc2)
