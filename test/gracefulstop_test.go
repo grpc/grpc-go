@@ -148,7 +148,7 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	// Now dial.  The listener's Accept method will return a valid connection,
 	// even though GracefulStop has closed the listener.
-	cc, err := grpc.NewClient("localhost:0", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(d))
+	cc, err := grpc.NewClient("whatever:///this-gets-overwritten", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(d))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(_, %q, _) = %v", lis.Addr().String(), err)
 	}
