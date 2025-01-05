@@ -100,7 +100,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		xdsClose()
-		t.Fatalf("failed to create a client for server: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	cc.Connect()
 	return cc, func() {
