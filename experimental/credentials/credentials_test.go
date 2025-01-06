@@ -41,22 +41,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// A struct that implements AuthInfo interface but does not implement GetCommonAuthInfo() method.
-type testAuthInfoNoGetCommonAuthInfoMethod struct{}
-
-func (ta testAuthInfoNoGetCommonAuthInfoMethod) AuthType() string {
-	return "testAuthInfoNoGetCommonAuthInfoMethod"
-}
-
-// A struct that implements AuthInfo interface and implements CommonAuthInfo() method.
-type testAuthInfo struct {
-	credentials.CommonAuthInfo
-}
-
-func (ta testAuthInfo) AuthType() string {
-	return "testAuthInfo"
-}
-
 func (s) TestTLSOverrideServerName(t *testing.T) {
 	expectedServerName := "server.name"
 	c := NewTLSWithALPNDisabled(nil)
@@ -157,8 +141,8 @@ func compare(a1, a2 credentials.AuthInfo) bool {
 	}
 	switch a1.AuthType() {
 	case "tls":
-		state1 := a1.(TLSInfo).State
-		state2 := a2.(TLSInfo).State
+		state1 := a1.(credentials.TLSInfo).State
+		state2 := a2.(credentials.TLSInfo).State
 		if state1.Version == state2.Version &&
 			state1.HandshakeComplete == state2.HandshakeComplete &&
 			state1.CipherSuite == state2.CipherSuite &&
@@ -255,7 +239,7 @@ func tlsServerHandshake(conn net.Conn) (credentials.AuthInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return TLSInfo{State: serverConn.ConnectionState(), CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}, nil
+	return credentials.TLSInfo{State: serverConn.ConnectionState(), CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}, nil
 }
 
 func tlsClientHandshake(conn net.Conn, _ string) (credentials.AuthInfo, error) {
@@ -264,5 +248,5 @@ func tlsClientHandshake(conn net.Conn, _ string) (credentials.AuthInfo, error) {
 	if err := clientConn.Handshake(); err != nil {
 		return nil, err
 	}
-	return TLSInfo{State: clientConn.ConnectionState(), CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}, nil
+	return credentials.TLSInfo{State: clientConn.ConnectionState(), CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}, nil
 }

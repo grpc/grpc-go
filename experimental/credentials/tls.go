@@ -16,6 +16,7 @@
  *
  */
 
+// Package credentials contains experimental TLS credentials.
 package credentials
 
 import (
@@ -24,57 +25,12 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/experimental/credentials/internal"
-	"google.golang.org/grpc/grpclog"
 )
-
-var logger = grpclog.Component("credentials")
-
-// TLSInfo contains the auth information for a TLS authenticated connection.
-// It implements the AuthInfo interface.
-type TLSInfo struct {
-	State tls.ConnectionState
-	credentials.CommonAuthInfo
-	// This API is experimental.
-	SPIFFEID *url.URL
-}
-
-// AuthType returns the type of TLSInfo as a string.
-func (t TLSInfo) AuthType() string {
-	return "tls"
-}
-
-// cipherSuiteLookup returns the string version of a TLS cipher suite ID.
-func cipherSuiteLookup(cipherSuiteID uint16) string {
-	for _, s := range tls.CipherSuites() {
-		if s.ID == cipherSuiteID {
-			return s.Name
-		}
-	}
-	for _, s := range tls.InsecureCipherSuites() {
-		if s.ID == cipherSuiteID {
-			return s.Name
-		}
-	}
-	return fmt.Sprintf("unknown ID: %v", cipherSuiteID)
-}
-
-// GetSecurityValue returns security info requested by channelz.
-func (t TLSInfo) GetSecurityValue() credentials.ChannelzSecurityValue {
-	v := &TLSChannelzSecurityValue{
-		StandardName: cipherSuiteLookup(t.State.CipherSuite),
-	}
-	// Currently there's no way to get LocalCertificate info from tls package.
-	if len(t.State.PeerCertificates) > 0 {
-		v.RemoteCertificate = t.State.PeerCertificates[0].Raw
-	}
-	return v
-}
 
 // tlsCreds is the credentials required for authenticating a connection using TLS.
 type tlsCreds struct {
@@ -118,7 +74,7 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 		return nil, nil, ctx.Err()
 	}
 
-	tlsInfo := TLSInfo{
+	tlsInfo := credentials.TLSInfo{
 		State: conn.ConnectionState(),
 		CommonAuthInfo: credentials.CommonAuthInfo{
 			SecurityLevel: credentials.PrivacyAndIntegrity,
@@ -138,7 +94,7 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Auth
 		return nil, nil, err
 	}
 	cs := conn.ConnectionState()
-	tlsInfo := TLSInfo{
+	tlsInfo := credentials.TLSInfo{
 		State: cs,
 		CommonAuthInfo: credentials.CommonAuthInfo{
 			SecurityLevel: credentials.PrivacyAndIntegrity,
@@ -243,20 +199,6 @@ func NewServerTLSFromFileWithALPNDisabled(certFile, keyFile string) (credentials
 		return nil, err
 	}
 	return NewTLSWithALPNDisabled(&tls.Config{Certificates: []tls.Certificate{cert}}), nil
-}
-
-// TLSChannelzSecurityValue defines the struct that TLS protocol should return
-// from GetSecurityValue(), containing security info like cipher and certificate used.
-//
-// # Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
-type TLSChannelzSecurityValue struct {
-	credentials.ChannelzSecurityValue
-	StandardName      string
-	LocalCertificate  []byte
-	RemoteCertificate []byte
 }
 
 // cloneTLSConfig returns a shallow clone of the exported

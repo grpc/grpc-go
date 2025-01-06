@@ -16,7 +16,7 @@
  *
  */
 
-// Package credentials defines APIs for parsing SPIFFE ID.
+// Package internal defines APIs for parsing SPIFFE ID.
 //
 // All APIs in this package are experimental.
 package internal
