@@ -41,7 +41,6 @@ import (
 )
 
 func testLocalCredsE2ESucceed(t *testing.T, network, address string) error {
-
 	lis, err := net.Listen(network, address)
 	if err != nil {
 		return fmt.Errorf("Failed to create listener: %v", err)

@@ -57,13 +57,13 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
 
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 
 	ss1 := &stubserver.StubServer{
-		Listener: lis,
+		Listener: lis1,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
@@ -72,7 +72,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	defer ss1.S.Stop()
 	stubserver.StartTestService(t, ss1)
 
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}
@@ -81,7 +81,6 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	endTime := time.Now().Add(testTime)
 	for time.Now().Before(endTime) {
 		if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -551,8 +550,35 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
 
-	ss2 := &stubserver.StubServer{
+	ss1 := &stubserver.StubServer{
 		Listener: lis1,
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+				t.Errorf("unexpected error from send: %v", err)
+				return err
+			}
+			// Wait until a message is received from client
+			_, err := stream.Recv()
+			if err == nil {
+				t.Error("expected to never receive any message")
+			}
+			return err
+		},
+		S: grpc.NewServer(),
+	}
+	stubserver.StartTestService(t, ss1)
+	defer ss1.S.Stop()
+
+	conn2Established := grpcsync.NewEvent()
+	lis2, err := listenWithNotifyingListener("tcp", "localhost:0", conn2Established)
+	if err != nil {
+		t.Fatalf("Error while listening. Err: %v", err)
+	}
+	ss2 := &stubserver.StubServer{
+		Listener: lis2,
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
@@ -572,33 +598,6 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	}
 	stubserver.StartTestService(t, ss2)
 	defer ss2.S.Stop()
-
-	conn2Established := grpcsync.NewEvent()
-	lis2, err := listenWithNotifyingListener("tcp", "localhost:0", conn2Established)
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	ss3 := &stubserver.StubServer{
-		Listener: lis2,
-		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
-				t.Errorf("unexpected error from send: %v", err)
-				return err
-			}
-			// Wait until a message is received from client
-			_, err := stream.Recv()
-			if err == nil {
-				t.Error("expected to never receive any message")
-			}
-			return err
-		},
-		S: grpc.NewServer(),
-	}
-	stubserver.StartTestService(t, ss3)
-	defer ss3.S.Stop()
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{
@@ -632,7 +631,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	}
 
 	t.Log("Gracefully stopping server 1.")
-	go ss2.S.GracefulStop()
+	go ss1.S.GracefulStop()
 
 	t.Log("Waiting for the ClientConn to enter IDLE state.")
 	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
@@ -653,7 +652,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	lis2.Close()
 
 	t.Log("Hard closing connection 1.")
-	ss2.S.Stop()
+	ss1.S.Stop()
 
 	t.Log("Waiting for the first stream to error.")
 	if _, err = stream.Recv(); err == nil {
