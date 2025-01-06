@@ -27,9 +27,10 @@ import (
 	"net/url"
 	"os"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/experimental/credentials/internal"
 	"google.golang.org/grpc/grpclog"
-	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 var logger = grpclog.Component("credentials")
@@ -91,7 +92,7 @@ func (c tlsCreds) Info() credentials.ProtocolInfo {
 
 func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
 	// use local cfg to avoid clobbering ServerName if using multiple endpoints
-	cfg := credinternal.CloneTLSConfig(c.config)
+	cfg := cloneTLSConfig(c.config)
 	if cfg.ServerName == "" {
 		serverName, _, err := net.SplitHostPort(authority)
 		if err != nil {
@@ -123,11 +124,11 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawCon
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
-	id := credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	id := internal.SPIFFEIDFromState(conn.ConnectionState())
 	if id != nil {
 		tlsInfo.SPIFFEID = id
 	}
-	return credinternal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
+	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -143,11 +144,11 @@ func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Auth
 			SecurityLevel: credentials.PrivacyAndIntegrity,
 		},
 	}
-	id := credinternal.SPIFFEIDFromState(conn.ConnectionState())
+	id := internal.SPIFFEIDFromState(conn.ConnectionState())
 	if id != nil {
 		tlsInfo.SPIFFEID = id
 	}
-	return credinternal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
+	return internal.WrapSyscallConn(rawConn, conn), tlsInfo, nil
 }
 
 func (c *tlsCreds) Clone() credentials.TransportCredentials {
@@ -175,8 +176,8 @@ var tls12ForbiddenCipherSuites = map[uint16]struct{}{
 // NewTLSWithALPNDisabled uses c to construct a TransportCredentials based on
 // TLS. ALPN verification is disabled.
 func NewTLSWithALPNDisabled(c *tls.Config) credentials.TransportCredentials {
-	tc := &tlsCreds{credinternal.CloneTLSConfig(c)}
-	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
+	tc := &tlsCreds{cloneTLSConfig(c)}
+	tc.config.NextProtos = appendH2ToNextProtos(tc.config.NextProtos)
 	// If the user did not configure a MinVersion and did not configure a
 	// MaxVersion < 1.2, use MinVersion=1.2, which is required by
 	// https://datatracker.ietf.org/doc/html/rfc7540#section-9.2
@@ -256,4 +257,29 @@ type TLSChannelzSecurityValue struct {
 	StandardName      string
 	LocalCertificate  []byte
 	RemoteCertificate []byte
+}
+
+// cloneTLSConfig returns a shallow clone of the exported
+// fields of cfg, ignoring the unexported sync.Once, which
+// contains a mutex and must not be copied.
+//
+// If cfg is nil, a new zero tls.Config is returned.
+func cloneTLSConfig(cfg *tls.Config) *tls.Config {
+	if cfg == nil {
+		return &tls.Config{}
+	}
+
+	return cfg.Clone()
+}
+
+// appendH2ToNextProtos appends h2 to next protos.
+func appendH2ToNextProtos(ps []string) []string {
+	for _, p := range ps {
+		if p == http2.NextProtoTLS {
+			return ps
+		}
+	}
+	ret := make([]string, 0, len(ps)+1)
+	ret = append(ret, ps...)
+	return append(ret, http2.NextProtoTLS)
 }
