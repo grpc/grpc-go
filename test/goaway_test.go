@@ -57,22 +57,22 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
 
-	lis1, err := net.Listen("tcp", "localhost:0")
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 
-	ss1 := &stubserver.StubServer{
-		Listener: lis1,
+	ss := &stubserver.StubServer{
+		Listener: lis,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 		S: grpc.NewServer(grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionAge: maxConnAge})),
 	}
-	defer ss1.S.Stop()
-	stubserver.StartTestService(t, ss1)
+	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
-	cc, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}

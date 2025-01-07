@@ -76,10 +76,8 @@ func testLocalCredsE2ESucceed(t *testing.T, network, address string) error {
 		},
 		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
 	}
-
-	defer ss.S.Stop()
-
 	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	var cc *grpc.ClientConn
 	lisAddr := lis.Addr().String()
@@ -180,8 +178,8 @@ func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
 		},
 		S: grpc.NewServer(grpc.Creds(local.NewCredentials())),
 	}
-	defer ss.S.Stop()
 	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {

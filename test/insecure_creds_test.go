@@ -153,9 +153,8 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 		},
 		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
 	}
-
-	defer ss.S.Stop()
 	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	addr := lis.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -188,9 +187,8 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
 		},
 		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
 	}
-
-	defer ss.S.Stop()
 	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	addr := lis.Addr().String()
 	dopts := []grpc.DialOption{
