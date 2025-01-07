@@ -16,6 +16,7 @@
  *
  */
 
+// Package testutils contains helpers for transport tests.
 package testutils
 
 import (
