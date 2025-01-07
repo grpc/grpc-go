@@ -320,21 +320,25 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		callHdr.Creds = c.creds
 	}
 
+	// Acquire mutex to access cc.nameResolutionDelay.
+	cc.mu.Lock()
 	cs := &clientStream{
-		callHdr:      callHdr,
-		ctx:          ctx,
-		methodConfig: &mc,
-		opts:         opts,
-		callInfo:     c,
-		cc:           cc,
-		desc:         desc,
-		codec:        c.codec,
-		cp:           cp,
-		comp:         comp,
-		cancel:       cancel,
-		firstAttempt: true,
-		onCommit:     onCommit,
+		callHdr:             callHdr,
+		ctx:                 ctx,
+		methodConfig:        &mc,
+		opts:                opts,
+		callInfo:            c,
+		cc:                  cc,
+		desc:                desc,
+		codec:               c.codec,
+		cp:                  cp,
+		comp:                comp,
+		cancel:              cancel,
+		firstAttempt:        true,
+		onCommit:            onCommit,
+		nameResolutionDelay: cc.nameResolutionDelay,
 	}
+	cc.mu.Unlock()
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
 	}
@@ -417,7 +421,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: cs.nameResolutionDelay})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,
@@ -531,6 +535,8 @@ type clientStream struct {
 	callInfo *callInfo
 	cc       *ClientConn
 	desc     *StreamDesc
+
+	nameResolutionDelay time.Duration
 
 	codec baseCodec
 	cp    Compressor

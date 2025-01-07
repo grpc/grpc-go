@@ -192,6 +192,11 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		method:    info.FullMethodName,
 	}
 	if h.options.isTracingEnabled() {
+		if info.NameResolutionDelay > 0 {
+			callSpan := trace.SpanFromContext(ctx)
+			callSpan.AddEvent("Delayed name resolution complete")
+			ctx = trace.ContextWithSpan(ctx, callSpan)
+		}
 		ctx, ai = h.traceTagRPC(ctx, info, ai)
 	}
 	return setRPCInfo(ctx, &rpcInfo{

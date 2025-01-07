@@ -613,12 +613,18 @@ type ClientConn struct {
 
 	// mu protects the following fields.
 	// TODO: split mu so the same mutex isn't used for everything.
-	mu              sync.RWMutex
-	resolverWrapper *ccResolverWrapper         // Always recreated whenever entering idle to simplify Close.
-	balancerWrapper *ccBalancerWrapper         // Always recreated whenever entering idle to simplify Close.
-	sc              *ServiceConfig             // Latest service config received from the resolver.
-	conns           map[*addrConn]struct{}     // Set to nil on close.
-	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
+	mu sync.RWMutex
+	// nameResolutionStartTime track the start time since name resolution started.
+	nameResolutionStartTime time.Time
+	// nameResolutionInProgress indicate if name resolution is in progress.
+	nameResolutionInProgress bool
+	// nameResolutionDelay holds the duration for which name resolution was delayed.
+	nameResolutionDelay time.Duration
+	resolverWrapper     *ccResolverWrapper         // Always recreated whenever entering idle to simplify Close.
+	balancerWrapper     *ccBalancerWrapper         // Always recreated whenever entering idle to simplify Close.
+	sc                  *ServiceConfig             // Latest service config received from the resolver.
+	conns               map[*addrConn]struct{}     // Set to nil on close.
+	mkp                 keepalive.ClientParameters // May be updated upon receipt of a GoAway.
 	// firstResolveEvent is used to track whether the name resolver sent us at
 	// least one update. RPCs block on this event.  May be accessed without mu
 	// if we know we cannot be asked to enter idle mode while accessing it (e.g.
@@ -674,6 +680,14 @@ func (cc *ClientConn) Connect() {
 // context expires.  Returns nil unless the context expires first; otherwise
 // returns a status error based on the context.
 func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
+	// Set the start time for name resolution if it's not already set
+	cc.mu.Lock()
+	if !cc.nameResolutionInProgress {
+		cc.nameResolutionStartTime = time.Now()
+		cc.nameResolutionInProgress = true
+	}
+	cc.mu.Unlock()
+
 	// This is on the RPC path, so we use a fast path to avoid the
 	// more-expensive "select" below after the resolver has returned once.
 	if cc.firstResolveEvent.HasFired() {
@@ -681,6 +695,9 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	}
 	select {
 	case <-cc.firstResolveEvent.Done():
+		cc.mu.Lock()
+		cc.nameResolutionDelay = time.Now().Sub(cc.nameResolutionStartTime)
+		cc.mu.Unlock()
 		return nil
 	case <-ctx.Done():
 		return status.FromContextError(ctx.Err()).Err()
