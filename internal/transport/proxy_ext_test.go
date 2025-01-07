@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ import (
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/transport"
+	tu "google.golang.org/grpc/internal/transport/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -63,20 +64,37 @@ func createAndStartBackendServer(t *testing.T) string {
 	return fmt.Sprintf("localhost:%d", testutils.ParsePort(t, backend.Address))
 }
 
+func isIPAddr(addr string) bool {
+	_, err := netip.ParseAddr(addr)
+	return err == nil
+}
+
 // Tests the scenario where grpc.Dial is performed using a proxy with the
 // default resolver in the target URI. The test verifies that the connection is
 // established to the proxy server, sends the unresolved target URI in the HTTP
 // CONNECT request and is successfully connected to the backend server.
 func (s) TestGRPCDialWithProxy(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
-	unresolvedProxyURI, _ := transport.SetupProxy(t, transport.RequestCheck(false), false)
+	reqCheck := func(req *http.Request) {
+		if req.Method != http.MethodConnect {
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		}
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := isIPAddr(host), false; got != want {
+			t.Errorf("isIPAddr(%q) = %t, want = false", req.URL.Host, got)
+		}
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -111,14 +129,26 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 // HTTP CONNECT request, successfully connecting to the backend server.
 func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
-	unresolvedProxyURI, _ := transport.SetupProxy(t, transport.RequestCheck(true), false)
+	reqCheck := func(req *http.Request) {
+		if req.Method != http.MethodConnect {
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		}
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := isIPAddr(host), true; got != want {
+			t.Errorf("isIPAddr(%q) = %t, want = true", req.URL.Host, got)
+		}
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -152,14 +182,26 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
-	unresolvedProxyURI, _ := transport.SetupProxy(t, transport.RequestCheck(false), false)
+	reqCheck := func(req *http.Request) {
+		if req.Method != http.MethodConnect {
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		}
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := isIPAddr(host), false; got != want {
+			t.Errorf("isIPAddr(%q) = %t, want = false", req.URL.Host, got)
+		}
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -193,14 +235,26 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 // establishes a connection to the backend server.
 func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
-	unresolvedProxyURI, _ := transport.SetupProxy(t, transport.RequestCheck(true), false)
+	reqCheck := func(req *http.Request) {
+		if req.Method != http.MethodConnect {
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		}
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := isIPAddr(host), true; got != want {
+			t.Errorf("isIPAddr(%q) = %t, want = true", req.URL.Host, got)
+		}
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -225,7 +279,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%s) failed: %v", targetResolver.Scheme()+":///"+unresolvedTargetURI, err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	defer conn.Close()
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
@@ -241,7 +295,19 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 // CONNECT request, the proxy URI is resolved correctly, and the connection is
 // successfully established with the backend server through the proxy.
 func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
-	unresolvedProxyURI, _ := transport.SetupProxy(t, transport.RequestCheck(true), false)
+	reqCheck := func(req *http.Request) {
+		if req.Method != http.MethodConnect {
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		}
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := isIPAddr(host), true; got != want {
+			t.Errorf("isIPAddr(%q) = %t, want = true", req.URL.Host, got)
+		}
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 	unresolvedTargetURI := createAndStartBackendServer(t)
 
 	// Overwrite the function in the test and restore them in defer.
@@ -249,7 +315,7 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -283,16 +349,17 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 // never receives a connection request.
 func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
-	unresolvedProxyURI, proxyStartedCh := transport.SetupProxy(t, func(req *http.Request) error {
-		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
-	}, false)
+	reqCheck := func(_ *http.Request) {
+		t.Error("proxy server should not have received a Connect request")
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -321,14 +388,6 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
-
-	// Verify that the proxy server was not dialed.
-	select {
-	case <-proxyStartedCh:
-		t.Fatal("unexpected dial to proxy server")
-	default:
-		t.Log("proxy server was not dialed")
-	}
 }
 
 // Tests the scenario where grpc.NewClient is used with grpc.WithContextDialer()
@@ -338,16 +397,17 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 // as expected.
 func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	unresolvedTargetURI := createAndStartBackendServer(t)
-	unresolvedProxyURI, proxyStartedCh := transport.SetupProxy(t, func(req *http.Request) error {
-		return fmt.Errorf("proxy server should not have received a Connect request: %v", req)
-	}, false)
+	reqCheck := func(_ *http.Request) {
+		t.Error("proxy server should not have received a Connect request")
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -380,13 +440,6 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
-
-	select {
-	case <-proxyStartedCh:
-		t.Fatal("unexpected dial to proxy server")
-	default:
-		t.Log("proxy server was not dialled")
-	}
 }
 
 // Tests the scenario where grpc.NewClient is used with the default DNS resolver
@@ -402,24 +455,28 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 		user     = "notAUser"
 		password = "notAPassword"
 	)
-	unresolvedProxyURI, _ := transport.SetupProxy(t, func(req *http.Request) error {
+	reqCheck := func(req *http.Request) {
 		if req.Method != http.MethodConnect {
-			return fmt.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 		}
-		if req.URL.Host != unresolvedTargetURI {
-			return fmt.Errorf("unexpected URL.Host %q, want %q", req.URL.Host, unresolvedTargetURI)
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		if got, want := isIPAddr(host), false; got != want {
+			t.Errorf("isIPAddr(%q) = %t, want = false", req.URL.Host, got)
 		}
 		wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 		if got := req.Header.Get("Proxy-Authorization"); got != wantProxyAuthStr {
 			gotDecoded, err := base64.StdEncoding.DecodeString(got)
 			if err != nil {
-				return fmt.Errorf("failed to decode Proxy-Authorization header: %v", err)
+				t.Errorf("failed to decode Proxy-Authorization header: %v", err)
 			}
 			wantDecoded, _ := base64.StdEncoding.DecodeString(wantProxyAuthStr)
-			return fmt.Errorf("unexpected auth %q (%q), want %q (%q)", got, gotDecoded, wantProxyAuthStr, wantDecoded)
+			t.Errorf("unexpected auth %q (%q), want %q (%q)", got, gotDecoded, wantProxyAuthStr, wantDecoded)
 		}
-		return nil
-	}, false)
+	}
+	pServer := tu.SetupProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -427,7 +484,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 			return &url.URL{
 				Scheme: "https",
 				User:   url.UserPassword(user, password),
-				Host:   unresolvedProxyURI,
+				Host:   pServer.Addr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)

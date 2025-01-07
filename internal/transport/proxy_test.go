@@ -25,14 +25,16 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"net/url"
+	"net/netip"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal/proxyattributes"
-	"google.golang.org/grpc/internal/resolver/delegatingresolver"
+	"google.golang.org/grpc/internal/transport/testutils"
 	"google.golang.org/grpc/resolver"
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	serverMessage := []byte("server-hello")
@@ -40,7 +42,20 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	proxyAddr, _ := SetupProxy(t, RequestCheck(true), true)
+	reqCheck := func(req *http.Request) {
+		if req.Method != http.MethodConnect {
+			t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		}
+		host, _, err := net.SplitHostPort(req.URL.Host)
+		if err != nil {
+			t.Error(err)
+		}
+		_, err = netip.ParseAddr(host)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	pServer := testutils.SetupProxy(t, reqCheck, true)
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))
@@ -57,23 +72,10 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 		done <- nil
 	}()
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(_ *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   proxyAddr,
-		}, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
-
 	// Dial to proxy server.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, err := proxyDial(ctx, resolver.Address{Addr: proxyAddr}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
+	c, err := proxyDial(ctx, resolver.Address{Addr: pServer.Addr}, "test", proxyattributes.Options{ConnectAddr: blis.Addr().String()})
 	if err != nil {
 		t.Fatalf("HTTP connect Dial failed: %v", err)
 	}
