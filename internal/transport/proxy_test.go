@@ -34,8 +34,6 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const defaultTestTimeout = 10 * time.Second
-
 func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	serverMessage := []byte("server-hello")
 	blis, err := net.Listen("tcp", "localhost:0")
