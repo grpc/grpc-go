@@ -193,7 +193,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			// Create a ClientConn with the xds scheme and make an RPC.
 			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 			if err != nil {
-				t.Fatalf("failed to create a client for server: %v", err)
+				t.Fatalf("Failed to create a client for server: %v", err)
 			}
 			defer cc.Close()
 
