@@ -378,7 +378,6 @@ func main() {
 	case "rpc_soak":
 		rpcSoakConfig := createBaseSoakConfig(serverAddr, conn)
 		rpcSoakConfig.ChannelForTest = func() (*grpc.ClientConn, func()) { return conn, func() {} }
-		//rpcSoakConfig.MayCreateNewChannel = interop.UseSharedChannel
 		interop.DoSoakTest(ctxWithDeadline, rpcSoakConfig)
 		logger.Infoln("RpcSoak done")
 	case "channel_soak":
@@ -390,9 +389,6 @@ func main() {
 			}
 			return cc, func() { cc.Close() /* returns an error, so unfortunately needs wrapping in this closure */ }
 		}
-		//channelSoakConfig.MayCreateNewChannel = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-		//	return interop.CreateNewChannel(currentChannel, serverAddr, opts)
-		//}
 		interop.DoSoakTest(ctxWithDeadline, channelSoakConfig)
 		logger.Infoln("ChannelSoak done")
 	case "orca_per_rpc":
