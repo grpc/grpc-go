@@ -128,11 +128,6 @@ func (s) TestGracefulStop(t *testing.T) {
 	<-dlis.acceptCalled
 	ss.S.GracefulStop()
 	close(gracefulStopDone)
-	go func() {
-		<-dlis.acceptCalled
-		ss.S.GracefulStop()
-		close(gracefulStopDone)
-	}()
 	// 2. GracefulStop() Server after listener's Accept is called, but don't
 	//    allow Accept() to exit when Close() is called on it.
 
