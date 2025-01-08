@@ -84,7 +84,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := isIPAddr(host), false; got != want {
-			t.Errorf("isIPAddr(%q) = %t, want = false", req.URL.Host, got)
+			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
 	pServer := tu.SetupProxy(t, reqCheck, false)
@@ -102,9 +102,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -138,7 +136,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := isIPAddr(host), true; got != want {
-			t.Errorf("isIPAddr(%q) = %t, want = true", req.URL.Host, got)
+			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
 	pServer := tu.SetupProxy(t, reqCheck, false)
@@ -156,9 +154,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -191,7 +187,7 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := isIPAddr(host), false; got != want {
-			t.Errorf("isIPAddr(%q) = %t, want = false", req.URL.Host, got)
+			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
 	pServer := tu.SetupProxy(t, reqCheck, false)
@@ -209,9 +205,7 @@ func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -244,7 +238,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := isIPAddr(host), true; got != want {
-			t.Errorf("isIPAddr(%q) = %t, want = true", req.URL.Host, got)
+			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
 	pServer := tu.SetupProxy(t, reqCheck, false)
@@ -262,9 +256,7 @@ func (s) TestGRPCNewClientWithProxyAndCustomResolver(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	// Create and update a custom resolver for target URI.
 	resolvedTargetURI := fmt.Sprintf("[::0]:%d", testutils.ParsePort(t, unresolvedTargetURI))
@@ -304,7 +296,7 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := isIPAddr(host), true; got != want {
-			t.Errorf("isIPAddr(%q) = %t, want = true", req.URL.Host, got)
+			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
 	pServer := tu.SetupProxy(t, reqCheck, false)
@@ -323,9 +315,7 @@ func (s) TestGRPCNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -367,9 +357,7 @@ func (s) TestGRPCNewClientWithNoProxy(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -415,9 +403,7 @@ func (s) TestGRPCNewClientWithContextDialer(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	// Create a custom dialer that directly dials the backend.
 	customDialer := func(_ context.Context, unresolvedTargetURI string) (net.Conn, error) {
@@ -464,7 +450,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := isIPAddr(host), false; got != want {
-			t.Errorf("isIPAddr(%q) = %t, want = false", req.URL.Host, got)
+			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 		wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 		if got := req.Header.Get("Proxy-Authorization"); got != wantProxyAuthStr {
@@ -492,9 +478,7 @@ func (s) TestBasicAuthInGrpcNewClientWithProxy(t *testing.T) {
 	}
 	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = orighpfe
-	}()
+	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

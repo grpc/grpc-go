@@ -43,10 +43,8 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-const (
-	defaultTestShortTimeout = 10 * time.Millisecond
-	defaultTestTimeout      = 10 * time.Second
-)
+const defaultTestTimeout = 10 * time.Second
+const defaultTestShortTimeout = 10 * time.Millisecond
 
 // TestMaxConnectionIdle tests that a server will send GoAway to an idle
 // client. An idle client is one who doesn't make any RPC calls for a duration
