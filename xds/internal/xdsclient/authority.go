@@ -177,6 +177,17 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 		a.logger.Infof("Connection to server %s failed with error: %v", serverConfig, err)
 	}
 
+	// We do not consider it an error if the ADS stream was closed after having
+	// received a response on the stream. This is because there are legitimate
+	// reasons why the server may need to close the stream during normal
+	// operations, such as needing to rebalance load or the underlying
+	// connection hitting its max connection age limit. See gRFC A57 for more
+	// details.
+	if xdsresource.ErrType(err) == xdsresource.ErrTypeStreamFailedAfterRecv {
+		a.logger.Warningf("Watchers not notified since ADS stream failed after having received at least one response: %v", err)
+		return
+	}
+
 	// Propagate the connection error from the transport layer to all watchers.
 	for _, rType := range a.resources {
 		for _, state := range rType {
