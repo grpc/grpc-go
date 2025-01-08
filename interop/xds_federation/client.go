@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -84,30 +85,6 @@ func main() {
 		}
 	}
 	var clients []clientConfig
-	//var MayCreateNewChannel interop.ManagedChannel
-	var ChannelForTest func() (*grpc.ClientConn, func())
-	switch *testCase {
-	case "rpc_soak":
-		//MayCreateNewChannel = interop.UseSharedChannel
-		ChannelForTest = func() (*grpc.ClientConn, func()) { return sharedConn, func() {} }
-	case "channel_soak":
-		//MayCreateNewChannel = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-		//	for _, client := range clients {
-		//		return interop.CreateNewChannel(currentChannel, client.uri, client.opts)
-		//	}
-		//	return nil, nil
-		//}
-		ChannelForTest = func() (*grpc.ClientConn, func()) {
-			cc, err := grpc.NewClient(serverAddr, opts...)
-			if err != nil {
-				log.Fatal("Failed to create shared channel: %v", err)
-			}
-			return cc, func() { cc.Close() /* returns an error, so unfortunately needs wrapping in this closure */ }
-		}
-	default:
-		logger.Fatal("Unsupported test case: ", *testCase)
-	}
-
 	for i := range uris {
 		var opts []grpc.DialOption
 		switch creds[i] {
@@ -132,12 +109,27 @@ func main() {
 	// run soak tests with the different clients
 	logger.Infof("Clients running with test case %q", *testCase)
 	var wg sync.WaitGroup
+	var ChannelForTest func() (*grpc.ClientConn, func())
 	ctx := context.Background()
 	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
 			ctxWithDeadline, cancel := context.WithTimeout(ctx, time.Duration(*soakOverallTimeoutSeconds)*time.Second)
 			defer cancel()
+			switch *testCase {
+			case "rpc_soak":
+				ChannelForTest = func() (*grpc.ClientConn, func()) { return c.conn, func() {} }
+			case "channel_soak":
+				ChannelForTest = func() (*grpc.ClientConn, func()) {
+					cc, err := grpc.NewClient(c.uri, c.opts...)
+					if err != nil {
+						log.Fatalf("Failed to create shared channel: %v", err)
+					}
+					return cc, func() { cc.Close() /* returns an error, so unfortunately needs wrapping in this closure */ }
+				}
+			default:
+				logger.Fatal("Unsupported test case: ", *testCase)
+			}
 			soakConfig := interop.SoakTestConfig{
 				RequestSize:                      *soakRequestSize,
 				ResponseSize:                     *soakResponseSize,

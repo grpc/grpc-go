@@ -28,6 +28,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -376,7 +377,7 @@ func main() {
 		logger.Infoln("PickFirstUnary done")
 	case "rpc_soak":
 		rpcSoakConfig := createBaseSoakConfig(serverAddr, conn)
-		rpcSoakConfig.ChannelForTest = func() (*grpc.ClientConn, func()) { return sharedConn, func() {} }
+		rpcSoakConfig.ChannelForTest = func() (*grpc.ClientConn, func()) { return conn, func() {} }
 		//rpcSoakConfig.MayCreateNewChannel = interop.UseSharedChannel
 		interop.DoSoakTest(ctxWithDeadline, rpcSoakConfig)
 		logger.Infoln("RpcSoak done")
@@ -385,7 +386,7 @@ func main() {
 		channelSoakConfig.ChannelForTest = func() (*grpc.ClientConn, func()) {
 			cc, err := grpc.NewClient(serverAddr, opts...)
 			if err != nil {
-				log.Fatal("Failed to create shared channel: %v", err)
+				log.Fatalf("Failed to create shared channel: %v", err)
 			}
 			return cc, func() { cc.Close() /* returns an error, so unfortunately needs wrapping in this closure */ }
 		}
