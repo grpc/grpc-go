@@ -124,13 +124,15 @@ func (s) TestGracefulStop(t *testing.T) {
 	stubserver.StartTestService(t, ss)
 
 	// 1. Start Server
-	done := make(chan struct{})
+	gracefulStopDone := make(chan struct{})
+	<-dlis.acceptCalled
+	ss.S.GracefulStop()
+	close(gracefulStopDone)
 	go func() {
 		<-dlis.acceptCalled
 		ss.S.GracefulStop()
-		close(done)
+		close(gracefulStopDone)
 	}()
-
 	// 2. GracefulStop() Server after listener's Accept is called, but don't
 	//    allow Accept() to exit when Close() is called on it.
 
@@ -159,7 +161,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <status code Unavailable>", err)
 	}
 	cancel()
-	<-done
+	<-gracefulStopDone
 }
 
 // TestGracefulStopClosesConnAfterLastStream ensures that a server closes the
