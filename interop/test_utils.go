@@ -692,8 +692,8 @@ type WorkerResults struct {
 	Latencies      *stats.Histogram
 }
 
-// ManagedChannel determines whether a new channel will be created or an existing one reused.
-type ManagedChannel func(*grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient)
+//// ManagedChannel determines whether a new channel will be created or an existing one reused.
+//type ManagedChannel func(*grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient)
 
 // SoakIterationConfig holds the parameters required for a single soak iteration.
 type SoakIterationConfig struct {
@@ -714,40 +714,40 @@ type SoakTestConfig struct {
 	NumWorkers                       int
 	Iterations                       int
 	MaxFailures                      int
+	ChannelForTest                   func() (*grpc.ClientConn, func())
 	SharedChannel                    *grpc.ClientConn
-	MayCreateNewChannel              ManagedChannel
 }
 
-// createChannel initializes the shared channel (once for all workers).
-func createChannel(serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-	conn, err := grpc.NewClient(serverAddr, dopts...)
-	if err != nil {
-		log.Fatalf("Failed to create shared channel: %v", err)
-	}
-	client := testgrpc.NewTestServiceClient(conn)
-	return conn, client
-}
+//// createChannel initializes the shared channel (once for all workers).
+//func createChannel(serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+//	conn, err := grpc.NewClient(serverAddr, dopts...)
+//	if err != nil {
+//		log.Fatalf("Failed to create shared channel: %v", err)
+//	}
+//	client := testgrpc.NewTestServiceClient(conn)
+//	return conn, client
+//}
 
-func closeChannel(channel *grpc.ClientConn) {
-	if channel != nil {
-		err := channel.Close()
-		if err != nil {
-			log.Fatalf("Failed to close channel: %v", err)
-		}
-	}
-}
+//func closeChannel(channel *grpc.ClientConn) {
+//	if channel != nil {
+//		err := channel.Close()
+//		if err != nil {
+//			log.Fatalf("Failed to close channel: %v", err)
+//		}
+//	}
+//}
 
-// CreateNewChannel creates a new channel by shutting down the current one (for channel soak tests).
-func CreateNewChannel(currentChannel *grpc.ClientConn, serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-	closeChannel(currentChannel)
-	return createChannel(serverAddr, dopts)
-}
-
-// UseSharedChannel reuses the provided currentChannel.
-func UseSharedChannel(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-	client := testgrpc.NewTestServiceClient(currentChannel)
-	return currentChannel, client
-}
+//// CreateNewChannel creates a new channel by shutting down the current one (for channel soak tests).
+//func CreateNewChannel(currentChannel *grpc.ClientConn, serverAddr string, dopts []grpc.DialOption) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+//	closeChannel(currentChannel)
+//	return createChannel(serverAddr, dopts)
+//}
+//
+//// UseSharedChannel reuses the provided currentChannel.
+//func UseSharedChannel(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+//	client := testgrpc.NewTestServiceClient(currentChannel)
+//	return currentChannel, client
+//}
 
 func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latencyMs int64, err error) {
 	start := time.Now()
@@ -780,7 +780,7 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 
 func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, workerResults *WorkerResults) {
 	timeoutDuration := config.OverallTimeout
-	currentChannel := config.SharedChannel
+	//currentChannel := config.SharedChannel
 	soakIterationsPerWorker := config.Iterations / config.NumWorkers
 	for i := 0; i < soakIterationsPerWorker; i++ {
 		if ctx.Err() != nil {
@@ -791,8 +791,11 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			return
 		}
 		earliestNextStart := time.After(config.MinTimeBetweenRPCs)
-		// Get the channel and client from the provided channelFunc (either shared or new).
-		_, client := config.MayCreateNewChannel(currentChannel)
+		//// Get the channel and client from the provided channelFunc (either shared or new).
+		//_, client := config.MayCreateNewChannel(currentChannel)
+		currentChannel, cleanup := config.ChannelForTest()
+		defer cleanup()
+		client := testgrpc.NewTestServiceClient(currentChannel)
 		var p peer.Peer
 		iterationConfig := SoakIterationConfig{
 			RequestSize:  config.RequestSize,
@@ -832,7 +835,7 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 // TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
 func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	if soakConfig.Iterations%soakConfig.NumWorkers != 0 {
-		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumWorkers\n")
+		fmt.Fprintf(os.Stderr, "soakIterations must be evenly divisible by soakNumWThreads\n")
 	}
 	//sharedChannel := conn
 	startTime := time.Now()
@@ -878,7 +881,11 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	if totalFailures > soakConfig.MaxFailures {
 		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, soakConfig.MaxFailures)
 	}
-	defer closeChannel(soakConfig.SharedChannel)
+	//defer closeChannel(soakConfig.SharedChannel)
+	if soakConfig.ChannelForTest != nil {
+		_, cleanup := soakConfig.ChannelForTest()
+		defer cleanup()
+	}
 }
 
 type testServer struct {

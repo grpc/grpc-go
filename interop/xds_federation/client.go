@@ -54,7 +54,7 @@ var (
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
 	soakRequestSize                        = flag.Int("soak_request_size", 271828, "The request size in a soak RPC. The default value is set based on the interop large unary test case.")
 	soakResponseSize                       = flag.Int("soak_response_size", 314159, "The response size in a soak RPC. The default value is set based on the interop large unary test case.")
-	soakNumWorkers                         = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
+	soakNumThreads                         = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	testCase                               = flag.String("test_case", "rpc_soak",
 		`Configure different test cases. Valid options are:
         rpc_soak: sends --soak_iterations large_unary RPCs;
@@ -84,16 +84,25 @@ func main() {
 		}
 	}
 	var clients []clientConfig
-	var MayCreateNewChannel interop.ManagedChannel
+	//var MayCreateNewChannel interop.ManagedChannel
+	var ChannelForTest func() (*grpc.ClientConn, func())
 	switch *testCase {
 	case "rpc_soak":
-		MayCreateNewChannel = interop.UseSharedChannel
+		//MayCreateNewChannel = interop.UseSharedChannel
+		ChannelForTest = func() (*grpc.ClientConn, func()) { return sharedConn, func() {} }
 	case "channel_soak":
-		MayCreateNewChannel = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
-			for _, client := range clients {
-				return interop.CreateNewChannel(currentChannel, client.uri, client.opts)
+		//MayCreateNewChannel = func(currentChannel *grpc.ClientConn) (*grpc.ClientConn, testgrpc.TestServiceClient) {
+		//	for _, client := range clients {
+		//		return interop.CreateNewChannel(currentChannel, client.uri, client.opts)
+		//	}
+		//	return nil, nil
+		//}
+		ChannelForTest = func() (*grpc.ClientConn, func()) {
+			cc, err := grpc.NewClient(serverAddr, opts...)
+			if err != nil {
+				log.Fatal("Failed to create shared channel: %v", err)
 			}
-			return nil, nil
+			return cc, func() { cc.Close() /* returns an error, so unfortunately needs wrapping in this closure */ }
 		}
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
@@ -136,11 +145,11 @@ func main() {
 				MinTimeBetweenRPCs:               time.Duration(*soakMinTimeMsBetweenRPCs) * time.Millisecond,
 				OverallTimeout:                   time.Duration(*soakOverallTimeoutSeconds) * time.Second,
 				ServerAddr:                       c.uri,
-				NumWorkers:                       *soakNumWorkers,
+				NumWorkers:                       *soakNumThreads,
 				Iterations:                       *soakIterations,
 				MaxFailures:                      *soakMaxFailures,
 				SharedChannel:                    c.conn,
-				MayCreateNewChannel:              MayCreateNewChannel,
+				ChannelForTest:                   ChannelForTest,
 			}
 			interop.DoSoakTest(ctxWithDeadline, soakConfig)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
