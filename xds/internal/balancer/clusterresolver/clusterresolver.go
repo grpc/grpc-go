@@ -248,32 +248,37 @@ func (b *clusterResolverBalancer) updateChildConfig() {
 		b.logger.Infof("Built child policy config: %s", pretty.ToJSON(childCfg))
 	}
 
-	flattenedAddrs := make([]resolver.Address, len(endpoints))
-	for i := range endpoints {
-		for j := range endpoints[i].Addresses {
-			addr := endpoints[i].Addresses[j]
-			addr.BalancerAttributes = endpoints[i].Attributes
+	flattenedAddrs := make([]resolver.Address, 0, len(endpoints))
+	// Send a copy of the endpoints slice to the children as balancer may use
+	// the same endpoints slice in subsequent updates.
+	endpointsCopy := make([]resolver.Endpoint, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		addrs := make([]resolver.Address, 0, len(endpoint.Addresses))
+		for _, addr := range endpoint.Addresses {
+			addr.BalancerAttributes = endpoint.Attributes
+			addrs = append(addrs, addr)
 			// If the endpoint has multiple addresses, only the first is added
 			// to the flattened address list. This ensures that LB policies
 			// that don't support endpoints create only one subchannel to a
 			// backend.
-			if j == 0 {
-				flattenedAddrs[i] = addr
+			if len(addrs) == 1 {
+				flattenedAddrs = append(flattenedAddrs, addr)
 			}
-			// BalancerAttributes need to be present in endpoint addresses. This
-			// temporary workaround is required to make load reporting work
-			// with the old pickfirst policy which creates SubConns with multiple
-			// addresses. Since the addresses can be from different localities,
-			// an Address.BalancerAttribute is used to identify the locality of the
-			// address used by the transport. This workaround can be removed once
-			// the old pickfirst is removed.
-			// See https://github.com/grpc/grpc-go/issues/7339
-			endpoints[i].Addresses[j] = addr
 		}
+		// BalancerAttributes need to be present in endpoint addresses. This
+		// temporary workaround is required to make load reporting work
+		// with the old pickfirst policy which creates SubConns with multiple
+		// addresses. Since the addresses can be from different localities,
+		// an Address.BalancerAttribute is used to identify the locality of the
+		// address used by the transport. This workaround can be removed once
+		// the old pickfirst is removed.
+		// See https://github.com/grpc/grpc-go/issues/7339
+		endpoint.Addresses = addrs
+		endpointsCopy = append(endpointsCopy, endpoint)
 	}
 	if err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Endpoints:     endpoints,
+			Endpoints:     endpointsCopy,
 			Addresses:     flattenedAddrs,
 			ServiceConfig: b.configRaw,
 			Attributes:    b.attrsWithClient,
