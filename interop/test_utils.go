@@ -714,7 +714,7 @@ type SoakTestConfig struct {
 	SharedChannel                    *grpc.ClientConn
 }
 
-func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latencyMs time.Duration, err error) {
+func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latency time.Duration, err error) {
 	start := time.Now()
 	// Do a large-unary RPC.
 	// Create the request payload.
@@ -739,8 +739,8 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 		return 0, err
 	}
 	// Calculate latency and return result.
-	latencyMs = time.Since(start)
-	return latencyMs, nil
+	latency = time.Since(start)
+	return latency, nil
 }
 
 func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, workerResults *WorkerResults) {
@@ -765,7 +765,7 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			Client:       client,
 			CallOptions:  []grpc.CallOption{grpc.Peer(&p)},
 		}
-		latencyMs, err := doOneSoakIteration(ctx, iterationConfig)
+		latency, err := doOneSoakIteration(ctx, iterationConfig)
 		if p.Addr != nil {
 			fmt.Fprintf(os.Stderr, "Peer address: %v\n", p.Addr)
 		} else {
@@ -777,16 +777,16 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			<-earliestNextStart
 			continue
 		}
-		if latencyMs > config.PerIterationMaxAcceptableLatency {
-			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latencyMs, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
+		if latency > config.PerIterationMaxAcceptableLatency {
+			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latency, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
 			workerResults.Failures++
 			<-earliestNextStart
 			continue
 		}
 		// Success: log the details of the iteration.
-		workerResults.Latencies.Add(latencyMs.Milliseconds())
+		workerResults.Latencies.Add(latency.Milliseconds())
 		workerResults.IterationsDone++
-		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latencyMs, p.Addr, config.ServerAddr)
+		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency, p.Addr, config.ServerAddr)
 		<-earliestNextStart
 	}
 }
