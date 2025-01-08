@@ -436,15 +436,9 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 		}
 		if state.md.Status == xdsresource.ServiceStatusNotExist {
 			// The metadata status is set to "ServiceStatusNotExist" if a
-			// previous update deleted this resource, in which case we
-			// want to send an ambient error.
-			for watcher := range state.watchers {
-				watcher := watcher
-				watcherCnt.Add(1)
-				funcsToSchedule = append(funcsToSchedule, func(context.Context) {
-					watcher.OnAmbientError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: previous update deleted this resource"), done)
-				})
-			}
+			// previous update deleted this resource, in which case we do not
+			// want to repeatedly call the watch callbacks with a
+			// "resource-not-found" error.
 			continue
 		}
 		if serverConfig.ServerFeaturesIgnoreResourceDeletion() {
