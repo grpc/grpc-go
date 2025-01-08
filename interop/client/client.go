@@ -387,7 +387,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("Failed to create shared channel: %v", err)
 			}
-			return cc, func() { cc.Close() /* returns an error, so unfortunately needs wrapping in this closure */ }
+			return cc, func() { cc.Close() }
 		}
 		interop.DoSoakTest(ctxWithDeadline, channelSoakConfig)
 		logger.Infoln("ChannelSoak done")
