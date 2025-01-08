@@ -22,8 +22,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -43,6 +43,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -200,27 +201,20 @@ func setupServer(t *testing.T, watchFunc healthWatchFunc) (*grpc.Server, net.Lis
 	}
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			for {
-				req, err := stream.Recv()
-				if err == io.EOF {
-					return nil
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			if md, ok := metadata.FromIncomingContext(ctx); ok {
+				// For testing purpose, returns an error if user-agent is failAppUA.
+				// To test that client gets the correct error.
+				if ua, ok := md["user-agent"]; !ok || strings.HasPrefix(ua[0], failAppUA) {
+					return nil, detailedError
 				}
-				if err != nil {
-					return fmt.Errorf("error receiving from stream: %v", err)
+				var str []string
+				for _, entry := range md["user-agent"] {
+					str = append(str, "ua", entry)
 				}
-				t.Logf("Received message: %v", req)
-				resp := &testpb.StreamingOutputCallResponse{
-					Payload: req.Payload,
-				}
-				if err := stream.Send(resp); err != nil {
-					return fmt.Errorf("error sending to stream: %v", err)
-				}
-				t.Logf("Sent response: %v", resp)
+				grpc.SendHeader(ctx, metadata.Pairs(str...))
 			}
+			return new(testpb.Empty), nil
 		},
 		S: grpc.NewServer(),
 	}

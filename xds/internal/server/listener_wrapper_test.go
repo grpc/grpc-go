@@ -219,6 +219,7 @@ func (s) TestConnsCleanup(t *testing.T) {
 		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
 	}
 	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	// Make 100 connections to the server, and make an RPC on each one.
 	for i := 0; i < 100; i++ {
@@ -245,6 +246,4 @@ func (s) TestConnsCleanup(t *testing.T) {
 	if lenConns > 0 {
 		t.Fatalf("timeout waiting for lis wrapper conns to clear, size: %v", lenConns)
 	}
-
-	ss.S.Stop()
 }
