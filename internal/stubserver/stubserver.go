@@ -59,8 +59,8 @@ type StubServer struct {
 	EmptyCallF           func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error)
 	UnaryCallF           func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error)
 	FullDuplexCallF      func(stream testgrpc.TestService_FullDuplexCallServer) error
-	StreamingInputCallF  func(stream testgrpc.TestService_StreamingInputCallServer) error                                          // Client-Streaming request
-	StreamingOutputCallF func(req *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error // Server-streaming response
+	StreamingInputCallF  func(stream testgrpc.TestService_StreamingInputCallServer) error
+	StreamingOutputCallF func(req *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error
 
 	// A client connected to this service the test may use.  Created in Start().
 	Client testgrpc.TestServiceClient
