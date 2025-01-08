@@ -94,6 +94,8 @@ type dialOptions struct {
 	idleTimeout                 time.Duration
 	defaultScheme               string
 	maxCallAttempts             int
+	staticConnWindowSize        int32
+	staticStreamWindowSize      int32
 }
 
 // DialOption configures how we set up the connection.
@@ -659,6 +661,32 @@ func WithMaxHeaderListSize(s uint32) DialOption {
 func WithDisableHealthCheck() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.disableHealthCheck = true
+	})
+}
+
+// WithStaticConnWindowSize returns a DialOption which sets a static value for
+// the connection window size. This disables BDP estimation and keeps the
+// window size fixed at the provided value. The lower bound for window size is
+// 64K, and any value smaller than that will be ignored.
+func WithStaticConnWindowSize(s int32) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		if s < 64*1024 {
+			return
+		}
+		o.staticConnWindowSize = s
+	})
+}
+
+// WithStaticStreamWindowSize returns a DialOption which sets a static value for
+// the stream window size. This disables BDP estimation and keeps the
+// window size fixed at the provided value. The lower bound for window size is
+// 64K, and any value smaller than that will be ignored.
+func WithStaticStreamWindowSize(s int32) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		if s < 64*1024 {
+			return
+		}
+		o.staticStreamWindowSize = s
 	})
 }
 
