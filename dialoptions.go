@@ -664,29 +664,19 @@ func WithDisableHealthCheck() DialOption {
 	})
 }
 
-// WithStaticConnWindowSize returns a DialOption which sets a static value for
-// the connection window size. This disables BDP estimation and keeps the
-// window size fixed at the provided value. The lower bound for window size is
-// 64K, and any value smaller than that will be ignored.
-func WithStaticConnWindowSize(s int32) DialOption {
+// WithStaticConnWindowSize returns a DialOption to set the static initial
+// connection window size. This does not disable BDP estimation.
+func WithStaticConnWindowSize(size int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		if s < 64*1024 {
-			return
-		}
-		o.staticConnWindowSize = s
+		o.staticConnWindowSize = size
 	})
 }
 
-// WithStaticStreamWindowSize returns a DialOption which sets a static value for
-// the stream window size. This disables BDP estimation and keeps the
-// window size fixed at the provided value. The lower bound for window size is
-// 64K, and any value smaller than that will be ignored.
-func WithStaticStreamWindowSize(s int32) DialOption {
+// WithStaticStreamWindowSize returns a DialOption to set the static initial
+// stream window size. This does not disable BDP estimation.
+func WithStaticStreamWindowSize(size int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		if s < 64*1024 {
-			return
-		}
-		o.staticStreamWindowSize = s
+		o.staticStreamWindowSize = size
 	})
 }
 
