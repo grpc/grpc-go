@@ -1144,7 +1144,7 @@ func waitForProducedZeroAddressesError(ctx context.Context, t *testing.T, client
 	return errors.New("timeout when waiting for RPCs to fail with UNAVAILABLE status and produced zero addresses")
 }
 
-// Test runs a server which listens on multiple ports. The test updates xds resouce
+// Test runs a server which listens on multiple ports. The test updates xds resources
 // cache to contain a single endpoint with multiple addresses. The test intercepts
 // the resolver updates sent to the petiole policy and verifies that the
 // additional endpoint addresses are correctly propagated.

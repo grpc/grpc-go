@@ -1,0 +1,154 @@
+issues:
+  exclude-rules:
+    - linters:
+        - staticcheck
+      text: ': grpc.'
+    - linters:
+        - staticcheck
+      text: '.BalancerAttributes is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.CredsBundle is deprecated:'
+    - linters:
+        - staticcheck
+      text: 'balancer.ErrTransientFailure is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.ExactMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetContainsMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetExactMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetMetadata is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetMatchSubjectAltNames is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetPrefixMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetSafeRegexMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetSuffixMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetTlsCertificateCertificateProviderInstance is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.GetValidationContextCertificateProviderInstance is deprecated:'
+    - linters:
+        - staticcheck
+      text: 'grpc/reflection/v1alpha/reflection.proto is marked as deprecated'
+    - linters:
+        - staticcheck
+      path: logger.go
+      text: 'internal.Logger is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.Metadata is deprecated: use Attributes instead.'
+    - linters:
+        - staticcheck
+      text: '.NewSubConn is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.OverrideServerName is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.PrefixMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.RemoveSubConn is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.SafeRegexMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.SecurityVersion is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.SuffixMatch is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.SwitchTo is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.Target is deprecated: Use the Target field in the BuildOptions instead.'
+    - linters:
+        - staticcheck
+      text: '.UpdateAddresses is deprecated:'
+    - linters:
+        - staticcheck
+      text: '.UpdateSubConnState is deprecated:'
+    - linters:
+        - staticcheck
+      text: 'SA2001: empty critical section'
+    - linters:
+        - staticcheck
+      text: 'SA4000: identical expressions on the left and right side'
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - misspell
+    - revive
+    - staticcheck
+
+linters-settings:
+  govet:
+    disable: # Needs to be fixed
+      - deepequalerrors
+      - fieldalignment
+      - nilness
+      - printf
+      - shadow
+    enable-all: true
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+        arguments:
+          - allowTypesBefore: "*testing.T"
+      - name: context-keys-type
+      - name: dot-imports
+      - name: empty-block # Disabled to allow intentional no-op blocks (e.g., channel draining).
+        disabled: true
+      - name: errorf
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: import-shadowing # Disabled to allow intentional reuse of variable names that are the same as package imports.
+        disabled: true
+      - name: increment-decrement
+      - name: indent-error-flow
+        arguments:
+          - "preserveScope"
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id # Disabled to allow intentional reuse of variable names that are the same as built-in functions.
+        disabled: true
+      - name: superfluous-else
+        arguments:
+          - "preserveScope"
+      - name: time-naming
+      - name: var-naming
+        disabled: true # Needs to be fixed
+      - name: unexported-return
+      - name: unused-parameter
+        disabled: true # Needs to be fixed
+      - name: unreachable-code
+      - name: var-declaration
+      - name: use-any
+
+run:
+  timeout: 5m
