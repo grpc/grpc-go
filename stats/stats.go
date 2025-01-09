@@ -36,9 +36,10 @@ type RPCStats interface {
 	IsClient() bool
 }
 
-// Begin contains stats when an RPC attempt begins. This event is called after
-// the InHeader event, as headers must be processed before the RPC lifecycle
-// begins.
+// Begin contains stats recorded when an RPC attempt begins. This event is
+// called after the `InHeader` for server-side events, as headers must be
+// processed before the RPC lifecycle begins. For client-side events, it is the
+// first event for client-side stats events.
 //
 // FailFast is only valid if this Begin is from client side.
 type Begin struct {
@@ -101,9 +102,9 @@ func (s *InPayload) IsClient() bool { return s.Client }
 
 func (s *InPayload) isRPCStats() {}
 
-// InHeader contain stats when the header is received. It is the first event in
-// the server after receiving the RPC. It is followed by the OutPayload
-// server event.
+// InHeader contains stats recorded when the header is received. It is the
+// first event in server-side stats after receiving the RPC request.  For
+// client-side stats, it occurs after the `OutPayload` event.
 type InHeader struct {
 	// Client is true if this InHeader is from client side.
 	Client bool
@@ -200,8 +201,9 @@ type OutTrailer struct {
 	Client bool
 	// WireLength is the wire length of trailer.
 	//
-	// Deprecated: This field is never set. The length is not known when this message is
-	// emitted because the trailer fields are compressed with hpack after that.
+	// Deprecated: This field is never set. The length is not known when this 
+    // message is emitted because the trailer fields are compressed with hpack 
+    // after that.
 	WireLength int
 	// Trailer contains the trailer metadata sent to the client. This
 	// field is only valid if this OutTrailer is from the server side.

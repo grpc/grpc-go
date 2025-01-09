@@ -435,7 +435,7 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallReq
 	}
 }
 
-type expectedData struct {
+type wantData struct {
 	method         string
 	isClientStream bool
 	isServerStream bool
@@ -468,7 +468,7 @@ const (
 	connEnd
 )
 
-func checkBegin(t *testing.T, d *gotData, e *expectedData) {
+func checkBegin(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.Begin
@@ -495,7 +495,7 @@ func checkBegin(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
+func checkInHeader(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.InHeader
@@ -552,7 +552,7 @@ func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
+func checkInPayload(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.InPayload
@@ -594,7 +594,7 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkInTrailer(t *testing.T, d *gotData, e *expectedData) {
+func checkInTrailer(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.InTrailer
@@ -613,7 +613,7 @@ func checkInTrailer(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
+func checkOutHeader(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.OutHeader
@@ -660,7 +660,7 @@ func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
+func checkOutPayload(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.OutPayload
@@ -682,13 +682,13 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 		payloads = e.responses
 	}
 
-	expectedPayload := payloads[*idx]
-	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
-		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
+	wantPayload := payloads[*idx]
+	if !proto.Equal(st.Payload.(proto.Message), wantPayload) {
+		t.Fatalf("st.Payload = %v, want %v", st.Payload, wantPayload)
 	}
 	*idx++
-	if st.Length != proto.Size(expectedPayload) {
-		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
+	if st.Length != proto.Size(wantPayload) {
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(wantPayload))
 	}
 
 	// Below are sanity checks that Length, CompressedLength and SentTime are populated.
@@ -702,7 +702,7 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
+func checkOutTrailer(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.OutTrailer
@@ -721,7 +721,7 @@ func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkEnd(t *testing.T, d *gotData, e *expectedData) {
+func checkEnd(t *testing.T, d *gotData, e *wantData) {
 	var (
 		ok bool
 		st *stats.End
@@ -744,8 +744,8 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("expected st.Error to be a statusError, got %v (type %T)", st.Error, st.Error)
 	}
 
-	expectedStatus, _ := status.FromError(e.err)
-	if actual.Code() != expectedStatus.Code() || actual.Message() != expectedStatus.Message() {
+	wantStatus, _ := status.FromError(e.err)
+	if actual.Code() != wantStatus.Code() || actual.Message() != wantStatus.Message() {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
 
@@ -788,13 +788,9 @@ func checkConnEnd(t *testing.T, d *gotData) {
 	st.IsClient() // TODO remove this.
 }
 
-type event struct {
-	eventType string
-}
-
 type statshandler struct {
 	mu      sync.Mutex
-	events  []event
+	events  []string
 	gotRPC  []*gotData
 	gotConn []*gotData
 }
@@ -811,7 +807,7 @@ func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) conte
 func (h *statshandler) recordEvent(eventType string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.events = append(h.events, event{eventType: eventType})
+	h.events = append(h.events, eventType)
 }
 
 func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
@@ -860,7 +856,7 @@ func checkConnStats(t *testing.T, got []*gotData) {
 	checkConnEnd(t, got[len(got)-1])
 }
 
-func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
+func checkServerStats(t *testing.T, got []*gotData, expect *wantData, checkFuncs []func(t *testing.T, d *gotData, e *wantData)) {
 	if len(got) != len(checkFuncs) {
 		for i, g := range got {
 			t.Errorf(" - %v, %T", i, g.s)
@@ -873,7 +869,7 @@ func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 	}
 }
 
-func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
+func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *wantData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, []stats.Handler{h})
 	te.startServer(&testServer{})
@@ -944,7 +940,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	expect := &expectedData{
+	want := &wantData{
 		serverAddr:     te.srvAddr,
 		compression:    tc.compress,
 		method:         method,
@@ -958,11 +954,11 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	h.mu.Lock()
 	checkConnStats(t, h.gotConn)
 	h.mu.Unlock()
-	checkServerStats(t, h.gotRPC, expect, checkFuncs)
+	checkServerStats(t, h.gotRPC, want, checkFuncs)
 }
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
-	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -974,7 +970,7 @@ func (s) TestServerStatsUnaryRPC(t *testing.T) {
 }
 
 func (s) TestServerStatsUnaryRPCError(t *testing.T) {
-	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -986,12 +982,12 @@ func (s) TestServerStatsUnaryRPCError(t *testing.T) {
 
 func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 	count := 5
-	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	checkFuncs := []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
 	}
-	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *wantData){
 		checkInPayload,
 	}
 	for i := 0; i < count; i++ {
@@ -1007,7 +1003,7 @@ func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 
 func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 	count := 1
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
@@ -1019,13 +1015,13 @@ func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 
 func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 	count := 5
-	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	checkFuncs := []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
 		checkOutHeader,
 	}
-	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *wantData){
 		checkOutPayload,
 	}
 	for i := 0; i < count; i++ {
@@ -1040,7 +1036,7 @@ func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 
 func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 	count := 5
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -1052,12 +1048,12 @@ func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 
 func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 	count := 5
-	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	checkFuncs := []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
 	}
-	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *wantData){
 		checkInPayload,
 		checkOutPayload,
 	}
@@ -1073,7 +1069,7 @@ func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 
 func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *wantData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
@@ -1084,11 +1080,11 @@ func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 }
 
 type checkFuncWithCount struct {
-	f func(t *testing.T, d *gotData, e *expectedData)
+	f func(t *testing.T, d *gotData, e *wantData)
 	c int // expected count
 }
 
-func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs map[int]*checkFuncWithCount) {
+func checkClientStats(t *testing.T, got []*gotData, expect *wantData, checkFuncs map[int]*checkFuncWithCount) {
 	var expectLen int
 	for _, v := range checkFuncs {
 		expectLen += v.c
@@ -1247,7 +1243,7 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	expect := &expectedData{
+	expect := &wantData{
 		serverAddr:     te.srvAddr,
 		compression:    tc.compress,
 		method:         method,
@@ -1662,14 +1658,14 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 
 // verifyEventSequence verifies that a sequence of recorded events matches
 // the expected sequence.
-func verifyEventSequence(t *testing.T, got []event, expected []string) {
+func verifyEventSequence(t *testing.T, got []string, want []string) {
 	t.Helper()
 	// Extract event types from `got` for comparison.
 	gotEventTypes := make([]string, len(got))
 	for i, e := range got {
-		gotEventTypes[i] = e.eventType
+		gotEventTypes[i] = e
 	}
-	if !cmp.Equal(gotEventTypes, expected) {
-		t.Errorf("Event sequence mismatch (-got +expected):\n%s", cmp.Diff(gotEventTypes, expected))
+	if !cmp.Equal(gotEventTypes, want) {
+		t.Errorf("Event sequence mismatch (-got +want):\n%s", cmp.Diff(gotEventTypes, want))
 	}
 }
