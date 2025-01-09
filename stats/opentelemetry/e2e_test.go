@@ -1594,12 +1594,9 @@ func (s) TestEventForNameResolutionDelay(t *testing.T) {
 	to, spanExporter := defaultTraceOptions(t)
 	// Set the W3CContextPropagator as part of TracingOptions.
 	to.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
-	otelOptions := opentelemetry.Options{}
-	if mo != nil {
-		otelOptions.MetricsOptions = *mo
-	}
-	if to != nil {
-		otelOptions.TraceOptions = *to
+	otelOptions := opentelemetry.Options{
+		MetricsOptions: *mo,
+		TraceOptions:   *to,
 	}
 
 	lis1, err := net.Listen("tcp", "localhost:0")

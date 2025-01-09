@@ -692,14 +692,14 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	// more-expensive "select" below after the resolver has returned once.
 	if cc.firstResolveEvent.HasFired() {
 		cc.mu.Lock()
-		cc.nameResolutionDelay = time.Now().Sub(cc.nameResolutionStartTime)
+		cc.nameResolutionDelay = time.Since(cc.nameResolutionStartTime)
 		cc.mu.Unlock()
 		return nil
 	}
 	select {
 	case <-cc.firstResolveEvent.Done():
 		cc.mu.Lock()
-		cc.nameResolutionDelay = time.Now().Sub(cc.nameResolutionStartTime)
+		cc.nameResolutionDelay = time.Since(cc.nameResolutionStartTime)
 		cc.mu.Unlock()
 		return nil
 	case <-ctx.Done():
