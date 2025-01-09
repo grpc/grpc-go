@@ -152,7 +152,7 @@ func parseAdditionalMetadataFlag() []string {
 }
 
 // createSoakTestConfig creates a shared configuration structure for soak tests.
-func createBaseSoakConfig(serverAddr string, conn *grpc.ClientConn) interop.SoakTestConfig {
+func createBaseSoakConfig(serverAddr string) interop.SoakTestConfig {
 	return interop.SoakTestConfig{
 		RequestSize:                      *soakRequestSize,
 		ResponseSize:                     *soakResponseSize,
@@ -375,12 +375,12 @@ func main() {
 		interop.DoPickFirstUnary(ctx, tc)
 		logger.Infoln("PickFirstUnary done")
 	case "rpc_soak":
-		rpcSoakConfig := createBaseSoakConfig(serverAddr, conn)
+		rpcSoakConfig := createBaseSoakConfig(serverAddr)
 		rpcSoakConfig.ChannelForTest = func() (*grpc.ClientConn, func()) { return conn, func() {} }
 		interop.DoSoakTest(ctxWithDeadline, rpcSoakConfig)
 		logger.Infoln("RpcSoak done")
 	case "channel_soak":
-		channelSoakConfig := createBaseSoakConfig(serverAddr, conn)
+		channelSoakConfig := createBaseSoakConfig(serverAddr)
 		channelSoakConfig.ChannelForTest = func() (*grpc.ClientConn, func()) {
 			cc, err := grpc.NewClient(serverAddr, opts...)
 			if err != nil {
