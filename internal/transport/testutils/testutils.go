@@ -60,7 +60,9 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 		t.Errorf("failed to read CONNECT req: %v", err)
 		return
 	}
-
+	if req.Method != http.MethodConnect {
+		t.Fatalf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+	}
 	p.onRequest(req)
 
 	t.Logf("Dialing to %s", req.URL.Host)
@@ -98,11 +100,11 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 	go io.Copy(p.out, p.in)
 }
 
-// SetupProxy initializes and starts a proxy server, registers a cleanup to
+// HTTPProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns the proxy's listener and helper channels.
-func SetupProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
+func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
 	t.Helper()
-	pLis, err := net.Listen("tcp", "localhost:0")
+	pLis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}

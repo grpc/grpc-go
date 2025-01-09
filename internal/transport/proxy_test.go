@@ -30,13 +30,14 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/proxyattributes"
-	"google.golang.org/grpc/internal/transport/testutils"
+	"google.golang.org/grpc/internal/testutils"
+	transporttestutils "google.golang.org/grpc/internal/transport/testutils"
 	"google.golang.org/grpc/resolver"
 )
 
 func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 	serverMessage := []byte("server-hello")
-	blis, err := net.Listen("tcp", "localhost:0")
+	blis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -53,7 +54,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	pServer := testutils.SetupProxy(t, reqCheck, true)
+	pServer := transporttestutils.HTTPProxy(t, reqCheck, true)
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))
