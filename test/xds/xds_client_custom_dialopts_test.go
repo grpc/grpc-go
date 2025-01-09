@@ -44,7 +44,6 @@ import (
 )
 
 const testCredsBuilderName = "test_dialer_creds"
-const maxMockStatsHandlerCalls = 99999
 
 // testCredsBuilder implements the `Credentials` interface defined in
 // package `xds/bootstrap` and encapsulates an insecure credential with a
