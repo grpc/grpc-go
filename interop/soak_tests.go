@@ -17,11 +17,11 @@
  */
 
 // Package interop contains functions used by interop client/server.
+// client starts an interop client to do rpc_soak test and channel_soak test.
 //
 // See interop test case descriptions [here].
 //
 // [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
-// client starts an interop client to do rpc_soak test and channel_soak test
 package interop
 
 import (
