@@ -24,21 +24,6 @@
 // [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package interop
 
-//import (
-//	"bytes"
-//	"context"
-//	"fmt"
-//	"os"
-//	"sync"
-//	"time"
-//
-//	"google.golang.org/grpc"
-//	"google.golang.org/grpc/benchmark/stats"
-//	"google.golang.org/grpc/peer"
-//
-//	testgrpc "google.golang.org/grpc/interop/grpc_testing"
-//	testpb "google.golang.org/grpc/interop/grpc_testing"
-//)
 import (
 	"bytes"
 	"context"
