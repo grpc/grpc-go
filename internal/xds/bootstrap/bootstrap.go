@@ -54,6 +54,8 @@ const (
 // For overriding in unit tests.
 var bootstrapFileReadFunc = os.ReadFile
 
+var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
+
 // ChannelCreds contains the credentials to be used while communicating with an
 // xDS server. It is also used to dedup servers with the same server URI.
 //
@@ -283,9 +285,15 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 }
 
 // dialer captures the Dialer method specified via the credentials bundle.
+// Deprecated and to be deleted. Use extradDialOptions which takes precedence over this.
 type dialer interface {
 	// Dialer specifies how to dial the xDS server.
 	Dialer(context.Context, string) (net.Conn, error)
+}
+
+// extraDialOptions captures custom dial options specified via the credentials bundle.
+type extraDialOptions interface {
+	DialOptions() []grpc.DialOption
 }
 
 // UnmarshalJSON takes the json data (a server) and unmarshals it to the struct.
@@ -311,7 +319,9 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		}
 		sc.selectedCreds = cc
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
-		if d, ok := bundle.(dialer); ok {
+		if d, ok := bundle.(extraDialOptions); ok {
+			sc.dialerOption = joinDialOptions(d.DialOptions()...)
+		} else if d, ok := bundle.(dialer); ok {
 			sc.dialerOption = grpc.WithContextDialer(d.Dialer)
 		}
 		sc.cleanups = append(sc.cleanups, cancel)
