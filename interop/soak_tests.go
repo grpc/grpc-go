@@ -16,11 +16,6 @@
  *
  */
 
-// client starts an interop client to do rpc_soak test and channel_soak test.
-//
-// See interop test case descriptions [here].
-//
-// [here]: https://github.com/grpc/grpc/blob/master/doc/interop-test-descriptions.md
 package interop
 
 import (
@@ -39,8 +34,8 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-// WorkerResults stores the aggregated results for a specific worker during the soak test.
-type WorkerResults struct {
+// SoakWorkerResults stores the aggregated results for a specific worker during the soak test.
+type SoakWorkerResults struct {
 	IterationsDone int
 	Failures       int
 	Latencies      *stats.Histogram
@@ -66,7 +61,6 @@ type SoakTestConfig struct {
 	Iterations                       int
 	MaxFailures                      int
 	ChannelForTest                   func() (*grpc.ClientConn, func())
-	SharedChannel                    *grpc.ClientConn
 }
 
 func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latency time.Duration, err error) {
@@ -98,7 +92,7 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 	return latency, nil
 }
 
-func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, workerResults *WorkerResults) {
+func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, soakWorkerResults *SoakWorkerResults) {
 	timeoutDuration := config.OverallTimeout
 	soakIterationsPerWorker := config.Iterations / config.NumWorkers
 	for i := 0; i < soakIterationsPerWorker; i++ {
@@ -121,26 +115,21 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			CallOptions:  []grpc.CallOption{grpc.Peer(&p)},
 		}
 		latency, err := doOneSoakIteration(ctx, iterationConfig)
-		if p.Addr != nil {
-			fmt.Fprintf(os.Stderr, "Peer address: %v\n", p.Addr)
-		} else {
-			fmt.Fprintf(os.Stderr, "No peer address available for this RPC.\n")
-		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s failed: %s\n", workerID, i, 0, p.Addr, config.ServerAddr, err)
-			workerResults.Failures++
+			soakWorkerResults.Failures++
 			<-earliestNextStart
 			continue
 		}
 		if latency > config.PerIterationMaxAcceptableLatency {
 			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latency, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
-			workerResults.Failures++
+			soakWorkerResults.Failures++
 			<-earliestNextStart
 			continue
 		}
 		// Success: log the details of the iteration.
-		workerResults.Latencies.Add(latency.Milliseconds())
-		workerResults.IterationsDone++
+		soakWorkerResults.Latencies.Add(latency.Milliseconds())
+		soakWorkerResults.IterationsDone++
 		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency, p.Addr, config.ServerAddr)
 		<-earliestNextStart
 	}
@@ -156,12 +145,12 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	}
 	startTime := time.Now()
 	var wg sync.WaitGroup
-	workerResults := make([]WorkerResults, soakConfig.NumWorkers)
+	soakWorkerResults := make([]SoakWorkerResults, soakConfig.NumWorkers)
 	for i := 0; i < soakConfig.NumWorkers; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			executeSoakTestInWorker(ctx, soakConfig, startTime, workerID, &workerResults[workerID])
+			executeSoakTestInWorker(ctx, soakConfig, startTime, workerID, &soakWorkerResults[workerID])
 		}(i)
 	}
 	// Wait for all goroutines to complete.
@@ -176,7 +165,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		BaseBucketSize: 1,
 		MinValue:       0,
 	})
-	for _, worker := range workerResults {
+	for _, worker := range soakWorkerResults {
 		totalIterations += worker.IterationsDone
 		totalFailures += worker.Failures
 		if worker.Latencies != nil {

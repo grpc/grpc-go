@@ -163,7 +163,6 @@ func createBaseSoakConfig(serverAddr string, conn *grpc.ClientConn) interop.Soak
 		NumWorkers:                       *soakNumThreads,
 		Iterations:                       *soakIterations,
 		MaxFailures:                      *soakMaxFailures,
-		SharedChannel:                    conn,
 	}
 }
 

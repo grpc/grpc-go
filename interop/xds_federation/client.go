@@ -109,7 +109,7 @@ func main() {
 	// run soak tests with the different clients
 	logger.Infof("Clients running with test case %q", *testCase)
 	var wg sync.WaitGroup
-	var ChannelForTest func() (*grpc.ClientConn, func())
+	var channelForTest func() (*grpc.ClientConn, func())
 	ctx := context.Background()
 	for i := range clients {
 		wg.Add(1)
@@ -118,9 +118,9 @@ func main() {
 			defer cancel()
 			switch *testCase {
 			case "rpc_soak":
-				ChannelForTest = func() (*grpc.ClientConn, func()) { return c.conn, func() {} }
+				channelForTest = func() (*grpc.ClientConn, func()) { return c.conn, func() {} }
 			case "channel_soak":
-				ChannelForTest = func() (*grpc.ClientConn, func()) {
+				channelForTest = func() (*grpc.ClientConn, func()) {
 					cc, err := grpc.NewClient(c.uri, c.opts...)
 					if err != nil {
 						log.Fatalf("Failed to create shared channel: %v", err)
@@ -140,8 +140,7 @@ func main() {
 				NumWorkers:                       *soakNumThreads,
 				Iterations:                       *soakIterations,
 				MaxFailures:                      *soakMaxFailures,
-				SharedChannel:                    c.conn,
-				ChannelForTest:                   ChannelForTest,
+				ChannelForTest:                   channelForTest,
 			}
 			interop.DoSoakTest(ctxWithDeadline, soakConfig)
 			logger.Infof("%s test done for server: %s", *testCase, c.uri)
