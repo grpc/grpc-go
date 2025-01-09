@@ -49,15 +49,15 @@ git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Exampl
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
-git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
+git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|soak_tests\|testutils'
 
 # - Do not use "interface{}"; use "any" instead.
-git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerated'
+git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerated"
 
 # - Do not call grpclog directly. Use grpclog.Component instead.
 git grep -l -e 'grpclog.I' --or -e 'grpclog.W' --or -e 'grpclog.E' --or -e 'grpclog.F' --or -e 'grpclog.V' -- "*.go" | not grep -v '^grpclog/component.go\|^internal/grpctest/tlogger_test.go\|^internal/grpclog/prefix_logger.go'
 
-# - Ensure that the deprecated protobuf dependency is not used.
+# - Ensure that the deprecated protobuf dependency is not used
 not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)testdata/grpc_testing_not_regenerated/*'
 
 # - Ensure all usages of grpc_testing package are renamed when importing.
