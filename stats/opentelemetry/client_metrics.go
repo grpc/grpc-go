@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -194,7 +195,9 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	if h.options.isTracingEnabled() {
 		if info.NameResolutionDelay > 0 {
 			callSpan := trace.SpanFromContext(ctx)
-			callSpan.AddEvent("Delayed name resolution complete")
+			callSpan.AddEvent("Delayed name resolution complete", trace.WithAttributes(
+				attribute.Int64("duration(in ns)", info.NameResolutionDelay.Nanoseconds()),
+			))
 			ctx = trace.ContextWithSpan(ctx, callSpan)
 		}
 		ctx, ai = h.traceTagRPC(ctx, info, ai)

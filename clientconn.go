@@ -680,7 +680,7 @@ func (cc *ClientConn) Connect() {
 // context expires.  Returns nil unless the context expires first; otherwise
 // returns a status error based on the context.
 func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
-	// Set the start time for name resolution if it's not already set
+	// Set the start time for name resolution if it's not already set.
 	cc.mu.Lock()
 	if !cc.nameResolutionInProgress {
 		cc.nameResolutionStartTime = time.Now()
@@ -691,6 +691,9 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	// This is on the RPC path, so we use a fast path to avoid the
 	// more-expensive "select" below after the resolver has returned once.
 	if cc.firstResolveEvent.HasFired() {
+		cc.mu.Lock()
+		cc.nameResolutionDelay = time.Now().Sub(cc.nameResolutionStartTime)
+		cc.mu.Unlock()
 		return nil
 	}
 	select {

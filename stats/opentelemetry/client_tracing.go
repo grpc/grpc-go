@@ -18,10 +18,10 @@ package opentelemetry
 
 import (
 	"context"
-	"go.opentelemetry.io/otel/trace"
 	"strings"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/stats"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
