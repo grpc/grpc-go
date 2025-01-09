@@ -1,0 +1,14 @@
+Reapply "updating newclient err msg"
+
+This reverts commit f1ec518c39558526b1330f800201d31dc9c1cede.
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch replace-dial-with-newclient
+# Your branch is ahead of 'origin/replace-dial-with-newclient' by 1 commit.
+#   (use "git push" to publish your local commits)
+#
+# Changes to be committed:
+#	modified:   examples/features/customloadbalancer/client/main.go
+#
