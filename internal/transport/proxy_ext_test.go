@@ -115,7 +115,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	}
 
 	if !proxyStarted {
-		t.Fatalf("Proxy not started")
+		t.Fatalf("Proxy not connected")
 	}
 }
 
@@ -172,7 +172,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	}
 
 	if !proxyStarted {
-		t.Fatalf("Proxy not started")
+		t.Fatalf("Proxy not connected")
 	}
 }
 
@@ -222,7 +222,7 @@ func (s) TestNewClientWithProxy(t *testing.T) {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 	if !proxyStarted {
-		t.Fatalf("Proxy not started")
+		t.Fatalf("Proxy not connected")
 	}
 }
 
@@ -283,7 +283,7 @@ func (s) TestNewClientWithProxyAndCustomResolver(t *testing.T) {
 	}
 
 	if !proxyStarted {
-		t.Fatalf("Proxy not started")
+		t.Fatalf("Proxy not connected")
 	}
 }
 
@@ -339,7 +339,7 @@ func (s) TestNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	}
 
 	if !proxyStarted {
-		t.Fatalf("Proxy not started")
+		t.Fatalf("Proxy not connected")
 	}
 }
 
@@ -500,6 +500,41 @@ func (s) TestBasicAuthInNewClientWithProxy(t *testing.T) {
 	}
 
 	if !proxyStarted {
-		t.Fatalf("Proxy not started")
+		t.Fatalf("Proxy not connected")
+	}
+}
+
+// Tests the scenario where a gRPC client retrieves the proxy address from the
+// environment variable `HTTPS_PROXY`. The test sets up an HTTP proxy server
+// and verifies that the client connects to this proxy, sends the unresolved
+// target URI in the HTTP CONNECT request.
+func (s) TestHTTPProxyFromEnvironment(t *testing.T) {
+	unresolvedTargetURI := "example.test.com"
+	proxyStarted := false
+	reqCheck := func(req *http.Request) {
+		proxyStarted = true
+		if got, want := req.URL.Host, unresolvedTargetURI; got != want {
+			t.Errorf(" Unexpected request host: %s , want = %s ", got, want)
+		}
+	}
+	pServer := transporttestutils.HTTPProxy(t, reqCheck, false)
+
+	// Overwrite the function in the test and restore them in defer.
+	t.Setenv("HTTPS_PROXY", pServer.Addr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%s) failed: %v", unresolvedTargetURI, err)
+	}
+	defer conn.Close()
+
+	// Send an empty RPC.
+	client := testgrpc.NewTestServiceClient(conn)
+	client.EmptyCall(ctx, &testgrpc.Empty{})
+
+	if !proxyStarted {
+		t.Fatalf("Proxy not connected")
 	}
 }
