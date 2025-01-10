@@ -320,24 +320,27 @@ func compressWithDeterministicError(t *testing.T, input []byte) mem.BufferSlice 
 	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 }
 
-// MockDecompressor is a mock decompressor that always returns an error
+// MockDecompressor is a mock implementation of a decompressor used for testing purposes.
+// It simulates decompression behavior, returning either decompressed data or an error based on the ShouldError flag.
 type MockDecompressor struct {
-	ShouldError bool
+	ShouldError bool // Flag to control whether the decompression should simulate an error.
 }
 
-// Do simulates decompression. If ShouldError is true, it returns an error, else it returns decompressed data.
-func (m *MockDecompressor) Do(reader io.Reader) ([]byte, error) {
+// Do simulates decompression. It returns a predefined error if ShouldError is true,
+// or a fixed set of decompressed data if ShouldError is false.
+func (m *MockDecompressor) Do(_ io.Reader) ([]byte, error) {
 	if m.ShouldError {
 		return nil, errors.New(decompressionErrorMsg)
 	}
 	return []byte(defaultDecompressedData), nil
 }
 
+// Type returns the identifier for the MockDecompressor, which is "mock".
 func (m *MockDecompressor) Type() string {
-	return "mock"
+	return "MockDecompressor"
 }
 
-// TestDecompress tests the decompress function behaves correctly for following scenarios
+// TestDecompress// fails with resourceExhausted error when the decompressed message exceeds maxReceiveMessageSize. tests the decompress function behaves correctly for following scenarios
 // decompress successfully when message is <= maxReceiveMessageSize
 // errors when message > maxReceiveMessageSize
 // decompress successfully when maxReceiveMessageSize is MaxInt
