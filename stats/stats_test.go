@@ -258,13 +258,15 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	for _, sh := range te.serverStatsHandlers {
 		opts = append(opts, grpc.StatsHandler(sh))
 	}
-	s := grpc.NewServer(opts...)
-	te.srv = s
-	if te.testServer != nil {
-		testgrpc.RegisterTestServiceServer(s, te.testServer)
+	stub := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(opts...),
 	}
-
-	go s.Serve(lis)
+	stubserver.StartTestService(te.t, stub)
+	defer stub.S.Stop()
 	te.srvAddr = lis.Addr().String()
 }
 
