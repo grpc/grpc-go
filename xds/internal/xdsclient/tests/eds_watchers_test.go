@@ -53,7 +53,7 @@ const (
 
 type noopEndpointsWatcher struct{}
 
-func (noopEndpointsWatcher) OnResourceChanged(_ *xdsresource.EndpointsResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (noopEndpointsWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (noopEndpointsWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -76,13 +76,14 @@ func newEndpointsWatcher() *endpointsWatcher {
 	return &endpointsWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (ew *endpointsWatcher) OnResourceChanged(update *xdsresource.EndpointsResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
+func (ew *endpointsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		ew.updateCh.Replace(endpointsUpdateErrTuple{err: update.Err})
 		onDone()
 		return
 	}
-	ew.updateCh.Send(endpointsUpdateErrTuple{update: update.Resource})
+	u := update.Data.(*xdsresource.EndpointsResourceData)
+	ew.updateCh.Send(endpointsUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 

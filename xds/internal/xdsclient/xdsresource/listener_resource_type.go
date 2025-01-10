@@ -154,7 +154,7 @@ type ListenerWatcher interface {
 	//      - resource validation error (if resource is not cached)
 	//      - ADS stream failure (if resource is not cached)
 	//      - connection failure (if resource is not cached)
-	OnResourceChanged(*ListenerResourceData, error, OnDoneFunc)
+	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
 
 	// If resource is already cached, it is invoked under different error
 	// conditions including but not limited to the following:
@@ -168,13 +168,13 @@ type delegatingListenerWatcher struct {
 	watcher ListenerWatcher
 }
 
-func (d *delegatingListenerWatcher) OnResourceChanged(data ResourceData, err error, onDone OnDoneFunc) {
-	if err != nil {
-		d.watcher.OnResourceChanged(nil, err, onDone)
+func (d *delegatingListenerWatcher) OnResourceChanged(update ResourceDataOrError, onDone OnDoneFunc) {
+	if update.Err != nil {
+		d.watcher.OnResourceChanged(&ResourceDataOrError{Err: update.Err}, onDone)
 		return
 	}
-	l := data.(*ListenerResourceData)
-	d.watcher.OnResourceChanged(l, nil, onDone)
+	l := update.Data.(*ListenerResourceData)
+	d.watcher.OnResourceChanged(&ResourceDataOrError{Data: l}, onDone)
 }
 
 func (d *delegatingListenerWatcher) OnAmbientError(err error, onDone OnDoneFunc) {

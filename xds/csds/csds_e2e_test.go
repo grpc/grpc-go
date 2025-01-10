@@ -70,7 +70,7 @@ func Test(t *testing.T) {
 
 type nopListenerWatcher struct{}
 
-func (nopListenerWatcher) OnResourceChanged(_ *xdsresource.ListenerResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (nopListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (nopListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -79,7 +79,7 @@ func (nopListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc)
 
 type nopRouteConfigWatcher struct{}
 
-func (nopRouteConfigWatcher) OnResourceChanged(_ *xdsresource.RouteConfigResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (nopRouteConfigWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (nopRouteConfigWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -88,7 +88,7 @@ func (nopRouteConfigWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFu
 
 type nopClusterWatcher struct{}
 
-func (nopClusterWatcher) OnResourceChanged(_ *xdsresource.ClusterResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (nopClusterWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (nopClusterWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -97,7 +97,7 @@ func (nopClusterWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) 
 
 type nopEndpointsWatcher struct{}
 
-func (nopEndpointsWatcher) OnResourceChanged(_ *xdsresource.EndpointsResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (nopEndpointsWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (nopEndpointsWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -125,7 +125,7 @@ func newBlockingListenerWatcher(testCtxDone <-chan struct{}) *blockingListenerWa
 	}
 }
 
-func (w *blockingListenerWatcher) OnResourceChanged(_ *xdsresource.ListenerResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (w *blockingListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 func (w *blockingListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {

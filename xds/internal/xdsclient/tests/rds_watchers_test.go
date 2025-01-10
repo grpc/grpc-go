@@ -43,7 +43,7 @@ import (
 
 type noopRouteConfigWatcher struct{}
 
-func (noopRouteConfigWatcher) OnResourceChanged(_ *xdsresource.RouteConfigResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (noopRouteConfigWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (noopRouteConfigWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -63,13 +63,14 @@ func newRouteConfigWatcher() *routeConfigWatcher {
 	return &routeConfigWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (rw *routeConfigWatcher) OnResourceChanged(update *xdsresource.RouteConfigResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
+func (rw *routeConfigWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		rw.updateCh.Replace(routeConfigUpdateErrTuple{err: update.Err})
 		onDone()
 		return
 	}
-	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
+	rc := update.Data.(*xdsresource.RouteConfigResourceData)
+	rw.updateCh.Send(routeConfigUpdateErrTuple{update: rc.Resource})
 	onDone()
 }
 

@@ -37,10 +37,10 @@ type TestResourceWatcher struct {
 
 // OnResourceChanged is invoked by the xDS client to report the latest update
 // or an error on the resource being watched.
-func (w *TestResourceWatcher) OnResourceChanged(data xdsresource.ResourceData, err error, onDone xdsresource.OnDoneFunc) {
+func (w *TestResourceWatcher) OnResourceChanged(update xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
-	if err != nil {
-		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+	if update.Err != nil {
+		if xdsresource.ErrType(update.Err) == xdsresource.ErrorTypeResourceNotFound {
 			select {
 			case <-w.ResourceDoesNotExistCh:
 			default:
@@ -52,7 +52,7 @@ func (w *TestResourceWatcher) OnResourceChanged(data xdsresource.ResourceData, e
 		case <-w.ErrorCh:
 		default:
 		}
-		w.ErrorCh <- err
+		w.ErrorCh <- update.Err
 		return
 
 	}
@@ -60,7 +60,7 @@ func (w *TestResourceWatcher) OnResourceChanged(data xdsresource.ResourceData, e
 	case <-w.UpdateCh:
 	default:
 	}
-	w.UpdateCh <- &data
+	w.UpdateCh <- &update.Data
 }
 
 // OnAmbientError is invoked by the xDS client to report the latest error.

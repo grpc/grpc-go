@@ -58,18 +58,25 @@ type Producer interface {
 // from the xDS server.
 type OnDoneFunc func()
 
-// ResourceWatcher is an interface that can to be implemented to wrap the
-// callbacks to be invoked for different events corresponding to the resource
-// being watched.
+// ResourceDataOrError is a struct that contains either ResourceData or error.
+// It is used to represent the result of an xDS resource update. Exactly one of
+// Data or Err will be non-nil.
+type ResourceDataOrError struct {
+	Data ResourceData
+	Err  error
+}
+
+// ResourceWatcher wraps the callbacks to be invoked for different events
+// corresponding to the resource being watched.
 type ResourceWatcher interface {
 	// OnResourceChanged is invoked to notify the watcher of a new version of
 	// the resource received from the xDS server or an error indicating the
-	// reason why the resource cannot be obtained.
+	// reason why the resource could not be obtained.
 	//
-	// The ResourceData parameter needs to be type asserted to the appropriate
-	// type for the resource being watched. In case of error, the ResourceData
-	// is nil otherwise its not nil and error is nil but both will never be nil
-	// together.
+	// The ResourceData of the ResourceDataOrError needs to be type asserted to
+	// the appropriate type for the resource being watched. In case of error,
+	// the ResourceData is nil otherwise its not nil and error is nil but both
+	// will never be nil together.
 	//
 	// Watcher is expected to use the most recent value passed to
 	// OnResourceChanged(), regardless of whether that's a resource or an error
@@ -83,7 +90,7 @@ type ResourceWatcher interface {
 	//      - resource validation error (if resource is not cached)
 	//      - ADS stream failure (if resource is not cached)
 	//      - connection failure (if resource is not cached)
-	OnResourceChanged(ResourceData, error, OnDoneFunc)
+	OnResourceChanged(ResourceDataOrError, OnDoneFunc)
 
 	// OnAmbientError is invoked to notify the watcher of an error that occurs
 	// after a resource has been received (i.e. we already have a cached

@@ -36,13 +36,14 @@ func newListenerWatcher(resourceName string, parent *xdsResolver) *listenerWatch
 	return lw
 }
 
-func (l *listenerWatcher) OnResourceChanged(update *xdsresource.ListenerResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		handleError := func(context.Context) { l.parent.onListenerResourceChangedError(err); onDone() }
+func (l *listenerWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		handleError := func(context.Context) { l.parent.onListenerResourceChangedError(update.Err); onDone() }
 		l.parent.serializer.ScheduleOr(handleError, onDone)
 		return
 	}
-	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(update.Resource); onDone() }
+	u := update.Data.(*xdsresource.ListenerResourceData)
+	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(u.Resource); onDone() }
 	l.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }
 
@@ -68,14 +69,15 @@ func newRouteConfigWatcher(resourceName string, parent *xdsResolver) *routeConfi
 	return rw
 }
 
-func (r *routeConfigWatcher) OnResourceChanged(u *xdsresource.RouteConfigResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		handleError := func(context.Context) { r.parent.onRouteConfigResourceChangedError(r.resourceName, err); onDone() }
+func (r *routeConfigWatcher) OnResourceChanged(u *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if u.Err != nil {
+		handleError := func(context.Context) { r.parent.onRouteConfigResourceChangedError(r.resourceName, u.Err); onDone() }
 		r.parent.serializer.ScheduleOr(handleError, onDone)
 		return
 	}
 	handleUpdate := func(context.Context) {
-		r.parent.onRouteConfigResourceUpdate(r.resourceName, u.Resource)
+		update := u.Data.(*xdsresource.RouteConfigResourceData)
+		r.parent.onRouteConfigResourceUpdate(r.resourceName, update.Resource)
 		onDone()
 	}
 	r.parent.serializer.ScheduleOr(handleUpdate, onDone)

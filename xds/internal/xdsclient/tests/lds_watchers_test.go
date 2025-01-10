@@ -48,7 +48,7 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) OnResourceChanged(_ *xdsresource.ListenerResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (noopListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -68,13 +68,14 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (lw *listenerWatcher) OnResourceChanged(update *xdsresource.ListenerResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+func (lw *listenerWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		lw.updateCh.Replace(listenerUpdateErrTuple{err: update.Err})
 		onDone()
 		return
 	}
-	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+	u := update.Data.(*xdsresource.ListenerResourceData)
+	lw.updateCh.Send(listenerUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 
@@ -97,13 +98,14 @@ func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
 
-func (lw *listenerWatcherMultiple) OnResourceChanged(update *xdsresource.ListenerResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: err})
+func (lw *listenerWatcherMultiple) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: update.Err})
 		onDone()
 		return
 	}
-	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+	u := update.Data.(*xdsresource.ListenerResourceData)
+	lw.updateCh.Send(listenerUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 

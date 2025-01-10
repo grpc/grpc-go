@@ -118,7 +118,7 @@ type RouteConfigWatcher interface {
 	//      - resource validation error (if resource is not cached)
 	//      - ADS stream failure (if resource is not cached)
 	//      - connection failure (if resource is not cached)
-	OnResourceChanged(*RouteConfigResourceData, error, OnDoneFunc)
+	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
 
 	// If resource is already cached, it is invoked under different error
 	// conditions including but not limited to the following:
@@ -132,13 +132,13 @@ type delegatingRouteConfigWatcher struct {
 	watcher RouteConfigWatcher
 }
 
-func (d *delegatingRouteConfigWatcher) OnResourceChanged(data ResourceData, err error, onDone OnDoneFunc) {
-	if err != nil {
-		d.watcher.OnResourceChanged(nil, err, onDone)
+func (d *delegatingRouteConfigWatcher) OnResourceChanged(update ResourceDataOrError, onDone OnDoneFunc) {
+	if update.Err != nil {
+		d.watcher.OnResourceChanged(&ResourceDataOrError{Err: update.Err}, onDone)
 		return
 	}
-	rc := data.(*RouteConfigResourceData)
-	d.watcher.OnResourceChanged(rc, nil, onDone)
+	rc := update.Data.(*RouteConfigResourceData)
+	d.watcher.OnResourceChanged(&ResourceDataOrError{Data: rc}, onDone)
 }
 
 func (d *delegatingRouteConfigWatcher) OnAmbientError(err error, onDone OnDoneFunc) {

@@ -147,7 +147,7 @@ type rdsWatcher struct {
 	canceled bool // eats callbacks if true
 }
 
-func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.RouteConfigResourceData, err error, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -156,17 +156,19 @@ func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.RouteConfigResourceD
 	}
 	rw.mu.Unlock()
 	if rw.logger.V(2) {
-		if err != nil {
-			rw.logger.Infof("RDS watch for resource %q received error: %#v", rw.routeName, err)
+		if update.Err != nil {
+			rw.logger.Infof("RDS watch for resource %q received error: %#v", rw.routeName, update.Err)
 		} else {
-			rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
+			u := update.Data.(*xdsresource.RouteConfigResourceData)
+			rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, u.Resource)
 		}
 	}
-	if err != nil {
-		rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
+	if update.Err != nil {
+		rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: update.Err})
 		return
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &update.Resource})
+	u := update.Data.(*xdsresource.RouteConfigResourceData)
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &u.Resource})
 }
 
 func (rw *rdsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {

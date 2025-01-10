@@ -44,7 +44,7 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) OnResourceChanged(_ *xdsresource.ClusterResourceData, _ error, onDone xdsresource.OnDoneFunc) {
+func (noopClusterWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (noopClusterWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
@@ -64,13 +64,14 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) OnResourceChanged(update *xdsresource.ClusterResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
+func (cw *clusterWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		cw.updateCh.Replace(clusterUpdateErrTuple{err: update.Err})
 		onDone()
 		return
 	}
-	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
+	u := update.Data.(*xdsresource.ClusterResourceData)
+	cw.updateCh.Send(clusterUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 

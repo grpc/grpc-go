@@ -60,9 +60,9 @@ func newBLockingListenerWatcher() *blockingListenerWatcher {
 	}
 }
 
-func (lw *blockingListenerWatcher) OnResourceChanged(update *xdsresource.ListenerResourceData, err error, done xdsresource.OnDoneFunc) {
-	if err != nil {
-		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+func (lw *blockingListenerWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, done xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		if xdsresource.ErrType(update.Err) == xdsresource.ErrorTypeResourceNotFound {
 			// Notify receipt of resource not found.
 			select {
 			case lw.notFoundCh <- struct{}{}:

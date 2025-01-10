@@ -32,13 +32,14 @@ type clusterWatcher struct {
 	parent *cdsBalancer
 }
 
-func (cw *clusterWatcher) OnResourceChanged(u *xdsresource.ClusterResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		handleError := func(context.Context) { cw.parent.onClusterResourceChangedError(cw.name, err); onDone() }
+func (cw *clusterWatcher) OnResourceChanged(u *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if u.Err != nil {
+		handleError := func(context.Context) { cw.parent.onClusterResourceChangedError(cw.name, u.Err); onDone() }
 		cw.parent.serializer.ScheduleOr(handleError, onDone)
 		return
 	}
-	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, u.Resource); onDone() }
+	update := u.Data.(*xdsresource.ClusterResourceData)
+	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, update.Resource); onDone() }
 	cw.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }
 

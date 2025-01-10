@@ -76,18 +76,18 @@ func newEDSResolver(nameToWatch string, producer xdsresource.Producer, topLevelR
 }
 
 // OnUpdate is invoked to report an update for the resource being watched.
-func (er *edsDiscoveryMechanism) OnResourceChanged(update *xdsresource.EndpointsResourceData, err error, onDone xdsresource.OnDoneFunc) {
+func (er *edsDiscoveryMechanism) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	if er.stopped.HasFired() {
 		onDone()
 		return
 	}
 
-	if err != nil {
+	if update.Err != nil {
 		if er.logger.V(2) {
-			if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
+			if xdsresource.ErrType(update.Err) == xdsresource.ErrorTypeResourceNotFound {
 				er.logger.Infof("EDS discovery mechanism for resource %q reported resource-does-not-exist error", er.nameToWatch)
 			} else {
-				er.logger.Infof("EDS discovery mechanism for resource %q reported on resource changed error: %v", er.nameToWatch, err)
+				er.logger.Infof("EDS discovery mechanism for resource %q reported on resource changed error: %v", er.nameToWatch, update.Err)
 			}
 		}
 		// Report an empty update that would result in no priority child being
@@ -105,7 +105,8 @@ func (er *edsDiscoveryMechanism) OnResourceChanged(update *xdsresource.Endpoints
 	}
 
 	er.mu.Lock()
-	er.update = &update.Resource
+	u := update.Data.(*xdsresource.EndpointsResourceData)
+	er.update = &u.Resource
 	er.mu.Unlock()
 
 	er.topLevelResolver.onUpdate(onDone)

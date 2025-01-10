@@ -69,13 +69,14 @@ func newTestRouteConfigWatcher(client xdsclient.XDSClient, name1, name2 string) 
 	}
 }
 
-func (rw *testRouteConfigWatcher) OnResourceChanged(update *xdsresource.RouteConfigResourceData, err error, onDone xdsresource.OnDoneFunc) {
-	if err != nil {
-		rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
+func (rw *testRouteConfigWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		rw.updateCh.Replace(routeConfigUpdateErrTuple{err: update.Err})
 		onDone()
 		return
 	}
-	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
+	rc := update.Data.(*xdsresource.RouteConfigResourceData)
+	rw.updateCh.Send(routeConfigUpdateErrTuple{update: rc.Resource})
 
 	rw.cancel1 = xdsresource.WatchRouteConfig(rw.client, rw.name1, rw.rcw1)
 	rw.cancel2 = xdsresource.WatchRouteConfig(rw.client, rw.name2, rw.rcw2)

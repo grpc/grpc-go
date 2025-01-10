@@ -414,28 +414,30 @@ type ldsWatcher struct {
 	name   string
 }
 
-func (lw *ldsWatcher) OnResourceChanged(update *xdsresource.ListenerResourceData, err error, onDone xdsresource.OnDoneFunc) {
+func (lw *ldsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
 	if lw.parent.closed.HasFired() {
-		if err != nil {
-			lw.logger.Warningf("Resource %q received err: %#v after listener was closed", lw.name, err)
+		if update.Err != nil {
+			lw.logger.Warningf("Resource %q received err: %#v after listener was closed", lw.name, update.Err)
 		} else {
 			lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
 		}
 		return
 	}
 	if lw.logger.V(2) {
-		if err != nil {
-			lw.logger.Infof("LDS watch for resource %q received error: %#v", lw.name, err)
+		if update.Err != nil {
+			lw.logger.Infof("LDS watch for resource %q received error: %#v", lw.name, update.Err)
 		} else {
-			lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, update.Resource)
+			u := update.Data.(*xdsresource.ListenerResourceData)
+			lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, u.Resource)
 		}
 	}
-	if err != nil {
-		lw.parent.onLDSResourceChangedError(err)
+	if update.Err != nil {
+		lw.parent.onLDSResourceChangedError(update.Err)
 		return
 	}
-	lw.parent.handleLDSUpdate(update.Resource)
+	u := update.Data.(*xdsresource.ListenerResourceData)
+	lw.parent.handleLDSUpdate(u.Resource)
 }
 
 func (lw *ldsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {

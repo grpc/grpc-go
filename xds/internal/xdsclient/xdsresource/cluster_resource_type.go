@@ -121,7 +121,7 @@ type ClusterWatcher interface {
 	//      - resource validation error (if resource is not cached)
 	//      - ADS stream failure (if resource is not cached)
 	//      - connection failure (if resource is not cached)
-	OnResourceChanged(*ClusterResourceData, error, OnDoneFunc)
+	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
 
 	// If resource is already cached, it is invoked under different error
 	// conditions including but not limited to the following:
@@ -135,13 +135,13 @@ type delegatingClusterWatcher struct {
 	watcher ClusterWatcher
 }
 
-func (d *delegatingClusterWatcher) OnResourceChanged(data ResourceData, err error, onDone OnDoneFunc) {
-	if err != nil {
-		d.watcher.OnResourceChanged(nil, err, onDone)
+func (d *delegatingClusterWatcher) OnResourceChanged(update ResourceDataOrError, onDone OnDoneFunc) {
+	if update.Err != nil {
+		d.watcher.OnResourceChanged(&ResourceDataOrError{Err: update.Err}, onDone)
 		return
 	}
-	c := data.(*ClusterResourceData)
-	d.watcher.OnResourceChanged(c, nil, onDone)
+	c := update.Data.(*ClusterResourceData)
+	d.watcher.OnResourceChanged(&ResourceDataOrError{Data: c}, onDone)
 }
 
 func (d *delegatingClusterWatcher) OnAmbientError(err error, onDone OnDoneFunc) {
