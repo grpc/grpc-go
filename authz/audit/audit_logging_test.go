@@ -88,21 +88,6 @@ func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerCon
 // and 'deny' outcomes. Additionally, it checks if SPIFFE ID from a certificate
 // is propagated correctly.
 func (s) TestAuditLogger(t *testing.T) {
-	// Construct the credentials for the tests and the stub server
-	serverCreds := loadServerCreds(t)
-	clientCreds := loadClientCreds(t)
-	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			_, err := stream.Recv()
-			if err != io.EOF {
-				return err
-			}
-			return nil
-		},
-	}
 	// Each test data entry contains an authz policy for a grpc server,
 	// how many 'allow' and 'deny' outcomes we expect (each test case makes 2
 	// unary calls and one client-streaming call), and a structure to check if
@@ -257,6 +242,21 @@ func (s) TestAuditLogger(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			// Construct the credentials for the tests and the stub server
+			serverCreds := loadServerCreds(t)
+			clientCreds := loadClientCreds(t)
+			ss := &stubserver.StubServer{
+				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
+				},
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+					_, err := stream.Recv()
+					if err != io.EOF {
+						return err
+					}
+					return nil
+				},
+			}
 			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary
 			// and stream interceptors.
 			lb := &loggerBuilder{

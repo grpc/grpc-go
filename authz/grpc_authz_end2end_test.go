@@ -567,7 +567,8 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		// Start a gRPC server with gRPC authz unary server interceptor.
-		S: grpc.NewServer(grpc.ChainUnaryInterceptor(i.UnaryInterceptor))}
+		S: grpc.NewServer(grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
 	stubserver.StartTestService(t, stub)
 	defer stub.Stop()
 
@@ -658,7 +659,8 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
-		S: grpc.NewServer(grpc.ChainUnaryInterceptor(i.UnaryInterceptor))}
+		S: grpc.NewServer(grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
+	}
 	stubserver.StartTestService(t, stub)
 	defer stub.Stop()
 
