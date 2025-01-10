@@ -61,7 +61,7 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 		return
 	}
 	if req.Method != http.MethodConnect {
-		t.Fatalf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
+		t.Errorf("unexpected Method %q, want %q", req.Method, http.MethodConnect)
 	}
 	p.onRequest(req)
 
@@ -126,6 +126,7 @@ func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bo
 			p.handleRequest(t, in, waitForServerHello)
 		}
 	}()
+	t.Logf("Started proxy at: %q", pLis.Addr())
 	t.Cleanup(p.stop)
 	p.Addr = fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String()))
 	return p
