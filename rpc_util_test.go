@@ -335,12 +335,12 @@ func (m *MockDecompressor) Do(_ io.Reader) ([]byte, error) {
 	return []byte(defaultDecompressedData), nil
 }
 
-// Type returns the identifier for the MockDecompressor, which is "mock".
+// Type returns the string identifier for the MockDecompressor.
 func (m *MockDecompressor) Type() string {
 	return "MockDecompressor"
 }
 
-// TestDecompress// fails with resourceExhausted error when the decompressed message exceeds maxReceiveMessageSize. tests the decompress function behaves correctly for following scenarios
+// TestDecompress tests the decompress function behaves correctly for following scenarios
 // decompress successfully when message is <= maxReceiveMessageSize
 // errors when message > maxReceiveMessageSize
 // decompress successfully when maxReceiveMessageSize is MaxInt
