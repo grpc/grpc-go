@@ -464,13 +464,3 @@ func startServer(t *testing.T, handshakerServiceAddress string, wait *sync.WaitG
 	stubserver.StartTestService(t, stub)
 	return func() { stub.S.Stop() }, listener.Addr().String()
 }
-
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
-func (s *testServer) UnaryCall(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{
-		Payload: &testpb.Payload{},
-	}, nil
-}
