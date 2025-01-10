@@ -324,6 +324,7 @@ func (s) TestDecompress(t *testing.T) {
 	testCases := []struct {
 		name                  string
 		input                 mem.BufferSlice
+		dc                    Decompressor
 		maxReceiveMessageSize int
 		want                  []byte
 		wantErr               error
@@ -331,6 +332,7 @@ func (s) TestDecompress(t *testing.T) {
 		{
 			name:                  "Decompresses successfully with sufficient buffer size",
 			input:                 compressWithDeterministicError(t, []byte("decompressed data")),
+			dc:                    nil,
 			maxReceiveMessageSize: 50,
 			want:                  []byte("decompressed data"),
 			wantErr:               nil,
@@ -338,13 +340,15 @@ func (s) TestDecompress(t *testing.T) {
 		{
 			name:                  "Fails due to exceeding maxReceiveMessageSize",
 			input:                 compressWithDeterministicError(t, []byte("message that is too large")),
+			dc:                    nil,
 			maxReceiveMessageSize: len("message that is too large") - 1,
 			want:                  nil,
-			wantErr:               errMaxMessageSizeExceeded,
+			wantErr:               status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", len("message that is too large")-1),
 		},
 		{
 			name:                  "Decompresses to exactly maxReceiveMessageSize",
 			input:                 compressWithDeterministicError(t, []byte("exact size message")),
+			dc:                    nil,
 			maxReceiveMessageSize: len("exact size message"),
 			want:                  []byte("exact size message"),
 			wantErr:               nil,
@@ -352,6 +356,7 @@ func (s) TestDecompress(t *testing.T) {
 		{
 			name:                  "Decompresses successfully with maxReceiveMessageSize MaxInt",
 			input:                 compressWithDeterministicError(t, []byte("large message")),
+			dc:                    nil,
 			maxReceiveMessageSize: math.MaxInt,
 			want:                  []byte("large message"),
 			wantErr:               nil,
@@ -360,7 +365,7 @@ func (s) TestDecompress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := decompress(compressor, tc.input, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
+			output, err := decompress(compressor, tc.input, tc.dc, tc.maxReceiveMessageSize, mem.DefaultBufferPool())
 			if !cmp.Equal(err, tc.wantErr, cmpopts.EquateErrors()) {
 				t.Fatalf("decompress() err = %v, wantErr = %v", err, tc.wantErr)
 			}
