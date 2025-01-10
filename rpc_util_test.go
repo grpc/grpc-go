@@ -21,6 +21,7 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"math"
 	"reflect"
@@ -38,6 +39,11 @@ import (
 	"google.golang.org/grpc/status"
 	perfpb "google.golang.org/grpc/test/codec_perf"
 	"google.golang.org/protobuf/proto"
+)
+
+const (
+	defaultDecompressedData = "default decompressed data"
+	decompressionErrorMsg   = "invalid compression format"
 )
 
 type fullReader struct {
@@ -314,12 +320,33 @@ func compressWithDeterministicError(t *testing.T, input []byte) mem.BufferSlice 
 	return mem.BufferSlice{mem.NewBuffer(&compressedData, nil)}
 }
 
+// MockDecompressor is a mock decompressor that always returns an error
+type MockDecompressor struct {
+	ShouldError bool
+}
+
+// Do simulates decompression. If ShouldError is true, it returns an error, else it returns decompressed data.
+func (m *MockDecompressor) Do(reader io.Reader) ([]byte, error) {
+	if m.ShouldError {
+		return nil, errors.New(decompressionErrorMsg)
+	}
+	return []byte(defaultDecompressedData), nil
+}
+
+func (m *MockDecompressor) Type() string {
+	return "mock"
+}
+
 // TestDecompress tests the decompress function behaves correctly for following scenarios
 // decompress successfully when message is <= maxReceiveMessageSize
 // errors when message > maxReceiveMessageSize
-// decompress successfully when maxReceiveMessageSize is MaxInt.
+// decompress successfully when maxReceiveMessageSize is MaxInt
+// errors when the decompressed message has an invalid format
+// errors when the decompressed message exceeds the maxReceiveMessageSize.
 func (s) TestDecompress(t *testing.T) {
 	compressor := encoding.GetCompressor("gzip")
+	validDecompressor := &MockDecompressor{ShouldError: false}
+	invalidFormatDecompressor := &MockDecompressor{ShouldError: true}
 
 	testCases := []struct {
 		name                  string
@@ -360,6 +387,22 @@ func (s) TestDecompress(t *testing.T) {
 			maxReceiveMessageSize: math.MaxInt,
 			want:                  []byte("large message"),
 			wantErr:               nil,
+		},
+		{
+			name:                  "Fails with decompression error due to invalid format",
+			input:                 compressWithDeterministicError(t, []byte("invalid compressed data")),
+			dc:                    invalidFormatDecompressor,
+			maxReceiveMessageSize: 50,
+			want:                  nil,
+			wantErr:               status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", errors.New(decompressionErrorMsg)),
+		},
+		{
+			name:                  "Fails with resourceExhausted error when decompressed message exceeds maxReceiveMessageSize",
+			input:                 compressWithDeterministicError(t, []byte("large compressed data")),
+			dc:                    validDecompressor,
+			maxReceiveMessageSize: 20,
+			want:                  nil,
+			wantErr:               status.Errorf(codes.ResourceExhausted, "grpc: message after decompression larger than max (%d vs. %d)", 25, 20),
 		},
 	}
 

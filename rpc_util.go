@@ -849,9 +849,10 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 	return out, nil
 }
 
-// decompress decompresses the given data `d` using either a custom decompressor `dc`
-// or a provided `compressor`. It checks if the decompressed data exceeds the
-// `maxReceiveMessageSize` and returns an error if so.
+// decompress processes the given data by decompressing it using either a custom decompressor or a standard compressor.
+// If a custom decompressor is provided, it takes precedence. The function validates that the decompressed data
+// does not exceed the specified maximum size and returns an error if this limit is exceeded.
+// On success, it returns the decompressed data. Otherwise, it returns an error if decompression fails or the data exceeds the size limit.
 func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompressor, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, error) {
 	if dc != nil {
 		uncompressed, err := dc.Do(d.Reader())
@@ -873,7 +874,6 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompress
 		if err != nil {
 			out.Free()
 			return nil, status.Errorf(codes.Internal, "grpc: failed to read decompressed data: %v", err)
-
 		}
 
 		if doesReceiveMessageOverflow(out.Len(), maxReceiveMessageSize, dcReader) {
