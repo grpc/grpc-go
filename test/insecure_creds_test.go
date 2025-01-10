@@ -115,10 +115,8 @@ func (s) TestInsecureCreds(t *testing.T) {
 			} else {
 				ss.S = grpc.NewServer()
 			}
-			defer ss.S.Stop()
-
 			stubserver.StartTestService(t, ss)
-
+			defer ss.S.Stop()
 			addr := lis.Addr().String()
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			if test.clientInsecureCreds {
