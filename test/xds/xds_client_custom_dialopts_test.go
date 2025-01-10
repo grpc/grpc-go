@@ -63,7 +63,7 @@ func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, fu
 	if err := json.Unmarshal(config, &cfg); err != nil {
 		return nil, func() {}, fmt.Errorf("failed to unmarshal config: %v", err)
 	}
-	return &testCredsBundle{insecure.NewBundle(), &t.dialerCalled, cfg.MgmtServerAddress, &mockStatsHandler{
+	return &testCredsBundle{insecure.NewBundle(), &t.dialerCalled, cfg.MgmtServerAddress, &noopStatsHandler{
 		tagRPCCalled:     &t.tagRPCCalled,
 		handleRPCCalled:  &t.handleRPCCalled,
 		tagConnCalled:    &t.tagConnCalled,
@@ -75,29 +75,29 @@ func (t *testCredsBuilder) Name() string {
 	return testCredsBuilderName
 }
 
-// mockStatsHandler implements `stats.Handler`. It's a no-op mock handler.
-type mockStatsHandler struct {
+// noopStatsHandler implements `stats.Handler`. It's a no-op mock handler.
+type noopStatsHandler struct {
 	tagRPCCalled     *atomic.Bool
 	handleRPCCalled  *atomic.Bool
 	tagConnCalled    *atomic.Bool
 	handleConnCalled *atomic.Bool
 }
 
-func (h *mockStatsHandler) TagRPC(ctx context.Context, i *stats.RPCTagInfo) context.Context {
+func (h *noopStatsHandler) TagRPC(ctx context.Context, i *stats.RPCTagInfo) context.Context {
 	h.tagRPCCalled.Store(true)
 	return ctx
 }
 
-func (h *mockStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+func (h *noopStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	h.handleRPCCalled.Store(true)
 }
 
-func (h *mockStatsHandler) TagConn(ctx context.Context, i *stats.ConnTagInfo) context.Context {
+func (h *noopStatsHandler) TagConn(ctx context.Context, i *stats.ConnTagInfo) context.Context {
 	h.tagConnCalled.Store(true)
 	return ctx
 }
 
-func (h *mockStatsHandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+func (h *noopStatsHandler) HandleConn(ctx context.Context, s stats.ConnStats) {
 	h.handleConnCalled.Store(true)
 }
 
@@ -108,7 +108,7 @@ type testCredsBundle struct {
 	credentials.Bundle
 	dialerCalled      *atomic.Bool
 	mgmtServerAddress string
-	mockStatsHandler  *mockStatsHandler
+	noopStatsHandler  *noopStatsHandler
 }
 
 func (t *testCredsBundle) DialOptions() []grpc.DialOption {
@@ -119,7 +119,7 @@ func (t *testCredsBundle) DialOptions() []grpc.DialOption {
 			return net.Dial("tcp", t.mgmtServerAddress)
 		}),
 		// Custom no-op RPC stats handler.
-		grpc.WithStatsHandler(t.mockStatsHandler),
+		grpc.WithStatsHandler(t.noopStatsHandler),
 	}
 }
 

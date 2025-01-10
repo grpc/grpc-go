@@ -285,7 +285,7 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 }
 
 // dialer captures the Dialer method specified via the credentials bundle.
-// Deprecated and to be deleted. Use extradDialOptions which takes precedence over this.
+// Deprecated: use extradDialOptions. Will take precedence over this.
 type dialer interface {
 	// Dialer specifies how to dial the xDS server.
 	Dialer(context.Context, string) (net.Conn, error)
