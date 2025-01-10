@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -809,8 +808,6 @@ func (p *payloadInfo) free() {
 	}
 }
 
-var errMaxMessageSizeExceeded = errors.New("max message size exceeded")
-
 // recvAndDecompress reads a message from the stream, decompressing it if necessary.
 //
 // Cancelling the returned cancel function releases the buffer back to the pool. So the caller should cancel as soon as
@@ -852,8 +849,9 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 	return out, nil
 }
 
-// Using compressor, decompress d, returning data and size.
-// If the decompressed data exceeds maxReceiveMessageSize, it returns errMaxMessageSizeExceeded.
+// decompress decompresses the given data `d` using either a custom decompressor `dc`
+// or a provided `compressor`. It checks if the decompressed data exceeds the
+// `maxReceiveMessageSize` and returns an error if so.
 func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompressor, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, error) {
 	if dc != nil {
 		uncompressed, err := dc.Do(d.Reader())
