@@ -479,6 +479,11 @@ func (s) TestBasicAuthInNewClientWithProxy(t *testing.T) {
 
 	t.Setenv("HTTPS_PROXY", user+":"+password+"@"+pServer.Addr)
 
+	// Use the httpproxy package functions instead of `http.ProxyFromEnvironment`
+	// because the latter reads proxy-related environment variables only once at
+	// initialization. This behavior causes issues when running test multiple
+	// times, as changes to environment variables during tests would be ignored.
+	// By using `httpproxy.FromEnvironment()`, we ensure proxy settings are read dynamically.
 	origHTTPSProxyFromEnvironment := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = func(req *http.Request) (*url.URL, error) {
 		return httpproxy.FromEnvironment().ProxyFunc()(req.URL)
