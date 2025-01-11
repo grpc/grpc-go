@@ -54,8 +54,6 @@ const (
 // For overriding in unit tests.
 var bootstrapFileReadFunc = os.ReadFile
 
-var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
-
 // ChannelCreds contains the credentials to be used while communicating with an
 // xDS server. It is also used to dedup servers with the same server URI.
 //
@@ -183,7 +181,7 @@ type ServerConfig struct {
 	// credentials and store it here for easy access.
 	selectedCreds   ChannelCreds
 	credsDialOption grpc.DialOption
-	dialerOption    grpc.DialOption
+	extraDialOptions []grpc.DialOption
 
 	cleanups []func()
 }
@@ -226,8 +224,8 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 // server.
 func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 	dopts := []grpc.DialOption{sc.credsDialOption}
-	if sc.dialerOption != nil {
-		dopts = append(dopts, sc.dialerOption)
+	if sc.extraDialOptions != nil {
+		dopts = append(dopts, sc.extraDialOptions...)
 	}
 	return dopts
 }
@@ -320,9 +318,9 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		sc.selectedCreds = cc
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
 		if d, ok := bundle.(extraDialOptions); ok {
-			sc.dialerOption = joinDialOptions(d.DialOptions()...)
+			sc.extraDialOptions = d.DialOptions()
 		} else if d, ok := bundle.(dialer); ok {
-			sc.dialerOption = grpc.WithContextDialer(d.Dialer)
+			sc.extraDialOptions = []grpc.DialOption{grpc.WithContextDialer(d.Dialer)}
 		}
 		sc.cleanups = append(sc.cleanups, cancel)
 		break
