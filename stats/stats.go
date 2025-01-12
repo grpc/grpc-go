@@ -201,9 +201,9 @@ type OutTrailer struct {
 	Client bool
 	// WireLength is the wire length of trailer.
 	//
-	// Deprecated: This field is never set. The length is not known when this 
-    // message is emitted because the trailer fields are compressed with hpack 
-    // after that.
+	// Deprecated: This field is never set. The length is not known when this
+	// message is emitted because the trailer fields are compressed with hpack
+	// after that.
 	WireLength int
 	// Trailer contains the trailer metadata sent to the client. This
 	// field is only valid if this OutTrailer is from the server side.
