@@ -1662,9 +1662,8 @@ func verifyEventSequence(t *testing.T, got []string, want []string) {
 	t.Helper()
 	// Extract event types from `got` for comparison.
 	gotEventTypes := make([]string, len(got))
-	for i, e := range got {
-		gotEventTypes[i] = e
-	}
+	copy(gotEventTypes, got)
+
 	if !cmp.Equal(gotEventTypes, want) {
 		t.Errorf("Event sequence mismatch (-got +want):\n%s", cmp.Diff(gotEventTypes, want))
 	}
