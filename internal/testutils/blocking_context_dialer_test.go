@@ -125,7 +125,7 @@ func (s) TestBlockingDialer_HoldWaitFail(t *testing.T) {
 	}()
 
 	if !h.Wait(ctx) {
-		t.Fatalf("Timeout while waiting for a connection attempt to " + h.addr)
+		t.Fatal("Timeout while waiting for a connection attempt to " + h.addr)
 	}
 	select {
 	case err = <-dialError:

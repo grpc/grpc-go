@@ -592,11 +592,8 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatalf("Error creating client: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
-	client := testgrpc.NewTestServiceClient(cc)
 
-	t.Log("Waiting for the ClientConn to enter READY state.")
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	client := testgrpc.NewTestServiceClient(cc)
 
 	// We make a streaming RPC and do an one-message-round-trip to make sure
 	// it's created on connection 1.
