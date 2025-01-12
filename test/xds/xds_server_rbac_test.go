@@ -478,6 +478,30 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.PermissionDenied,
 			wantStatusUnaryCall: codes.OK,
 		},
+		// This test tests an RBAC HTTP Filter which is configured to allow only
+		// RPC's with certain paths ("UnaryCall") via the ":path" header. Only
+		// unary calls passing through this RBAC HTTP Filter should proceed as
+		// normal, and any others should be denied.
+		{
+			name: "allow-certain-path-by-header",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-path": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":path", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "/grpc.testing.TestService/UnaryCall"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.OK,
+		},
 		// This test that a RBAC Config with nil rules means that every RPC is
 		// allowed. This maps to the line "If absent, no enforcing RBAC policy
 		// will be applied" from the RBAC Proto documentation for the Rules

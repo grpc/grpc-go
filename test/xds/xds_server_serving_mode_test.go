@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -314,6 +316,12 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatal("Failed to create clientConn to a server in \"not-serving\" state")
 	}
 	defer cc1.Close()
+
+	_, err = testgrpc.NewTestServiceClient(cc1).FullDuplexCall(ctx)
+	if err == nil || status.Code(err) != codes.Unavailable {
+		t.Fatalf("Expected FullDuplexCall to fail with status code Unavailable, got: %v", err)
+	}
+
 	// Update the management server with both listener resources.
 	if err := managementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
