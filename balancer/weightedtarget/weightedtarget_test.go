@@ -297,6 +297,9 @@ func (s) TestWeightedTarget(t *testing.T) {
 
 	// The same SubConn is closed by balancergroup, gracefulswitch and
 	// pickfirstleaf when they are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
 	initialSC := scShutdown
 	for scShutdown == initialSC {
 		scShutdown = <-cc.ShutdownSubConnCh
@@ -912,6 +915,9 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 
 	// The same SubConn is closed by balancergroup, gracefulswitch and
 	// pickfirstleaf when they are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
 	initialSC := scShutdown
 	for scShutdown == initialSC {
 		scShutdown = <-cc.ShutdownSubConnCh

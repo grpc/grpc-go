@@ -371,6 +371,9 @@ func (s) TestBalancerGroup_locality_caching_not_read_within_timeout(t *testing.T
 	defer cancel()
 	// The same SubConn is closed by balancergroup, gracefulswitch and
 	// pickfirstleaf when they are closed.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
 	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2].Addr]: 3,
 		addrToSC[testBackendAddrs[3].Addr]: 3,
@@ -419,6 +422,9 @@ func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testi
 	shutdownTimeout := time.After(time.Millisecond * 500)
 	// The same SubConn is closed by balancergroup, gracefulswitch and
 	// pickfirstleaf when they are closed.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
 	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2].Addr]: 3,
 		addrToSC[testBackendAddrs[3].Addr]: 3,
@@ -696,6 +702,9 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	defer cancel()
 	// The same SubConn is closed by balancergroup, gracefulswitch and
 	// pickfirstleaf when they are closed.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
 	scToShutdown := map[balancer.SubConn]int{
 		m1[testBackendAddrs[0].Addr]: 3,
 		m1[testBackendAddrs[1].Addr]: 3,
