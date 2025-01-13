@@ -179,8 +179,8 @@ type ServerConfig struct {
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
-	selectedCreds   ChannelCreds
-	credsDialOption grpc.DialOption
+	selectedCreds    ChannelCreds
+	credsDialOption  grpc.DialOption
 	extraDialOptions []grpc.DialOption
 
 	cleanups []func()
