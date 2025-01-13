@@ -59,7 +59,6 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/stats/opentelemetry"
-	expstats "google.golang.org/grpc/stats/opentelemetry/experimental"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
 
@@ -100,7 +99,7 @@ func defaultTraceOptions(_ *testing.T) (*experimental.TraceOptions, *tracetest.I
 	spanExporter := tracetest.NewInMemoryExporter()
 	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
 	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
-	textMapPropagator := propagation.NewCompositeTextMapPropagator(expstats.GRPCTraceBinPropagator{})
+	textMapPropagator := propagation.NewCompositeTextMapPropagator(opentelemetry.GRPCTraceBinPropagator{})
 	otel.SetTextMapPropagator(textMapPropagator)
 	otel.SetTracerProvider(tracerProvider)
 	traceOptions := &experimental.TraceOptions{

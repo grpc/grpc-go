@@ -17,7 +17,6 @@
 package opentelemetry
 
 import (
-	"context"
 	"sync/atomic"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -27,15 +26,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// statsHandler holds common functionality for both client and server stats
-// handler.
-type statsHandler struct{}
-
 // populateSpan populates span information based on stats passed in, representing
 // invariants of the RPC lifecycle. It ends the span, triggering its export.
 // This function handles attempt spans on the client-side and call spans on the
 // server-side.
-func (h *statsHandler) populateSpan(_ context.Context, rs stats.RPCStats, ai *attemptInfo) {
+func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 	if ai == nil || ai.traceSpan == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.
@@ -62,14 +57,16 @@ func (h *statsHandler) populateSpan(_ context.Context, rs stats.RPCStats, ai *at
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting
 		// from one for sent messages and one for received messages."
-		mi := atomic.AddUint32(&ai.countRecvMsg, 1)
+		mi := ai.countRecvMsg + 1
+		ai.countRecvMsg = ai.countRecvMsg + 1
 		span.AddEvent("Inbound compressed message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(mi)),
 			attribute.Int64("message-size", int64(rs.Length)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
 	case *stats.OutPayload:
-		mi := atomic.AddUint32(&ai.countSentMsg, 1)
+		mi := ai.countSentMsg + 1
+		ai.countSentMsg = ai.countSentMsg + 1
 		span.AddEvent("Outbound compressed message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(mi)),
 			attribute.Int64("message-size", int64(rs.Length)),

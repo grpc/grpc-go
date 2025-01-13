@@ -36,7 +36,6 @@ import (
 )
 
 type clientStatsHandler struct {
-	statsHandler
 	estats.MetricsRecorder
 	options       Options
 	clientMetrics clientMetrics
@@ -140,7 +139,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 
 // perCallTracesAndMetrics records per call trace spans and metrics.
 func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts *trace.Span) {
-	if h.options.isTracingEnabled() && ts != nil {
+	if h.options.isTracingEnabled() {
 		s := status.Convert(err)
 		if s.Code() == grpccodes.OK {
 			(*ts).SetStatus(otelcodes.Ok, s.Message())
@@ -209,7 +208,7 @@ func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		h.processRPCEvent(ctx, rs, ri.ai)
 	}
 	if h.options.isTracingEnabled() {
-		h.populateSpan(ctx, rs, ri.ai)
+		populateSpan(rs, ri.ai)
 	}
 }
 
