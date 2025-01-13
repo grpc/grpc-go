@@ -46,8 +46,7 @@ import (
 const testCredsBuilderName = "test_dialer_creds"
 
 // testCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates an insecure credential with a
-// custom Dialer that specifies how to dial the xDS server.
+// package `xds/bootstrap`.
 type testCredsBuilder struct {
 	dialerCalled     atomic.Bool
 	tagRPCCalled     atomic.Bool
