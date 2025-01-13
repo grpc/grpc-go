@@ -254,6 +254,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
+	<-sc1.ConnectCh
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
@@ -292,6 +293,9 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 
 	t.Log("Turn down 1, use 2.")
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	<-sc1.ConnectCh
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
 		ConnectionError:   errors.New("test error"),

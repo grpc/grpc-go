@@ -618,7 +618,6 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// Record a connection attempt when exiting CONNECTING.
 	if newState.ConnectivityState == connectivity.TransientFailure {
 		sd.connectionFailedInFirstPass = true
-		sd.lastErr = newState.ConnectionError
 		connectionAttemptsFailedMetric.Record(b.metricsRecorder, 1, b.target)
 	}
 
@@ -703,6 +702,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 				})
 			}
 		case connectivity.TransientFailure:
+			sd.lastErr = newState.ConnectionError
 			sd.effectiveState = connectivity.TransientFailure
 			// Since we're re-using common SubConns while handling resolver
 			// updates, we could receive an out of turn TRANSIENT_FAILURE from
@@ -728,6 +728,7 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	switch newState.ConnectivityState {
 	case connectivity.TransientFailure:
 		b.numTF = (b.numTF + 1) % b.subConns.Len()
+		sd.lastErr = newState.ConnectionError
 		if b.numTF%b.subConns.Len() == 0 {
 			b.updateBalancerState(balancer.State{
 				ConnectivityState: connectivity.TransientFailure,

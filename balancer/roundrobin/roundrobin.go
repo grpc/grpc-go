@@ -59,8 +59,8 @@ func (bb builder) Name() string {
 
 func (bb builder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	bal := &rrBalancer{
-		cc:    cc,
-		child: endpointsharding.NewBalancer(cc, opts),
+		cc:       cc,
+		Balancer: endpointsharding.NewBalancer(cc, opts),
 	}
 	bal.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[%p] ", bal))
 	bal.logger.Infof("Created")
@@ -68,25 +68,9 @@ func (bb builder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) bala
 }
 
 type rrBalancer struct {
+	balancer.Balancer
 	cc     balancer.ClientConn
-	child  balancer.Balancer
 	logger *internalgrpclog.PrefixLogger
-}
-
-func (b *rrBalancer) Close() {
-	b.child.Close()
-}
-
-func (b *rrBalancer) ExitIdle() {
-	// Should always be ok, as child is endpoint sharding.
-	if ei, ok := b.child.(balancer.ExitIdler); ok {
-		ei.ExitIdle()
-	}
-}
-
-func (b *rrBalancer) ResolverError(err error) {
-	// Will cause inline picker update from endpoint sharding.
-	b.child.ResolverError(err)
 }
 
 func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -94,9 +78,5 @@ func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	// checks and outlier detection, if configured.
 	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
 	ccs.BalancerConfig = endpointShardingLBConfig
-	return b.child.UpdateClientConnState(ccs)
-}
-
-func (b *rrBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
+	return b.Balancer.UpdateClientConnState(ccs)
 }

@@ -827,6 +827,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	<-cc.NewPickerCh
+	<-sc3.ConnectCh
 	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p := <-cc.NewPickerCh
@@ -877,6 +878,9 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	}
 
 	// Move balancer 3 into transient failure.
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	<-sc3.ConnectCh
+	sc3.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	wantSubConnErr := errors.New("subConn connection error")
 	sc3.UpdateState(balancer.SubConnState{
 		ConnectivityState: connectivity.TransientFailure,
