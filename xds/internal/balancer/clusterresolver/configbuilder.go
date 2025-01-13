@@ -144,6 +144,9 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for i, e := range endpoints {
 		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
+		// Copy the nested address field as slice fields are shared by the
+		// iteration variable and the original slice.
+		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
 	}
 	return pName, &clusterimpl.LBConfig{
 		Cluster:         mechanism.Cluster,
