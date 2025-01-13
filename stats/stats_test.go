@@ -266,8 +266,12 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 		S: grpc.NewServer(opts...),
 	}
 	stubserver.StartTestService(te.t, stub)
-	defer stub.S.Stop()
 	te.srvAddr = lis.Addr().String()
+
+	te.t.Cleanup(func() {
+		stub.S.Stop()
+	})
+
 }
 
 func (te *test) clientConn() *grpc.ClientConn {
