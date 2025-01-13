@@ -95,7 +95,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	b := &leastRequestBalancer{
 		ClientConn:        cc,
 		endpointRPCCounts: resolver.NewEndpointMap(),
-		choiceCount:       2,
 	}
 	b.child = endpointsharding.NewBalancer(b, bOpts)
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[%p] ", b))
@@ -104,6 +103,9 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 }
 
 type leastRequestBalancer struct {
+	// Embeds balancer.Balancer because needs to intercept UpdateClientConnState
+	// to learn about choiceCount.
+	balancer.Balancer
 	// Embeds balancer.ClientConn because needs to intercept UpdateState calls
 	// from the child balancer.
 	balancer.ClientConn
@@ -112,25 +114,14 @@ type leastRequestBalancer struct {
 
 	mu          sync.Mutex
 	choiceCount uint32
-	// endpointRPCCounts holds  RPC counts to keep track for subsequent picker
+	// endpointRPCCounts holds RPC counts to keep track for subsequent picker
 	// updates.
 	endpointRPCCounts *resolver.EndpointMap // endpoint -> *atomic.Int32
 }
 
-// Close implements balancer.Balancer.
 func (lrb *leastRequestBalancer) Close() {
 	lrb.child.Close()
 	lrb.endpointRPCCounts = nil
-}
-
-// ResolverError implements balancer.Balancer.
-func (lrb *leastRequestBalancer) ResolverError(err error) {
-	lrb.child.ResolverError(err)
-}
-
-// UpdateSubConnState implements balancer.Balancer.
-func (lrb *leastRequestBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	lrb.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
 func (lrb *leastRequestBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -218,10 +209,9 @@ func (lrb *leastRequestBalancer) UpdateState(state balancer.State) {
 }
 
 type picker struct {
-	// choiceCount is the number of random SubConns to find the one with
-	// the least request.
-	choiceCount uint32
-	// Built out when receives list of ready child pickers.
+	// choiceCount is the number of random endpoints to sample for choosing the
+	// one with the least requests.
+	choiceCount    uint32
 	endpointStates []endpointState
 }
 
