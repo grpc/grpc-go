@@ -73,15 +73,18 @@ type ResourceWatcher interface {
 	// the resource received from the xDS server or an error indicating the
 	// reason why the resource could not be obtained.
 	//
-	// The ResourceData of the ResourceDataOrError needs to be type asserted to
-	// the appropriate type for the resource being watched. In case of error,
-	// the ResourceData is nil otherwise its not nil and error is nil but both
-	// will never be nil together.
+	// In the former case, this callback will be invoked with a non-nil
+	// ResourceData in ResourceDataOrError. The ResourceData of the
+	// ResourceDataOrError needs to be type asserted to the appropriate type
+	// for the resource being watched.
+	//
+	// In the latter case, this callback will be invoked with a non-nil error
+	// value in ResourceDataOrError.
 	//
 	// Watcher is expected to use the most recent value passed to
-	// OnResourceChanged(), regardless of whether that's a resource or an error
-	// i.e., if the watcher is given an error via OnResourceChanged(), that
-	// means it should stop using any previously delivered resource.
+	// OnResourceChanged(), regardless of whether that's a ResourceData or an
+	// error i.e., if the watcher is given an error via OnResourceChanged(),
+	// that means it should stop using any previously delivered resource.
 	//
 	// It is invoked under different error conditions including but not
 	// limited to the following:

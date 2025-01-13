@@ -155,19 +155,17 @@ func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError,
 		return
 	}
 	rw.mu.Unlock()
-	if rw.logger.V(2) {
-		if update.Err != nil {
-			rw.logger.Infof("RDS watch for resource %q received error: %#v", rw.routeName, update.Err)
-		} else {
-			u := update.Data.(*xdsresource.RouteConfigResourceData)
-			rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, u.Resource)
-		}
-	}
 	if update.Err != nil {
+		if rw.logger.V(2) {
+			rw.logger.Infof("RDS watch for resource %q received error: %v", rw.routeName, update.Err)
+		}
 		rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: update.Err})
 		return
 	}
 	u := update.Data.(*xdsresource.RouteConfigResourceData)
+	if rw.logger.V(2) {
+		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, u.Resource)
+	}
 	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &u.Resource})
 }
 

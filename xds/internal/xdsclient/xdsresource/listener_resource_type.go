@@ -156,8 +156,8 @@ type ListenerWatcher interface {
 	//      - connection failure (if resource is not cached)
 	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
 
-	// If resource is already cached, it is invoked under different error
-	// conditions including but not limited to the following:
+	// OnAmbientError is invoked if resource is already cached under different
+	// error conditions including but not limited to the following:
 	//      - resource validation error
 	//      - ADS stream failure
 	//      - connection failure

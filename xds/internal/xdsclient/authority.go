@@ -466,7 +466,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 			watcher := watcher
 			watcherCnt.Add(1)
 			funcsToSchedule = append(funcsToSchedule, func(context.Context) {
-				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource has been removed")}, done)
+				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q has been removed", name, rType.TypeName())}, done)
 			})
 		}
 	}
@@ -510,7 +510,7 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 	for watcher := range state.watchers {
 		watcher := watcher
 		a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-			watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %s does not exist", rType.TypeName())}, func() {})
+			watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName())}, func() {})
 		})
 	}
 }
@@ -667,7 +667,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// server does not have this resource, notify the new watcher.
 		if state.md.Status == xdsresource.ServiceStatusNotExist {
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %s does not exist", rType.TypeName())}, func() {})
+				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName())}, func() {})
 			})
 		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)

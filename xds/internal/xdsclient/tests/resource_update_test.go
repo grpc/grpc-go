@@ -161,7 +161,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: "xds: resource ListenerResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ListenerResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -177,7 +177,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
 			},
-			wantErr: "xds: resource ListenerResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ListenerResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -194,7 +194,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3routepb.RouteConfiguration{})},
 			},
-			wantErr: "xds: resource ListenerResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ListenerResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -418,7 +418,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: "xds: resource RouteConfigResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"RouteConfigResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
@@ -434,7 +434,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
 			},
-			wantErr: "xds: resource RouteConfigResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"RouteConfigResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
@@ -451,7 +451,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3clusterpb.Cluster{})},
 			},
-			wantErr: "xds: resource RouteConfigResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"RouteConfigResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
@@ -667,7 +667,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: "xds: resource ClusterResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ClusterResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
@@ -683,7 +683,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.cluster.v3.Cluster",
 				VersionInfo: "1",
 			},
-			wantErr: "xds: resource ClusterResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ClusterResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
@@ -700,7 +700,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3endpointpb.ClusterLoadAssignment{})},
 			},
-			wantErr: "xds: resource ClusterResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ClusterResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.cluster.v3.Cluster",
@@ -974,7 +974,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: "xds: resource EndpointsResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"EndpointsResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
@@ -990,7 +990,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 				VersionInfo: "1",
 			},
-			wantErr: "xds: resource EndpointsResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"EndpointsResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
@@ -1007,7 +1007,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3listenerpb.Listener{})},
 			},
-			wantErr: "xds: resource EndpointsResource does not exist",
+			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"EndpointsResource\" does not exist", resourceName1),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",

@@ -54,7 +54,6 @@ func (w *TestResourceWatcher) OnResourceChanged(update xdsresource.ResourceDataO
 		}
 		w.ErrorCh <- update.Err
 		return
-
 	}
 	select {
 	case <-w.UpdateCh:

@@ -424,19 +424,17 @@ func (lw *ldsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError,
 		}
 		return
 	}
-	if lw.logger.V(2) {
-		if update.Err != nil {
-			lw.logger.Infof("LDS watch for resource %q received error: %#v", lw.name, update.Err)
-		} else {
-			u := update.Data.(*xdsresource.ListenerResourceData)
-			lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, u.Resource)
-		}
-	}
 	if update.Err != nil {
+		if lw.logger.V(2) {
+			lw.logger.Infof("LDS watch for resource %q received error: %v", lw.name, update.Err)
+		}
 		lw.parent.onLDSResourceChangedError(update.Err)
 		return
 	}
 	u := update.Data.(*xdsresource.ListenerResourceData)
+	if update.Err != nil {
+		lw.logger.Infof("LDS watch for resource %q received update: %v", lw.name, u.Resource)
+	}
 	lw.parent.handleLDSUpdate(u.Resource)
 }
 
