@@ -445,7 +445,7 @@ func startFakeHandshakerService(t *testing.T, wait *sync.WaitGroup) (stop func()
 	return func() { s.Stop() }, listener.Addr().String()
 }
 
-func startServer(t *testing.T, handshakerServiceAddress string, wait *sync.WaitGroup) (stop func(), address string) {
+func startServer(t *testing.T, handshakerServiceAddress string, _ *sync.WaitGroup) (stop func(), address string) {
 	listener, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("LocalTCPListener() failed: %v", err)
