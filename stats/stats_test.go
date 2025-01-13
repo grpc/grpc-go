@@ -263,14 +263,30 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.SendHeader(testHeaderMetadata); err != nil {
+				return status.Errorf(status.Code(err), "%v.SendHeader(%v) = %v, want %v", stream, testHeaderMetadata, err, nil)
+			}
+			stream.SetTrailer(testTrailerMetadata)
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					return stream.SendAndClose(&testpb.StreamingInputCallResponse{AggregatedPayloadSize: 0})
+				}
+				if err != nil {
+					return err
+				}
+
+				if id := payloadToID(in.Payload); id == errorID {
+					return fmt.Errorf("got error id: %v", id)
+				}
+			}
+		},
 		S: grpc.NewServer(opts...),
 	}
 	stubserver.StartTestService(te.t, stub)
+	defer stub.S.Stop()
 	te.srvAddr = lis.Addr().String()
-
-	te.t.Cleanup(func() {
-		stub.S.Stop()
-	})
 
 }
 
