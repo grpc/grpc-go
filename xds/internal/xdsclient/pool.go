@@ -21,28 +21,45 @@ package xdsclient
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 var (
-	// DefaultPool is the default pool for xDS clients. It is created at the
-	// init time by reading bootstrap configuration from env vars.
+	// DefaultPool is the default pool for xDS clients. It is created at init
+	// time by reading bootstrap configuration from env vars.
 	DefaultPool *Pool
 )
 
-// Pool represents pool of xDS clients who share the same bootstrap
+// Pool represents a pool of xDS clients that share the same bootstrap
 // configuration.
-//
-// Note that mu should ideally only have to guard clients. But here, we need
-// it to guard config as well since SetFallbackBootstrapConfig writes to
-// config.
 type Pool struct {
+	// Note that mu should ideally only have to guard clients. But here, we need
+	// it to guard config as well since SetFallbackBootstrapConfig writes to
+	// config.
 	mu      sync.Mutex
 	clients map[string]*clientRefCounted
 	config  *bootstrap.Config
+}
+
+// OptionsForTesting contains options to configure xDS client creation for
+// testing purposes only.
+type OptionsForTesting struct {
+	// Name is a unique name for this xDS client.
+	Name string
+
+	// WatchExpiryTimeout is the timeout for xDS resource watch expiry. If
+	// unspecified, uses the default value used in non-test code.
+	WatchExpiryTimeout time.Duration
+
+	// StreamBackoffAfterFailure is the backoff function used to determine the
+	// backoff duration after stream failures.
+	// If unspecified, uses the default value used in non-test code.
+	StreamBackoffAfterFailure func(int) time.Duration
 }
 
 // NewPool creates a new xDS client pool with the given bootstrap contents.
@@ -110,11 +127,74 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 	return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 
-// SetFallbackBootstrapConfig to specify a bootstrap configuration to use a
-// fallback when the bootstrap env vars are not specified.
+// SetFallbackBootstrapConfig is used to specify a bootstrap configuration
+// that will be used as a fallback when the bootstrap environment variables
+// are not defined.
 func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.config = config
+}
+
+// DumpResources returns the status and contents of all xDS resources. It uses
+// xDS clients from the current pool.
+func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	resp := &v3statuspb.ClientStatusResponse{}
+	for key, client := range DefaultPool.clients {
+		cfg := client.dumpResources()
+		cfg.ClientScope = key
+		resp.Config = append(resp.Config, cfg)
+	}
+	return resp
+}
+
+func (p *Pool) clientRefCountedClose(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	client, ok := p.clients[name]
+	if !ok {
+		logger.Errorf("Attempt to close a non-existent xDS client with name %s", name)
+		return
+	}
+	if client.decrRef() != 0 {
+		return
+	}
+	client.clientImpl.close()
+	xdsClientImplCloseHook(name)
+	delete(p.clients, name)
+
+}
+
+// newRefCounted creates a new reference counted xDS client implementation for
+// name, if one does not exist already. If an xDS client for the given name
+// exists, it gets a reference to it and returns it.
+func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.config == nil {
+		return nil, nil, fmt.Errorf("bootstrap configuration not set in the pool")
+	}
+
+	if c := p.clients[name]; c != nil {
+		c.incrRef()
+		return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	}
+
+	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff)
+	if err != nil {
+		return nil, nil, err
+	}
+	c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
+	client := &clientRefCounted{clientImpl: c, refCount: 1}
+	p.clients[name] = client
+	xdsClientImplCreateHook(name)
+
+	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
+	return client, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }

@@ -158,7 +158,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// Create an xDS client for use by the cluster_resolver LB policy.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -297,7 +297,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Create an xDS client for use by the cluster_resolver LB policy.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -465,7 +465,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Create an xDS client for use by the cluster_resolver LB policy.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -542,7 +542,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// Create an xDS client for use by the cluster_resolver LB policy.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -945,7 +945,7 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	// Create an xDS client for use by the cluster_resolver LB policy.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -1021,7 +1021,7 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	// Create an xDS client for use by the cluster_resolver LB policy.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -1097,7 +1097,7 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -1274,7 +1274,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 			}
 			pool := xdsclient.NewPool(config)
 

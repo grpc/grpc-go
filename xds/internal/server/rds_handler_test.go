@@ -114,7 +114,7 @@ func xdsSetupForTests(t *testing.T) (*e2e.ManagementServer, string, chan []strin
 
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsC, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{

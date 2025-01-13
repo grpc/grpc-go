@@ -285,7 +285,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			config, err := bootstrap.NewConfigForTesting(bc)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -565,7 +565,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			config, err := bootstrap.NewConfigForTesting(bc)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -806,7 +806,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			config, err := bootstrap.NewConfigForTesting(bc)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -1159,7 +1159,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 			config, err := bootstrap.NewConfigForTesting(bc)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{

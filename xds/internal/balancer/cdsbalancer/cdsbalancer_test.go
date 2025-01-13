@@ -243,7 +243,7 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -370,7 +370,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{

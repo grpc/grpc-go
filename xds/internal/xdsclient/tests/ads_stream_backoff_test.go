@@ -49,7 +49,7 @@ func createXDSClientWithBackoff(t *testing.T, bootstrapContents []byte, streamBa
 
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{

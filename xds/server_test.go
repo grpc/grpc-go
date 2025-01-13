@@ -474,9 +474,9 @@ func (s) TestServeSuccess(t *testing.T) {
 // TestNewServer_ClientCreationFailure tests the case where the xDS client
 // creation fails and verifies that the call to NewGRPCServer() fails.
 func (s) TestNewServer_ClientCreationFailure(t *testing.T) {
-	origXDSClientPool := xDSClientPool
-	xDSClientPool = xdsclient.NewPool(nil)
-	defer func() { xDSClientPool = origXDSClientPool }()
+	origXDSClientPool := xdsClientPool
+	xdsClientPool = xdsclient.NewPool(nil)
+	defer func() { xdsClientPool = origXDSClientPool }()
 
 	if _, err := NewGRPCServer(); err == nil {
 		t.Fatal("NewGRPCServer() succeeded when expected to fail")

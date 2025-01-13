@@ -60,9 +60,8 @@ type ServingModeChangeArgs struct {
 	Err error
 }
 
-// BootstrapContentsForTesting returns a grpc.ServerOption with a new pool set
-// with the provided bootstrap configuration. It allows users to inject a
-// bootstrap configuration to be used by only this server, instead of the
+// BootstrapContentsForTesting returns a grpc.ServerOption which allows users
+// to inject a bootstrap configuration used by only this server, instead of the
 // global configuration from the environment variables.
 //
 // # Testing Only
@@ -79,7 +78,7 @@ func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 	if err != nil {
 		return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = nil }}
 	}
-	return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = xdsclient.NewPool(config) }}
+	return ClientPoolForTesting(xdsclient.NewPool(config))
 }
 
 // ClientPoolForTesting returns a grpc.ServerOption with the pool for xds

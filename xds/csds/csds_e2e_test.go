@@ -223,7 +223,7 @@ func (s) TestCSDS(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	// Create two xDS clients, with different names. These should end up
@@ -423,7 +423,7 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 

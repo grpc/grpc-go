@@ -228,7 +228,7 @@ func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID stri
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh

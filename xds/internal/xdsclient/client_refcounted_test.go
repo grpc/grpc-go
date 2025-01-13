@@ -39,7 +39,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
 	config, err := bootstrap.NewConfigForTesting(contents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", contents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 	}
 	pool := NewPool(config)
 
@@ -134,7 +134,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
 	config, err := bootstrap.NewConfigForTesting(contents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", contents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 	}
 	pool := NewPool(config)
 

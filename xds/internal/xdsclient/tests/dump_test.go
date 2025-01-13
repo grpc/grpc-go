@@ -138,7 +138,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
@@ -409,7 +409,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	}
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 

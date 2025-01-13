@@ -148,7 +148,7 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{

@@ -91,7 +91,7 @@ func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, "node-id", "dummy-management-server")
 	config, err := bootstrap.NewConfigForTesting(contents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", contents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
@@ -191,7 +191,7 @@ func (s) TestResolverResourceName(t *testing.T) {
 			}
 			config, err := bootstrap.NewConfigForTesting(contents)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", contents, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 			}
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
@@ -234,7 +234,7 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	config, err := bootstrap.NewConfigForTesting(contents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", contents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
@@ -270,7 +270,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
 		config, err := bootstrap.NewConfigForTesting(bc)
 		if err != nil {
-			t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+			t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 		}
 		pool := xdsclient.NewPool(config)
 		if err != nil {
@@ -354,7 +354,7 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 // returned by the resolver matches expectations, and that the config selector
 // returned by the resolver picks clusters based on the route configuration
 // received from the management server.
-func TestResolverGoodServiceUpdate(t *testing.T) {
+func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 	for _, tt := range []struct {
 		name              string
 		routeConfig       *v3routepb.RouteConfiguration

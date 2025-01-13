@@ -211,7 +211,7 @@ func (s) TestCDSWatch(t *testing.T) {
 			// Create an xDS client with the above bootstrap contents.
 			config, err := bootstrap.NewConfigForTesting(bc)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
 			pool := xdsclient.NewPool(config)
 			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -364,7 +364,7 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			// Create an xDS client with the above bootstrap contents.
 			config, err := bootstrap.NewConfigForTesting(bc)
 			if err != nil {
-				t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
 			pool := xdsclient.NewPool(config)
 			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -470,7 +470,7 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -570,7 +570,7 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -646,7 +646,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -689,7 +689,7 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -775,7 +775,7 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -890,7 +890,7 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -962,7 +962,7 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -1057,7 +1057,7 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	// Create an xDS client with the above bootstrap contents.
 	config, err := bootstrap.NewConfigForTesting(bc)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bc, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{

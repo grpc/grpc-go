@@ -154,12 +154,10 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	// Create an xDS client with the above bootstrap configuration and a short
-	// idle channel expiry timeout. This ensures that connections to lower
-	// priority servers get closed quickly, for the test to verify.
+	// Create an xDS client with the above bootstrap configuration.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -355,12 +353,10 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	// Create an xDS client with the above bootstrap configuration and a short
-	// idle channel expiry timeout. This ensures that connections to lower
-	// priority servers get closed quickly, for the test to verify.
+	// Create an xDS client with the above bootstrap configuration.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
@@ -546,12 +542,10 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	// Create an xDS client with the above bootstrap configuration and a short
-	// idle channel expiry timeout. This ensures that connections to lower
-	// priority servers get closed quickly, for the test to verify.
+	// Create an xDS client with the above bootstrap configuration.
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
 	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{

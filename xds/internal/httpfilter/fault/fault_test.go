@@ -90,7 +90,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
-		t.Fatalf("Failed to create an bootstrap config from contents: %v, %v", bootstrapContents, err)
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
