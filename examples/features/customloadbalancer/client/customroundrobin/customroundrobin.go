@@ -28,19 +28,13 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/serviceconfig"
 )
 
-var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
+var gracefulSwitchPickFirst = endpointsharding.PickFirstConfig
 
 func init() {
 	balancer.Register(customRoundRobinBuilder{})
-	var err error
-	gracefulSwitchPickFirst, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
-	if err != nil {
-		logger.Fatal(err)
-	}
 }
 
 const customRRName = "custom_round_robin"
@@ -78,8 +72,6 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts)
 	return crr
 }
-
-var logger = grpclog.Component("example")
 
 type customRoundRobin struct {
 	// All state and operations on this balancer are either initialized at build
