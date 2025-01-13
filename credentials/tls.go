@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 )
 
-const alpnFailureHelpMessage = "If you upgraded from a grpc-go version earlier than 1.67, your TLS connections may stopped working due to ALPN enforcement. For more details, see: https://github.com/grpc/grpc-go/issues/434. To disable ALPN enforcement, set the environment variable GRPC_ENFORCE_ALPN_ENABLED to false, or use the experimental credentials available under experimental/credentials. Note that these workarounds are intended for migration purposes and will be removed in future grpc-go versions."
+const alpnFailureHelpMessage = "If you upgraded from a grpc-go version earlier than 1.67, your TLS connections may have stopped working due to ALPN enforcement. For more details, see: https://github.com/grpc/grpc-go/issues/434"
 
 var logger = grpclog.Component("credentials")
 
