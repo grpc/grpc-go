@@ -306,6 +306,7 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	}
 	stubserver.StartTestService(te.t, stub)
 	defer stub.S.Stop()
+
 	te.srvAddr = lis.Addr().String()
 	te.srvIP = lis.Addr().(*net.TCPAddr).IP
 	te.srvPort = lis.Addr().(*net.TCPAddr).Port
