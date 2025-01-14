@@ -94,7 +94,7 @@ type dialOptions struct {
 	idleTimeout                 time.Duration
 	defaultScheme               string
 	maxCallAttempts             int
-	targetResolutionEnabled     bool // Specifies if target hostnames should be resolved when proxying is enabled.
+	enableLocalDNSResolution    bool // Specifies if target hostnames should be resolved when proxying is enabled.
 	useProxy                    bool // Specifies if a server should be connected via proxy.
 }
 
@@ -383,17 +383,18 @@ func WithNoProxy() DialOption {
 	})
 }
 
-// WithTargetResolutionEnabled returns a DialOption which enables target
-// resolution on client when a proxy is used along with the the "dns" scheme.
-// This is ignored if WithNoProxy is used.
+// WithLocalDNSResolution forces local DNS name resolution even when a proxy is
+// specified in the environment.  By default, the server name is provided
+// directly to the proxy as part of the CONNECT handshake. This is ignored if
+// WithNoProxy is used.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func WithTargetResolutionEnabled() DialOption {
+func WithLocalDNSResolution() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.targetResolutionEnabled = true
+		o.enableLocalDNSResolution = true
 	})
 }
 
@@ -686,12 +687,12 @@ func defaultDialOptions() dialOptions {
 			UserAgent:       grpcUA,
 			BufferPool:      mem.DefaultBufferPool(),
 		},
-		bs:                      internalbackoff.DefaultExponential,
-		idleTimeout:             30 * time.Minute,
-		defaultScheme:           "dns",
-		maxCallAttempts:         defaultMaxCallAttempts,
-		useProxy:                true,
-		targetResolutionEnabled: false,
+		bs:                       internalbackoff.DefaultExponential,
+		idleTimeout:              30 * time.Minute,
+		defaultScheme:            "dns",
+		maxCallAttempts:          defaultMaxCallAttempts,
+		useProxy:                 true,
+		enableLocalDNSResolution: false,
 	}
 }
 

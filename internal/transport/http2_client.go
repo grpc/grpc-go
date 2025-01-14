@@ -156,10 +156,6 @@ type http2Client struct {
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, grpcUA string) (net.Conn, error) {
 	address := addr.Addr
-
-	if opts, present := proxyattributes.Get(addr); present {
-		return proxyDial(ctx, addr, grpcUA, opts)
-	}
 	networkType, ok := networktype.Get(addr)
 	if fn != nil {
 		// Special handling for unix scheme with custom dialer. Back in the day,
@@ -181,6 +177,9 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	}
 	if !ok {
 		networkType, address = parseDialTarget(address)
+	}
+	if opts, present := proxyattributes.Get(addr); present {
+		return proxyDial(ctx, addr, grpcUA, opts)
 	}
 	return internal.NetDialerWithTCPKeepalive().DialContext(ctx, networkType, address)
 }
