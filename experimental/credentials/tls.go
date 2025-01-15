@@ -19,10 +19,11 @@
 // Package credentials provides experimental TLS credentials.
 // The use of this package is strongly discouraged. These credentials exist
 // solely to maintain compatibility for users interacting with clients that
-// violate the HTTP/2 specification. This package is slated for removal in
-// upcoming grpc-go releases. Users must not rely on this package directly.
-// Instead, they should either vendor a specific version of gRPC or copy the
-// relevant credentials into their own codebase if absolutely necessary.
+// violate the HTTP/2 specification by not advertising support for "h2" in ALPN.
+// This package is slated for removal in upcoming grpc-go releases. Users must
+// not rely on this package directly. Instead, they should either vendor a
+// specific version of gRPC or copy the relevant credentials into their own
+// codebase if absolutely necessary.
 package credentials
 
 import (
