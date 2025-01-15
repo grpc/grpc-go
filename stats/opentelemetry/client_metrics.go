@@ -88,7 +88,7 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 
 	startTime := time.Now()
-	var span *trace.Span
+	var span trace.Span
 	if h.options.isTracingEnabled() {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
@@ -126,7 +126,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	}
 
 	startTime := time.Now()
-	var span *trace.Span
+	var span trace.Span
 	if h.options.isTracingEnabled() {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
@@ -138,15 +138,15 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 }
 
 // perCallTracesAndMetrics records per call trace spans and metrics.
-func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts *trace.Span) {
+func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
 	if h.options.isTracingEnabled() {
 		s := status.Convert(err)
 		if s.Code() == grpccodes.OK {
-			(*ts).SetStatus(otelcodes.Ok, s.Message())
+			ts.SetStatus(otelcodes.Ok, s.Message())
 		} else {
-			(*ts).SetStatus(otelcodes.Error, s.Message())
+			ts.SetStatus(otelcodes.Error, s.Message())
 		}
-		(*ts).End()
+		ts.End()
 	}
 	if h.options.isMetricsEnabled() {
 		callLatency := float64(time.Since(startTime)) / float64(time.Second)
@@ -188,7 +188,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	ai := &attemptInfo{
 		startTime: time.Now(),
 		xdsLabels: labels.TelemetryLabels,
-		method:    info.FullMethodName,
+		method:    removeLeadingSlash(info.FullMethodName),
 	}
 	if h.options.isTracingEnabled() {
 		ctx, ai = h.traceTagRPC(ctx, info, ai)

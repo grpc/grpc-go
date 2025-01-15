@@ -34,7 +34,7 @@ import (
 // If TextMapPropagator is not provided in the trace options, it returns context
 // as is.
 func (h *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo, ai *attemptInfo) (context.Context, *attemptInfo) {
-	mn := strings.Replace(removeLeadingSlash(ai.method), "/", ".", -1)
+	mn := strings.Replace(ai.method, "/", ".", -1)
 	var span trace.Span
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
