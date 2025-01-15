@@ -42,16 +42,11 @@ const Name = "least_request_experimental"
 var (
 	// randuint32 is a global to stub out in tests.
 	randuint32               = rand.Uint32
-	endpointShardingLBConfig serviceconfig.LoadBalancingConfig
+	endpointShardingLBConfig = endpointsharding.PickFirstConfig
 	logger                   = grpclog.Component("least-request")
 )
 
 func init() {
-	var err error
-	endpointShardingLBConfig, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
-	if err != nil {
-		logger.Fatal(err)
-	}
 	balancer.Register(bb{})
 }
 
