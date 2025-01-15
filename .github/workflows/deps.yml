@@ -34,7 +34,8 @@ jobs:
           AFTER="$(mktemp -d)"
 
           scripts/gen-deps.sh "${AFTER}"
-          git checkout origin/master
+          # GITHUB_BASE_REF is set when the job is triggered by a PR.
+          git checkout origin/"${GITHUB_BASE_REF:-master}"
           scripts/gen-deps.sh "${BEFORE}"
 
           echo "Comparing dependencies..."
