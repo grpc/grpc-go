@@ -107,7 +107,6 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 // HTTPProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns the proxy's listener and helper channels.
 func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
-	t.Helper()
 	pLis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
