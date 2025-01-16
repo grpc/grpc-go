@@ -237,6 +237,7 @@ func main() {
 	}
 	grpcServer := grpc.NewServer(opts...)
 	pb.RegisterRouteGuideServer(grpcServer, newServer())
+	log.Printf("Server is running on localhost:%d", *port)
 	grpcServer.Serve(lis)
 }
 
