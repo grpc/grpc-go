@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/proxyserver"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -53,7 +54,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	pServer := testutils.HTTPProxy(t, reqCheck, true)
+	pServer := proxyserver.HTTPProxy(t, reqCheck, true)
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))

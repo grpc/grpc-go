@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2023 gRPC authors.
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
  *
  */
 
-package testutils
+// Package proxyserver provides a implementation of proxy server for tests.
+// The proxy server only supports one connection at a time.
+package proxyserver
 
 import (
 	"bufio"
@@ -27,6 +29,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/testutils"
 )
 
 // ProxyServer represents a test proxy server.
@@ -98,10 +102,10 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 }
 
 // HTTPProxy initializes and starts a proxy server, registers a cleanup to
-// stop it, and returns the proxy's listener and helper channels.
+// stop it, and returns a ProxyServer.
 func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
 	t.Helper()
-	pLis, err := LocalTCPListener()
+	pLis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -109,6 +113,7 @@ func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bo
 	p := &ProxyServer{
 		lis:       pLis,
 		onRequest: reqCheck,
+		Addr:      fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())),
 	}
 
 	// Start the proxy server.
@@ -123,8 +128,7 @@ func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bo
 			p.handleRequest(t, in, waitForServerHello)
 		}
 	}()
-	t.Logf("Started proxy at: %q", pLis.Addr())
+	t.Logf("Started proxy at: %q", pLis.Addr().String())
 	t.Cleanup(p.stop)
-	p.Addr = fmt.Sprintf("localhost:%d", ParsePort(t, pLis.Addr().String()))
 	return p
 }
