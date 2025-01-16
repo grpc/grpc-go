@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2023 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
  *
  */
 
-// Package proxy contains utilities for proxy server and HTTP CONNECT e2e tests.
-package proxy
+package testutils
 
 import (
 	"bufio"
@@ -28,8 +27,6 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/internal/testutils"
 )
 
 // ProxyServer represents a test proxy server.
@@ -104,7 +101,7 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 // stop it, and returns the proxy's listener and helper channels.
 func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
 	t.Helper()
-	pLis, err := testutils.LocalTCPListener()
+	pLis, err := LocalTCPListener()
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
@@ -128,6 +125,6 @@ func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bo
 	}()
 	t.Logf("Started proxy at: %q", pLis.Addr())
 	t.Cleanup(p.stop)
-	p.Addr = fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String()))
+	p.Addr = fmt.Sprintf("localhost:%d", ParsePort(t, pLis.Addr().String()))
 	return p
 }
