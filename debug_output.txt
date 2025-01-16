@@ -1,0 +1,36 @@
+channelz/internal/protoconv/sockopt_nonlinux.go:2://go:build !linux
+channelz/service/service_sktopt_test.go:1://go:build linux && (386 || amd64)
+credentials/alts/alts_test.go:1://go:build linux || windows
+credentials/alts/utils_test.go:1://go:build linux || windows
+doc.go:19://go:generate ./scripts/regenerate.sh
+examples/features/unix_abstract/client/main.go:1://go:build linux
+examples/features/unix_abstract/server/main.go:1://go:build linux
+internal/channelz/syscall_nonlinux.go:1://go:build !linux
+internal/channelz/syscall_test.go:1://go:build linux
+internal/googlecloud/manufacturer.go:1://go:build !(linux || windows)
+internal/leakcheck/leakcheck_enabled.go:1://go:build checkbuffers
+internal/profiling/goid_modified.go:1://go:build grpcgoid
+internal/profiling/goid_regular.go:1://go:build !grpcgoid
+internal/syscall/syscall_nonlinux.go:1://go:build !linux
+internal/tcp_keepalive_others.go:1://go:build !unix && !windows
+internal/tcp_keepalive_unix.go:1://go:build unix
+internal/tcp_keepalive_windows.go:1://go:build windows
+internal/transport/proxy_test.go:1://go:build !race
+internal/transport/transport_test.go:1185:	//Client should be able to create another stream and send data on it.
+internal/xds/rbac/rbac_engine.go:293:	//TODO(gtcooke94) check if we need to log before creating the event
+interop/soak_tests.go:159:	//Handle results.
+test/authority_test.go:1://go:build linux
+test/healthcheck_test.go:241:	//+------------------------------+-------------------------------------------+
+test/healthcheck_test.go:242:	//| Health Check Returned Status | Expected addrConn Connectivity Transition |
+test/healthcheck_test.go:243:	//+------------------------------+-------------------------------------------+
+test/healthcheck_test.go:244:	//| NOT_SERVING                  | ->TRANSIENT FAILURE                       |
+test/healthcheck_test.go:245:	//| SERVING                      | ->READY                                   |
+test/healthcheck_test.go:246:	//| SERVICE_UNKNOWN              | ->TRANSIENT FAILURE                       |
+test/healthcheck_test.go:247:	//| SERVING                      | ->READY                                   |
+test/healthcheck_test.go:248:	//| UNKNOWN                      | ->TRANSIENT FAILURE                       |
+test/healthcheck_test.go:249:	//+------------------------------+-------------------------------------------+
+test/race_test.go:1://go:build race
+test/tools/tools.go:1://go:build tools
+trace_notrace.go:1://go:build grpcnotrace
+trace_withtrace.go:1://go:build !grpcnotrace
+xds/internal/httpfilter/fault/fault_test.go:1://go:build !386

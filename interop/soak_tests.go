@@ -156,7 +156,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	// Wait for all goroutines to complete.
 	wg.Wait()
 
-	//Handle results.
+	// Handle results.
 	totalIterations := 0
 	totalFailures := 0
 	latencies := stats.NewHistogram(stats.HistogramOptions{
