@@ -54,7 +54,8 @@ func clientRefCountedClose(name string) {
 	clientsMu.Unlock()
 
 	// This attempts to close the transport to the management server and could
-	// take a while to complete. So, call it without holding the lock.
+	// theoretically call back into the xdsclient package again and deadlock.
+	// Hence, this needs to be called without holding the lock.
 	client.clientImpl.close()
 	xdsClientImplCloseHook(name)
 
