@@ -19,6 +19,7 @@ package cdsbalancer
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -63,6 +64,9 @@ var (
 		return builder.Build(cc, opts), nil
 	}
 	buildProvider = buildProviderFunc
+
+	// systemRootCertsFunc is used for mocking the system cert pool for tests.
+	systemRootCertsFunc = x509.SystemCertPool
 )
 
 func init() {
@@ -208,9 +212,15 @@ func (b *cdsBalancer) handleSecurityConfig(config *xdsresource.SecurityConfig) e
 
 	// A root provider is required whether we are using TLS or mTLS.
 	cpc := b.xdsClient.BootstrapConfig().CertProviderConfigs()
-	rootProvider, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
-	if err != nil {
-		return err
+	var rootProvider certprovider.Provider
+	if config.UseSystemRootCerts {
+		rootProvider = systemRootCertsProvider{}
+	} else {
+		rp, err := buildProvider(cpc, config.RootInstanceName, config.RootCertName, false, true)
+		if err != nil {
+			return err
+		}
+		rootProvider = rp
 	}
 
 	// The identity provider is only present when using mTLS.
@@ -668,4 +678,18 @@ func (ccw *ccWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Addr
 		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHIPtr)
 	}
 	ccw.ClientConn.UpdateAddresses(sc, newAddrs)
+}
+
+type systemRootCertsProvider struct{}
+
+func (systemRootCertsProvider) Close() {}
+
+func (systemRootCertsProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
+	rootCAs, err := systemRootCertsFunc()
+	if err != nil {
+		return nil, err
+	}
+	return &certprovider.KeyMaterial{
+		Roots: rootCAs,
+	}, nil
 }

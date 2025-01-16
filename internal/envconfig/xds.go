@@ -59,4 +59,9 @@ var (
 	// TODO: https://github.com/grpc/grpc-go/issues/7866 - Control this using
 	// an env variable when all LB policies handle endpoints.
 	XDSDualstackEndpointsEnabled = false
+
+	// XDSSystemRootCertsEnabled when xDs clients can use use the system's
+	// default root certificates for TLS certificate validation. Form more
+	// details, see gRFC A82.
+	XDSSystemRootCertsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_SYSTEM_ROOT_CERTS", false)
 )

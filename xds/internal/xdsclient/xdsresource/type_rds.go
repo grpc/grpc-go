@@ -213,6 +213,9 @@ type SecurityConfig struct {
 	// client to present a certificate. Set to true when performing mTLS. Used
 	// only on the server-side.
 	RequireClientCert bool
+	// UseSystemRootCerts indicates the use of system root certificates by the
+	// client to validate the server certificate.
+	UseSystemRootCerts bool
 }
 
 // Equal returns true if sc is equal to other.
@@ -233,6 +236,8 @@ func (sc *SecurityConfig) Equal(other *SecurityConfig) bool {
 	case sc.IdentityCertName != other.IdentityCertName:
 		return false
 	case sc.RequireClientCert != other.RequireClientCert:
+		return false
+	case sc.UseSystemRootCerts != other.UseSystemRootCerts:
 		return false
 	default:
 		if len(sc.SubjectAltNameMatchers) != len(other.SubjectAltNameMatchers) {
