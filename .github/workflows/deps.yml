@@ -30,7 +30,7 @@ jobs:
       # Run the commands to generate dependencies before and after and compare.
       - name: Compare dependencies
         run: |
-          set -eux
+          set -eu
           TEMP_DIR="$(mktemp -d)"
           # GITHUB_BASE_REF is set when the job is triggered by a PR.
           TARGET_REF="${GITHUB_BASE_REF:-master}"
@@ -45,5 +45,5 @@ jobs:
           echo "Comparing dependencies..."
           cd "${TEMP_DIR}"
           # Run grep in a sub-shell since bash does not support ! in the middle of a pipe
-          diff -u0 -r "./before" "./after" | bash -c '! grep -v "@@"'
+          diff -u0 -r "before" "after" | bash -c '! grep -v "@@"'
           echo "No changes detected."
