@@ -30,14 +30,20 @@ jobs:
       # Run the commands to generate dependencies before and after and compare.
       - name: Compare dependencies
         run: |
-          BEFORE="$(mktemp -d)"
-          AFTER="$(mktemp -d)"
+          set -eu
+          TEMP_DIR="$(mktemp -d)"
+          # GITHUB_BASE_REF is set when the job is triggered by a PR.
+          TARGET_REF="${GITHUB_BASE_REF:-master}"
 
-          scripts/gen-deps.sh "${AFTER}"
-          git checkout origin/master
-          scripts/gen-deps.sh "${BEFORE}"
+          mkdir "${TEMP_DIR}/after"
+          scripts/gen-deps.sh "${TEMP_DIR}/after"
+
+          git checkout "origin/${TARGET_REF}"
+          mkdir "${TEMP_DIR}/before"
+          scripts/gen-deps.sh "${TEMP_DIR}/before"
 
           echo "Comparing dependencies..."
+          cd "${TEMP_DIR}"
           # Run grep in a sub-shell since bash does not support ! in the middle of a pipe
-          diff -u0 -r "${BEFORE}" "${AFTER}" | bash -c '! grep -v "@@"'
+          diff -u0 -r "before" "after" | bash -c '! grep -v "@@"'
           echo "No changes detected."
