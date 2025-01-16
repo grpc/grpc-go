@@ -36,11 +36,9 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -82,14 +80,10 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigForTesting(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	var resolverBuilder resolver.Builder
+	var err error
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
 		if err != nil {

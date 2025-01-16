@@ -76,6 +76,7 @@ type ServingModeChangeArgs struct {
 func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
 	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
 	if err != nil {
+		logger.Warningf("Failed to parse bootstrap contents %s for server options: %v", string(bootstrapContents), err)
 		return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = nil }}
 	}
 	return ClientPoolForTesting(xdsclient.NewPool(config))

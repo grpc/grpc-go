@@ -151,6 +151,20 @@ var (
 	// other features, including the CSDS service.
 	NewXDSResolverWithConfigForTesting any // func([]byte) (resolver.Builder, error)
 
+	// NewXDSResolverWithPoolForTesting creates a new xDS resolver builder
+	// using the provided xDS pool instead of creating a new one using the
+	// bootstrap configuration specified by the supported environment variables.
+	// The resolver.Builder is meant to be used in conjunction with the
+	// grpc.WithResolvers DialOption. The resolver.Builder does not take
+	// ownership of the provided xDS client and it is the responsibility of the
+	// caller to close the client when no longer required.
+	//
+	// Testing Only
+	//
+	// This function should ONLY be used for testing and may not work with some
+	// other features, including the CSDS service.
+	NewXDSResolverWithPoolForTesting any // func(*xdsclient.Pool) (resolver.Builder, error)
+
 	// NewXDSResolverWithClientForTesting creates a new xDS resolver builder
 	// using the provided xDS client instead of creating a new one using the
 	// bootstrap configuration specified by the supported environment variables.

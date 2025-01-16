@@ -45,9 +45,9 @@ import (
 const Scheme = "xds"
 
 // newBuilderWithConfigForTesting creates a new xds resolver builder using a
-// specific xds bootstrap config, so tests can use multiple xds clients in
-// different ClientConns at the same time. It creates the new xds client in
-// the default pool with provided config.
+// specific xds bootstrap config, so tests can use multiple xDS clients in
+// different ClientConns at the same time. The builder creates a new pool with
+// the provided config and a new xDS client in that pool.
 func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
 		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
@@ -56,6 +56,17 @@ func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 				return nil, nil, err
 			}
 			pool := xdsclient.NewPool(config)
+			return pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name})
+		},
+	}, nil
+}
+
+// newBuilderWithPoolForTesting creates a new xds resolver builder using the
+// specific xds client pool, so that tests have complete control over the exact
+// specific xds client pool being used.
+func newBuilderWithPoolForTesting(pool *xdsclient.Pool) (resolver.Builder, error) {
+	return &xdsResolverBuilder{
+		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
 			return pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name})
 		},
 	}, nil
@@ -77,11 +88,11 @@ func newBuilderWithClientForTesting(client xdsclient.XDSClient) (resolver.Builde
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 	internal.NewXDSResolverWithConfigForTesting = newBuilderWithConfigForTesting
+	internal.NewXDSResolverWithPoolForTesting = newBuilderWithPoolForTesting
 	internal.NewXDSResolverWithClientForTesting = newBuilderWithClientForTesting
 
 	rinternal.NewWRR = wrr.NewRandom
-	rinternal.NewXDSClient = func(name string) (xdsclient.XDSClient, func(), error) { return xdsclient.DefaultPool.NewClient(name) }
-
+	rinternal.NewXDSClient = xdsclient.DefaultPool.NewClient
 }
 
 type xdsResolverBuilder struct {
@@ -90,7 +101,7 @@ type xdsResolverBuilder struct {
 
 // Build helps implement the resolver.Builder interface.
 //
-// The xds bootstrap process is performed (and a new xds client is built) every
+// The xds bootstrap process is performed (and a new xDS client is built) every
 // time an xds resolver is built.
 func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (_ resolver.Resolver, retErr error) {
 	r := &xdsResolver{

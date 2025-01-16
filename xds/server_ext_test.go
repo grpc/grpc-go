@@ -290,7 +290,7 @@ func (s) TestMultipleServers_DifferentBootstrapConfigurations(t *testing.T) {
 	stubserver.StartTestService(t, stub2)
 	defer stub2.S.Stop()
 
-	// Update both management servers with listener resources pointing to the
+	// Update the management server with the listener resources pointing to the
 	// corresponding gRPC servers.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

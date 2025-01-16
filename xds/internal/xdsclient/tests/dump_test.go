@@ -140,6 +140,10 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
+	// We use the default xDS client pool here because
+	// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
+	// resources currently known to the default xDS client within gRPC which is
+	// implicitly managed within the xdsclient.DefaultPool.
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create two xDS clients with the above bootstrap contents.
@@ -411,6 +415,10 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
+	// We use the default xDS client pool here because
+	// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
+	// resources currently known to the default xDS client within gRPC which is
+	// implicitly managed within the xdsclient.DefaultPool.
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create two xDS clients with the above bootstrap contents.

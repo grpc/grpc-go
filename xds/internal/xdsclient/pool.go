@@ -62,7 +62,13 @@ type OptionsForTesting struct {
 	StreamBackoffAfterFailure func(int) time.Duration
 }
 
-// NewPool creates a new xDS client pool with the given bootstrap contents.
+// NewPool creates a new xDS client pool with the given bootstrap config.
+//
+// If a nil bootstrap config is passed and SetFallbackBootstrapConfig is not
+// called before a call to NewClient, the latter will fail. i.e. if there is an
+// attempt to create an xDS client from the pool without specifying bootstrap
+// configuration (either at pool creation time or by setting the fallback
+// bootstrap configuration), xDS client creation will fail.
 func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
 		clients: make(map[string]*clientRefCounted),
@@ -94,7 +100,7 @@ func (p *Pool) NewClient(name string) (XDSClient, func(), error) {
 // This function should ONLY be used for testing purposes.
 func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 	if opts.Name == "" {
-		return nil, nil, fmt.Errorf("opts.Name field must be non-empty")
+		return nil, nil, fmt.Errorf("xds: opts.Name field must be non-empty")
 	}
 	if opts.WatchExpiryTimeout == 0 {
 		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
@@ -106,7 +112,8 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 }
 
 // GetClientForTesting returns an xDS client created earlier using the given
-// name from the pool.
+// name from the pool. If the client with the given name doesn't already exist,
+// it returns an error.
 //
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
@@ -121,7 +128,7 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 
 	c, ok := p.clients[name]
 	if !ok {
-		return nil, nil, fmt.Errorf("xDS client with name %q not found", name)
+		return nil, nil, fmt.Errorf("xds:: xDS client with name %q not found", name)
 	}
 	c.incrRef()
 	return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
@@ -137,8 +144,7 @@ func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.config = config
 }
 
-// DumpResources returns the status and contents of all xDS resources. It uses
-// xDS clients from the current pool.
+// DumpResources returns the status and contents of all xDS resources.
 func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -178,7 +184,7 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 	defer p.mu.Unlock()
 
 	if p.config == nil {
-		return nil, nil, fmt.Errorf("bootstrap configuration not set in the pool")
+		return nil, nil, fmt.Errorf("xds: bootstrap configuration not set in the pool")
 	}
 
 	if c := p.clients[name]; c != nil {

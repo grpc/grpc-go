@@ -225,11 +225,13 @@ func (s) TestCSDS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
+	// We use the default xDS client pool here because the CSDS service reports
+	// on the state of the default xDS client which is implicitly managed
+	// within the xdsclient.DefaultPool.
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
-
 	xdsClient1, xdsClose1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: xdsClient1Name,
 	})
@@ -425,6 +427,9 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
+	// We use the default xDS client pool here because the CSDS service reports
+	// on the state of the default xDS client which is implicitly managed
+	// within the xdsclient.DefaultPool.
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 
 	// Create two xDS clients, with different names. These should end up

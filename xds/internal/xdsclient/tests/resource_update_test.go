@@ -287,6 +287,10 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
+			// We use the default xDS client pool here because
+			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
+			// resources currently known to the default xDS client within gRPC which is
+			// implicitly managed within the xdsclient.DefaultPool.
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
@@ -567,6 +571,10 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
+			// We use the default xDS client pool here because
+			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
+			// resources currently known to the default xDS client within gRPC which is
+			// implicitly managed within the xdsclient.DefaultPool.
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
@@ -808,6 +816,10 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
+			// We use the default xDS client pool here because
+			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
+			// resources currently known to the default xDS client within gRPC which is
+			// implicitly managed within the xdsclient.DefaultPool.
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
@@ -1161,6 +1173,10 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
+			// We use the default xDS client pool here because
+			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
+			// resources currently known to the default xDS client within gRPC which is
+			// implicitly managed within the xdsclient.DefaultPool.
 			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
