@@ -34,23 +34,16 @@ jobs:
           TEMP_DIR="$(mktemp -d)"
           # GITHUB_BASE_REF is set when the job is triggered by a PR.
           TARGET_REF="${GITHUB_BASE_REF:-master}"
-          # GITHUB_HEAD_REF is set when the job is triggered by a PR.
-          SOURCE_REF="${GITHUB_HEAD_REF:-source}"
 
-          # Replace special characters in the branch names.
-          BEFORE_DIR_NAME="$(echo "${SOURCE_REF}" | sed 's/[^a-zA-Z0-9._-]/_/g')"
-          AFTER_DIR_NAME="$(echo "${TARGET_REF}" | sed 's/[^a-zA-Z0-9._-]/_/g')"
-
-
-          mkdir "${TEMP_DIR}/${AFTER_DIR_NAME}"
-          scripts/gen-deps.sh "${TEMP_DIR}/${AFTER_DIR_NAME}"
+          mkdir "${TEMP_DIR}/after"
+          scripts/gen-deps.sh "${TEMP_DIR}/after"
 
           git checkout "origin/${TARGET_REF}"
-          mkdir "${TEMP_DIR}/${BEFORE_DIR_NAME}"
-          scripts/gen-deps.sh "${TEMP_DIR}/${BEFORE_DIR_NAME}"
+          mkdir "${TEMP_DIR}/before"
+          scripts/gen-deps.sh "${TEMP_DIR}/before"
 
           echo "Comparing dependencies..."
           cd "${TEMP_DIR}"
           # Run grep in a sub-shell since bash does not support ! in the middle of a pipe
-          diff -u0 -r "./${BEFORE_DIR_NAME}" "./${AFTER_DIR_NAME}" | bash -c '! grep -v "@@"'
+          diff -u0 -r "./before" "./after" | bash -c '! grep -v "@@"'
           echo "No changes detected."
