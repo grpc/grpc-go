@@ -160,20 +160,25 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 
 func (p *Pool) clientRefCountedClose(name string) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	client, ok := p.clients[name]
 	if !ok {
 		logger.Errorf("Attempt to close a non-existent xDS client with name %s", name)
+		p.mu.Unlock()
 		return
 	}
 	if client.decrRef() != 0 {
+		p.mu.Unlock()
 		return
 	}
+	delete(p.clients, name)
+	p.mu.Unlock()
+
+	// This attempts to close the transport to the management server and could
+	// theoretically call back into the xdsclient package again and deadlock.
+	// Hence, this needs to be called without holding the lock.
 	client.clientImpl.close()
 	xdsClientImplCloseHook(name)
-	delete(p.clients, name)
-
 }
 
 // newRefCounted creates a new reference counted xDS client implementation for
