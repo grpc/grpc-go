@@ -85,15 +85,10 @@ var (
 )
 
 // endpointSharding which specifies pick first children.
-var endpointShardingLBConfig serviceconfig.LoadBalancingConfig
+var endpointShardingLBConfig = endpointsharding.PickFirstConfig
 
 func init() {
 	balancer.Register(bb{})
-	var err error
-	endpointShardingLBConfig, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
-	if err != nil {
-		logger.Fatal(err)
-	}
 }
 
 type bb struct{}

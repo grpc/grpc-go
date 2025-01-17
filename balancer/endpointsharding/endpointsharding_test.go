@@ -50,16 +50,11 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
+var gracefulSwitchPickFirst = endpointsharding.PickFirstConfig
 
 var logger = grpclog.Component("endpoint-sharding-test")
 
 func init() {
-	var err error
-	gracefulSwitchPickFirst, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
-	if err != nil {
-		logger.Fatal(err)
-	}
 	balancer.Register(fakePetioleBuilder{})
 }
 

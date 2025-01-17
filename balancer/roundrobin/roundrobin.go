@@ -22,7 +22,6 @@
 package roundrobin
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
@@ -30,7 +29,6 @@ import (
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 // Name is the name of round_robin balancer.
@@ -38,16 +36,9 @@ const Name = "round_robin"
 
 var (
 	logger = grpclog.Component("roundrobin")
-	// endpointSharding which specifies pick first children.
-	endpointShardingLBConfig serviceconfig.LoadBalancingConfig
 )
 
 func init() {
-	var err error
-	endpointShardingLBConfig, err = endpointsharding.ParseConfig(json.RawMessage(endpointsharding.PickFirstConfig))
-	if err != nil {
-		logger.Fatal(err)
-	}
 	balancer.Register(builder{})
 }
 
@@ -77,6 +68,6 @@ func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	// Enable the health listener in pickfirst children for client side health
 	// checks and outlier detection, if configured.
 	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-	ccs.BalancerConfig = endpointShardingLBConfig
+	ccs.BalancerConfig = endpointsharding.PickFirstConfig
 	return b.Balancer.UpdateClientConnState(ccs)
 }
