@@ -34,6 +34,7 @@ const proxyOptionsKey = keyType("grpc.resolver.delegatingresolver.proxyOptions")
 // handshake.
 type Options struct {
 	User        url.Userinfo
+	UserSet     bool
 	ConnectAddr string
 }
 

@@ -206,12 +206,15 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	}
 	var addresses []resolver.Address
 	var user url.Userinfo
+	var userSet bool
 	if r.proxyURL.User != nil {
 		user = *r.proxyURL.User
+		userSet = true
 	}
 	for _, targetAddr := range (*r.targetResolverState).Addresses {
 		addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 			User:        user,
+			UserSet:     userSet,
 			ConnectAddr: targetAddr.Addr,
 		}))
 	}
@@ -230,6 +233,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 			for _, targetAddr := range endpt.Addresses {
 				addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 					User:        user,
+					UserSet:     userSet,
 					ConnectAddr: targetAddr.Addr,
 				}))
 			}

@@ -16,8 +16,9 @@
  *
  */
 
-// Package proxyserver provides a implementation of proxy server for tests.
-// The proxy server only supports one connection at a time.
+// Package proxyserver provides an implementation of a proxy server for testing purposes.
+// The server supports only a single incoming connection at a time and is not concurrent.
+// It handles only HTTP CONNECT requests; other HTTP methods are not supported.
 package proxyserver
 
 import (
