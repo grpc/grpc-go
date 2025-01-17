@@ -34,6 +34,10 @@ type unimplEmbeddedByValue struct {
 }
 
 func TestUnimplementedEmbedding(t *testing.T) {
+	// TODO: b/390589881. Remove this skip once all the google3 usages are
+	// fixed to embed `UnimplementedTestServiceServer`.
+	t.Skip("Skip until next grpc release includes panic during registration.")
+
 	// Embedded by value, this should succeed.
 	testgrpc.RegisterTestServiceServer(grpc.NewServer(), &unimplEmbeddedByValue{})
 	defer func() {
