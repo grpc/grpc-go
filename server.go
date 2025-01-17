@@ -1360,7 +1360,13 @@ func (s *Server) processUnaryRPC(ctx context.Context, stream *transport.ServerSt
 		}
 		return err
 	}
-	dataFree := grpcsync.OnceFunc(d.Free)
+	freed := false
+	dataFree := func() {
+		if !freed {
+			d.Free()
+			freed = true
+		}
+	}
 	defer dataFree()
 	df := func(v any) error {
 		defer dataFree()
