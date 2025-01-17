@@ -876,33 +876,19 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompress
 			return nil, status.Errorf(codes.Internal, "grpc: failed to read decompressed data: %v", err)
 		}
 
-		if doesReceiveMessageOverflow(out.Len(), maxReceiveMessageSize, dcReader) {
+		if out.Len() == maxReceiveMessageSize && !atEOF(dcReader) {
 			out.Free()
 			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", maxReceiveMessageSize)
 		}
 		return out, nil
 	}
-	return d, nil
+	return nil, status.Errorf(codes.Internal, "grpc: no decompressor available for compressed payload")
 }
 
-// doesReceiveMessageOverflow checks if the number of bytes read from the stream
-// exceed the maximum receive message size allowed by the receiver. If the `readBytes`
-// is greater than or equal to `maxReceiveMessageSize`, the function attempts to read
-// one more byte from the `dcReader` to detect if there's an overflow.
-//
-// If additional data is read, or an error other than `io.EOF` is encountered, the function
-// returns `true` to indicate that the message size has exceeded the permissible limit.
-// Otherwise, it returns `false` indicating no overflow.
-func doesReceiveMessageOverflow(readBytes, maxReceiveMessageSize int, dcReader io.Reader) bool {
-	if readBytes < maxReceiveMessageSize {
-		return false
-	}
-
-	b := make([]byte, 1)
-	if n, err := dcReader.Read(b); n > 0 || err != io.EOF {
-		return true
-	}
-	return false
+// atEOF reads data from r and returns true if zero bytes could be read and r.Read returns EOF.
+func atEOF(dcReader io.Reader) bool {
+	n, err := dcReader.Read(make([]byte, 1))
+	return n == 0 && err == io.EOF
 }
 
 type recvCompressor interface {
