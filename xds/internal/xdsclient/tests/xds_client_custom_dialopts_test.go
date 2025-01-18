@@ -16,14 +16,13 @@
  *
  */
 
-package xds_test
+package xdsclient_test
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
-	"sync/atomic"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -36,90 +35,48 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	internalbootstrap "google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/xds/bootstrap"
-
+        xci "google.golang.org/grpc/xds/internal/xdsclient/internal"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-const testCredsBuilderName = "test_dialer_creds"
-
-// testCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap`.
-type testCredsBuilder struct {
-	dialerCalled     atomic.Bool
-	tagRPCCalled     atomic.Bool
-	handleRPCCalled  atomic.Bool
-	tagConnCalled    atomic.Bool
-	handleConnCalled atomic.Bool
+// mockDialOption is a no-op grpc.DialOption with a name.
+type mockDialOption struct {
+	grpc.EmptyDialOption
+	name string
 }
 
+const testCredsBuilderName = "test_dialer_creds"
+
+var testDialOptNames = []string{"opt1", "opt2", "opt3"}
+
+// testCredsBundle implements `credentials.Bundle`  and `extraDialOptions`.
+type testCredsBundle struct {
+	credentials.Bundle
+	dialOpts []grpc.DialOption
+}
+
+func (t *testCredsBundle) DialOptions() []grpc.DialOption {
+	return t.dialOpts
+}
+
+type testCredsBuilder struct{}
+
 func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
-	cfg := &struct {
-		MgmtServerAddress string `json:"mgmt_server_address"`
-	}{}
-	if err := json.Unmarshal(config, &cfg); err != nil {
-		return nil, func() {}, fmt.Errorf("failed to unmarshal config: %v", err)
-	}
-	return &testCredsBundle{insecure.NewBundle(), &t.dialerCalled, cfg.MgmtServerAddress, &noopStatsHandler{
-		tagRPCCalled:     &t.tagRPCCalled,
-		handleRPCCalled:  &t.handleRPCCalled,
-		tagConnCalled:    &t.tagConnCalled,
-		handleConnCalled: &t.handleConnCalled,
-	}}, func() {}, nil
+	return &testCredsBundle{insecure.NewBundle(),
+		func() []grpc.DialOption {
+			var opts []grpc.DialOption
+			for _, name := range testDialOptNames {
+				opts = append(opts, &mockDialOption{name: name})
+			}
+			return opts
+		}(),
+	}, func() {}, nil
 }
 
 func (t *testCredsBuilder) Name() string {
 	return testCredsBuilderName
-}
-
-// noopStatsHandler implements `stats.Handler`. It's a no-op mock handler.
-type noopStatsHandler struct {
-	tagRPCCalled     *atomic.Bool
-	handleRPCCalled  *atomic.Bool
-	tagConnCalled    *atomic.Bool
-	handleConnCalled *atomic.Bool
-}
-
-func (h *noopStatsHandler) TagRPC(ctx context.Context, i *stats.RPCTagInfo) context.Context {
-	h.tagRPCCalled.Store(true)
-	return ctx
-}
-
-func (h *noopStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
-	h.handleRPCCalled.Store(true)
-}
-
-func (h *noopStatsHandler) TagConn(ctx context.Context, i *stats.ConnTagInfo) context.Context {
-	h.tagConnCalled.Store(true)
-	return ctx
-}
-
-func (h *noopStatsHandler) HandleConn(ctx context.Context, s stats.ConnStats) {
-	h.handleConnCalled.Store(true)
-}
-
-// testCredsBundle implements `credentials.Bundle` and `bootstrap.extraDialOptions`.
-// It encapsulates an insecure credential and returns dial options with a mock dialer and a mock
-// stats handler.
-type testCredsBundle struct {
-	credentials.Bundle
-	dialerCalled      *atomic.Bool
-	mgmtServerAddress string
-	noopStatsHandler  *noopStatsHandler
-}
-
-func (t *testCredsBundle) DialOptions() []grpc.DialOption {
-	return []grpc.DialOption{
-		// Custom dialer that creates a pass-through connection (no-op) to the xDS management server.
-		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			t.dialerCalled.Store(true)
-			return net.Dial("tcp", t.mgmtServerAddress)
-		}),
-		// Custom no-op RPC stats handler.
-		grpc.WithStatsHandler(t.noopStatsHandler),
-	}
 }
 
 func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
@@ -174,6 +131,25 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Intercept a grpc.NewClient call from the xds client to validate DialOptions.
+	xci.GRPCNewClient = func(target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error) {
+		actual := map[string]int{}
+		for _, opt := range opts {
+			if mo, ok := opt.(*mockDialOption); ok {
+				actual[mo.name]++
+			}
+		}
+		expected := map[string]int{}
+		for _, name := range testDialOptNames {
+			expected[name]++
+		}
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("grpc.NewClient() was called with unexpected DialOptions: got %v, want %v", actual, expected)
+		}
+		return grpc.NewClient(target, opts...)
+	}
+	defer func() { xci.GRPCNewClient = grpc.NewClient }()
+
 	// Create a ClientConn and make a successful RPC. The insecure transport credentials passed into
 	// the gRPC.NewClient is the credentials for the data plane communication with the test backend.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
@@ -188,24 +164,4 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 
 	// Close the connection to ensure stats handler calls are made.
 	cc.Close()
-
-	// Verify that the mock dialer was called.
-	if !credsBuilder.dialerCalled.Load() {
-		t.Errorf("credsBuilder.dialerCalled was not called")
-	}
-
-	// Verify that the mock stats handler methods were called.
-	// We expect all to be called at least once.
-	if !credsBuilder.tagRPCCalled.Load() {
-		t.Errorf("credsBuilder.tagRPCCalled was not called")
-	}
-	if !credsBuilder.handleRPCCalled.Load() {
-		t.Errorf("credsBuilder.handleRPCCalled was not called")
-	}
-	if !credsBuilder.tagConnCalled.Load() {
-		t.Errorf("credsBuilder.tagConnCalled was not called")
-	}
-	if !credsBuilder.handleConnCalled.Load() {
-		t.Errorf("credsBuilder.handleConnCalled was not called")
-	}
 }
