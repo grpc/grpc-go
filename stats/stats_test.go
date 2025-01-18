@@ -1565,12 +1565,13 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 	}
 	// Allow time for events to propagate
 	time.Sleep(50 * time.Millisecond)
+
 	// Verify sequence
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	// To verify if the Unary RPC server stats events are logged in the
 	// correct order.
-	wantedUnarySequence := []string{
+	wantUnarySequence := []string{
 		"ConnStats",
 		"InHeader",
 		"Begin",
@@ -1580,7 +1581,7 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 		"OutTrailer",
 		"End",
 	}
-	verifyEventSequence(t, h.events, wantedUnarySequence)
+	verifyEventSequence(t, h.events, wantUnarySequence)
 }
 
 // TestServerStatsClientStreamEventSequence tests that the sequence of server-side
@@ -1595,14 +1596,13 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-
 	time.Sleep(50 * time.Millisecond)
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	// To verify if the Client Stream RPC server stats events are logged in the
 	// correct order.
-	wantedClientStreamSequence := []string{
+	wantClientStreamSequence := []string{
 		"ConnStats",
 		"InHeader",
 		"Begin",
@@ -1616,7 +1616,7 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 		"OutTrailer",
 		"End",
 	}
-	verifyEventSequence(t, h.events, wantedClientStreamSequence)
+	verifyEventSequence(t, h.events, wantClientStreamSequence)
 }
 
 // TestServerStatsClientStreamEventSequence tests that the sequence of server-side
@@ -1631,7 +1631,6 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-
 	time.Sleep(50 * time.Millisecond)
 
 	h.mu.Lock()
@@ -1639,7 +1638,7 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 
 	// To verify if the Server Stream RPC server stats events are logged in the
 	// correct order.
-	wantedServerStreamSequence := []string{
+	wantServerStreamSequence := []string{
 		"ConnStats",
 		"InHeader",
 		"Begin",
@@ -1653,18 +1652,15 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 		"OutTrailer",
 		"End",
 	}
-	verifyEventSequence(t, h.events, wantedServerStreamSequence)
+	verifyEventSequence(t, h.events, wantServerStreamSequence)
 }
 
 // verifyEventSequence verifies that a sequence of recorded events matches
 // the expected sequence.
 func verifyEventSequence(t *testing.T, got []string, want []string) {
 	t.Helper()
-	// Extract event types from `got` for comparison.
-	gotEventTypes := make([]string, len(got))
-	copy(gotEventTypes, got)
 
-	if !cmp.Equal(gotEventTypes, want) {
-		t.Errorf("Event sequence mismatch (-got +want):\n%s", cmp.Diff(gotEventTypes, want))
+	if !cmp.Equal(got, want) {
+		t.Errorf("Event sequence mismatch. Diff (-got +want):\n%s", cmp.Diff(got, want))
 	}
 }
