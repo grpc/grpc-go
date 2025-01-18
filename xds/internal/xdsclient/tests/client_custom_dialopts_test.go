@@ -38,7 +38,7 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/bootstrap"
-        xci "google.golang.org/grpc/xds/internal/xdsclient/internal"
+	xci "google.golang.org/grpc/xds/internal/xdsclient/internal"
 )
 
 // mockDialOption is a no-op grpc.DialOption with a name.
