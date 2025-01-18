@@ -1182,7 +1182,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	if err := cstream1.Write(nil, newBufferSlice(make([]byte, defaultWindowSize)), &WriteOptions{Last: true}); err != nil {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
-	//Client should be able to create another stream and send data on it.
+	// Client should be able to create another stream and send data on it.
 	cstream2, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 2nd stream. Err: %v", err)
