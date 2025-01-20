@@ -176,11 +176,11 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
-	// Set a initial resolver with a GRPCLB service config and a single address
+	// Set an initial resolver with a GRPCLB service config and a single address
 	// pointing to the grpclb server we created above. This will cause the
 	// channel to switch to the "grpclb" balancer, which returns a single
 	// backend address.
-	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
@@ -225,8 +225,8 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
-	// Set the initial resolver state to simulate the channel starting with the
-	// "pick_first" balancer.
+	// Set an empty initial resolver state. This should lead to the channel
+	// using the default LB policy which is pick_first.
 	r.InitialState(resolver.State{Addresses: addrs[1:]})
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
@@ -339,14 +339,14 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 
 	r := manual.NewBuilderWithScheme("whatever")
-	// Set a initial resolver which contains a bunch of stub server backends and a
+	// Set an initial resolver which contains a bunch of stub server backends and a
 	// grpclb server address. The latter should get the ClientConn to try and
 	// apply the grpclb policy. But since grpclb is not registered, it should
 	// fallback to the default LB policy which is pick_first. The ClientConn is
 	// also expected to filter out the grpclb address when sending the addresses
 	// list for pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address"}}
-	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}
 	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: grpclbAddr}))
 
@@ -367,7 +367,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	// grpclb address when sending the addresses list to round_robin.
 	r.UpdateState(resolver.State{
 		Addresses:     addrs,
-		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`{"loadBalancingPolicy": "round_robin"}`),
+		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(rrServiceConfig),
 	})
 	client := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs); err != nil {
@@ -396,15 +396,12 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 			return nil
 		},
 		Close: func(*stub.BalancerData) {
-			go func() {
-				subConn := <-scChan
-				subConn.Shutdown()
-			}()
+			(<-scChan).Shutdown()
 		},
 	})
 
 	r := manual.NewBuilderWithScheme("whatever")
-	// Set  a initial resolver specifying our stub balancer as the LB policy.
+	// Set an initial resolver specifying our stub balancer as the LB policy.
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(
 		fmt.Sprintf(`{"loadBalancingPolicy": "%v"}`, t.Name()),
 	)

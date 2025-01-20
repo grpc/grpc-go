@@ -37,6 +37,10 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+const (
+	defaultTestTimeout = 5 * time.Second
+)
+
 type s struct {
 	grpctest.Tester
 }
@@ -327,7 +331,7 @@ func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 			cc.Close()
 		}
 	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
