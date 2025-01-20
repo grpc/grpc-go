@@ -49,6 +49,7 @@ const (
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
 	pickFirstServiceConfig  = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 	grpclbServiceConfig     = `{"loadBalancingConfig": [{"grpclb":{}}]}`
+	grpclbConfig            = `{"loadBalancingPolicy": "grpclb"}`
 
 	// This is the number of stub backends set up at the start of each test. The
 	// first backend is used for the "grpclb" policy and the rest are used for
@@ -346,7 +347,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	// also expected to filter out the grpclb address when sending the addresses
 	// list for pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address"}}
-	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
+	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}
 	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: grpclbAddr}))
 
@@ -355,7 +356,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
+	cc.Connect()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
