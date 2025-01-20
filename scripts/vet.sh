@@ -49,7 +49,7 @@ git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Exampl
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
-git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|soak_tests\|testutils'
+git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
 
 # - Do not use "interface{}"; use "any" instead.
 git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerated'
