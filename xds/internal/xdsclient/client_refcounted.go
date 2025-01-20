@@ -40,19 +40,24 @@ var (
 
 func clientRefCountedClose(name string) {
 	clientsMu.Lock()
-	defer clientsMu.Unlock()
-
 	client, ok := clients[name]
 	if !ok {
 		logger.Errorf("Attempt to close a non-existent xDS client with name %s", name)
+		clientsMu.Unlock()
 		return
 	}
 	if client.decrRef() != 0 {
+		clientsMu.Unlock()
 		return
 	}
+	delete(clients, name)
+	clientsMu.Unlock()
+
+	// This attempts to close the transport to the management server and could
+	// theoretically call back into the xdsclient package again and deadlock.
+	// Hence, this needs to be called without holding the lock.
 	client.clientImpl.close()
 	xdsClientImplCloseHook(name)
-	delete(clients, name)
 
 }
 
