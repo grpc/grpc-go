@@ -110,18 +110,16 @@ func (s) TestInsecureCreds(t *testing.T) {
 					return &testpb.Empty{}, nil
 				},
 			}
+			sOpts := []grpc.ServerOption{}
 			if test.serverInsecureCreds {
 				ss.S = grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
 			} else {
-				ss.S = grpc.NewServer()
+				ss.S = grpc.NewServer(sOpts...)
 			}
 			stubserver.StartTestService(t, ss)
 			defer ss.S.Stop()
 			addr := lis.Addr().String()
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			if test.clientInsecureCreds {
-				opts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			}
 			cc, err := grpc.NewClient(addr, opts...)
 			if err != nil {
 				t.Fatalf("grpc.NewClient(%q) failed: %v", addr, err)
