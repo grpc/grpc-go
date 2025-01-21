@@ -99,7 +99,7 @@ func setupDNS(t *testing.T) (chan resolver.Target, *manual.Resolver) {
 // management server has not responded to all requested EDS resources, and also
 // that RPCs are routed to the highest priority cluster once all requested EDS
 // resources have been sent by the management server.
-func TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
+func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
