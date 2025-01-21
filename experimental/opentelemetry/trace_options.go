@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// This package is EXPERIMENTAL and may be move to stats/opentelemetry package
-// in a later release.
+// Package opentelemetry is EXPERIMENTAL and may be moved to stats/opentelemetry
+// package in a later release.
 package opentelemetry
 
 import (

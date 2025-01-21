@@ -66,7 +66,23 @@ func (o *Options) isMetricsEnabled() bool {
 }
 
 func (o *Options) isTracingEnabled() bool {
-	return o.TraceOptions.TextMapPropagator != nil
+	// Check if both TextMapPropagator and TracerProvider are set.
+	isTextMapPropagatorSet := o.TraceOptions.TextMapPropagator != nil
+	isTracerProviderSet := o.TraceOptions.TracerProvider != nil
+
+	// Return false if neither option is set.
+	if !isTextMapPropagatorSet && !isTracerProviderSet {
+		return false
+	}
+
+	// Log an error if one of the options is missing.
+	if isTextMapPropagatorSet != isTracerProviderSet {
+		logger.Error("traceOptions are not set properly: one of TextMapPropagator or TracerProvider is missing.")
+		return false
+	}
+
+	// Both options are set, return true.
+	return true
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
