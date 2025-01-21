@@ -356,7 +356,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {

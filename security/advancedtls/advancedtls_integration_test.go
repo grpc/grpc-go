@@ -39,6 +39,8 @@ import (
 )
 
 const (
+	// Default timeout for normal connections.
+	defaultTestTimeout = 5 * time.Second
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 200 * time.Millisecond
 	// Time we wait for the credential updates to be picked up.
@@ -84,9 +86,7 @@ func (greeterServer) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.Hello
 
 // TODO(ZhenLian): remove shouldFail to the function signature to provider
 // tests.
-func callAndVerify(msg string, client pb.GreeterClient, shouldFail bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+func callAndVerify(ctx context.Context, msg string, client pb.GreeterClient, shouldFail bool) error {
 	_, err := client.SayHello(ctx, &pb.HelloRequest{Name: msg})
 	if want, got := shouldFail == true, err != nil; got != want {
 		return fmt.Errorf("want and got mismatch,  want shouldFail=%v, got fail=%v, rpc error: %v", want, got, err)
@@ -96,7 +96,7 @@ func callAndVerify(msg string, client pb.GreeterClient, shouldFail bool) error {
 
 // TODO(ZhenLian): remove shouldFail and add ...DialOption to the function
 // signature to provider cleaner tests.
-func callAndVerifyWithClientConn(address string, msg string, creds credentials.TransportCredentials, shouldFail bool) (*grpc.ClientConn, pb.GreeterClient, error) {
+func callAndVerifyWithClientConn(ctx context.Context, address string, msg string, creds credentials.TransportCredentials, shouldFail bool) (*grpc.ClientConn, pb.GreeterClient, error) {
 	var conn *grpc.ClientConn
 	var err error
 	// If we want the test to fail, we establish a non-blocking connection to
@@ -113,7 +113,7 @@ func callAndVerifyWithClientConn(address string, msg string, creds credentials.T
 		}
 	}
 	greetClient := pb.NewGreeterClient(conn)
-	err = callAndVerify(msg, greetClient, shouldFail)
+	err = callAndVerify(ctx, msg, greetClient, shouldFail)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -379,7 +379,9 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			// ------------------------Scenario 1------------------------------------
 			// stage = 0, initial connection should succeed
-			conn, greetClient, err := callAndVerifyWithClientConn(addr, "rpc call 1", clientTLSCreds, false)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, greetClient, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -388,22 +390,25 @@ func (s) TestEnd2End(t *testing.T) {
 			stage.increase()
 			// ------------------------Scenario 2------------------------------------
 			// stage = 1, previous connection should still succeed
-			err = callAndVerify("rpc call 2", greetClient, false)
+			err = callAndVerify(ctx, "rpc call 2", greetClient, false)
 			if err != nil {
 				t.Fatal(err)
 			}
 			// ------------------------Scenario 3------------------------------------
 			// stage = 1, new connection should fail
-			conn2, _, err := callAndVerifyWithClientConn(addr, "rpc call 3", clientTLSCreds, true)
+			ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+			conn2, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 3", clientTLSCreds, true)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer conn2.Close()
+			// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
+			cancel2()
 			// ----------------------------------------------------------------------
 			stage.increase()
 			// ------------------------Scenario 4------------------------------------
 			// stage = 2,  new connection should succeed
-			conn3, _, err := callAndVerifyWithClientConn(addr, "rpc call 4", clientTLSCreds, false)
+			conn3, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 4", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -665,7 +670,9 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			}
 
 			// At initialization, the connection should be good.
-			conn, greetClient, err := callAndVerifyWithClientConn(addr, "rpc call 1", clientTLSCreds, false)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, greetClient, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -675,13 +682,13 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			test.certUpdateFunc()
 			time.Sleep(sleepInterval)
 			// The already-established connection should not be affected.
-			err = callAndVerify("rpc call 2", greetClient, false)
+			err = callAndVerify(ctx, "rpc call 2", greetClient, false)
 			if err != nil {
 				t.Fatal(err)
 			}
 			// New connections should still be good, because the Provider didn't pick
 			// up the changes due to key-cert mismatch.
-			conn2, _, err := callAndVerifyWithClientConn(addr, "rpc call 3", clientTLSCreds, false)
+			conn2, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 3", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -693,18 +700,21 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			// New connections should fail now, because the Provider picked the
 			// change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
 			// other side.
-			conn3, _, err := callAndVerifyWithClientConn(addr, "rpc call 4", clientTLSCreds, true)
+			ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+			conn3, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 4", clientTLSCreds, true)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer conn3.Close()
+			// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
+			cancel2()
 			// Make the trust cert change on the other side, and wait 1 second for
 			// the provider to pick up the change.
 			test.trustCertUpdateFunc()
 			time.Sleep(sleepInterval)
 			// New connections should be good, because the other side is using
 			// *_trust_cert_2.pem now.
-			conn4, _, err := callAndVerifyWithClientConn(addr, "rpc call 5", clientTLSCreds, false)
+			conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -787,7 +797,9 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			if test.expectError {
 				shouldFail = true
 			}
-			conn, _, err := callAndVerifyWithClientConn(addr, "rpc call 1", clientTLSCreds, shouldFail)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, shouldFail)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -927,7 +939,9 @@ func (s) TestTLSVersions(t *testing.T) {
 			if test.expectError {
 				shouldFail = true
 			}
-			conn, _, err := callAndVerifyWithClientConn(addr, "rpc call 1", clientTLSCreds, shouldFail)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			conn, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, shouldFail)
 			if err != nil {
 				t.Fatal(err)
 			}
