@@ -563,6 +563,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		t.Fatalf("Failed to update management server with initial resources: %v", err)
 	}
 
+	// Verify that a successful RPC can be made over a secure connection.
 	client := testgrpc.NewTestServiceClient(cc)
 	go func() {
 		_, _ = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
