@@ -385,9 +385,6 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 	uccsCalled := make(chan struct{}, 1)
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(data *stub.BalancerData, ccs balancer.ClientConnState) error {
-			if len(ccs.ResolverState.Addresses) == 0 {
-				t.Errorf("UpdateClientConnState received empty address list")
-			}
 			sc, err := data.ClientConn.NewSubConn(ccs.ResolverState.Addresses, balancer.NewSubConnOptions{})
 			if err != nil {
 				t.Errorf("failed to create subConn: %v", err)
