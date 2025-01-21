@@ -102,7 +102,6 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 		xdsClose()
 		t.Fatalf("Failed to create a client for server: %v", err)
 	}
-	cc.Connect()
 	return cc, func() {
 		xdsClose()
 		cc.Close()
@@ -391,9 +390,9 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 
 	// Create xDS client, configure cds_experimental LB policy with a manual
 	// resolver, and dial the test backends.
-	_, cleanup := setupAndDial(t, bootstrapContents)
+	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// The priority configuration generated should have Outlier Detection as a
 	// direct child due to Outlier Detection being turned on.
 	wantCfg := &priority.LBConfig{

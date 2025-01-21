@@ -160,7 +160,7 @@ func (s) TestAggregateCluster_WithTwoEDSClusters(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// Wait for both EDS resources to be requested.
 	func() {
 		for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
@@ -387,7 +387,7 @@ func (s) TestAggregateCluster_WithOneDNSCluster_ParseFailure(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// Ensure that the ClientConn moves to TransientFailure.
 	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
 		if !cc.WaitForStateChange(ctx, state) {
@@ -545,7 +545,7 @@ func (s) TestAggregateCluster_WithEDSAndDNS(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// Ensure that an EDS request is sent for the expected resource name.
 	select {
 	case <-ctx.Done():
@@ -887,7 +887,7 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// Ensure that the DNS resolver is started for the expected target.
 	select {
 	case <-ctx.Done():
@@ -960,7 +960,7 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// Ensure that the DNS resolver is started for the expected target.
 	select {
 	case <-ctx.Done():
