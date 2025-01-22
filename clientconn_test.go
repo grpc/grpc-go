@@ -765,7 +765,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		}
 		if ctx.Err() != nil {
 			// Timeout
-			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 20s", v)
+			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 10s", v)
 		}
 	}
 }
