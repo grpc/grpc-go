@@ -68,13 +68,10 @@ type ServerConfig struct {
 // Equal reports whether sc and other `ServerConfig` objects are considered
 // equal.
 func (sc *ServerConfig) Equal(other *ServerConfig) bool {
-	switch {
-	case sc == nil && other == nil:
+	if sc == nil && other == nil {
 		return true
-	case sc.ServerURI != other.ServerURI:
-		return false
 	}
-	return true
+	return sc.ServerURI != other.ServerURI
 }
 
 // String returns the string representation of the `ServerConfig`.
