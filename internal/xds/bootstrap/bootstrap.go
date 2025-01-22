@@ -289,7 +289,8 @@ type dialer interface {
 	Dialer(context.Context, string) (net.Conn, error)
 }
 
-// extraDialOptions captures custom dial options specified via the credentials bundle.
+// extraDialOptions captures custom dial options specified via the credentials
+// bundle.
 type extraDialOptions interface {
 	DialOptions() []grpc.DialOption
 }

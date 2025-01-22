@@ -22,9 +22,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -41,47 +41,46 @@ import (
 	xci "google.golang.org/grpc/xds/internal/xdsclient/internal"
 )
 
-// mockDialOption is a no-op grpc.DialOption with a name.
-type mockDialOption struct {
+// nopDialOption is a no-op grpc.DialOption with a name.
+type nopDialOption struct {
 	grpc.EmptyDialOption
 	name string
 }
 
-const testCredsBuilderName = "test_dialer_creds"
-
-var testDialOptNames = []string{"opt1", "opt2", "opt3"}
-
-// testCredsBundle implements `credentials.Bundle`  and `extraDialOptions`.
+// testCredsBundle implements `credentials.Bundle` and `extraDialOptions`.
 type testCredsBundle struct {
 	credentials.Bundle
-	dialOpts []grpc.DialOption
+	testDialOptNames []string
 }
 
 func (t *testCredsBundle) DialOptions() []grpc.DialOption {
-	return t.dialOpts
+	var opts []grpc.DialOption
+	for _, name := range t.testDialOptNames {
+		opts = append(opts, &nopDialOption{name: name})
+	}
+	return opts
 }
 
-type testCredsBuilder struct{}
+type testCredsBuilder struct{
+	testDialOptNames []string
+}
 
 func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
-	return &testCredsBundle{insecure.NewBundle(),
-		func() []grpc.DialOption {
-			var opts []grpc.DialOption
-			for _, name := range testDialOptNames {
-				opts = append(opts, &mockDialOption{name: name})
-			}
-			return opts
-		}(),
+	return &testCredsBundle{
+		Bundle: insecure.NewBundle(),
+		testDialOptNames: t.testDialOptNames,
 	}, func() {}, nil
 }
 
 func (t *testCredsBuilder) Name() string {
-	return testCredsBuilderName
+	return "test_dialer_creds"
 }
 
 func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 	// Create and register the credentials bundle builder.
-	credsBuilder := &testCredsBuilder{}
+	credsBuilder := &testCredsBuilder{
+		testDialOptNames: []string{"opt1", "opt2", "opt3"},
+	}
 	bootstrap.RegisterCredentials(credsBuilder)
 
 	// Start an xDS management server.
@@ -96,7 +95,7 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 				"type": %q,
 				"config": {"mgmt_server_address": %q}
 			}]
-		}]`, mgmtServer.Address, testCredsBuilderName, mgmtServer.Address)),
+		}]`, mgmtServer.Address, credsBuilder.Name(), mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {
@@ -133,25 +132,26 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 
 	// Intercept a grpc.NewClient call from the xds client to validate DialOptions.
 	xci.GRPCNewClient = func(target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error) {
-		actual := map[string]int{}
+		got := map[string]int{}
 		for _, opt := range opts {
-			if mo, ok := opt.(*mockDialOption); ok {
-				actual[mo.name]++
+			if mo, ok := opt.(*nopDialOption); ok {
+				got[mo.name]++
 			}
 		}
-		expected := map[string]int{}
-		for _, name := range testDialOptNames {
-			expected[name]++
+		want := map[string]int{}
+		for _, name := range credsBuilder.testDialOptNames {
+			want[name]++
 		}
-		if !reflect.DeepEqual(actual, expected) {
-			t.Errorf("grpc.NewClient() was called with unexpected DialOptions: got %v, want %v", actual, expected)
+		if !cmp.Equal(got, want) {
+			t.Errorf("grpc.NewClient() was called with unexpected DialOptions: got %v, want %v", got, want)
 		}
 		return grpc.NewClient(target, opts...)
 	}
 	defer func() { xci.GRPCNewClient = grpc.NewClient }()
 
-	// Create a ClientConn and make a successful RPC. The insecure transport credentials passed into
-	// the gRPC.NewClient is the credentials for the data plane communication with the test backend.
+	// Create a ClientConn and make a successful RPC. The insecure transport
+	// credentials passed into the gRPC.NewClient is the credentials for the
+	// data plane communication with the test backend.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -161,7 +161,5 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
-
-	// Close the connection to ensure stats handler calls are made.
 	cc.Close()
 }
