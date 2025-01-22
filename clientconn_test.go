@@ -743,15 +743,14 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	addr := lis.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cc, err := NewClient(addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{
+	cc, err := DialContext(ctx, addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                10 * time.Second,
 		Timeout:             100 * time.Millisecond,
 		PermitWithoutStream: true,
 	}))
 	if err != nil {
-		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
-	cc.Connect()
 	defer cc.Close()
 	connected.Fire()
 	for {
@@ -765,7 +764,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		}
 		if ctx.Err() != nil {
 			// Timeout
-			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 10s", v)
+			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 20s", v)
 		}
 	}
 }
