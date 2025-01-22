@@ -16,9 +16,7 @@
 *
  */
 
-
 package interop
-
 
 import (
 	"bytes"
@@ -28,16 +26,13 @@ import (
 	"sync"
 	"time"
 
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/peer"
 
-
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
 
 // SoakWorkerResults stores the aggregated results for a specific worker during the soak test.
 type SoakWorkerResults struct {
@@ -46,7 +41,6 @@ type SoakWorkerResults struct {
 	Latencies      *stats.Histogram
 }
 
-
 // SoakIterationConfig holds the parameters required for a single soak iteration.
 type SoakIterationConfig struct {
 	RequestSize  int                        // The size of the request payload in bytes.
@@ -54,7 +48,6 @@ type SoakIterationConfig struct {
 	Client       testgrpc.TestServiceClient // The gRPC client to make the call.
 	CallOptions  []grpc.CallOption          // Call options for the RPC.
 }
-
 
 // SoakTestConfig holds the configuration for the entire soak test.
 type SoakTestConfig struct {
@@ -69,7 +62,6 @@ type SoakTestConfig struct {
 	MaxFailures                      int
 	ChannelForTest                   func() (*grpc.ClientConn, func())
 }
-
 
 func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latency time.Duration, err error) {
 	start := time.Now()
@@ -100,7 +92,6 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 	return latency, nil
 }
 
-
 func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, soakWorkerResults *SoakWorkerResults) {
 	timeoutDuration := config.OverallTimeout
 	soakIterationsPerWorker := config.Iterations / config.NumWorkers
@@ -112,7 +103,6 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			MinValue:       0,
 		})
 	}
-
 
 	for i := 0; i < soakIterationsPerWorker; i++ {
 		if ctx.Err() != nil {
@@ -154,7 +144,6 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 	}
 }
 
-
 // DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
@@ -175,7 +164,6 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	}
 	// Wait for all goroutines to complete.
 	wg.Wait()
-
 
 	//Handle results.
 	totalIterations := 0
@@ -200,11 +188,9 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
 		soakConfig.ServerAddr, totalIterations, soakConfig.Iterations, totalFailures, b.String())
 
-
 	if totalIterations != soakConfig.Iterations {
 		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalIterations, soakConfig.Iterations)
 	}
-
 
 	if totalFailures > soakConfig.MaxFailures {
 		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, soakConfig.MaxFailures)
@@ -214,5 +200,3 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		defer cleanup()
 	}
 }
-
-

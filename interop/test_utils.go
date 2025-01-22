@@ -681,7 +681,6 @@ func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 	}
 }
 
-
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 
