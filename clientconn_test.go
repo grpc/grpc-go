@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -94,11 +95,12 @@ func (s) TestDialWithTimeout(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
+	client, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
 	close(dialDone)
 	if err != nil {
-		t.Fatalf("Dial failed. Err: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
+	client.Connect()
 	defer client.Close()
 	timeout := time.After(1 * time.Second)
 	select {
@@ -313,9 +315,9 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			break
 		}
 	}()
-	client, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
+	client, err := NewClient(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
 	if err != nil {
-		t.Fatalf("Error while dialing. Err: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 
 	go stayConnected(client)
@@ -379,9 +381,9 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 		Backoff:           bc,
 		MinConnectTimeout: 1 * time.Second,
 	}
-	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
+	cc, err := NewClient(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
 	if err != nil {
-		t.Fatalf("Unexpected error from Dial(%v) = %v", lis.Addr(), err)
+		t.Fatalf("Unexpected error from NewClient(%v) = %v", lis.Addr(), err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
@@ -557,8 +559,8 @@ func (b *fakeBundleCreds) TransportCredentials() credentials.TransportCredential
 
 func (s) TestCredentialsMisuse(t *testing.T) {
 	// Use of no transport creds and no creds bundle must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80"); err != errNoTransportSecurity {
-		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errNoTransportSecurity)
+	if _, err := NewClient("passthrough:///Non-Existent.Server:80"); err != errNoTransportSecurity {
+		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errNoTransportSecurity)
 	}
 
 	// Use of both transport creds and creds bundle must fail.
@@ -570,19 +572,19 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 		WithTransportCredentials(creds),
 		WithCredentialsBundle(&fakeBundleCreds{transportCreds: creds}),
 	}
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", dopts...); err != errTransportCredsAndBundle {
-		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
+	if _, err := NewClient("passthrough:///Non-Existent.Server:80", dopts...); err != errTransportCredsAndBundle {
+		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
 	}
 
 	// Use of perRPC creds requiring transport security over an insecure
 	// transport must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithTransportCredentials(insecure.NewCredentials())); err != errTransportCredentialsMissing {
-		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
+	if _, err := NewClient("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithTransportCredentials(insecure.NewCredentials())); err != errTransportCredentialsMissing {
+		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
 	}
 
 	// Use of a creds bundle with nil transport credentials must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithCredentialsBundle(&fakeBundleCreds{})); err != errNoTransportCredsInBundle {
-		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
+	if _, err := NewClient("passthrough:///Non-Existent.Server:80", WithCredentialsBundle(&fakeBundleCreds{})); err != errNoTransportCredsInBundle {
+		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
 	}
 }
 
@@ -621,7 +623,7 @@ func (s) TestWithConnectParams(t *testing.T) {
 
 func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential, opts ...DialOption) {
 	opts = append(opts, WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := Dial("passthrough:///foo:80", opts...)
+	conn, err := NewClient("passthrough:///foo:80", opts...)
 	if err != nil {
 		t.Fatalf("unexpected error dialing connection: %v", err)
 	}
@@ -644,9 +646,9 @@ func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential,
 func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	// Default value specified for minConnectTimeout in the spec is 20 seconds.
 	mct := 1 * time.Minute
-	conn, err := Dial("passthrough:///foo:80", WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
+	conn, err := NewClient("passthrough:///foo:80", WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
 	if err != nil {
-		t.Fatalf("unexpected error dialing connection: %v", err)
+		t.Fatalf("Failed to create a client: %v", err)
 	}
 	defer conn.Close()
 
@@ -658,15 +660,16 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
-	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
-	}
-	defer cc.Close()
-
 	// SwitchBalancer before NewAddress. There was no balancer created, this
 	// makes sure we don't call close on nil balancerWrapper.
-	r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)
+	r.InitialState(resolver.State{ServiceConfig: sc(`{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
+
+	cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
+	if err != nil {
+		t.Fatalf("Failed to create a client for server: %v", err)
+	}
+	defer cc.Close()
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -674,28 +677,28 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 	for i := 0; i < 10; i++ { // Run this multiple times to make sure it doesn't panic.
 		r := manual.NewBuilderWithScheme(fmt.Sprintf("whatever-%d", i))
-
-		cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
+		sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)
+		go r.InitialState(resolver.State{ServiceConfig: sc(`{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
+		cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 		if err != nil {
-			t.Fatalf("failed to dial: %v", err)
+			t.Fatalf("Failed to create a client for server: %v", err)
 		}
 		// Send a new service config while closing the ClientConn.
 		go cc.Close()
-		go r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`)}) // This should not panic.
 	}
 }
 
 func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
+	// This make sure we don't create addrConn with empty address list.
+	r.InitialState(resolver.State{}) // This should not panic.
+
+	cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to dial: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer cc.Close()
-
-	// This make sure we don't create addrConn with empty address list.
-	r.UpdateState(resolver.State{}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -740,14 +743,15 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	addr := lis.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cc, err := DialContext(ctx, addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{
+	cc, err := NewClient(addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                10 * time.Second,
 		Timeout:             100 * time.Millisecond,
 		PermitWithoutStream: true,
 	}))
 	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	connected.Fire()
 	for {
@@ -769,12 +773,8 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 func (s) TestDisableServiceConfigOption(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	addr := r.Scheme() + ":///non.existent"
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDisableServiceConfig())
-	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
-	}
-	defer cc.Close()
-	r.UpdateState(resolver.State{ServiceConfig: parseCfg(r, `{
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)
+	r.InitialState(resolver.State{ServiceConfig: sc(`{
     "methodConfig": [
         {
             "name": [
@@ -787,6 +787,12 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
         }
     ]
 }`)})
+	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDisableServiceConfig())
+	if err != nil {
+		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+	}
+	defer cc.Close()
+
 	time.Sleep(1 * time.Second)
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady != nil {
@@ -795,8 +801,8 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 }
 
 func (s) TestMethodConfigDefaultService(t *testing.T) {
-	addr := "nonexist:///non.existent"
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(`{
+	addr := "passthrough:///non.existent"
+	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(`{
   "methodConfig": [{
     "name": [
       {
@@ -807,10 +813,10 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
   }]
 }`))
 	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
+	cc.Connect()
 	defer cc.Close()
-
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady == nil {
 		t.Fatalf("want: method (%q) config to fallback to the default service", "/foo/Bar")
@@ -831,12 +837,12 @@ func (s) TestClientConnCanonicalTarget(t *testing.T) {
 		{
 			name:                "canonical-target-not-specified",
 			addr:                "no.scheme",
-			canonicalTargetWant: "passthrough:///no.scheme",
+			canonicalTargetWant: "dns:///no.scheme",
 		},
 		{
 			name:                "canonical-target-nonexistent",
 			addr:                "nonexist:///non.existent",
-			canonicalTargetWant: "passthrough:///nonexist:///non.existent",
+			canonicalTargetWant: "dns:///nonexist:///non.existent",
 		},
 		{
 			name:                "canonical-target-add-colon-slash",
@@ -846,9 +852,9 @@ func (s) TestClientConnCanonicalTarget(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cc, err := Dial(test.addr, WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := NewClient(test.addr, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", test.addr, err)
+				t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", test.addr, err)
 			}
 			defer cc.Close()
 			if cc.Target() != test.addr {
@@ -875,23 +881,23 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	}()
 	dialer := func(string, time.Duration) (net.Conn, error) {
 		dials <- struct{}{}
-		return nil, errors.New("failed to fake dial")
+		return nil, errors.New("Failed to create a fake NewClient")
 	}
-	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
-		t.Fatalf("Dial() = _, %v; want _, nil", err)
+		t.Fatalf("NewClient() = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
 	select {
 	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
-		t.Fatal("Failed to call dial within 10s")
+		t.Fatal("Failed to call NewClient within 10s")
 	}
 
 	select {
 	case <-dials:
-		t.Fatal("Dial called unexpectedly before resetting backoff")
+		t.Fatal("NewClient called unexpectedly before resetting backoff")
 	case <-time.NewTimer(100 * time.Millisecond).C:
 	}
 
@@ -900,24 +906,25 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	select {
 	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
-		t.Fatal("Failed to call dial within 10s after resetting backoff")
+		t.Fatal("Failed to call NewClient within 10s after resetting backoff")
 	}
 }
 
 func (s) TestBackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
-	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
 		dialStrCh <- t
-		return nil, fmt.Errorf("test dialer, always error")
+		return nil, fmt.Errorf("Failed to create a client")
 	}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	select {
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for custom dialer to be invoked during Dial")
+		t.Fatal("Timeout when waiting for custom dialer to be invoked during NewClient")
 	case <-dialStrCh:
 	}
 }
@@ -1041,7 +1048,7 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	rb := manual.NewBuilderWithScheme("whatever")
 	rb.InitialState(resolver.State{Addresses: addrsList})
 
-	client, err := Dial("whatever:///this-gets-overwritten",
+	client, err := NewClient("whatever:///this-gets-overwritten",
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(rb),
 		WithConnectParams(ConnectParams{
@@ -1158,17 +1165,18 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 }
 
 func testInvalidDefaultServiceConfig(t *testing.T, r *manual.Resolver, addr, sc string) {
-	_, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(sc))
+	_, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(sc))
 	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
-		t.Fatalf("Dial got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
+		t.Fatalf("NewClient got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
 	}
 }
 
 func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
+	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	// Resolver service config gets ignored since resolver service config is disabled.
 	r.UpdateState(resolver.State{
@@ -1181,10 +1189,11 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *
 }
 
 func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
+	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
@@ -1195,10 +1204,11 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 }
 
 func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
+	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
