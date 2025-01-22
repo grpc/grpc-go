@@ -38,9 +38,30 @@ import (
 // ServerConfig contains the configuration to connect to an xDS management
 // server.
 type ServerConfig struct {
-	ServerURI              string
+	// ServerURI is the server url of the xDS management server.
+	ServerURI string
+
+	// IgnoreResourceDeletion is a server feature which if set to true,
+	// indicates that resource deletion errors can be ignored and cached
+	// resource data can be used.
+	//
+	// This will be removed in future once we implement gRFC A88
+	// and two new fields `FailOnDataErrors` and
+	// `ResourceTimerIsTransientError` will be introduced.
 	IgnoreResourceDeletion bool
 
+	// Extensions for `ServerConfig` can be populated with arbitrary data to be
+	// passed to the `TransportBuilder` and/or xDS Client's `ResourceType`
+	// implementations. This field can be used to provide additional
+	// configuration or context specific to the user's needs.
+	//
+	// The xDS and LRS clients itself does not interpret the contents of this
+	// field. It is the responsibility of the user's custom `TransportBuilder`
+	// and/or `ResourceType` implementations to handle and interpret these
+	// extensions.
+	//
+	// For example, a custom TransportBuilder might use this field to configure
+	// a specific security credentials.
 	Extensions any
 }
 
@@ -61,11 +82,22 @@ func (sc *ServerConfig) String() string {
 	return strings.Join([]string{sc.ServerURI, fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
 }
 
-// Authority provides the functionality required to communicate with
-// xDS management servers corresponding to an authority.
+// Authority contains configuration for an xDS control plane authority.
 type Authority struct {
+	// XDSServers contains the list of server configurations for this authority.
 	XDSServers []ServerConfig
 
+	// Extensions for `Authority` can be populated with arbitrary data to be
+	// passed to the xDS Client's user specific implementations. This field
+	// can be used to provide additional configuration or context specific to
+	// the user's needs.
+	//
+	// The xDS and LRS clients itself does not interpret the contents of this
+	// field. It is the responsibility of the user's implementations to handle
+	// and interpret these extensions.
+	//
+	// For example, a custom name resolver might use this field for the name of
+	// listener resource to subscribe to.
 	Extensions any
 }
 
