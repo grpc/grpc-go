@@ -61,13 +61,13 @@ func (t *testCredsBundle) DialOptions() []grpc.DialOption {
 	return opts
 }
 
-type testCredsBuilder struct{
+type testCredsBuilder struct {
 	testDialOptNames []string
 }
 
 func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
 	return &testCredsBundle{
-		Bundle: insecure.NewBundle(),
+		Bundle:           insecure.NewBundle(),
 		testDialOptNames: t.testDialOptNames,
 	}, func() {}, nil
 }
