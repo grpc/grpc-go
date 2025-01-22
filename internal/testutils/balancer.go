@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
@@ -153,6 +154,11 @@ func (tcc *BalancerClientConn) NewSubConn(a []resolver.Address, o balancer.NewSu
 	}
 
 	return sc, nil
+}
+
+// MetricsRecorder returns a no-op MetricsRecorder.
+func (*BalancerClientConn) MetricsRecorder() stats.MetricsRecorder {
+	return &NoopMetricsRecorder{}
 }
 
 // RemoveSubConn is a nop; tests should all be updated to use sc.Shutdown()

@@ -97,7 +97,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	b := &wrrBalancer{
 		ClientConn:       cc,
 		target:           bOpts.Target.String(),
-		metricsRecorder:  bOpts.MetricsRecorder,
+		metricsRecorder:  cc.MetricsRecorder(),
 		addressWeights:   resolver.NewAddressMap(),
 		endpointToWeight: resolver.NewEndpointMap(),
 		scToWeight:       make(map[balancer.SubConn]*endpointWeight),

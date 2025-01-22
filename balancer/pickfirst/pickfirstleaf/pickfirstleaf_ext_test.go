@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -885,7 +884,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
-	tmr := stats.NewTestMetricsRecorder()
+	tmr := testutils.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
@@ -974,7 +973,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
-	tmr := stats.NewTestMetricsRecorder()
+	tmr := testutils.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
@@ -1034,7 +1033,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
-	tmr := stats.NewTestMetricsRecorder()
+	tmr := testutils.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
@@ -1099,7 +1098,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1145,7 +1144,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1189,7 +1188,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{

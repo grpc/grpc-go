@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
@@ -80,7 +79,7 @@ func (s) TestPickFirstMetrics(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: ss.Address}}},
 	)
 
-	tmr := stats.NewTestMetricsRecorder()
+	tmr := testutils.NewTestMetricsRecorder()
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithStatsHandler(tmr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("NewClient() failed with error: %v", err)
@@ -124,7 +123,7 @@ func (s) TestPickFirstMetricsFailure(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: "bad address"}}},
 	)
 	grpcTarget := r.Scheme() + ":///"
-	tmr := stats.NewTestMetricsRecorder()
+	tmr := testutils.NewTestMetricsRecorder()
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithStatsHandler(tmr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("NewClient() failed with error: %v", err)
