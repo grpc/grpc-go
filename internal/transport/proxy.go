@@ -66,9 +66,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, grpcUA string, o
 		URL:    &url.URL{Host: opts.ConnectAddr},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-
-	if userSet := opts.UserSet; userSet {
-		user := opts.User
+	if user := opts.User; user != nil {
 		u := user.Username()
 		p, _ := user.Password()
 		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))

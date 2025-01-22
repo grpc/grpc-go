@@ -102,9 +102,9 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 	go io.Copy(p.out, p.in)
 }
 
-// HTTPProxy initializes and starts a proxy server, registers a cleanup to
+// NewHTTPProxy initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns a ProxyServer.
-func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
+func NewHTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
 	t.Helper()
 	pLis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -114,7 +114,10 @@ func HTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bo
 	p := &ProxyServer{
 		lis:       pLis,
 		onRequest: reqCheck,
-		Addr:      fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())),
+		// Use "localhost:<port>" to verify the proxy address is handled
+		// correctly by the delegating resolver and connects to the proxy server
+		// correctly even when unresolved.
+		Addr: fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())),
 	}
 
 	// Start the proxy server.

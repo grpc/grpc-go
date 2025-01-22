@@ -42,8 +42,7 @@ func (s) TestGet(t *testing.T) {
 		name            string
 		addr            resolver.Address
 		wantConnectAddr string
-		wantUser        url.Userinfo
-		wantUserSet     bool
+		wantUser        *url.Userinfo
 		wantAttrPresent bool
 	}{
 		{
@@ -62,12 +61,10 @@ func (s) TestGet(t *testing.T) {
 			addr: resolver.Address{
 				Addr: "test-address",
 				Attributes: attributes.New(proxyOptionsKey, Options{
-					User:    *user,
-					UserSet: true,
+					User: user,
 				}),
 			},
-			wantUser:        *user,
-			wantUserSet:     true,
+			wantUser:        user,
 			wantAttrPresent: true,
 		},
 		{
@@ -91,9 +88,6 @@ func (s) TestGet(t *testing.T) {
 			if gotOption.User != tt.wantUser {
 				t.Errorf("User(%v) = %v, want %v", tt.addr, gotOption.User, tt.wantUser)
 			}
-			if gotOption.UserSet != tt.wantUserSet {
-				t.Errorf("UserSet(%v) = %v, want %v", tt.addr, gotOption.UserSet, tt.wantUserSet)
-			}
 		})
 	}
 }
@@ -103,8 +97,7 @@ func (s) TestGet(t *testing.T) {
 func (s) TestSet(t *testing.T) {
 	addr := resolver.Address{Addr: "test-address"}
 	pOpts := Options{
-		User:        *url.UserPassword("username", "password"),
-		UserSet:     true,
+		User:        url.UserPassword("username", "password"),
 		ConnectAddr: "proxy-address",
 	}
 
@@ -119,8 +112,5 @@ func (s) TestSet(t *testing.T) {
 	}
 	if got, want := gotOption.User, pOpts.User; got != want {
 		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)
-	}
-	if got, want := gotOption.UserSet, pOpts.UserSet; got != want {
-		t.Errorf("unexpected UserSet proxy attribute = %v, want %v", got, want)
 	}
 }

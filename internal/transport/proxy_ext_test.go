@@ -88,7 +88,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 			t.Errorf(" Unexpected request host: %s , want = %s ", got, want)
 		}
 	}
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -145,7 +145,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -200,7 +200,7 @@ func (s) TestNewClientWithProxy(t *testing.T) {
 			t.Errorf(" Unexpected request host: %s , want = %s ", got, want)
 		}
 	}
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -254,7 +254,7 @@ func (s) TestNewClientWithProxyAndCustomResolver(t *testing.T) {
 			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -316,7 +316,7 @@ func (s) TestNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 			t.Errorf("isIPAddr(%q) = %t, want = %t", host, got, want)
 		}
 	}
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -361,7 +361,7 @@ func (s) TestNewClientWithNoProxy(t *testing.T) {
 	backend := startBackendServer(t)
 	unresolvedTargetURI := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, backend.Address))
 	reqCheck := func(_ *http.Request) { t.Error("proxy server should not have received a Connect request") }
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -406,7 +406,7 @@ func (s) TestNewClientWithContextDialer(t *testing.T) {
 	backend := startBackendServer(t)
 	unresolvedTargetURI := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, backend.Address))
 	reqCheck := func(_ *http.Request) { t.Error("proxy server should not have received a Connect request") }
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -475,7 +475,7 @@ func (s) TestBasicAuthInNewClientWithProxy(t *testing.T) {
 			t.Errorf("unexpected auth %q (%q), want %q (%q)", got, gotDecoded, wantProxyAuthStr, wantDecoded)
 		}
 	}
-	pServer := proxyserver.HTTPProxy(t, reqCheck, false)
+	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
 
 	t.Setenv("HTTPS_PROXY", user+":"+password+"@"+pServer.Addr)
 
