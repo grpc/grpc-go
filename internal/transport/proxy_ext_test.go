@@ -89,13 +89,17 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 		}
 	}
 	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
+	// Use "localhost:<port>" to verify the proxy address is handled
+	// correctly by the delegating resolver and connects to the proxy server
+	// correctly even when unresolved.
+	pAddr := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pServer.Addr))
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   pServer.Addr,
+				Host:   pAddr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
@@ -201,13 +205,17 @@ func (s) TestNewClientWithProxy(t *testing.T) {
 		}
 	}
 	pServer := proxyserver.NewHTTPProxy(t, reqCheck, false)
+	// Use "localhost:<port>" to verify the proxy address is handled
+	// correctly by the delegating resolver and connects to the proxy server
+	// correctly even when unresolved.
+	pAddr := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pServer.Addr))
 
 	// Overwrite the function in the test and restore them in defer.
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == unresolvedTargetURI {
 			return &url.URL{
 				Scheme: "https",
-				Host:   pServer.Addr,
+				Host:   pAddr,
 			}, nil
 		}
 		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)

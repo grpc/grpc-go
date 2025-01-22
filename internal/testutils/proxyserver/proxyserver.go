@@ -24,7 +24,6 @@ package proxyserver
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -114,10 +113,7 @@ func NewHTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello
 	p := &ProxyServer{
 		lis:       pLis,
 		onRequest: reqCheck,
-		// Use "localhost:<port>" to verify the proxy address is handled
-		// correctly by the delegating resolver and connects to the proxy server
-		// correctly even when unresolved.
-		Addr: fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pLis.Addr().String())),
+		Addr:      pLis.Addr().String(),
 	}
 
 	// Start the proxy server.
