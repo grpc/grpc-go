@@ -78,15 +78,17 @@ func Test(t *testing.T) {
 // Returns the following:
 //   - the management server: tests use this to configure resources
 //   - nodeID expected by the management server: this is set in the Node proto
-//     sent by the xdsClient for queries.
+//     sent by the xdsClient for queries
 //   - the port the server is listening on
-//   - cleanup function to be invoked by the tests when done
+//   - contents of the bootstrap configuration pointing to xDS management
+//     server
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, []byte) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Create a bootstrap config for default pool.
+	// Create a bootstrap config pointing to the above management server with
+	// the nodeID.
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Create a local listener.
@@ -461,6 +463,9 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 	// Create an xDS resolver with the above bootstrap configuration.
 	var xdsResolver resolver.Builder
 	var err error
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
 		if err != nil {
@@ -552,6 +557,9 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	// Create an xDS resolver with the above bootstrap configuration.
 	var xdsResolver resolver.Builder
 	var err error
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
 		if err != nil {
@@ -567,8 +575,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	})
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := resources.Listeners[0].GetApiListener().GetApiListener()
-	err = lis.UnmarshalTo(hcm)
-	if err != nil {
+	if err = lis.UnmarshalTo(hcm); err != nil {
 		t.Fatal(err)
 	}
 

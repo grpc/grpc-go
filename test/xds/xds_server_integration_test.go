@@ -326,6 +326,9 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	var xdsResolver resolver.Builder
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		var err error
 		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)

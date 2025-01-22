@@ -90,10 +90,13 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 	t.Helper()
 
 	var builder resolver.Builder
-	var err error
 	if bootstrapContents != nil {
 		// Create an xDS resolver with the provided bootstrap configuration.
+		if internal.NewXDSResolverWithConfigForTesting == nil {
+			t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+		}
 		if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+			var err error
 			builder, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -201,6 +204,8 @@ func verifyErrorFromResolver(ctx context.Context, t *testing.T, errCh chan error
 //   - A reference to the xDS management server
 //   - A channel to read requested Listener resource names
 //   - A channel to read requested RouteConfiguration resource names
+//   - Contents of the bootstrap configuration pointing to xDS management
+//     server
 func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID string) (*e2e.ManagementServer, chan []string, chan []string, []byte) {
 	t.Helper()
 

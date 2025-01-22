@@ -73,8 +73,8 @@ func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 	// xDS client pool.
 	pool := xdsclient.NewPool(nil)
 	var xdsResolver resolver.Builder
-	var err error
 	if newResolver := internal.NewXDSResolverWithPoolForTesting; newResolver != nil {
+		var err error
 		xdsResolver, err = newResolver.(func(*xdsclient.Pool) (resolver.Builder, error))(pool)
 		if err != nil {
 			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
@@ -83,7 +83,7 @@ func (s) TestResolverBuilder_ClientCreationFails_NoBootstrap(t *testing.T) {
 
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///target")}
 	if _, err := xdsResolver.Build(target, nil, resolver.BuildOptions{}); err == nil {
-		t.Fatalf("xds Resolver Build(%v) succeeded when expected to fail, because there is not bootstrap configuration for the xDS client pool", pool)
+		t.Fatalf("xds Resolver Build(%v) succeeded when expected to fail, because there is no bootstrap configuration for the xDS client pool", pool)
 	}
 }
 
@@ -96,6 +96,9 @@ func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
 	// Create an xDS resolver with the above bootstrap configuration.
 	var xdsResolver resolver.Builder
 	var err error
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(contents)
 		if err != nil {

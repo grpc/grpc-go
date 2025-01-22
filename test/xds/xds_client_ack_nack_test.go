@@ -131,6 +131,9 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	var xdsResolver resolver.Builder
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)

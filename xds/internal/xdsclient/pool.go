@@ -150,7 +150,7 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 	defer p.mu.Unlock()
 
 	resp := &v3statuspb.ClientStatusResponse{}
-	for key, client := range DefaultPool.clients {
+	for key, client := range p.clients {
 		cfg := client.dumpResources()
 		cfg.ClientScope = key
 		resp.Config = append(resp.Config, cfg)
@@ -160,7 +160,6 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 
 func (p *Pool) clientRefCountedClose(name string) {
 	p.mu.Lock()
-
 	client, ok := p.clients[name]
 	if !ok {
 		logger.Errorf("Attempt to close a non-existent xDS client with name %s", name)
@@ -201,7 +200,9 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 	if err != nil {
 		return nil, nil, err
 	}
-	c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
+	if logger.V(2) {
+		c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
+	}
 	client := &clientRefCounted{clientImpl: c, refCount: 1}
 	p.clients[name] = client
 	xdsClientImplCreateHook(name)

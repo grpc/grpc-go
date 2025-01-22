@@ -62,7 +62,7 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 	}
 }
 
-func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse) error {
+func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, pool *xdsclient.Pool) error {
 	var cmpOpts = cmp.Options{
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
@@ -71,7 +71,7 @@ func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusRespons
 
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		got := xdsclient.DumpResources()
+		got := pool.DumpResources()
 		// Sort the client configs based on the `client_scope` field.
 		slices.SortFunc(got.GetConfig(), func(a, b *v3statuspb.ClientConfig) int {
 			return strings.Compare(a.ClientScope, b.ClientScope)
@@ -140,15 +140,10 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
-	// We use the default xDS client pool here because
-	// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
-	// resources currently known to the default xDS client within gRPC which is
-	// implicitly managed within the xdsclient.DefaultPool.
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
-
+	pool := xdsclient.NewPool(config)
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
-	client1, close1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+	client1, close1, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: client1Name,
 	})
 	if err != nil {
@@ -156,7 +151,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	}
 	defer close1()
 	client2Name := t.Name() + "-2"
-	client2, close2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+	client2, close2, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: client2Name,
 	})
 	if err != nil {
@@ -185,7 +180,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -228,7 +223,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -268,7 +263,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -328,7 +323,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -415,15 +410,11 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
-	// We use the default xDS client pool here because
-	// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
-	// resources currently known to the default xDS client within gRPC which is
-	// implicitly managed within the xdsclient.DefaultPool.
-	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+	pool := xdsclient.NewPool(config)
 
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
-	client1, close1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+	client1, close1, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: client1Name,
 	})
 	if err != nil {
@@ -431,7 +422,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	}
 	defer close1()
 	client2Name := t.Name() + "-2"
-	client2, close2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+	client2, close2, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: client2Name,
 	})
 	if err != nil {
@@ -461,7 +452,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -504,7 +495,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -541,7 +532,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -578,7 +569,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp); err != nil {
+	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
 		t.Fatal(err)
 	}
 }

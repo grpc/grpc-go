@@ -77,13 +77,15 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
 	// Create bootstrap configuration pointing to the above management server.
-
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	var resolverBuilder resolver.Builder
 	var err error
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
 		if err != nil {
@@ -193,6 +195,9 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	// Create an xDS resolver with the above bootstrap configuration.
 	var resolverBuilder resolver.Builder
 	var err error
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
 		if err != nil {

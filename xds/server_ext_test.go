@@ -346,13 +346,13 @@ func (s) TestMultipleServers_DifferentBootstrapConfigurations(t *testing.T) {
 
 	// Both unary RPCs should work once the servers transitions into serving.
 	var peer1 peer.Peer
-	waitForSuccessfulRPC(ctx, t, cc1, grpc.WaitForReady(true), grpc.Peer(&peer1))
+	waitForSuccessfulRPC(ctx, t, cc1, grpc.Peer(&peer1))
 	if peer1.Addr.String() != lis1.Addr().String() {
 		t.Errorf("Connected to wrong peer: %s, want %s", peer1.Addr, lis1.Addr())
 	}
 
 	var peer2 peer.Peer
-	waitForSuccessfulRPC(ctx, t, cc2, grpc.WaitForReady(true), grpc.Peer(&peer2))
+	waitForSuccessfulRPC(ctx, t, cc2, grpc.Peer(&peer2))
 	if peer2.Addr.String() != lis2.Addr().String() {
 		t.Errorf("Connected to wrong peer: %s, want %s", peer2.Addr, lis2.Addr())
 	}

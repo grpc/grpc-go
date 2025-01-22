@@ -287,12 +287,8 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			// We use the default xDS client pool here because
-			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
-			// resources currently known to the default xDS client within gRPC which is
-			// implicitly managed within the xdsclient.DefaultPool.
-			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
-			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
@@ -357,7 +353,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -571,12 +567,8 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			// We use the default xDS client pool here because
-			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
-			// resources currently known to the default xDS client within gRPC which is
-			// implicitly managed within the xdsclient.DefaultPool.
-			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
-			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
@@ -640,7 +632,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -816,12 +808,8 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			// We use the default xDS client pool here because
-			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
-			// resources currently known to the default xDS client within gRPC which is
-			// implicitly managed within the xdsclient.DefaultPool.
-			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
-			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
@@ -899,7 +887,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1173,12 +1161,8 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			// We use the default xDS client pool here because
-			// `xdsclient.DumpResources()` is designed to provide a snapshot of the xDS
-			// resources currently known to the default xDS client within gRPC which is
-			// implicitly managed within the xdsclient.DefaultPool.
-			xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
-			client, close, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
@@ -1242,7 +1226,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})

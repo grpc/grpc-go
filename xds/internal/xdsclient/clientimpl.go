@@ -96,16 +96,16 @@ func init() {
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
 
 	// DefaultPool is initialized with bootstrap configuration from one of the
-	// support environment variables. If the environment variables are not set,
-	// then fallback bootstrap configuration should be set before attempting to
-	// create an xDS client, else xDS client creation will fail
-	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
+	// supported environment variables. If the environment variables are not
+	// set, then fallback bootstrap configuration should be set before
+	// attempting to create an xDS client, else xDS client creation will fail.
 	config, err := bootstrap.GetConfiguration()
 	if err != nil {
 		logger.Warningf("Failed to read xDS bootstrap config from env vars:  %v", err)
+		DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
 		return
 	}
-	DefaultPool.config = config
+	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted), config: config}
 }
 
 // newClientImpl returns a new xdsClient with the given config.
@@ -386,7 +386,7 @@ func (c *clientImpl) dumpResources() *v3statuspb.ClientConfig {
 // configuration used for the channel.
 //
 // It receives callbacks for events on the underlying ADS stream and invokes
-// corresponding callbacks on interested authoririties.
+// corresponding callbacks on interested authorities.
 type channelState struct {
 	parent       *clientImpl
 	serverConfig *bootstrap.ServerConfig

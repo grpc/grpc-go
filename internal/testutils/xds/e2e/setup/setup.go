@@ -51,6 +51,9 @@ func ManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, string, [
 	// Create an xDS resolver with the above bootstrap configuration.
 	var r resolver.Builder
 	var err error
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
 	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
 		r, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
 		if err != nil {
