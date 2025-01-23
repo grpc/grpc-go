@@ -1,8 +1,7 @@
-# NOTICE
-
 This directory contains implementation details of the xDS and LRS client but
-should not be used directly. Its contents are subject to change without notice
-and are not covered by any API stability guarantees.
+should not be used directly. This is a work in progress and its contents are
+subject to change without notice and are not covered by any API stability
+guarantees.
 
 If you are looking for a way to interact with xDS, please refer to the
-public [xds documentation](https://github.com/grpc/grpc-go/blob/master/examples/features/xds/README.md).
+[example](https://github.com/grpc/grpc-go/blob/master/examples/features/xds/README.md).
