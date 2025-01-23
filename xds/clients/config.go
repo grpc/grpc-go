@@ -16,13 +16,19 @@
  *
  */
 
-// Package clients provides the functionality to create xDS and LRS client
-// using possible options for resource decoding and transport.
+// Package clients contains implementations of the xDS and LRS clients, to be
+// used by applications to communicate with xDS management servers.
+//
+// The xDS client enable users to create client instance with in-memory
+// configurations and register watches for named resource that can be received
+// on ADS stream.
+//
+// The LRS client allows to report load through LRS Stream.
 //
 // # Experimental
 //
 // Notice: This package is EXPERIMENTAL and may be changed or removed
-// in a later release.
+// in a later release. See [README](https://github.com/grpc/grpc-go/tree/master/xds/clients/README.md)
 package clients
 
 import (
@@ -30,51 +36,65 @@ import (
 	"slices"
 	"strings"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	"github.com/google/go-cmp/cmp"
 )
 
 // ServerConfig contains the configuration to connect to an xDS management
 // server.
 type ServerConfig struct {
-	// ServerURI is the server url of the xDS management server.
+	// ServerURI is the target URI of the xDS management server.
 	ServerURI string
 
 	// IgnoreResourceDeletion is a server feature which if set to true,
 	// indicates that resource deletion errors can be ignored and cached
 	// resource data can be used.
 	//
-	// This will be removed in future once we implement gRFC A88
-	// and two new fields `FailOnDataErrors` and
-	// `ResourceTimerIsTransientError` will be introduced.
+	// This will be removed in the future once we implement gRFC A88
+	// and two new fields FailOnDataErrors and
+	// ResourceTimerIsTransientError will be introduced.
 	IgnoreResourceDeletion bool
 
-	// Extensions for `ServerConfig` can be populated with arbitrary data to be
-	// passed to the `TransportBuilder` and/or xDS Client's `ResourceType`
-	// implementations. This field can be used to provide additional
-	// configuration or context specific to the user's needs.
+	// Extensions can be populated with arbitrary data to be passed to the
+	// [TransportBuilder] and/or xDS Client's ResourceType implementations.
+	// This field can be used to provide additional configuration or context
+	// specific to the user's needs.
 	//
-	// The xDS and LRS clients itself does not interpret the contents of this
-	// field. It is the responsibility of the user's custom `TransportBuilder`
-	// and/or `ResourceType` implementations to handle and interpret these
+	// The xDS and LRS clients itself do not interpret the contents of this
+	// field. It is the responsibility of the user's custom [TransportBuilder]
+	// and/or ResourceType implementations to handle and interpret these
 	// extensions.
 	//
-	// For example, a custom TransportBuilder might use this field to configure
-	// a specific security credentials.
+	// For example, a custom [TransportBuilder] might use this field to
+	// configure a specific security credentials.
 	Extensions any
 }
 
-// Equal reports whether sc and other `ServerConfig` objects are considered
-// equal.
+// Equal returns true if sc and other are considered equal.
 func (sc *ServerConfig) Equal(other *ServerConfig) bool {
-	if sc == nil && other == nil {
+	switch {
+	case sc == nil && other == nil:
 		return true
+	case (sc != nil) != (other != nil):
+		return false
+	case sc.ServerURI != other.ServerURI:
+		return false
+	case sc.IgnoreResourceDeletion != other.IgnoreResourceDeletion:
+		return false
+	case !cmp.Equal(sc.Extensions, other.Extensions):
+		return false
 	}
-	return sc.ServerURI != other.ServerURI
+	return true
 }
 
-// String returns the string representation of the `ServerConfig`.
+// String returns a string representation of the [ServerConfig].
+//
+// NOTICE: This interface is intended mainly for logging/testing purposes and
+// that the user must not assume anything about the stability of the output
+// returned from this method.
 func (sc *ServerConfig) String() string {
 	return strings.Join([]string{sc.ServerURI, fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
 }
@@ -84,12 +104,12 @@ type Authority struct {
 	// XDSServers contains the list of server configurations for this authority.
 	XDSServers []ServerConfig
 
-	// Extensions for `Authority` can be populated with arbitrary data to be
-	// passed to the xDS Client's user specific implementations. This field
-	// can be used to provide additional configuration or context specific to
-	// the user's needs.
+	// Extensions can be populated with arbitrary data to be passed to the xDS
+	// Client's user specific implementations. This field can be used to
+	// provide additional configuration or context specific to the user's
+	// needs.
 	//
-	// The xDS and LRS clients itself does not interpret the contents of this
+	// The xDS and LRS clients itself do not interpret the contents of this
 	// field. It is the responsibility of the user's implementations to handle
 	// and interpret these extensions.
 	//
@@ -98,19 +118,31 @@ type Authority struct {
 	Extensions any
 }
 
-// Node is the representation of the client node of xDS Client.
+// Node represents the node of the xDS client for management servers to
+// identify the application making the request.
 type Node struct {
-	ID               string
-	Cluster          string
-	Locality         Locality
-	Metadata         any
-	UserAgentName    string
+	// ID is a string identifier of the node.
+	ID string
+	// Cluster is the name of the cluster the node belongs to.
+	Cluster string
+	// Locality is the location of the node including region, zone, sub-zone.
+	Locality Locality
+	// Metadata is any arbitrary values associated with the node to provide
+	// additional context.
+	Metadata any
+	// UserAgentName is the user agent name. It is typically set to a hardcoded
+	// constant such as grpc-go.
+	UserAgentName string
+	// UserAgentVersion is the user agent version. It is typically set to the
+	// version of the library.
 	UserAgentVersion string
-
-	clientFeatures []string
+	// ClientFeatures is a list of features supported by this client. These are
+	// typically hardcoded within the xDS client, but may be overridden for
+	// testing purposes.
+	ClientFeatures []string
 }
 
-// ToProto converts the `Node` object to its protobuf representation.
+// ToProto converts the [Node] object to its protobuf representation.
 func (n Node) ToProto() *v3corepb.Node {
 	return &v3corepb.Node{
 		Id:      n.ID,
@@ -128,14 +160,17 @@ func (n Node) ToProto() *v3corepb.Node {
 		Metadata:             proto.Clone(n.Metadata.(*structpb.Struct)).(*structpb.Struct),
 		UserAgentName:        n.UserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
-		ClientFeatures:       slices.Clone(n.clientFeatures),
+		ClientFeatures:       slices.Clone(n.ClientFeatures),
 	}
 }
 
-// Locality is the representation of the locality field within `Node`.
+// Locality represents the location of the xDS client node.
 type Locality struct {
-	Region  string
-	Zone    string
+	// Region is the region of the xDS client node.
+	Region string
+	// Zone is the area within a region.
+	Zone string
+	// SubZone is the further subdivision within a sub-zone.
 	SubZone string
 }
 
@@ -144,7 +179,7 @@ func (l Locality) IsEmpty() bool {
 	return l.Equal(Locality{})
 }
 
-// Equal reports whether l and other `Locality` objects are considered equal.
+// Equal returns true if l and other are considered equal.
 func (l Locality) Equal(other Locality) bool {
 	return l.Region == other.Region && l.Zone == other.Zone && l.SubZone == other.SubZone
 }
