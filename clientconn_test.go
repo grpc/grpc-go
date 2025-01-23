@@ -682,7 +682,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		cc.Connect()
 		// Send a new service config while closing the ClientConn.
 		go cc.Close()
-		go r.InitialState(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(rrServiceConfig)}) // This should not panic.
+		go r.UpdateState(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(rrServiceConfig)}) // This should not panic.
 	}
 }
 
