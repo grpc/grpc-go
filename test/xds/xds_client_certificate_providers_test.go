@@ -132,12 +132,9 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	var resolverBuilder resolver.Builder
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Spin up a test backend.

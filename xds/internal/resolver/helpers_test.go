@@ -95,12 +95,10 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 		if internal.NewXDSResolverWithConfigForTesting == nil {
 			t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 		}
-		if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-			var err error
-			builder, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-			if err != nil {
-				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-			}
+		var err error
+		builder, err = internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 		}
 	} else {
 		builder = resolver.Get(xdsresolver.Scheme)

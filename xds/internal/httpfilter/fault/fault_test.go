@@ -461,16 +461,12 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	fs, nodeID, port, bc := clientSetup(t)
 	// Create an xDS resolver with the above bootstrap configuration.
-	var xdsResolver resolver.Builder
-	var err error
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	for tcNum, tc := range testCases {
@@ -555,16 +551,12 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	fs, nodeID, port, bc := clientSetup(t)
 	// Create an xDS resolver with the above bootstrap configuration.
-	var xdsResolver resolver.Builder
-	var err error
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: "myservice",

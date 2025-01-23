@@ -134,12 +134,9 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	var xdsResolver resolver.Builder
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	server := stubserver.StartTestService(t, nil)

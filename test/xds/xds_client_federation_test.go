@@ -90,8 +90,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	resolver, err := resolverBuilder(bootstrapContents)
+	resolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -187,8 +186,7 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	resolver, err := resolverBuilder(bootstrapContents)
+	resolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}

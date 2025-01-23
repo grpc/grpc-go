@@ -94,16 +94,12 @@ func (s) TestResolverBuilder_AuthorityNotDefinedInBootstrap(t *testing.T) {
 	contents := e2e.DefaultBootstrapContents(t, "node-id", "dummy-management-server")
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var xdsResolver resolver.Builder
-	var err error
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(contents)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(contents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	target := resolver.Target{URL: *testutils.MustParseURL("xds://non-existing-authority/target")}

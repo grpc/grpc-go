@@ -292,8 +292,7 @@ func xdsResolverBuilder(t *testing.T, bs []byte) resolver.Builder {
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	xdsR, err := resolverBuilder(bs)
+	xdsR, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bs)
 	if err != nil {
 		t.Fatalf("Creating xDS resolver for testing failed for config %q: %v", string(bs), err)
 	}

@@ -265,16 +265,12 @@ func setupManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, stri
 	bc := e2e.DefaultBootstrapContents(t, nodeID, xdsServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var r resolver.Builder
-	var err error
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		r, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	return xdsServer, nodeID, r
