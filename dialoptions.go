@@ -689,9 +689,9 @@ func withMinConnectDeadline(f func() time.Duration) DialOption {
 	})
 }
 
-// withDefaultScheme is used to allow Dial to use "passthrough" as the default
+// WithDefaultScheme is used to allow Dial to use "passthrough" as the default
 // name resolver, while NewClient uses "dns" otherwise.
-func withDefaultScheme(s string) DialOption {
+func WithDefaultScheme(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.defaultScheme = s
 	})
