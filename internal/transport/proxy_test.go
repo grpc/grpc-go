@@ -54,7 +54,7 @@ func (s) TestHTTPConnectWithServerHello(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	pServer := proxyserver.NewHTTPProxy(t, reqCheck, true)
+	pServer := proxyserver.New(t, reqCheck, true)
 
 	msg := []byte{4, 3, 5, 2}
 	recvBuf := make([]byte, len(msg))

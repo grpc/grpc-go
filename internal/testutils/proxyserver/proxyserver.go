@@ -101,9 +101,9 @@ func (p *ProxyServer) handleRequest(t *testing.T, in net.Conn, waitForServerHell
 	go io.Copy(p.out, p.in)
 }
 
-// NewHTTPProxy initializes and starts a proxy server, registers a cleanup to
+// New initializes and starts a proxy server, registers a cleanup to
 // stop it, and returns a ProxyServer.
-func NewHTTPProxy(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
+func New(t *testing.T, reqCheck func(*http.Request), waitForServerHello bool) *ProxyServer {
 	t.Helper()
 	pLis, err := testutils.LocalTCPListener()
 	if err != nil {
