@@ -22,9 +22,11 @@ import (
 	"context"
 )
 
-// TransportBuilder is an interface for building a new xDS transport.
+// TransportBuilder is an interface to create communication channel to an xDS
+// management server.
 type TransportBuilder interface {
-	// Build creates a new xDS transport for the provided Server Config.
+	// Build creates a new [Transport] instance to the xDS server based on the
+	// provided Server Config.
 	Build(ServerConfig ServerConfig) (Transport, error)
 }
 
@@ -32,7 +34,7 @@ type TransportBuilder interface {
 // streaming calls.
 type Transport interface {
 	// NewStream creates a new streaming call to the xDS server for
-	// specified method name. The returned Streaming interface can be used
+	// specified RPC method name. The returned Streaming interface can be used
 	// to send and receive messages on the stream.
 	NewStream(context.Context, string) (Stream, error)
 
@@ -47,6 +49,6 @@ type Stream interface {
 	// Send sends the provided message on the stream.
 	Send([]byte) error
 
-	// Recv block until the next message is received on the stream.
+	// Recv blocks until the next message is received on the stream.
 	Recv() ([]byte, error)
 }
