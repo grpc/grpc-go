@@ -193,12 +193,14 @@ XXXXX PleaseIgnoreUnused'
 done
 
 # Error for violation of enabled lint rules in config excluding generated code.
-revive \
-  -set_exit_status=1 \
-  -exclude "testdata/grpc_testing_not_regenerated/" \
-  -exclude "**/*.pb.go" \
-  -formatter plain \
-  -config "$(dirname "$0")/revive.toml" \
-  ./...
+find . -name "go.mod" -exec dirname {} \; | while read dir; do
+  revive \
+    -set_exit_status=1 \
+    -exclude "testdata/grpc_testing_not_regenerated/" \
+    -exclude "**/*.pb.go" \
+    -formatter plain \
+    -config "$(dirname "$0")/revive.toml" \
+    "$dir/..."
+done
 
 echo SUCCESS
