@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
@@ -42,6 +44,10 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
+var (
+	defaultTestTimeout = time.Second * 10
+)
+
 type s struct {
 	grpctest.Tester
 }
@@ -49,8 +55,6 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
-
-var gracefulSwitchPickFirst = endpointsharding.PickFirstConfig
 
 var logger = grpclog.Component("endpoint-sharding-test")
 
@@ -95,7 +99,7 @@ func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) err
 	}
 
 	return fp.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: gracefulSwitchPickFirst,
+		BalancerConfig: endpointsharding.PickFirstConfig,
 		ResolverState:  state.ResolverState,
 	})
 }
@@ -143,13 +147,81 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 		log.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 	// Assert a round robin distribution between the two spun up backends. This
 	// requires a poll and eventual consistency as both endpoint children do not
 	// start in state READY.
 	if err = roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend1.Address}, {Addr: backend2.Address}}); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+}
+
+// Tests that endpointsharding doesn't automatically re-connect IDLE children.
+// The test creates an endpoint with two servers and another with a single
+// server. The active service in endpoint 1 is closed to make the child
+// pickfirst enter IDLE state. The test verifies that the child pickfirst
+// doesn't connect to the second address in the endpoint.
+func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
+	backend1 := stubserver.StartTestService(t, nil)
+	defer backend1.Stop()
+	backend2 := stubserver.StartTestService(t, nil)
+	defer backend2.Stop()
+	backend3 := stubserver.StartTestService(t, nil)
+	defer backend3.Stop()
+
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	defer mr.Close()
+
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = endpointsharding.NewBalancerWithoutAutoReconnect(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
+				BalancerConfig: endpointsharding.PickFirstConfig,
+				ResolverState:  ccs.ResolverState,
+			})
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+	}
+	stub.Register(name, bf)
+
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, name)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
+	mr.InitialState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: backend1.Address}, {Addr: backend2.Address}}},
+			{Addresses: []resolver.Address{{Addr: backend3.Address}}},
+		},
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to create new client: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	// Assert a round robin distribution between the two spun up backends. This
+	// requires a poll and eventual consistency as both endpoint children do not
+	// start in state READY.
+	if err = roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend1.Address}, {Addr: backend3.Address}}); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// On closing the first server, the first child balancer should enter
+	// IDLE. Since endpointsharding is configured not to auto-reconnect, it will
+	// remain IDLE and will not try to connect to the second backend in the same
+	// endpoint.
+	backend1.Stop()
+	if err = roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend3.Address}}); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
 	}
 }
