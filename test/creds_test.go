@@ -435,6 +435,7 @@ func (s) TestCredsHandshakeAuthority(t *testing.T) {
 	s := grpc.NewServer()
 	go s.Serve(lis)
 	defer s.Stop()
+
 	r := manual.NewBuilderWithScheme("whatever")
 
 	cc, err := grpc.NewClient(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))
@@ -467,6 +468,7 @@ func (s) TestCredsHandshakeServerNameAuthority(t *testing.T) {
 	s := grpc.NewServer()
 	go s.Serve(lis)
 	defer s.Stop()
+
 	r := manual.NewBuilderWithScheme("whatever")
 
 	cc, err := grpc.NewClient(r.Scheme()+":///"+testAuthority, grpc.WithTransportCredentials(cred), grpc.WithResolvers(r))
