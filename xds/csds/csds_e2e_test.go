@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/csds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -220,22 +221,27 @@ func (s) TestCSDS(t *testing.T) {
 	// Create a bootstrap contents pointing to the above management server.
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	// We use the default xDS client pool here because the CSDS service reports
+	// on the state of the default xDS client which is implicitly managed
+	// within the xdsclient.DefaultPool.
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
-	xdsClient1, xdsClose1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     xdsClient1Name,
-		Contents: bootstrapContents,
+	xdsClient1, xdsClose1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: xdsClient1Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer xdsClose1()
 	const xdsClient2Name = "xds-csds-client-2"
-	xdsClient2, xdsClose2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     xdsClient2Name,
-		Contents: bootstrapContents,
+	xdsClient2, xdsClose2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: xdsClient2Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -417,22 +423,27 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	// Create a bootstrap contents pointing to the above management server.
 	nodeID := uuid.New().String()
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	// We use the default xDS client pool here because the CSDS service reports
+	// on the state of the default xDS client which is implicitly managed
+	// within the xdsclient.DefaultPool.
+	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
-	xdsClient1, xdsClose1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     xdsClient1Name,
-		Contents: bootstrapContents,
+	xdsClient1, xdsClose1, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: xdsClient1Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer xdsClose1()
 	const xdsClient2Name = "xds-csds-client-2"
-	xdsClient2, xdsClose2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     xdsClient2Name,
-		Contents: bootstrapContents,
+	xdsClient2, xdsClose2, err := xdsclient.DefaultPool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: xdsClient2Name,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

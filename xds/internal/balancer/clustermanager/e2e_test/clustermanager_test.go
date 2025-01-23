@@ -102,13 +102,12 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Configure client side xDS resources on the management server.

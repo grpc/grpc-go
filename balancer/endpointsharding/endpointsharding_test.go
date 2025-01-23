@@ -16,7 +16,7 @@
  *
  */
 
-package endpointsharding
+package endpointsharding_test
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -49,16 +50,11 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-var gracefulSwitchPickFirst serviceconfig.LoadBalancingConfig
+var gracefulSwitchPickFirst = endpointsharding.PickFirstConfig
 
 var logger = grpclog.Component("endpoint-sharding-test")
 
 func init() {
-	var err error
-	gracefulSwitchPickFirst, err = ParseConfig(json.RawMessage(PickFirstConfig))
-	if err != nil {
-		logger.Fatal(err)
-	}
 	balancer.Register(fakePetioleBuilder{})
 }
 
@@ -75,7 +71,7 @@ func (fakePetioleBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		ClientConn: cc,
 		bOpts:      opts,
 	}
-	fp.Balancer = NewBalancer(fp, opts)
+	fp.Balancer = endpointsharding.NewBalancer(fp, opts)
 	return fp
 }
 
@@ -105,7 +101,7 @@ func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) err
 }
 
 func (fp *fakePetiole) UpdateState(state balancer.State) {
-	childStates := ChildStatesFromPicker(state.Picker)
+	childStates := endpointsharding.ChildStatesFromPicker(state.Picker)
 	// Both child states should be present in the child picker. States and
 	// picker change over the lifecycle of test, but there should always be two.
 	if len(childStates) != 2 {
