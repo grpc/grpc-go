@@ -70,7 +70,7 @@ func (s) TestBalancer_StateListenerBeforeConnect(t *testing.T) {
 	stub.Register(t.Name(), bf)
 	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
 
-	cc, err := NewClient("fake", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(svcCfg))
+	cc, err := NewClient("passthrough:///test.server", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(svcCfg))
 	if err != nil {
 		t.Fatal("Failed to create a client for server:", err)
 	}
