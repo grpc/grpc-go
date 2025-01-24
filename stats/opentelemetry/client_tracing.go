@@ -22,7 +22,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/stats"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
@@ -31,7 +30,7 @@ import (
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-func (h *clientStatsHandler) traceTagRPC(ctx context.Context, _ *stats.RPCTagInfo, ai *attemptInfo) (context.Context, *attemptInfo) {
+func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn)

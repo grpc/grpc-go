@@ -202,7 +202,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		method:    removeLeadingSlash(method),
 	}
 	if h.options.isTracingEnabled() {
-		ctx, ai = h.traceTagRPC(ctx, info, ai)
+		ctx, ai = h.traceTagRPC(ctx, ai)
 	}
 	return setRPCInfo(ctx, &rpcInfo{
 		ai: ai,

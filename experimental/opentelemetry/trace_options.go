@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Package opentelemetry is EXPERIMENTAL and may be moved to stats/opentelemetry
+// Package opentelemetry is EXPERIMENTAL and will be moved to stats/opentelemetry
 // package in a later release.
 package opentelemetry
 
@@ -23,7 +23,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TraceOptions are the tracing options for OpenTelemetry instrumentation.
+// TraceOptions contains the tracing settings for OpenTelemetry instrumentation.
 type TraceOptions struct {
 	// TracerProvider is the OpenTelemetry tracer which is required to
 	// record traces/trace spans for instrumentation.  If unset, tracing
@@ -31,7 +31,6 @@ type TraceOptions struct {
 	TracerProvider trace.TracerProvider
 
 	// TextMapPropagator propagates span context through text map carrier.
-	// If unset, context propagation will not occur, which may result in
-	// loss of trace context across service boundaries.
+	// If unset, tracing will not be recorded.
 	TextMapPropagator propagation.TextMapPropagator
 }
