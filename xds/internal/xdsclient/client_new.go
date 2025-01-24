@@ -24,15 +24,34 @@ import (
 	"sync"
 	"time"
 
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpcsync"
+	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclientinternal "google.golang.org/grpc/xds/internal/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport/ads"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport/grpctransport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+)
+
+var (
+	xdsClientResourceUpdatesValidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.xds_client.resource_updates_valid",
+		Description: "A counter of resources received that were considered valid. The counter will be incremented even for resources that have not changed.",
+		Unit:        "resource",
+		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		Default:     false,
+	})
+	xdsClientResourceUpdatesInvalidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.xds_client.resource_updates_invalid",
+		Description: "A counter of resources received that were considered invalid.",
+		Unit:        "resource",
+		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		Default:     false,
+	})
 )
 
 // NameForServer represents the value to be passed as name when creating an xDS
@@ -46,6 +65,10 @@ const NameForServer = "#server"
 // - actual configuration specified by GRPC_XDS_BOOTSTRAP_CONFIG
 // - fallback configuration set using bootstrap.SetFallbackBootstrapConfig
 //
+// The second argument taken is a metricsRecorder. Each instance of an xDS
+// Client shared per target will use the metricsRecorder passed during the New
+// call that created the actual instance.
+//
 // gRPC client implementations are expected to pass the channel's target URI for
 // the name field, while server implementations are expected to pass a dedicated
 // well-known value "#server", as specified in gRFC A71. The returned client is
@@ -56,18 +79,21 @@ const NameForServer = "#server"
 // it once they are done using the client. The underlying client will be closed
 // only when all references are released, and it is safe for the caller to
 // invoke this close function multiple times.
-func New(name string) (XDSClient, func(), error) {
+func New(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
 	config, err := bootstrap.GetConfiguration()
 	if err != nil {
 		return nil, nil, fmt.Errorf("xds: failed to get xDS bootstrap config: %v", err)
 	}
-	return newRefCounted(name, config, defaultWatchExpiryTimeout, defaultIdleChannelExpiryTimeout, backoff.DefaultExponential.Backoff)
+	return newRefCounted(name, config, defaultWatchExpiryTimeout, defaultIdleChannelExpiryTimeout, backoff.DefaultExponential.Backoff, metricsRecorder)
 }
 
 // newClientImpl returns a new xdsClient with the given config.
-func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (*clientImpl, error) {
+func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, mr estats.MetricsRecorder, target string) (*clientImpl, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+
 	c := &clientImpl{
+		metricsRecorder:    mr,
+		target:             target,
 		done:               grpcsync.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
@@ -94,6 +120,8 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpi
 			serializer:       c.serializer,
 			getChannelForADS: c.getChannelForADS,
 			logPrefix:        clientPrefix(c),
+			target:           target,
+			metricsRecorder:  c.metricsRecorder,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -102,6 +130,8 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout, idleChannelExpi
 		serializer:       c.serializer,
 		getChannelForADS: c.getChannelForADS,
 		logPrefix:        clientPrefix(c),
+		target:           target,
+		metricsRecorder:  c.metricsRecorder,
 	})
 	c.logger = prefixLogger(c)
 	return c, nil
@@ -129,6 +159,9 @@ type OptionsForTesting struct {
 	// backoff duration after stream failures.
 	// If unspecified, uses the default value used in non-test code.
 	StreamBackoffAfterFailure func(int) time.Duration
+	// MetricsRecorder is the metrics recorder the xDS Client will use. If
+	// unspecified, uses a no-op MetricsRecorder.
+	MetricsRecorder estats.MetricsRecorder
 }
 
 // NewForTesting returns an xDS client configured with the provided options.
@@ -153,12 +186,15 @@ func NewForTesting(opts OptionsForTesting) (XDSClient, func(), error) {
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
 	}
+	if opts.MetricsRecorder == nil {
+		opts.MetricsRecorder = &istats.NoopMetricsRecorder{}
+	}
 
 	config, err := bootstrap.NewConfigForTesting(opts.Contents)
 	if err != nil {
 		return nil, nil, err
 	}
-	return newRefCounted(opts.Name, config, opts.WatchExpiryTimeout, opts.IdleChannelExpiryTimeout, opts.StreamBackoffAfterFailure)
+	return newRefCounted(opts.Name, config, opts.WatchExpiryTimeout, opts.IdleChannelExpiryTimeout, opts.StreamBackoffAfterFailure, opts.MetricsRecorder)
 }
 
 // GetForTesting returns an xDS client created earlier using the given name.

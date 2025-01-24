@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
+	"google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -475,7 +476,7 @@ func (s) TestServeSuccess(t *testing.T) {
 // creation fails and verifies that the call to NewGRPCServer() fails.
 func (s) TestNewServer_ClientCreationFailure(t *testing.T) {
 	origNewXDSClient := newXDSClient
-	newXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
+	newXDSClient = func(string, stats.MetricsRecorder) (xdsclient.XDSClient, func(), error) {
 		return nil, nil, errors.New("xdsClient creation failed")
 	}
 	defer func() { newXDSClient = origNewXDSClient }()

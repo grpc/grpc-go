@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	istats "google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -105,7 +106,8 @@ func buildResolverForTarget(t *testing.T, target resolver.Target) (chan resolver
 	}
 	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF, ReportErrorF: reportErrorF}
 	r, err := builder.Build(target, tcc, resolver.BuildOptions{
-		Authority: url.PathEscape(target.Endpoint()),
+		Authority:       url.PathEscape(target.Endpoint()),
+		MetricsRecorder: &istats.NoopMetricsRecorder{},
 	})
 	if err != nil {
 		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)

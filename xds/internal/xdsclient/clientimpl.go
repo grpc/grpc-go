@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -55,6 +56,8 @@ type clientImpl struct {
 	serializer         *grpcsync.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
 	logger             *grpclog.PrefixLogger        // Logger for this client.
+	metricsRecorder    stats.MetricsRecorder        // Metrics recorder for metrics.
+	target             string                       // The gRPC target for this client.
 
 	// The clientImpl owns a bunch of channels to individual xDS servers
 	// specified in the bootstrap configuration. Authorities acquire references

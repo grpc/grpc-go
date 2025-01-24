@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
@@ -606,7 +607,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{})
+	bal := builder.Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
 	defer bal.Close()
 
 	configJSON1 := `{

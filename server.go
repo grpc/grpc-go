@@ -37,12 +37,14 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
+	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/mem"
@@ -82,6 +84,9 @@ func init() {
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
 	internal.BufferPool = bufferPool
+	internal.MetricsRecorderForServer = func(srv *Server) estats.MetricsRecorder {
+		return istats.NewMetricsRecorderList(srv.opts.statsHandlers)
+	}
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -670,6 +675,7 @@ func NewServer(opt ...ServerOption) *Server {
 		done:     grpcsync.NewEvent(),
 		channelz: channelz.RegisterServer(""),
 	}
+
 	chainUnaryServerInterceptors(s)
 	chainStreamServerInterceptors(s)
 	s.cv = sync.NewCond(&s.mu)
