@@ -172,11 +172,6 @@ type ClientConn interface {
 	// record metrics. Balancer implementations which do not register metrics on
 	// metrics registry and record on them can ignore this method.
 	MetricsRecorder() estats.MetricsRecorder
-
-	// EnforceClientConnEmbedding is included to force implementers to embed
-	// another implementation of this interface, allowing gRPC to add methods
-	// without breaking users.
-	internal.EnforceClientConnEmbedding
 }
 
 // BuildOptions contains additional information for Build.
@@ -333,13 +328,6 @@ type Picker interface {
 // UpdateClientConnState, ResolverError, UpdateSubConnState, and Close are
 // guaranteed to be called synchronously from the same goroutine.  There's no
 // guarantee on picker.Pick, it may be called anytime.
-//
-// NOTICE: This interface is intended to be implemented by gRPC, or intercepted
-// by custom load balancing polices.  Users should not need their own complete
-// implementation of this interface -- they should always delegate to a
-// ClientConn passed to Builder.Build() by embedding it in their
-// implementations. An embedded ClientConn must never be nil, or runtime panics
-// will occur.
 type Balancer interface {
 	// UpdateClientConnState is called by gRPC when the state of the ClientConn
 	// changes.  If the error returned is ErrBadResolverState, the ClientConn
