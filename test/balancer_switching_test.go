@@ -177,18 +177,23 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
-	// Set an initial resolver with a GRPCLB service config and a single address
-	// pointing to the grpclb server we created above. This will cause the
-	// channel to switch to the "grpclb" balancer, which returns a single
-	// backend address.
-	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
-	state := resolver.State{ServiceConfig: grpclbConfig}
-	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
+
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
+
+	// Set an initial resolver with a GRPCLB service config and a single address
+	// pointing to the grpclb server we created above. This will cause the
+	// channel to switch to the "grpclb" balancer, which returns a single
+	// backend address.
+	grpclbConfig := parseServiceConfig(t, r, grpclbServiceConfig)
+	r.InitialState(resolver.State{
+		ServiceConfig: grpclbConfig,
+		Addresses:     []resolver.Address{{Addr: lbServer.Address()}},
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -200,7 +205,10 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	// Push a resolver update containing a non-existent grpclb server address.
 	// This should not lead to a balancer switch.
 	const nonExistentServer = "non-existent-grpclb-server-address"
-	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: nonExistentServer}}}))
+	r.UpdateState(resolver.State{
+		ServiceConfig: grpclbConfig,
+		Addresses:     []resolver.Address{{Addr: nonExistentServer}},
+	})
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +218,7 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	// list of addresses pushed as part of this update is different from the one
 	// returned by the "grpclb" balancer. So, we should see RPCs going to the
 	// newly configured backends, as part of the balancer switch.
-	emptyConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`{}`)
+	emptyConfig := parseServiceConfig(t, r, `{}`)
 	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: emptyConfig})
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
