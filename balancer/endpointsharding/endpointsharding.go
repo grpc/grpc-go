@@ -64,12 +64,13 @@ type ChildState struct {
 	State    balancer.State
 
 	// Balancer exposes only the ExitIdler interface of the child LB policy.
-	// Other methods on the child policy are called only by endpointsharding.
+	// Other methods of the child policy are called only by endpointsharding.
 	Balancer balancer.ExitIdler
 }
 
 // NewBalancer returns a load balancing policy that manages homogeneous child
-// policies each owning a single endpoint.
+// policies each owning a single endpoint. The balancer will automatically call
+// ExitIdle on its children if they report IDLE connectivity state.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	return newBlanacer(cc, opts, true)
 }
@@ -175,7 +176,6 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 		bal := child.(*balancerWrapper)
 		if _, ok := newChildren.Get(e); !ok {
 			bal.Close()
-			bal.isClosed = true
 		}
 	}
 	es.children.Store(newChildren)
@@ -214,7 +214,6 @@ func (es *endpointSharding) Close() {
 	for _, child := range children.Values() {
 		bal := child.(*balancerWrapper)
 		bal.Close()
-		bal.isClosed = true
 	}
 }
 
@@ -313,13 +312,9 @@ func ChildStatesFromPicker(picker balancer.Picker) []ChildState {
 type balancerWrapper struct {
 	balancer.Balancer   // Simply forward balancer.Balancer operations.
 	balancer.ClientConn // embed to intercept UpdateState, doesn't deal with SubConns
-
-	es *endpointSharding
-
-	childState ChildState
-
-	// Users must hold `es.childMu`.
-	isClosed bool
+	es                  *endpointSharding
+	childState          ChildState
+	isClosed            bool
 }
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
@@ -330,6 +325,11 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 		bw.ExitIdle()
 	}
 	bw.es.updateState()
+}
+
+func (bw *balancerWrapper) Close() {
+	bw.Balancer.Close()
+	bw.isClosed = true
 }
 
 // ExitIdle pings an IDLE child balancer to exit idle in a new goroutine to
