@@ -100,7 +100,16 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   go mod tidy -compat=1.22
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
-
+  
+  # Error for violation of enabled lint rules in config excluding generated code.
+  revive \
+    -set_exit_status=1 \
+    -exclude "testdata/grpc_testing_not_regenerated/" \
+    -exclude "**/*.pb.go" \
+    -formatter plain \
+    -config "$(dirname "$0")/revive.toml" \
+    ./...
+  
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
   # By default, Staticcheck targets the Go version declared in go.mod via the go
@@ -190,17 +199,6 @@ GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
   popd
-done
-
-# Error for violation of enabled lint rules in config excluding generated code.
-find . -name "go.mod" -exec dirname {} \; | while read dir; do
-  revive \
-    -set_exit_status=1 \
-    -exclude "testdata/grpc_testing_not_regenerated/" \
-    -exclude "**/*.pb.go" \
-    -formatter plain \
-    -config "$(dirname "$0")/revive.toml" \
-    "$dir/..."
 done
 
 echo SUCCESS
