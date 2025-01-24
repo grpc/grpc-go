@@ -129,6 +129,13 @@ type State struct {
 // brand new implementation of this interface. For the situations like
 // testing, the new implementation should embed this interface. This allows
 // gRPC to add new methods to this interface.
+//
+// NOTICE: This interface is intended to be implemented by gRPC, or intercepted
+// by custom load balancing polices.  Users should not need their own complete
+// implementation of this interface -- they should always delegate to a
+// ClientConn passed to Builder.Build() by embedding it in their
+// implementations. An embedded ClientConn must never be nil, or runtime panics
+// will occur.
 type ClientConn interface {
 	// NewSubConn is called by balancer to create a new SubConn.
 	// It doesn't block and wait for the connections to be established.
@@ -332,13 +339,6 @@ type Picker interface {
 // UpdateClientConnState, ResolverError, UpdateSubConnState, and Close are
 // guaranteed to be called synchronously from the same goroutine.  There's no
 // guarantee on picker.Pick, it may be called anytime.
-//
-// NOTICE: This interface is intended to be implemented by gRPC, or intercepted
-// by custom load balancing polices.  Users should not need their own complete
-// implementation of this interface -- they should always delegate to a
-// ClientConn passed to Builder.Build() by embedding it in their
-// implementations. An embedded ClientConn must never be nil, or runtime panics
-// will occur.
 type Balancer interface {
 	// UpdateClientConnState is called by gRPC when the state of the ClientConn
 	// changes.  If the error returned is ErrBadResolverState, the ClientConn

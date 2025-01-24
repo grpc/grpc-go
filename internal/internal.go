@@ -281,5 +281,5 @@ type EnforceSubConnEmbedding interface {
 // EnforceClientConnEmbedding is used to enforce proper ClientConn implementation
 // embedding.
 type EnforceClientConnEmbedding interface {
-	enforceSubConnEmbedding()
+	enforceClientConnEmbedding()
 }
