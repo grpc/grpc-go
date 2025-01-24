@@ -789,7 +789,6 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
         }
     ]
 }`)})
-
 	time.Sleep(1 * time.Second)
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady != nil {
