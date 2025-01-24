@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -78,4 +79,45 @@ type ClusterUpdate struct {
 	// "com.google.csm.telemetry_labels" with keys "service_name" or
 	// "service_namespace".
 	TelemetryLabels map[string]string
+}
+
+// SecurityConfig contains the security configuration received as part of the
+// Cluster resource on the client-side, and as part of the Listener resource on
+// the server-side.
+type SecurityConfig struct {
+	// RootInstanceName identifies the certProvider plugin to be used to fetch
+	// root certificates. This instance name will be resolved to the plugin name
+	// and its associated configuration from the certificate_providers field of
+	// the bootstrap file.
+	RootInstanceName string
+	// RootCertName is the certificate name to be passed to the plugin (looked
+	// up from the bootstrap file) while fetching root certificates.
+	RootCertName string
+	// IdentityInstanceName identifies the certProvider plugin to be used to
+	// fetch identity certificates. This instance name will be resolved to the
+	// plugin name and its associated configuration from the
+	// certificate_providers field of the bootstrap file.
+	IdentityInstanceName string
+	// IdentityCertName is the certificate name to be passed to the plugin
+	// (looked up from the bootstrap file) while fetching identity certificates.
+	IdentityCertName string
+	// SubjectAltNameMatchers is an optional list of match criteria for SANs
+	// specified on the peer certificate. Used only on the client-side.
+	//
+	// Some intricacies:
+	// - If this field is empty, then any peer certificate is accepted.
+	// - If the peer certificate contains a wildcard DNS SAN, and an `exact`
+	//   matcher is configured, a wildcard DNS match is performed instead of a
+	//   regular string comparison.
+	SubjectAltNameMatchers []matcher.StringMatcher
+	// RequireClientCert indicates if the server handshake process expects the
+	// client to present a certificate. Set to true when performing mTLS. Used
+	// only on the server-side.
+	RequireClientCert bool
+	// UseSystemRootCerts indicates that the client should use system root
+	// certificates to validate the server certificate. This field is mutually
+	// exclusive with RootCertName and RootInstanceName. Validation performed
+	// after unmarshalling xDS resources ensures that this field is set only
+	// when both RootCertName and RootInstanceName are empty.
+	UseSystemRootCerts bool
 }
