@@ -123,7 +123,7 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 				if lastPickErr != nil {
 					errStr = "latest balancer error: " + lastPickErr.Error()
 				} else {
-					errStr = fmt.Sprintf("received context error while waiting for new LB policy update: %s", ctx.Err().Error())
+					errStr = fmt.Sprintf("received context error due to timing out waiting for connection: %s", ctx.Err().Error())
 				}
 				switch ctx.Err() {
 				case context.DeadlineExceeded:
