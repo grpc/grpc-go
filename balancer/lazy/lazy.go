@@ -113,12 +113,12 @@ func (lb *lazyBalancer) ResolverError(err error) {
 func (lb *lazyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
-	if childLBCfg, ok := ccs.BalancerConfig.(lbCfg); !ok {
+	childLBCfg, ok := ccs.BalancerConfig.(lbCfg)
+	if !ok {
 		lb.logger.Errorf("Got LB config of unexpected type: %v", ccs.BalancerConfig)
-		ccs.BalancerConfig = nil
-	} else {
-		ccs.BalancerConfig = childLBCfg.childLBCfg
+		return balancer.ErrBadResolverState
 	}
+	ccs.BalancerConfig = childLBCfg.childLBCfg
 	if lb.delegate != nil {
 		return lb.delegate.UpdateClientConnState(ccs)
 	}
@@ -198,6 +198,8 @@ type idlePicker struct {
 }
 
 func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	i.exitIdle()
+	// Call exitIdle in a new goroutine to avoid deadlocks while calling back
+	// into the channel synchronously.
+	go i.exitIdle()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
