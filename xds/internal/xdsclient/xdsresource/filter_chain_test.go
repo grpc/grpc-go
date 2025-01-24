@@ -545,7 +545,7 @@ func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "expected field ca_certificate_provider_instance is missing and unexpected field ca_certificate_provider_instance is set",
+			wantErr: "expected field ca_certificate_provider_instance is missing and unexpected field system_root_certs is set",
 		},
 		{
 			desc: "system root certificate field set on server, env var disabled",

@@ -65,8 +65,9 @@ var (
 	}
 	buildProvider = buildProviderFunc
 
-	// systemRootCertsFunc is used for mocking the system cert pool for tests.
-	systemRootCertsFunc = x509.SystemCertPool
+	// x509SystemCertPoolFunc is used for mocking the system cert pool for
+	// tests.
+	x509SystemCertPoolFunc = x509.SystemCertPool
 )
 
 func init() {
@@ -680,12 +681,14 @@ func (ccw *ccWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Addr
 	ccw.ClientConn.UpdateAddresses(sc, newAddrs)
 }
 
+// systemRootCertsProvider implements a certprovider.Provider that returns the
+// system default root certificates for validation.
 type systemRootCertsProvider struct{}
 
 func (systemRootCertsProvider) Close() {}
 
 func (systemRootCertsProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
-	rootCAs, err := systemRootCertsFunc()
+	rootCAs, err := x509SystemCertPoolFunc()
 	if err != nil {
 		return nil, err
 	}

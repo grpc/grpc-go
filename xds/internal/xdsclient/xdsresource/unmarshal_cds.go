@@ -365,8 +365,6 @@ func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.Comm
 	//    - contains a default validation context which holds the list of
 	//      matchers for accepted SANs.
 	//    - contains certificate provider instance configuration
-	//    - contains a `system_root_certs` field indicating the use of system
-	//      root certs.
 	//  - certificate provider instance configuration
 	//    - in this case, we do not get a list of accepted SANs.
 	switch t := common.GetValidationContextType().(type) {
@@ -473,23 +471,24 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 	//    certificates, else
 	// 2. If the system_root_certs field is set, and the config is for a client,
 	//    use the system default root certs.
-	if validationCtx.GetCaCertificateProviderInstance() == nil {
-		systemRootCertsEnabled := envconfig.XDSSystemRootCertsEnabled && validationCtx.GetSystemRootCerts() != nil
-		// The `system_root_certs` field will not be supported on the gRPC
-		// server side. If `ca_certificate_provider_instance` is unset and
-		// `system_root_certs` is set, the LDS resource will be NACKed.
-		// - A82
-		if server && systemRootCertsEnabled {
-			return nil, fmt.Errorf("expected field ca_certificate_provider_instance is missing and unexpected field ca_certificate_provider_instance is set for server in CommonTlsContext message: %+v", common)
-		}
-		if server || !envconfig.XDSSystemRootCertsEnabled {
-			return nil, fmt.Errorf("expected field ca_certificate_provider_instance is missing in CommonTlsContext message: %+v", common)
-		}
-		// Clients can use system root certs for validation.
-		if !systemRootCertsEnabled {
-			return nil, fmt.Errorf("expected fields ca_certificate_provider_instance and system_root_certs are missing in CommonTlsContext message: %+v", common)
+	useSystemRootCerts := false
+	if validationCtx.GetCaCertificateProviderInstance() == nil && envconfig.XDSSystemRootCertsEnabled {
+		if server {
+			if validationCtx.GetSystemRootCerts() != nil {
+				// The `system_root_certs` field will not be supported on the
+				// gRPC server side. If `ca_certificate_provider_instance` is
+				// unset and `system_root_certs` is set, the LDS resource will
+				// be NACKed.
+				// - A82
+				return nil, fmt.Errorf("expected field ca_certificate_provider_instance is missing and unexpected field system_root_certs is set for server in CommonTlsContext message: %+v", common)
+			}
+		} else {
+			if validationCtx.GetSystemRootCerts() != nil {
+				useSystemRootCerts = true
+			}
 		}
 	}
+
 	// The following fields are ignored:
 	// - trusted_ca
 	// - watched_directory
@@ -511,9 +510,15 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 	if rootProvider := validationCtx.GetCaCertificateProviderInstance(); rootProvider != nil {
 		sc.RootInstanceName = rootProvider.GetInstanceName()
 		sc.RootCertName = rootProvider.GetCertificateName()
-	} else if !server && envconfig.XDSSystemRootCertsEnabled && validationCtx.SystemRootCerts != nil {
+	} else if useSystemRootCerts {
 		sc.UseSystemRootCerts = true
+	} else if !server && envconfig.XDSSystemRootCertsEnabled {
+		return nil, fmt.Errorf("expected fields ca_certificate_provider_instance and system_root_certs are missing in CommonTlsContext message: %+v", common)
+	} else {
+		// Don't mention the system_root_certs field if it was not checked.
+		return nil, fmt.Errorf("expected field ca_certificate_provider_instance is missing in CommonTlsContext message: %+v", common)
 	}
+
 	var matchers []matcher.StringMatcher
 	for _, m := range validationCtx.GetMatchSubjectAltNames() {
 		matcher, err := matcher.StringMatcherFromProto(m)

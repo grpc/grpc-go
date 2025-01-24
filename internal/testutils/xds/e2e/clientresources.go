@@ -67,11 +67,11 @@ const (
 	// mTLS is required. Both client and server present identity certificates in
 	// this configuration.
 	SecurityLevelMTLS
-	// SecurityLevelMTLSWithSystemRootCerts is used when security configuration
-	// corresponding to mTLS is required and the client needs to use system root
-	// certs to validate the server certificate. Both client and server present
-	// identity certificates in this configuration.
-	SecurityLevelMTLSWithSystemRootCerts
+	// SecurityLevelTLSWithSystemRootCerts is used when security configuration
+	// corresponding to TLS is required. Only the server presents an identity
+	// certificate in this configuration and the client uses system root certs
+	// to validate the server certificate.
+	SecurityLevelTLSWithSystemRootCerts
 )
 
 // ResourceParams wraps the arguments to be passed to DefaultClientResources.
@@ -598,16 +598,13 @@ func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 				},
 			},
 		}
-	case SecurityLevelMTLSWithSystemRootCerts:
+	case SecurityLevelTLSWithSystemRootCerts:
 		tlsContext = &v3tlspb.UpstreamTlsContext{
 			CommonTlsContext: &v3tlspb.CommonTlsContext{
 				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
 					ValidationContext: &v3tlspb.CertificateValidationContext{
 						SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
 					},
-				},
-				TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-					InstanceName: ClientSideCertProviderInstance,
 				},
 			},
 		}

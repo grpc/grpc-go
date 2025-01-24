@@ -213,8 +213,11 @@ type SecurityConfig struct {
 	// client to present a certificate. Set to true when performing mTLS. Used
 	// only on the server-side.
 	RequireClientCert bool
-	// UseSystemRootCerts indicates the use of system root certificates by the
-	// client to validate the server certificate.
+	// UseSystemRootCerts indicates that the client should use system root
+	// certificates to validate the server certificate. This field is mutually
+	// exclusive with RootCertName and RootInstanceName. Validation performed
+	// after unmarshalling xDS resources ensures that this field is set only
+	// when both RootCertName and RootInstanceName are empty.
 	UseSystemRootCerts bool
 }
 

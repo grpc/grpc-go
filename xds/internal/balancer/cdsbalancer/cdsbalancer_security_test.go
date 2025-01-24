@@ -755,16 +755,15 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 // Verifies that the connection between the client and the server is secure.
 func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	origFlag := envconfig.XDSSystemRootCertsEnabled
-	origSRCF := systemRootCertsFunc
+	origSRCF := x509SystemCertPoolFunc
 	defer func() {
 		envconfig.XDSSystemRootCertsEnabled = origFlag
-		systemRootCertsFunc = origSRCF
+		x509SystemCertPoolFunc = origSRCF
 	}()
 	envconfig.XDSSystemRootCertsEnabled = true
-	systemRootCertsFunc = origSRCF
 
 	systemRootCertsFuncCalled := false
-	systemRootCertsFunc = func() (*x509.CertPool, error) {
+	x509SystemCertPoolFunc = func() (*x509.CertPool, error) {
 		certData, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read certificate file: %w", err)
@@ -793,7 +792,7 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	// cluster resource is configured to return security configuration.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLSWithSystemRootCerts)},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelTLSWithSystemRootCerts)},
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
 		SkipValidation: true,
 	}
@@ -806,12 +805,12 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	// Verify that a successful RPC can be made over a secure connection.
 	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
 
 	if systemRootCertsFuncCalled != true {
-		t.Errorf("systemRootCertsFuncCalled = %t, want = true", systemRootCertsFuncCalled)
+		t.Errorf("System root certs were not used during the test.")
 	}
 }

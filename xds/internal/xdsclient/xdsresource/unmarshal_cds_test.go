@@ -475,7 +475,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 				},
 			},
 			server:  true,
-			wantErr: "expected field ca_certificate_provider_instance is missing and unexpected field ca_certificate_provider_instance is set",
+			wantErr: "expected field ca_certificate_provider_instance is missing and unexpected field system_root_certs is set",
 		},
 	}
 
@@ -1056,7 +1056,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 											InstanceName:    rootPluginInstance,
 											CertificateName: rootCertName,
 										},
-										// SystemRootCerts will be ignored dur
+										// SystemRootCerts will be ignored due
 										// to the presence of
 										// CaCertificateProviderInstance.
 										SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
