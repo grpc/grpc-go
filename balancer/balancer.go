@@ -170,7 +170,8 @@ type ClientConn interface {
 
 	// MetricsRecorder provides the metrics recorder that balancers can use to
 	// record metrics. Balancer implementations which do not register metrics on
-	// metrics registry and record on them can ignore this method.
+	// metrics registry and record on them can ignore this method. The returned
+	// MetricsRecorder is guaranteed to never be nil.
 	MetricsRecorder() estats.MetricsRecorder
 }
 
