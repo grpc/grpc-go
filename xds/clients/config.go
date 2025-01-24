@@ -16,19 +16,33 @@
  *
  */
 
-// Package clients contains implementations of the xDS and LRS clients, to be
-// used by applications to communicate with xDS management servers.
+// Package clients provides implementations of the xDS and LRS clients,
+// enabling applications to communicate with xDS management servers and report
+// load.
 //
-// The xDS client enable users to create client instance with in-memory
-// configurations and register watches for named resource that can be received
-// on ADS stream.
+// xDS Client
 //
-// The LRS client allows to report load through LRS Stream.
+// The xDS client allows applications to:
+//   - Create client instances with in-memory configurations.
+//   - Register watches for named resources.
+//   - Receive resources via the ADS (Aggregated Discovery Service) stream.
+//
+// This enables applications to dynamically discover and configure resources
+// such as listeners, routes, clusters, and endpoints from an xDS management
+// server.
+//
+// # LRS Client
+//
+// The LRS (Load Reporting Service) client allows applications to report load
+// data to an LRS server via the LRS stream. This data can be used for
+// monitoring, traffic management, and other purposes.
 //
 // # Experimental
 //
-// Notice: This package is EXPERIMENTAL and may be changed or removed
-// in a later release. See [README](https://github.com/grpc/grpc-go/tree/master/xds/clients/README.md)
+// NOTICE: This package is EXPERIMENTAL and may be changed or removed
+// in a later release.
+//
+// See [README](https://github.com/grpc/grpc-go/tree/master/xds/clients/README.md).
 package clients
 
 import (
@@ -40,11 +54,9 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/google/go-cmp/cmp"
 )
 
-// ServerConfig contains the configuration to connect to an xDS management
-// server.
+// ServerConfig holds settings for connecting to an xDS management server.
 type ServerConfig struct {
 	// ServerURI is the target URI of the xDS management server.
 	ServerURI string
@@ -63,10 +75,9 @@ type ServerConfig struct {
 	// This field can be used to provide additional configuration or context
 	// specific to the user's needs.
 	//
-	// The xDS and LRS clients itself do not interpret the contents of this
-	// field. It is the responsibility of the user's custom [TransportBuilder]
-	// and/or ResourceType implementations to handle and interpret these
-	// extensions.
+	// The xDS and LRS clients do not interpret the contents of this field.
+	// It is the responsibility of the user's custom [TransportBuilder] and/or
+	// ResourceType implementations to handle and interpret these extensions.
 	//
 	// For example, a custom [TransportBuilder] might use this field to
 	// configure a specific security credentials.
@@ -84,17 +95,18 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 		return false
 	case sc.IgnoreResourceDeletion != other.IgnoreResourceDeletion:
 		return false
-	case !cmp.Equal(sc.Extensions, other.Extensions):
-		return false
 	}
-	return true
+	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
+		return true
+	}
+	return false
 }
 
 // String returns a string representation of the [ServerConfig].
 //
-// NOTICE: This interface is intended mainly for logging/testing purposes and
-// that the user must not assume anything about the stability of the output
-// returned from this method.
+// WARNING: This method is primarily intended for logging and testing
+// purposes. The output returned by this method is not guaranteed to be stable
+// and may change at any time. Do not rely on it for production use.
 func (sc *ServerConfig) String() string {
 	return strings.Join([]string{sc.ServerURI, fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
 }
@@ -109,40 +121,34 @@ type Authority struct {
 	// provide additional configuration or context specific to the user's
 	// needs.
 	//
-	// The xDS and LRS clients itself do not interpret the contents of this
-	// field. It is the responsibility of the user's implementations to handle
-	// and interpret these extensions.
-	//
-	// For example, a custom name resolver might use this field for the name of
-	// listener resource to subscribe to.
+	// The xDS and LRS clients do not interpret the contents of this field. It
+	// is the responsibility of the user's implementations to handle and
+	// interpret these extensions.
 	Extensions any
 }
 
-// Node represents the node of the xDS client for management servers to
-// identify the application making the request.
+// Node represents the identity of the xDS client, allowing
+// management servers to identify the source of xDS requests.
 type Node struct {
-	// ID is a string identifier of the node.
+	// ID is a string identifier of the application.
 	ID string
-	// Cluster is the name of the cluster the node belongs to.
+	// Cluster is the name of the cluster the application belongs to.
 	Cluster string
-	// Locality is the location of the node including region, zone, sub-zone.
+	// Locality is the location of the application including region, zone,
+	// sub-zone.
 	Locality Locality
-	// Metadata is any arbitrary values associated with the node to provide
-	// additional context.
+	// Metadata provides additional context about the application by associating
+	// arbitrary key-value pairs with it.
 	Metadata any
-	// UserAgentName is the user agent name. It is typically set to a hardcoded
-	// constant such as grpc-go.
+	// UserAgentName is the user agent name of application.
 	UserAgentName string
-	// UserAgentVersion is the user agent version. It is typically set to the
-	// version of the library.
+	// UserAgentVersion is the user agent version of application.
 	UserAgentVersion string
-	// ClientFeatures is a list of features supported by this client. These are
-	// typically hardcoded within the xDS client, but may be overridden for
-	// testing purposes.
+	// ClientFeatures is a list of xDS features supported by this client.
 	ClientFeatures []string
 }
 
-// ToProto converts the [Node] object to its protobuf representation.
+// ToProto converts an instance of [Node] to its protobuf representation.
 func (n Node) ToProto() *v3corepb.Node {
 	return &v3corepb.Node{
 		Id:      n.ID,
@@ -164,13 +170,13 @@ func (n Node) ToProto() *v3corepb.Node {
 	}
 }
 
-// Locality represents the location of the xDS client node.
+// Locality represents the location of the xDS client application.
 type Locality struct {
-	// Region is the region of the xDS client node.
+	// Region is the region of the xDS client application.
 	Region string
 	// Zone is the area within a region.
 	Zone string
-	// SubZone is the further subdivision within a sub-zone.
+	// SubZone is the further subdivision within a zone.
 	SubZone string
 }
 
