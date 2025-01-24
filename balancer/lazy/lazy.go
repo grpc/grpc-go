@@ -16,7 +16,7 @@
  *
  */
 
-// Package lazy contains load balancer that starts in IDLE instead of
+// Package lazy contains a load balancer that starts in IDLE instead of
 // CONNECTING. Once it starts connecting, it instantiates its delegate.
 //
 // # Experimental
