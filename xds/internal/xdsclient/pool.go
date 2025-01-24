@@ -24,14 +24,30 @@ import (
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
+	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 var (
 	// DefaultPool is the default pool for xDS clients. It is created at init
 	// time by reading bootstrap configuration from env vars.
-	DefaultPool *Pool
+	DefaultPool                         *Pool
+	xdsClientResourceUpdatesValidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.xds_client.resource_updates_valid",
+		Description: "A counter of resources received that were considered valid. The counter will be incremented even for resources that have not changed.",
+		Unit:        "resource",
+		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		Default:     false,
+	})
+	xdsClientResourceUpdatesInvalidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.xds_client.resource_updates_invalid",
+		Description: "A counter of resources received that were considered invalid.",
+		Unit:        "resource",
+		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		Default:     false,
+	})
 )
 
 // Pool represents a pool of xDS clients that share the same bootstrap
@@ -59,6 +75,10 @@ type OptionsForTesting struct {
 	// backoff duration after stream failures.
 	// If unspecified, uses the default value used in non-test code.
 	StreamBackoffAfterFailure func(int) time.Duration
+
+	// MetricsRecorder is the metrics recorder the xDS Client will use. If
+	// unspecified, uses a no-op MetricsRecorder.
+	MetricsRecorder estats.MetricsRecorder
 }
 
 // NewPool creates a new xDS client pool with the given bootstrap config.
@@ -82,8 +102,8 @@ func NewPool(config *bootstrap.Config) *Pool {
 // The second return value represents a close function which the caller is
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
-func (p *Pool) NewClient(name string) (XDSClient, func(), error) {
-	return p.newRefCounted(name, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff)
+func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
+	return p.newRefCounted(name, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff, metricsRecorder)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -107,7 +127,10 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultExponentialBackoff
 	}
-	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
+	if opts.MetricsRecorder == nil {
+		opts.MetricsRecorder = &istats.NoopMetricsRecorder{}
+	}
+	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure, opts.MetricsRecorder)
 }
 
 // GetClientForTesting returns an xDS client created earlier using the given
@@ -206,7 +229,7 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (XDSClient, func(), error) {
+func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -219,7 +242,7 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff)
+	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff, metricsRecorder, name)
 	if err != nil {
 		return nil, nil, err
 	}

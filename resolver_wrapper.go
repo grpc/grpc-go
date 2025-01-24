@@ -77,6 +77,7 @@ func (ccr *ccResolverWrapper) start() error {
 			CredsBundle:          ccr.cc.dopts.copts.CredsBundle,
 			Dialer:               ccr.cc.dopts.copts.Dialer,
 			Authority:            ccr.cc.authority,
+			MetricsRecorder:      ccr.cc.metricsRecorderList,
 		}
 		var err error
 		// The delegating resolver is used unless:

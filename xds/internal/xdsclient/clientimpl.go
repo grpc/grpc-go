@@ -27,6 +27,7 @@ import (
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpclog"
@@ -78,6 +79,8 @@ type clientImpl struct {
 	serializer         *grpcsync.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
 	logger             *grpclog.PrefixLogger        // Logger for this client.
+	metricsRecorder    estats.MetricsRecorder       // Metrics recorder for metrics.
+	target             string                       // The gRPC target for this client.
 
 	// The clientImpl owns a bunch of channels to individual xDS servers
 	// specified in the bootstrap configuration. Authorities acquire references
@@ -111,9 +114,11 @@ func init() {
 }
 
 // newClientImpl returns a new xdsClient with the given config.
-func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration) (*clientImpl, error) {
+func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, mr estats.MetricsRecorder, target string) (*clientImpl, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &clientImpl{
+		metricsRecorder:    mr,
+		target:             target,
 		done:               grpcsync.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
@@ -139,6 +144,8 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, s
 			serializer:       c.serializer,
 			getChannelForADS: c.getChannelForADS,
 			logPrefix:        clientPrefix(c),
+			target:           target,
+			metricsRecorder:  c.metricsRecorder,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -147,6 +154,8 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, s
 		serializer:       c.serializer,
 		getChannelForADS: c.getChannelForADS,
 		logPrefix:        clientPrefix(c),
+		target:           target,
+		metricsRecorder:  c.metricsRecorder,
 	})
 	c.logger = prefixLogger(c)
 	return c, nil
