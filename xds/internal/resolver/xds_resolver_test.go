@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -257,7 +258,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	// client is closed.
 	origNewClient := rinternal.NewXDSClient
 	closeCh := make(chan struct{})
-	rinternal.NewXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
+	rinternal.NewXDSClient = func(string, estats.MetricsRecorder) (xdsclient.XDSClient, func(), error) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
 		config, err := bootstrap.NewConfigForTesting(bc)
 		if err != nil {
