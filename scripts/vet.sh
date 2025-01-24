@@ -102,13 +102,14 @@ for MOD_FILE in $(find . -name 'go.mod'); do
     (git status; git --no-pager diff; exit 1)
   
   # Error for violation of enabled lint rules in config excluding generated code.
+  echo "Revive config directory: $(dirname "$0")"
   revive \
     -set_exit_status=1 \
     -exclude "testdata/grpc_testing_not_regenerated/" \
     -exclude "**/*.pb.go" \
     -formatter plain \
     -config "$(dirname "$0")/revive.toml" \
-    ./...
+    "$MOD_DIR/..."
   
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"

@@ -264,7 +264,7 @@ func (s) TestEnd2End(t *testing.T) {
 				}
 				cert, err := x509.ParseCertificate(params.RawCerts[0])
 				if err != nil || cert == nil {
-					return nil, fmt.Errorf("failed to parse certificate: %s", err.Error())
+					return nil, fmt.Errorf("failed to parse certificate: " + err.Error())
 				}
 				authzCheck := false
 				switch stage.read() {
