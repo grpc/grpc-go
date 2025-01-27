@@ -103,7 +103,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   go mod tidy -compat=1.22
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
-  
+
   # Error for violation of enabled lint rules in config excluding generated code.
   revive \
     -set_exit_status=1 \
