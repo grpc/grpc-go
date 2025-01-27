@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -37,15 +38,19 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
-	defaultTestTimeout = time.Second * 10
+	defaultTestTimeout      = time.Second * 10
+	defaultTestShortTimeout = time.Millisecond * 10
 )
 
 type s struct {
@@ -221,7 +226,25 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	// remain IDLE and will not try to connect to the second backend in the same
 	// endpoint.
 	backend1.Stop()
+	// CheckRoundRobinRPCs waits for all the backends to become reachable, we
+	// call it to ensure the picker no longer sends RPCs to closed backend.
 	if err = roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend3.Address}}); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// Verify requests go only to backend3 for a short time.
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	for ; shortCtx.Err() == nil; <-time.After(time.Millisecond) {
+		var peer peer.Peer
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+			if status.Code(err) != codes.DeadlineExceeded {
+				t.Fatalf("EmptyCall() returned unexpected error %v", err)
+			}
+			break
+		}
+		if got, want := peer.Addr.String(), backend3.Address; got != want {
+			t.Fatalf("EmptyCall() went to unexpected backend: got %q, want %q", got, want)
+		}
 	}
 }
