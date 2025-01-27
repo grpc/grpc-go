@@ -1092,7 +1092,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 		// Since no addresses are ejected, a SubConn update should forward down
 		// to the child.
-		od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+		od.updateSubConnState(scw1.(*subConnWrapper), balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 
@@ -1124,6 +1124,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("picker.Pick failed with error: %v", err)
 		}
+		if got, want := pi.SubConn, scw3.(*subConnWrapper).SubConn; got != want {
+			t.Fatalf("Unexpected SubConn chosen by picker: got %v, want %v", got, want)
+		}
 		for c := 0; c < 5; c++ {
 			pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		}
@@ -1154,7 +1157,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		// that address should not be forwarded downward. These SubConn updates
 		// will be cached to update the child sometime in the future when the
 		// address gets unejected.
-		od.updateSubConnState(pi.SubConn, balancer.SubConnState{
+		od.updateSubConnState(scw3.(*subConnWrapper), balancer.SubConnState{
 			ConnectivityState: connectivity.Connecting,
 		})
 		sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -1566,7 +1569,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 
 	// Call balancer.Balancers synchronously in this goroutine, upholding the
 	// balancer.Balancer API guarantee.
-	od.updateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
+	od.updateSubConnState(scw1.(*subConnWrapper), balancer.SubConnState{
 		ConnectivityState: connectivity.Connecting,
 	})
 	od.ResolverError(errors.New("some error"))

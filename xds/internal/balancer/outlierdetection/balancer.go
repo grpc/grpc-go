@@ -66,7 +66,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		closed:         grpcsync.NewEvent(),
 		done:           grpcsync.NewEvent(),
 		addrs:          make(map[string]*addressInfo),
-		scWrappers:     make(map[balancer.SubConn]*subConnWrapper),
 		scUpdateCh:     buffer.NewUnbounded(),
 		pickerUpdateCh: buffer.NewUnbounded(),
 		channelzParent: bOpts.ChannelzParent,
@@ -198,7 +197,6 @@ type outlierDetectionBalancer struct {
 	mu                    sync.Mutex
 	addrs                 map[string]*addressInfo
 	cfg                   *LBConfig
-	scWrappers            map[balancer.SubConn]*subConnWrapper
 	timerStartTime        time.Time
 	intervalTimer         *time.Timer
 	inhibitPickerUpdates  bool
@@ -337,19 +335,9 @@ func (b *outlierDetectionBalancer) ResolverError(err error) {
 	b.child.resolverError(err)
 }
 
-func (b *outlierDetectionBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *outlierDetectionBalancer) updateSubConnState(scw *subConnWrapper, state balancer.SubConnState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	scw, ok := b.scWrappers[sc]
-	if !ok {
-		// Shouldn't happen if passed down a SubConnWrapper to child on SubConn
-		// creation.
-		b.logger.Errorf("UpdateSubConnState called with SubConn that has no corresponding SubConnWrapper")
-		return
-	}
-	if state.ConnectivityState == connectivity.Shutdown {
-		delete(b.scWrappers, scw.SubConn)
-	}
 	scw.setLatestConnectivityState(state.ConnectivityState)
 	b.scUpdateCh.Put(&scUpdate{
 		scw:   scw,
@@ -459,15 +447,8 @@ func (b *outlierDetectionBalancer) UpdateState(s balancer.State) {
 }
 
 func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	var sc balancer.SubConn
 	oldListener := opts.StateListener
-	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(sc, state) }
-	sc, err := b.cc.NewSubConn(addrs, opts)
-	if err != nil {
-		return nil, err
-	}
 	scw := &subConnWrapper{
-		SubConn:                    sc,
 		addresses:                  addrs,
 		scUpdateCh:                 b.scUpdateCh,
 		listener:                   oldListener,
@@ -475,9 +456,14 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 		latestHealthState:          balancer.SubConnState{ConnectivityState: connectivity.Connecting},
 		healthListenerEnabled:      len(addrs) == 1 && pickfirstleaf.IsManagedByPickfirst(addrs[0]),
 	}
+	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(scw, state) }
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.scWrappers[sc] = scw
+	sc, err := b.cc.NewSubConn(addrs, opts)
+	if err != nil {
+		return nil, err
+	}
+	scw.SubConn = sc
 	if len(addrs) != 1 {
 		return scw, nil
 	}
