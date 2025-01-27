@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc/internal/grpctest"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 )
 
 type s struct {
@@ -108,7 +108,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmr := testutils.NewTestMetricsRecorder()
+			tmr := stats.NewTestMetricsRecorder()
 			wsc := &endpointWeight{
 				metricsRecorder: tmr,
 				weightVal:       3,
@@ -136,7 +136,7 @@ func (s) TestWRR_Metrics_SubConnWeight(t *testing.T) {
 // with no weights. Both of these should emit a count metric for round robin
 // fallback.
 func (s) TestWRR_Metrics_Scheduler_RR_Fallback(t *testing.T) {
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	ew := &endpointWeight{
 		metricsRecorder: tmr,
 		weightVal:       0,

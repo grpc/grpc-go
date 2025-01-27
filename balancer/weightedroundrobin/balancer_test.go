@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -224,7 +224,7 @@ func (s) TestWRRMetricsBasic(t *testing.T) {
 	srv := startServer(t, reportCall)
 	sc := svcConfig(t, testMetricsConfig)
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	if err := srv.StartClient(grpc.WithDefaultServiceConfig(sc), grpc.WithStatsHandler(tmr)); err != nil {
 		t.Fatalf("Error starting client: %v", err)
 	}

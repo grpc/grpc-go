@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
@@ -884,7 +885,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_AfterEndOfList(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
@@ -973,7 +974,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TriggerConnectionDelay(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
@@ -1033,7 +1034,7 @@ func (s) TestPickFirstLeaf_HappyEyeballs_TF_ThenTimerFires(t *testing.T) {
 	triggerTimer, timeAfter := mockTimer()
 	pfinternal.TimeAfterFunc = timeAfter
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	dialer := testutils.NewBlockingDialer()
 	opts := []grpc.DialOption{
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),

@@ -25,7 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 )
 
 var (
@@ -120,7 +120,7 @@ func (s) TestLRU_BasicOperations(t *testing.T) {
 
 func (s) TestDataCache_BasicOperations(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil, &testutils.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -134,7 +134,7 @@ func (s) TestDataCache_BasicOperations(t *testing.T) {
 
 func (s) TestDataCache_AddForcesResize(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(1, nil, &testutils.NoopMetricsRecorder{}, "")
+	dc := newDataCache(1, nil, &stats.NoopMetricsRecorder{}, "")
 
 	// The first entry in cacheEntries has a minimum expiry time in the future.
 	// This entry would stop the resize operation since we do not evict entries
@@ -163,7 +163,7 @@ func (s) TestDataCache_AddForcesResize(t *testing.T) {
 
 func (s) TestDataCache_Resize(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil, &testutils.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -194,7 +194,7 @@ func (s) TestDataCache_Resize(t *testing.T) {
 
 func (s) TestDataCache_EvictExpiredEntries(t *testing.T) {
 	initCacheEntries()
-	dc := newDataCache(5, nil, &testutils.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -221,7 +221,7 @@ func (s) TestDataCache_ResetBackoffState(t *testing.T) {
 	}
 
 	initCacheEntries()
-	dc := newDataCache(5, nil, &testutils.NoopMetricsRecorder{}, "")
+	dc := newDataCache(5, nil, &stats.NoopMetricsRecorder{}, "")
 	for i, k := range cacheKeys {
 		dc.addEntry(k, cacheEntries[i])
 	}
@@ -251,7 +251,7 @@ func (s) TestDataCache_Metrics(t *testing.T) {
 		{size: 4},
 		{size: 5},
 	}
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	dc := newDataCache(50, nil, tmr, "")
 
 	dc.updateRLSServerTarget("rls-server-target")

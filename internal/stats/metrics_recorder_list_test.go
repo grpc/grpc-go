@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	istats "google.golang.org/grpc/internal/stats"
-	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/stats"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
@@ -146,8 +146,8 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	// Create two stats.Handlers which also implement MetricsRecorder, configure
 	// one as a global dial option and one as a local dial option.
-	mr1 := testutils.NewTestMetricsRecorder()
-	mr2 := testutils.NewTestMetricsRecorder()
+	mr1 := stats.NewTestMetricsRecorder()
+	mr2 := stats.NewTestMetricsRecorder()
 
 	defer internal.ClearGlobalDialOptions()
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(mr1))
@@ -166,7 +166,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	// to record.
 	tsc.UnaryCall(ctx, &testpb.SimpleRequest{})
 
-	mdWant := testutils.MetricsData{
+	mdWant := stats.MetricsData{
 		Handle:    intCountHandle.Descriptor(),
 		IntIncr:   1,
 		LabelKeys: []string{"int counter label", "int counter optional label"},
@@ -179,7 +179,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	mdWant = testutils.MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    floatCountHandle.Descriptor(),
 		FloatIncr: 2,
 		LabelKeys: []string{"float counter label", "float counter optional label"},
@@ -192,7 +192,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	mdWant = testutils.MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    intHistoHandle.Descriptor(),
 		IntIncr:   3,
 		LabelKeys: []string{"int histo label", "int histo optional label"},
@@ -205,7 +205,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	mdWant = testutils.MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    floatHistoHandle.Descriptor(),
 		FloatIncr: 4,
 		LabelKeys: []string{"float histo label", "float histo optional label"},
@@ -217,7 +217,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 	if err := mr2.WaitForFloat64Histo(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
-	mdWant = testutils.MetricsData{
+	mdWant = stats.MetricsData{
 		Handle:    intGaugeHandle.Descriptor(),
 		IntIncr:   5,
 		LabelKeys: []string{"int gauge label", "int gauge optional label"},

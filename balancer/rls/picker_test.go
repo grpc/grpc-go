@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -266,7 +266,7 @@ func (s) Test_RLSDefaultTargetPicksMetric(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
@@ -312,7 +312,7 @@ func (s) Test_RLSTargetPicksMetric(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {
@@ -350,7 +350,7 @@ func (s) Test_RLSFailedPicksMetric(t *testing.T) {
 	// Register a manual resolver and push the RLS service config through it.
 	r := startManualResolverWithConfig(t, rlsConfig)
 
-	tmr := testutils.NewTestMetricsRecorder()
+	tmr := stats.NewTestMetricsRecorder()
 	// Dial the backend.
 	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(tmr))
 	if err != nil {

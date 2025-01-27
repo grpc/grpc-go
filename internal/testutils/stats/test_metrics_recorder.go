@@ -16,7 +16,8 @@
  *
  */
 
-package testutils
+// Package stats implements a TestMetricsRecorder utility.
+package stats
 
 import (
 	"context"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	estats "google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/stats"
 )
 
@@ -33,11 +35,11 @@ import (
 // have taken place. It also persists metrics data keyed on the metrics
 // descriptor.
 type TestMetricsRecorder struct {
-	intCountCh   *Channel
-	floatCountCh *Channel
-	intHistoCh   *Channel
-	floatHistoCh *Channel
-	intGaugeCh   *Channel
+	intCountCh   *testutils.Channel
+	floatCountCh *testutils.Channel
+	intHistoCh   *testutils.Channel
+	floatHistoCh *testutils.Channel
+	intGaugeCh   *testutils.Channel
 
 	// mu protects data.
 	mu sync.Mutex
@@ -48,11 +50,11 @@ type TestMetricsRecorder struct {
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
 func NewTestMetricsRecorder() *TestMetricsRecorder {
 	return &TestMetricsRecorder{
-		intCountCh:   NewChannelWithSize(10),
-		floatCountCh: NewChannelWithSize(10),
-		intHistoCh:   NewChannelWithSize(10),
-		floatHistoCh: NewChannelWithSize(10),
-		intGaugeCh:   NewChannelWithSize(10),
+		intCountCh:   testutils.NewChannelWithSize(10),
+		floatCountCh: testutils.NewChannelWithSize(10),
+		intHistoCh:   testutils.NewChannelWithSize(10),
+		floatHistoCh: testutils.NewChannelWithSize(10),
+		intGaugeCh:   testutils.NewChannelWithSize(10),
 
 		data: make(map[string]float64),
 	}
