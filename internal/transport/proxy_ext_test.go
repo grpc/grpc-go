@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/proxyserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -55,7 +56,7 @@ func Test(t *testing.T) {
 func startBackendServer(t *testing.T) *stubserver.StubServer {
 	t.Helper()
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testgrpc.Empty) (*testgrpc.Empty, error) { return &testgrpc.Empty{}, nil },
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
 	}
 	if err := backend.StartServer(); err != nil {
 		t.Fatalf("failed to start backend: %v", err)
@@ -119,7 +120,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 
@@ -176,7 +177,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 
@@ -235,7 +236,7 @@ func (s) TestNewClientWithProxy(t *testing.T) {
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 	if !proxyCalled {
@@ -295,7 +296,7 @@ func (s) TestNewClientWithProxyAndCustomResolver(t *testing.T) {
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
@@ -351,7 +352,7 @@ func (s) TestNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
 
@@ -400,7 +401,7 @@ func (s) TestNewClientWithNoProxy(t *testing.T) {
 
 	// Create a test service client and make an RPC call.
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
@@ -449,7 +450,7 @@ func (s) TestNewClientWithContextDialer(t *testing.T) {
 	defer conn.Close()
 
 	client := testgrpc.NewTestServiceClient(conn)
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
@@ -510,7 +511,7 @@ func (s) TestBasicAuthInNewClientWithProxy(t *testing.T) {
 
 	// Send an empty RPC to the backend through the proxy.
 	client := testgrpc.NewTestServiceClient(conn)
-	client.EmptyCall(ctx, &testgrpc.Empty{})
+	client.EmptyCall(ctx, &testpb.Empty{})
 
 	if !proxyCalled {
 		t.Fatalf("Proxy not connected")
