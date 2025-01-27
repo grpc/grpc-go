@@ -77,7 +77,7 @@ func (s) TestExitIdle(t *testing.T) {
 		},
 	})
 
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, lazy.LazyPickfirstConfig)
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, lazy.PickfirstConfig)
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(json),
@@ -125,7 +125,7 @@ func (s) TestPicker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	lazyCfg, err := balancer.Get(lazy.Name).(balancer.ConfigParser).ParseConfig(json.RawMessage(lazy.LazyPickfirstConfig))
+	lazyCfg, err := balancer.Get(lazy.Name).(balancer.ConfigParser).ParseConfig(json.RawMessage(lazy.PickfirstConfig))
 	if err != nil {
 		t.Fatalf("Failed to parse service config: %v", err)
 	}
@@ -164,6 +164,7 @@ func (s) TestPicker(t *testing.T) {
 
 	// The channel should remain in IDLE as the ExitIdle calls are not
 	// propagated to the lazy balancer from the stub balancer.
+	cc.Connect()
 	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer shortCancel()
 	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
@@ -187,14 +188,14 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 	resolverStateReceived := false
-	resolverErrorReceivedByChild := false
+	resolverErrorReceived := false
 
 	childBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			if resolverErrorReceivedByChild {
+			if resolverErrorReceived {
 				t.Error("Received resolver error before resolver state.")
 			}
 			resolverStateReceived = true
@@ -204,7 +205,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 			if !resolverStateReceived {
 				t.Error("Received resolver error before resolver state.")
 			}
-			resolverErrorReceivedByChild = true
+			resolverErrorReceived = true
 			bd.Data.(balancer.Balancer).ResolverError(err)
 		},
 		Close: func(bd *stub.BalancerData) {
@@ -225,7 +226,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 			bd.Data = balancer.Get(lazy.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			t.Log("Ignoring call to ExitIdle to delay lazy child creation till RPC time.")
+			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			bd.Data.(balancer.Balancer).ResolverError(err)
@@ -285,7 +286,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 		t.Fatalf("Child balancer did not receive resolver state.")
 	}
 
-	if !resolverErrorReceivedByChild {
+	if !resolverErrorReceived {
 		t.Fatalf("Child balancer did not receive error.")
 	}
 }
@@ -329,7 +330,7 @@ func (s) TestResolverErrorThenGoodUpdate(t *testing.T) {
 			bd.Data = balancer.Get(lazy.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			t.Log("Ignoring call to ExitIdle to delay lazy child creation till RPC time.")
+			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
@@ -409,7 +410,7 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 		},
 	})
 
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, lazy.LazyPickfirstConfig)
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, lazy.PickfirstConfig)
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(json),

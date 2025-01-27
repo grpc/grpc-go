@@ -46,10 +46,10 @@ func init() {
 }
 
 var (
-	// LazyPickfirstConfig is the LB policy config json for a pick_first load
+	// PickfirstConfig is the LB policy config json for a pick_first load
 	// balancer that is lazily initialized.
-	LazyPickfirstConfig = fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
-	logger              = grpclog.Component("lazy-lb")
+	PickfirstConfig = fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
+	logger          = grpclog.Component("lazy-lb")
 )
 
 const (
@@ -66,6 +66,14 @@ func (builder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balanc
 		buildOptions: bOpts,
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
+	cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Idle,
+		Picker: &idlePicker{exitIdle: sync.OnceFunc(func() {
+			// Call ExitIdle in a new goroutine to avoid deadlocks while calling
+			// back into the channel synchronously.
+			go b.ExitIdle()
+		})},
+	})
 	return b
 }
 
@@ -83,11 +91,10 @@ type lazyBalancer struct {
 	// The following fields are accessed while handling calls to the idlePicker
 	// and when handling ClientConn state updates. They are guarded by a mutex.
 
-	mu                     sync.Mutex
-	delegate               balancer.Balancer
-	latestClientConnState  *balancer.ClientConnState
-	latestResolverError    error
-	updatedClientConnState bool
+	mu                    sync.Mutex
+	delegate              balancer.Balancer
+	latestClientConnState *balancer.ClientConnState
+	latestResolverError   error
 }
 
 func (lb *lazyBalancer) Close() {
@@ -107,7 +114,6 @@ func (lb *lazyBalancer) ResolverError(err error) {
 		return
 	}
 	lb.latestResolverError = err
-	lb.updateBalancerStateLocked()
 }
 
 func (lb *lazyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -125,7 +131,6 @@ func (lb *lazyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) erro
 
 	lb.latestClientConnState = &ccs
 	lb.latestResolverError = nil
-	lb.updateBalancerStateLocked()
 	return nil
 }
 
@@ -160,18 +165,6 @@ func (lb *lazyBalancer) ExitIdle() {
 	}
 }
 
-func (lb *lazyBalancer) updateBalancerStateLocked() {
-	// optimization to avoid extra picker updates.
-	if lb.updatedClientConnState {
-		return
-	}
-	lb.cc.UpdateState(balancer.State{
-		ConnectivityState: connectivity.Idle,
-		Picker:            &idlePicker{exitIdle: sync.OnceFunc(lb.ExitIdle)},
-	})
-	lb.updatedClientConnState = true
-}
-
 type lbCfg struct {
 	serviceconfig.LoadBalancingConfig
 	childLBCfg serviceconfig.LoadBalancingConfig
@@ -198,8 +191,6 @@ type idlePicker struct {
 }
 
 func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
-	// Call exitIdle in a new goroutine to avoid deadlocks while calling back
-	// into the channel synchronously.
-	go i.exitIdle()
+	i.exitIdle()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
