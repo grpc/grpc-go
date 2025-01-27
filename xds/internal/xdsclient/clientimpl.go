@@ -102,7 +102,7 @@ func init() {
 	config, err := bootstrap.GetConfiguration()
 	if err != nil {
 		if logger.V(2) {
-			logger.Warningf("Failed to read xDS bootstrap config from env vars:  %v", err)
+			logger.Infof("Failed to read xDS bootstrap config from env vars:  %v", err)
 		}
 		DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
 		return
