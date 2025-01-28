@@ -158,7 +158,7 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 }
 
 func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := LocalTCPListener()
 	if err != nil {
 		return fmt.Errorf("Failed to create listener: %v", err)
 	}

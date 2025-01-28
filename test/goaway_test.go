@@ -46,6 +46,11 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
+// LocalTCPListener returns a net.Listener listening on local address and port.
+func LocalTCPListener() (net.Listener, error) {
+	return net.Listen("tcp", "localhost:0")
+}
+
 // TestGracefulClientOnGoAway attempts to ensure that when the server sends a
 // GOAWAY (in this test, by configuring max connection age on the server), a
 // client will never see an error.  This requires that the client is appraised
@@ -56,12 +61,10 @@ import (
 func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
-
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-
 	ss := &stubserver.StubServer{
 		Listener: lis,
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -545,29 +548,30 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	lis1, err := net.Listen("tcp", "localhost:0")
+	lis1, err := LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
-
-	ss1 := &stubserver.StubServer{
-		Listener: lis1,
-		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
-				t.Errorf("unexpected error from send: %v", err)
-				return err
-			}
-			// Wait until a message is received from client
-			_, err := stream.Recv()
-			if err == nil {
-				t.Error("expected to never receive any message")
-			}
+	unaryCallF := func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		return &testpb.SimpleResponse{}, nil
+	}
+	fullDuplexCallF := func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+			t.Errorf("Unexpected error from send: %v", err)
 			return err
-		},
-		S: grpc.NewServer(),
+		}
+		// Wait until a message is received from client
+		_, err := stream.Recv()
+		if err == nil {
+			t.Error("Expected to never receive any message")
+		}
+		return err
+	}
+	ss1 := &stubserver.StubServer{
+		Listener:        lis1,
+		UnaryCallF:      unaryCallF,
+		FullDuplexCallF: fullDuplexCallF,
+		S:               grpc.NewServer(),
 	}
 	stubserver.StartTestService(t, ss1)
 	defer ss1.S.Stop()
@@ -578,23 +582,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
 	ss2 := &stubserver.StubServer{
-		Listener: lis2,
-		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
-				t.Errorf("unexpected error from send: %v", err)
-				return err
-			}
-			// Wait until a message is received from client
-			_, err := stream.Recv()
-			if err == nil {
-				t.Error("expected to never receive any message")
-			}
-			return err
-		},
-		S: grpc.NewServer(),
+		Listener:        lis2,
+		UnaryCallF:      unaryCallF,
+		FullDuplexCallF: fullDuplexCallF,
+		S:               grpc.NewServer(),
 	}
 	stubserver.StartTestService(t, ss2)
 	defer ss2.S.Stop()

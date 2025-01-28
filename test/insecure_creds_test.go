@@ -20,7 +20,6 @@ package test
 
 import (
 	"context"
-	"net"
 	"strings"
 	"testing"
 
@@ -83,7 +82,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			lis, err := net.Listen("tcp", "localhost:0")
+			lis, err := LocalTCPListener()
 			if err != nil {
 				t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 			}
@@ -137,7 +136,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 }
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}
@@ -172,7 +171,7 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 }
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}
