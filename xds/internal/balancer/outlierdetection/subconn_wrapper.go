@@ -33,9 +33,9 @@ import (
 // whether or not this SubConn is ejected.
 type subConnWrapper struct {
 	balancer.SubConn
-	// addressInfo is a pointer to the subConnWrapper's corresponding address
+	// endpointInfo is a pointer to the subConnWrapper's corresponding endpoint
 	// map entry, if the map entry exists. It is accessed atomically.
-	addressInfo unsafe.Pointer // *addressInfo
+	endpointInfo unsafe.Pointer // *endpointInfo
 	// The following fields are set during object creation and read-only after
 	// that.
 
