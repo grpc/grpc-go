@@ -179,37 +179,3 @@ type Int64Range struct {
 	Start int64
 	End   int64
 }
-
-// Equal returns true if sc is equal to other.
-func (sc *SecurityConfig) Equal(other *SecurityConfig) bool {
-	switch {
-	case sc == nil && other == nil:
-		return true
-	case (sc != nil) != (other != nil):
-		return false
-	}
-	switch {
-	case sc.RootInstanceName != other.RootInstanceName:
-		return false
-	case sc.RootCertName != other.RootCertName:
-		return false
-	case sc.IdentityInstanceName != other.IdentityInstanceName:
-		return false
-	case sc.IdentityCertName != other.IdentityCertName:
-		return false
-	case sc.RequireClientCert != other.RequireClientCert:
-		return false
-	case sc.UseSystemRootCerts != other.UseSystemRootCerts:
-		return false
-	default:
-		if len(sc.SubjectAltNameMatchers) != len(other.SubjectAltNameMatchers) {
-			return false
-		}
-		for i := 0; i < len(sc.SubjectAltNameMatchers); i++ {
-			if !sc.SubjectAltNameMatchers[i].Equal(other.SubjectAltNameMatchers[i]) {
-				return false
-			}
-		}
-	}
-	return true
-}
