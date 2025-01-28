@@ -1543,21 +1543,16 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	// Using defaultTraceOptions to set up OpenTelemetry with an in-memory exporter
 	to, exporter := defaultTraceOptions(t)
-	// Set the W3CContextPropagator as part of TracingOptions.
-	to.TextMapPropagator = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
 	const rpcErrorMsg = "unary call: internal server error"
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return nil, fmt.Errorf(rpcErrorMsg)
+			return nil, fmt.Errorf("%v", rpcErrorMsg)
 		},
 	}
 
-	otelOptions := opentelemetry.Options{}
-	if mo != nil {
-		otelOptions.MetricsOptions = *mo
-	}
-	if to != nil {
-		otelOptions.TraceOptions = *to
+	otelOptions := opentelemetry.Options{
+		MetricsOptions: *mo,
+		TraceOptions:   *to,
 	}
 
 	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)},
