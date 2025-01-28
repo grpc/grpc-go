@@ -687,7 +687,7 @@ type systemRootCertsProvider struct{}
 
 func (systemRootCertsProvider) Close() {}
 
-func (systemRootCertsProvider) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
+func (systemRootCertsProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
 	rootCAs, err := x509SystemCertPoolFunc()
 	if err != nil {
 		return nil, err
