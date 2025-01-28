@@ -552,6 +552,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}
+
 	unaryCallF := func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 		return &testpb.SimpleResponse{}, nil
 	}
