@@ -46,7 +46,7 @@ func init() {
 		o.MetricsOptions.pluginOption = po
 		// Log an error if one of the options is missing.
 		if (o.TraceOptions.TextMapPropagator == nil) != (o.TraceOptions.TracerProvider == nil) {
-			logger.Error("traceOptions are not set properly: one of TextMapPropagator or TracerProvider is missing.")
+			logger.Warning("Tracing will not be recorded because traceOptions are not set properly: one of TextMapPropagator or TracerProvider is missing")
 		}
 	}
 }
