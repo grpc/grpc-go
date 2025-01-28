@@ -36,7 +36,7 @@ type RPCStats interface {
 	IsClient() bool
 }
 
-// Begin marks the start of an RPC attempt for stats recording.
+// Begin contains stats for the start of an RPC attempt.
 //
 // - Server-side: Triggered after `InHeader`, as headers are processed before the RPC lifecycle begins.
 // - Client-side: The first stats event recorded.
@@ -73,7 +73,7 @@ func (*PickerUpdated) IsClient() bool { return true }
 
 func (*PickerUpdated) isRPCStats() {}
 
-// InPayload contains the information for an incoming payload.
+// InPayload contains stats about an incoming payload.
 type InPayload struct {
 	// Client is true if this InPayload is from client side.
 	Client bool
@@ -102,7 +102,7 @@ func (s *InPayload) IsClient() bool { return s.Client }
 
 func (s *InPayload) isRPCStats() {}
 
-// InHeader records stats upon header reception.
+// InHeader contains stats about header reception.
 //
 // - Server-side: The first stats event after the RPC request is received.
 // - Client-side: Occurs after the `OutPayload` event (after the request payload is sent).
@@ -130,7 +130,7 @@ func (s *InHeader) IsClient() bool { return s.Client }
 
 func (s *InHeader) isRPCStats() {}
 
-// InTrailer contains stats when a trailer is received.
+// InTrailer contains stats about trailer reception.
 type InTrailer struct {
 	// Client is true if this InTrailer is from client side.
 	Client bool
@@ -146,7 +146,7 @@ func (s *InTrailer) IsClient() bool { return s.Client }
 
 func (s *InTrailer) isRPCStats() {}
 
-// OutPayload contains the information for an outgoing payload.
+// OutPayload contains stats about an outgoing payload.
 type OutPayload struct {
 	// Client is true if this OutPayload is from client side.
 	Client bool
@@ -173,7 +173,7 @@ func (s *OutPayload) IsClient() bool { return s.Client }
 
 func (s *OutPayload) isRPCStats() {}
 
-// OutHeader contains stats when a header is sent.
+// OutHeader contains stats about header transmission.
 type OutHeader struct {
 	// Client is true if this OutHeader is from client side.
 	Client bool
@@ -196,7 +196,7 @@ func (s *OutHeader) IsClient() bool { return s.Client }
 
 func (s *OutHeader) isRPCStats() {}
 
-// OutTrailer contains stats when a trailer is sent.
+// OutTrailer contains stats about trailer transmission.
 type OutTrailer struct {
 	// Client is true if this OutTrailer is from client side.
 	Client bool
@@ -216,7 +216,7 @@ func (s *OutTrailer) IsClient() bool { return s.Client }
 
 func (s *OutTrailer) isRPCStats() {}
 
-// End contains stats when an RPC ends.
+// End contains stats about RPC completion.
 type End struct {
 	// Client is true if this End is from client side.
 	Client bool
@@ -246,7 +246,7 @@ type ConnStats interface {
 	IsClient() bool
 }
 
-// ConnBegin contains the stats of a connection when it is established.
+// ConnBegin contains stats about connection establishment.
 type ConnBegin struct {
 	// Client is true if this ConnBegin is from client side.
 	Client bool
@@ -257,7 +257,7 @@ func (s *ConnBegin) IsClient() bool { return s.Client }
 
 func (s *ConnBegin) isConnStats() {}
 
-// ConnEnd contains the stats of a connection when it ends.
+// ConnEnd contains stats about connection termination.
 type ConnEnd struct {
 	// Client is true if this ConnEnd is from client side.
 	Client bool
