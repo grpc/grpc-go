@@ -1003,7 +1003,7 @@ func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 
 func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 	count := 1
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *wantData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: clientStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
@@ -1015,13 +1015,13 @@ func (s) TestServerStatsClientStreamRPCError(t *testing.T) {
 
 func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 	count := 5
-	checkFuncs := []func(t *testing.T, d *gotData, e *wantData){
+	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
 		checkOutHeader,
 	}
-	ioPayFuncs := []func(t *testing.T, d *gotData, e *wantData){
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkOutPayload,
 	}
 	for i := 0; i < count; i++ {
@@ -1036,7 +1036,7 @@ func (s) TestServerStatsServerStreamRPC(t *testing.T) {
 
 func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 	count := 5
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *wantData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: serverStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -1048,12 +1048,12 @@ func (s) TestServerStatsServerStreamRPCError(t *testing.T) {
 
 func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 	count := 5
-	checkFuncs := []func(t *testing.T, d *gotData, e *wantData){
+	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
 	}
-	ioPayFuncs := []func(t *testing.T, d *gotData, e *wantData){
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInPayload,
 		checkOutPayload,
 	}
@@ -1069,7 +1069,7 @@ func (s) TestServerStatsFullDuplexRPC(t *testing.T) {
 
 func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 	count := 5
-	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *wantData){
+	testServerStats(t, &testConfig{compress: "gzip"}, &rpcConfig{count: count, success: false, callType: fullDuplexStreamRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
@@ -1080,11 +1080,11 @@ func (s) TestServerStatsFullDuplexRPCError(t *testing.T) {
 }
 
 type checkFuncWithCount struct {
-	f func(t *testing.T, d *gotData, e *wantData)
+	f func(t *testing.T, d *gotData, e *expectedData)
 	c int // expected count
 }
 
-func checkClientStats(t *testing.T, got []*gotData, expect *wantData, checkFuncs map[int]*checkFuncWithCount) {
+func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs map[int]*checkFuncWithCount) {
 	var expectLen int
 	for _, v := range checkFuncs {
 		expectLen += v.c
@@ -1243,7 +1243,7 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	expect := &wantData{
+	expect := &expectedData{
 		serverAddr:     te.srvAddr,
 		compression:    tc.compress,
 		method:         method,
