@@ -1563,12 +1563,7 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	// Allow time for events to propagate
-	time.Sleep(50 * time.Millisecond)
 
-	// Verify sequence
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	// To verify if the Unary RPC server stats events are logged in the
 	// correct order.
 	wantUnarySequence := []string{
@@ -1581,6 +1576,30 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 		"OutTrailer",
 		"End",
 	}
+
+    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+    defer cancel()
+    for {
+        h.mu.Lock()
+        eventCount := len(h.events)
+        h.mu.Unlock()
+
+        if eventCount >= len(wantUnarySequence) {
+            break
+        }
+
+        select {
+        case <-ctx.Done():
+            t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantUnarySequence)))
+        default:
+            time.Sleep(10 * time.Millisecond)
+        }
+    }
+
+	// Verify sequence
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	verifyEventSequence(t, h.events, wantUnarySequence)
 }
 
@@ -1596,10 +1615,7 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	time.Sleep(50 * time.Millisecond)
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	// To verify if the Client Stream RPC server stats events are logged in the
 	// correct order.
 	wantClientStreamSequence := []string{
@@ -1616,6 +1632,28 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 		"OutTrailer",
 		"End",
 	}
+
+    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+    defer cancel()
+    for {
+        h.mu.Lock()
+        eventCount := len(h.events)
+        h.mu.Unlock()
+
+        if eventCount >= len(wantClientStreamSequence) {
+            break
+        }
+
+        select {
+        case <-ctx.Done():
+            t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantClientStreamSequence)))
+        default:
+            time.Sleep(10 * time.Millisecond)
+        }
+    }
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	verifyEventSequence(t, h.events, wantClientStreamSequence)
 }
 
@@ -1631,10 +1669,6 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	time.Sleep(50 * time.Millisecond)
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
 
 	// To verify if the Server Stream RPC server stats events are logged in the
 	// correct order.
@@ -1652,6 +1686,29 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 		"OutTrailer",
 		"End",
 	}
+
+    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+    defer cancel()
+
+    for {
+        h.mu.Lock()
+        eventCount := len(h.events)
+        h.mu.Unlock()
+
+        if eventCount >= len(wantServerStreamSequence) {
+            break
+        }
+
+        select {
+        case <-ctx.Done():
+            t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantServerStreamSequence)))
+        default:
+            time.Sleep(10 * time.Millisecond)
+        }
+    }
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	verifyEventSequence(t, h.events, wantServerStreamSequence)
 }
 
