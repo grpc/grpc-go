@@ -71,6 +71,14 @@ func GetAddrInfo(addr resolver.Address) AddrInfo {
 	return ai
 }
 
+// GetAddrInfoFromEndpoint returns the AddrInfo stored in the Attributes field
+// of endpoint.
+func GetAddrInfoFromEndpoint(endpoint resolver.Endpoint) AddrInfo {
+	v := endpoint.Attributes.Value(attributeKey{})
+	ai, _ := v.(AddrInfo)
+	return ai
+}
+
 func (a AddrInfo) String() string {
 	return fmt.Sprintf("Weight: %d", a.Weight)
 }
