@@ -18,7 +18,6 @@ package opentelemetry
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -86,12 +85,6 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
 			}
 		}
-	}
-
-	// Log an error if one of the options is missing.
-	if (h.options.TraceOptions.TextMapPropagator == nil) != (h.options.TraceOptions.TracerProvider == nil) {
-		logger.Error("traceOptions are not set properly: one of TextMapPropagator or TracerProvider is missing.")
-		return fmt.Errorf("traceOptions are not set properly: one of TextMapPropagator or TracerProvider is missing.")
 	}
 
 	startTime := time.Now()

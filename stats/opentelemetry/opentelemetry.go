@@ -44,6 +44,10 @@ import (
 func init() {
 	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
 		o.MetricsOptions.pluginOption = po
+		// Log an error if one of the options is missing.
+		if (o.TraceOptions.TextMapPropagator == nil) != (o.TraceOptions.TracerProvider == nil) {
+			logger.Error("traceOptions are not set properly: one of TextMapPropagator or TracerProvider is missing.")
+		}
 	}
 }
 
