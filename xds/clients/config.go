@@ -81,6 +81,9 @@ type ServerConfig struct {
 	//
 	// For example, a custom [TransportBuilder] might use this field to
 	// configure a specific security credentials.
+	//
+	// Note: For custom types used in Extensions, ensure an Equal(any) bool
+	// method is implemented for equality checks on ServerConfig.
 	Extensions any
 }
 
@@ -94,6 +97,12 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 	case sc.ServerURI != other.ServerURI:
 		return false
 	case sc.IgnoreResourceDeletion != other.IgnoreResourceDeletion:
+		return false
+	}
+	if sc.Extensions == nil && other.Extensions == nil {
+		return true
+	}
+	if sc.Extensions == nil || other.Extensions == nil {
 		return false
 	}
 	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
@@ -145,6 +154,8 @@ type Node struct {
 	// UserAgentVersion is the user agent version of application.
 	UserAgentVersion string
 	// ClientFeatures is a list of xDS features supported by this client.
+	// These features are set within the xDS client, but may be overridden only
+	// for testing purposes.
 	ClientFeatures []string
 }
 
