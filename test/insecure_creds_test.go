@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -82,7 +83,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			lis, err := LocalTCPListener()
+			lis, err := testutils.LocalTCPListener()
 			if err != nil {
 				t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 			}
@@ -136,7 +137,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 }
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
-	lis, err := LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}
@@ -171,7 +172,7 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 }
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
-	lis, err := LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}

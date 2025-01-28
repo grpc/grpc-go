@@ -46,11 +46,6 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-// LocalTCPListener returns a net.Listener listening on local address and port.
-func LocalTCPListener() (net.Listener, error) {
-	return net.Listen("tcp", "localhost:0")
-}
-
 // TestGracefulClientOnGoAway attempts to ensure that when the server sends a
 // GOAWAY (in this test, by configuring max connection age on the server), a
 // client will never see an error.  This requires that the client is appraised
@@ -61,7 +56,7 @@ func LocalTCPListener() (net.Listener, error) {
 func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
-	lis, err := LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
@@ -548,7 +543,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	lis1, err := LocalTCPListener()
+	lis1, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
 	}

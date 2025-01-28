@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -158,7 +159,7 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 }
 
 func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
-	lis, err := LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		return fmt.Errorf("Failed to create listener: %v", err)
 	}
