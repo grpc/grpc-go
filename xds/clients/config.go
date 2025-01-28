@@ -102,9 +102,6 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 	if sc.Extensions == nil && other.Extensions == nil {
 		return true
 	}
-	if sc.Extensions == nil || other.Extensions == nil {
-		return false
-	}
 	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
 		return true
 	}
@@ -174,7 +171,15 @@ func (n Node) ToProto() *v3corepb.Node {
 				SubZone: n.Locality.SubZone,
 			}
 		}(),
-		Metadata:             proto.Clone(n.Metadata.(*structpb.Struct)).(*structpb.Struct),
+		Metadata: func() *structpb.Struct {
+			if n.Metadata == nil {
+				return nil
+			}
+			if md, ok := n.Metadata.(*structpb.Struct); ok {
+				return proto.Clone(md).(*structpb.Struct)
+			}
+			return nil
+		}(),
 		UserAgentName:        n.UserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
 		ClientFeatures:       slices.Clone(n.ClientFeatures),
