@@ -1645,10 +1645,10 @@ func (s *Server) processStreamingRPC(ctx context.Context, stream *transport.Serv
 	// If dc is set and matches the stream's compression, use it.  Otherwise, try
 	// to find a matching registered compressor for decomp.
 	if rc := stream.RecvCompress(); s.opts.dc != nil && s.opts.dc.Type() == rc {
-		ss.dc = s.opts.dc
+		ss.decompressorV0 = s.opts.dc
 	} else if rc != "" && rc != encoding.Identity {
-		ss.decomp = encoding.GetCompressor(rc)
-		if ss.decomp == nil {
+		ss.decompressorV1 = encoding.GetCompressor(rc)
+		if ss.decompressorV1 == nil {
 			st := status.Newf(codes.Unimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", rc)
 			ss.s.WriteStatus(st)
 			return st.Err()
@@ -1660,12 +1660,12 @@ func (s *Server) processStreamingRPC(ctx context.Context, stream *transport.Serv
 	//
 	// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
 	if s.opts.cp != nil {
-		ss.cp = s.opts.cp
+		ss.compressorV0 = s.opts.cp
 		ss.sendCompressorName = s.opts.cp.Type()
 	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
 		// Legacy compressor not specified; attempt to respond with same encoding.
-		ss.comp = encoding.GetCompressor(rc)
-		if ss.comp != nil {
+		ss.compressorV1 = encoding.GetCompressor(rc)
+		if ss.compressorV1 != nil {
 			ss.sendCompressorName = rc
 		}
 	}
@@ -1676,7 +1676,7 @@ func (s *Server) processStreamingRPC(ctx context.Context, stream *transport.Serv
 		}
 	}
 
-	ss.ctx = newContextWithRPCInfo(ss.ctx, false, ss.codec, ss.cp, ss.comp)
+	ss.ctx = newContextWithRPCInfo(ss.ctx, false, ss.codec, ss.compressorV0, ss.compressorV1)
 
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
