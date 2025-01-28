@@ -1577,24 +1577,24 @@ func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
 		"End",
 	}
 
-    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-    defer cancel()
-    for {
-        h.mu.Lock()
-        eventCount := len(h.events)
-        h.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for {
+		h.mu.Lock()
+		eventCount := len(h.events)
+		h.mu.Unlock()
 
-        if eventCount >= len(wantUnarySequence) {
-            break
-        }
+		if eventCount >= len(wantUnarySequence) {
+			break
+		}
 
-        select {
-        case <-ctx.Done():
-            t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantUnarySequence)))
-        default:
-            time.Sleep(10 * time.Millisecond)
-        }
-    }
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantUnarySequence)))
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 
 	// Verify sequence
 	h.mu.Lock()
@@ -1633,24 +1633,24 @@ func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
 		"End",
 	}
 
-    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-    defer cancel()
-    for {
-        h.mu.Lock()
-        eventCount := len(h.events)
-        h.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for {
+		h.mu.Lock()
+		eventCount := len(h.events)
+		h.mu.Unlock()
 
-        if eventCount >= len(wantClientStreamSequence) {
-            break
-        }
+		if eventCount >= len(wantClientStreamSequence) {
+			break
+		}
 
-        select {
-        case <-ctx.Done():
-            t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantClientStreamSequence)))
-        default:
-            time.Sleep(10 * time.Millisecond)
-        }
-    }
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantClientStreamSequence)))
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -1687,25 +1687,25 @@ func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
 		"End",
 	}
 
-    ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-    defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-    for {
-        h.mu.Lock()
-        eventCount := len(h.events)
-        h.mu.Unlock()
+	for {
+		h.mu.Lock()
+		eventCount := len(h.events)
+		h.mu.Unlock()
 
-        if eventCount >= len(wantServerStreamSequence) {
-            break
-        }
+		if eventCount >= len(wantServerStreamSequence) {
+			break
+		}
 
-        select {
-        case <-ctx.Done():
-            t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantServerStreamSequence)))
-        default:
-            time.Sleep(10 * time.Millisecond)
-        }
-    }
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantServerStreamSequence)))
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
