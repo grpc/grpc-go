@@ -113,25 +113,24 @@ func (s) TestGracefulStop(t *testing.T) {
 	ss := &stubserver.StubServer{
 		Listener: dlis,
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			_, err := stream.Recv()
-			if err != nil {
+			if _, err := stream.Recv(); err != nil {
 				return err
 			}
 			return stream.Send(&testpb.StreamingOutputCallResponse{})
 		},
 		S: grpc.NewServer(),
 	}
+	// 1. Start Server
 	stubserver.StartTestService(t, ss)
 
-	// 1. Start Server
+	// 2. GracefulStop() Server after listener's Accept is called, but don't
+	//    allow Accept() to exit when Close() is called on it.
 	gracefulStopDone := make(chan struct{})
 	<-dlis.acceptCalled
 	go func() {
 		ss.S.GracefulStop()
 		close(gracefulStopDone)
 	}()
-	// 2. GracefulStop() Server after listener's Accept is called, but don't
-	//    allow Accept() to exit when Close() is called on it.
 
 	// 3. Create a new connection to the server after listener.Close() is called.
 	//    Server should close this connection immediately, before handshaking.
