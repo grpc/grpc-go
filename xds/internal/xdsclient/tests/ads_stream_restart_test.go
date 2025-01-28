@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -112,9 +113,13 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap configuration.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -124,6 +129,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	// Register a watch for a listener resource.
 	lw := newListenerWatcher()
 	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	defer ldsCancel()
 
 	// Verify that an ADS stream is opened and an LDS request with the above
 	// resource name is sent.
@@ -143,52 +149,6 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
-	if err := verifyListenerUpdate(ctx, lw.updateCh, wantListenerUpdate); err != nil {
-		t.Fatal(err)
-	}
-
-	// Cancel the watch for the above listener resource, and verify that an LDS
-	// request with no resource names is sent.
-	ldsCancel()
-	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Stop the restartable listener and wait for the stream to close.
-	lis.Stop()
-	select {
-	case <-streamClosed:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for ADS stream to close")
-	}
-
-	// Restart the restartable listener and wait for the stream to open.
-	lis.Restart()
-	select {
-	case <-streamOpened:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for ADS stream to open")
-	}
-
-	// Wait for a short duration and verify that no LDS request is sent, since
-	// there are no resources being watched.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case names := <-ldsResourcesCh:
-		t.Fatalf("LDS request sent for resource names %v, when expecting no request", names)
-	}
-
-	// Register another watch for the same listener resource, and verify that an
-	// LDS request with the above resource name is sent.
-	ldsCancel = xdsresource.WatchListener(client, listenerName, lw)
-	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName}); err != nil {
-		t.Fatal(err)
-	}
-	defer ldsCancel()
-
-	// Verify the update received by the watcher.
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantListenerUpdate); err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +215,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 
 	// Wait for a short duration and verify that no CDS request is sent, since
 	// there are no resources being watched.
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
 	case <-sCtx.Done():

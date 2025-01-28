@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
 // Tests that multiple calls to New() with the same name returns the same
@@ -36,7 +37,11 @@ func (s) TestClientNew_Single(t *testing.T) {
 	// directory, and set the bootstrap env vars to point to it.
 	nodeID := uuid.New().String()
 	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
-	testutils.CreateBootstrapFileForTesting(t, contents)
+	config, err := bootstrap.NewConfigForTesting(contents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
+	}
+	pool := NewPool(config)
 
 	// Override the client creation hook to get notified.
 	origClientImplCreateHook := xdsClientImplCreateHook
@@ -55,7 +60,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 	defer func() { xdsClientImplCloseHook = origClientImplCloseHook }()
 
 	// The first call to New() should create a new client.
-	_, closeFunc, err := New(t.Name())
+	_, closeFunc, err := pool.NewClient(t.Name())
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -71,7 +76,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 	closeFuncs := make([]func(), count)
 	for i := 0; i < count; i++ {
 		func() {
-			_, closeFuncs[i], err = New(t.Name())
+			_, closeFuncs[i], err = pool.NewClient(t.Name())
 			if err != nil {
 				t.Fatalf("%d-th call to New() failed with error: %v", i, err)
 			}
@@ -109,7 +114,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 
 	// Calling New() again, after the previous Client was actually closed,
 	// should create a new one.
-	_, closeFunc, err = New(t.Name())
+	_, closeFunc, err = pool.NewClient(t.Name())
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -127,7 +132,11 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 	// directory, and set the bootstrap env vars to point to it.
 	nodeID := uuid.New().String()
 	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
-	testutils.CreateBootstrapFileForTesting(t, contents)
+	config, err := bootstrap.NewConfigForTesting(contents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
+	}
+	pool := NewPool(config)
 
 	// Override the client creation hook to get notified.
 	origClientImplCreateHook := xdsClientImplCreateHook
@@ -147,7 +156,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 
 	// Create two xDS clients.
 	client1Name := t.Name() + "-1"
-	_, closeFunc1, err := New(client1Name)
+	_, closeFunc1, err := pool.NewClient(client1Name)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -162,7 +171,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 	}
 
 	client2Name := t.Name() + "-2"
-	_, closeFunc2, err := New(client2Name)
+	_, closeFunc2, err := pool.NewClient(client2Name)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
@@ -184,7 +193,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < count; i++ {
 			var err error
-			_, closeFuncs1[i], err = New(client1Name)
+			_, closeFuncs1[i], err = pool.NewClient(client1Name)
 			if err != nil {
 				t.Errorf("%d-th call to New() failed with error: %v", i, err)
 			}
@@ -194,7 +203,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < count; i++ {
 			var err error
-			_, closeFuncs2[i], err = New(client2Name)
+			_, closeFuncs2[i], err = pool.NewClient(client2Name)
 			if err != nil {
 				t.Errorf("%d-th call to New() failed with error: %v", i, err)
 			}

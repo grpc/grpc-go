@@ -51,23 +51,23 @@ const (
 	testDropCategory    = "test-drops"
 	testDropOverMillion = 1
 
-	localityCount      = 5
-	addressPerLocality = 2
+	localityCount       = 5
+	endpointPerLocality = 2
 )
 
 var (
-	testLocalityIDs []internal.LocalityID
-	testAddressStrs [][]string
-	testEndpoints   [][]xdsresource.Endpoint
+	testLocalityIDs       []internal.LocalityID
+	testResolverEndpoints [][]resolver.Endpoint
+	testEndpoints         [][]xdsresource.Endpoint
 
 	testLocalitiesP0, testLocalitiesP1 []xdsresource.Locality
 
-	addrCmpOpts = cmp.Options{
+	endpointCmpOpts = cmp.Options{
 		cmp.AllowUnexported(attributes.Attributes{}),
-		cmp.Transformer("SortAddrs", func(in []resolver.Address) []resolver.Address {
-			out := append([]resolver.Address(nil), in...) // Copy input to avoid mutating it
+		cmp.Transformer("SortEndpoints", func(in []resolver.Endpoint) []resolver.Endpoint {
+			out := append([]resolver.Endpoint(nil), in...) // Copy input to avoid mutating it
 			sort.Slice(out, func(i, j int) bool {
-				return out[i].Addr < out[j].Addr
+				return out[i].Addresses[0].Addr < out[j].Addresses[0].Addr
 			})
 			return out
 		}),
@@ -85,18 +85,22 @@ func init() {
 	for i := 0; i < localityCount; i++ {
 		testLocalityIDs = append(testLocalityIDs, internal.LocalityID{Zone: fmt.Sprintf("test-zone-%d", i)})
 		var (
-			addrs []string
-			ends  []xdsresource.Endpoint
+			endpoints []resolver.Endpoint
+			ends      []xdsresource.Endpoint
 		)
-		for j := 0; j < addressPerLocality; j++ {
+		for j := 0; j < endpointPerLocality; j++ {
 			addr := fmt.Sprintf("addr-%d-%d", i, j)
-			addrs = append(addrs, addr)
+			endpoints = append(endpoints, resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}})
 			ends = append(ends, xdsresource.Endpoint{
-				Address:      addr,
 				HealthStatus: xdsresource.EndpointHealthStatusHealthy,
+				Addresses: []string{
+					addr,
+					fmt.Sprintf("addr-%d-%d-additional-1", i, j),
+					fmt.Sprintf("addr-%d-%d-additional-2", i, j),
+				},
 			})
 		}
-		testAddressStrs = append(testAddressStrs, addrs)
+		testResolverEndpoints = append(testResolverEndpoints, endpoints)
 		testEndpoints = append(testEndpoints, ends)
 	}
 
@@ -171,7 +175,7 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 			mechanism: DiscoveryMechanism{
 				Type: DiscoveryMechanismTypeLogicalDNS,
 			},
-			addresses:    testAddressStrs[4],
+			endpoints:    testResolverEndpoints[4],
 			childNameGen: newNameGenerator(1),
 		},
 	}, nil)
@@ -226,7 +230,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 				Type:             DiscoveryMechanismTypeLogicalDNS,
 				outlierDetection: noopODCfg,
 			},
-			addresses:    testAddressStrs[4],
+			endpoints:    testResolverEndpoints[4],
 			childNameGen: newNameGenerator(1),
 		},
 	}, nil)
@@ -301,7 +305,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 }
 
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotAddrs := buildClusterImplConfigForDNS(newNameGenerator(3), testAddressStrs[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
+	gotName, gotConfig, gotEndpoints := buildClusterImplConfigForDNS(newNameGenerator(3), testResolverEndpoints[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
 	wantName := "priority-3"
 	wantConfig := &clusterimpl.LBConfig{
 		Cluster: testClusterName2,
@@ -309,9 +313,11 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 			Name: "pick_first",
 		},
 	}
-	wantAddrs := []resolver.Address{
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[0][0]}, []string{"priority-3"}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[0][1]}, []string{"priority-3"}),
+	e1 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][0].Addresses[0]}}}
+	e2 := resolver.Endpoint{Addresses: []resolver.Address{{Addr: testEndpoints[0][1].Addresses[0]}}}
+	wantEndpoints := []resolver.Endpoint{
+		hierarchy.SetInEndpoint(e1, []string{"priority-3"}),
+		hierarchy.SetInEndpoint(e2, []string{"priority-3"}),
 	}
 
 	if diff := cmp.Diff(gotName, wantName); diff != "" {
@@ -320,7 +326,7 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
 		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 	}
-	if diff := cmp.Diff(gotAddrs, wantAddrs, addrCmpOpts); diff != "" {
+	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 	}
 }
@@ -334,7 +340,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 
-	gotNames, gotConfigs, gotAddrs, _ := buildClusterImplConfigForEDS(
+	gotNames, gotConfigs, gotEndpoints, _ := buildClusterImplConfigForEDS(
 		newNameGenerator(2),
 		xdsresource.EndpointsUpdate{
 			Drops: []xdsresource.OverloadDropConfig{
@@ -408,15 +414,15 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 			},
 		},
 	}
-	wantAddrs := []resolver.Address{
-		testAddrWithAttrs(testAddressStrs[0][0], 20, 1, "priority-2-0", &testLocalityIDs[0]),
-		testAddrWithAttrs(testAddressStrs[0][1], 20, 1, "priority-2-0", &testLocalityIDs[0]),
-		testAddrWithAttrs(testAddressStrs[1][0], 80, 1, "priority-2-0", &testLocalityIDs[1]),
-		testAddrWithAttrs(testAddressStrs[1][1], 80, 1, "priority-2-0", &testLocalityIDs[1]),
-		testAddrWithAttrs(testAddressStrs[2][0], 20, 1, "priority-2-1", &testLocalityIDs[2]),
-		testAddrWithAttrs(testAddressStrs[2][1], 20, 1, "priority-2-1", &testLocalityIDs[2]),
-		testAddrWithAttrs(testAddressStrs[3][0], 80, 1, "priority-2-1", &testLocalityIDs[3]),
-		testAddrWithAttrs(testAddressStrs[3][1], 80, 1, "priority-2-1", &testLocalityIDs[3]),
+	wantEndpoints := []resolver.Endpoint{
+		testEndpointWithAttrs(testEndpoints[0][0].Addresses, 20, 1, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[0][1].Addresses, 20, 1, "priority-2-0", &testLocalityIDs[0]),
+		testEndpointWithAttrs(testEndpoints[1][0].Addresses, 80, 1, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[1][1].Addresses, 80, 1, "priority-2-0", &testLocalityIDs[1]),
+		testEndpointWithAttrs(testEndpoints[2][0].Addresses, 20, 1, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[2][1].Addresses, 20, 1, "priority-2-1", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[3][0].Addresses, 80, 1, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[3][1].Addresses, 80, 1, "priority-2-1", &testLocalityIDs[3]),
 	}
 
 	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -425,7 +431,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	if diff := cmp.Diff(gotConfigs, wantConfigs); diff != "" {
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
 	}
-	if diff := cmp.Diff(gotAddrs, wantAddrs, addrCmpOpts); diff != "" {
+	if diff := cmp.Diff(gotEndpoints, wantEndpoints, endpointCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
 	}
 
@@ -526,29 +532,29 @@ func TestDedupSortedIntSlice(t *testing.T) {
 
 func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	tests := []struct {
-		name         string
-		localities   []xdsresource.Locality
-		priorityName string
-		mechanism    DiscoveryMechanism
-		childPolicy  *iserviceconfig.BalancerConfig
-		wantConfig   *clusterimpl.LBConfig
-		wantAddrs    []resolver.Address
-		wantErr      bool
+		name          string
+		localities    []xdsresource.Locality
+		priorityName  string
+		mechanism     DiscoveryMechanism
+		childPolicy   *iserviceconfig.BalancerConfig
+		wantConfig    *clusterimpl.LBConfig
+		wantEndpoints []resolver.Endpoint
+		wantErr       bool
 	}{{
 		name: "round robin as child, no LRS",
 		localities: []xdsresource.Locality{
 			{
 				Endpoints: []xdsresource.Endpoint{
-					{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
-					{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
+					{Addresses: []string{"addr-1-1"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+					{Addresses: []string{"addr-1-2"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 				},
 				ID:     internal.LocalityID{Zone: "test-zone-1"},
 				Weight: 20,
 			},
 			{
 				Endpoints: []xdsresource.Endpoint{
-					{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
-					{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
+					{Addresses: []string{"addr-2-1"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+					{Addresses: []string{"addr-2-2"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 				},
 				ID:     internal.LocalityID{Zone: "test-zone-2"},
 				Weight: 80,
@@ -567,11 +573,11 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 			EDSServiceName: testEDSService,
 			ChildPolicy:    &iserviceconfig.BalancerConfig{Name: roundrobin.Name},
 		},
-		wantAddrs: []resolver.Address{
-			testAddrWithAttrs("addr-1-1", 20, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
-			testAddrWithAttrs("addr-1-2", 20, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
-			testAddrWithAttrs("addr-2-1", 80, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
-			testAddrWithAttrs("addr-2-2", 80, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+		wantEndpoints: []resolver.Endpoint{
+			testEndpointWithAttrs([]string{"addr-1-1"}, 20, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+			testEndpointWithAttrs([]string{"addr-1-2"}, 20, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+			testEndpointWithAttrs([]string{"addr-2-1"}, 80, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+			testEndpointWithAttrs([]string{"addr-2-2"}, 80, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
 		},
 	},
 		{
@@ -579,16 +585,16 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 			localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
+						{Addresses: []string{"addr-1-1"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Addresses: []string{"addr-1-2"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
 					Endpoints: []xdsresource.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
+						{Addresses: []string{"addr-2-1"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Addresses: []string{"addr-2-2"}, HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -603,11 +609,11 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 					Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
 				},
 			},
-			wantAddrs: []resolver.Address{
-				testAddrWithAttrs("addr-1-1", 20, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
-				testAddrWithAttrs("addr-1-2", 20, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
-				testAddrWithAttrs("addr-2-1", 80, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
-				testAddrWithAttrs("addr-2-2", 80, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+			wantEndpoints: []resolver.Endpoint{
+				testEndpointWithAttrs([]string{"addr-1-1"}, 20, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testEndpointWithAttrs([]string{"addr-1-2"}, 20, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testEndpointWithAttrs([]string{"addr-2-1"}, 80, 90, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+				testEndpointWithAttrs([]string{"addr-2-2"}, 80, 10, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
 			},
 		},
 	}
@@ -620,7 +626,7 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 			if diff := cmp.Diff(got, tt.wantConfig); diff != "" {
 				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
 			}
-			if diff := cmp.Diff(got1, tt.wantAddrs, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+			if diff := cmp.Diff(got1, tt.wantEndpoints, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
 				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
 			}
 		})
@@ -635,17 +641,20 @@ func assertString(f func() (string, error)) string {
 	return s
 }
 
-func testAddrWithAttrs(addrStr string, localityWeight, endpointWeight uint32, priority string, lID *internal.LocalityID) resolver.Address {
-	addr := resolver.Address{Addr: addrStr}
+func testEndpointWithAttrs(addrStrs []string, localityWeight, endpointWeight uint32, priority string, lID *internal.LocalityID) resolver.Endpoint {
+	endpoint := resolver.Endpoint{}
+	for _, a := range addrStrs {
+		endpoint.Addresses = append(endpoint.Addresses, resolver.Address{Addr: a})
+	}
 	path := []string{priority}
 	if lID != nil {
 		path = append(path, assertString(lID.ToString))
-		addr = internal.SetLocalityID(addr, *lID)
+		endpoint = internal.SetLocalityIDInEndpoint(endpoint, *lID)
 	}
-	addr = hierarchy.Set(addr, path)
-	addr = wrrlocality.SetAddrInfo(addr, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
-	addr = weightedroundrobin.SetAddrInfo(addr, weightedroundrobin.AddrInfo{Weight: localityWeight * endpointWeight})
-	return addr
+	endpoint = hierarchy.SetInEndpoint(endpoint, path)
+	endpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
+	endpoint = weightedroundrobin.SetAddrInfoInEndpoint(endpoint, weightedroundrobin.AddrInfo{Weight: localityWeight * endpointWeight})
+	return endpoint
 }
 
 func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {

@@ -692,9 +692,9 @@ func encode(c baseCodec, msg any) (mem.BufferSlice, error) {
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "grpc: error while marshaling: %v", err.Error())
 	}
-	if uint(b.Len()) > math.MaxUint32 {
+	if bufSize := uint(b.Len()); bufSize > math.MaxUint32 {
 		b.Free()
-		return nil, status.Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", len(b))
+		return nil, status.Errorf(codes.ResourceExhausted, "grpc: message too large (%d bytes)", bufSize)
 	}
 	return b, nil
 }
@@ -828,30 +828,13 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 		return nil, st.Err()
 	}
 
-	var size int
 	if pf.isCompressed() {
 		defer compressed.Free()
-
 		// To match legacy behavior, if the decompressor is set by WithDecompressor or RPCDecompressor,
 		// use this decompressor as the default.
-		if dc != nil {
-			var uncompressedBuf []byte
-			uncompressedBuf, err = dc.Do(compressed.Reader())
-			if err == nil {
-				out = mem.BufferSlice{mem.SliceBuffer(uncompressedBuf)}
-			}
-			size = len(uncompressedBuf)
-		} else {
-			out, size, err = decompress(compressor, compressed, maxReceiveMessageSize, p.bufferPool)
-		}
+		out, err = decompress(compressor, compressed, dc, maxReceiveMessageSize, p.bufferPool)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
-		}
-		if size > maxReceiveMessageSize {
-			out.Free()
-			// TODO: Revisit the error code. Currently keep it consistent with java
-			// implementation.
-			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
+			return nil, err
 		}
 	} else {
 		out = compressed
@@ -866,20 +849,46 @@ func recvAndDecompress(p *parser, s recvCompressor, dc Decompressor, maxReceiveM
 	return out, nil
 }
 
-// Using compressor, decompress d, returning data and size.
-// Optionally, if data will be over maxReceiveMessageSize, just return the size.
-func decompress(compressor encoding.Compressor, d mem.BufferSlice, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, int, error) {
-	dcReader, err := compressor.Decompress(d.Reader())
-	if err != nil {
-		return nil, 0, err
+// decompress processes the given data by decompressing it using either a custom decompressor or a standard compressor.
+// If a custom decompressor is provided, it takes precedence. The function validates that the decompressed data
+// does not exceed the specified maximum size and returns an error if this limit is exceeded.
+// On success, it returns the decompressed data. Otherwise, it returns an error if decompression fails or the data exceeds the size limit.
+func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompressor, maxReceiveMessageSize int, pool mem.BufferPool) (mem.BufferSlice, error) {
+	if dc != nil {
+		uncompressed, err := dc.Do(d.Reader())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message: %v", err)
+		}
+		if len(uncompressed) > maxReceiveMessageSize {
+			return nil, status.Errorf(codes.ResourceExhausted, "grpc: message after decompression larger than max (%d vs. %d)", len(uncompressed), maxReceiveMessageSize)
+		}
+		return mem.BufferSlice{mem.SliceBuffer(uncompressed)}, nil
 	}
+	if compressor != nil {
+		dcReader, err := compressor.Decompress(d.Reader())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the message: %v", err)
+		}
 
-	out, err := mem.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1), pool)
-	if err != nil {
-		out.Free()
-		return nil, 0, err
+		out, err := mem.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)), pool)
+		if err != nil {
+			out.Free()
+			return nil, status.Errorf(codes.Internal, "grpc: failed to read decompressed data: %v", err)
+		}
+
+		if out.Len() == maxReceiveMessageSize && !atEOF(dcReader) {
+			out.Free()
+			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", maxReceiveMessageSize)
+		}
+		return out, nil
 	}
-	return out, out.Len(), nil
+	return nil, status.Errorf(codes.Internal, "grpc: no decompressor available for compressed payload")
+}
+
+// atEOF reads data from r and returns true if zero bytes could be read and r.Read returns EOF.
+func atEOF(dcReader io.Reader) bool {
+	n, err := dcReader.Read(make([]byte, 1))
+	return n == 0 && err == io.EOF
 }
 
 type recvCompressor interface {

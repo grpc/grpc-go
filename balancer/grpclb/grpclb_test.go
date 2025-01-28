@@ -460,7 +460,7 @@ func (s) TestGRPCLB_Basic(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 
@@ -517,7 +517,7 @@ func (s) TestGRPCLB_Weighted(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 
@@ -597,7 +597,7 @@ func (s) TestGRPCLB_DropRequest(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -769,7 +769,7 @@ func (s) TestGRPCLB_BalancerDisconnects(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -940,7 +940,7 @@ func (s) TestGRPCLB_ExplicitFallback(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -1008,11 +1008,12 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1102,10 +1103,11 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	// Push a service config with grpclb as the load balancing policy and
@@ -1198,7 +1200,7 @@ func (s) TestGRPCLB_BackendConnectionErrorPropagation(t *testing.T) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
-		t.Fatalf("Failed to create new client to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend: %v", err)
 	}
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
@@ -1241,10 +1243,11 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 	}
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, dopts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	testC := testgrpc.NewTestServiceClient(cc)
 
@@ -1311,15 +1314,16 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push the backend address to the remote balancer.
 	tss.ls.sls <- sl
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName,
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
 		grpc.WithUserAgent(testUserAgent))
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testC := testgrpc.NewTestServiceClient(cc)
 
 	// Push a resolver update with grpclb configuration which does not contain the
@@ -1418,15 +1422,14 @@ func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats,
 	tss.ls.statsDura = 100 * time.Millisecond
 	creds := serverNameCheckCreds{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
+	cc, err := grpc.NewClient(r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds),
 		grpc.WithPerRPCCredentials(failPreRPCCred{}),
 		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
-		t.Fatalf("Failed to dial to the backend %v", err)
+		t.Fatalf("Failed to create a client for the backend %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	rstate := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}

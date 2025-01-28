@@ -176,7 +176,7 @@ func (s) TestEDSWatch(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 							ID: internal.LocalityID{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -199,7 +199,7 @@ func (s) TestEDSWatch(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 							ID: internal.LocalityID{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -237,12 +237,15 @@ func (s) TestEDSWatch(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap configuration: %v", err)
 			}
-			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     t.Name(),
-				Contents: bc,
+			config, err := bootstrap.NewConfigForTesting(bc)
+			if err != nil {
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+			}
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(),
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
@@ -335,7 +338,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 							ID: internal.LocalityID{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -351,7 +354,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost2, edsPort2), Weight: 1}},
+							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1}},
 							ID: internal.LocalityID{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -373,7 +376,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 							ID: internal.LocalityID{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -389,7 +392,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost2, edsPort2), Weight: 1}},
+							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1}},
 							ID: internal.LocalityID{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -427,12 +430,15 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap configuration: %v", err)
 			}
-			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     t.Name(),
-				Contents: bc,
+			config, err := bootstrap.NewConfigForTesting(bc)
+			if err != nil {
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+			}
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(),
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
@@ -531,12 +537,15 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -581,7 +590,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 					ID: internal.LocalityID{
 						Region:  "region-1",
 						Zone:    "zone-1",
@@ -633,12 +642,15 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -669,7 +681,7 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 					ID: internal.LocalityID{
 						Region:  "region-1",
 						Zone:    "zone-1",
@@ -718,11 +730,14 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
@@ -758,12 +773,15 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
@@ -795,7 +813,7 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 					ID: internal.LocalityID{
 						Region:  "region-1",
 						Zone:    "zone-1",
@@ -827,12 +845,15 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -896,12 +917,15 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -952,7 +976,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Address: fmt.Sprintf("%s:%d", edsHost1, edsPort1), Weight: 1}},
+					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
 					ID: internal.LocalityID{
 						Region:  "region-1",
 						Zone:    "zone-1",
