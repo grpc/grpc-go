@@ -151,7 +151,7 @@ func (d *gzipDecompressor) Type() string {
 
 // callInfo contains all related configuration and information about an RPC.
 type callInfo struct {
-	compressorType        string
+	compressorName        string
 	failFast              bool
 	maxReceiveMessageSize *int
 	maxSendMessageSize    *int
@@ -222,7 +222,7 @@ type HeaderCallOption struct {
 
 func (o HeaderCallOption) before(*callInfo) error { return nil }
 func (o HeaderCallOption) after(_ *callInfo, attempt *csAttempt) {
-	*o.HeaderAddr, _ = attempt.s.Header()
+	*o.HeaderAddr, _ = attempt.transportStream.Header()
 }
 
 // Trailer returns a CallOptions that retrieves the trailer metadata
@@ -244,7 +244,7 @@ type TrailerCallOption struct {
 
 func (o TrailerCallOption) before(*callInfo) error { return nil }
 func (o TrailerCallOption) after(_ *callInfo, attempt *csAttempt) {
-	*o.TrailerAddr = attempt.s.Trailer()
+	*o.TrailerAddr = attempt.transportStream.Trailer()
 }
 
 // Peer returns a CallOption that retrieves peer information for a unary RPC.
@@ -266,7 +266,7 @@ type PeerCallOption struct {
 
 func (o PeerCallOption) before(*callInfo) error { return nil }
 func (o PeerCallOption) after(_ *callInfo, attempt *csAttempt) {
-	if x, ok := peer.FromContext(attempt.s.Context()); ok {
+	if x, ok := peer.FromContext(attempt.transportStream.Context()); ok {
 		*o.PeerAddr = *x
 	}
 }
@@ -435,7 +435,7 @@ type CompressorCallOption struct {
 }
 
 func (o CompressorCallOption) before(c *callInfo) error {
-	c.compressorType = o.CompressorType
+	c.compressorName = o.CompressorType
 	return nil
 }
 func (o CompressorCallOption) after(*callInfo, *csAttempt) {}
