@@ -435,7 +435,7 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallReq
 	}
 }
 
-type wantData struct {
+type expectedData struct {
 	method         string
 	isClientStream bool
 	isServerStream bool
@@ -468,7 +468,7 @@ const (
 	connEnd
 )
 
-func checkBegin(t *testing.T, d *gotData, e *wantData) {
+func checkBegin(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.Begin
@@ -495,7 +495,7 @@ func checkBegin(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkInHeader(t *testing.T, d *gotData, e *wantData) {
+func checkInHeader(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.InHeader
@@ -552,7 +552,7 @@ func checkInHeader(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkInPayload(t *testing.T, d *gotData, e *wantData) {
+func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.InPayload
@@ -594,7 +594,7 @@ func checkInPayload(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkInTrailer(t *testing.T, d *gotData, e *wantData) {
+func checkInTrailer(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.InTrailer
@@ -613,7 +613,7 @@ func checkInTrailer(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkOutHeader(t *testing.T, d *gotData, e *wantData) {
+func checkOutHeader(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.OutHeader
@@ -660,7 +660,7 @@ func checkOutHeader(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkOutPayload(t *testing.T, d *gotData, e *wantData) {
+func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.OutPayload
@@ -702,7 +702,7 @@ func checkOutPayload(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkOutTrailer(t *testing.T, d *gotData, e *wantData) {
+func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.OutTrailer
@@ -721,7 +721,7 @@ func checkOutTrailer(t *testing.T, d *gotData, e *wantData) {
 	}
 }
 
-func checkEnd(t *testing.T, d *gotData, e *wantData) {
+func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	var (
 		ok bool
 		st *stats.End
@@ -856,7 +856,7 @@ func checkConnStats(t *testing.T, got []*gotData) {
 	checkConnEnd(t, got[len(got)-1])
 }
 
-func checkServerStats(t *testing.T, got []*gotData, expect *wantData, checkFuncs []func(t *testing.T, d *gotData, e *wantData)) {
+func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	if len(got) != len(checkFuncs) {
 		for i, g := range got {
 			t.Errorf(" - %v, %T", i, g.s)
@@ -869,7 +869,7 @@ func checkServerStats(t *testing.T, got []*gotData, expect *wantData, checkFuncs
 	}
 }
 
-func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *wantData)) {
+func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {
 	h := &statshandler{}
 	te := newTest(t, tc, nil, []stats.Handler{h})
 	te.startServer(&testServer{})
@@ -940,7 +940,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	want := &wantData{
+	want := &expectedData{
 		serverAddr:     te.srvAddr,
 		compression:    tc.compress,
 		method:         method,
@@ -958,7 +958,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 }
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
-	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *wantData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: true, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -970,7 +970,7 @@ func (s) TestServerStatsUnaryRPC(t *testing.T) {
 }
 
 func (s) TestServerStatsUnaryRPCError(t *testing.T) {
-	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *wantData){
+	testServerStats(t, &testConfig{compress: ""}, &rpcConfig{success: false, callType: unaryRPC}, []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkInPayload,
@@ -982,12 +982,12 @@ func (s) TestServerStatsUnaryRPCError(t *testing.T) {
 
 func (s) TestServerStatsClientStreamRPC(t *testing.T) {
 	count := 5
-	checkFuncs := []func(t *testing.T, d *gotData, e *wantData){
+	checkFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInHeader,
 		checkBegin,
 		checkOutHeader,
 	}
-	ioPayFuncs := []func(t *testing.T, d *gotData, e *wantData){
+	ioPayFuncs := []func(t *testing.T, d *gotData, e *expectedData){
 		checkInPayload,
 	}
 	for i := 0; i < count; i++ {
