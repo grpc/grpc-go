@@ -296,7 +296,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	// policy received in the first update.
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(rrServiceConfig)
 
-	// Push a resolver update with the service config specifying "round_robin".
+	// Set an initial resolver with the service config specifying "round_robin".
 	r.InitialState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
 
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
