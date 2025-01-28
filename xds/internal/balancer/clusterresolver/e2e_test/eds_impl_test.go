@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -155,9 +156,13 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -290,9 +295,13 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -454,9 +463,13 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -527,9 +540,13 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -926,9 +943,13 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -998,9 +1019,13 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client for use by the cluster_resolver LB policy.
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1070,9 +1095,13 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	// with a short watch expiry timeout.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	config, err := bootstrap.NewConfigForTesting(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
@@ -1160,17 +1189,17 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	lis1, err := net.Listen("tcp", "localhost:0")
+	lis1, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis1.Close()
-	lis2, err := net.Listen("tcp", "localhost:0")
+	lis2, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer lis2.Close()
-	lis3, err := net.Listen("tcp", "localhost:0")
+	lis3, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
@@ -1223,7 +1252,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			defer func() {
 				balancer.Register(originalRRBuilder)
 			}()
-			resolverUpdateCh := make(chan resolver.State, 1)
+			resolverState := atomic.Pointer[resolver.State]{}
+			resolverState.Store(&resolver.State{})
 			stub.Register(roundrobin.Name, stub.BalancerFuncs{
 				Init: func(bd *stub.BalancerData) {
 					bd.Data = originalRRBuilder.Build(bd.ClientConn, bd.BuildOptions)
@@ -1232,7 +1262,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 					bd.Data.(balancer.Balancer).Close()
 				},
 				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-					resolverUpdateCh <- ccs.ResolverState
+					resolverState.Store(&ccs.ResolverState)
 					return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 				},
 			})
@@ -1243,6 +1273,11 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			// Create bootstrap configuration pointing to the above management server.
 			nodeID := uuid.New().String()
 			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+			config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+			if err != nil {
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+			}
+			pool := xdsclient.NewPool(config)
 
 			// Create xDS resources for consumption by the test. We start off with a
 			// single backend in a single EDS locality.
@@ -1259,9 +1294,8 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 
 			// Create an xDS client talking to the above management server, configured
 			// with a short watch expiry timeout.
-			xdsClient, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     t.Name(),
-				Contents: bootstrapContents,
+			xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(),
 			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
@@ -1297,15 +1331,10 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var rs resolver.State
-			select {
-			case rs = <-resolverUpdateCh:
-			case <-ctx.Done():
-				t.Fatalf("Context timed out waiting for resolver update.")
-			}
+			gotState := resolverState.Load()
 
 			gotEndpointPorts := []uint32{}
-			for _, a := range rs.Endpoints[0].Addresses {
+			for _, a := range gotState.Endpoints[0].Addresses {
 				gotEndpointPorts = append(gotEndpointPorts, testutils.ParsePort(t, a.Addr))
 			}
 			if diff := cmp.Diff(gotEndpointPorts, tc.wantEndpointPorts); diff != "" {
@@ -1313,7 +1342,7 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			}
 
 			gotAddrPorts := []uint32{}
-			for _, a := range rs.Addresses {
+			for _, a := range gotState.Addresses {
 				gotAddrPorts = append(gotAddrPorts, testutils.ParsePort(t, a.Addr))
 			}
 			if diff := cmp.Diff(gotAddrPorts, tc.wantAddrPorts); diff != "" {

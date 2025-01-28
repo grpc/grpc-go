@@ -37,16 +37,24 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// PickFirstConfig is a pick first config without shuffling enabled.
-var PickFirstConfig string
+var (
+	// PickFirstConfig is a pick first config without shuffling enabled.
+	PickFirstConfig serviceconfig.LoadBalancingConfig
+	logger          = grpclog.Component("endpoint-sharding")
+)
 
 func init() {
-	PickFirstConfig = fmt.Sprintf("[{%q: {}}]", pickfirstleaf.Name)
+	var err error
+	PickFirstConfig, err = ParseConfig(json.RawMessage(fmt.Sprintf("[{%q: {}}]", pickfirstleaf.Name)))
+	if err != nil {
+		logger.Fatal(err)
+	}
 }
 
 // ChildState is the balancer state of a child along with the endpoint which

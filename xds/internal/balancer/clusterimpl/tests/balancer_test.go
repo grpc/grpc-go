@@ -79,16 +79,14 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start a server backend exposing the test service.
@@ -191,13 +189,12 @@ func (s) TestLoadReportingPickFirstMultiLocality(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	var err error
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Start two server backends exposing the test service.

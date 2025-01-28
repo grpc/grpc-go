@@ -225,7 +225,12 @@ func Dial(target string, opts ...DialOption) (*ClientConn, error) {
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
 	// At the end of this method, we kick the channel out of idle, rather than
 	// waiting for the first rpc.
-	opts = append([]DialOption{withDefaultScheme("passthrough")}, opts...)
+	//
+	// WithLocalDNSResolution dial option in `grpc.Dial` ensures that it
+	// preserves behavior: when default scheme passthrough is used, skip
+	// hostname resolution, when "dns" is used for resolution, perform
+	// resolution on the client.
+	opts = append([]DialOption{withDefaultScheme("passthrough"), WithLocalDNSResolution()}, opts...)
 	cc, err := NewClient(target, opts...)
 	if err != nil {
 		return nil, err
