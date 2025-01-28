@@ -190,11 +190,6 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 
-	// Set an initial resolver with a GRPCLB service config and a single address
-	// pointing to the grpclb server we created above. This will cause the
-	// channel to switch to the "grpclb" balancer, which returns a single
-	// backend address.
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
