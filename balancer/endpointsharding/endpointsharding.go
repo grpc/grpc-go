@@ -105,17 +105,17 @@ type endpointSharding struct {
 	// calls into a child. To avoid deadlocks, do not acquire childMu while
 	// holding mu.
 	childMu  sync.Mutex
-	children atomic.Pointer[resolver.EndpointMap]
+	children atomic.Pointer[resolver.EndpointMap] // endpoint -> *balancerWrapper
 
 	// inhibitChildUpdates is set during UpdateClientConnState/ResolverError
 	// calls (calls to children will each produce an update, only want one
 	// update).
 	inhibitChildUpdates atomic.Bool
 
-	// mu synchronizes access to the stored children balancer states.
-	// It must not be held during calls into a child since synchronous calls
-	// back from the child may require taking mu, causing a deadlock. To avoid
-	// deadlocks, do not acquire childMu while holding mu.
+	// mu synchronizes access to the state stored in balancerWrappers in the
+	// children field. mu must not be held during calls into a child since
+	// synchronous calls back from the child may require taking mu, causing a
+	// deadlock. To avoid deadlocks, do not acquire childMu while holding mu.
 	mu sync.Mutex
 }
 
@@ -146,24 +146,24 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 			// update.
 			continue
 		}
-		var bal *balancerWrapper
-		if child, ok := children.Get(endpoint); ok {
-			bal = child.(*balancerWrapper)
-			// Endpoint attributes may have changes, update the stored endpoint.
+		var childBalancer *balancerWrapper
+		if val, ok := children.Get(endpoint); ok {
+			childBalancer = val.(*balancerWrapper)
+			// Endpoint attributes may have changed, update the stored endpoint.
 			es.mu.Lock()
-			bal.childState.Endpoint = endpoint
+			childBalancer.childState.Endpoint = endpoint
 			es.mu.Unlock()
 		} else {
-			bal = &balancerWrapper{
+			childBalancer = &balancerWrapper{
 				childState: ChildState{Endpoint: endpoint},
 				ClientConn: es.cc,
 				es:         es,
 			}
-			bal.childState.Balancer = bal
-			bal.child = gracefulswitch.NewBalancer(bal, es.bOpts)
+			childBalancer.childState.Balancer = childBalancer
+			childBalancer.child = gracefulswitch.NewBalancer(childBalancer, es.bOpts)
 		}
-		newChildren.Set(endpoint, bal)
-		if err := bal.updateClientConnStateLocked(balancer.ClientConnState{
+		newChildren.Set(endpoint, childBalancer)
+		if err := childBalancer.updateClientConnStateLocked(balancer.ClientConnState{
 			BalancerConfig: state.BalancerConfig,
 			ResolverState: resolver.State{
 				Endpoints:  []resolver.Endpoint{endpoint},
@@ -180,9 +180,8 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 	// Delete old children that are no longer present.
 	for _, e := range children.Keys() {
 		child, _ := children.Get(e)
-		bal := child.(*balancerWrapper)
 		if _, ok := newChildren.Get(e); !ok {
-			bal.closeLocked()
+			child.(*balancerWrapper).closeLocked()
 		}
 	}
 	es.children.Store(newChildren)
@@ -205,8 +204,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	}()
 	children := es.children.Load()
 	for _, child := range children.Values() {
-		bal := child.(balancer.Balancer)
-		bal.ResolverError(err)
+		child.(balancer.Balancer).ResolverError(err)
 	}
 }
 
@@ -219,8 +217,7 @@ func (es *endpointSharding) Close() {
 	defer es.childMu.Unlock()
 	children := es.children.Load()
 	for _, child := range children.Values() {
-		bal := child.(*balancerWrapper)
-		bal.closeLocked()
+		child.(*balancerWrapper).closeLocked()
 	}
 }
 
@@ -320,7 +317,7 @@ type balancerWrapper struct {
 	// The following fields are initialized at build time and read-only after
 	// that and therefore do not need to be guarded by a mutex.
 
-	// child contains the wrapped balancer. Access it's methods only through
+	// child contains the wrapped balancer. Access its methods only through
 	// methods on balancerWrapper to ensure proper synchronization
 	child               balancer.Balancer
 	balancer.ClientConn // embed to intercept UpdateState, doesn't deal with SubConns
