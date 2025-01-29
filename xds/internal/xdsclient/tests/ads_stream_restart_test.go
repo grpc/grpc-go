@@ -113,7 +113,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap configuration.
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

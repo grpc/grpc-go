@@ -144,7 +144,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 			}
 		},
 	}
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
@@ -421,7 +421,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 			}
 		},
 	}
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

@@ -100,7 +100,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

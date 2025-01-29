@@ -144,6 +144,13 @@ func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.config = config
 }
 
+// GetConfig returns the bootstrap configuration used by the pool.
+func (p *Pool) GetConfig() *bootstrap.Config {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.config
+}
+
 // DumpResources returns the status and contents of all xDS resources.
 func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 	p.mu.Lock()

@@ -259,7 +259,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	closeCh := make(chan struct{})
 	rinternal.NewXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
-		config, err := bootstrap.NewConfigForTesting(bc)
+		config, err := bootstrap.NewConfigFromContents(bc)
 		if err != nil {
 			t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 		}
