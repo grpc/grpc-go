@@ -140,6 +140,26 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: true,
 		},
 		{
+			name: "first config's Extensions is nil",
+			s1: &ServerConfig{
+				Extensions: testServerConfigExtension{1},
+			},
+			s2: &ServerConfig{
+				Extensions: nil,
+			},
+			wantEq: false,
+		},
+		{
+			name: "other config's Extensions is nil",
+			s1: &ServerConfig{
+				Extensions: nil,
+			},
+			s2: &ServerConfig{
+				Extensions: testServerConfigExtension{2},
+			},
+			wantEq: false,
+		},
+		{
 			name: "all same",
 			s1: &ServerConfig{
 				ServerURI:              "foo",
