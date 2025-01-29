@@ -42,13 +42,18 @@ import (
 )
 
 func init() {
-	balancer.Register(builder{})
+	pfCfgJSON := fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
+	var err error
+	PickfirstConfig, err = Builder{}.ParseConfig(json.RawMessage(pfCfgJSON))
+	if err != nil {
+		logger.Fatalf("Failed to parse pickfirst config: %v", err)
+	}
 }
 
 var (
 	// PickfirstConfig is the LB policy config json for a pick_first load
 	// balancer that is lazily initialized.
-	PickfirstConfig = fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
+	PickfirstConfig serviceconfig.LoadBalancingConfig
 	logger          = grpclog.Component("lazy-lb")
 )
 
@@ -58,9 +63,11 @@ const (
 	logPrefix = "[lazy-lb %p] "
 )
 
-type builder struct{}
+// Builder builds the lazy balancer. It is not registered in the global balancer
+// registry by default.
+type Builder struct{}
 
-func (builder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+func (Builder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &lazyBalancer{
 		cc:           cc,
 		buildOptions: bOpts,
@@ -77,7 +84,7 @@ func (builder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balanc
 	return b
 }
 
-func (builder) Name() string {
+func (Builder) Name() string {
 	return Name
 }
 
@@ -170,7 +177,7 @@ type lbCfg struct {
 	childLBCfg serviceconfig.LoadBalancingConfig
 }
 
-func (b builder) ParseConfig(lbConfig json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (b Builder) ParseConfig(lbConfig json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	jsonReprsentation := &struct {
 		ChildPolicy json.RawMessage
 	}{}

@@ -182,7 +182,8 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = endpointsharding.NewBalancerWithoutAutoReconnect(bd.ClientConn, bd.BuildOptions)
+			epOpts := endpointsharding.BuildOptions{DisableAutoReconnect: true}
+			bd.Data = endpointsharding.NewBalancerWithOpts(bd.ClientConn, bd.BuildOptions, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{

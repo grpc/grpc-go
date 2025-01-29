@@ -72,22 +72,32 @@ type ChildState struct {
 // policies each owning a single endpoint. The balancer will automatically call
 // ExitIdle on its children if they report IDLE connectivity state.
 func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return newBlanacer(cc, opts, true)
+	return newBlanacer(cc, opts, BuildOptions{})
 }
 
-// NewBalancerWithoutAutoReconnect returns a load balancing policy that manages
+// BuildOptions are the options to configure the behaviour of the
+// endpointsharding balancer.
+type BuildOptions struct {
+	DisableAutoReconnect bool
+	ChildBuilder         balancer.Builder
+}
+
+// NewBalancerWithOpts returns a load balancing policy that manages
 // homogeneous child policies each owning a single endpoint. The balancer will
 // allow children to remain in IDLE state until triggered to exit idle state
 // using the ChildState obtained using the endpointsharding picker.
-func NewBalancerWithoutAutoReconnect(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return newBlanacer(cc, opts, false)
+func NewBalancerWithOpts(cc balancer.ClientConn, opts balancer.BuildOptions, epOpts BuildOptions) balancer.Balancer {
+	return newBlanacer(cc, opts, epOpts)
 }
 
-func newBlanacer(cc balancer.ClientConn, opts balancer.BuildOptions, autoReconnect bool) balancer.Balancer {
+func newBlanacer(cc balancer.ClientConn, opts balancer.BuildOptions, epOpts BuildOptions) balancer.Balancer {
+	if epOpts.ChildBuilder == nil {
+		epOpts.ChildBuilder = &gracefulSwitchBuilder{}
+	}
 	es := &endpointSharding{
-		cc:                  cc,
-		bOpts:               opts,
-		enableAutoReconnect: autoReconnect,
+		cc:     cc,
+		bOpts:  opts,
+		epOpts: epOpts,
 	}
 	es.children.Store(resolver.NewEndpointMap())
 	return es
@@ -97,9 +107,9 @@ func newBlanacer(cc balancer.ClientConn, opts balancer.BuildOptions, autoReconne
 // balancer with child config for every unique Endpoint received. It updates the
 // child states on any update from parent or child.
 type endpointSharding struct {
-	cc                  balancer.ClientConn
-	bOpts               balancer.BuildOptions
-	enableAutoReconnect bool
+	cc     balancer.ClientConn
+	bOpts  balancer.BuildOptions
+	epOpts BuildOptions
 
 	// childMu synchronizes calls to any single child. It must be held for all
 	// calls into a child. To avoid deadlocks, do not acquire childMu while
@@ -160,7 +170,7 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 				es:         es,
 			}
 			childBalancer.childState.Balancer = childBalancer
-			childBalancer.child = gracefulswitch.NewBalancer(childBalancer, es.bOpts)
+			childBalancer.child = es.epOpts.ChildBuilder.Build(childBalancer, es.bOpts)
 		}
 		newChildren.Set(endpoint, childBalancer)
 		if err := childBalancer.updateClientConnStateLocked(balancer.ClientConnState{
@@ -334,7 +344,7 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.mu.Lock()
 	bw.childState.State = state
 	bw.es.mu.Unlock()
-	if state.ConnectivityState == connectivity.Idle && bw.es.enableAutoReconnect {
+	if state.ConnectivityState == connectivity.Idle && !bw.es.epOpts.DisableAutoReconnect {
 		bw.ExitIdle()
 	}
 	bw.es.updateState()
@@ -378,4 +388,15 @@ func (bw *balancerWrapper) closeLocked() {
 // format of the loadBalancingConfig field in ServiceConfig.
 func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return gracefulswitch.ParseConfig(cfg)
+}
+
+type gracefulSwitchBuilder struct {
+}
+
+func (b *gracefulSwitchBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return gracefulswitch.NewBalancer(cc, opts)
+}
+
+func (b *gracefulSwitchBuilder) Name() string {
+	return "gracefulswitch"
 }

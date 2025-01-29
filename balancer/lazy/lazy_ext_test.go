@@ -53,6 +53,8 @@ const (
 	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
+var pfCfg = fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
+
 type s struct {
 	grpctest.Tester
 }
@@ -77,7 +79,8 @@ func (s) TestExitIdle(t *testing.T) {
 		},
 	})
 
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, lazy.PickfirstConfig)
+	balancer.Register(lazy.Builder{})
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, pfCfg)
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(json),
@@ -125,11 +128,6 @@ func (s) TestPicker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	lazyCfg, err := balancer.Get(lazy.Name).(balancer.ConfigParser).ParseConfig(json.RawMessage(lazy.PickfirstConfig))
-	if err != nil {
-		t.Fatalf("Failed to parse service config: %v", err)
-	}
-
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = balancer.Get(lazy.Name).Build(bd.ClientConn, bd.BuildOptions)
@@ -139,7 +137,7 @@ func (s) TestPicker(t *testing.T) {
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
-				BalancerConfig: lazyCfg,
+				BalancerConfig: lazy.PickfirstConfig,
 				ResolverState:  ccs.ResolverState,
 			})
 		},
@@ -410,7 +408,8 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 		},
 	})
 
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, lazy.PickfirstConfig)
+	balancer.Register(lazy.Builder{})
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, pfCfg)
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(json),
