@@ -23,12 +23,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -43,10 +46,12 @@ type SoakWorkerResults struct {
 
 // SoakIterationConfig holds the parameters required for a single soak iteration.
 type SoakIterationConfig struct {
-	RequestSize  int                        // The size of the request payload in bytes.
-	ResponseSize int                        // The expected size of the response payload in bytes.
-	Client       testgrpc.TestServiceClient // The gRPC client to make the call.
-	CallOptions  []grpc.CallOption          // Call options for the RPC.
+	RequestSize                 int                        // The size of the request payload in bytes.
+	ResponseSize                int                        // The expected size of the response payload in bytes.
+	Client                      testgrpc.TestServiceClient // The gRPC client to make the call.
+	CallOptions                 []grpc.CallOption          // Call options for the RPC.
+	ExpectStatusCode            codes.Code                 // The expected status code of the RPC.
+	ExpectStatusMessageContains string                     // The expected substring in the RPC status message.
 }
 
 // SoakTestConfig holds the configuration for the entire soak test.
@@ -61,6 +66,8 @@ type SoakTestConfig struct {
 	Iterations                       int
 	MaxFailures                      int
 	ChannelForTest                   func() (*grpc.ClientConn, func())
+	ExpectStatusCode                 codes.Code
+	ExpectStatusMessageContains      string
 }
 
 func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latency time.Duration, err error) {
@@ -76,15 +83,31 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 	// Perform the GRPC call.
 	var reply *testpb.SimpleResponse
 	reply, err = config.Client.UnaryCall(ctx, req, config.CallOptions...)
-	if err != nil {
-		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
-		return 0, err
+	if config.ExpectStatusCode == codes.OK {
+		if err != nil {
+			err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
+			return 0, err
+		}
+		// Validate response.
+		t := reply.GetPayload().GetType()
+		s := len(reply.GetPayload().GetBody())
+		if t != testpb.PayloadType_COMPRESSABLE || s != config.ResponseSize {
+			err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, config.ResponseSize)
+			return 0, err
+		}
+		// Calculate latency and return result.
+		latency = time.Since(start)
+		return latency, nil
 	}
-	// Validate response.
-	t := reply.GetPayload().GetType()
-	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != config.ResponseSize {
-		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, config.ResponseSize)
+
+	// Expected erroneous status code.
+	errString := ""
+	if err != nil {
+		errString = err.Error()
+	}
+	if config.ExpectStatusCode != status.Code(err) || !strings.Contains(errString, config.ExpectStatusMessageContains) {
+		err = fmt.Errorf("/TestService/UnaryCall RPC status: %s error message: %q, want status: %s, error message to include: %q",
+			status.Code(err), errString, config.ExpectStatusCode, config.ExpectStatusMessageContains)
 		return 0, err
 	}
 	// Calculate latency and return result.
@@ -118,10 +141,12 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 		client := testgrpc.NewTestServiceClient(currentChannel)
 		var p peer.Peer
 		iterationConfig := SoakIterationConfig{
-			RequestSize:  config.RequestSize,
-			ResponseSize: config.ResponseSize,
-			Client:       client,
-			CallOptions:  []grpc.CallOption{grpc.Peer(&p)},
+			RequestSize:                 config.RequestSize,
+			ResponseSize:                config.ResponseSize,
+			Client:                      client,
+			CallOptions:                 []grpc.CallOption{grpc.Peer(&p)},
+			ExpectStatusCode:            config.ExpectStatusCode,
+			ExpectStatusMessageContains: config.ExpectStatusMessageContains,
 		}
 		latency, err := doOneSoakIteration(ctx, iterationConfig)
 		if err != nil {

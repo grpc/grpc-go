@@ -37,6 +37,7 @@ import (
 
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
@@ -83,6 +84,8 @@ var (
 	soakNumThreads                         = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	additionalMetadata                     = flag.String("additional_metadata", "", "Additional metadata to send in each request, as a semicolon-separated list of key:value pairs.")
+	expectedError                          = flag.String("expected_error", "UNAVAILABLE", "The expected error code (canonical string). For tests that expect error.")
+	expectedErrorMessageContains           = flag.String("expected_error_message_contains", "", "For tests that expect error, the message that is expected in the error message.")
 	testCase                               = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
@@ -108,7 +111,9 @@ var (
         unimplemented_service: client attempts to call unimplemented service;
         pick_first_unary: all requests are sent to one server despite multiple servers are resolved;
         orca_per_rpc: the client verifies ORCA per-RPC metrics are provided;
-        orca_oob: the client verifies ORCA out-of-band metrics are provided.`)
+        orca_oob: the client verifies ORCA out-of-band metrics are provided;
+        empty_unary_error: empty_unary but expecting returning error;
+        rpc_soak_error: expect error status code in rpc soak test.`)
 
 	logger = grpclog.Component("interop")
 )
@@ -396,6 +401,18 @@ func main() {
 	case "orca_oob":
 		interop.DoORCAOOBTest(ctx, tc)
 		logger.Infoln("ORCAOOB done")
+	case "empty_unary_error":
+		var ec codes.Code
+		ec.UnmarshalJSON([]byte(`"` + *expectedError + `"`))
+		interop.DoEmptyUnaryError(ctx, tc, ec, *expectedErrorMessageContains)
+		logger.Infoln("EmptyUnaryError done")
+	case "rpc_soak_error":
+		rpcSoakErrorConfig := createBaseSoakConfig(serverAddr)
+		rpcSoakErrorConfig.ChannelForTest = func() (*grpc.ClientConn, func()) { return conn, func() {} }
+		rpcSoakErrorConfig.ExpectStatusCode.UnmarshalJSON([]byte(`"` + *expectedError + `"`))
+		rpcSoakErrorConfig.ExpectStatusMessageContains = *expectedErrorMessageContains
+		interop.DoSoakTest(ctxWithDeadline, rpcSoakErrorConfig)
+		logger.Infoln("RpcSoakError done")
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}

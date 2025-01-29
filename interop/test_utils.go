@@ -681,6 +681,19 @@ func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 	}
 }
 
+// DoEmptyUnaryError performs a unary RPC with empty request and expects an error with a specific error code
+// and that contains a specific error message.
+func DoEmptyUnaryError(ctx context.Context, tc testgrpc.TestServiceClient, errorCode codes.Code, errorMessage string, args ...grpc.CallOption) {
+	_, err := tc.EmptyCall(ctx, &testpb.Empty{}, args...)
+
+	if status.Code(err) != errorCode {
+		logger.Fatalf("EmptyCall compleled with error code %d, want %d", status.Code(err), errorCode)
+	}
+	if !strings.Contains(err.Error(), errorMessage) {
+		logger.Fatalf("EmptyCall completed with error message %s, want to include %s", err.Error(), errorMessage)
+	}
+}
+
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 
