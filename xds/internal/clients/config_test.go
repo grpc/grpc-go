@@ -64,43 +64,43 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 		wantEq bool
 	}{
 		{
-			name:   "both nil",
+			name:   "both_nil",
 			s1:     nil,
 			s2:     nil,
 			wantEq: true,
 		},
 		{
-			name:   "s1 nil",
+			name:   "one_nil",
 			s1:     nil,
 			s2:     &ServerConfig{},
 			wantEq: false,
 		},
 		{
-			name:   "s2 nil",
+			name:   "other_nil",
 			s1:     &ServerConfig{},
 			s2:     nil,
 			wantEq: false,
 		},
 		{
-			name:   "empty, equal",
+			name:   "both_empty_and_equal",
 			s1:     &ServerConfig{},
 			s2:     &ServerConfig{},
 			wantEq: true,
 		},
 		{
-			name:   "ServerURI different",
+			name:   "different_ServerURI",
 			s1:     &ServerConfig{ServerURI: "foo"},
 			s2:     &ServerConfig{ServerURI: "bar"},
 			wantEq: false,
 		},
 		{
-			name:   "IgnoreResourceDeletion different",
+			name:   "different_IgnoreResourceDeletion",
 			s1:     &ServerConfig{IgnoreResourceDeletion: true},
 			s2:     &ServerConfig{},
 			wantEq: false,
 		},
 		{
-			name: "Extensions different, no Equal method",
+			name: "different_Extensions_with_no_Equal_method",
 			s1: &ServerConfig{
 				Extensions: 1,
 			},
@@ -110,7 +110,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: false, // By default, if there's no Equal method, they are unequal
 		},
 		{
-			name: "Extensions same, no Equal method",
+			name: "same_Extensions_with_no_Equal_method",
 			s1: &ServerConfig{
 				Extensions: 1,
 			},
@@ -120,7 +120,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: false, // By default, if there's no Equal method, they are unequal
 		},
 		{
-			name: "Extensions different, with Equal method",
+			name: "different_Extensions_with_Equal_method",
 			s1: &ServerConfig{
 				Extensions: testServerConfigExtension{1},
 			},
@@ -130,7 +130,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: false,
 		},
 		{
-			name: "Extensions same, with Equal method",
+			name: "same_Extensions_same_with_Equal_method",
 			s1: &ServerConfig{
 				Extensions: testServerConfigExtension{1},
 			},
@@ -140,7 +140,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: true,
 		},
 		{
-			name: "first config's Extensions is nil",
+			name: "first_config_Extensions_is_nil",
 			s1: &ServerConfig{
 				Extensions: testServerConfigExtension{1},
 			},
@@ -150,7 +150,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: false,
 		},
 		{
-			name: "other config's Extensions is nil",
+			name: "other_config_Extensions_is_nil",
 			s1: &ServerConfig{
 				Extensions: nil,
 			},
@@ -160,7 +160,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 			wantEq: false,
 		},
 		{
-			name: "all same",
+			name: "all_fields_same",
 			s1: &ServerConfig{
 				ServerURI:              "foo",
 				IgnoreResourceDeletion: true,
@@ -191,27 +191,27 @@ func (s) TestLocality_IsEmpty(t *testing.T) {
 		want     bool
 	}{
 		{
-			name:     "empty locality",
+			name:     "empty_locality",
 			locality: Locality{},
 			want:     true,
 		},
 		{
-			name:     "non-empty region",
+			name:     "non_empty_region",
 			locality: Locality{Region: "region"},
 			want:     false,
 		},
 		{
-			name:     "non-empty zone",
+			name:     "non_empty_zone",
 			locality: Locality{Zone: "zone"},
 			want:     false,
 		},
 		{
-			name:     "non-empty subzone",
+			name:     "non_empty_subzone",
 			locality: Locality{SubZone: "subzone"},
 			want:     false,
 		},
 		{
-			name:     "non-empty all",
+			name:     "non_empty_all_fields",
 			locality: Locality{Region: "region", Zone: "zone", SubZone: "subzone"},
 			want:     false,
 		},
@@ -233,35 +233,41 @@ func (s) TestLocality_Equal(t *testing.T) {
 		wantEq bool
 	}{
 		{
-			name:   "equal localities",
+			name:   "both_equal",
 			l1:     Locality{Region: "region", Zone: "zone", SubZone: "subzone"},
 			l2:     Locality{Region: "region", Zone: "zone", SubZone: "subzone"},
 			wantEq: true,
 		},
 		{
-			name:   "different regions",
+			name:   "different_regions",
 			l1:     Locality{Region: "region1", Zone: "zone", SubZone: "subzone"},
 			l2:     Locality{Region: "region2", Zone: "zone", SubZone: "subzone"},
 			wantEq: false,
 		},
 
 		{
-			name:   "different zones",
+			name:   "different_zones",
 			l1:     Locality{Region: "region", Zone: "zone1", SubZone: "subzone"},
 			l2:     Locality{Region: "region", Zone: "zone2", SubZone: "subzone"},
 			wantEq: false,
 		},
 		{
-			name:   "different subzones",
+			name:   "different_subzones",
 			l1:     Locality{Region: "region", Zone: "zone", SubZone: "subzone1"},
 			l2:     Locality{Region: "region", Zone: "zone", SubZone: "subzone2"},
 			wantEq: false,
 		},
 		{
-			name:   "empty vs non-empty",
+			name:   "one_empty",
 			l1:     Locality{},
 			l2:     Locality{Region: "region", Zone: "zone", SubZone: "subzone"},
 			wantEq: false,
+		},
+		{
+			name:   "both_empty",
+			l1:     Locality{},
+			l2:     Locality{},
+			wantEq: true,
 		},
 	}
 
@@ -281,7 +287,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 		wantProto *v3corepb.Node
 	}{
 		{
-			desc: "all fields set",
+			desc: "all_fields_set",
 			inputNode: Node{
 				ID:      "id",
 				Cluster: "cluster",
@@ -310,7 +316,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 			},
 		},
 		{
-			desc: "some fields unset",
+			desc: "some_fields_unset",
 			inputNode: Node{
 				ID: "id",
 			},
@@ -322,7 +328,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 			},
 		},
 		{
-			desc: "empty locality",
+			desc: "empty_locality",
 			inputNode: Node{
 				ID:       "id",
 				Locality: Locality{},
