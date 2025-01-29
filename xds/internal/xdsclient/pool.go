@@ -25,7 +25,6 @@ import (
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
@@ -131,7 +130,7 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 		return nil, nil, fmt.Errorf("xds:: xDS client with name %q not found", name)
 	}
 	c.incrRef()
-	return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 
 // SetFallbackBootstrapConfig is used to specify a bootstrap configuration
@@ -193,7 +192,7 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 
 	if c := p.clients[name]; c != nil {
 		c.incrRef()
-		return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
 	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff)
@@ -208,5 +207,5 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
-	return client, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return client, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
