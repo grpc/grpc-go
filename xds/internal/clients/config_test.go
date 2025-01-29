@@ -293,7 +293,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 				Metadata:         newStructProtoFromMap(t, map[string]any{"k1": "v1", "k2": 101, "k3": 280.0}),
 				UserAgentName:    "user agent",
 				UserAgentVersion: "version",
-				ClientFeatures:   []string{"feature1", "feature2"},
+				clientFeatures:   []string{"feature1", "feature2"},
 			},
 			wantProto: &v3corepb.Node{
 				Id:      "id",
@@ -338,7 +338,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotProto := test.inputNode.ToProto()
+			gotProto := test.inputNode.toProto()
 			if diff := cmp.Diff(test.wantProto, gotProto, protocmp.Transform()); diff != "" {
 				t.Fatalf("Unexpected diff in node proto: (-want, +got):\n%s", diff)
 			}

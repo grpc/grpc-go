@@ -153,11 +153,11 @@ type Node struct {
 	// ClientFeatures is a list of xDS features supported by this client.
 	// These features are set within the xDS client, but may be overridden only
 	// for testing purposes.
-	ClientFeatures []string
+	clientFeatures []string
 }
 
-// ToProto converts an instance of [Node] to its protobuf representation.
-func (n Node) ToProto() *v3corepb.Node {
+// toProto converts an instance of [Node] to its protobuf representation.
+func (n Node) toProto() *v3corepb.Node {
 	return &v3corepb.Node{
 		Id:      n.ID,
 		Cluster: n.Cluster,
@@ -182,7 +182,7 @@ func (n Node) ToProto() *v3corepb.Node {
 		}(),
 		UserAgentName:        n.UserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
-		ClientFeatures:       slices.Clone(n.ClientFeatures),
+		ClientFeatures:       slices.Clone(n.clientFeatures),
 	}
 }
 
