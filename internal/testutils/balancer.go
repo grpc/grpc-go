@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
@@ -98,6 +99,7 @@ func (*TestSubConn) RegisterHealthListener(func(balancer.SubConnState)) {}
 
 // BalancerClientConn is a mock balancer.ClientConn used in tests.
 type BalancerClientConn struct {
+	internal.EnforceClientConnEmbedding
 	logger Logger
 
 	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
