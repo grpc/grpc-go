@@ -109,8 +109,9 @@ func (gsb *Balancer) switchTo(builder balancer.Builder) (*balancerWrapper, error
 		return nil, errBalancerClosed
 	}
 	bw := &balancerWrapper{
-		builder: builder,
-		gsb:     gsb,
+		ClientConn: gsb.cc,
+		builder:    builder,
+		gsb:        gsb,
 		lastState: balancer.State{
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
@@ -293,6 +294,7 @@ func (gsb *Balancer) Close() {
 // State updates from the wrapped balancer can result in invocation of the
 // graceful switch logic.
 type balancerWrapper struct {
+	balancer.ClientConn
 	balancer.Balancer
 	gsb     *Balancer
 	builder balancer.Builder
