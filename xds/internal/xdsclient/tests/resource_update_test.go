@@ -283,13 +283,9 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			config, err := bootstrap.NewConfigForTesting(bc)
-			if err != nil {
-				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-			}
-			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
+				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {
@@ -353,7 +349,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -563,13 +559,9 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			config, err := bootstrap.NewConfigForTesting(bc)
-			if err != nil {
-				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-			}
-			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
+				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {
@@ -632,7 +624,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -804,13 +796,9 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			config, err := bootstrap.NewConfigForTesting(bc)
-			if err != nil {
-				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-			}
-			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
+				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {
@@ -887,7 +875,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1157,13 +1145,9 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
 			bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-			config, err := bootstrap.NewConfigForTesting(bc)
-			if err != nil {
-				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-			}
-			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
 				Name:               t.Name(),
+				Contents:           bc,
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {
@@ -1226,7 +1210,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if diff := cmp.Diff(test.wantUpdate, gotUpdate, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected diff in metadata, diff (-want +got):\n%s", diff)
 			}
-			if err := compareUpdateMetadata(ctx, pool.DumpResources, test.wantGenericXDSConfig); err != nil {
+			if err := compareUpdateMetadata(ctx, xdsclient.DumpResources, test.wantGenericXDSConfig); err != nil {
 				t.Fatal(err)
 			}
 		})

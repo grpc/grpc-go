@@ -38,8 +38,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 	xdsinternal "google.golang.org/grpc/xds/internal"
@@ -144,12 +142,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 			}
 		},
 	}
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool)}
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
@@ -181,7 +174,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 	// A unary RPC should work once it transitions into serving. (need this same
 	// assertion from LDS resource not found triggering it).
-	waitForSuccessfulRPC(ctx, t, cc, grpc.WaitForReady(true))
+	waitForSuccessfulRPC(ctx, t, cc)
 
 	// Start a stream before switching the server to not serving. Due to the
 	// stream being created before the graceful stop of the underlying
@@ -195,7 +188,7 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 	// Lookup the xDS client in use based on the dedicated well-known key, as
 	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := pool.GetClientForTesting(xdsclient.NameForServer)
+	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}
@@ -222,140 +215,6 @@ func (s) TestServingModeChanges(t *testing.T) {
 
 	// New RPCs on that connection should eventually start failing.
 	waitForFailedRPCWithStatus(ctx, t, cc, errAcceptAndClose)
-}
-
-// TestMultipleServers_DifferentBootstrapConfigurations verifies that multiple
-// xDS-enabled gRPC servers can be created with different bootstrap
-// configurations, and that they correctly request different LDS resources from
-// the management server based on their respective listening ports.  It also
-// ensures that gRPC clients can connect to the intended server and that RPCs
-// function correctly. The test uses the grpc.Peer() call option to validate
-// that the client is connected to the correct server.
-func (s) TestMultipleServers_DifferentBootstrapConfigurations(t *testing.T) {
-	// Setup an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
-
-	// Create two bootstrap configurations pointing to the above management server.
-	nodeID1 := uuid.New().String()
-	bootstrapContents1 := e2e.DefaultBootstrapContents(t, nodeID1, mgmtServer.Address)
-	nodeID2 := uuid.New().String()
-	bootstrapContents2 := e2e.DefaultBootstrapContents(t, nodeID2, mgmtServer.Address)
-
-	// Create two xDS-enabled gRPC servers using the above bootstrap configs.
-	lis1, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	lis2, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-
-	serving1 := grpcsync.NewEvent()
-	modeChangeOpt1 := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-		if args.Mode == connectivity.ServingModeServing {
-			serving1.Fire()
-		}
-	})
-	serving2 := grpcsync.NewEvent()
-	modeChangeOpt2 := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-		if args.Mode == connectivity.ServingModeServing {
-			serving2.Fire()
-		}
-	})
-
-	stub1 := &stubserver.StubServer{
-		Listener: lis1,
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	if stub1.S, err = xds.NewGRPCServer(xds.BootstrapContentsForTesting(bootstrapContents1), modeChangeOpt1); err != nil {
-		t.Fatalf("Failed to create first xDS enabled gRPC server: %v", err)
-	}
-	stubserver.StartTestService(t, stub1)
-	defer stub1.S.Stop()
-
-	stub2 := &stubserver.StubServer{
-		Listener: lis2,
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	if stub2.S, err = xds.NewGRPCServer(xds.BootstrapContentsForTesting(bootstrapContents2), modeChangeOpt2); err != nil {
-		t.Fatalf("Failed to create second xDS enabled gRPC server: %v", err)
-	}
-	stubserver.StartTestService(t, stub2)
-	defer stub2.S.Stop()
-
-	// Update the management server with the listener resources pointing to the
-	// corresponding gRPC servers.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	host1, port1, err := hostPortFromListener(lis1)
-	if err != nil {
-		t.Fatalf("Failed to retrieve host and port of server: %v", err)
-	}
-	host2, port2, err := hostPortFromListener(lis2)
-	if err != nil {
-		t.Fatalf("Failed to retrieve host and port of server: %v", err)
-	}
-
-	resources1 := e2e.UpdateOptions{
-		NodeID:    nodeID1,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host1, port1, e2e.SecurityLevelNone, "routeName")},
-	}
-	if err := mgmtServer.Update(ctx, resources1); err != nil {
-		t.Fatal(err)
-	}
-
-	resources2 := e2e.UpdateOptions{
-		NodeID:    nodeID2,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultServerListener(host2, port2, e2e.SecurityLevelNone, "routeName")},
-	}
-	if err := mgmtServer.Update(ctx, resources2); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for the server 1 to go Serving")
-	case <-serving1.Done():
-	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for the server 2 to go Serving")
-	case <-serving2.Done():
-	}
-
-	// Create two gRPC clients, one for each server.
-	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to create client for test server 1: %s, %v", lis1.Addr().String(), err)
-	}
-	defer cc1.Close()
-
-	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to create client for test server 2: %s, %v", lis2.Addr().String(), err)
-	}
-	defer cc2.Close()
-
-	// Both unary RPCs should work once the servers transitions into serving.
-	var peer1 peer.Peer
-	waitForSuccessfulRPC(ctx, t, cc1, grpc.Peer(&peer1))
-	if peer1.Addr.String() != lis1.Addr().String() {
-		t.Errorf("Connected to wrong peer: %s, want %s", peer1.Addr, lis1.Addr())
-	}
-
-	var peer2 peer.Peer
-	waitForSuccessfulRPC(ctx, t, cc2, grpc.Peer(&peer2))
-	if peer2.Addr.String() != lis2.Addr().String() {
-		t.Errorf("Connected to wrong peer: %s, want %s", peer2.Addr, lis2.Addr())
-	}
 }
 
 // TestResourceNotFoundRDS tests the case where an LDS points to an RDS which
@@ -421,12 +280,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 			}
 		},
 	}
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.ClientPoolForTesting(pool)}
+	sopts := []grpc.ServerOption{grpc.Creds(insecure.NewCredentials()), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents)}
 	if stub.S, err = xds.NewGRPCServer(sopts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
@@ -443,7 +297,7 @@ func (s) TestResourceNotFoundRDS(t *testing.T) {
 
 	// Lookup the xDS client in use based on the dedicated well-known key, as
 	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := pool.GetClientForTesting(xdsclient.NameForServer)
+	xdsC, close, err := xdsclient.GetForTesting(xdsclient.NameForServer)
 	if err != nil {
 		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
 	}
@@ -471,11 +325,11 @@ loop:
 	waitForFailedRPCWithStatus(ctx, t, cc, status.New(codes.Unavailable, "error from xDS configuration for matched route configuration"))
 }
 
-func waitForSuccessfulRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn, opts ...grpc.CallOption) {
+func waitForSuccessfulRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn) {
 	t.Helper()
 
 	c := testgrpc.NewTestServiceClient(cc)
-	if _, err := c.EmptyCall(ctx, &testpb.Empty{}, opts...); err != nil {
+	if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 }

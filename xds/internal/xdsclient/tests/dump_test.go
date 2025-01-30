@@ -62,7 +62,7 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 	}
 }
 
-func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, pool *xdsclient.Pool) error {
+func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse) error {
 	var cmpOpts = cmp.Options{
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
@@ -71,7 +71,7 @@ func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusRespons
 
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		got := pool.DumpResources()
+		got := xdsclient.DumpResources()
 		// Sort the client configs based on the `client_scope` field.
 		slices.SortFunc(got.GetConfig(), func(a, b *v3statuspb.ClientConfig) int {
 			return strings.Compare(a.ClientScope, b.ClientScope)
@@ -136,23 +136,22 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigForTesting(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
-	client1, close1, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client1Name,
+	client1, close1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     client1Name,
+		Contents: bc,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer close1()
 	client2Name := t.Name() + "-2"
-	client2, close2, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client2Name,
+	client2, close2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     client2Name,
+		Contents: bc,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -180,7 +179,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 
@@ -223,7 +222,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 
@@ -263,7 +262,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,7 +322,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -406,24 +405,22 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	config, err := bootstrap.NewConfigForTesting(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
+	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create two xDS clients with the above bootstrap contents.
 	client1Name := t.Name() + "-1"
-	client1, close1, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client1Name,
+	client1, close1, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     client1Name,
+		Contents: bc,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer close1()
 	client2Name := t.Name() + "-2"
-	client2, close2, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client2Name,
+	client2, close2, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+		Name:     client2Name,
+		Contents: bc,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -452,7 +449,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 
@@ -495,7 +492,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 
@@ -532,7 +529,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 
@@ -569,7 +566,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp); err != nil {
 		t.Fatal(err)
 	}
 }

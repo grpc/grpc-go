@@ -266,6 +266,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClient(t, bc)
 
 	// Call the load reporting API, and ensure that an LRS stream is created.
