@@ -179,6 +179,7 @@ func (cc *controlChannel) monitorConnectivityState() {
 		stateSubscriber.state.Close()
 	}()
 	for {
+		// Wait for the control channel to become READY.
 		var s any
 		for s = <-stateSubscriber.state.Get(); s != connectivity.Ready; s = <-stateSubscriber.state.Get() {
 			stateSubscriber.state.Load()
@@ -195,7 +196,7 @@ func (cc *controlChannel) monitorConnectivityState() {
 		}
 		first = false
 
-		// Wait for a transition out of READY
+		// Wait for the control channel to move out of READY.
 		for s = <-stateSubscriber.state.Get(); s == connectivity.Ready; s = <-stateSubscriber.state.Get() {
 			stateSubscriber.state.Load()
 			// Consume all READY states until we see a transition
@@ -204,6 +205,7 @@ func (cc *controlChannel) monitorConnectivityState() {
 		if s == connectivity.Shutdown {
 			return
 		}
+		cc.logger.Infof("Connectivity state is %s", s)
 	}
 }
 
