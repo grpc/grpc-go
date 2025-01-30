@@ -27,11 +27,10 @@ import (
 	_ "google.golang.org/grpc" // to register pick_first
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/serviceconfig"
 )
-
-var gracefulSwitchPickFirst = endpointsharding.PickFirstConfig
 
 func init() {
 	balancer.Register(customRoundRobinBuilder{})
@@ -69,7 +68,7 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 		ClientConn: cc,
 		bOpts:      bOpts,
 	}
-	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts)
+	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
 	return crr
 }
 
@@ -100,7 +99,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	// is guaranteed to happen since the aggregator will always call
 	// UpdateChildState in its UpdateClientConnState.
 	return crr.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: gracefulSwitchPickFirst,
+		BalancerConfig: nil, // pickfirst can handle nil configs.
 		ResolverState:  state.ResolverState,
 	})
 }

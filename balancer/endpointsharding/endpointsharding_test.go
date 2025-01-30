@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
@@ -80,7 +81,7 @@ func (fakePetioleBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		ClientConn: cc,
 		bOpts:      opts,
 	}
-	fp.Balancer = endpointsharding.NewBalancer(fp, opts)
+	fp.Balancer = endpointsharding.NewBalancer(fp, opts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
 	return fp
 }
 
@@ -103,10 +104,7 @@ func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) err
 		return fmt.Errorf("UpdateClientConnState wants two endpoints, got: %v", el)
 	}
 
-	return fp.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: endpointsharding.PickFirstConfig,
-		ResolverState:  state.ResolverState,
-	})
+	return fp.Balancer.UpdateClientConnState(state)
 }
 
 func (fp *fakePetiole) UpdateState(state balancer.State) {
@@ -182,14 +180,11 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			epOpts := endpointsharding.BuildOptions{DisableAutoReconnect: true}
-			bd.Data = endpointsharding.NewBalancerWithOpts(bd.ClientConn, bd.BuildOptions, epOpts)
+			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
+			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name), epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
-				BalancerConfig: endpointsharding.PickFirstConfig,
-				ResolverState:  ccs.ResolverState,
-			})
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.Balancer).Close()

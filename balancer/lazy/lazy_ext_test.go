@@ -20,7 +20,6 @@ package lazy_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -53,8 +52,6 @@ const (
 	defaultTestShortTimeout = 100 * time.Millisecond
 )
 
-var pfCfg = fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
-
 type s struct {
 	grpctest.Tester
 }
@@ -79,8 +76,25 @@ func (s) TestExitIdle(t *testing.T) {
 		},
 	})
 
-	balancer.Register(lazy.Builder{})
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, pfCfg)
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name))
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.ExitIdler).ExitIdle()
+		},
+		ResolverError: func(bd *stub.BalancerData, err error) {
+			bd.Data.(balancer.Balancer).ResolverError(err)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+	}
+	stub.Register(t.Name(), bf)
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": {}}]}`, t.Name())
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(json),
@@ -89,7 +103,6 @@ func (s) TestExitIdle(t *testing.T) {
 	cc, err := grpc.NewClient(mr.Scheme()+":///", opts...)
 	if err != nil {
 		t.Fatalf("grpc.NewClient(_) failed: %v", err)
-
 	}
 	defer cc.Close()
 
@@ -130,16 +143,13 @@ func (s) TestPicker(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(lazy.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name))
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle, calling the picker should make the lazy balancer exit IDLE state.")
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
-				BalancerConfig: lazy.PickfirstConfig,
-				ResolverState:  ccs.ResolverState,
-			})
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.Balancer).Close()
@@ -214,14 +224,9 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 	childBalName := strings.ReplaceAll(strings.ToLower(t.Name())+"_child", "/", "")
 	stub.Register(childBalName, childBF)
 
-	lazyCfgJSON := fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", childBalName)
-	lazyCfg, err := balancer.Get(lazy.Name).(balancer.ConfigParser).ParseConfig(json.RawMessage(lazyCfgJSON))
-	if err != nil {
-		t.Fatalf("Failed to parse service config: %v", err)
-	}
 	topLevelBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(lazy.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName))
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
@@ -230,10 +235,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 			bd.Data.(balancer.Balancer).ResolverError(err)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
-				BalancerConfig: lazyCfg,
-				ResolverState:  ccs.ResolverState,
-			})
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.Balancer).Close()
@@ -318,23 +320,15 @@ func (s) TestResolverErrorThenGoodUpdate(t *testing.T) {
 	childBalName := strings.ReplaceAll(strings.ToLower(t.Name())+"_child", "/", "")
 	stub.Register(childBalName, childBF)
 
-	lazyCfgJSON := fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", childBalName)
-	lazyCfg, err := balancer.Get(lazy.Name).(balancer.ConfigParser).ParseConfig(json.RawMessage(lazyCfgJSON))
-	if err != nil {
-		t.Fatalf("Failed to parse service config: %v", err)
-	}
 	topLevelBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(lazy.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName))
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
-				BalancerConfig: lazyCfg,
-				ResolverState:  ccs.ResolverState,
-			})
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.Balancer).Close()
@@ -408,8 +402,25 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 		},
 	})
 
-	balancer.Register(lazy.Builder{})
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": %s}]}`, lazy.Name, pfCfg)
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name))
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.ExitIdler).ExitIdle()
+		},
+		ResolverError: func(bd *stub.BalancerData, err error) {
+			bd.Data.(balancer.Balancer).ResolverError(err)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.Data.(balancer.Balancer).Close()
+		},
+	}
+	stub.Register(t.Name(), bf)
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s": {}}]}`, t.Name())
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(json),

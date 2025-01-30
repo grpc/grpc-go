@@ -41,9 +41,8 @@ const Name = "least_request_experimental"
 
 var (
 	// randuint32 is a global to stub out in tests.
-	randuint32               = rand.Uint32
-	endpointShardingLBConfig = endpointsharding.PickFirstConfig
-	logger                   = grpclog.Component("least-request")
+	randuint32 = rand.Uint32
+	logger     = grpclog.Component("least-request")
 )
 
 func init() {
@@ -91,7 +90,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		ClientConn:        cc,
 		endpointRPCCounts: resolver.NewEndpointMap(),
 	}
-	b.child = endpointsharding.NewBalancer(b, bOpts)
+	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[%p] ", b))
 	b.logger.Infof("Created")
 	return b
@@ -132,7 +131,7 @@ func (lrb *leastRequestBalancer) UpdateClientConnState(ccs balancer.ClientConnSt
 	// Enable the health listener in pickfirst children for client side health
 	// checks and outlier detection, if configured.
 	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-	ccs.BalancerConfig = endpointShardingLBConfig
+	ccs.BalancerConfig = nil // pickfirst can handle nil configuration.
 	return lrb.child.UpdateClientConnState(ccs)
 }
 
