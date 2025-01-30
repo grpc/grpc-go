@@ -643,7 +643,7 @@ func (s *Server) serverWorker() {
 // connections to reduce the time spent overall on runtime.morestack.
 func (s *Server) initServerWorkers() {
 	s.serverWorkerChannel = make(chan func())
-	s.serverWorkerChannelClose = grpcsync.OnceFunc(func() {
+	s.serverWorkerChannelClose = sync.OnceFunc(func() {
 		close(s.serverWorkerChannel)
 	})
 	for i := uint32(0); i < s.opts.numServerWorkers; i++ {
@@ -1930,7 +1930,7 @@ func (s *Server) stop(graceful bool) {
 	s.conns = nil
 
 	if s.opts.numServerWorkers > 0 {
-		// Closing the channel (only once, via grpcsync.OnceFunc) after all the
+		// Closing the channel (only once, via sync.OnceFunc) after all the
 		// connections have been closed above ensures that there are no
 		// goroutines executing the callback passed to st.HandleStreams (where
 		// the channel is written to).
