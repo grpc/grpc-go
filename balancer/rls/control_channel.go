@@ -29,7 +29,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/buffer"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -131,6 +133,17 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig st
 	return dopts, nil
 }
 
+type ccStateSubscriber struct {
+	state *buffer.Unbounded
+}
+
+func (c *ccStateSubscriber) OnMessage(msg any) {
+	st, ok := msg.(connectivity.State)
+	if !ok {
+		return // Ignore invalid messages
+	}
+	c.state.Put(st)
+}
 func (cc *controlChannel) monitorConnectivityState() {
 	cc.logger.Infof("Starting connectivity state monitoring goroutine")
 	// Since we use two mechanisms to deal with RLS server being down:
@@ -156,17 +169,24 @@ func (cc *controlChannel) monitorConnectivityState() {
 
 	// Using the background context is fine here since we check for the ClientConn
 	// entering SHUTDOWN and return early in that case.
-	ctx := context.Background()
-
+	stateSubscriber := &ccStateSubscriber{
+		state: buffer.NewUnbounded(),
+	}
+	unsubscribe := internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(cc.cc, stateSubscriber)
 	first := true
+	defer func() {
+		unsubscribe()
+		stateSubscriber.state.Close()
+	}()
 	for {
-		// Wait for the control channel to become READY.
-		for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
+		var s any
+		for s = <-stateSubscriber.state.Get(); s != connectivity.Ready; s = <-stateSubscriber.state.Get() {
+			stateSubscriber.state.Load()
 			if s == connectivity.Shutdown {
 				return
 			}
-			cc.cc.WaitForStateChange(ctx, s)
 		}
+		stateSubscriber.state.Load()
 		cc.logger.Infof("Connectivity state is READY")
 
 		if !first {
@@ -175,12 +195,15 @@ func (cc *controlChannel) monitorConnectivityState() {
 		}
 		first = false
 
-		// Wait for the control channel to move out of READY.
-		cc.cc.WaitForStateChange(ctx, connectivity.Ready)
-		if cc.cc.GetState() == connectivity.Shutdown {
+		// Wait for a transition out of READY
+		for s = <-stateSubscriber.state.Get(); s == connectivity.Ready; s = <-stateSubscriber.state.Get() {
+			stateSubscriber.state.Load()
+			// Consume all READY states until we see a transition
+		}
+		stateSubscriber.state.Load()
+		if s == connectivity.Shutdown {
 			return
 		}
-		cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
 	}
 }
 
