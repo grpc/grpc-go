@@ -110,7 +110,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
     -exclude "testdata/grpc_testing_not_regenerated/" \
     -exclude "**/*.pb.go" \
     -formatter plain \
-    -config "$REVIVE_CONFIG_PATH" \
+    -config "${REVIVE_CONFIG_PATH}" \
     ./...
 
   # - Collection of static analysis checks
