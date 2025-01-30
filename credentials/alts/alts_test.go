@@ -324,7 +324,7 @@ func (s) TestFullHandshake(t *testing.T) {
 	defer wait.Wait()
 	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
 	defer stopHandshaker()
-	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	stopServer, serverAddress := startServer(t, handshakerAddress)
 	defer stopServer()
 
 	// Ping the server, authenticating with ALTS.
@@ -350,7 +350,7 @@ func (s) TestConcurrentHandshakes(t *testing.T) {
 	defer wait.Wait()
 	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
 	defer stopHandshaker()
-	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	stopServer, serverAddress := startServer(t, handshakerAddress)
 	defer stopServer()
 
 	// Ping the server, authenticating with ALTS.
@@ -445,7 +445,7 @@ func startFakeHandshakerService(t *testing.T, wait *sync.WaitGroup) (stop func()
 	return func() { s.Stop() }, listener.Addr().String()
 }
 
-func startServer(t *testing.T, handshakerServiceAddress string, _ *sync.WaitGroup) (stop func(), address string) {
+func startServer(t *testing.T, handshakerServiceAddress string) (stop func(), address string) {
 	listener, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("LocalTCPListener() failed: %v", err)
@@ -454,7 +454,7 @@ func startServer(t *testing.T, handshakerServiceAddress string, _ *sync.WaitGrou
 	creds := NewServerCreds(serverOpts)
 	stub := &stubserver.StubServer{
 		Listener: listener,
-		UnaryCallF: func(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{
 				Payload: &testpb.Payload{},
 			}, nil
