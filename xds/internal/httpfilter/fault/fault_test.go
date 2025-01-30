@@ -36,13 +36,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -78,18 +76,17 @@ func Test(t *testing.T) {
 // Returns the following:
 //   - the management server: tests use this to configure resources
 //   - nodeID expected by the management server: this is set in the Node proto
-//     sent by the xdsClient for queries
+//     sent by the xdsClient for queries.
 //   - the port the server is listening on
-//   - contents of the bootstrap configuration pointing to xDS management
-//     server
-func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, []byte) {
+//   - cleanup function to be invoked by the tests when done
+func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Create a bootstrap config pointing to the above management server with
-	// the nodeID.
+	// Create a bootstrap file in a temporary directory.
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
 
 	// Create a local listener.
 	lis, err := testutils.LocalTCPListener()
@@ -117,7 +114,7 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, []byte) {
 
 	stubserver.StartTestService(t, stub)
 	t.Cleanup(stub.S.Stop)
-	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), bootstrapContents
+	return managementServer, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port)
 }
 
 func (s) TestFaultInjection_Unary(t *testing.T) {
@@ -459,15 +456,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		}},
 	}}
 
-	fs, nodeID, port, bc := clientSetup(t)
-	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
-	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	fs, nodeID, port := clientSetup(t)
 
 	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -517,7 +506,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 
 			// Create a ClientConn and run the test case.
-			cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+			cc, err := grpc.NewClient("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -549,15 +538,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 }
 
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
-	fs, nodeID, port, bc := clientSetup(t)
-	// Create an xDS resolver with the above bootstrap configuration.
-	if internal.NewXDSResolverWithConfigForTesting == nil {
-		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-	}
-	xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-	if err != nil {
-		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-	}
+	fs, nodeID, port := clientSetup(t)
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: "myservice",
 		NodeID:     nodeID,
@@ -567,7 +548,8 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	})
 	hcm := new(v3httppb.HttpConnectionManager)
 	lis := resources.Listeners[0].GetApiListener().GetApiListener()
-	if err = lis.UnmarshalTo(hcm); err != nil {
+	err := lis.UnmarshalTo(hcm)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -599,7 +581,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	}
 
 	// Create a ClientConn
-	cc, err := grpc.NewClient("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	cc, err := grpc.NewClient("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

@@ -329,12 +329,13 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, managementServer.Address)
 
 			// Create an xDS resolver with the above bootstrap configuration.
-			if internal.NewXDSResolverWithConfigForTesting == nil {
-				t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-			}
-			xdsResolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-			if err != nil {
-				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+			var xdsResolver resolver.Builder
+			if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+				var err error
+				xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+				if err != nil {
+					t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+				}
 			}
 
 			server := stubserver.StartTestService(t, nil)
