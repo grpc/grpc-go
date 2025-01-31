@@ -183,12 +183,13 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		}
 	}
 	var b bytes.Buffer
+	totalIterations := totalSuccesses + totalFailures
 	latencies.Print(&b)
 	fmt.Fprintf(os.Stderr,
 		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
 		soakConfig.ServerAddr, totalSuccesses, soakConfig.Iterations, totalFailures, b.String())
 
-	if totalSuccesses+totalFailures != soakConfig.Iterations {
+	if totalIterations != soakConfig.Iterations {
 		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalSuccesses, soakConfig.Iterations)
 	}
 
