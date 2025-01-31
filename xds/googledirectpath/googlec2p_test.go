@@ -117,6 +117,7 @@ func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
 
 			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
+			defer func() { xdsClientPool.UnsetBootstrapConfigForTesting() }()
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
@@ -307,7 +308,7 @@ func (s) TestBuildXDS(t *testing.T) {
 				t.Fatalf("Build() returned %#v, want xds resolver", r)
 			}
 
-			gotConfig := xdsClientPool.GetConfig()
+			gotConfig := xdsClientPool.BootstrapConfigForTesting()
 			if gotConfig == nil {
 				t.Fatalf("Failed to get bootstrap config: %v", err)
 			}
@@ -401,7 +402,7 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 		t.Fatalf("Build() returned %#v, want xds resolver", r)
 	}
 
-	gotConfig := xdsClientPool.GetConfig()
+	gotConfig := xdsClientPool.BootstrapConfigForTesting()
 	if gotConfig == nil {
 		t.Fatalf("Failed to get bootstrap config: %v", err)
 	}
@@ -473,7 +474,7 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 		t.Fatalf("Build() returned %#v, want xds resolver", r)
 	}
 
-	gotConfig := xdsClientPool.GetConfig()
+	gotConfig := xdsClientPool.BootstrapConfigForTesting()
 	if gotConfig == nil {
 		t.Fatalf("Failed to get bootstrap config: %v", err)
 	}

@@ -229,6 +229,7 @@ func (s) TestCSDS(t *testing.T) {
 	// on the state of the default xDS client which is implicitly managed
 	// within the xdsclient.DefaultPool.
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+	defer func() { xdsclient.DefaultPool.UnsetBootstrapConfigForTesting() }()
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"
@@ -431,6 +432,7 @@ func (s) TestCSDS_NACK(t *testing.T) {
 	// on the state of the default xDS client which is implicitly managed
 	// within the xdsclient.DefaultPool.
 	xdsclient.DefaultPool.SetFallbackBootstrapConfig(config)
+	defer func() { xdsclient.DefaultPool.UnsetBootstrapConfigForTesting() }()
 	// Create two xDS clients, with different names. These should end up
 	// creating two different xDS clients.
 	const xdsClient1Name = "xds-csds-client-1"

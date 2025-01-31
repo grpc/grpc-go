@@ -140,14 +140,11 @@ func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.config != nil {
+		logger.Error("Attempt to set a bootstrap configuration even though one is already set via environment variables.")
+		return
+	}
 	p.config = config
-}
-
-// GetConfig returns the bootstrap configuration used by the pool.
-func (p *Pool) GetConfig() *bootstrap.Config {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.config
 }
 
 // DumpResources returns the status and contents of all xDS resources.
@@ -162,6 +159,26 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 		resp.Config = append(resp.Config, cfg)
 	}
 	return resp
+}
+
+// BootstrapConfigForTesting returns the bootstrap configuration used by the
+// pool. The caller should not mutate the returned config.
+//
+// To be used only for testing purposes.
+func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.config
+}
+
+// UnsetBootstrapConfigForTesting unsets the bootstrap configuration used by
+// the pool.
+//
+// To be used only for testing purposes.
+func (p *Pool) UnsetBootstrapConfigForTesting() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.config = nil
 }
 
 func (p *Pool) clientRefCountedClose(name string) {
