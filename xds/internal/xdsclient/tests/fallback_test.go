@@ -140,14 +140,14 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 	// Generate bootstrap configuration with the above two servers.
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[
-		 {
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 },
-		 {
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		},
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {
@@ -335,14 +335,14 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	// Generate bootstrap configuration with the above two servers.
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[
-		 {
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 },
-		 {
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		},
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {
@@ -520,14 +520,14 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	// Generate bootstrap configuration with the above two servers.
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[
-		 {
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 },
-		 {
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		},
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {

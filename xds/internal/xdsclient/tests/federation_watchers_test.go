@@ -53,16 +53,16 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, serverDefaultAuthority.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, serverDefaultAuthority.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testNonDefaultAuthority: []byte(fmt.Sprintf(`{
-				 "xds_servers": [{
-					 "server_uri": %q,
-					 "channel_creds": [{"type": "insecure"}]
-				 }]}`, serverNonDefaultAuthority.Address)),
+				"xds_servers": [{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]}`, serverNonDefaultAuthority.Address)),
 		},
 	})
 	if err != nil {

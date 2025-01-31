@@ -173,18 +173,18 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
@@ -312,18 +312,18 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
@@ -480,18 +480,18 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
@@ -557,18 +557,18 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
@@ -960,18 +960,18 @@ func (s) TestEDS_BadUpdateWithoutPreviousGoodUpdate(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -1036,18 +1036,18 @@ func (s) TestEDS_BadUpdateWithPreviousGoodUpdate(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -1121,18 +1121,18 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			 "loadBalancingConfig":[{
-				 "cluster_resolver_experimental":{
-					 "discoveryMechanisms": [{
-						 "cluster": "%s",
-						 "type": "EDS",
-						 "edsServiceName": "%s",
-						 "outlierDetection": {}
-					 }],
-					 "xdsLbPolicy":[{"round_robin":{}}]
-				 }
-			 }]
-		 }`, clusterName, edsServiceName)
+			"loadBalancingConfig":[{
+				"cluster_resolver_experimental":{
+					"discoveryMechanisms": [{
+						"cluster": "%s",
+						"type": "EDS",
+						"edsServiceName": "%s",
+						"outlierDetection": {}
+					}],
+					"xdsLbPolicy":[{"round_robin":{}}]
+				}
+			}]
+		}`, clusterName, edsServiceName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -1306,18 +1306,18 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			// the cluster_resolver LB policy with a single discovery mechanism.
 			r := manual.NewBuilderWithScheme("whatever")
 			jsonSC := fmt.Sprintf(`{
-				 "loadBalancingConfig":[{
-					 "cluster_resolver_experimental":{
-						 "discoveryMechanisms": [{
-							 "cluster": "%s",
-							 "type": "EDS",
-							 "edsServiceName": "%s",
-							 "outlierDetection": {}
-						 }],
-						 "xdsLbPolicy":[{"round_robin":{}}]
-					 }
-				 }]
-			 }`, clusterName, edsServiceName)
+				"loadBalancingConfig":[{
+					"cluster_resolver_experimental":{
+						"discoveryMechanisms": [{
+							"cluster": "%s",
+							"type": "EDS",
+							"edsServiceName": "%s",
+							"outlierDetection": {}
+						}],
+						"xdsLbPolicy":[{"round_robin":{}}]
+					}
+				}]
+			}`, clusterName, edsServiceName)
 			scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 			r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
