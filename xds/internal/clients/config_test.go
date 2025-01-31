@@ -177,7 +177,7 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if gotEq := test.s1.Equal(test.s2); gotEq != test.wantEq {
+			if gotEq := test.s1.equal(test.s2); gotEq != test.wantEq {
 				t.Errorf("Equal() = %v, want %v", gotEq, test.wantEq)
 			}
 		})
@@ -218,7 +218,7 @@ func (s) TestLocality_IsEmpty(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := test.locality.IsEmpty(); got != test.want {
+			if got := test.locality.isEmpty(); got != test.want {
 				t.Errorf("IsEmpty() = %v, want %v", got, test.want)
 			}
 		})
@@ -273,7 +273,7 @@ func (s) TestLocality_Equal(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if gotEq := test.l1.Equal(test.l2); gotEq != test.wantEq {
+			if gotEq := test.l1.equal(test.l2); gotEq != test.wantEq {
 				t.Errorf("Equal() = %v, want %v", gotEq, test.wantEq)
 			}
 		})

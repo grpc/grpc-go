@@ -87,8 +87,8 @@ type ServerConfig struct {
 	Extensions any
 }
 
-// Equal returns true if sc and other are considered equal.
-func (sc *ServerConfig) Equal(other *ServerConfig) bool {
+// equal returns true if sc and other are considered equal.
+func (sc *ServerConfig) equal(other *ServerConfig) bool {
 	switch {
 	case sc == nil && other == nil:
 		return true
@@ -162,7 +162,7 @@ func (n Node) toProto() *v3corepb.Node {
 		Id:      n.ID,
 		Cluster: n.Cluster,
 		Locality: func() *v3corepb.Locality {
-			if n.Locality.IsEmpty() {
+			if n.Locality.isEmpty() {
 				return nil
 			}
 			return &v3corepb.Locality{
@@ -196,12 +196,12 @@ type Locality struct {
 	SubZone string
 }
 
-// IsEmpty reports whether l is considered empty.
-func (l Locality) IsEmpty() bool {
-	return l.Equal(Locality{})
+// isEmpty reports whether l is considered empty.
+func (l Locality) isEmpty() bool {
+	return l.equal(Locality{})
 }
 
-// Equal returns true if l and other are considered equal.
-func (l Locality) Equal(other Locality) bool {
+// equal returns true if l and other are considered equal.
+func (l Locality) equal(other Locality) bool {
 	return l.Region == other.Region && l.Zone == other.Zone && l.SubZone == other.SubZone
 }
