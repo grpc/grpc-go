@@ -156,12 +156,12 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 	// top-level LB policy on the channel.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": "%s"
+				 }
+			 }]
+		 }`, clusterName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	state := xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient)
 	r.InitialState(state)
@@ -381,9 +381,9 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
@@ -442,14 +442,14 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	// errCertProviderBuilder.
 	nodeID := uuid.New().String()
 	providerCfg := json.RawMessage(fmt.Sprintf(`{
-		"plugin_name": "%s",
-		"config": {}
-	}`, errCertProviderName))
+		 "plugin_name": "%s",
+		 "config": {}
+	 }`, errCertProviderName))
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, mgmtServer.Address)),
 		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		CertificateProviders:               map[string]json.RawMessage{e2e.ClientSideCertProviderInstance: providerCfg},

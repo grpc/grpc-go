@@ -391,16 +391,16 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	nodeID := uuid.New().String()
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer1.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, mgmtServer1.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			authority: []byte(fmt.Sprintf(`{
-				"xds_servers": [{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]}`, mgmtServer2.Address)),
+				 "xds_servers": [{
+					 "server_uri": %q,
+					 "channel_creds": [{"type": "insecure"}]
+				 }]}`, mgmtServer2.Address)),
 		},
 	})
 	if err != nil {

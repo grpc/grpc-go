@@ -92,12 +92,12 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	// with a single cluster.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": "%s"
+				 }
+			 }]
+		 }`, clusterName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
 

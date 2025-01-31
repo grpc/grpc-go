@@ -20,6 +20,7 @@ package xdsclient
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/grpclog"
@@ -674,7 +675,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 }
 
 func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {
-	return grpcsync.OnceFunc(func() {
+	return sync.OnceFunc(func() {
 		done := make(chan struct{})
 		a.xdsClientSerializer.ScheduleOr(func(context.Context) {
 			defer close(done)

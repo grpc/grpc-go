@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -169,9 +169,9 @@ func (s) TestResolverResourceName(t *testing.T) {
 			// Create a bootstrap configuration with test options.
 			opts := bootstrap.ConfigOptionsForTesting{
 				Servers: []byte(fmt.Sprintf(`[{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]`, mgmtServer.Address)),
+					 "server_uri": %q,
+					 "channel_creds": [{"type": "insecure"}]
+				 }]`, mgmtServer.Address)),
 				ClientDefaultListenerResourceNameTemplate: tt.listenerResourceNameTemplate,
 				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 			}
@@ -181,9 +181,9 @@ func (s) TestResolverResourceName(t *testing.T) {
 				// resource name matches expectation.
 				opts.Authorities = map[string]json.RawMessage{
 					tt.extraAuthority: []byte(fmt.Sprintf(`{
-						"server_uri": %q,
-						"channel_creds": [{"type": "insecure"}]
-					}`, mgmtServer.Address)),
+						 "server_uri": %q,
+						 "channel_creds": [{"type": "insecure"}]
+					 }`, mgmtServer.Address)),
 				}
 			}
 			contents, err := bootstrap.NewContentsForTesting(opts)
@@ -271,7 +271,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 			Name:               t.Name(),
 			WatchExpiryTimeout: defaultTestTimeout,
 		})
-		return c, grpcsync.OnceFunc(func() {
+		return c, sync.OnceFunc(func() {
 			close(closeCh)
 			cancel()
 		}), err
@@ -375,26 +375,26 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			// as this update, as the previous config selector still references
 			// the old cluster when the new one is pushed.
 			wantServiceConfig: `{
-  "loadBalancingConfig": [{
-    "xds_cluster_manager_experimental": {
-      "children": {
-        "cluster:cluster_1": {
-          "childPolicy": [{
-			"cds_experimental": {
-			  "cluster": "cluster_1"
-			}
-		  }]
-        },
-        "cluster:cluster_2": {
-          "childPolicy": [{
-			"cds_experimental": {
-			  "cluster": "cluster_2"
-			}
-		  }]
-        }
-      }
-    }
-  }]}`,
+   "loadBalancingConfig": [{
+	 "xds_cluster_manager_experimental": {
+	   "children": {
+		 "cluster:cluster_1": {
+		   "childPolicy": [{
+			 "cds_experimental": {
+			   "cluster": "cluster_1"
+			 }
+		   }]
+		 },
+		 "cluster:cluster_2": {
+		   "childPolicy": [{
+			 "cds_experimental": {
+			   "cluster": "cluster_2"
+			 }
+		   }]
+		 }
+	   }
+	 }
+   }]}`,
 			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 	} {
@@ -841,34 +841,34 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	// old cluster is present in the service config. Also ensure that the newly
 	// returned config selector does not hold a reference to the old cluster.
 	wantSC := fmt.Sprintf(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster:%s": {
-				"childPolicy": [
-				  {
-					"cds_experimental": {
-					  "cluster": "%s"
-					}
-				  }
-				]
-			  },
-			  "cluster:%s": {
-				"childPolicy": [
-				  {
-					"cds_experimental": {
-					  "cluster": "%s"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`, defaultTestClusterName, defaultTestClusterName, newClusterName, newClusterName)
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster:%s": {
+				 "childPolicy": [
+				   {
+					 "cds_experimental": {
+					   "cluster": "%s"
+					 }
+				   }
+				 ]
+			   },
+			   "cluster:%s": {
+				 "childPolicy": [
+				   {
+					 "cds_experimental": {
+					   "cluster": "%s"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`, defaultTestClusterName, defaultTestClusterName, newClusterName, newClusterName)
 	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 
 	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -886,25 +886,25 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	resOld.OnCommitted()
 
 	wantSC = fmt.Sprintf(`
-{
-	"loadBalancingConfig": [
-		{
-		  "xds_cluster_manager_experimental": {
-			"children": {
-			  "cluster:%s": {
-				"childPolicy": [
-				  {
-					"cds_experimental": {
-					  "cluster": "%s"
-					}
-				  }
-				]
-			  }
-			}
-		  }
-		}
-	  ]
-}`, newClusterName, newClusterName)
+ {
+	 "loadBalancingConfig": [
+		 {
+		   "xds_cluster_manager_experimental": {
+			 "children": {
+			   "cluster:%s": {
+				 "childPolicy": [
+				   {
+					 "cds_experimental": {
+					   "cluster": "%s"
+					 }
+				   }
+				 ]
+			   }
+			 }
+		   }
+		 }
+	   ]
+ }`, newClusterName, newClusterName)
 	verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 }
 

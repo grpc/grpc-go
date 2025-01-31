@@ -83,18 +83,18 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, defaultAuthorityServer.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, defaultAuthorityServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			testAuthority1: []byte(`{}`),
 			testAuthority2: []byte(`{}`),
 			testAuthority3: []byte(fmt.Sprintf(`{
-				"xds_servers": [{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]}`, nonDefaultAuthorityServer.Address)),
+				 "xds_servers": [{
+					 "server_uri": %q,
+					 "channel_creds": [{"type": "insecure"}]
+				 }]}`, nonDefaultAuthorityServer.Address)),
 		},
 	})
 	if err != nil {

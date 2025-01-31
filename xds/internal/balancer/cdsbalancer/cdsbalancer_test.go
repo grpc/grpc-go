@@ -256,12 +256,12 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": "%s"
+				 }
+			 }]
+		 }`, clusterName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
 
@@ -320,12 +320,12 @@ func (s) TestConfigurationUpdate_Success(t *testing.T) {
 
 	// Push the same configuration again.
 	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": "%s"
+				 }
+			 }]
+		 }`, clusterName)
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.UpdateState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -341,12 +341,12 @@ func (s) TestConfigurationUpdate_Success(t *testing.T) {
 	// Push an updated configuration with a different cluster name.
 	newClusterName := clusterName + "-new"
 	jsonSC = fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, newClusterName)
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": "%s"
+				 }
+			 }]
+		 }`, newClusterName)
 	scpr = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.UpdateState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -390,12 +390,12 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	updateStateErrCh := make(chan error, 1)
 	r.UpdateStateCallback = func(err error) { updateStateErrCh <- err }
 	jsonSC := `{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": ""
-				}
-			}]
-		}`
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": ""
+				 }
+			 }]
+		 }`
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient))
 
@@ -427,12 +427,12 @@ func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
 	updateStateErrCh := make(chan error, 1)
 	r.UpdateStateCallback = func(err error) { updateStateErrCh <- err }
 	jsonSC := `{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "foo"
-				}
-			}]
-		}`
+			 "loadBalancingConfig":[{
+				 "cds_experimental":{
+					 "cluster": "foo"
+				 }
+			 }]
+		 }`
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(resolver.State{ServiceConfig: scpr})
 
@@ -574,23 +574,23 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 					Type:           clusterresolver.DiscoveryMechanismTypeEDS,
 					EDSServiceName: serviceName,
 					OutlierDetection: json.RawMessage(`{
-						"interval": "10s",
-						"baseEjectionTime": "30s",
-						"maxEjectionTime": "300s",
-						"maxEjectionPercent": 10,
-						"successRateEjection": {
-							"stdevFactor": 1900,
-							"enforcementPercentage": 100,
-							"minimumHosts": 5,
-							"requestVolume": 100
-						},
-						"failurePercentageEjection": {
-							"threshold": 85,
-							"enforcementPercentage": 5,
-							"minimumHosts": 5,
-							"requestVolume": 50
-						}
-					}`),
+						 "interval": "10s",
+						 "baseEjectionTime": "30s",
+						 "maxEjectionTime": "300s",
+						 "maxEjectionPercent": 10,
+						 "successRateEjection": {
+							 "stdevFactor": 1900,
+							 "enforcementPercentage": 100,
+							 "minimumHosts": 5,
+							 "requestVolume": 100
+						 },
+						 "failurePercentageEjection": {
+							 "threshold": 85,
+							 "enforcementPercentage": 5,
+							 "minimumHosts": 5,
+							 "requestVolume": 50
+						 }
+					 }`),
 					TelemetryLabels: xdsinternal.UnknownCSMLabels,
 				}},
 				XDSLBPolicy: json.RawMessage(`[{"ring_hash_experimental": {"minRingSize":1024, "maxRingSize":8388608}}]`),
