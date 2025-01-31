@@ -129,12 +129,12 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	}
 
 	// Create an xDS resolver with the above bootstrap configuration.
-	var resolverBuilder resolver.Builder
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	// Spin up a test backend.
@@ -167,11 +167,12 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	}
 
 	// Create a ClientConn and ensure that it moves to TRANSIENT_FAILURE.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolverBuilder))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Make an RPC and ensure that expected error is returned.

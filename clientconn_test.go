@@ -753,7 +753,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	for {
 		time.Sleep(10 * time.Millisecond)
 		cc.mu.RLock()
-		v := cc.mkp.Time
+		v := cc.keepaliveParams.Time
 		cc.mu.RUnlock()
 		if v == 20*time.Second {
 			// Success
