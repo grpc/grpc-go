@@ -120,11 +120,11 @@ func (s) TestGracefulStop(t *testing.T) {
 		},
 		S: grpc.NewServer(),
 	}
-	// Start Server
+	// 1.Start Server and start serving by calling Serve().
 	stubserver.StartTestService(t, ss)
 
-	//  GracefulStop() Server after listener's Accept is called, but don't
-	//    allow Accept() to exit when Close() is called on it.
+	//2. Call GracefulStop from a goroutine. It will trigger Close on the listener
+	//but the listener won’t close immediately—it waits until a connection is accepted.
 	gracefulStopDone := make(chan struct{})
 	<-dlis.acceptCalled
 	go func() {
@@ -132,13 +132,12 @@ func (s) TestGracefulStop(t *testing.T) {
 		close(gracefulStopDone)
 	}()
 
-	//  Create a new connection to the server after listener.Close() is called.
-	//    Server should close this connection immediately, before handshaking.
+	// 3.Create a new connection to the server after listener.Close() is called.
+	// Server should close this connection immediately, before handshaking.
 
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
 
-	// Now dial.  The listener's Accept method will return a valid connection,
-	// even though GracefulStop has closed the listener.
+	//Dial the server. This will cause a connection to be accepted. This will also unblock the Close method.
 	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer dialCancel()
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
@@ -149,7 +148,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	defer cc.Close()
 
-	//  Send an RPC on the new connection.
+	// 4. Make an RPC.
 	// The server would send a GOAWAY first, but we are delaying the server's
 	// writes for now until the client writes more than the preface.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
