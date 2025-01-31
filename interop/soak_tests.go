@@ -166,7 +166,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	wg.Wait()
 
 	//Handle results.
-	totalIterations := 0
+	totalSuccesses := 0
 	totalFailures := 0
 	latencies := stats.NewHistogram(stats.HistogramOptions{
 		NumBuckets:     20,
@@ -175,7 +175,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		MinValue:       0,
 	})
 	for _, worker := range soakWorkerResults {
-		totalIterations += worker.IterationsDone
+		totalSuccesses += worker.IterationsDone
 		totalFailures += worker.Failures
 		if worker.Latencies != nil {
 			// Add latencies from the worker's Histogram to the main latencies.
@@ -186,14 +186,14 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	latencies.Print(&b)
 	fmt.Fprintf(os.Stderr,
 		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
-		soakConfig.ServerAddr, totalIterations, soakConfig.Iterations, totalFailures, b.String())
+		soakConfig.ServerAddr, totalSuccesses, soakConfig.Iterations, totalFailures, b.String())
 
-	if totalIterations != soakConfig.Iterations {
-		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalIterations, soakConfig.Iterations)
+	if totalSuccesses+totalFailures != soakConfig.Iterations {
+		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalSuccesses, soakConfig.Iterations)
 	}
 
 	if totalFailures > soakConfig.MaxFailures {
-		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, soakConfig.MaxFailures)
+		logger.Fatalf("Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, soakConfig.MaxFailures)
 	}
 	if soakConfig.ChannelForTest != nil {
 		_, cleanup := soakConfig.ChannelForTest()
