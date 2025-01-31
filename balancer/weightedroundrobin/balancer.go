@@ -100,7 +100,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		scToWeight:       make(map[balancer.SubConn]*endpointWeight),
 	}
 
-	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
+	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 	return b
@@ -227,14 +227,12 @@ func (b *wrrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.updateEndpointsLocked(ccs.ResolverState.Endpoints)
 	b.mu.Unlock()
 
-	// Make pickfirst children use health listeners for outlier detection to
-	// work.
-	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
 	// This causes child to update picker inline and will thus cause inline
 	// picker update.
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: nil, // pickfirst can handle nil configs.
-		ResolverState:  ccs.ResolverState,
+		// Make pickfirst children use health listeners for outlier detection to
+		// work.
+		ResolverState: pickfirstleaf.EnableHealthListener(ccs.ResolverState),
 	})
 }
 

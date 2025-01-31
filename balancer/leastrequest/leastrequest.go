@@ -90,7 +90,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		ClientConn:        cc,
 		endpointRPCCounts: resolver.NewEndpointMap(),
 	}
-	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
+	b.child = endpointsharding.NewBalancer(b, bOpts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[%p] ", b))
 	b.logger.Infof("Created")
 	return b
@@ -128,11 +128,11 @@ func (lrb *leastRequestBalancer) UpdateClientConnState(ccs balancer.ClientConnSt
 	lrb.mu.Lock()
 	lrb.choiceCount = lrCfg.ChoiceCount
 	lrb.mu.Unlock()
-	// Enable the health listener in pickfirst children for client side health
-	// checks and outlier detection, if configured.
-	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-	ccs.BalancerConfig = nil // pickfirst can handle nil configuration.
-	return lrb.child.UpdateClientConnState(ccs)
+	return lrb.child.UpdateClientConnState(balancer.ClientConnState{
+		// Enable the health listener in pickfirst children for client side health
+		// checks and outlier detection, if configured.
+		ResolverState: pickfirstleaf.EnableHealthListener(ccs.ResolverState),
+	})
 }
 
 type endpointState struct {

@@ -45,8 +45,12 @@ const (
 	logPrefix = "[lazy-lb %p] "
 )
 
+// childBuilderFunc creates a new balancer with the ClientConn. It has the same
+// type as the balancer.Builder.Build method.
+type childBuilderFunc = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer
+
 // NewBalancer is the constructor for the lazy balancer.
-func NewBalancer(cc balancer.ClientConn, bOpts balancer.BuildOptions, childBuilder balancer.Builder) balancer.Balancer {
+func NewBalancer(cc balancer.ClientConn, bOpts balancer.BuildOptions, childBuilder childBuilderFunc) balancer.Balancer {
 	b := &lazyBalancer{
 		cc:           cc,
 		buildOptions: bOpts,
@@ -70,7 +74,7 @@ type lazyBalancer struct {
 	cc           balancer.ClientConn
 	buildOptions balancer.BuildOptions
 	logger       *internalgrpclog.PrefixLogger
-	childBuilder balancer.Builder
+	childBuilder childBuilderFunc
 
 	// The following fields are accessed while handling calls to the idlePicker
 	// and when handling ClientConn state updates. They are guarded by a mutex.
@@ -126,7 +130,7 @@ func (lb *lazyBalancer) ExitIdle() {
 		}
 		return
 	}
-	lb.delegate = lb.childBuilder.Build(lb.cc, lb.buildOptions)
+	lb.delegate = lb.childBuilder(lb.cc, lb.buildOptions)
 	if lb.latestClientConnState != nil {
 		if err := lb.delegate.UpdateClientConnState(*lb.latestClientConnState); err != nil {
 			if err == balancer.ErrBadResolverState {

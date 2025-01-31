@@ -78,7 +78,7 @@ func (s) TestExitIdle(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name))
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.ExitIdler).ExitIdle()
@@ -143,7 +143,7 @@ func (s) TestPicker(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name))
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle, calling the picker should make the lazy balancer exit IDLE state.")
@@ -226,7 +226,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 
 	topLevelBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName))
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
@@ -322,7 +322,7 @@ func (s) TestResolverErrorThenGoodUpdate(t *testing.T) {
 
 	topLevelBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName))
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
@@ -404,7 +404,7 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name))
+			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.ExitIdler).ExitIdle()

@@ -81,7 +81,7 @@ func (fakePetioleBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		ClientConn: cc,
 		bOpts:      opts,
 	}
-	fp.Balancer = endpointsharding.NewBalancer(fp, opts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
+	fp.Balancer = endpointsharding.NewBalancer(fp, opts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
 	return fp
 }
 
@@ -181,7 +181,7 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
-			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name), epOpts)
+			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)

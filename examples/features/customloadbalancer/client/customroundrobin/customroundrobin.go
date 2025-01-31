@@ -68,7 +68,7 @@ func (customRoundRobinBuilder) Build(cc balancer.ClientConn, bOpts balancer.Buil
 		ClientConn: cc,
 		bOpts:      bOpts,
 	}
-	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts, balancer.Get(pickfirstleaf.Name), endpointsharding.Options{})
+	crr.Balancer = endpointsharding.NewBalancer(crr, bOpts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
 	return crr
 }
 
@@ -99,8 +99,7 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	// is guaranteed to happen since the aggregator will always call
 	// UpdateChildState in its UpdateClientConnState.
 	return crr.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: nil, // pickfirst can handle nil configs.
-		ResolverState:  state.ResolverState,
+		ResolverState: state.ResolverState,
 	})
 }
 
