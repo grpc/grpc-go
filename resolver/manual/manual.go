@@ -122,7 +122,7 @@ func (r *Resolver) ReportError(err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.CC == nil {
-		panic("cannot report error as grpc.NewClient with resolver has not been called")
+		panic("cannot report error as channel has not exited IDLE state")
 	}
 	r.CC.ReportError(err)
 }

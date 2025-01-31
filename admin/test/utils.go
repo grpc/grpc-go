@@ -70,7 +70,7 @@ func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("cannot connect to server: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 
 	t.Run("channelz", func(t *testing.T) {
