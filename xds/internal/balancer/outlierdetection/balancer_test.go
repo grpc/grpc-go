@@ -1842,7 +1842,7 @@ func (s) TestMultipleAddressesPerEndpoint(t *testing.T) {
 		t.Fatalf("RPCs didn't go to second address in the second endpoint: %v", err)
 	}
 
-	// Reduce the ejection interval and run the internal algorithm again, it
+	// Reduce the ejection interval and run the interval algorithm again, it
 	// should uneject endpoints[0].
 	odCfg.MaxEjectionTime = 0
 	odCfg.BaseEjectionTime = 0

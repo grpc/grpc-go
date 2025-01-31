@@ -754,8 +754,8 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 	b.intervalTimer = afterFunc(time.Duration(b.cfg.Interval), b.intervalTimerAlgorithm)
 }
 
-// endpointsWithAtLeastRequestVolume returns a slice of endpoin information of all
-// endpoints with at least request volume passed in.
+// endpointsWithAtLeastRequestVolume returns a slice of endpoint information of
+// all endpoints with at least request volume passed in.
 //
 // Caller must hold b.mu.
 func (b *outlierDetectionBalancer) endpointsWithAtLeastRequestVolume(requestVolume uint32) []*endpointInfo {
