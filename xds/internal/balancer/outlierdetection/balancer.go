@@ -30,7 +30,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
@@ -451,11 +450,11 @@ func incrementCounter(sc balancer.SubConn, info balancer.DoneInfo) {
 	// change what activeBucket points to. A50 says to swap the pointer, which
 	// will cause this race to write to deprecated memory the interval timer
 	// algorithm will never read, which makes this race alright.
-	epInfo := (*endpointInfo)(atomic.LoadPointer(&scw.endpointInfo))
+	epInfo := scw.endpointInfo.Load()
 	if epInfo == nil {
 		return
 	}
-	ab := (*bucket)(atomic.LoadPointer(&epInfo.callCounter.activeBucket))
+	ab := epInfo.callCounter.activeBucket.Load()
 
 	if info.Err == nil {
 		atomic.AddUint32(&ab.numSuccesses, 1)
@@ -494,7 +493,7 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 		return scw, nil
 	}
 	epInfo.sws = append(epInfo.sws, scw)
-	atomic.StorePointer(&scw.endpointInfo, unsafe.Pointer(epInfo))
+	scw.endpointInfo.Store(epInfo)
 	if !epInfo.latestEjectionTimestamp.IsZero() {
 		scw.eject()
 	}
@@ -517,7 +516,7 @@ func (b *outlierDetectionBalancer) appendIfPresent(addr string, scw *subConnWrap
 	}
 
 	epInfo.sws = append(epInfo.sws, scw)
-	atomic.StorePointer(&scw.endpointInfo, unsafe.Pointer(epInfo))
+	scw.endpointInfo.Store(epInfo)
 	return epInfo
 }
 
@@ -526,7 +525,7 @@ func (b *outlierDetectionBalancer) appendIfPresent(addr string, scw *subConnWrap
 //
 // Caller must hold b.mu.
 func (b *outlierDetectionBalancer) removeSubConnFromEndpointMapEntry(scw *subConnWrapper) {
-	epInfo := (*endpointInfo)(atomic.LoadPointer(&scw.endpointInfo))
+	epInfo := scw.endpointInfo.Load()
 	if epInfo == nil {
 		return
 	}
@@ -572,7 +571,7 @@ func (b *outlierDetectionBalancer) UpdateAddresses(sc balancer.SubConn, addrs []
 		}
 	case len(scw.addresses) == 1: // single address to multiple/no addresses
 		b.removeSubConnFromEndpointMapEntry(scw)
-		addrInfo := (*endpointInfo)(atomic.LoadPointer(&scw.endpointInfo))
+		addrInfo := scw.endpointInfo.Load()
 		if addrInfo != nil {
 			addrInfo.callCounter.clear()
 		}

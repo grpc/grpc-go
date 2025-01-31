@@ -20,7 +20,7 @@ package outlierdetection
 import (
 	"fmt"
 	"sync"
-	"unsafe"
+	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -35,7 +35,7 @@ type subConnWrapper struct {
 	balancer.SubConn
 	// endpointInfo is a pointer to the subConnWrapper's corresponding endpoint
 	// map entry, if the map entry exists. It is accessed atomically.
-	endpointInfo unsafe.Pointer // *endpointInfo
+	endpointInfo atomic.Pointer[endpointInfo]
 	// The following fields are set during object creation and read-only after
 	// that.
 
