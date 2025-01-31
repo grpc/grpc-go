@@ -190,7 +190,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		soakConfig.ServerAddr, totalSuccesses, soakConfig.Iterations, totalFailures, b.String())
 
 	if totalIterations != soakConfig.Iterations {
-		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalSuccesses, soakConfig.Iterations)
+		logger.Fatalf("Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalSuccesses, soakConfig.Iterations)
 	}
 
 	if totalFailures > soakConfig.MaxFailures {
