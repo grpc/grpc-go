@@ -40,6 +40,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 var (
@@ -68,12 +69,10 @@ func initTracer() (*trace.TracerProvider, error) {
 		return nil, fmt.Errorf("failed to create stdouttrace exporter: %w", err)
 	}
 
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(attribute.String("service.name", "grpc-server")),
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("grpc-server"),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
-	}
 
 	tp := trace.NewTracerProvider(
 		trace.WithSpanProcessor(trace.NewSimpleSpanProcessor(exporter)),
@@ -100,11 +99,11 @@ func main() {
 	}()
 
 	// Initialize tracing
-	tracerProvider, err := initTracer()
+	tp, err := initTracer()
 	if err != nil {
 		log.Fatalf("Error setting up tracing: %v", err)
 	}
-	defer func() { _ = tracerProvider.Shutdown(context.Background()) }()
+	defer func() { _ = tp.Shutdown(context.Background()) }()
 
 	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 

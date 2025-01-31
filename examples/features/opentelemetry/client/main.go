@@ -35,13 +35,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 var (
@@ -56,12 +56,10 @@ func initTracer() (*trace.TracerProvider, error) {
 		return nil, fmt.Errorf("failed to create stdouttrace exporter: %w", err)
 	}
 
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(attribute.String("service.name", "grpc-client")),
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("grpc-client"),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
-	}
 
 	tp := trace.NewTracerProvider(
 		trace.WithSpanProcessor(trace.NewSimpleSpanProcessor(exporter)),
@@ -89,11 +87,11 @@ func main() {
 
 	ctx := context.Background()
 	// Initialize tracing
-	tracerProvider, err := initTracer()
+	tp, err := initTracer()
 	if err != nil {
 		log.Fatalf("Error setting up tracing: %v", err)
 	}
-	defer func() { _ = tracerProvider.Shutdown(context.Background()) }()
+	defer func() { _ = tp.Shutdown(context.Background()) }()
 
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 
