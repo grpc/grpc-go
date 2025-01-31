@@ -38,7 +38,7 @@ func TestResolver(t *testing.T) {
 
 	t.Run("update_state_panics", func(t *testing.T) {
 		defer func() {
-			want := "cannot update state as grpc.Dial with resolver has not been called"
+			want := "cannot update state as channel has not exited IDLE state"
 			if r := recover(); r != want {
 				t.Errorf("expected panic %q, got %q", want, r)
 			}
@@ -50,7 +50,7 @@ func TestResolver(t *testing.T) {
 	})
 	t.Run("report_error_panics", func(t *testing.T) {
 		defer func() {
-			want := "cannot report error as grpc.Dial with resolver has not been called"
+			want := "cannot report error as channel has not exited IDLE state"
 			if r := recover(); r != want {
 				t.Errorf("expected panic %q, got %q", want, r)
 			}
