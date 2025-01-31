@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/stats"
@@ -88,9 +87,9 @@ func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.Balancer
 	if got, want := len(ringHashPicker.endpointStates), len(endpoints); got != want {
 		t.Errorf("Number of child balancers = %d, want = %d", got, want)
 	}
-	for es, bs := range ringHashPicker.endpointStates {
+	for firstAddr, bs := range ringHashPicker.endpointStates {
 		if got, want := bs.ConnectivityState, connectivity.Idle; got != want {
-			t.Errorf("Child balancer connectivity state for address %q = %v, want = %v", es.firstAddr, got, want)
+			t.Errorf("Child balancer connectivity state for address %q = %v, want = %v", firstAddr, got, want)
 		}
 	}
 	return cc, b, p1
@@ -216,7 +215,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc0 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc0.Addresses[0].Addr, ring0.items[1].endpointState.firstAddr; got != want {
+	if got, want := sc0.Addresses[0].Addr, ring0.items[1].firstAddr; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -228,7 +227,6 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	// Send state updates to Ready.
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	<-sc0.HealthUpdateDelivered.Done()
 
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
@@ -268,7 +266,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc1 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc1.Addresses[0].Addr, ring0.items[0].endpointState.firstAddr; got != want {
+	if got, want := sc1.Addresses[0].Addr, ring0.items[0].firstAddr; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -291,7 +289,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc2 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc2.Addresses[0].Addr, ring0.items[2].endpointState.firstAddr; got != want {
+	if got, want := sc2.Addresses[0].Addr, ring0.items[2].firstAddr; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -330,12 +328,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	// After the first picked SubConn turn Ready, new picks should return it
 	// again (even though the second picked SubConn is also Ready).
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	// Once the SubConn is Ready, it will report Connecting and wait for a
-	// health update. Once it get a health update for Ready, pickfirst will
-	// report Ready.
-	sc0.HealthUpdateDelivered = grpcsync.NewEvent()
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	<-sc0.HealthUpdateDelivered.Done()
 	p4 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p4.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
@@ -376,7 +369,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc0 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc0.Addresses[0].Addr, ring0.items[1].endpointState.firstAddr; got != want {
+	if got, want := sc0.Addresses[0].Addr, ring0.items[1].firstAddr; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -413,7 +406,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc1 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc1.Addresses[0].Addr, ring0.items[2].endpointState.firstAddr; got != want {
+	if got, want := sc1.Addresses[0].Addr, ring0.items[2].firstAddr; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -423,7 +416,6 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	}
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	<-sc1.HealthUpdateDelivered.Done()
 
 	// With the new generated picker, hash2 always picks sc1.
 	p2 := <-cc.NewPickerCh
@@ -527,14 +519,14 @@ func (s) TestAddrWeightChange(t *testing.T) {
 		t.Fatalf("new picker after changing address weight has %d entries, want 3", len(p3.(*picker).ring.items))
 	}
 	for _, i := range p3.(*picker).ring.items {
-		if i.endpointState.firstAddr == testBackendAddrStrs[0] {
-			if i.endpointState.weight != 1 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.endpointState.weight, i.endpointState.firstAddr)
+		if i.firstAddr == testBackendAddrStrs[0] {
+			if i.weight != 1 {
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.weight, i.firstAddr)
 			}
 		}
-		if i.endpointState.firstAddr == testBackendAddrStrs[1] {
-			if i.endpointState.weight != 2 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.endpointState.weight, i.endpointState.firstAddr)
+		if i.firstAddr == testBackendAddrStrs[1] {
+			if i.weight != 2 {
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.weight, i.firstAddr)
 			}
 		}
 	}

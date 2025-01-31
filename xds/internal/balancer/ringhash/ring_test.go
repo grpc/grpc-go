@@ -61,7 +61,7 @@ func (s) TestRingNew(t *testing.T) {
 				for _, e := range testEndpoints {
 					var count int
 					for _, ii := range r.items {
-						if ii.endpointState.firstAddr == e.Addresses[0].Addr {
+						if ii.firstAddr == e.Addresses[0].Addr {
 							count++
 						}
 					}

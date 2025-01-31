@@ -32,16 +32,17 @@ type ring struct {
 	items []*ringEntry
 }
 
-type endpointWithWeight struct {
-	firstAddr     string
-	endpointState *endpointState
-	weight        float64
+type endpointInfo struct {
+	firstAddr      string
+	scaledWeight   float64
+	originalWeight uint32
 }
 
 type ringEntry struct {
-	idx           int
-	hash          uint64
-	endpointState *endpointState
+	idx       int
+	hash      uint64
+	firstAddr string
+	weight    uint32
 }
 
 // newRing creates a ring from the endpoints stored in the EndpointMap. The ring
@@ -100,16 +101,16 @@ func newRing(endpoints *resolver.EndpointMap, minRingSize, maxRingSize uint64, l
 	// A hash is generated for each item, and later the results will be sorted
 	// based on the hash.
 	var currentHashes, targetHashes float64
-	for _, epw := range normalizedWeights {
-		targetHashes += scale * epw.weight
+	for _, epInfo := range normalizedWeights {
+		targetHashes += scale * epInfo.scaledWeight
 		// This index ensures that ring entries corresponding to the same
-		// address hash to different values. And since this index is
-		// per-address, these entries hash to the same value across address
+		// endpoint hash to different values. And since this index is
+		// per-endpoint, these entries hash to the same value across address
 		// updates.
 		idx := 0
 		for currentHashes < targetHashes {
-			h := xxhash.Sum64String(epw.firstAddr + "_" + strconv.Itoa(idx))
-			items = append(items, &ringEntry{hash: h, endpointState: epw.endpointState})
+			h := xxhash.Sum64String(epInfo.firstAddr + "_" + strconv.Itoa(idx))
+			items = append(items, &ringEntry{hash: h, firstAddr: epInfo.firstAddr, weight: epInfo.originalWeight})
 			idx++
 			currentHashes++
 		}
@@ -135,7 +136,7 @@ func newRing(endpoints *resolver.EndpointMap, minRingSize, maxRingSize uint64, l
 // The endpoints are sorted in ascending order to ensure consistent results.
 //
 // Must be called with a non-empty endpoints map.
-func normalizeWeights(endpoints *resolver.EndpointMap) ([]endpointWithWeight, float64) {
+func normalizeWeights(endpoints *resolver.EndpointMap) ([]endpointInfo, float64) {
 	var weightSum uint32
 	// Since attributes are explicitly ignored in the EndpointMap key, we need
 	// to iterate over the values to get the weights.
@@ -143,19 +144,19 @@ func normalizeWeights(endpoints *resolver.EndpointMap) ([]endpointWithWeight, fl
 	for _, a := range endpointVals {
 		weightSum += a.(*endpointState).weight
 	}
-	ret := make([]endpointWithWeight, 0, endpoints.Len())
+	ret := make([]endpointInfo, 0, endpoints.Len())
 	min := 1.0
 	for _, a := range endpointVals {
-		epInfo := a.(*endpointState)
+		epState := a.(*endpointState)
 		// (*endpointState).weight is set to 1 if the weight attribute is not
 		// found on the endpoint. And since this function is guaranteed to be
 		// called with a non-empty endpoints map, weightSum is guaranteed to be
 		// non-zero. So, we need not worry about divide by zero error here.
-		nw := float64(epInfo.weight) / float64(weightSum)
-		ret = append(ret, endpointWithWeight{
-			endpointState: epInfo,
-			weight:        nw,
-			firstAddr:     epInfo.firstAddr,
+		nw := float64(epState.weight) / float64(weightSum)
+		ret = append(ret, endpointInfo{
+			firstAddr:      epState.firstAddr,
+			scaledWeight:   nw,
+			originalWeight: epState.weight,
 		})
 		min = math.Min(min, nw)
 	}

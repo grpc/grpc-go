@@ -132,9 +132,7 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			}
 		}
 		es.weight = newWeight
-		es.mu.Lock()
 		es.state = childState.State
-		es.mu.Unlock()
 	}
 
 	for _, endpoint := range b.endpointStates.Keys() {
@@ -241,9 +239,7 @@ func (b *ringhashBalancer) updatePickerLocked() {
 				continue
 			}
 			es := val.(*endpointState)
-			es.mu.RLock()
 			connState := es.state.ConnectivityState
-			es.mu.RUnlock()
 			if connState == connectivity.Connecting {
 				idleBalancer = nil
 				break
@@ -267,7 +263,7 @@ func (b *ringhashBalancer) updatePickerLocked() {
 	if b.endpointStates.Len() == 0 {
 		picker = base.NewErrPicker(errors.New("produced zero addresses"))
 	} else {
-		picker = newPicker(b.ring, b.logger)
+		picker = newPicker(b.ring, b.endpointStates, b.logger)
 	}
 	b.logger.Infof("Pushing new state %v and picker %p", state, picker)
 	b.ClientConn.UpdateState(balancer.State{
@@ -305,9 +301,7 @@ func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 	var nums [5]int
 	for _, val := range b.endpointStates.Values() {
 		es := val.(*endpointState)
-		es.mu.RLock()
 		nums[es.state.ConnectivityState]++
-		es.mu.RUnlock()
 	}
 
 	if nums[connectivity.Ready] > 0 {
@@ -336,7 +330,7 @@ func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 // non-zero. But, when used in a non-xDS context, the weight attribute could be
 // unset. A Default of 1 is used in the latter case.
 func getWeightAttribute(e resolver.Endpoint) uint32 {
-	w := weightedroundrobin.GetAddrInfoFromEndpoint(e).Weight
+	w := weightedroundrobin.AddrInfoFromEndpoint(e).Weight
 	if w == 0 {
 		return 1
 	}
@@ -351,6 +345,8 @@ type endpointState struct {
 	weight    uint32
 	balancer  balancer.ExitIdler
 
-	mu    sync.RWMutex
+	// state is updated by the balancer while receiving resolver updates from
+	// the channel and picker updates from its children. Access to it is guarded
+	// by ringhashBalancer.mu.
 	state balancer.State
 }

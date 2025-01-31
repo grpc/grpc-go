@@ -22,21 +22,28 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/resolver"
 )
 
 type picker struct {
 	ring   *ring
 	logger *grpclog.PrefixLogger
 	// endpointStates is a cache of endpoint connectivity states and pickers.
-	endpointStates map[*endpointState]balancer.State
+	// The cache is used to avoid locking the mutex for reading the state at RPC
+	// time.
+	endpointStates map[string]balancer.State // endpointState.firstAddr -> balancer.State
 }
 
-func newPicker(ring *ring, logger *grpclog.PrefixLogger) *picker {
-	states := make(map[*endpointState]balancer.State)
-	for _, e := range ring.items {
-		e.endpointState.mu.RLock()
-		states[e.endpointState] = e.endpointState.state
-		e.endpointState.mu.RUnlock()
+// newPicker generates a picker with the given ring. Callers must hold the
+// mutex in the ringhash balancer to ensure the endpoint states are not updated
+// when creating the picker. The picker copies the endpoint states over to avoid
+// locking the mutex at RPC time. The picker should be re-generated every time
+// an endpoint state is updated.
+func newPicker(ring *ring, endpointStates *resolver.EndpointMap, logger *grpclog.PrefixLogger) *picker {
+	states := make(map[string]balancer.State)
+	for _, val := range endpointStates.Values() {
+		epState := val.(*endpointState)
+		states[epState.firstAddr] = epState.state
 	}
 	return &picker{ring: ring, logger: logger, endpointStates: states}
 }
@@ -65,5 +72,5 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 func (p *picker) balancerState(e *ringEntry) balancer.State {
-	return p.endpointStates[e.endpointState]
+	return p.endpointStates[e.firstAddr]
 }
