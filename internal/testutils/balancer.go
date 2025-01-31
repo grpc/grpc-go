@@ -95,7 +95,7 @@ func (tsc *TestSubConn) String() string {
 	return tsc.id
 }
 
-// RegisterHealthListener is send a READY update to mock a situation when no
+// RegisterHealthListener sends a READY update to mock a situation when no
 // health checking mechanisms are configured.
 func (tsc *TestSubConn) RegisterHealthListener(lis func(balancer.SubConnState)) {
 	// Call the listener in a separate gorouting to avoid deadlocks.
