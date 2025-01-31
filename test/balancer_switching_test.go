@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
-	pickfirst "google.golang.org/grpc/balancer/pickfirst"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
@@ -36,6 +36,7 @@ import (
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -47,6 +48,7 @@ const (
 	wantGRPCLBTraceDesc     = `Channel switches to new LB policy "grpclb"`
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
 	pickFirstServiceConfig  = `{"loadBalancingConfig": [{"pick_first":{}}]}`
+	grpclbServiceConfig     = `{"loadBalancingConfig": [{"grpclb":{}}]}`
 
 	// This is the number of stub backends set up at the start of each test. The
 	// first backend is used for the "grpclb" policy and the rest are used for
@@ -174,19 +176,20 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
-	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
-	// Push a resolver update with a GRPCLB service config and a single address
+	// Set an initial resolver with a GRPCLB service config and a single address
 	// pointing to the grpclb server we created above. This will cause the
 	// channel to switch to the "grpclb" balancer, which returns a single
 	// backend address.
-	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
-	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
+	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
@@ -223,15 +226,16 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
-	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
-	// Push a resolver update containing no grpclb server address. This should
-	// lead to the channel using the default LB policy which is pick_first.
-	r.UpdateState(resolver.State{Addresses: addrs[1:]})
+	// Set an empty initial resolver state. This should lead to the channel
+	// using the default LB policy which is pick_first.
+	r.InitialState(resolver.State{Addresses: addrs[1:]})
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
@@ -241,7 +245,7 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
 	// switch to the "grpclb" balancer, which returns a single backend address.
-	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := parseServiceConfig(t, r, grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 	client := testgrpc.NewTestServiceClient(cc)
@@ -276,9 +280,9 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 	r := manual.NewBuilderWithScheme("whatever")
 	target := fmt.Sprintf("%s:///%s", r.Scheme(), loadBalancedServiceName)
-	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -292,10 +296,11 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	// If we use the `loadBalancingPolicy` field, the switch to "grpclb" later on
 	// in the test will not happen as the ClientConn will continue to use the LB
 	// policy received in the first update.
-	scpr := parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(rrServiceConfig)
 
-	// Push a resolver update with the service config specifying "round_robin".
-	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
+	// Set an initial resolver with the service config specifying "round_robin".
+	r.InitialState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
@@ -307,7 +312,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	// pointing to the grpclb server we created above. This will cause the
 	// channel to switch to the "grpclb" balancer, which returns a single
 	// backend address.
-	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
@@ -336,26 +341,27 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 
 	r := manual.NewBuilderWithScheme("whatever")
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
-	// Push a resolver update which contains a bunch of stub server backends and a
+	// Set an initial resolver which contains a bunch of stub server backends and a
 	// grpclb server address. The latter should get the ClientConn to try and
 	// apply the grpclb policy. But since grpclb is not registered, it should
 	// fallback to the default LB policy which is pick_first. The ClientConn is
 	// also expected to filter out the grpclb address when sending the addresses
 	// list for pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address"}}
-	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
+	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`{"loadBalancingPolicy": "grpclb"}`)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}
-	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: grpclbAddr}))
+	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: grpclbAddr}))
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Pick_first backend readiness check failed: %v", err)
 	}
 
 	// Push a resolver update with the same addresses, but with a service config
@@ -367,7 +373,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	})
 	client := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Round robin RPCs failed: %v", err)
 	}
 }
 
@@ -394,18 +400,21 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 	})
 
 	r := manual.NewBuilderWithScheme("whatever")
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
-	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
-	}
-	defer cc.Close()
-
-	// Push a resolver update specifying our stub balancer as the LB policy.
-	scpr := parseServiceConfig(t, r, fmt.Sprintf(`{"loadBalancingPolicy": "%v"}`, t.Name()))
-	r.UpdateState(resolver.State{
+	// Set an initial resolver specifying our stub balancer as the LB policy.
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(
+		fmt.Sprintf(`{"loadBalancingPolicy": "%v"}`, t.Name()),
+	)
+	r.InitialState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: "dummy-address"}},
 		ServiceConfig: scpr,
 	})
+
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	cc.Connect()
+	defer cc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -453,18 +462,18 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	addrs := stubBackendsToResolverAddrs(backends)
 
 	r := manual.NewBuilderWithScheme("whatever")
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
-	// Push a resolver update with the service config specifying "round_robin".
+	// Set an resolver update with the service config specifying "round_robin".
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	r.UpdateState(resolver.State{
+	r.InitialState(resolver.State{
 		Addresses:     addrs[1:],
-		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
+		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(rrServiceConfig),
 	})
 	client := testgrpc.NewTestServiceClient(cc)
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
@@ -505,7 +514,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// report a ready picker until we ask it to do so.
 	r.UpdateState(resolver.State{
 		Addresses:     addrs[:1],
-		ServiceConfig: r.CC.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
+		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
 	})
 	select {
 	case <-ctx.Done():
@@ -513,7 +522,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	case <-ccUpdateCh:
 	}
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RPCs routed to old balancer failed: %v", err)
 	}
 
 	// Ask our stub balancer to forward the earlier received ccUpdate to the
@@ -521,6 +530,6 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// being reported to the channel. RPCs should start using the new balancer.
 	close(waitToProceed)
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
-		t.Fatal(err)
+		t.Fatalf("RPCs routed to new balancer failed: %v", err)
 	}
 }
