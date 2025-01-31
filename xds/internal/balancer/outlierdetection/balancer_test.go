@@ -1680,7 +1680,7 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 // after running the intervalTimerAlgorithm. The test stops the unhealthy
 // backend and verifies that the second backend in the first endpoint is dialed
 // but it doesn't receive requests due to its ejection status. The test stops
-// stops the connected backend in the second endpoint and verifies that requests
+// the connected backend in the second endpoint and verifies that requests
 // start going to the second address in the second endpoint. The test reduces
 // the ejection interval and runs the intervalTimerAlgorithm again. The test
 // verifies that the first endpoint is unejected and requests reach both
