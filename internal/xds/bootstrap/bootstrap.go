@@ -179,9 +179,9 @@ type ServerConfig struct {
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
-	selectedCreds   ChannelCreds
-	credsDialOption grpc.DialOption
-	dialerOption    grpc.DialOption
+	selectedCreds    ChannelCreds
+	credsDialOption  grpc.DialOption
+	extraDialOptions []grpc.DialOption
 
 	cleanups []func()
 }
@@ -224,8 +224,8 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 // server.
 func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 	dopts := []grpc.DialOption{sc.credsDialOption}
-	if sc.dialerOption != nil {
-		dopts = append(dopts, sc.dialerOption)
+	if sc.extraDialOptions != nil {
+		dopts = append(dopts, sc.extraDialOptions...)
 	}
 	return dopts
 }
@@ -283,9 +283,16 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 }
 
 // dialer captures the Dialer method specified via the credentials bundle.
+// Deprecated: use extradDialOptions. Will take precedence over this.
 type dialer interface {
 	// Dialer specifies how to dial the xDS server.
 	Dialer(context.Context, string) (net.Conn, error)
+}
+
+// extraDialOptions captures custom dial options specified via
+// credentials.Bundle.
+type extraDialOptions interface {
+	DialOptions() []grpc.DialOption
 }
 
 // UnmarshalJSON takes the json data (a server) and unmarshals it to the struct.
@@ -311,8 +318,10 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		}
 		sc.selectedCreds = cc
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
-		if d, ok := bundle.(dialer); ok {
-			sc.dialerOption = grpc.WithContextDialer(d.Dialer)
+		if d, ok := bundle.(extraDialOptions); ok {
+			sc.extraDialOptions = d.DialOptions()
+		} else if d, ok := bundle.(dialer); ok {
+			sc.extraDialOptions = []grpc.DialOption{grpc.WithContextDialer(d.Dialer)}
 		}
 		sc.cleanups = append(sc.cleanups, cancel)
 		break

@@ -78,33 +78,17 @@ var wantDefaultServiceConfig = fmt.Sprintf(`{
    }]
  }`, defaultTestClusterName, defaultTestClusterName)
 
-// buildResolverForTarget builds an xDS resolver for the given target. If
-// the bootstrap contents are provided, it build the xDS resolver using them
-// otherwise, it uses the default xDS resolver.
-//
-// It returns the following:
+// buildResolverForTarget builds an xDS resolver for the given target. It
+// returns the following:
 // - a channel to read updates from the resolver
 // - a channel to read errors from the resolver
 // - the newly created xDS resolver
-func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapContents []byte) (chan resolver.State, chan error, resolver.Resolver) {
+func buildResolverForTarget(t *testing.T, target resolver.Target) (chan resolver.State, chan error, resolver.Resolver) {
 	t.Helper()
 
-	var builder resolver.Builder
-	if bootstrapContents != nil {
-		// Create an xDS resolver with the provided bootstrap configuration.
-		if internal.NewXDSResolverWithConfigForTesting == nil {
-			t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-		}
-		var err error
-		builder, err = internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
-	} else {
-		builder = resolver.Get(xdsresolver.Scheme)
-		if builder == nil {
-			t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
-		}
+	builder := resolver.Get(xdsresolver.Scheme)
+	if builder == nil {
+		t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
 	}
 
 	stateCh := make(chan resolver.State, 1)
@@ -202,9 +186,7 @@ func verifyErrorFromResolver(ctx context.Context, t *testing.T, errCh chan error
 //   - A reference to the xDS management server
 //   - A channel to read requested Listener resource names
 //   - A channel to read requested RouteConfiguration resource names
-//   - Contents of the bootstrap configuration pointing to xDS management
-//     server
-func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID string) (*e2e.ManagementServer, chan []string, chan []string, []byte) {
+func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID string) (*e2e.ManagementServer, chan []string, chan []string) {
 	t.Helper()
 
 	listenerResourceNamesCh := make(chan []string, 1)
@@ -242,7 +224,8 @@ func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID stri
 
 	// Create a bootstrap configuration specifying the above management server.
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh, bootstrapContents
+	testutils.CreateBootstrapFileForTesting(t, bootstrapContents)
+	return mgmtServer, listenerResourceNamesCh, routeConfigResourceNamesCh
 }
 
 // Spins up an xDS management server and configures it with a default listener
