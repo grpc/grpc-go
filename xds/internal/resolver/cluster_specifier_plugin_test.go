@@ -115,7 +115,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _ := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
@@ -128,7 +128,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 	})}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC := `
@@ -205,7 +205,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _ := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
@@ -218,7 +218,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	})}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Wait for an update from the resolver, and verify the service config.
 	wantSC := `

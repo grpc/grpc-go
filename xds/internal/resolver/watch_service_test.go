@@ -46,14 +46,14 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, lisCh, routeCfgCh := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, lisCh, routeCfgCh, bc := setupManagementServerForTest(ctx, t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Verify initial update from the resolver.
 	waitForResourceNames(ctx, t, lisCh, []string{defaultTestServiceName})
@@ -103,14 +103,14 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, lisCh, routeCfgCh := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, lisCh, routeCfgCh, bc := setupManagementServerForTest(ctx, t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)})
+	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Verify initial update from the resolver.
 	waitForResourceNames(ctx, t, lisCh, []string{defaultTestServiceName})
