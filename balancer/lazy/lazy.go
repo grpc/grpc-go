@@ -26,44 +26,35 @@
 package lazy
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-func init() {
-	balancer.Register(builder{})
-}
-
 var (
-	// PickfirstConfig is the LB policy config json for a pick_first load
-	// balancer that is lazily initialized.
-	PickfirstConfig = fmt.Sprintf("{\"childPolicy\": [{%q: {}}]}", pickfirstleaf.Name)
-	logger          = grpclog.Component("lazy-lb")
+	logger = grpclog.Component("lazy-lb")
 )
 
 const (
-	// Name is the name of the lazy balancer.
-	Name      = "lazy"
 	logPrefix = "[lazy-lb %p] "
 )
 
-type builder struct{}
+// ChildBuilderFunc creates a new balancer with the ClientConn. It has the same
+// type as the balancer.Builder.Build method.
+type ChildBuilderFunc func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer
 
-func (builder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+// NewBalancer is the constructor for the lazy balancer.
+func NewBalancer(cc balancer.ClientConn, bOpts balancer.BuildOptions, childBuilder ChildBuilderFunc) balancer.Balancer {
 	b := &lazyBalancer{
 		cc:           cc,
 		buildOptions: bOpts,
+		childBuilder: childBuilder,
 	}
 	b.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(logPrefix, b))
 	cc.UpdateState(balancer.State{
@@ -77,16 +68,13 @@ func (builder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balanc
 	return b
 }
 
-func (builder) Name() string {
-	return Name
-}
-
 type lazyBalancer struct {
 	// The following fields are initialized at build time and read-only after
 	// that and therefore do not need to be guarded by a mutex.
 	cc           balancer.ClientConn
 	buildOptions balancer.BuildOptions
 	logger       *internalgrpclog.PrefixLogger
+	childBuilder ChildBuilderFunc
 
 	// The following fields are accessed while handling calls to the idlePicker
 	// and when handling ClientConn state updates. They are guarded by a mutex.
@@ -119,12 +107,6 @@ func (lb *lazyBalancer) ResolverError(err error) {
 func (lb *lazyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
-	childLBCfg, ok := ccs.BalancerConfig.(lbCfg)
-	if !ok {
-		lb.logger.Errorf("Got LB config of unexpected type: %v", ccs.BalancerConfig)
-		return balancer.ErrBadResolverState
-	}
-	ccs.BalancerConfig = childLBCfg.childLBCfg
 	if lb.delegate != nil {
 		return lb.delegate.UpdateClientConnState(ccs)
 	}
@@ -148,7 +130,7 @@ func (lb *lazyBalancer) ExitIdle() {
 		}
 		return
 	}
-	lb.delegate = gracefulswitch.NewBalancer(lb.cc, lb.buildOptions)
+	lb.delegate = lb.childBuilder(lb.cc, lb.buildOptions)
 	if lb.latestClientConnState != nil {
 		if err := lb.delegate.UpdateClientConnState(*lb.latestClientConnState); err != nil {
 			if err == balancer.ErrBadResolverState {
@@ -163,25 +145,6 @@ func (lb *lazyBalancer) ExitIdle() {
 		lb.delegate.ResolverError(lb.latestResolverError)
 		lb.latestResolverError = nil
 	}
-}
-
-type lbCfg struct {
-	serviceconfig.LoadBalancingConfig
-	childLBCfg serviceconfig.LoadBalancingConfig
-}
-
-func (b builder) ParseConfig(lbConfig json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	jsonReprsentation := &struct {
-		ChildPolicy json.RawMessage
-	}{}
-	if err := json.Unmarshal(lbConfig, jsonReprsentation); err != nil {
-		return nil, err
-	}
-	childCfg, err := gracefulswitch.ParseConfig(jsonReprsentation.ChildPolicy)
-	if err != nil {
-		return nil, err
-	}
-	return lbCfg{childLBCfg: childCfg}, nil
 }
 
 // idlePicker is used when the SubConn is IDLE and kicks the SubConn into

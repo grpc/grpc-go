@@ -26,36 +26,16 @@
 package endpointsharding
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 )
-
-var (
-	// PickFirstConfig is a pick first config without shuffling enabled.
-	PickFirstConfig serviceconfig.LoadBalancingConfig
-	logger          = grpclog.Component("endpoint-sharding")
-)
-
-func init() {
-	var err error
-	PickFirstConfig, err = ParseConfig(json.RawMessage(fmt.Sprintf("[{%q: {}}]", pickfirstleaf.Name)))
-	if err != nil {
-		logger.Fatal(err)
-	}
-}
 
 // ChildState is the balancer state of a child along with the endpoint which
 // identifies the child balancer.
@@ -68,26 +48,30 @@ type ChildState struct {
 	Balancer balancer.ExitIdler
 }
 
+// Options are the options to configure the behaviour of the
+// endpointsharding balancer.
+type Options struct {
+	// DisableAutoReconnect allows the balancer to keep child balancer in the
+	// IDLE state until they are explicitly triggered to exit using the
+	// ChildState obtained from the endpointsharding picker. When set to false,
+	// the endpointsharding balancer will automatically call ExitIdle on child
+	// connections that report IDLE.
+	DisableAutoReconnect bool
+}
+
+// ChildBuilderFunc creates a new balancer with the ClientConn. It has the same
+// type as the balancer.Builder.Build method.
+type ChildBuilderFunc func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer
+
 // NewBalancer returns a load balancing policy that manages homogeneous child
-// policies each owning a single endpoint. The balancer will automatically call
-// ExitIdle on its children if they report IDLE connectivity state.
-func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return newBlanacer(cc, opts, true)
-}
-
-// NewBalancerWithoutAutoReconnect returns a load balancing policy that manages
-// homogeneous child policies each owning a single endpoint. The balancer will
-// allow children to remain in IDLE state until triggered to exit idle state
-// using the ChildState obtained using the endpointsharding picker.
-func NewBalancerWithoutAutoReconnect(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return newBlanacer(cc, opts, false)
-}
-
-func newBlanacer(cc balancer.ClientConn, opts balancer.BuildOptions, autoReconnect bool) balancer.Balancer {
+// policies each owning a single endpoint. The endpointsharding balancer
+// forwards the LoadBalancingConfig in ClientConn state updates to its children.
+func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions, childBuilder ChildBuilderFunc, esOpts Options) balancer.Balancer {
 	es := &endpointSharding{
-		cc:                  cc,
-		bOpts:               opts,
-		enableAutoReconnect: autoReconnect,
+		cc:           cc,
+		bOpts:        opts,
+		esOpts:       esOpts,
+		childBuilder: childBuilder,
 	}
 	es.children.Store(resolver.NewEndpointMap())
 	return es
@@ -97,9 +81,10 @@ func newBlanacer(cc balancer.ClientConn, opts balancer.BuildOptions, autoReconne
 // balancer with child config for every unique Endpoint received. It updates the
 // child states on any update from parent or child.
 type endpointSharding struct {
-	cc                  balancer.ClientConn
-	bOpts               balancer.BuildOptions
-	enableAutoReconnect bool
+	cc           balancer.ClientConn
+	bOpts        balancer.BuildOptions
+	esOpts       Options
+	childBuilder ChildBuilderFunc
 
 	// childMu synchronizes calls to any single child. It must be held for all
 	// calls into a child. To avoid deadlocks, do not acquire childMu while
@@ -160,7 +145,7 @@ func (es *endpointSharding) UpdateClientConnState(state balancer.ClientConnState
 				es:         es,
 			}
 			childBalancer.childState.Balancer = childBalancer
-			childBalancer.child = gracefulswitch.NewBalancer(childBalancer, es.bOpts)
+			childBalancer.child = es.childBuilder(childBalancer, es.bOpts)
 		}
 		newChildren.Set(endpoint, childBalancer)
 		if err := childBalancer.updateClientConnStateLocked(balancer.ClientConnState{
@@ -334,7 +319,7 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.es.mu.Lock()
 	bw.childState.State = state
 	bw.es.mu.Unlock()
-	if state.ConnectivityState == connectivity.Idle && bw.es.enableAutoReconnect {
+	if state.ConnectivityState == connectivity.Idle && !bw.es.esOpts.DisableAutoReconnect {
 		bw.ExitIdle()
 	}
 	bw.es.updateState()
@@ -369,13 +354,4 @@ func (bw *balancerWrapper) closeLocked() {
 	}
 	bw.child.Close()
 	bw.isClosed = true
-}
-
-// ParseConfig parses a child config list and returns an LB config to use with
-// the endpointsharding balancer.
-//
-// cfg is expected to be a JSON array of LB policy names + configs as the
-// format of the loadBalancingConfig field in ServiceConfig.
-func ParseConfig(cfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	return gracefulswitch.ParseConfig(cfg)
 }
