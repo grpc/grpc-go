@@ -115,9 +115,13 @@ func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
 			*envP = "does not matter"
 			defer func() { *envP = oldEnv }()
 
+			// Override xDS client pool.
+			oldXdsClientPool := xdsClientPool
+			xdsClientPool = xdsclient.NewPool(nil)
+			defer func() { xdsClientPool = oldXdsClientPool }()
+
 			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
-			defer func() { xdsClientPool.UnsetBootstrapConfigForTesting() }()
 			if err != nil {
 				t.Fatalf("failed to build resolver: %v", err)
 			}
