@@ -172,7 +172,6 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
-
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Make an RPC and ensure that expected error is returned.
