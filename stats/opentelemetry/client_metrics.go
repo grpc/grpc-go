@@ -153,7 +153,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 }
 
 // perCallTraces records per call trace spans.
-func (h *clientStatsHandler) perCallTraces(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
+func (h *clientStatsHandler) perCallTraces(ctx context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
 	if h.options.isTracingEnabled() {
 		log.Printf("Tracing call with context: %v", ctx)
 		s := status.Convert(err)

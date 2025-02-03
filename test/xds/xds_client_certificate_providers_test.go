@@ -167,12 +167,12 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	}
 
 	// Create a ClientConn and ensure that it moves to TRANSIENT_FAILURE.
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolverBuilder))
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
+
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Make an RPC and ensure that expected error is returned.

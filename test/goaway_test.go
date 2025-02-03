@@ -674,12 +674,11 @@ func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
 		ctCh.Send(ct)
 	}()
 
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("error dialing: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

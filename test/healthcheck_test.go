@@ -224,11 +224,10 @@ func setupClient(t *testing.T, c *clientConfig) (*grpc.ClientConn, *manual.Resol
 		opts = append(opts, c.extraDialOption...)
 	}
 
-	cc, err := grpc.NewClient(r.Scheme()+":///test.server", opts...)
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", opts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("grpc.Dial() failed: %v", err)
 	}
-	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 	return cc, r
 }
