@@ -626,18 +626,15 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 					}
 				}
 
+				if i == retries-1 {
+					// Update resolver.ClientConn to not return an error
+					// anymore before last resolution retry to ensure that
+					// last resolution attempt doesn't back off.
+					returnNilErr.Store(true)
+				}
+
 				// Unblock the DNS resolver's backoff by pushing the current time.
 				timeChan <- time.Now()
-			}
-
-			// Update resolver.ClientConn to not return an error anymore.
-			returnNilErr.Store(true)
-
-			// Unblock the DNS resolver's backoff, if ongoing, while we set the
-			// test clientConn to not return an error anymore.
-			select {
-			case timeChan <- time.Now():
-			default:
 			}
 
 			// Verify that the DNS resolver does not backoff anymore.
