@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ type Config struct {
 	// including fallbacks.
 	Authorities map[string]clients.Authority
 
-	// Node is the identity of the xDS client, connecting to the xDS
+	// Node is the identity of the xDS client connecting to the xDS
 	// management server.
 	Node clients.Node
 

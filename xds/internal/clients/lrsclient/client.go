@@ -1,6 +1,8 @@
+//revive:disable:unused-parameter
+
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +18,8 @@
  *
  */
 
-// Package lrsclient provides implementation of the LRS client for enabling
-// applications to report load to the xDS management servers.
+// Package lrsclient provides an implementation of the LRS client to report
+// load to the xDS management servers.
 //
 // It allows applications to report load data to an LRS server via the LRS
 // stream. This data can be used for monitoring, traffic management, and other
@@ -28,18 +30,19 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// LRSClient is a full fledged LRS client.
+// LRSClient is an LRS client to report load data to the LRS servers.
 type LRSClient struct {
 }
 
-// ReportLoad starts a load reporting stream to the given server. All load
-// reports to the same server share the LRS stream.
+// ReportLoad starts a load reporting stream to the server in given
+// [clients.ServerConfig]. All load reports to the same server share the LRS
+// stream.
 //
-// It returns a [LoadStore] for the user to report loads, a function to
+// It returns a [LoadStore] for the user to report loads and a function to
 // cancel the load reporting stream.
 //
 // The stats from [LoadStore] are reported periodically until cleanup
 // function is called.
-func (c *LRSClient) ReportLoad(_ *clients.ServerConfig) (*LoadStore, func()) {
-	return NewLoadStore(), func() {}
+func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) (*LoadStore, func()) {
+	panic("unimplemented")
 }
