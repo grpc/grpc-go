@@ -105,7 +105,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
 	if opts.StreamBackoffAfterFailure == nil {
-		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
+		opts.StreamBackoffAfterFailure = defaultExponentialBackoff
 	}
 	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
 }

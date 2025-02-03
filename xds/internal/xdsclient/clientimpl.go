@@ -59,7 +59,7 @@ var (
 	xdsClientImplCreateHook = func(string) {}
 	xdsClientImplCloseHook  = func(string) {}
 
-	defaultStreamBackoffFunc = backoff.DefaultExponential.Backoff
+	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
 
 // clientImpl is the real implementation of the xDS client. The exported Client
