@@ -1,6 +1,8 @@
+//revive:disable:unused-parameter
+
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +18,13 @@
  *
  */
 
-// Package xdsclient provides implementation of the xDS client for enabling
-// applications to communicate with xDS management servers.
+// Package xdsclient provides an implementation of the xDS client to
+// communicate with xDS management servers.
 //
 // It allows applications to:
-//   - Create xDS client instance with in-memory configurations.
+//   - Create xDS client instances with in-memory configurations.
 //   - Register watches for named resources.
-//   - Receive resources via the ADS (Aggregated Discovery Service) stream.
+//   - Receive resources via an ADS (Aggregated Discovery Service) stream.
 //
 // This enables applications to dynamically discover and configure resources
 // such as listeners, routes, clusters, and endpoints from an xDS management
@@ -30,43 +32,42 @@
 package xdsclient
 
 import (
-	"errors"
-
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
-// XDSClient is a full fledged client which queries a set of discovery APIs
-// (collectively termed as xDS) on a remote management server, to discover
+// XDSClient is a client which queries a set of discovery APIs (collectively
+// termed as xDS) on a remote management server, to discover
 // various dynamic resources.
 type XDSClient struct {
 }
 
 // New returns a new xDS Client configured with provided config.
-func New(_ Config) (*XDSClient, error) {
-	return nil, errors.New("xds: xDS client is not yet implemented")
+func New(config Config) (*XDSClient, error) {
+	panic("unimplemented")
 }
 
 // WatchResource uses xDS to discover the resource associated with the provided
-// resource name. The resource type url look up the resource type
-// implementation which determines how xDS responses are received, are
-// deserialized and validated. Upon receipt of a response from the management
-// server, an appropriate callback on the watcher is invoked.
-//
-// During a race (e.g. an xDS response is received while the user is calling
-// cancel()), there's a small window where the callback can be called after
-// the watcher is canceled. Callers need to handle this case.
-func (c *XDSClient) WatchResource(_ string, _ string, _ ResourceWatcher) (cancel func()) {
-	return nil
+// resource name.
+//   - resourceTypeURL is used to look up the resource type implementation
+//     provided in the [ResourceTypes] of the config which determines how
+//     xDS responses are deserialized and validated after receiving from the xDS
+//     management server.
+//   - resourceName is the name of the resource to watch.
+//   - resourceWatcher is used to notify the caller about updates to the resource
+//     being watched. Upon receipt of a response from the management server, an
+//     appropriate callback on the resourceWatcher is invoked.
+func (c *XDSClient) WatchResource(resourceTypeURL string, resourceName string, resourceWatcher ResourceWatcher) (cancel func()) {
+	panic("unimplemented")
 }
 
 // Close closes the xDS client and releases all resources. The caller is
 // expected to invoke it once they are done using the client.
 func (c *XDSClient) Close() error {
-	return nil
+	panic("unimplemented")
 }
 
 // DumpResources returns the status and contents of all xDS resources from the
 // xDS client.
 func (c *XDSClient) DumpResources() *v3statuspb.ClientStatusResponse {
-	return nil
+	panic("unimplemented")
 }
