@@ -41,14 +41,11 @@ import (
 // Name is the name of the ring_hash balancer.
 const Name = "ring_hash_experimental"
 
-var lazyPickfirstConfig serviceconfig.LoadBalancingConfig
+func lazyPickFirstBuilder(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return lazy.NewBalancer(cc, opts, balancer.Get(pickfirstleaf.Name).Build)
+}
 
 func init() {
-	var err error
-	lazyPickfirstConfig, err = endpointsharding.ParseConfig(json.RawMessage(fmt.Sprintf("[{%q: %s}]", lazy.Name, lazy.PickfirstConfig)))
-	if err != nil {
-		logger.Fatal(err)
-	}
 	balancer.Register(bb{})
 }
 
@@ -59,7 +56,8 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		ClientConn:     cc,
 		endpointStates: resolver.NewEndpointMap(),
 	}
-	b.child = endpointsharding.NewBalancerWithoutAutoReconnect(b, opts)
+	esOpts := endpointsharding.Options{DisableAutoReconnect: true}
+	b.child = endpointsharding.NewBalancer(b, opts, lazyPickFirstBuilder, esOpts)
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 	return b
@@ -171,14 +169,11 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 		b.mu.Unlock()
 	}()
 
-	// Make pickfirst children use health listeners for outlier detection and
-	// health checking to work.
-	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-	childConfig := balancer.ClientConnState{
-		BalancerConfig: lazyPickfirstConfig,
-		ResolverState:  ccs.ResolverState,
-	}
-	if err := b.child.UpdateClientConnState(childConfig); err != nil {
+	if err := b.child.UpdateClientConnState(balancer.ClientConnState{
+		// Make pickfirst children use health listeners for outlier detection
+		// and health checking to work.
+		ResolverState: pickfirstleaf.EnableHealthListener(ccs.ResolverState),
+	}); err != nil {
 		return err
 	}
 
