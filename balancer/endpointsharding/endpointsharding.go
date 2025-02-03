@@ -59,14 +59,14 @@ type Options struct {
 	DisableAutoReconnect bool
 }
 
-// childBuilderFunc creates a new balancer with the ClientConn. It has the same
+// ChildBuilderFunc creates a new balancer with the ClientConn. It has the same
 // type as the balancer.Builder.Build method.
-type childBuilderFunc = func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer
+type ChildBuilderFunc func(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer
 
 // NewBalancer returns a load balancing policy that manages homogeneous child
 // policies each owning a single endpoint. The endpointsharding balancer
 // forwards the LoadBalancingConfig in ClientConn state updates to its children.
-func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions, childBuilder childBuilderFunc, esOpts Options) balancer.Balancer {
+func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions, childBuilder ChildBuilderFunc, esOpts Options) balancer.Balancer {
 	es := &endpointSharding{
 		cc:           cc,
 		bOpts:        opts,
@@ -84,7 +84,7 @@ type endpointSharding struct {
 	cc           balancer.ClientConn
 	bOpts        balancer.BuildOptions
 	esOpts       Options
-	childBuilder childBuilderFunc
+	childBuilder ChildBuilderFunc
 
 	// childMu synchronizes calls to any single child. It must be held for all
 	// calls into a child. To avoid deadlocks, do not acquire childMu while
