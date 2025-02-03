@@ -53,10 +53,10 @@ const (
 
 type noopEndpointsWatcher struct{}
 
-func (noopEndpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
+func (noopEndpointsWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (noopEndpointsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (noopEndpointsWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 func (noopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
@@ -76,22 +76,23 @@ func newEndpointsWatcher() *endpointsWatcher {
 	return &endpointsWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (ew *endpointsWatcher) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
-	ew.updateCh.Send(endpointsUpdateErrTuple{update: update.Resource})
+func (ew *endpointsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		ew.updateCh.Replace(endpointsUpdateErrTuple{err: update.Err})
+		onDone()
+		return
+	}
+	u := update.Data.(*xdsresource.EndpointsResourceData)
+	ew.updateCh.Send(endpointsUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 
-func (ew *endpointsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (ew *endpointsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
-	onDone()
-}
-
-func (ew *endpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	ew.updateCh.Replace(endpointsUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Endpoints not found in received response")})
 	onDone()
 }
 

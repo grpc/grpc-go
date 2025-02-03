@@ -76,20 +76,39 @@ func newEDSResolver(nameToWatch string, producer xdsresource.Producer, topLevelR
 }
 
 // OnUpdate is invoked to report an update for the resource being watched.
-func (er *edsDiscoveryMechanism) OnUpdate(update *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
+func (er *edsDiscoveryMechanism) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	if er.stopped.HasFired() {
 		onDone()
 		return
 	}
 
+	if update.Err != nil {
+		if er.logger.V(2) {
+			er.logger.Infof("EDS discovery mechanism for resource %q reported on resource changed error: %v", er.nameToWatch, update.Err)
+		}
+		// Report an empty update that would result in no priority child being
+		// created for this discovery mechanism. This would result in the priority
+		// LB policy reporting TRANSIENT_FAILURE (as there would be no priorities or
+		// localities) if this was the only discovery mechanism, or would result in
+		// the priority LB policy using a lower priority discovery mechanism when
+		// that becomes available.
+		er.mu.Lock()
+		er.update = &xdsresource.EndpointsUpdate{}
+		er.mu.Unlock()
+
+		er.topLevelResolver.onUpdate(onDone)
+		return
+	}
+
 	er.mu.Lock()
-	er.update = &update.Resource
+	u := update.Data.(*xdsresource.EndpointsResourceData)
+	er.update = &u.Resource
 	er.mu.Unlock()
 
 	er.topLevelResolver.onUpdate(onDone)
 }
 
-func (er *edsDiscoveryMechanism) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (er *edsDiscoveryMechanism) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	if er.stopped.HasFired() {
 		onDone()
 		return
@@ -114,29 +133,6 @@ func (er *edsDiscoveryMechanism) OnError(err error, onDone xdsresource.OnDoneFun
 	// localities) if this was the only discovery mechanism, or would result in
 	// the priority LB policy using a lower priority discovery mechanism when
 	// that becomes available.
-	er.update = &xdsresource.EndpointsUpdate{}
-	er.mu.Unlock()
-
-	er.topLevelResolver.onUpdate(onDone)
-}
-
-func (er *edsDiscoveryMechanism) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	if er.stopped.HasFired() {
-		onDone()
-		return
-	}
-
-	if er.logger.V(2) {
-		er.logger.Infof("EDS discovery mechanism for resource %q reported resource-does-not-exist error", er.nameToWatch)
-	}
-
-	// Report an empty update that would result in no priority child being
-	// created for this discovery mechanism. This would result in the priority
-	// LB policy reporting TRANSIENT_FAILURE (as there would be no priorities or
-	// localities) if this was the only discovery mechanism, or would result in
-	// the priority LB policy using a lower priority discovery mechanism when
-	// that becomes available.
-	er.mu.Lock()
 	er.update = &xdsresource.EndpointsUpdate{}
 	er.mu.Unlock()
 

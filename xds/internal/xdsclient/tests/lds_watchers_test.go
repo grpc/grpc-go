@@ -48,13 +48,10 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (noopListenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (noopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
@@ -71,22 +68,23 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (lw *listenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
-	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+func (lw *listenerWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		lw.updateCh.Replace(listenerUpdateErrTuple{err: update.Err})
+		onDone()
+		return
+	}
+	u := update.Data.(*xdsresource.ListenerResourceData)
+	lw.updateCh.Send(listenerUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 
-func (lw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (lw *listenerWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
-	onDone()
-}
-
-func (lw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	lw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
@@ -100,18 +98,19 @@ func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
 
-func (lw *listenerWatcherMultiple) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
-	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+func (lw *listenerWatcherMultiple) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+	if update.Err != nil {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: update.Err})
+		onDone()
+		return
+	}
+	u := update.Data.(*xdsresource.ListenerResourceData)
+	lw.updateCh.Send(listenerUpdateErrTuple{update: u.Resource})
 	onDone()
 }
 
-func (lw *listenerWatcherMultiple) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (lw *listenerWatcherMultiple) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	lw.updateCh.Send(listenerUpdateErrTuple{err: err})
-	onDone()
-}
-
-func (lw *listenerWatcherMultiple) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	lw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
