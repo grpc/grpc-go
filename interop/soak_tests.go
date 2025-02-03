@@ -36,9 +36,9 @@ import (
 
 // SoakWorkerResults stores the aggregated results for a specific worker during the soak test.
 type SoakWorkerResults struct {
-	IterationsDone int
-	Failures       int
-	Latencies      *stats.Histogram
+	iterationsSucceeded int
+	Failures            int
+	Latencies           *stats.Histogram
 }
 
 // SoakIterationConfig holds the parameters required for a single soak iteration.
@@ -138,7 +138,7 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 		}
 		// Success: log the details of the iteration.
 		soakWorkerResults.Latencies.Add(latency.Milliseconds())
-		soakWorkerResults.IterationsDone++
+		soakWorkerResults.iterationsSucceeded++
 		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency, p.Addr, config.ServerAddr)
 		<-earliestNextStart
 	}
@@ -175,7 +175,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		MinValue:       0,
 	})
 	for _, worker := range soakWorkerResults {
-		totalSuccesses += worker.IterationsDone
+		totalSuccesses += worker.iterationsSucceeded
 		totalFailures += worker.Failures
 		if worker.Latencies != nil {
 			// Add latencies from the worker's Histogram to the main latencies.
@@ -186,7 +186,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	totalIterations := totalSuccesses + totalFailures
 	latencies.Print(&b)
 	fmt.Fprintf(os.Stderr,
-		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
+		"(server_uri: %s) soak test successes: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
 		soakConfig.ServerAddr, totalSuccesses, soakConfig.Iterations, totalFailures, b.String())
 
 	if totalIterations != soakConfig.Iterations {
