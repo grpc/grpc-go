@@ -72,12 +72,17 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 }
 
 type ringhashBalancer struct {
+	// The following fields are initialized at build time and read-only after
+	// that and therefore do not need to be guarded by a mutex.
+
+	// ClientConn is embedded to intercept UpdateState calls from the child
+	// endpointsharding balancer.
 	balancer.ClientConn
 	logger *grpclog.PrefixLogger
 	child  balancer.Balancer
-	config *LBConfig
 
 	mu                   sync.Mutex
+	config               *LBConfig
 	inhibitChildUpdates  bool
 	shouldRegenerateRing bool
 	endpointStates       *resolver.EndpointMap // Map from endpoint -> *endpointState
@@ -159,7 +164,12 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 	b.inhibitChildUpdates = true
 	// Save the endpoint list. It's used to try IDLE endpoints when previous
 	// endpoints have reported TRANSIENT_FAILURE.
-	b.orderedEndpoints = ccs.ResolverState.Endpoints
+	b.orderedEndpoints = make([]resolver.Endpoint, 0, len(ccs.ResolverState.Endpoints))
+	for _, ep := range ccs.ResolverState.Endpoints {
+		// Since Addresses is a slice field, it needs to be copied explicitly.
+		ep.Addresses = append([]resolver.Address{}, ep.Addresses...)
+		b.orderedEndpoints = append(b.orderedEndpoints, ep)
+	}
 	b.mu.Unlock()
 
 	defer func() {
