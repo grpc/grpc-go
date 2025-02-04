@@ -156,8 +156,8 @@ type ListenerWatcher interface {
 	// OnAmbientError is invoked if resource is already cached under different
 	// error conditions.
 	//
-	// Upon receiving this, the watcher may continue using the previously seen
-	// resource. xDS client will not remove the resource from its cache.
+	// Upon receiving this, the watcher should not stop using the previously
+	// seen resource. xDS client will not remove the resource from its cache.
 	OnAmbientError(error, OnDoneFunc)
 }
 

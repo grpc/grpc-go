@@ -496,9 +496,9 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	}
 }
 
-// Handles an error Cluster update from the xDS client. Propagates the error
-// down to the child policy if one exists, or puts the channel in
-// TRANSIENT_FAILURE.
+// Handles an error Cluster update from the xDS client to not stop using the
+// previously seen resource. Propagates the error down to the child policy
+// if one exists, or puts the channel in TRANSIENT_FAILURE.
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
@@ -520,9 +520,9 @@ func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
 	}
 }
 
-// Handles a resource-not-found error from the xDS client. Propagates the error
-// down to the child policy if one exists, or puts the channel in
-// TRANSIENT_FAILURE.
+// Handles an error Cluster update from the xDS client to stop using the
+// previously seen resource. Propagates the error down to the child policy
+// if one exists, or puts the channel in TRANSIENT_FAILURE.
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceChangedError(name string, err error) {
