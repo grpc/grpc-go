@@ -128,7 +128,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 		opts.StreamBackoffAfterFailure = defaultExponentialBackoff
 	}
 	if opts.MetricsRecorder == nil {
-		opts.MetricsRecorder = &istats.NoopMetricsRecorder{}
+		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
 	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure, opts.MetricsRecorder)
 }

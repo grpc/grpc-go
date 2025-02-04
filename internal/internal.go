@@ -65,7 +65,7 @@ var (
 	// is configured on the underlying gRPC server. This is set by server.go.
 	GetServerCredentials any // func (*grpc.Server) credentials.TransportCredentials
 	// MetricsRecorderForServer returns the MetricsRecorderList derived from a
-	// servers stats handlers.
+	// server's stats handlers.
 	MetricsRecorderForServer any // func (*grpc.Server) estats.MetricsRecorder
 	// CanonicalString returns the canonical string of the code defined here:
 	// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.

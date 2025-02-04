@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,9 +48,9 @@ func (noopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc)
 	onDone()
 }
 
-// TestResourceUpdateMetrics tests resource update metrics. It configures an xDS
-// Client and provides a valid and invalid LDS update, and verifies the valid
-// and invalid metrics emitted from them.
+// TestResourceUpdateMetrics configures an xDS Client and provides a valid and
+// invalid LDS update, and verifies the valid and invalid metrics emitted from
+// them.
 func (s) TestResourceUpdateMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
