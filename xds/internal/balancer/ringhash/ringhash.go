@@ -93,7 +93,7 @@ type ringhashBalancer struct {
 // per-endpoint state stored in the ring, and also the aggregated state based on
 // the child picker. It also reconciles the endpoint list. It sets
 // `b.shouldRegenerateRing` to true if the new endpoints list is different from
-// the previous, i.e either of the following is true:
+// the previous, i.e. any of the following is true:
 // - an endpoint was added
 // - an endpoint was removed
 // - an endpoint's weight was updated
@@ -113,7 +113,7 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			es = &endpointState{}
 			b.endpointStates.Set(endpoint, es)
 			b.shouldRegenerateRing = true
-			// Set the first address only during creation time since it's hash
+			// Set the first address only during creation time since its hash
 			// is used to create the ring. Even if the address ordering changes
 			// in subsequent resolver updates, the endpoint hash should remain
 			// the same.
@@ -277,7 +277,7 @@ func (b *ringhashBalancer) ExitIdle() {
 	// triggers from picks or from child balancer state changes.
 }
 
-// aggregatedStateLocked records returns the aggregated child balancers state
+// aggregatedStateLocked returns the aggregated child balancers state
 // based on the following rules.
 //   - If there is at least one endpoint in READY state, report READY.
 //   - If there are 2 or more endpoints in TRANSIENT_FAILURE state, report
