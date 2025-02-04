@@ -35,13 +35,13 @@ type LRSClient struct {
 }
 
 // ReportLoad starts a load reporting stream to the server in given
-// [clients.ServerConfig]. All load reports to the same server share the LRS
+// clients.ServerConfig. All load reports to the same server share the LRS
 // stream.
 //
-// It returns a [LoadStore] for the user to report loads and a function to
+// It returns a LoadStore for the user to report loads and a function to
 // cancel the load reporting stream.
 //
-// The stats from [LoadStore] are reported periodically until cleanup
+// The stats from LoadStore are reported periodically until cleanup
 // function is called.
 func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) (*LoadStore, func()) {
 	panic("unimplemented")

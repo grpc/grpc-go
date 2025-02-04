@@ -25,13 +25,13 @@ import (
 // TransportBuilder provides the functionality to create a communication
 // channel to an xDS management server.
 type TransportBuilder interface {
-	// Build creates a new [Transport] instance to the xDS server based on the
+	// Build creates a new Transport instance to the xDS server based on the
 	// provided ServerConfig.
 	Build(ServerConfig ServerConfig) (Transport, error)
 }
 
-// Transport provides the functionality to communicate with an xDS server using
-// streaming calls.
+// Transport provides the functionality to communicate with an xDS management
+// server using streaming calls.
 type Transport interface {
 	// NewStream creates a new streaming call to the xDS server for the
 	// specified RPC method name. The returned Stream interface can be used
@@ -43,7 +43,7 @@ type Transport interface {
 }
 
 // Stream provides methods to send and receive messages on a stream. Messages
-// are represented as a byte slice ([]byte).
+// are represented as a byte slice.
 type Stream interface {
 	// Send sends the provided message on the stream.
 	Send([]byte) error
