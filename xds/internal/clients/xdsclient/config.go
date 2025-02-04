@@ -77,17 +77,3 @@ func NewConfig(servers []clients.ServerConfig, authorities map[string]clients.Au
 	c.streamBackOffTimeout = defaultStreamBackoffFunc
 	return c
 }
-
-// SetWatchExpiryTimeoutForTesting sets the watch expiry timeout.
-//
-// For testing purpose only.
-func (c *Config) SetWatchExpiryTimeoutForTesting(d time.Duration) {
-	c.watchExpiryTimeOut = d
-}
-
-// SetStreamBackOffTimeoutForTesting sets the stream backoff timeout function
-//
-// For testing purpose only.
-func (c *Config) SetStreamBackOffTimeoutForTesting(d func(int) time.Duration) {
-	c.streamBackOffTimeout = d
-}
