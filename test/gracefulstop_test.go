@@ -123,8 +123,9 @@ func (s) TestGracefulStop(t *testing.T) {
 	// 1.Start Server and start serving by calling Serve().
 	stubserver.StartTestService(t, ss)
 
-	//2. Call GracefulStop from a goroutine. It will trigger Close on the listener
-	//but the listener won’t close immediately—it waits until a connection is accepted.
+	// 2. Call GracefulStop from a goroutine. It will trigger Close on the listener,
+	// but the listener won’t close immediately—it waits until a connection is
+	// accepted.
 	gracefulStopDone := make(chan struct{})
 	<-dlis.acceptCalled
 	go func() {
@@ -137,7 +138,8 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
 
-	//Dial the server. This will cause a connection to be accepted. This will also unblock the Close method.
+	// Dial the server. This will cause a connection to be accepted. This will also
+	// unblock the Close method.
 	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer dialCancel()
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
