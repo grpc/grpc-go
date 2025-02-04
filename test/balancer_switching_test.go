@@ -186,7 +186,7 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	// pointing to the grpclb server we created above. This will cause the
 	// channel to switch to the "grpclb" balancer, which returns a single
 	// backend address.
-	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
+	grpclbConfig := parseServiceConfig(t, r, grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.InitialState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 
