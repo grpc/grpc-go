@@ -20,7 +20,7 @@
 // enabling applications to communicate with xDS management servers and report
 // load.
 //
-// xDS Client
+// # xDS Client
 //
 // The xDS client allows applications to:
 //   - Create client instances with in-memory configurations.
@@ -41,14 +41,10 @@
 //
 // NOTICE: This package is EXPERIMENTAL and may be changed or removed
 // in a later release.
-//
-// See [README](https://github.com/grpc/grpc-go/tree/master/xds/clients/README.md).
 package clients
 
 import (
-	"fmt"
 	"slices"
-	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -71,15 +67,15 @@ type ServerConfig struct {
 	IgnoreResourceDeletion bool
 
 	// Extensions can be populated with arbitrary data to be passed to the
-	// [TransportBuilder] and/or xDS Client's ResourceType implementations.
+	// TransportBuilder and/or xDS Client's ResourceType implementations.
 	// This field can be used to provide additional configuration or context
 	// specific to the user's needs.
 	//
 	// The xDS and LRS clients do not interpret the contents of this field.
-	// It is the responsibility of the user's custom [TransportBuilder] and/or
+	// It is the responsibility of the user's custom TransportBuilder and/or
 	// ResourceType implementations to handle and interpret these extensions.
 	//
-	// For example, a custom [TransportBuilder] might use this field to
+	// For example, a custom TransportBuilder might use this field to
 	// configure a specific security credentials.
 	//
 	// Note: For custom types used in Extensions, ensure an Equal(any) bool
@@ -106,15 +102,6 @@ func (sc *ServerConfig) equal(other *ServerConfig) bool {
 		return true
 	}
 	return false
-}
-
-// String returns a string representation of the [ServerConfig].
-//
-// WARNING: This method is primarily intended for logging and testing
-// purposes. The output returned by this method is not guaranteed to be stable
-// and may change at any time. Do not rely on it for production use.
-func (sc *ServerConfig) String() string {
-	return strings.Join([]string{sc.ServerURI, fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
 }
 
 // Authority contains configuration for an xDS control plane authority.
@@ -150,13 +137,13 @@ type Node struct {
 	UserAgentName string
 	// UserAgentVersion is the user agent version of application.
 	UserAgentVersion string
-	// ClientFeatures is a list of xDS features supported by this client.
+	// clientFeatures is a list of xDS features supported by this client.
 	// These features are set within the xDS client, but may be overridden only
 	// for testing purposes.
 	clientFeatures []string
 }
 
-// toProto converts an instance of [Node] to its protobuf representation.
+// toProto converts an instance of Node to its protobuf representation.
 func (n Node) toProto() *v3corepb.Node {
 	return &v3corepb.Node{
 		Id:      n.ID,
