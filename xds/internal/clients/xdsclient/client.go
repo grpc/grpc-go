@@ -49,7 +49,7 @@ func New(config Config) (*XDSClient, error) {
 // WatchResource uses xDS to discover the resource associated with the provided
 // resource name.
 //   - resourceTypeURL is used to look up the resource type implementation
-//     provided in the [ResourceTypes] of the config which determines how
+//     provided in the ResourceTypes map of the config which determines how
 //     xDS responses are deserialized and validated after receiving from the xDS
 //     management server.
 //   - resourceName is the name of the resource to watch.

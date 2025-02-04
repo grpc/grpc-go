@@ -29,7 +29,7 @@ type ResourceType interface {
 	// TypeURL is the xDS type URL of this resource type for the v3 xDS
 	// protocol. This URL is used as the key to look up the corresponding
 	// ResourceType implementation in the ResourceTypes map provided in the
-	// [Config].
+	// Config.
 	TypeURL() string
 
 	// TypeName identifies resources in a transport protocol agnostic way. This
@@ -50,12 +50,12 @@ type ResourceType interface {
 	// If protobuf deserialization fails or resource validation fails,
 	// returns a non-nil error. Otherwise, returns a fully populated
 	// DecodeResult.
-	Decode(DecodeOptions, any) (*DecodeResult, error)
+	Decode(ResourceDecodeOptions, any) (*ResourceDecodeResult, error)
 }
 
-// DecodeOptions wraps the options required by ResourceType implementation for
+// ResourceDecodeOptions wraps the options required by ResourceType implementation for
 // decoding configuration received from the xDS management server.
-type DecodeOptions struct {
+type ResourceDecodeOptions struct {
 	// Config contains the complete configuration passed to the xDS client.
 	// This contains useful data for resource validation.
 	Config *Config
@@ -66,8 +66,8 @@ type DecodeOptions struct {
 	ServerConfig *clients.ServerConfig
 }
 
-// DecodeResult is the result of a decode operation.
-type DecodeResult struct {
+// ResourceDecodeResult is the result of a decode operation.
+type ResourceDecodeResult struct {
 	// Name is the name of the resource being watched.
 	Name string
 

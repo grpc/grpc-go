@@ -18,13 +18,13 @@
 
 package xdsclient
 
-// OnUpdateProcessed is a function to be invoked by resource watcher
+// OnCallbackProcessed is a function to be invoked by resource watcher
 // implementations upon completing the processing of a callback from the xDS
 // client. Failure to invoke this callback prevents the xDS client from reading
 // further messages from the xDS server.
-type OnUpdateProcessed func()
+type OnCallbackProcessed func()
 
-// ResourceDataOrError is a struct that contains either [ResourceData] or
+// ResourceDataOrError is a struct that contains either ResourceData or
 // error. It is used to represent the result of an xDS resource update. Exactly
 // one of Data or Err will be non-nil.
 type ResourceDataOrError struct {
@@ -43,12 +43,12 @@ type ResourceWatcher interface {
 	// Upon receiving this, in case of an error, the watcher should
 	// stop using any previously seen resource. The xDS client will remove the
 	// resource from its cache.
-	OnResourceChanged(ResourceDataOrError, OnUpdateProcessed)
+	OnResourceChanged(ResourceDataOrError, OnCallbackProcessed)
 
 	// OnAmbientError is invoked if resource is already cached under different
 	// error conditions.
 	//
 	// Upon receiving this, the watcher may continue using the previously seen
 	// resource. The xDS client will not remove the resource from its cache.
-	OnAmbientError(error, OnUpdateProcessed)
+	OnAmbientError(error, OnCallbackProcessed)
 }
