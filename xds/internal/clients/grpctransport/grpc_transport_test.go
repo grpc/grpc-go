@@ -27,6 +27,9 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/protobuf/proto"
+
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
 const (
@@ -153,5 +156,43 @@ func (s) TestNewStream(t *testing.T) {
 				t.Fatalf("transport.NewStream() error = %v, wantErr %v", err, test.wantErr)
 			}
 		})
+	}
+}
+
+// TestStream_Send verifies that grpcTransport.Stream.Send() successfully sends
+// a message on the stream. It starts a management server to create a stream
+// and sends a marshalled DiscoveryRequest proto on it.
+func (s) TestStream_Send(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Start an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Build a grpc-based transport to the above xDS management server.
+	serverCfg := clients.ServerConfig{
+		ServerURI:  mgmtServer.Address,
+		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+	}
+	builder := Builder{}
+	transport, err := builder.Build(serverCfg)
+	if err != nil {
+		t.Fatalf("failed to build transport: %v", err)
+	}
+	defer transport.Close()
+
+	// Create a new stream to the xDS management server.
+	stream, err := transport.NewStream(ctx, "test-method")
+	if err != nil {
+		t.Fatalf("failed to create stream: %v", err)
+	}
+
+	// Send a discovery request message on the stream.
+	req, err := proto.Marshal(&v3discoverypb.DiscoveryRequest{})
+	if err != nil {
+		t.Fatalf("failed to marshal DiscoveryRequest: %v", err)
+	}
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("failed to send message: %v", err)
 	}
 }
