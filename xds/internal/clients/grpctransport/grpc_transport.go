@@ -31,28 +31,12 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// ServerConfigExtension allows extending the clients.ServerConfig for the
-// gRPC-based transport builder. Any implementation of this must implement
-// the ServerConfig() method.
-//
-// This interface must be implemented by the grpc transport builder provided
-// in the Extensions field of the clients.ServerConfig.
-type ServerConfigExtension interface {
-	ServerConfig() *ServerConfig
-}
-
-// ServerConfig holds the settings for connecting to an xDS management server
+// ServerConfigExtension holds the settings for connecting to an xDS management server
 // using gRPC.
-type ServerConfig struct {
+type ServerConfigExtension struct {
 	// Credentials is the credential bundle containing the gRPC credentials for
 	// connecting to the xDS management server.
 	Credentials credentials.Bundle
-}
-
-// ServerConfig returns the ServerConfig itself. This method is designed
-// to satisfy [ServerConfigExtension] interface requirement.
-func (s *ServerConfig) ServerConfig() *ServerConfig {
-	return s
 }
 
 // Builder provides a way to build a gRPC-based transport to an xDS management
@@ -76,8 +60,7 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	if !ok {
 		return nil, fmt.Errorf("xds: ServerConfig's Extensions field cannot be anything other than grpctransport.ServerConfigExtension for gRPC transport")
 	}
-	gtsc := gtsce.ServerConfig()
-	if gtsc.Credentials == nil {
+	if gtsce.Credentials == nil {
 		return nil, fmt.Errorf("xsd: ServerConfigExtensions's Credentials field cannot be nil for gRPC transport")
 	}
 
@@ -93,7 +76,7 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(gtsc.Credentials))
+	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(gtsce.Credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", sc.ServerURI, err)
 	}
