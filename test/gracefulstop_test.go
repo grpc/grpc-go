@@ -123,8 +123,9 @@ func (s) TestGracefulStop(t *testing.T) {
 	// 1.Start Server and start serving by calling Serve().
 	stubserver.StartTestService(t, ss)
 
-	// 2. Call GracefulStop from a goroutine. It will trigger Close on the listener,
-	// but the listener will not actually close until a connection is accepted.
+	// 2. Call GracefulStop from a goroutine. It will trigger Close on the
+	// listener, but the listener will not actually close until a connection
+	// is accepted.
 	gracefulStopDone := make(chan struct{})
 	<-dlis.acceptCalled
 	go func() {
@@ -132,7 +133,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		close(gracefulStopDone)
 	}()
 
-	// 3.Create a new connection to the server after listener.Close() is called.
+	// 3. Create a new connection to the server after listener.Close() is called.
 	// Server should close this connection immediately, before handshaking.
 
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
