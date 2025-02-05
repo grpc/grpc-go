@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
 )
@@ -43,9 +44,15 @@ type ServerConfigExtension struct {
 // server.
 type Builder struct{}
 
+func init() {
+	encoding.RegisterCodec(&byteCodec{})
+}
+
 // Build creates a new gRPC-based transport to an xDS management server using
 // the provided clients.ServerConfig. This involves creating a
-// grpc.ClientConn to the server using the provided credentials and server URI.
+// grpc.ClientConn to the server using the provided credentials and server URI,
+// and byteCodec which is byte-based implementation of encoding.Codec to send
+// and receive messages as bytes on the stream.
 //
 // If any of ServerURI or Extensions of `sc` are not present, Build() will return
 // an error.
@@ -76,7 +83,7 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(gtsce.Credentials))
+	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(gtsce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
 		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", sc.ServerURI, err)
 	}
@@ -122,4 +129,25 @@ func (s *stream) Recv() ([]byte, error) {
 // Close closes the gRPC stream to the xDS management server.
 func (g *grpcTransport) Close() error {
 	return g.cc.Close()
+}
+
+type byteCodec struct{}
+
+func (c *byteCodec) Marshal(v any) ([]byte, error) {
+	if b, ok := v.([]byte); ok {
+		return b, nil
+	}
+	return nil, fmt.Errorf("message must be a byte slice")
+}
+
+func (c *byteCodec) Unmarshal(data []byte, v any) error {
+	if b, ok := v.(*[]byte); ok {
+		*b = data
+		return nil
+	}
+	return fmt.Errorf("target must be a pointer to a byte slice")
+}
+
+func (c *byteCodec) Name() string {
+	return "byteCodec"
 }
