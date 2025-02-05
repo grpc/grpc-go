@@ -138,7 +138,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
 
 	// Dial the server. This will cause a connection to be accepted. This will
-	// also unblock the Close method.
+	// also unblock the Close method .
 	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer dialCancel()
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
