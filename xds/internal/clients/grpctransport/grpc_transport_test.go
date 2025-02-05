@@ -61,7 +61,7 @@ func (s) TestBuild(t *testing.T) {
 			name: "ServerURI_empty",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "",
-				Extensions: &ServerConfig{Credentials: insecure.NewBundle()},
+				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 			},
 			wantErr: true,
 		},
@@ -82,7 +82,7 @@ func (s) TestBuild(t *testing.T) {
 			name: "ServerConfigExtension_Credentials_nil",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "server-address",
-				Extensions: &ServerConfig{},
+				Extensions: ServerConfigExtension{},
 			},
 			wantErr: true,
 		},
@@ -90,7 +90,7 @@ func (s) TestBuild(t *testing.T) {
 			name: "success",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "server-address",
-				Extensions: &ServerConfig{Credentials: insecure.NewBundle()},
+				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 			},
 			wantErr: false,
 		},
@@ -137,7 +137,7 @@ func (s) TestNewStream(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			serverCfg := clients.ServerConfig{
 				ServerURI:  test.serverURI,
-				Extensions: &ServerConfig{Credentials: insecure.NewBundle()},
+				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 			}
 			builder := Builder{}
 			transport, err := builder.Build(serverCfg)
