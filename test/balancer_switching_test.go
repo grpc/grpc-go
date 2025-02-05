@@ -36,7 +36,6 @@ import (
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -301,7 +300,6 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 
 	// Set an initial resolver with the service config specifying "round_robin".
 	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
@@ -313,7 +311,7 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	// pointing to the grpclb server we created above. This will cause the
 	// channel to switch to the "grpclb" balancer, which returns a single
 	// backend address.
-	grpclbConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbServiceConfig)
+	grpclbConfig := parseServiceConfig(t, r, grpclbServiceConfig)
 	state := resolver.State{ServiceConfig: grpclbConfig}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: lbServer.Address()}}}))
 	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
@@ -348,6 +346,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	}
 	defer cc.Close()
 	cc.Connect()
+
 	// Set an initial resolver which contains a bunch of stub server backends and a
 	// grpclb server address. The latter should get the ClientConn to try and
 	// apply the grpclb policy. But since grpclb is not registered, it should
@@ -358,7 +357,6 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	grpclbConfig := parseServiceConfig(t, r, `{"loadBalancingPolicy": "grpclb"}`)
 	state := resolver.State{ServiceConfig: grpclbConfig, Addresses: addrs}
 	r.UpdateState(grpclbstate.Set(state, &grpclbstate.State{BalancerAddresses: grpclbAddr}))
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := pfutil.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
@@ -401,7 +399,6 @@ func (s) TestBalancerSwitch_OldBalancerCallsShutdownInClose(t *testing.T) {
 	})
 
 	r := manual.NewBuilderWithScheme("whatever")
-
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
@@ -514,7 +511,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// report a ready picker until we ask it to do so.
 	r.UpdateState(resolver.State{
 		Addresses:     addrs[:1],
-		ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
+		ServiceConfig: r.CC.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
 	})
 	select {
 	case <-ctx.Done():
