@@ -167,15 +167,15 @@ func (h *clientStatsHandler) perCallTraces(ctx context.Context, err error, _ tim
 }
 
 // perCallMetrics records per call metrics.
-func (m *metricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
-	if m.clientMetrics.callDuration != nil {
+func (h *metricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
+	if h.clientMetrics.callDuration != nil {
 		callLatency := float64(time.Since(startTime)) / float64(time.Second)
 		attrs := otelattribute.NewSet(
 			otelattribute.String("grpc.method", ci.method),
 			otelattribute.String("grpc.target", ci.target),
 			otelattribute.String("grpc.status", canonicalString(status.Code(err))),
 		)
-		m.clientMetrics.callDuration.Record(ctx, callLatency, otelmetric.WithAttributeSet(attrs))
+		h.clientMetrics.callDuration.Record(ctx, callLatency, otelmetric.WithAttributeSet(attrs))
 	}
 }
 
