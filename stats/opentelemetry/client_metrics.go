@@ -18,7 +18,6 @@ package opentelemetry
 
 import (
 	"context"
-	"log"
 	"sync/atomic"
 	"time"
 
@@ -83,6 +82,9 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 	ctx = setCallInfo(ctx, ci)
 
+	metricsEnabled := h.options.isMetricsEnabled()
+	tracingEnabled := h.options.isTracingEnabled()
+
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
@@ -94,14 +96,16 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 
 	startTime := time.Now()
 	var span trace.Span
-	if h.options.isTracingEnabled() {
+	if tracingEnabled {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
+
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	if h.options.isMetricsEnabled() {
+
+	if metricsEnabled {
 		h.metrics.perCallMetrics(ctx, err, startTime, ci)
 	}
-	if h.options.isTracingEnabled() {
+	if tracingEnabled {
 		h.perCallTraces(ctx, err, startTime, ci, span)
 	}
 	return err
@@ -153,9 +157,8 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 }
 
 // perCallTraces records per call trace spans.
-func (h *clientStatsHandler) perCallTraces(ctx context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
+func (h *clientStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, ci *callInfo, ts trace.Span) {
 	if h.options.isTracingEnabled() {
-		log.Printf("Tracing call with context: %v", ctx)
 		s := status.Convert(err)
 		if s.Code() == grpccodes.OK {
 			ts.SetStatus(otelcodes.Ok, s.Message())
