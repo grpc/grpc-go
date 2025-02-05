@@ -99,7 +99,6 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	if tracingEnabled {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
-
 	err := invoker(ctx, method, req, reply, cc, opts...)
 
 	if metricsEnabled {
@@ -129,7 +128,8 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 		method: h.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
-
+	metricsEnabled := h.options.isMetricsEnabled()
+	tracingEnabled := h.options.isTracingEnabled()
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
@@ -141,14 +141,14 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 
 	startTime := time.Now()
 	var span trace.Span
-	if h.options.isTracingEnabled() {
+	if tracingEnabled {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
 	callback := func(err error) {
-		if h.options.isMetricsEnabled() {
+		if metricsEnabled {
 			h.metrics.perCallMetrics(ctx, err, startTime, ci)
 		}
-		if h.options.isTracingEnabled() {
+		if tracingEnabled {
 			h.perCallTraces(ctx, err, startTime, ci, span)
 		}
 	}
@@ -157,7 +157,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 }
 
 // perCallTraces records per call trace spans.
-func (h *clientStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, ci *callInfo, ts trace.Span) {
+func (h *clientStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
 	if h.options.isTracingEnabled() {
 		s := status.Convert(err)
 		if s.Code() == grpccodes.OK {
