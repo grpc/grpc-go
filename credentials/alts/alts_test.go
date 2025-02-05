@@ -36,6 +36,7 @@ import (
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/credentials/alts/internal/testutil"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -323,7 +324,7 @@ func (s) TestFullHandshake(t *testing.T) {
 	defer wait.Wait()
 	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
 	defer stopHandshaker()
-	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	stopServer, serverAddress := startServer(t, handshakerAddress)
 	defer stopServer()
 
 	// Ping the server, authenticating with ALTS.
@@ -349,7 +350,7 @@ func (s) TestConcurrentHandshakes(t *testing.T) {
 	defer wait.Wait()
 	stopHandshaker, handshakerAddress := startFakeHandshakerService(t, &wait)
 	defer stopHandshaker()
-	stopServer, serverAddress := startServer(t, handshakerAddress, &wait)
+	stopServer, serverAddress := startServer(t, handshakerAddress)
 	defer stopServer()
 
 	// Ping the server, authenticating with ALTS.
@@ -444,31 +445,22 @@ func startFakeHandshakerService(t *testing.T, wait *sync.WaitGroup) (stop func()
 	return func() { s.Stop() }, listener.Addr().String()
 }
 
-func startServer(t *testing.T, handshakerServiceAddress string, wait *sync.WaitGroup) (stop func(), address string) {
+func startServer(t *testing.T, handshakerServiceAddress string) (stop func(), address string) {
 	listener, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("LocalTCPListener() failed: %v", err)
 	}
 	serverOpts := &ServerOptions{HandshakerServiceAddress: handshakerServiceAddress}
 	creds := NewServerCreds(serverOpts)
-	s := grpc.NewServer(grpc.Creds(creds))
-	testgrpc.RegisterTestServiceServer(s, &testServer{})
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
-		if err := s.Serve(listener); err != nil {
-			t.Errorf("s.Serve(%v) failed: %v", listener, err)
-		}
-	}()
-	return func() { s.Stop() }, listener.Addr().String()
-}
-
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
-func (s *testServer) UnaryCall(_ context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	return &testpb.SimpleResponse{
-		Payload: &testpb.Payload{},
-	}, nil
+	stub := &stubserver.StubServer{
+		Listener: listener,
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{
+				Payload: &testpb.Payload{},
+			}, nil
+		},
+		S: grpc.NewServer(grpc.Creds(creds)),
+	}
+	stubserver.StartTestService(t, stub)
+	return func() { stub.S.Stop() }, listener.Addr().String()
 }

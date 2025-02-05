@@ -37,7 +37,7 @@ func (s) TestClientNew_Single(t *testing.T) {
 	// directory, and set the bootstrap env vars to point to it.
 	nodeID := uuid.New().String()
 	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
-	config, err := bootstrap.NewConfigForTesting(contents)
+	config, err := bootstrap.NewConfigFromContents(contents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 	}
@@ -132,7 +132,7 @@ func (s) TestClientNew_Multiple(t *testing.T) {
 	// directory, and set the bootstrap env vars to point to it.
 	nodeID := uuid.New().String()
 	contents := e2e.DefaultBootstrapContents(t, nodeID, "non-existent-server-address")
-	config, err := bootstrap.NewConfigForTesting(contents)
+	config, err := bootstrap.NewConfigFromContents(contents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", contents, err)
 	}

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -259,7 +259,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	closeCh := make(chan struct{})
 	rinternal.NewXDSClient = func(string) (xdsclient.XDSClient, func(), error) {
 		bc := e2e.DefaultBootstrapContents(t, uuid.New().String(), "dummy-management-server-address")
-		config, err := bootstrap.NewConfigForTesting(bc)
+		config, err := bootstrap.NewConfigFromContents(bc)
 		if err != nil {
 			t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 		}
@@ -271,7 +271,7 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 			Name:               t.Name(),
 			WatchExpiryTimeout: defaultTestTimeout,
 		})
-		return c, grpcsync.OnceFunc(func() {
+		return c, sync.OnceFunc(func() {
 			close(closeCh)
 			cancel()
 		}), err

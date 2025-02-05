@@ -59,7 +59,7 @@ var (
 	xdsClientImplCreateHook = func(string) {}
 	xdsClientImplCloseHook  = func(string) {}
 
-	defaultStreamBackoffFunc = backoff.DefaultExponential.Backoff
+	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
 
 // clientImpl is the real implementation of the xDS client. The exported Client
@@ -101,7 +101,9 @@ func init() {
 	// attempting to create an xDS client, else xDS client creation will fail.
 	config, err := bootstrap.GetConfiguration()
 	if err != nil {
-		logger.Warningf("Failed to read xDS bootstrap config from env vars:  %v", err)
+		if logger.V(2) {
+			logger.Infof("Failed to read xDS bootstrap config from env vars:  %v", err)
+		}
 		DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
 		return
 	}
@@ -340,7 +342,7 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *bootstrap.ServerConfig, in
 // reference to the xdsChannel. This returned function is idempotent, meaning
 // it can be called multiple times without any additional effect.
 func (c *clientImpl) releaseChannel(serverConfig *bootstrap.ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
-	return grpcsync.OnceFunc(func() {
+	return sync.OnceFunc(func() {
 		c.channelsMu.Lock()
 
 		if c.logger.V(2) {

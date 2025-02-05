@@ -155,7 +155,7 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap configuration.
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
@@ -350,7 +350,7 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap configuration.
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
@@ -535,7 +535,7 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap configuration.
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

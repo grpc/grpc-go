@@ -181,7 +181,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 		}
 		cc.dopts.defaultServiceConfig, _ = scpr.Config.(*ServiceConfig)
 	}
-	cc.mkp = cc.dopts.copts.KeepaliveParams
+	cc.keepaliveParams = cc.dopts.copts.KeepaliveParams
 
 	if err = cc.initAuthority(); err != nil {
 		return nil, err
@@ -623,7 +623,7 @@ type ClientConn struct {
 	balancerWrapper *ccBalancerWrapper         // Always recreated whenever entering idle to simplify Close.
 	sc              *ServiceConfig             // Latest service config received from the resolver.
 	conns           map[*addrConn]struct{}     // Set to nil on close.
-	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
+	keepaliveParams keepalive.ClientParameters // May be updated upon receipt of a GoAway.
 	// firstResolveEvent is used to track whether the name resolver sent us at
 	// least one update. RPCs block on this event.  May be accessed without mu
 	// if we know we cannot be asked to enter idle mode while accessing it (e.g.
@@ -1215,8 +1215,8 @@ func (ac *addrConn) adjustParams(r transport.GoAwayReason) {
 	case transport.GoAwayTooManyPings:
 		v := 2 * ac.dopts.copts.KeepaliveParams.Time
 		ac.cc.mu.Lock()
-		if v > ac.cc.mkp.Time {
-			ac.cc.mkp.Time = v
+		if v > ac.cc.keepaliveParams.Time {
+			ac.cc.keepaliveParams.Time = v
 		}
 		ac.cc.mu.Unlock()
 	}
@@ -1312,7 +1312,7 @@ func (ac *addrConn) tryAllAddrs(ctx context.Context, addrs []resolver.Address, c
 		ac.mu.Lock()
 
 		ac.cc.mu.RLock()
-		ac.dopts.copts.KeepaliveParams = ac.cc.mkp
+		ac.dopts.copts.KeepaliveParams = ac.cc.keepaliveParams
 		ac.cc.mu.RUnlock()
 
 		copts := ac.dopts.copts
