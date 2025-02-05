@@ -196,7 +196,6 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		}
 	}
 
-	// Clean up the connection.
 	connMu.Lock()
 	defer connMu.Unlock()
 	if conn != nil {
