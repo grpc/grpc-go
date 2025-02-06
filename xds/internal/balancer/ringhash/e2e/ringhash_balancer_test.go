@@ -1881,14 +1881,14 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 }
 
 // Tests that when we trigger internal connection attempts without picks, we
-// keep retrying all the SubConns that haver reported TF previously.
+// keep retrying all the SubConns that have reported TF previously.
 func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurrently(t *testing.T) {
-	backends := backendAddrs(startTestServiceBackends(t, 1))
-	unReachableBackends := makeUnreachableBackends(t, 3)
+	const backendsCount = 4
+	backends := backendAddrs(startTestServiceBackends(t, backendsCount))
 
 	const clusterName = "cluster"
 
-	endpoints := endpointResource(t, clusterName, append(unReachableBackends, backends...))
+	endpoints := endpointResource(t, clusterName, append(backends))
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: clusterName,
@@ -1917,17 +1917,20 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
-	client := testgrpc.NewTestServiceClient(conn)
 
-	holdNonExistent0 := dialer.Hold(unReachableBackends[0])
-	holdNonExistent1 := dialer.Hold(unReachableBackends[1])
-	holdNonExistent2 := dialer.Hold(unReachableBackends[2])
-	holdGood := dialer.Hold(backends[0])
+	// Create holds for each backend address to delay a successful connection
+	// until the end of the test.
+	holds := make([]*testutils.Hold, backendsCount)
+	for i := 0; i < len(backends); i++ {
+		holds[i] = dialer.Hold(backends[i])
+	}
+
+	client := testgrpc.NewTestServiceClient(conn)
 
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)
 	go func() {
-		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", unReachableBackends[0]+"_0"))
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", backends[0]+"_0"))
 		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
 		if status.Code(err) == codes.Canceled {
 			errCh <- nil
@@ -1938,7 +1941,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 
 	// Wait for the RPC to trigger a connection attempt to the first address,
 	// then cancel the RPC.  No other connection attempts should be started yet.
-	if !holdNonExistent0.Wait(ctx) {
+	if !holds[0].Wait(ctx) {
 		t.Fatalf("Timeout waiting for connection attempt to backend 0")
 	}
 	rpcCancel()
@@ -1946,64 +1949,64 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
 	}
 
-	// Since the connection attempt to the first address is still blocked, no
-	// other connection attempts should be started yet.
-	if holdNonExistent1.IsStarted() {
-		t.Errorf("Got connection attempt to backend 1, expected no connection attempt.")
-	}
-	if holdNonExistent2.IsStarted() {
-		t.Errorf("Got connection attempt to backend 2, expected no connection attempt.")
-	}
-	if holdGood.IsStarted() {
-		t.Errorf("Got connection attempt to good backend, expected no connection attempt.")
+	// In every iteration of the following loop, we count the number of backends
+	// that are dialed. After counting, we fail all the connection attempts.
+	// This should cause the number of dialed backends to increase by 1 in every
+	// iteration of the loop as ringhash tries to exit TRANSIENT_FAILURE.
+	activeAddrs := map[string]bool{}
+	for wantBackendCount := 1; wantBackendCount <= backendsCount; wantBackendCount++ {
+		for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+			dialedCount := 0
+			for _, hold := range holds {
+				if hold.IsStarted() {
+					dialedCount++
+				}
+			}
+			if dialedCount > wantBackendCount {
+				t.Fatalf("More backends dialed than expected: got %d, want %d", dialedCount, wantBackendCount)
+			}
+			if dialedCount == wantBackendCount {
+				break
+			}
+		}
+
+		// Wait for a short time and verify no more backends are contacted.
+		<-time.After(defaultTestShortTimeout)
+		dialedCount := 0
+		newAddrsCount := 0
+		for i, hold := range holds {
+			if !hold.IsStarted() {
+				continue
+			}
+			dialedCount++
+			if _, ok := activeAddrs[backends[i]]; !ok {
+				newAddrsCount++
+				activeAddrs[backends[i]] = true
+			}
+		}
+		if dialedCount != wantBackendCount {
+			t.Fatalf("Unexpected number of backends dialed: got %d, want %d", dialedCount, wantBackendCount)
+		}
+		// Only one new address should be added in every iteration.
+		if newAddrsCount != 1 {
+			t.Fatalf("Unexpected number of new addresses added in iteration: got %d, want %d", newAddrsCount, 1)
+		}
+
+		// Create new holds and fail existing requests.
+		for i, hold := range holds {
+			if !hold.IsStarted() {
+				continue
+			}
+			holds[i] = dialer.Hold(backends[i])
+			hold.Fail(errors.New("Test error"))
+		}
 	}
 
-	// Allow the connection attempt to the first address to resume and wait for
-	// the attempt for the second address. No other connection attempts should
-	// be started yet.
-	holdNonExistent0Again := dialer.Hold(unReachableBackends[0])
-	holdNonExistent0.Resume()
-	if !holdNonExistent1.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend 1")
+	// Allow the request to a backend to succeed.
+	if !holds[1].Wait(ctx) {
+		t.Fatalf("Context timed out waiting %q to be dialed again.", backends[1])
 	}
-	if !holdNonExistent0Again.Wait(ctx) {
-		t.Fatalf("Timeout waiting for re-connection attempt to backend 0")
-	}
-	if holdNonExistent2.IsStarted() {
-		t.Errorf("Got connection attempt to backend 2, expected no connection attempt.")
-	}
-	if holdGood.IsStarted() {
-		t.Errorf("Got connection attempt to good backend, expected no connection attempt.")
-	}
-
-	// Allow the connection attempt to the second address to resume and wait for
-	// the attempt for the third address. No new connection attempts should
-	// be started yet.
-	holdNonExistent1Again := dialer.Hold(unReachableBackends[1])
-	holdNonExistent1.Resume()
-	if !holdNonExistent2.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend 2")
-	}
-	if !holdNonExistent1Again.Wait(ctx) {
-		t.Fatalf("Timeout waiting for re-connection attempt to backend 1")
-	}
-	if holdGood.IsStarted() {
-		t.Errorf("Got connection attempt to good backend, expected no connection attempt.")
-	}
-
-	// Allow the connection attempt to the third address to resume and wait
-	// for the attempt for the final address.
-	holdNonExistent2Again := dialer.Hold(unReachableBackends[2])
-	holdNonExistent2.Resume()
-	if !holdNonExistent2Again.Wait(ctx) {
-		t.Fatalf("Timeout waiting for re-connection attempt to backend 2")
-	}
-	if !holdGood.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to good backend")
-	}
-
-	// Allow the final attempt to resume.
-	holdGood.Resume()
+	holds[1].Resume()
 
 	// Wait for channel to become connected without any pending RPC.
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)

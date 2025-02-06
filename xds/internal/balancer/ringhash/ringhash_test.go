@@ -188,17 +188,22 @@ func (s) TestOneEndpoint(t *testing.T) {
 // same hash always pick the same SubConn. When the one picked is down, another
 // one will be picked.
 func (s) TestThreeSubConnsAffinity(t *testing.T) {
-	wantEndpoints := []resolver.Endpoint{
+	endpoints := []resolver.Endpoint{
 		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}},
 		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}},
 		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[2]}}},
 	}
-	cc, _, p0 := setupTest(t, wantEndpoints)
+	remainingAddrs := map[string]bool{
+		testBackendAddrStrs[0]: true,
+		testBackendAddrStrs[1]: true,
+		testBackendAddrStrs[2]: true,
+	}
+	cc, _, p0 := setupTest(t, endpoints)
 	// This test doesn't update addresses, so this ring will be used by all the
 	// pickers.
-	ring0 := p0.(*picker).ring
+	ring := p0.(*picker).ring
 
-	firstHash := ring0.items[0].hash
+	firstHash := ring.items[0].hash
 	// firstHash+1 will pick the second endpoint from the ring.
 	testHash := firstHash + 1
 	// The first pick should be queued, and should trigger Connect() on the only
@@ -206,134 +211,121 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
-	// The picked SubConn should be the second in the ring.
+
+	// The picked endpoint should be the second in the ring.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	var sc0 *testutils.TestSubConn
+	var subConns [3]*testutils.TestSubConn
 	select {
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for SubConn creation.")
-	case sc0 = <-cc.NewSubConnCh:
+	case subConns[1] = <-cc.NewSubConnCh:
 	}
-	if got, want := sc0.Addresses[0].Addr, ring0.items[1].firstAddr; got != want {
+	if got, want := subConns[1].Addresses[0].Addr, ring.items[1].firstAddr; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
-	case <-sc0.ConnectCh:
+	case <-subConns[1].ConnectCh:
 	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
+		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
+	}
+	delete(remainingAddrs, ring.items[1].firstAddr)
+
+	// Turn down the subConn in use.
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
+	// This should trigger a connection to a new endpoint.
+	<-cc.NewPickerCh
+	var sc *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc = <-cc.NewSubConnCh:
+	}
+	scAddr := sc.Addresses[0].Addr
+	if _, ok := remainingAddrs[scAddr]; !ok {
+		t.Fatalf("New SubConn created with previously used address: %q", scAddr)
+	}
+	delete(remainingAddrs, scAddr)
+	select {
+	case <-sc.ConnectCh:
+	case <-time.After(defaultTestTimeout):
+		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
+	}
+	if scAddr == ring.items[0].firstAddr {
+		subConns[0] = sc
+	} else if scAddr == ring.items[2].firstAddr {
+		subConns[2] = sc
 	}
 
-	// Send state updates to Ready.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	// Turning down the SubConn should cause creation of a connection to the
+	// final endpoint.
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc = <-cc.NewSubConnCh:
+	}
+	scAddr = sc.Addresses[0].Addr
+	if _, ok := remainingAddrs[scAddr]; !ok {
+		t.Fatalf("New SubConn created with previously used address: %q", scAddr)
+	}
+	delete(remainingAddrs, scAddr)
+	select {
+	case <-sc.ConnectCh:
+	case <-time.After(defaultTestTimeout):
+		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
+	}
+	if scAddr == ring.items[0].firstAddr {
+		subConns[0] = sc
+	} else if scAddr == ring.items[2].firstAddr {
+		subConns[2] = sc
+	}
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
+	// All endpoints are in TransientFailure. Make the first endpoint in the
+	// ring report Ready. All picks should go to this endpoint which is two
+	// indexes away from the endpoint with the chosen hash.
+	subConns[0].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	subConns[0].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[0].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatalf("Context timed out while waiting for channel to report Ready.")
+	}
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
-		if gotSCSt.SubConn != sc0 {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
+		if gotSCSt.SubConn != subConns[0] {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[0])
 		}
 	}
 
-	// Turn down the subConn in use.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
-	// The channel should transition to IDLE.
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Idle); err != nil {
-		t.Fatal(err)
-	}
+	// Make the last endpoint in the ring report Ready. All picks should go to
+	// this endpoint since it is one index away from the chosen hash.
+	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p2 := <-cc.NewPickerCh
-	// The first pick should be queued, and should trigger Connect() on the only
-	// SubConn.
-	if _, err := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
-		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-	select {
-	case <-sc0.ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
-	}
-	// Fail the first SubConn.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	// Each child balancer state update should trigger a picker update.
-	<-cc.NewPickerCh
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	// Reporting TF will cause the balancer to try connecting to the first
-	// address in the endpoint list.
-	var sc1 *testutils.TestSubConn
-	select {
-	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for SubConn creation.")
-	case sc1 = <-cc.NewSubConnCh:
-	}
-	if got, want := sc1.Addresses[0].Addr, ring0.items[0].firstAddr; got != want {
-		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
-	}
-	select {
-	case <-sc1.ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		if gotSCSt.SubConn != subConns[2] {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[2])
+		}
 	}
 
-	p2 = <-cc.NewPickerCh
-	// Pick with the same hash should be queued, because the SubConn after the
-	// first picked is Idle.
-	if _, err := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
-		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
-
-	// The third SubConn in the ring should connect.
-	var sc2 *testutils.TestSubConn
-	select {
-	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for SubConn creation.")
-	case sc2 = <-cc.NewSubConnCh:
-	}
-	if got, want := sc2.Addresses[0].Addr, ring0.items[2].firstAddr; got != want {
-		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
-	}
-	select {
-	case <-sc2.ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
-	}
-
-	// Send state updates to Ready.
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
-		t.Fatal(err)
-	}
-	// New picks should all return this SubConn.
+	// Make the second endpoint in the ring report Ready. All picks should go to
+	// this endpoint as it is the one with the chosen hash.
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p3 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
-		if gotSCSt.SubConn != sc2 {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
-		}
-	}
-
-	// Now, after backoff, the first picked SubConn will turn Idle.
-	// The leaf pickfirst will be in sticky TF, so it will report TF till the
-	// SubConn becomes ready, no picker updates will be sent by ringhash.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
-	// The picks above should have queued Connect() for the first picked
-	// SubConn, so this Idle state change will trigger a Connect().
-	select {
-	case <-sc0.ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
-	}
-
-	// After the first picked SubConn turn Ready, new picks should return it
-	// again (even though the second picked SubConn is also Ready).
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	p4 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p4.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
-		if gotSCSt.SubConn != sc0 {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
+		if gotSCSt.SubConn != subConns[1] {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[1])
 		}
 	}
 }

@@ -86,7 +86,6 @@ type ringhashBalancer struct {
 	inhibitChildUpdates  bool
 	shouldRegenerateRing bool
 	endpointStates       *resolver.EndpointMap // Map from endpoint -> *endpointState
-	orderedEndpoints     []resolver.Endpoint
 
 	// ring is always in sync with endpoints. When endpoints change, a new ring
 	// is generated. Note that address weights updates also regenerates the
@@ -162,14 +161,6 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 
 	b.mu.Lock()
 	b.inhibitChildUpdates = true
-	// Save the endpoint list. It's used to try IDLE endpoints when previous
-	// endpoints have reported TRANSIENT_FAILURE.
-	b.orderedEndpoints = make([]resolver.Endpoint, 0, len(ccs.ResolverState.Endpoints))
-	for _, ep := range ccs.ResolverState.Endpoints {
-		// Since Addresses is a slice field, it needs to be copied explicitly.
-		ep.Addresses = append([]resolver.Address{}, ep.Addresses...)
-		b.orderedEndpoints = append(b.orderedEndpoints, ep)
-	}
 	b.mu.Unlock()
 
 	defer func() {
@@ -237,12 +228,7 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		// TF. Since there must be at least one endpoint attempting to connect,
 		// we need to trigger one.
 		var idleBalancer balancer.ExitIdler
-		for _, e := range b.orderedEndpoints {
-			val, ok := b.endpointStates.Get(e)
-			if !ok {
-				b.logger.Errorf("Missing endpoint information in picker update from child balancer: %v", e)
-				continue
-			}
+		for _, val := range b.endpointStates.Values() {
 			es := val.(*endpointState)
 			connState := es.state.ConnectivityState
 			if connState == connectivity.Connecting {
