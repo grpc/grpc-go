@@ -27,11 +27,6 @@ import (
 	"net/http"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/examples/features/proto/echo"
-	"google.golang.org/grpc/stats/opentelemetry"
-
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
@@ -42,6 +37,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/stats/opentelemetry"
 )
 
 var (
@@ -50,14 +49,14 @@ var (
 )
 
 // initTracer initializes OpenTelemetry tracing
-func initTracer() (*trace.TracerProvider, error) {
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
 	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdouttrace exporter: %w", err)
 	}
 
 	res, err := resource.New(context.Background(),
-		resource.WithAttributes(attribute.String("service.name", "grpc-client")),
+		resource.WithAttributes(attribute.String("service.name", serviceName)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
@@ -89,11 +88,11 @@ func main() {
 
 	ctx := context.Background()
 	// Initialize tracing
-	tracerProvider, err := initTracer()
+	tp, err := initTracer("grpc-client")
 	if err != nil {
 		log.Fatalf("Error setting up tracing: %v", err)
 	}
-	defer func() { _ = tracerProvider.Shutdown(context.Background()) }()
+	defer func() { _ = tp.Shutdown(ctx) }()
 
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 
@@ -107,22 +106,19 @@ func main() {
 	}
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
-	tracer := otel.Tracer("grpc-client")
 
 	// Make an RPC every second. This should trigger telemetry to be emitted from
 	// the client and the server.
 	for {
 		reqCtx, cancel := context.WithTimeout(ctx, time.Second)
-		_, span := tracer.Start(reqCtx, "UnaryEchoClientCall")
 
 		r, err := c.UnaryEcho(reqCtx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
-		span.End()
 		cancel()
 
 		if err != nil {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
-		fmt.Println(r)
+		fmt.Println(r.Message)
 		time.Sleep(time.Second)
 	}
 }
