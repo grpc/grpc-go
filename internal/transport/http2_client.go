@@ -748,6 +748,25 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 		callHdr = &newCallHdr
 	}
 
+	// Authority specified in the `CallAuthority` CallOption takes the highest
+	// precedence to determine the :authority header. Any value in Host field of
+	// CallHdr is overwritten. But before overriding, we validate the authority
+	// string against the peer certificates and fail the RPC with `UNAVAILABLE`
+	// status code if eirther of the condition fails.
+	if callHdr.Authority != "" {
+		auth, ok := t.authInfo.(credentials.AuthorityValidator)
+		if !ok {
+			return nil, &NewStreamError{Err: status.Error(codes.Unavailable, fmt.Sprintf("credentials type %s does not implement the AuthorityValidator interface", t.authInfo.AuthType())), AllowTransparentRetry: false}
+		}
+		err := auth.ValidateAuthority(callHdr.Authority)
+		if err != nil {
+			return nil, &NewStreamError{Err: status.Error(codes.Unavailable, err.Error()), AllowTransparentRetry: false}
+		}
+		newCallHdr := *callHdr
+		newCallHdr.Host = callHdr.Authority
+		callHdr = &newCallHdr
+	}
+
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		return nil, &NewStreamError{Err: err, AllowTransparentRetry: false}
