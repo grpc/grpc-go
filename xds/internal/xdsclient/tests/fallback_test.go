@@ -155,18 +155,18 @@ func (s) TestFallback_OnStartup(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap configuration.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
-	})
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close()
 
 	// Get the xDS resolver to use the above xDS client.
-	resolverBuilder := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))
-	resolver, err := resolverBuilder(xdsC)
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	resolver, err := resolverBuilder(pool)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -350,18 +350,18 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap configuration.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
-	})
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close()
 
 	// Get the xDS resolver to use the above xDS client.
-	resolverBuilder := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))
-	resolver, err := resolverBuilder(xdsC)
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	resolver, err := resolverBuilder(pool)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -535,18 +535,18 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap configuration.
-	xdsC, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
-	})
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close()
 
 	// Get the xDS resolver to use the above xDS client.
-	resolverBuilder := internal.NewXDSResolverWithClientForTesting.(func(xdsclient.XDSClient) (resolver.Builder, error))
-	resolver, err := resolverBuilder(xdsC)
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	resolver, err := resolverBuilder(pool)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}

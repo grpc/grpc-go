@@ -86,7 +86,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap contents: %v", err)
 	}
-	bootstrapCfg, err := bootstrap.NewConfigForTesting(contents)
+	bootstrapCfg, err := bootstrap.NewConfigFromContents(contents)
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}

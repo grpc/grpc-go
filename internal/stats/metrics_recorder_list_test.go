@@ -110,11 +110,11 @@ func (recordingLoadBalancerBuilder) Name() string {
 }
 
 func (recordingLoadBalancerBuilder) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
-	intCountHandle.Record(bOpts.MetricsRecorder, 1, "int counter label val", "int counter optional label val")
-	floatCountHandle.Record(bOpts.MetricsRecorder, 2, "float counter label val", "float counter optional label val")
-	intHistoHandle.Record(bOpts.MetricsRecorder, 3, "int histo label val", "int histo optional label val")
-	floatHistoHandle.Record(bOpts.MetricsRecorder, 4, "float histo label val", "float histo optional label val")
-	intGaugeHandle.Record(bOpts.MetricsRecorder, 5, "int gauge label val", "int gauge optional label val")
+	intCountHandle.Record(cc.MetricsRecorder(), 1, "int counter label val", "int counter optional label val")
+	floatCountHandle.Record(cc.MetricsRecorder(), 2, "float counter label val", "float counter optional label val")
+	intHistoHandle.Record(cc.MetricsRecorder(), 3, "int histo label val", "int histo optional label val")
+	floatHistoHandle.Record(cc.MetricsRecorder(), 4, "float histo label val", "float histo optional label val")
+	intGaugeHandle.Record(cc.MetricsRecorder(), 5, "int gauge label val", "int gauge optional label val")
 
 	return &recordingLoadBalancer{
 		Balancer: balancer.Get(pickfirst.Name).Build(cc, bOpts),

@@ -42,7 +42,7 @@ func (s) TestGet(t *testing.T) {
 		name            string
 		addr            resolver.Address
 		wantConnectAddr string
-		wantUser        url.Userinfo
+		wantUser        *url.Userinfo
 		wantAttrPresent bool
 	}{
 		{
@@ -61,10 +61,10 @@ func (s) TestGet(t *testing.T) {
 			addr: resolver.Address{
 				Addr: "test-address",
 				Attributes: attributes.New(proxyOptionsKey, Options{
-					User: *user,
+					User: user,
 				}),
 			},
-			wantUser:        *user,
+			wantUser:        user,
 			wantAttrPresent: true,
 		},
 		{
@@ -97,7 +97,7 @@ func (s) TestGet(t *testing.T) {
 func (s) TestSet(t *testing.T) {
 	addr := resolver.Address{Addr: "test-address"}
 	pOpts := Options{
-		User:        *url.UserPassword("username", "password"),
+		User:        url.UserPassword("username", "password"),
 		ConnectAddr: "proxy-address",
 	}
 
@@ -108,7 +108,7 @@ func (s) TestSet(t *testing.T) {
 		t.Errorf("Get(%v) = %v, want %v ", populatedAddr, attrPresent, true)
 	}
 	if got, want := gotOption.ConnectAddr, pOpts.ConnectAddr; got != want {
-		t.Errorf("Unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
+		t.Errorf("unexpected ConnectAddr proxy atrribute = %v, want %v", got, want)
 	}
 	if got, want := gotOption.User, pOpts.User; got != want {
 		t.Errorf("unexpected User proxy attribute = %v, want %v", got, want)

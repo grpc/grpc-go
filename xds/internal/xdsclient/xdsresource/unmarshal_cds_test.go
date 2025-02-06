@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -269,10 +270,11 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 
 func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *testing.T) {
 	tests := []struct {
-		name    string
-		common  *v3tlspb.CommonTlsContext
-		server  bool
-		wantErr string
+		name                      string
+		common                    *v3tlspb.CommonTlsContext
+		server                    bool
+		wantErr                   string
+		enableSystemRootCertsFlag bool
 	}{
 		{
 			name: "unsupported-tls_certificates-field-for-identity-certs",
@@ -422,10 +424,68 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 			server:  true,
 			wantErr: "match_subject_alt_names field in validation context is not supported on the server",
 		},
+		{
+			name:                      "client-missing-root-cert-provider-and-use-system-certs-fields",
+			enableSystemRootCertsFlag: true,
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{},
+				},
+			},
+			wantErr: "expected fields ca_certificate_provider_instance and system_root_certs are missing",
+		},
+		{
+			name:                      "server-missing-root-cert-provider-and-use-system-certs-fields",
+			enableSystemRootCertsFlag: true,
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{},
+				},
+			},
+			server:  true,
+			wantErr: "expected field ca_certificate_provider_instance is missing",
+		},
+		{
+			name: "client-missing-root-cert-provider-and-use-system-certs-fields-env-var-unset",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{},
+				},
+			},
+			wantErr: "expected field ca_certificate_provider_instance is missing",
+		},
+		{
+			name: "server-missing-root-cert-provider-and-use-system-certs-fields-env-var-unset",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{},
+				},
+			},
+			server:  true,
+			wantErr: "expected field ca_certificate_provider_instance is missing",
+		},
+		{
+			name:                      "server-missing-root-cert-provider-and-set-use-system-certs-fields",
+			enableSystemRootCertsFlag: true,
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+					},
+				},
+			},
+			server:  true,
+			wantErr: "expected field ca_certificate_provider_instance is missing and unexpected field system_root_certs is set",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			origFlag := envconfig.XDSSystemRootCertsEnabled
+			defer func() {
+				envconfig.XDSSystemRootCertsEnabled = origFlag
+			}()
+			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
 			_, err := securityConfigFromCommonTLSContextUsingNewFields(test.common, test.server)
 			if err == nil {
 				t.Fatal("securityConfigFromCommonTLSContextUsingNewFields() succeeded when expected to fail")
@@ -455,10 +515,11 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 	var sanRE = regexp.MustCompile(sanRegexGood)
 
 	tests := []struct {
-		name       string
-		cluster    *v3clusterpb.Cluster
-		wantUpdate ClusterUpdate
-		wantErr    bool
+		name                      string
+		cluster                   *v3clusterpb.Cluster
+		wantUpdate                ClusterUpdate
+		wantErr                   bool
+		enableSystemRootCertsFlag bool
 	}{
 		{
 			name: "transport-socket-matches",
@@ -966,7 +1027,8 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "happy-case-with-validation-context-provider-instance-using-new-fields",
+			name:                      "happy-case-with-validation-context-provider-instance-using-new-fields",
+			enableSystemRootCertsFlag: true,
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -994,6 +1056,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 											InstanceName:    rootPluginInstance,
 											CertificateName: rootCertName,
 										},
+										// SystemRootCerts will be ignored due
+										// to the presence of
+										// CaCertificateProviderInstance.
+										SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
 									},
 								},
 							},
@@ -1012,6 +1078,86 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 				TelemetryLabels: internal.UnknownCSMLabels,
 			},
+		},
+		{
+			name:                      "happy-case-with-validation-context-provider-instance-using-new-fields-and-system-root-certs",
+			enableSystemRootCertsFlag: true,
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					UseSystemRootCerts:   true,
+					IdentityInstanceName: identityPluginInstance,
+					IdentityCertName:     identityCertName,
+				},
+				TelemetryLabels: internal.UnknownCSMLabels,
+			},
+		},
+		{
+			name: "failure-case-with-validation-context-provider-instance-using-new-fields-and-system-root-certs-env-flag-disabled",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantErr: true,
 		},
 		{
 			name: "happy-case-with-combined-validation-context-using-deprecated-fields",
@@ -1147,10 +1293,79 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
+		{
+			name:                      "happy-case-with-combined-validation-context-using-new-fields-and-system-root-certs",
+			enableSystemRootCertsFlag: true,
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{
+													MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: sanExact},
+													IgnoreCase:   true,
+												},
+												{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: sanPrefix}},
+												{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: sanSuffix}},
+												{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexGood}}},
+												{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: sanContains}},
+											},
+											SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+										},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				SecurityCfg: &SecurityConfig{
+					UseSystemRootCerts:   true,
+					IdentityInstanceName: identityPluginInstance,
+					IdentityCertName:     identityCertName,
+					SubjectAltNameMatchers: []matcher.StringMatcher{
+						matcher.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
+						matcher.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
+					},
+				},
+				TelemetryLabels: internal.UnknownCSMLabels,
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			origFlag := envconfig.XDSSystemRootCertsEnabled
+			defer func() {
+				envconfig.XDSSystemRootCertsEnabled = origFlag
+			}()
+			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
