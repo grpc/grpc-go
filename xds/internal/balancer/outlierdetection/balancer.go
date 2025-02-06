@@ -61,7 +61,7 @@ type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &outlierDetectionBalancer{
-		cc:             cc,
+		ClientConn:     cc,
 		closed:         grpcsync.NewEvent(),
 		done:           grpcsync.NewEvent(),
 		addrs:          make(map[string]*endpointInfo),
@@ -158,6 +158,7 @@ type scHealthUpdate struct {
 }
 
 type outlierDetectionBalancer struct {
+	balancer.ClientConn
 	// These fields are safe to be accessed without holding any mutex because
 	// they are synchronized in run(), which makes these field accesses happen
 	// serially.
@@ -171,7 +172,6 @@ type outlierDetectionBalancer struct {
 
 	closed         *grpcsync.Event
 	done           *grpcsync.Event
-	cc             balancer.ClientConn
 	logger         *grpclog.PrefixLogger
 	channelzParent channelz.Identifier
 
@@ -480,7 +480,7 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(scw, state) }
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	sc, err := b.cc.NewSubConn(addrs, opts)
+	sc, err := b.ClientConn.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -544,7 +544,7 @@ func (b *outlierDetectionBalancer) UpdateAddresses(sc balancer.SubConn, addrs []
 		return
 	}
 
-	b.cc.UpdateAddresses(scw.SubConn, addrs)
+	b.ClientConn.UpdateAddresses(scw.SubConn, addrs)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -586,14 +586,6 @@ func (b *outlierDetectionBalancer) UpdateAddresses(sc balancer.SubConn, addrs []
 	scw.addresses = addrs
 }
 
-func (b *outlierDetectionBalancer) ResolveNow(opts resolver.ResolveNowOptions) {
-	b.cc.ResolveNow(opts)
-}
-
-func (b *outlierDetectionBalancer) Target() string {
-	return b.cc.Target()
-}
-
 // handleSubConnUpdate stores the recent state and forward the update
 // if the SubConn is not ejected.
 func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
@@ -628,7 +620,7 @@ func (b *outlierDetectionBalancer) handleChildStateUpdate(u balancer.State) {
 	noopCfg := b.noopConfig()
 	b.mu.Unlock()
 	b.recentPickerNoop = noopCfg
-	b.cc.UpdateState(balancer.State{
+	b.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: b.childState.ConnectivityState,
 		Picker: &wrappedPicker{
 			childPicker: b.childState.Picker,
@@ -652,7 +644,7 @@ func (b *outlierDetectionBalancer) handleLBConfigUpdate(u lbCfgUpdate) {
 	// the bit.
 	if b.childState.Picker != nil && noopCfg != b.recentPickerNoop || b.updateUnconditionally {
 		b.recentPickerNoop = noopCfg
-		b.cc.UpdateState(balancer.State{
+		b.ClientConn.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
 			Picker: &wrappedPicker{
 				childPicker: b.childState.Picker,

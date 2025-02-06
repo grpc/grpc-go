@@ -277,3 +277,9 @@ const RLSLoadBalancingPolicyName = "rls_experimental"
 type EnforceSubConnEmbedding interface {
 	enforceSubConnEmbedding()
 }
+
+// EnforceClientConnEmbedding is used to enforce proper ClientConn implementation
+// embedding.
+type EnforceClientConnEmbedding interface {
+	enforceClientConnEmbedding()
+}
