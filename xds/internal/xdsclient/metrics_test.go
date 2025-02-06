@@ -48,9 +48,9 @@ func (noopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc)
 	onDone()
 }
 
-// TestResourceUpdateMetrics configures an xDS Client and provides a valid and
-// invalid LDS update, and verifies the valid and invalid metrics emitted from
-// them.
+// TestResourceUpdateMetrics configures an xDS client, and a management server
+// to send valid and invalid LDS updates, and verifies that the expected metrics
+// for both good and bad updates are emitted.
 func (s) TestResourceUpdateMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -87,7 +87,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	// Create an xDS client for use by the cluster_resolver LB policy.
+
 	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)

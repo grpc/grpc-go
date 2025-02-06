@@ -33,21 +33,7 @@ import (
 var (
 	// DefaultPool is the default pool for xDS clients. It is created at init
 	// time by reading bootstrap configuration from env vars.
-	DefaultPool                         *Pool
-	xdsClientResourceUpdatesValidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:        "grpc.xds_client.resource_updates_valid",
-		Description: "A counter of resources received that were considered valid. The counter will be incremented even for resources that have not changed.",
-		Unit:        "resource",
-		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
-		Default:     false,
-	})
-	xdsClientResourceUpdatesInvalidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
-		Name:        "grpc.xds_client.resource_updates_invalid",
-		Description: "A counter of resources received that were considered invalid.",
-		Unit:        "resource",
-		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
-		Default:     false,
-	})
+	DefaultPool *Pool
 )
 
 // Pool represents a pool of xDS clients that share the same bootstrap

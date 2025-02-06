@@ -61,6 +61,21 @@ var (
 	xdsClientImplCloseHook  = func(string) {}
 
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
+
+	xdsClientResourceUpdatesValidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.xds_client.resource_updates_valid",
+		Description: "A counter of resources received that were considered valid. The counter will be incremented even for resources that have not changed.",
+		Unit:        "resource",
+		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		Default:     false,
+	})
+	xdsClientResourceUpdatesInvalidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
+		Name:        "grpc.xds_client.resource_updates_invalid",
+		Description: "A counter of resources received that were considered invalid.",
+		Unit:        "resource",
+		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		Default:     false,
+	})
 )
 
 // clientImpl is the real implementation of the xDS client. The exported Client
