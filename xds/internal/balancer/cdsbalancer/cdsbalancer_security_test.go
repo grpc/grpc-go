@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -138,9 +139,13 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, serverCreds credentials.TransportCredentials) (*grpc.ClientConn, string) {
 	t.Helper()
 
-	xdsClient, xdsClose, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -747,4 +752,69 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
+}
+
+// Tests the case where the cds LB policy receives security configuration as
+// part of the Cluster resource that specifies the use system root certs.
+// Verifies that the connection between the client and the server is secure.
+func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
+	origFlag := envconfig.XDSSystemRootCertsEnabled
+	origSRCF := x509SystemCertPoolFunc
+	defer func() {
+		envconfig.XDSSystemRootCertsEnabled = origFlag
+		x509SystemCertPoolFunc = origSRCF
+	}()
+	envconfig.XDSSystemRootCertsEnabled = true
+
+	systemRootCertsFuncCalled := false
+	x509SystemCertPoolFunc = func() (*x509.CertPool, error) {
+		certData, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		}
+		certPool := x509.NewCertPool()
+
+		if ok := certPool.AppendCertsFromPEM(certData); !ok {
+			return nil, fmt.Errorf("failed to append certificate to cert pool")
+		}
+		systemRootCertsFuncCalled = true
+		return certPool, nil
+	}
+	// Spin up an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server
+	// and one that includes certificate providers configuration.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create a grpc channel with xDS creds talking to a test server with TLS
+	// credentials.
+	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
+
+	// Configure cluster and endpoints resources in the management server. The
+	// cluster resource is configured to return security configuration.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelTLSWithSystemRootCerts)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made over a secure connection.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
+
+	if systemRootCertsFuncCalled != true {
+		t.Errorf("System root certs were not used during the test.")
+	}
 }

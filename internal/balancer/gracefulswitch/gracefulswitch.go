@@ -415,7 +415,3 @@ func (bw *balancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver
 	bw.gsb.mu.Unlock()
 	bw.gsb.cc.UpdateAddresses(sc, addrs)
 }
-
-func (bw *balancerWrapper) Target() string {
-	return bw.gsb.cc.Target()
-}

@@ -60,6 +60,7 @@ var (
 // It uses the gracefulswitch.Balancer internally to ensure that balancer
 // switches happen in a graceful manner.
 type ccBalancerWrapper struct {
+	internal.EnforceClientConnEmbedding
 	// The following fields are initialized when the wrapper is created and are
 	// read-only afterwards, and therefore can be accessed without a mutex.
 	cc               *ClientConn
@@ -419,7 +420,7 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 		}
 		acbw.producersMu.Unlock()
 	}
-	return pData.producer, grpcsync.OnceFunc(unref)
+	return pData.producer, sync.OnceFunc(unref)
 }
 
 func (acbw *acBalancerWrapper) closeProducers() {

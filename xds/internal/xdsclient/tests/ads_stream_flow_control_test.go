@@ -28,8 +28,8 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	xdsclientinternal "google.golang.org/grpc/xds/internal/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -150,9 +150,13 @@ func overrideADSStreamCreation(t *testing.T) chan *wrappedADSStream {
 func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
 	t.Helper()
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -186,7 +190,6 @@ func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	client := createXDSClient(t, bc)
@@ -335,7 +338,6 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	client := createXDSClient(t, bc)
@@ -452,7 +454,6 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	client := createXDSClient(t, bc)
@@ -533,7 +534,6 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
 	client := createXDSClient(t, bc)

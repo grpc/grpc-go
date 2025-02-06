@@ -129,6 +129,13 @@ type State struct {
 // brand new implementation of this interface. For the situations like
 // testing, the new implementation should embed this interface. This allows
 // gRPC to add new methods to this interface.
+//
+// NOTICE: This interface is intended to be implemented by gRPC, or intercepted
+// by custom load balancing polices.  Users should not need their own complete
+// implementation of this interface -- they should always delegate to a
+// ClientConn passed to Builder.Build() by embedding it in their
+// implementations. An embedded ClientConn must never be nil, or runtime panics
+// will occur.
 type ClientConn interface {
 	// NewSubConn is called by balancer to create a new SubConn.
 	// It doesn't block and wait for the connections to be established.
@@ -173,6 +180,11 @@ type ClientConn interface {
 	// metrics registry and record on them can ignore this method. The returned
 	// MetricsRecorder is guaranteed to never be nil.
 	MetricsRecorder() estats.MetricsRecorder
+
+	// EnforceClientConnEmbedding is included to force implementers to embed
+	// another implementation of this interface, allowing gRPC to add methods
+	// without breaking users.
+	internal.EnforceClientConnEmbedding
 }
 
 // BuildOptions contains additional information for Build.
