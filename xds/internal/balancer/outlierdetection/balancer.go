@@ -579,14 +579,6 @@ func (b *outlierDetectionBalancer) UpdateAddresses(sc balancer.SubConn, addrs []
 	scw.addresses = addrs
 }
 
-func (b *outlierDetectionBalancer) ResolveNow(opts resolver.ResolveNowOptions) {
-	b.ClientConn.ResolveNow(opts)
-}
-
-func (b *outlierDetectionBalancer) Target() string {
-	return b.ClientConn.Target()
-}
-
 // handleSubConnUpdate stores the recent state and forward the update
 // if the SubConn is not ejected.
 func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
