@@ -1888,7 +1888,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 
 	const clusterName = "cluster"
 
-	endpoints := endpointResource(t, clusterName, append(backends))
+	endpoints := endpointResource(t, clusterName, backends)
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: clusterName,
@@ -2241,4 +2241,116 @@ func (s) TestRingHash_FallBackWithinEndpoint(t *testing.T) {
 	if newAddr != otherEndpointAddr {
 		t.Errorf("Requests went to unexpected address, got=%q, want=%q", newAddr, otherEndpointAddr)
 	}
+}
+
+// Tests that the ringhash balancer automatically connects to an IDLE endpoint
+// when the first endpoint fails. The test then verifies that the balancer
+// doesn't automatically re-connect to the endpoint when the READY endpoint
+// enters IDLE.
+func (s) TestRingHash_NoReconnectWhenEndpointEntersIdle(t *testing.T) {
+	unhealthyAddrs := makeUnreachableBackends(t, 1)
+	healthyBackends := startTestServiceBackends(t, 1)
+	healthyAddrs := backendAddrs(healthyBackends)
+
+	const clusterName = "cluster"
+
+	endpoints := endpointResource(t, clusterName, append(healthyAddrs, unhealthyAddrs...))
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	dialer := testutils.NewBlockingDialer()
+	dialOpts := []grpc.DialOption{
+		grpc.WithResolvers(xdsResolver),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithConnectParams(fastConnectParams),
+	}
+	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
+	}
+	defer conn.Close()
+
+	// Create holds for each backend address to delay a successful connection
+	// until the end of the test.
+	holdUnhealthy := dialer.Hold(unhealthyAddrs[0])
+	holdHealthy := dialer.Hold(healthyAddrs[0])
+
+	client := testgrpc.NewTestServiceClient(conn)
+
+	rpcCtx, rpcCancel := context.WithCancel(ctx)
+	errCh := make(chan error, 1)
+	go func() {
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", unhealthyAddrs[0]+"_0"))
+		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
+		if status.Code(err) == codes.Canceled {
+			errCh <- nil
+			return
+		}
+		errCh <- err
+	}()
+
+	// Wait for the RPC to trigger a connection attempt to the first address,
+	// then cancel the RPC.  No other connection attempts should be started yet.
+	if !holdUnhealthy.Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend %q.", unhealthyAddrs[0])
+	}
+
+	if holdHealthy.IsStarted() {
+		t.Fatalf("Backend %q dialed unexpectedly before backend %q failed.", healthyAddrs[0], unhealthyAddrs[0])
+	}
+	rpcCancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
+	}
+
+	// Once the first endpoint fails, the next endpoint should be connected
+	// automatically.
+	holdUnhealthy.Resume()
+	if !holdHealthy.Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend %q.", healthyAddrs[0])
+	}
+
+	holdHealthy.Resume()
+	// Wait for channel to become connected without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+
+	// Shutting down the healthy backend should cause the channel to enter
+	// CONNECTING. Since the endpoint has not entered TF, ringhash should
+	// not automatically try to re-connect. It should wait for an RPC.
+	holdHealthy = dialer.Hold(healthyAddrs[0])
+	healthyBackends[0].Stop()
+	testutils.AwaitState(ctx, t, conn, connectivity.Connecting)
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	testutils.AwaitNoStateChange(shortCtx, t, conn, connectivity.Connecting)
+	if holdHealthy.IsStarted() {
+		t.Fatalf("Backend %q dialed unexpectedly without an RPC being made.", healthyAddrs[0])
+	}
+
+	// Making an RPC should cause a re-connection attempt to the healthy
+	// backend.
+	go func() {
+		rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", unhealthyAddrs[0]+"_0"))
+		client.EmptyCall(rpcCtx, &testpb.Empty{})
+	}()
+	if !holdHealthy.Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend %q.", healthyAddrs[0])
+	}
+	// Once the second endpoint fails, the channel should enter
+	// TRANSIENT_FAILURE.
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 }

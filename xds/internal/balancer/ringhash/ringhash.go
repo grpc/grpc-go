@@ -107,6 +107,7 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 	childStates := endpointsharding.ChildStatesFromPicker(state.Picker)
 	// endpointsSet is the set converted from endpoints, used for quick lookup.
 	endpointsSet := resolver.NewEndpointMap()
+	endpointEnteredTF := false
 
 	for _, childState := range childStates {
 		endpoint := childState.Endpoint
@@ -132,6 +133,11 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			if oldWeight := es.weight; oldWeight != newWeight {
 				b.shouldRegenerateRing = true
 			}
+			oldState := es.state.ConnectivityState
+			newState := childState.State.ConnectivityState
+			if oldState != newState && newState == connectivity.TransientFailure {
+				endpointEnteredTF = true
+			}
 		}
 		es.weight = newWeight
 		es.state = childState.State
@@ -146,7 +152,7 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 		b.shouldRegenerateRing = true
 	}
 
-	b.updatePickerLocked()
+	b.updatePickerLocked(endpointEnteredTF)
 }
 
 func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -166,7 +172,7 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 	defer func() {
 		b.mu.Lock()
 		b.inhibitChildUpdates = false
-		b.updatePickerLocked()
+		b.updatePickerLocked(false)
 		b.mu.Unlock()
 	}()
 
@@ -207,32 +213,10 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
-func (b *ringhashBalancer) updatePickerLocked() {
-	if b.inhibitChildUpdates {
-		return
-	}
+func (b *ringhashBalancer) updatePickerLocked(endpointEnteredTF bool) {
 	state := b.aggregatedStateLocked()
-
-	// Update the channel.
-	if b.endpointStates.Len() > 0 && b.shouldRegenerateRing {
-		// with a non-empty list of endpoints.
-		b.ring = newRing(b.endpointStates, b.config.MinRingSize, b.config.MaxRingSize, b.logger)
-	}
-	b.shouldRegenerateRing = false
-	var newPicker balancer.Picker
-	if b.endpointStates.Len() == 0 {
-		newPicker = base.NewErrPicker(errors.New("produced zero addresses"))
-	} else {
-		newPicker = b.newPickerLocked()
-	}
-	b.logger.Infof("Pushing new state %v and picker %p", state, newPicker)
-	b.ClientConn.UpdateState(balancer.State{
-		ConnectivityState: state,
-		Picker:            newPicker,
-	})
-
 	// Start connecting to new endpoints if necessary.
-	if state == connectivity.Connecting || state == connectivity.TransientFailure {
+	if endpointEnteredTF && (state == connectivity.Connecting || state == connectivity.TransientFailure) {
 		// When overall state is TransientFailure, we need to make sure at least
 		// one endpoint is attempting to connect, otherwise this balancer may
 		// never get picks if the parent is priority.
@@ -261,6 +245,28 @@ func (b *ringhashBalancer) updatePickerLocked() {
 			idleBalancer.ExitIdle()
 		}
 	}
+
+	if b.inhibitChildUpdates {
+		return
+	}
+
+	// Update the channel.
+	if b.endpointStates.Len() > 0 && b.shouldRegenerateRing {
+		// with a non-empty list of endpoints.
+		b.ring = newRing(b.endpointStates, b.config.MinRingSize, b.config.MaxRingSize, b.logger)
+	}
+	b.shouldRegenerateRing = false
+	var newPicker balancer.Picker
+	if b.endpointStates.Len() == 0 {
+		newPicker = base.NewErrPicker(errors.New("produced zero addresses"))
+	} else {
+		newPicker = b.newPickerLocked()
+	}
+	b.logger.Infof("Pushing new state %v and picker %p", state, newPicker)
+	b.ClientConn.UpdateState(balancer.State{
+		ConnectivityState: state,
+		Picker:            newPicker,
+	})
 }
 
 func (b *ringhashBalancer) Close() {
