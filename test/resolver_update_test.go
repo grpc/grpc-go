@@ -89,9 +89,9 @@ func (s) TestResolverUpdateDuringBuild_ServiceConfigInvalidTypeError(t *testing.
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Config: fakeConfig{}}})
 
-	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
+		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 
@@ -117,7 +117,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
-	cc.Connect()
+
 	scpr := r.CC.ParseServiceConfig("bad json service config")
 	r.UpdateState(resolver.State{ServiceConfig: scpr})
 
@@ -195,12 +195,12 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := grpc.NewClient(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
+		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
-	cc.Connect()
+
 	// Push a resolver update and verify that our balancer receives the update.
 	addrs := []resolver.Address{{Addr: backend.Address}}
 	const lbCfg = "wrapping balancer LB policy config"
