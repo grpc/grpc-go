@@ -21,6 +21,7 @@ package endpointsharding_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -32,12 +33,14 @@ import (
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -159,6 +162,13 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	if err = roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend1.Address}, {Addr: backend2.Address}}); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
 	}
+
+	// Execute the resolver error path. pickfirst will ignore the resolver error
+	// as it has a good resolver state.
+	mr.ReportError(errors.New("test error"))
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Ready)
 }
 
 // Tests that endpointsharding doesn't automatically re-connect IDLE children.
