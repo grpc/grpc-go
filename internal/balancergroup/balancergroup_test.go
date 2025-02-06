@@ -81,10 +81,8 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
-		CC: cc,
-		BuildOpts: balancer.BuildOptions{
-			MetricsRecorder: &stats.NoopMetricsRecorder{},
-		},
+		CC:                      cc,
+		BuildOpts:               balancer.BuildOptions{},
 		StateAggregator:         gator,
 		Logger:                  nil,
 		SubBalancerCloseTimeout: time.Duration(0),
@@ -108,7 +106,6 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 		m1[addrs[0].Addr] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	// Test roundrobin on the last picker.
@@ -151,7 +148,6 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 		m2[addrs[0].Addr] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	// Test roundrobin on the last picker.
@@ -188,10 +184,8 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
-		CC: cc,
-		BuildOpts: balancer.BuildOptions{
-			MetricsRecorder: &stats.NoopMetricsRecorder{},
-		},
+		CC:                      cc,
+		BuildOpts:               balancer.BuildOptions{},
 		StateAggregator:         gator,
 		Logger:                  nil,
 		SubBalancerCloseTimeout: time.Duration(0),
@@ -218,10 +212,8 @@ func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duratio
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
-		CC: cc,
-		BuildOpts: balancer.BuildOptions{
-			MetricsRecorder: &stats.NoopMetricsRecorder{},
-		},
+		CC:                      cc,
+		BuildOpts:               balancer.BuildOptions{},
 		StateAggregator:         gator,
 		Logger:                  nil,
 		SubBalancerCloseTimeout: idleCacheTimeout,
@@ -245,7 +237,6 @@ func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duratio
 		m1[addrs[0].Addr] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	// Test roundrobin on the last picker.
@@ -368,16 +359,11 @@ func (s) TestBalancerGroup_locality_caching_not_read_within_timeout(t *testing.T
 	// shut down.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
 	scToShutdown := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2].Addr]: 3,
 		addrToSC[testBackendAddrs[3].Addr]: 3,
 	}
-	for i := 0; i < len(scToShutdown)*3; i++ {
+	for i := 0; i < len(scToShutdown); i++ {
 		select {
 		case sc := <-cc.ShutdownSubConnCh:
 			c := scToShutdown[sc]
@@ -419,16 +405,11 @@ func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testi
 	// The cached sub-balancer should be closed, and the subconns should be
 	// shut down immediately.
 	shutdownTimeout := time.After(time.Millisecond * 500)
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
 	scToShutdown := map[balancer.SubConn]int{
-		addrToSC[testBackendAddrs[2].Addr]: 3,
-		addrToSC[testBackendAddrs[3].Addr]: 3,
+		addrToSC[testBackendAddrs[2].Addr]: 1,
+		addrToSC[testBackendAddrs[3].Addr]: 1,
 	}
-	for i := 0; i < len(scToShutdown)*3; i++ {
+	for i := 0; i < len(scToShutdown); i++ {
 		select {
 		case sc := <-cc.ShutdownSubConnCh:
 			c := scToShutdown[sc]
@@ -460,7 +441,6 @@ func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testi
 			addrToSC[addr[0].Addr] = sc
 			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-			<-sc.HealthUpdateDelivered.Done()
 		case <-newSCTimeout:
 			t.Fatalf("timeout waiting for subConns (from new sub-balancer) to be newed")
 		}
@@ -521,7 +501,6 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		DialCreds:       insecure.NewCredentials(),
 		ChannelzParent:  channelz.RegisterChannel(nil, "test channel"),
 		CustomUserAgent: userAgent,
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
 	}
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
@@ -561,10 +540,8 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 	})
 	cc := testutils.NewBalancerClientConn(t)
 	bg := New(Options{
-		CC: cc,
-		BuildOpts: balancer.BuildOptions{
-			MetricsRecorder: &stats.NoopMetricsRecorder{},
-		},
+		CC:              cc,
+		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
 		Logger:          nil,
 	})
@@ -595,10 +572,8 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
 	bg := New(Options{
-		CC: cc,
-		BuildOpts: balancer.BuildOptions{
-			MetricsRecorder: &stats.NoopMetricsRecorder{},
-		},
+		CC:              cc,
+		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: gator,
 		Logger:          nil,
 	})
@@ -618,7 +593,6 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 		scs[sc] = true
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -698,25 +672,19 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	// SubConns for the balancer being gracefully switched from to get deleted.
 	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
-	scToShutdown := map[balancer.SubConn]int{
-		m1[testBackendAddrs[0].Addr]: 3,
-		m1[testBackendAddrs[1].Addr]: 3,
-	}
-	for i := 0; i < len(scToShutdown)*3; i++ {
+	for i := 0; i < 2; i++ {
 		select {
-		case sc := <-cc.ShutdownSubConnCh:
-			c := scToShutdown[sc]
-			if c == 0 {
-				t.Fatalf("Got Shutdown for %v when there's %d shutdown expected", sc, c)
-			}
-			scToShutdown[sc] = c - 1
 		case <-ctx.Done():
-			t.Fatalf("timeout waiting for subConns to be shut down")
+			t.Fatalf("error waiting for Shutdown()")
+		case sc := <-cc.ShutdownSubConnCh:
+			// The SubConn shut down should have been one of the two created
+			// SubConns, and both should be deleted.
+			if ok := scs[sc]; ok {
+				delete(scs, sc)
+				continue
+			} else {
+				t.Fatalf("Shutdown called for wrong SubConn %v, want in %v", sc, scs)
+			}
 		}
 	}
 }

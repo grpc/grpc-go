@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
@@ -94,9 +93,7 @@ func (s) TestDropByCategory(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	const (
@@ -275,9 +272,7 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	var maxRequest uint32 = 50
@@ -402,9 +397,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 
 	// Create a stub balancer which waits for the cluster_impl policy to be
 	// closed before sending a picker update (upon receipt of a subConn state
@@ -477,9 +470,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
@@ -554,9 +545,7 @@ func (s) TestReResolution(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
@@ -596,7 +585,6 @@ func (s) TestReResolution(t *testing.T) {
 	}
 
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	<-sc1.HealthUpdateDelivered.Done()
 	// Test pick with one backend.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err.Error())
@@ -627,9 +615,7 @@ func (s) TestLoadReporting(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	endpoints := make([]resolver.Endpoint, len(testBackendEndpoints))
@@ -683,7 +669,6 @@ func (s) TestLoadReporting(t *testing.T) {
 	sca := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
 	sca(&scs, endpoints[0].Addresses[0])
 	sc1.UpdateState(scs)
-	<-sc1.HealthUpdateDelivered.Done()
 	// Test pick with one backend.
 	const successCount = 5
 	const errorCount = 5
@@ -766,9 +751,7 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	endpoints := make([]resolver.Endpoint, len(testBackendEndpoints))
@@ -871,9 +854,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	// Keep track of which child policy was updated
@@ -941,9 +922,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	// Create a stub balancer which fails to ParseConfig.
@@ -1003,9 +982,7 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewBalancerClientConn(t)
-	b := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
 	// Create a stub balancer which waits for the cluster_impl policy to be

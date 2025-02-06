@@ -49,9 +49,10 @@ func (bb builder) Name() string {
 }
 
 func (bb builder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	childBuilder := balancer.Get(pickfirstleaf.Name).Build
 	bal := &rrBalancer{
 		cc:       cc,
-		Balancer: endpointsharding.NewBalancer(cc, opts),
+		Balancer: endpointsharding.NewBalancer(cc, opts, childBuilder, endpointsharding.Options{}),
 	}
 	bal.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[%p] ", bal))
 	bal.logger.Infof("Created")
@@ -65,9 +66,9 @@ type rrBalancer struct {
 }
 
 func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	// Enable the health listener in pickfirst children for client side health
-	// checks and outlier detection, if configured.
-	ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-	ccs.BalancerConfig = endpointsharding.PickFirstConfig
-	return b.Balancer.UpdateClientConnState(ccs)
+	return b.Balancer.UpdateClientConnState(balancer.ClientConnState{
+		// Enable the health listener in pickfirst children for client side health
+		// checks and outlier detection, if configured.
+		ResolverState: pickfirstleaf.EnableHealthListener(ccs.ResolverState),
+	})
 }

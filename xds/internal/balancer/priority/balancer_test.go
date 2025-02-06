@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -85,9 +84,7 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
@@ -201,9 +198,7 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	t.Log("Two localities, with priorities [0, 1], each with one backend.")
@@ -373,9 +368,7 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two localities, with priorities [0, 1], each with one backend.
@@ -459,9 +452,7 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two localities, with different priorities, each with one backend.
@@ -562,9 +553,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Three localities, with priorities [0,1,2], each with one backend.
@@ -637,15 +626,13 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
 	firstSC := <-cc.ShutdownSubConnCh
-	secondSC := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed. Remove duplicate events.
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
-	for secondSC == firstSC {
-		secondSC = <-cc.ShutdownSubConnCh
-	}
+	<-cc.ShutdownSubConnCh
+	secondSC := <-cc.ShutdownSubConnCh
 	scToShutdown := []balancer.SubConn{firstSC, secondSC}
 	if !(scToShutdown[0] == sc1 && scToShutdown[1] == sc2) && !(scToShutdown[0] == sc2 && scToShutdown[1] == sc1) {
 		t.Errorf("ShutdownSubConn, want [%v, %v], got %v", sc1, sc2, scToShutdown)
@@ -676,9 +663,7 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two localities, with different priorities, each with one backend.
@@ -749,9 +734,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two localities, with different priorities, each with one backend.
@@ -801,6 +784,12 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	// p0 subconn should be shut down.
 	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc0 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
@@ -872,23 +861,17 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	// p1 subconn should be shut down.
 	scToShutdown1 := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed. Remove duplicate events.
-	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
-	// workaround once pickfirst is the only leaf policy and responsible for
-	// shutting down SubConns.
 	for scToShutdown1 == scToShutdown {
 		scToShutdown1 = <-cc.ShutdownSubConnCh
 	}
 	if scToShutdown1 != sc11 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown1)
 	}
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed. Remove duplicate events.
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
 	<-cc.ShutdownSubConnCh
 
 	// Test pick return NoSubConn.
@@ -925,9 +908,7 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two localities, with priorities [0, 1], each with one backend.
@@ -1019,9 +1000,7 @@ func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One localities, with priorities [0], each with one backend.
@@ -1067,9 +1046,7 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
@@ -1166,9 +1143,7 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
@@ -1239,12 +1214,11 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 
 	// Old subconn from child-0 should be removed.
 	scToShutdown := <-cc.ShutdownSubConnCh
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed. Remove duplicate events.
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
-	<-cc.ShutdownSubConnCh
 	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc0 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
@@ -1271,9 +1245,7 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
@@ -1380,9 +1352,7 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend.
@@ -1481,9 +1451,7 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend.
@@ -1582,9 +1550,7 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend.
@@ -1627,9 +1593,7 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One children, with priorities [0], with one backend, reresolution is
@@ -1728,9 +1692,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One children, with priorities [0, 1], each with one backend.
@@ -1852,9 +1814,7 @@ func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// Two children, with priorities [0, 1], each with one backend.
@@ -1920,9 +1880,7 @@ func (s) TestPriority_AddLowPriorityWhenHighIsInIdle(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	// One child, with priorities [0], one backend.
@@ -2003,9 +1961,7 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 
 	cc := testutils.NewBalancerClientConn(t)
 	bb := balancer.Get(Name)
-	pb := bb.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	pb := bb.Build(cc, balancer.BuildOptions{})
 	defer pb.Close()
 
 	t.Log("Two localities, with priorities [0, 1], each with one backend.")

@@ -77,9 +77,7 @@ func TestClusterPicks(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
@@ -121,7 +119,6 @@ func TestClusterPicks(t *testing.T) {
 		m1[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -159,9 +156,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
@@ -203,7 +198,6 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 		m1[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -320,9 +314,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
@@ -364,7 +356,6 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		m1[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p1 := <-cc.NewPickerCh
@@ -449,7 +440,6 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		m2[addrs[0]] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-		<-sc.HealthUpdateDelivered.Done()
 	}
 
 	p3 := <-cc.NewPickerCh
@@ -493,7 +483,6 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	bOpts := balancer.BuildOptions{
 		DialCreds:       insecure.NewCredentials(),
 		CustomUserAgent: userAgent,
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
 	}
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
@@ -570,9 +559,7 @@ func TestInitialIdle(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	bal := builder.Build(cc, balancer.BuildOptions{})
 
 	configJSON1 := `{
 "children": {
@@ -619,9 +606,7 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	bal := builder.Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 
 	configJSON1 := `{
@@ -649,7 +634,6 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	<-sc1.HealthUpdateDelivered.Done()
 	p1 := <-cc.NewPickerCh
 	pi := balancer.PickInfo{
 		Ctx: SetPickedCluster(context.Background(), "csp:cluster"),
@@ -749,9 +733,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 
 	builder := balancer.Get(balancerName)
 	parser := builder.(balancer.ConfigParser)
-	bal := builder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	bal := builder.Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 
 	configJSON1 := `{

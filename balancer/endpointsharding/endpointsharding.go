@@ -189,7 +189,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	}()
 	children := es.children.Load()
 	for _, child := range children.Values() {
-		child.(balancer.Balancer).ResolverError(err)
+		child.(*balancerWrapper).resolverErrorLocked(err)
 	}
 }
 
@@ -354,4 +354,11 @@ func (bw *balancerWrapper) closeLocked() {
 	}
 	bw.child.Close()
 	bw.isClosed = true
+}
+
+func (bw *balancerWrapper) resolverErrorLocked(err error) {
+	if bw.isClosed {
+		return
+	}
+	bw.child.ResolverError(err)
 }

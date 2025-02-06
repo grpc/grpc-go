@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -171,9 +170,7 @@ func init() {
 // which should trigger a transient failure state update.
 func (s) TestWeightedTarget(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with "cluster_1: round_robin".
@@ -295,8 +292,8 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 	verifyAddressInNewSubConn(t, cc, addr3)
 
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed. Remove duplicate events.
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
@@ -350,9 +347,7 @@ func (s) TestWeightedTarget(t *testing.T) {
 // backends from the subBalancer.
 func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with "cluster_1: round_robin".
@@ -454,9 +449,7 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 // weighted target balancer with two sub-balancers, each with one backend.
 func (s) TestWeightedTarget_TwoSubBalancers_OneBackend(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with "cluster_1: test_config_balancer, cluster_2: test_config_balancer".
@@ -525,9 +518,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_OneBackend(t *testing.T) {
 // backend.
 func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with "cluster_1: round_robin, cluster_2: round_robin".
@@ -679,9 +670,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 // differing weights.
 func (s) TestWeightedTarget_TwoSubBalancers_DifferentWeight_MoreBackends(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with two subBalancers, one with twice the weight of the other.
@@ -764,9 +753,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_DifferentWeight_MoreBackends(t *test
 // the subBalancers.
 func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with two subBalancers, one with twice the weight of the other.
@@ -913,8 +900,8 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// The same SubConn is closed by balancergroup, gracefulswitch and
-	// pickfirstleaf when they are closed. Remove duplicate events.
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
@@ -940,9 +927,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 // change the weight of these subBalancers.
 func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with two subBalancers, one with twice the weight of the other.
@@ -1062,9 +1047,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing
 // other sub-balancer.
 func (s) TestWeightedTarget_InitOneSubBalancerTransientFailure(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with "cluster_1: test_config_balancer, cluster_2: test_config_balancer".
@@ -1128,9 +1111,7 @@ func (s) TestWeightedTarget_InitOneSubBalancerTransientFailure(t *testing.T) {
 // return transient failure error.
 func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	// Start with "cluster_1: test_config_balancer, cluster_2: test_config_balancer".
@@ -1318,9 +1299,7 @@ func init() {
 // state will be Idle.
 func (s) TestInitialIdle(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	config, err := wtbParser.ParseConfig([]byte(`
@@ -1364,9 +1343,7 @@ func (s) TestInitialIdle(t *testing.T) {
 func (s) TestIgnoreSubBalancerStateTransitions(t *testing.T) {
 	cc := &tcc{BalancerClientConn: testutils.NewBalancerClientConn(t)}
 
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	config, err := wtbParser.ParseConfig([]byte(`
@@ -1427,9 +1404,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	}
 	stub.Register("update_state_balancer", balFuncs)
 
-	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{
-		MetricsRecorder: &stats.NoopMetricsRecorder{},
-	})
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
 	config, err := wtbParser.ParseConfig([]byte(`
