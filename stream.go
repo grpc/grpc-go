@@ -296,7 +296,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		Method:         method,
 		ContentSubtype: callInfo.contentSubtype,
 		DoneFunc:       doneFunc,
-		Authority:      c.authority,
+		Authority:      callInfo.authority,
 	}
 
 	// Set our outgoing compression according to the UseCompressor CallOption, if
