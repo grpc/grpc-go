@@ -19,11 +19,11 @@
 package xdsclient
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
@@ -70,7 +70,7 @@ func newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout tim
 
 	if c := clients[name]; c != nil {
 		c.incrRef()
-		return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
+		return c, sync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 	}
 
 	// Create the new client implementation.
@@ -84,7 +84,7 @@ func newRefCounted(name string, config *bootstrap.Config, watchExpiryTimeout tim
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", config.Node().GetId())
-	return client, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
+	return client, sync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 }
 
 // clientRefCounted is ref-counted, and to be shared by the xds resolver and

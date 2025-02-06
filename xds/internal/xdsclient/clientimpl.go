@@ -323,7 +323,7 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *bootstrap.ServerConfig, in
 // reference to the xdsChannel. This returned function is idempotent, meaning
 // it can be called multiple times without any additional effect.
 func (c *clientImpl) releaseChannel(serverConfig *bootstrap.ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
-	return grpcsync.OnceFunc(func() {
+	return sync.OnceFunc(func() {
 		c.channelsMu.Lock()
 
 		if c.logger.V(2) {

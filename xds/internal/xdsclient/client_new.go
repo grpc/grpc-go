@@ -170,7 +170,7 @@ func GetForTesting(name string) (XDSClient, func(), error) {
 		return nil, nil, fmt.Errorf("xDS client with name %q not found", name)
 	}
 	c.incrRef()
-	return c, grpcsync.OnceFunc(func() { clientRefCountedClose(name) }), nil
+	return c, sync.OnceFunc(func() { clientRefCountedClose(name) }), nil
 }
 
 func init() {

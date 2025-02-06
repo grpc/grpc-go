@@ -416,7 +416,7 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 		}
 		acbw.producersMu.Unlock()
 	}
-	return pData.producer, grpcsync.OnceFunc(unref)
+	return pData.producer, sync.OnceFunc(unref)
 }
 
 func (acbw *acBalancerWrapper) closeProducers() {
