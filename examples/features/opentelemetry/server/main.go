@@ -55,12 +55,6 @@ type echoServer struct {
 }
 
 func (s *echoServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	tracer := otel.Tracer("grpc-server")
-	_, span := tracer.Start(ctx, "UnaryEcho")
-	span.SetAttributes(attribute.String("request.message", req.GetMessage()))
-	defer span.End()
-
-	log.Printf("Received request: %v", req.GetMessage())
 	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, s.addr)}, nil
 }
 
