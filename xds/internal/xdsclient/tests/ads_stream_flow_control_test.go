@@ -150,7 +150,7 @@ func overrideADSStreamCreation(t *testing.T) chan *wrappedADSStream {
 func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
 	t.Helper()
 
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

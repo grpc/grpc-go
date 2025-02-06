@@ -136,7 +136,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -397,7 +397,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			authority: []byte(fmt.Sprintf(`{
-				"xds_servers": [{
+				 "xds_servers": [{
 					"server_uri": %q,
 					"channel_creds": [{"type": "insecure"}]
 				}]}`, mgmtServer2.Address)),
@@ -406,7 +406,7 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}

@@ -25,7 +25,6 @@ import (
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 )
 
@@ -106,7 +105,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
 	if opts.StreamBackoffAfterFailure == nil {
-		opts.StreamBackoffAfterFailure = defaultStreamBackoffFunc
+		opts.StreamBackoffAfterFailure = defaultExponentialBackoff
 	}
 	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure)
 }
@@ -131,7 +130,7 @@ func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
 		return nil, nil, fmt.Errorf("xds:: xDS client with name %q not found", name)
 	}
 	c.incrRef()
-	return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
 
 // SetFallbackBootstrapConfig is used to specify a bootstrap configuration
@@ -141,6 +140,10 @@ func (p *Pool) SetFallbackBootstrapConfig(config *bootstrap.Config) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.config != nil {
+		logger.Error("Attempt to set a bootstrap configuration even though one is already set via environment variables.")
+		return
+	}
 	p.config = config
 }
 
@@ -156,6 +159,26 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 		resp.Config = append(resp.Config, cfg)
 	}
 	return resp
+}
+
+// BootstrapConfigForTesting returns the bootstrap configuration used by the
+// pool. The caller should not mutate the returned config.
+//
+// To be used only for testing purposes.
+func (p *Pool) BootstrapConfigForTesting() *bootstrap.Config {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.config
+}
+
+// UnsetBootstrapConfigForTesting unsets the bootstrap configuration used by
+// the pool.
+//
+// To be used only for testing purposes.
+func (p *Pool) UnsetBootstrapConfigForTesting() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.config = nil
 }
 
 func (p *Pool) clientRefCountedClose(name string) {
@@ -193,7 +216,7 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 
 	if c := p.clients[name]; c != nil {
 		c.incrRef()
-		return c, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
 	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff)
@@ -208,5 +231,5 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
-	return client, grpcsync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return client, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
