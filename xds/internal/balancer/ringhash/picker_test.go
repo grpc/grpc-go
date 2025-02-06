@@ -26,10 +26,9 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
-	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
+
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 var testSubConns []*testutils.TestSubConn
@@ -61,31 +60,25 @@ func (p *fakeChildPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	}
 }
 
-func testRingAndEndpointStates(cStats []connectivity.State) (*ring, *resolver.EndpointMap) {
+func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]balancer.State) {
 	var items []*ringEntry
-	epStates := resolver.NewEndpointMap()
-	for i, st := range cStats {
+	epStates := map[string]balancer.State{}
+	for i, st := range states {
 		testSC := testSubConns[i]
 		items = append(items, &ringEntry{
 			idx:       i,
 			hash:      uint64((i + 1) * 10),
 			firstAddr: testSC.String(),
 		})
-		ep := resolver.Endpoint{
-			Addresses: []resolver.Address{{Addr: testSC.String()}},
-		}
-		epState := &endpointState{
-			firstAddr: testSC.String(),
-			state: balancer.State{
-				ConnectivityState: st,
-				Picker: &fakeChildPicker{
-					connectivityState: st,
-					tfError:           fmt.Errorf("%d", i),
-					subConn:           testSC,
-				},
+		epState := balancer.State{
+			ConnectivityState: st,
+			Picker: &fakeChildPicker{
+				connectivityState: st,
+				tfError:           fmt.Errorf("%d", i),
+				subConn:           testSC,
 			},
 		}
-		epStates.Set(ep, epState)
+		epStates[testSC.String()] = epState
 	}
 	return &ring{items: items}, epStates
 }
@@ -141,7 +134,11 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ring, epStates := testRingAndEndpointStates(tt.connectivityStates)
-			p := newPicker(ring, epStates, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
+			p := &picker{
+				ring:           ring,
+				logger:         internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
+				endpointStates: epStates,
+			}
 			got, err := p.Pick(balancer.PickInfo{
 				Ctx: SetRequestHash(context.Background(), tt.hash),
 			})

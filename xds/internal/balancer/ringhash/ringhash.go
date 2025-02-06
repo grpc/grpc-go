@@ -213,6 +213,24 @@ func (b *ringhashBalancer) updatePickerLocked() {
 	}
 	state := b.aggregatedStateLocked()
 
+	// Update the channel.
+	if b.endpointStates.Len() > 0 && b.shouldRegenerateRing {
+		// with a non-empty list of endpoints.
+		b.ring = newRing(b.endpointStates, b.config.MinRingSize, b.config.MaxRingSize, b.logger)
+	}
+	b.shouldRegenerateRing = false
+	var newPicker balancer.Picker
+	if b.endpointStates.Len() == 0 {
+		newPicker = base.NewErrPicker(errors.New("produced zero addresses"))
+	} else {
+		newPicker = b.newPickerLocked()
+	}
+	b.logger.Infof("Pushing new state %v and picker %p", state, newPicker)
+	b.ClientConn.UpdateState(balancer.State{
+		ConnectivityState: state,
+		Picker:            newPicker,
+	})
+
 	// Start connecting to new endpoints if necessary.
 	if state == connectivity.Connecting || state == connectivity.TransientFailure {
 		// When overall state is TransientFailure, we need to make sure at least
@@ -243,24 +261,6 @@ func (b *ringhashBalancer) updatePickerLocked() {
 			idleBalancer.ExitIdle()
 		}
 	}
-
-	// Update the channel.
-	if b.endpointStates.Len() > 0 && b.shouldRegenerateRing {
-		// with a non-empty list of endpoints.
-		b.ring = newRing(b.endpointStates, b.config.MinRingSize, b.config.MaxRingSize, b.logger)
-	}
-	b.shouldRegenerateRing = false
-	var picker balancer.Picker
-	if b.endpointStates.Len() == 0 {
-		picker = base.NewErrPicker(errors.New("produced zero addresses"))
-	} else {
-		picker = newPicker(b.ring, b.endpointStates, b.logger)
-	}
-	b.logger.Infof("Pushing new state %v and picker %p", state, picker)
-	b.ClientConn.UpdateState(balancer.State{
-		ConnectivityState: state,
-		Picker:            picker,
-	})
 }
 
 func (b *ringhashBalancer) Close() {
@@ -271,6 +271,18 @@ func (b *ringhashBalancer) Close() {
 func (b *ringhashBalancer) ExitIdle() {
 	// ExitIdle implementation is a no-op because connections are either
 	// triggers from picks or from child balancer state changes.
+}
+
+// newPickerLocked generates a picker. The picker copies the endpoint states
+// over to avoid locking the mutex at RPC time. The picker should be
+// re-generated every time an endpoint state is updated.
+func (b *ringhashBalancer) newPickerLocked() *picker {
+	states := make(map[string]balancer.State)
+	for _, val := range b.endpointStates.Values() {
+		epState := val.(*endpointState)
+		states[epState.firstAddr] = epState.state
+	}
+	return &picker{ring: b.ring, logger: b.logger, endpointStates: states}
 }
 
 // aggregatedStateLocked returns the aggregated child balancers state
