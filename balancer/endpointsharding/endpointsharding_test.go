@@ -153,14 +153,14 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 
 	dOpts := []grpc.DialOption{
 		grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()),
-		// Use a large backoff dealy to avoid the error picker being updated
+		// Use a large backoff delay to avoid the error picker being updated
 		// too quickly.
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff: backoff.Config{
-				BaseDelay:  100 * time.Second,
+				BaseDelay:  2 * defaultTestTimeout,
 				Multiplier: float64(0),
 				Jitter:     float64(0),
-				MaxDelay:   100 * time.Second,
+				MaxDelay:   2 * defaultTestTimeout,
 			},
 		}),
 	}
@@ -192,7 +192,7 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if err == nil {
-			t.Fatalf("EmptyCall returned unexpected error: <nil>, want %q", "test error")
+			t.Fatalf("EmptyCall succeeded when expected to fail with %q", "test error")
 		}
 		if strings.Contains(err.Error(), "test error") {
 			break
