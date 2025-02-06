@@ -175,6 +175,12 @@ type ClientConn interface {
 	// Deprecated: Use the Target field in the BuildOptions instead.
 	Target() string
 
+	// MetricsRecorder provides the metrics recorder that balancers can use to
+	// record metrics. Balancer implementations which do not register metrics on
+	// metrics registry and record on them can ignore this method. The returned
+	// MetricsRecorder is guaranteed to never be nil.
+	MetricsRecorder() estats.MetricsRecorder
+
 	// EnforceClientConnEmbedding is included to force implementers to embed
 	// another implementation of this interface, allowing gRPC to add methods
 	// without breaking users.
@@ -210,10 +216,6 @@ type BuildOptions struct {
 	// same resolver.Target as passed to the resolver. See the documentation for
 	// the resolver.Target type for details about what it contains.
 	Target resolver.Target
-	// MetricsRecorder is the metrics recorder that balancers can use to record
-	// metrics. Balancer implementations which do not register metrics on
-	// metrics registry and record on them can ignore this field.
-	MetricsRecorder estats.MetricsRecorder
 }
 
 // Builder creates a balancer.

@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/channelz"
@@ -93,13 +94,16 @@ func newCCBalancerWrapper(cc *ClientConn) *ccBalancerWrapper {
 			CustomUserAgent: cc.dopts.copts.UserAgent,
 			ChannelzParent:  cc.channelz,
 			Target:          cc.parsedTarget,
-			MetricsRecorder: cc.metricsRecorderList,
 		},
 		serializer:       grpcsync.NewCallbackSerializer(ctx),
 		serializerCancel: cancel,
 	}
 	ccb.balancer = gracefulswitch.NewBalancer(ccb, ccb.opts)
 	return ccb
+}
+
+func (ccb *ccBalancerWrapper) MetricsRecorder() stats.MetricsRecorder {
+	return ccb.cc.metricsRecorderList
 }
 
 // updateClientConnState is invoked by grpc to push a ClientConnState update to
