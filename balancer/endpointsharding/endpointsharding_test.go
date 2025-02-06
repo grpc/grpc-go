@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
@@ -128,7 +129,9 @@ func (fp *fakePetiole) UpdateState(state balancer.State) {
 // special picker, so it should fallback to the default behavior, which is to
 // round_robin amongst the endpoint children that are in the aggregated state.
 // It also verifies the petiole has access to the raw child state in case it
-// wants to implement a custom picker.
+// wants to implement a custom picker. The test sends a resolver error to the
+// endpointsharding balancer and verifies an error picker from the children
+// is used while making an RPC.
 func (s) TestEndpointShardingBasic(t *testing.T) {
 	backend1 := stubserver.StartTestService(t, nil)
 	defer backend1.Stop()
@@ -138,7 +141,7 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	mr := manual.NewBuilderWithScheme("e2e-test")
 	defer mr.Close()
 
-	json := `{"loadBalancingConfig": [{"fake_petiole":{}}]}`
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, fakePetioleName)
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
 	mr.InitialState(resolver.State{
 		Endpoints: []resolver.Endpoint{
@@ -148,7 +151,20 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dOpts := []grpc.DialOption{
+		grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Use a large backoff dealy to avoid the error picker being updated
+		// too quickly.
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  100 * time.Second,
+				Multiplier: float64(0),
+				Jitter:     float64(0),
+				MaxDelay:   100 * time.Second,
+			},
+		}),
+	}
+	cc, err := grpc.NewClient(mr.Scheme()+":///", dOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create new client: %v", err)
 	}
@@ -163,12 +179,28 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 		t.Fatalf("error in expected round robin: %v", err)
 	}
 
-	// Execute the resolver error path. pickfirst will ignore the resolver error
-	// as it has a good resolver state.
+	// Stopping both the backends should make the channel enter
+	// TransientFailure.
+	backend1.Stop()
+	backend2.Stop()
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// When the resolver reports an error, the picker should get updated to
+	// return the resolver error.
 	mr.ReportError(errors.New("test error"))
-	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer cancel()
-	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Ready)
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		if err == nil {
+			t.Fatalf("EmptyCall returned unexpected error: <nil>, want %q", "test error")
+		}
+		if strings.Contains(err.Error(), "test error") {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Context timed out waiting for picker with resolver error.")
+	}
 }
 
 // Tests that endpointsharding doesn't automatically re-connect IDLE children.
