@@ -34,9 +34,7 @@ import (
 // Name is the name of round_robin balancer.
 const Name = "round_robin"
 
-var (
-	logger = grpclog.Component("roundrobin")
-)
+var logger = grpclog.Component("roundrobin")
 
 func init() {
 	balancer.Register(builder{})

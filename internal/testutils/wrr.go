@@ -58,9 +58,6 @@ func (twrr *testWRR) Add(item any, weight int64) {
 
 func (twrr *testWRR) Next() any {
 	twrr.mu.Lock()
-	if len(twrr.itemsWithWeight) == 0 {
-		return nil
-	}
 	iww := twrr.itemsWithWeight[twrr.idx]
 	twrr.count++
 	if twrr.count >= iww.weight {

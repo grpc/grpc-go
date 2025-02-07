@@ -336,6 +336,12 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 
 	// p2 SubConns are shut down.
 	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc2 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scToShutdown)
 	}
@@ -434,6 +440,12 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 
 	// p1 subconn should be shut down.
 	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc1 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc0, scToShutdown)
 	}
@@ -625,15 +637,17 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	//
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
-	firstSC := <-cc.ShutdownSubConnCh
 	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
 	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
+	scToShutdown := [2]balancer.SubConn{}
+	scToShutdown[0] = <-cc.ShutdownSubConnCh
 	<-cc.ShutdownSubConnCh
-	secondSC := <-cc.ShutdownSubConnCh
-	scToShutdown := []balancer.SubConn{firstSC, secondSC}
+	scToShutdown[1] = <-cc.ShutdownSubConnCh
+	<-cc.ShutdownSubConnCh
+
 	if !(scToShutdown[0] == sc1 && scToShutdown[1] == sc2) && !(scToShutdown[0] == sc2 && scToShutdown[1] == sc1) {
 		t.Errorf("ShutdownSubConn, want [%v, %v], got %v", sc1, sc2, scToShutdown)
 	}
@@ -861,18 +875,15 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 
 	// p1 subconn should be shut down.
 	scToShutdown1 := <-cc.ShutdownSubConnCh
-	for scToShutdown1 == scToShutdown {
-		scToShutdown1 = <-cc.ShutdownSubConnCh
-	}
-	if scToShutdown1 != sc11 {
-		t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown1)
-	}
 	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
 	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
 	<-cc.ShutdownSubConnCh
+	if scToShutdown1 != sc11 {
+		t.Fatalf("ShutdownSubConn, want %v, got %v", sc11, scToShutdown1)
+	}
 
 	// Test pick return NoSubConn.
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
@@ -1113,6 +1124,12 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 
 	// Old subconn should be shut down.
 	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc1 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
@@ -1316,6 +1333,12 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 
 	// Old subconn from child-1 should be shut down.
 	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc1 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}
@@ -1506,6 +1529,12 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 
 	// Old subconn should be shut down.
 	scToShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scToShutdown != sc1 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scToShutdown)
 	}

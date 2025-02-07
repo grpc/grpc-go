@@ -247,6 +247,12 @@ func (s) TestWeightedTarget(t *testing.T) {
 
 	// The subconn for cluster_1 should be shut down.
 	scShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scShutdown != sc1 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
@@ -292,15 +298,13 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 	verifyAddressInNewSubConn(t, cc, addr3)
 
+	scShutdown = <-cc.ShutdownSubConnCh
 	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
 	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
-	initialSC := scShutdown
-	for scShutdown == initialSC {
-		scShutdown = <-cc.ShutdownSubConnCh
-	}
+	<-cc.ShutdownSubConnCh
 
 	// The subconn from the test_config_balancer should be shut down.
 	if scShutdown != sc2 {
@@ -859,6 +863,12 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	p = <-cc.NewPickerCh
 
 	scShutdown := <-cc.ShutdownSubConnCh
+	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
+	// are closed. Remove duplicate events.
+	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
+	// workaround once pickfirst is the only leaf policy and responsible for
+	// shutting down SubConns.
+	<-cc.ShutdownSubConnCh
 	if scShutdown != sc2 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scShutdown)
 	}
@@ -900,19 +910,15 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
+	// Removing a subBalancer causes the weighted target LB policy to push a new
+	// picker which ensures that the removed subBalancer is not picked for RPCs.
+	scShutdown = <-cc.ShutdownSubConnCh
 	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
 	// are closed. Remove duplicate events.
 	// TODO: https://github.com/grpc/grpc-go/issues/6472 - Remove this
 	// workaround once pickfirst is the only leaf policy and responsible for
 	// shutting down SubConns.
-	initialSC := scShutdown
-	for scShutdown == initialSC {
-		scShutdown = <-cc.ShutdownSubConnCh
-	}
-	// Removing a subBalancer causes the weighted target LB policy to push a new
-	// picker which ensures that the removed subBalancer is not picked for RPCs.
-
-	scShutdown = <-cc.ShutdownSubConnCh
+	<-cc.ShutdownSubConnCh
 	if scShutdown != sc1 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc1, scShutdown)
 	}
