@@ -28,23 +28,24 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-var testAddrs []resolver.Address
-var testSubConnMap *resolver.AddressMap
+var testEndpoints []resolver.Endpoint
+var testEndpointStateMap *resolver.EndpointMap
 
 func init() {
-	testAddrs = []resolver.Address{
-		testAddr("a", 3),
-		testAddr("b", 3),
-		testAddr("c", 4),
+	testEndpoints = []resolver.Endpoint{
+		testEndpoint("a", 3),
+		testEndpoint("b", 3),
+		testEndpoint("c", 4),
 	}
-	testSubConnMap = resolver.NewAddressMap()
-	testSubConnMap.Set(testAddrs[0], &subConn{addr: "a", weight: 3})
-	testSubConnMap.Set(testAddrs[1], &subConn{addr: "b", weight: 3})
-	testSubConnMap.Set(testAddrs[2], &subConn{addr: "c", weight: 4})
+	testEndpointStateMap = resolver.NewEndpointMap()
+	testEndpointStateMap.Set(testEndpoints[0], &endpointState{firstAddr: "a", weight: 3})
+	testEndpointStateMap.Set(testEndpoints[1], &endpointState{firstAddr: "b", weight: 3})
+	testEndpointStateMap.Set(testEndpoints[2], &endpointState{firstAddr: "c", weight: 4})
 }
 
-func testAddr(addr string, weight uint32) resolver.Address {
-	return weightedroundrobin.SetAddrInfo(resolver.Address{Addr: addr}, weightedroundrobin.AddrInfo{Weight: weight})
+func testEndpoint(addr string, weight uint32) resolver.Endpoint {
+	ep := resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}}
+	return weightedroundrobin.SetAddrInfoInEndpoint(ep, weightedroundrobin.AddrInfo{Weight: weight})
 }
 
 func (s) TestRingNew(t *testing.T) {
@@ -52,20 +53,20 @@ func (s) TestRingNew(t *testing.T) {
 	for _, min := range []uint64{3, 4, 6, 8} {
 		for _, max := range []uint64{20, 8} {
 			t.Run(fmt.Sprintf("size-min-%v-max-%v", min, max), func(t *testing.T) {
-				r := newRing(testSubConnMap, min, max, nil)
+				r := newRing(testEndpointStateMap, min, max, nil)
 				totalCount := len(r.items)
 				if totalCount < int(min) || totalCount > int(max) {
 					t.Fatalf("unexpected size %v, want min %v, max %v", totalCount, min, max)
 				}
-				for _, a := range testAddrs {
+				for _, e := range testEndpoints {
 					var count int
 					for _, ii := range r.items {
-						if ii.sc.addr == a.Addr {
+						if ii.firstAddr == e.Addresses[0].Addr {
 							count++
 						}
 					}
 					got := float64(count) / float64(totalCount)
-					want := float64(getWeightAttribute(a)) / totalWeight
+					want := float64(getWeightAttribute(e)) / totalWeight
 					if !equalApproximately(got, want) {
 						t.Fatalf("unexpected item weight in ring: %v != %v", got, want)
 					}
@@ -82,7 +83,7 @@ func equalApproximately(x, y float64) bool {
 }
 
 func (s) TestRingPick(t *testing.T) {
-	r := newRing(testSubConnMap, 10, 20, nil)
+	r := newRing(testEndpointStateMap, 10, 20, nil)
 	for _, h := range []uint64{xxhash.Sum64String("1"), xxhash.Sum64String("2"), xxhash.Sum64String("3"), xxhash.Sum64String("4")} {
 		t.Run(fmt.Sprintf("picking-hash-%v", h), func(t *testing.T) {
 			e := r.pick(h)
@@ -100,7 +101,7 @@ func (s) TestRingPick(t *testing.T) {
 }
 
 func (s) TestRingNext(t *testing.T) {
-	r := newRing(testSubConnMap, 10, 20, nil)
+	r := newRing(testEndpointStateMap, 10, 20, nil)
 
 	for _, e := range r.items {
 		ne := r.next(e)
