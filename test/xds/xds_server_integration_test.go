@@ -212,9 +212,9 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	}
 
 	// Create a ClientConn with the xds scheme and make a successful RPC.
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
 	defer cc.Close()
 
@@ -295,9 +295,9 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			}
 
 			// Create a ClientConn with the xds scheme and make an RPC.
-			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 			if err != nil {
-				t.Fatalf("failed to dial local test server: %v", err)
+				t.Fatalf("failed to create a client for server: %v", err)
 			}
 			defer cc.Close()
 
@@ -375,9 +375,9 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	}
 
 	// Create a ClientConn with the xds scheme and make a successful RPC.
-	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds), grpc.WithResolvers(xdsResolver))
+	xdsCC, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
 	defer xdsCC.Close()
 
@@ -389,9 +389,9 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	// Create a ClientConn with TLS creds. This should fail since the server is
 	// using fallback credentials which in this case in insecure creds.
 	tlsCreds := testutils.CreateClientTLSCredentials(t)
-	tlsCC, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(tlsCreds))
+	tlsCC, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(tlsCreds))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("failed to create a client for server: %v", err)
 	}
 	defer tlsCC.Close()
 

@@ -290,11 +290,17 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	t.Log("Successfully performed an EmptyCall RPC")
 
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
-	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
+	t.Logf("Creating a channel with unknown authority %q, expecting failure", target)
 	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
-	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	cc, err = grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("Unexpected error while creating ClientConn: %v", err)
+	}
+	defer cc.Close()
+	client = testgrpc.NewTestServiceClient(cc)
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
+		t.Fatalf("EmptyCall(_, _) = _, %v; want _, %q", err, wantErr)
 	}
 }
 
