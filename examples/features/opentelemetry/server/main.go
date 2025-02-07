@@ -32,8 +32,16 @@ import (
 	"google.golang.org/grpc/stats/opentelemetry"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	experimental "google.golang.org/grpc/experimental/opentelemetry"
 )
 
 var (
@@ -50,21 +58,65 @@ func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.Echo
 	return &pb.EchoResponse{Message: fmt.Sprintf("%s (from %s)", req.Message, s.addr)}, nil
 }
 
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
+	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdouttrace exporter: %w", err)
+	}
+
+	res, err := resource.New(context.Background(),
+		resource.WithAttributes(attribute.String("service.name", serviceName)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithSpanProcessor(trace.NewSimpleSpanProcessor(exporter)),
+		trace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	return tp, nil
+}
+
 func main() {
+	flag.Parse()
+
 	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
-	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
+	go func() {
+		log.Printf("Starting Prometheus metrics server at %s\n", *prometheusEndpoint)
+		if err := http.ListenAndServe(*prometheusEndpoint, promhttp.Handler()); err != nil {
+			log.Fatalf("Failed to start Prometheus server: %v", err)
+		}
+	}()
 
-	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
+	// Initialize tracing
+	tp, err := initTracer("grpc-server")
+	if err != nil {
+		log.Fatalf("Failed to initialize tracing: %v", err)
+	}
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+
+	traceOptions := experimental.TraceOptions{
+		TracerProvider:    tp,
+		TextMapPropagator: propagation.TraceContext{},
+	}
+
+	so := opentelemetry.ServerOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
+		TraceOptions:   traceOptions,
+	})
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
-	s := grpc.NewServer(so)
+	s := grpc.NewServer(so, grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	pb.RegisterEchoServer(s, &echoServer{addr: *addr})
 
 	log.Printf("Serving on %s\n", *addr)

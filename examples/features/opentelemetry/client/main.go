@@ -27,14 +27,20 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/stats/opentelemetry"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 var (
@@ -42,20 +48,61 @@ var (
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9465", "the Prometheus exporter endpoint")
 )
 
+// initTracer initializes OpenTelemetry tracing
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
+	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdouttrace exporter: %w", err)
+	}
+
+	res, err := resource.New(context.Background(),
+		resource.WithAttributes(attribute.String("service.name", serviceName)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithSpanProcessor(trace.NewSimpleSpanProcessor(exporter)),
+		trace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	return tp, nil
+}
+
 func main() {
+	flag.Parse()
+
 	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
-	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
+	go func() {
+		log.Printf("Starting Prometheus metrics server at %s\n", *prometheusEndpoint)
+		if err := http.ListenAndServe(*prometheusEndpoint, promhttp.Handler()); err != nil {
+			log.Fatalf("Failed to start Prometheus server: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
+	// Initialize tracing
+	tp, err := initTracer("grpc-client")
+	if err != nil {
+		log.Fatalf("Error setting up tracing: %v", err)
+	}
+	defer func() { _ = tp.Shutdown(ctx) }()
+
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 
-	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
+	cc, err := grpc.NewClient(*addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		do,
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 	if err != nil {
-		log.Fatalf("Failed to start NewClient: %v", err)
+		log.Fatalf("Failed to create a client: %v", err)
 	}
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
@@ -64,10 +111,11 @@ func main() {
 	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
+
 		if err != nil {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
-		fmt.Println(r)
+		fmt.Println(r.Message)
 		time.Sleep(time.Second)
 	}
 }
