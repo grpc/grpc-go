@@ -120,7 +120,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		},
 		S: grpc.NewServer(),
 	}
-	// 1.Start Server and start serving by calling Serve().
+	// 1. Start Server and start serving by calling Serve().
 	stubserver.StartTestService(t, ss)
 
 	// 2. Call GracefulStop from a goroutine. It will trigger Close on the
