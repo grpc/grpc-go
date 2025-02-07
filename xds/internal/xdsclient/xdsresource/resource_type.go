@@ -58,27 +58,33 @@ type Producer interface {
 // from the xDS server.
 type OnDoneFunc func()
 
+// ResourceDataOrError contains either ResourceData or error. It is used to
+// represent the result of an xDS resource update. Exactly one of Data or Err
+// will be non-nil.
+type ResourceDataOrError struct {
+	Data ResourceData
+	Err  error
+}
+
 // ResourceWatcher wraps the callbacks to be invoked for different events
-// corresponding to the resource being watched.
+// corresponding to the resource being watched. gRFC A88 contains an exhaustive
+// list of what method is invoked under what conditions.
 type ResourceWatcher interface {
-	// OnUpdate is invoked to report an update for the resource being watched.
-	// The ResourceData parameter needs to be type asserted to the appropriate
-	// type for the resource being watched.
-	OnUpdate(ResourceData, OnDoneFunc)
+	// OnResourceChanged is invoked to notify the watcher of a new version of
+	// the resource received from the xDS server or an error indicating the
+	// reason why the resource cannot be obtained.
+	//
+	// Upon receiving this, in case of an error, the watcher should
+	// stop using any previously seen resource. xDS client will remove the
+	// resource from its cache.
+	OnResourceChanged(ResourceDataOrError, OnDoneFunc)
 
-	// OnError is invoked under different error conditions including but not
-	// limited to the following:
-	//	- authority mentioned in the resource is not found
-	//	- resource name parsing error
-	//	- resource deserialization error
-	//	- resource validation error
-	//	- ADS stream failure
-	//	- connection failure
-	OnError(error, OnDoneFunc)
-
-	// OnResourceDoesNotExist is invoked for a specific error condition where
-	// the requested resource is not found on the xDS management server.
-	OnResourceDoesNotExist(OnDoneFunc)
+	// OnAmbientError is invoked if resource is already cached under different
+	// error conditions.
+	//
+	// Upon receiving this, the watcher should not stop using the previously
+	// seen resource. xDS client will not remove the resource from its cache.
+	OnAmbientError(error, OnDoneFunc)
 }
 
 // TODO: Once the implementation is complete, rename this interface as

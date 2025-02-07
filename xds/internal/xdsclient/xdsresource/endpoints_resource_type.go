@@ -104,41 +104,41 @@ func (e *EndpointsResourceData) Raw() *anypb.Any {
 }
 
 // EndpointsWatcher wraps the callbacks to be invoked for different
-// events corresponding to the endpoints resource being watched.
+// events corresponding to the endpoints resource being watched. gRFC A88
+// contains an exhaustive list of what method is invoked under what conditions.
 type EndpointsWatcher interface {
-	// OnUpdate is invoked to report an update for the resource being watched.
-	OnUpdate(*EndpointsResourceData, OnDoneFunc)
+	// OnResourceChanged is invoked to notify the watcher of a new version of
+	// the resource received from the xDS server or an error indicating the
+	// reason why the resource cannot be obtained.
+	//
+	// Upon receiving this, in case of an error, the watcher should
+	// stop using any previously seen resource. xDS client will remove the
+	// resource from its cache.
+	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
 
-	// OnError is invoked under different error conditions including but not
-	// limited to the following:
-	//	- authority mentioned in the resource is not found
-	//	- resource name parsing error
-	//	- resource deserialization error
-	//	- resource validation error
-	//	- ADS stream failure
-	//	- connection failure
-	OnError(error, OnDoneFunc)
-
-	// OnResourceDoesNotExist is invoked for a specific error condition where
-	// the requested resource is not found on the xDS management server.
-	OnResourceDoesNotExist(OnDoneFunc)
+	// OnAmbientError is invoked if resource is already cached under different
+	// error conditions.
+	//
+	// Upon receiving this, the watcher should not stop using the previously
+	// seen resource. xDS client will not remove the resource from its cache.
+	OnAmbientError(error, OnDoneFunc)
 }
 
 type delegatingEndpointsWatcher struct {
 	watcher EndpointsWatcher
 }
 
-func (d *delegatingEndpointsWatcher) OnUpdate(data ResourceData, onDone OnDoneFunc) {
-	e := data.(*EndpointsResourceData)
-	d.watcher.OnUpdate(e, onDone)
+func (d *delegatingEndpointsWatcher) OnResourceChanged(update ResourceDataOrError, onDone OnDoneFunc) {
+	if update.Err != nil {
+		d.watcher.OnResourceChanged(&ResourceDataOrError{Err: update.Err}, onDone)
+		return
+	}
+	e := update.Data.(*EndpointsResourceData)
+	d.watcher.OnResourceChanged(&ResourceDataOrError{Data: e}, onDone)
 }
 
-func (d *delegatingEndpointsWatcher) OnError(err error, onDone OnDoneFunc) {
-	d.watcher.OnError(err, onDone)
-}
-
-func (d *delegatingEndpointsWatcher) OnResourceDoesNotExist(onDone OnDoneFunc) {
-	d.watcher.OnResourceDoesNotExist(onDone)
+func (d *delegatingEndpointsWatcher) OnAmbientError(err error, onDone OnDoneFunc) {
+	d.watcher.OnAmbientError(err, onDone)
 }
 
 // WatchEndpoints uses xDS to discover the configuration associated with the
