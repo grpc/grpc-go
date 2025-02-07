@@ -37,7 +37,11 @@ import (
 
 type clientStatsHandler struct {
 	estats.MetricsRecorder
-	options       Options
+	options Options
+	metrics metricsHandler
+}
+
+type metricsHandler struct {
 	clientMetrics clientMetrics
 }
 
@@ -58,11 +62,11 @@ func (h *clientStatsHandler) initializeMetrics() {
 		metrics = DefaultMetrics()
 	}
 
-	h.clientMetrics.attemptStarted = createInt64Counter(metrics.Metrics(), "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
-	h.clientMetrics.attemptDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
-	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.metrics.clientMetrics.attemptStarted = createInt64Counter(metrics.Metrics(), "grpc.client.attempt.started", meter, otelmetric.WithUnit("attempt"), otelmetric.WithDescription("Number of client call attempts started."))
+	h.metrics.clientMetrics.attemptDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+	h.metrics.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.metrics.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
+	h.metrics.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
 	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
@@ -78,6 +82,9 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 	ctx = setCallInfo(ctx, ci)
 
+	metricsEnabled := h.options.isMetricsEnabled()
+	tracingEnabled := h.options.isTracingEnabled()
+
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
@@ -89,11 +96,17 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 
 	startTime := time.Now()
 	var span trace.Span
-	if h.options.isTracingEnabled() {
+	if tracingEnabled {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
+
+	if metricsEnabled {
+		h.metrics.perCallMetrics(ctx, err, startTime, ci)
+	}
+	if tracingEnabled {
+		h.perCallTraces(ctx, err, startTime, ci, span)
+	}
 	return err
 }
 
@@ -115,7 +128,8 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 		method: h.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
-
+	metricsEnabled := h.options.isMetricsEnabled()
+	tracingEnabled := h.options.isTracingEnabled()
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
@@ -127,18 +141,23 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 
 	startTime := time.Now()
 	var span trace.Span
-	if h.options.isTracingEnabled() {
+	if tracingEnabled {
 		ctx, span = h.createCallTraceSpan(ctx, method)
 	}
 	callback := func(err error) {
-		h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
+		if metricsEnabled {
+			h.metrics.perCallMetrics(ctx, err, startTime, ci)
+		}
+		if tracingEnabled {
+			h.perCallTraces(ctx, err, startTime, ci, span)
+		}
 	}
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-// perCallTracesAndMetrics records per call trace spans and metrics.
-func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
+// perCallTraces records per call trace spans.
+func (h *clientStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
 	if h.options.isTracingEnabled() {
 		s := status.Convert(err)
 		if s.Code() == grpccodes.OK {
@@ -148,14 +167,18 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 		}
 		ts.End()
 	}
-	if h.options.isMetricsEnabled() {
+}
+
+// perCallMetrics records per call metrics.
+func (h *metricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
+	if h.clientMetrics.callDuration != nil {
 		callLatency := float64(time.Since(startTime)) / float64(time.Second)
-		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
+		attrs := otelattribute.NewSet(
 			otelattribute.String("grpc.method", ci.method),
 			otelattribute.String("grpc.target", ci.target),
 			otelattribute.String("grpc.status", canonicalString(status.Code(err))),
-		))
-		h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
+		)
+		h.clientMetrics.callDuration.Record(ctx, callLatency, otelmetric.WithAttributeSet(attrs))
 	}
 }
 
@@ -225,7 +248,7 @@ func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCSta
 			otelattribute.String("grpc.method", ci.method),
 			otelattribute.String("grpc.target", ci.target),
 		))
-		h.clientMetrics.attemptStarted.Add(ctx, 1, attrs)
+		h.metrics.clientMetrics.attemptStarted.Add(ctx, 1, attrs)
 	case *stats.OutPayload:
 		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
@@ -283,9 +306,9 @@ func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo,
 
 	// Allocate vararg slice once.
 	opts := []otelmetric.RecordOption{otelmetric.WithAttributeSet(otelattribute.NewSet(attributes...))}
-	h.clientMetrics.attemptDuration.Record(ctx, latency, opts...)
-	h.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), opts...)
-	h.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), opts...)
+	h.metrics.clientMetrics.attemptDuration.Record(ctx, latency, opts...)
+	h.metrics.clientMetrics.attemptSentTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.sentCompressedBytes), opts...)
+	h.metrics.clientMetrics.attemptRcvdTotalCompressedMessageSize.Record(ctx, atomic.LoadInt64(&ai.recvCompressedBytes), opts...)
 }
 
 const (
