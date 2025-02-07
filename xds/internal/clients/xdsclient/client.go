@@ -41,27 +41,23 @@ import (
 type XDSClient struct {
 }
 
-// New returns a new xDS Client configured with provided config.
+// New returns a new xDS Client configured with the provided config.
 func New(config Config) (*XDSClient, error) {
 	panic("unimplemented")
 }
 
-// WatchResource uses xDS to discover the resource associated with the provided
-// resource name.
-//   - resourceTypeURL is used to look up the resource type implementation
-//     provided in the ResourceTypes map of the config which determines how
-//     xDS responses are deserialized and validated after receiving from the xDS
-//     management server.
-//   - resourceName is the name of the resource to watch.
-//   - resourceWatcher is used to notify the caller about updates to the resource
-//     being watched. Upon receipt of a response from the management server, an
-//     appropriate callback on the resourceWatcher is invoked.
-func (c *XDSClient) WatchResource(resourceTypeURL string, resourceName string, resourceWatcher ResourceWatcher) (cancel func()) {
+// WatchResource starts watching the specified resource.
+//
+// typeURL must be present in the XDSClient's configured ResourceTypes. The
+// ResourceType will be used to decode the matching resource when it is
+// received, and the watcher will be called with the result.
+//
+// Cancel cancels the watch and prevents future calls to the watcher.
+func (c *XDSClient) WatchResource(typeURL string, name string, watcher ResourceWatcher) (cancel func()) {
 	panic("unimplemented")
 }
 
-// Close closes the xDS client and releases all resources. The caller is
-// expected to invoke it once they are done using the client.
+// Close closes the xDS client and releases all resources.
 func (c *XDSClient) Close() error {
 	panic("unimplemented")
 }

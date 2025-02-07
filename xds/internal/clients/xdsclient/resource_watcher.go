@@ -36,19 +36,14 @@ type ResourceDataOrError struct {
 // corresponding to the resource being watched. gRFC A88 contains an exhaustive
 // list of what method is invoked under what conditions.
 type ResourceWatcher interface {
-	// OnResourceChanged is invoked to notify the watcher of a new version of
-	// the resource received from the xDS server or an error indicating the
-	// reason why the resource cannot be obtained.
-	//
-	// Upon receiving this, in case of an error, the watcher should
-	// stop using any previously seen resource. The xDS client will remove the
-	// resource from its cache.
-	OnResourceChanged(ResourceDataOrError, OnCallbackProcessed)
+	// ResourceChanged either indicates a new version of the resource is
+	// available or an an error occurred while trying to fetch or decode the
+	// associated resource. In case of an error, the previous version of the
+	// resource should be considered invalid.
+	ResourceChanged(ResourceDataOrError, OnCallbackProcessed)
 
-	// OnAmbientError is invoked if resource is already cached under different
-	// error conditions.
-	//
-	// Upon receiving this, the watcher may continue using the previously seen
-	// resource. The xDS client will not remove the resource from its cache.
-	OnAmbientError(error, OnCallbackProcessed)
+	// AmbientError indicates an error occurred while trying to fetch or decode
+	// the associated resource.  The previous version of the resource should still
+	// be considered valid.
+	AmbientError(err error, done func())
 }
