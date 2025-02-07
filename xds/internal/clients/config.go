@@ -104,9 +104,13 @@ func (sc *ServerConfig) equal(other *ServerConfig) bool {
 	return false
 }
 
-// Authority contains configuration for an xDS control plane authority.
+// Authority contains configuration for an xDS control plane [authority].
+//
+// [authority]: https://www.envoyproxy.io/docs/envoy/latest/xds/core/v3/authority.proto
 type Authority struct {
 	// XDSServers contains the list of server configurations for this authority.
+	// xDS client use the first available server from the list. To ensure high
+	// availability, list the most reliable server first.
 	XDSServers []ServerConfig
 
 	// Extensions can be populated with arbitrary data to be passed to the xDS

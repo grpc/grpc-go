@@ -18,31 +18,25 @@
  *
  */
 
-// Package lrsclient provides an implementation of the LRS client to report
-// load to the xDS management servers.
+// Package lrsclient provides an [LRS] (Load Reporting Service) client.
 //
-// It allows applications to report load data to an LRS server via the LRS
-// stream. This data can be used for monitoring, traffic management, and other
-// purposes.
+// [LRS]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto
 package lrsclient
 
 import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// LRSClient is an LRS client to report load data to the LRS servers.
+// LRSClient is an LRS client.
 type LRSClient struct {
 }
 
-// ReportLoad starts a load reporting stream to the server in given
-// clients.ServerConfig. All load reports to the same server share the LRS
-// stream.
-//
-// It returns a LoadStore for the user to report loads and a function to
-// cancel the load reporting stream.
-//
-// The stats from LoadStore are reported periodically until cleanup
-// function is called.
-func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) (*LoadStore, func()) {
+// ReportLoad creates a new load reporting stream for the client.
+func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) *LoadStore {
+	panic("unimplemented")
+}
+
+// Close closes the LRS client and releases all resources.
+func (c *LRSClient) Close() error {
 	panic("unimplemented")
 }
