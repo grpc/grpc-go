@@ -37,12 +37,13 @@ import (
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
 	balancer.SubConn
-	tcc           *BalancerClientConn // the CC that owns this SubConn
-	id            string
-	ConnectCh     chan struct{}
-	stateListener func(balancer.SubConnState)
-	connectCalled *grpcsync.Event
-	Addresses     []resolver.Address
+	tcc            *BalancerClientConn // the CC that owns this SubConn
+	id             string
+	ConnectCh      chan struct{}
+	stateListener  func(balancer.SubConnState)
+	healthListener func(balancer.SubConnState)
+	connectCalled  *grpcsync.Event
+	Addresses      []resolver.Address
 }
 
 // NewTestSubConn returns a newly initialized SubConn.  Typically, subconns
@@ -78,7 +79,13 @@ func (tsc *TestSubConn) UpdateState(state balancer.SubConnState) {
 	<-tsc.connectCalled.Done()
 	if tsc.stateListener != nil {
 		tsc.stateListener(state)
-		return
+	}
+	// pickfirst registers a health listener synchronously while handing updates
+	// to READY. It updates the balancing state only after receiving the health
+	// update. We update the health state here so callers of tsc.UpdateState
+	// can verify picker updates as soon as UpdateState returns.
+	if state.ConnectivityState == connectivity.Ready && tsc.healthListener != nil {
+		tsc.healthListener(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 }
 
@@ -97,8 +104,11 @@ func (tsc *TestSubConn) String() string {
 	return tsc.id
 }
 
-// RegisterHealthListener is a no-op.
-func (*TestSubConn) RegisterHealthListener(func(balancer.SubConnState)) {}
+// RegisterHealthListener sends a READY update to mock a situation when no
+// health checking mechanisms are configured.
+func (tsc *TestSubConn) RegisterHealthListener(lis func(balancer.SubConnState)) {
+	tsc.healthListener = lis
+}
 
 // BalancerClientConn is a mock balancer.ClientConn used in tests.
 type BalancerClientConn struct {

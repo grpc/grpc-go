@@ -1164,8 +1164,8 @@ func waitForProducedZeroAddressesError(ctx context.Context, t *testing.T, client
 			t.Logf("EmptyCall() returned code: %v, want: %v", code, codes.Unavailable)
 			continue
 		}
-		if !strings.Contains(err.Error(), "produced zero addresses") {
-			t.Logf("EmptyCall() = %v, want %v", err, "produced zero addresses")
+		if !strings.Contains(err.Error(), "no children to pick from") {
+			t.Logf("EmptyCall() = %v, want %v", err, "no children to pick from")
 			continue
 		}
 		return nil

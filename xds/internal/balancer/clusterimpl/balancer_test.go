@@ -62,8 +62,8 @@ const (
 )
 
 var (
-	testBackendAddrs = []resolver.Address{{Addr: "1.1.1.1:1"}}
-	cmpOpts          = cmp.Options{
+	testBackendEndpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}}}
+	cmpOpts              = cmp.Options{
 		cmpopts.EquateEmpty(),
 		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
 	}
@@ -109,7 +109,7 @@ func (s) TestDropByCategory(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:             testClusterName,
 			EDSServiceName:      testServiceName,
@@ -205,7 +205,7 @@ func (s) TestDropByCategory(t *testing.T) {
 		dropDenominator2 = 4
 	)
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:             testClusterName,
 			EDSServiceName:      testServiceName,
@@ -284,7 +284,7 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:               testClusterName,
 			EDSServiceName:        testServiceName,
@@ -430,7 +430,7 @@ func (s) TestPickerUpdateAfterClose(t *testing.T) {
 
 	var maxRequest uint32 = 50
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:               testClusterName,
 			EDSServiceName:        testServiceName,
@@ -474,7 +474,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
@@ -494,7 +494,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
-	if got, want := addrs1[0].Addr, testBackendAddrs[0].Addr; got != want {
+	if got, want := addrs1[0].Addr, testBackendEndpoints[0].Addresses[0].Addr; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	cn, ok := xds.GetXDSHandshakeClusterName(addrs1[0].Attributes)
@@ -511,7 +511,7 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	const testClusterName2 = "test-cluster-2"
 	var addr2 = resolver.Address{Addr: "2.2.2.2"}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: []resolver.Address{addr2}}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{addr2}}}}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName2,
 			EDSServiceName: testServiceName,
@@ -549,7 +549,7 @@ func (s) TestReResolution(t *testing.T) {
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
@@ -568,7 +568,10 @@ func (s) TestReResolution(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   errors.New("test error"),
+	})
 	// This should get the transient failure picker.
 	if err := cc.WaitForErrPicker(ctx); err != nil {
 		t.Fatal(err.Error())
@@ -615,9 +618,12 @@ func (s) TestLoadReporting(t *testing.T) {
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
-	addrs := make([]resolver.Address, len(testBackendAddrs))
-	for i, a := range testBackendAddrs {
-		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
+	endpoints := make([]resolver.Endpoint, len(testBackendEndpoints))
+	for i, e := range testBackendEndpoints {
+		endpoints[i] = xdsinternal.SetLocalityIDInEndpoint(e, testLocality)
+		for j, a := range e.Addresses {
+			endpoints[i].Addresses[j] = xdsinternal.SetLocalityID(a, testLocality)
+		}
 	}
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
@@ -627,7 +633,7 @@ func (s) TestLoadReporting(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: endpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:             testClusterName,
 			EDSServiceName:      testServiceName,
@@ -661,7 +667,7 @@ func (s) TestLoadReporting(t *testing.T) {
 
 	scs := balancer.SubConnState{ConnectivityState: connectivity.Ready}
 	sca := internal.SetConnectedAddress.(func(*balancer.SubConnState, resolver.Address))
-	sca(&scs, addrs[0])
+	sca(&scs, endpoints[0].Addresses[0])
 	sc1.UpdateState(scs)
 	// Test pick with one backend.
 	const successCount = 5
@@ -748,9 +754,9 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
 
-	addrs := make([]resolver.Address, len(testBackendAddrs))
-	for i, a := range testBackendAddrs {
-		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
+	endpoints := make([]resolver.Endpoint, len(testBackendEndpoints))
+	for i, e := range testBackendEndpoints {
+		endpoints[i] = xdsinternal.SetLocalityIDInEndpoint(e, testLocality)
 	}
 	testLRSServerConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{
 		URI:          "trafficdirector.googleapis.com:443",
@@ -760,7 +766,7 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 		t.Fatalf("Failed to create LRS server config for testing: %v", err)
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: endpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:             testClusterName,
 			EDSServiceName:      testServiceName,
@@ -794,7 +800,7 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 
 	// Update LRS server to a different name.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: endpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:             testClusterName,
 			EDSServiceName:      testServiceName,
@@ -819,7 +825,7 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 
 	// Update LRS server to nil, to disable LRS.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: endpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
@@ -876,7 +882,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 
 	// Initial config update with childPolicyName1
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -893,7 +899,7 @@ func (s) TestChildPolicyUpdatedOnConfigUpdate(t *testing.T) {
 
 	// Second config update with childPolicyName2
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -929,7 +935,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	})
 
 	err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster: testClusterName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -992,7 +998,7 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 	})
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Endpoints: testBackendEndpoints}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,

@@ -51,6 +51,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 
 	const backendCount = 5
 	backends := make([]*stubserver.StubServer, backendCount)
+	endpoints := make([]resolver.Endpoint, backendCount)
 	addrs := make([]resolver.Address, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
@@ -64,6 +65,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 
 		backends[i] = backend
 		addrs[i] = resolver.Address{Addr: backend.Address}
+		endpoints[i] = resolver.Endpoint{Addresses: []resolver.Address{addrs[i]}}
 	}
 
 	dopts := []grpc.DialOption{
@@ -115,10 +117,10 @@ func (s) TestRoundRobin_AddressesRemoved(t *testing.T) {
 
 	// Send a resolver update with no addresses. This should push the channel into
 	// TransientFailure.
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{}})
+	r.UpdateState(resolver.State{Endpoints: []resolver.Endpoint{}})
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	const msgWant = "produced zero addresses"
+	const msgWant = "no children to pick from"
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); !strings.Contains(status.Convert(err).Message(), msgWant) {
 		t.Fatalf("EmptyCall() = %v, want Contains(Message(), %q)", err, msgWant)

@@ -395,6 +395,7 @@ func (b *wrrBalancer) Close() {
 			ew.stopORCAListener()
 		}
 	}
+	b.child.Close()
 }
 
 func (b *wrrBalancer) ExitIdle() {
