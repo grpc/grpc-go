@@ -131,7 +131,7 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			continue
 		}
 		if latency > config.PerIterationMaxAcceptableLatency {
-			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latency, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latency.Milliseconds(), p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
 			soakWorkerResults.Failures++
 			<-earliestNextStart
 			continue
@@ -139,7 +139,7 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 		// Success: log the details of the iteration.
 		soakWorkerResults.Latencies.Add(latency.Milliseconds())
 		soakWorkerResults.iterationsSucceeded++
-		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency, p.Addr, config.ServerAddr)
+		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency.Milliseconds(), p.Addr, config.ServerAddr)
 		<-earliestNextStart
 	}
 }
@@ -165,7 +165,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	// Wait for all goroutines to complete.
 	wg.Wait()
 
-	//Handle results.
+	// Handle results.
 	totalSuccesses := 0
 	totalFailures := 0
 	latencies := stats.NewHistogram(stats.HistogramOptions{
