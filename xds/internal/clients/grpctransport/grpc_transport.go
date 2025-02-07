@@ -27,48 +27,38 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// ServerConfigExtension holds the settings for connecting to an xDS management server
-// using gRPC.
+// ServerConfigExtension holds settings for connecting to a gRPC server,
+// such as an xDS or LRS server.
 type ServerConfigExtension struct {
-	// Credentials is the credential bundle containing the gRPC credentials for
-	// connecting to the xDS management server.
+	// Credentials will be used for all gRPC transports. If is unset, transport
+	// creation will fail.
 	Credentials credentials.Bundle
 }
 
-// Builder provides a way to build a gRPC-based transport to an xDS management
-// server.
+// Builder creates gRPC-based Transports. It must be paired with ServerConfigs
+// that contain its ServerConfigExtension.
 type Builder struct{}
 
-func init() {
-	encoding.RegisterCodec(&byteCodec{})
-}
-
-// Build creates a new gRPC-based transport to an xDS management server using
-// the provided clients.ServerConfig. This involves creating a
-// grpc.ClientConn to the server using the provided credentials and server URI,
-// and byteCodec which is byte-based implementation of encoding.Codec to send
-// and receive messages as bytes on the stream.
+// Build returns a gRPC-based clients.Transport.
 //
-// If any of ServerURI or Extensions of `sc` are not present, Build() will return
-// an error.
+// The Extension field of the ServerConfig must be a ServerConfigExtension.
 func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	if sc.ServerURI == "" {
-		return nil, fmt.Errorf("xds: ServerConfig's ServerURI field cannot be empty")
+		return nil, fmt.Errorf("ServerConfig's ServerURI field cannot be empty")
 	}
 	if sc.Extensions == nil {
-		return nil, fmt.Errorf("xds: ServerConfig's Extensions field cannot be nil for gRPC transport")
+		return nil, fmt.Errorf("ServerConfig's Extensions field cannot be nil for gRPC transport")
 	}
 	gtsce, ok := sc.Extensions.(ServerConfigExtension)
 	if !ok {
-		return nil, fmt.Errorf("xds: ServerConfig's Extensions field cannot be anything other than grpctransport.ServerConfigExtension for gRPC transport")
+		return nil, fmt.Errorf("ServerConfig Extensions field is %T, but must be %T", sc.Extensions, ServerConfigExtension{})
 	}
 	if gtsce.Credentials == nil {
-		return nil, fmt.Errorf("xsd: ServerConfigExtensions's Credentials field cannot be nil for gRPC transport")
+		return nil, fmt.Errorf("ServerConfigExtensions's Credentials field cannot be nil for gRPC transport")
 	}
 
 	// TODO: Incorporate reference count map for existing transports and
@@ -96,9 +86,7 @@ type grpcTransport struct {
 	cc *grpc.ClientConn
 }
 
-// NewStream creates a new gRPC stream to the xDS management server for the
-// specified method.  The returned Stream interface can be used to send and
-// receive messages on the stream.
+// NewStream creates a new gRPC stream to the server for the specified method.
 func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream, error) {
 	s, err := g.cc.NewStream(ctx, &grpc.StreamDesc{StreamName: method, ClientStreams: true, ServerStreams: true}, method)
 	if err != nil {
@@ -111,12 +99,12 @@ type stream struct {
 	stream grpc.ClientStream
 }
 
-// Send sends a message to the xDS management server.
+// Send sends a message to the server.
 func (s *stream) Send(msg []byte) error {
 	return s.stream.SendMsg(msg)
 }
 
-// Recv receives a message from the xDS management server.
+// Recv receives a message from the server.
 func (s *stream) Recv() ([]byte, error) {
 	var typedRes []byte
 	err := s.stream.RecvMsg(&typedRes)
@@ -126,7 +114,7 @@ func (s *stream) Recv() ([]byte, error) {
 	return typedRes, nil
 }
 
-// Close closes the gRPC stream to the xDS management server.
+// Close closes all the gRPC streams to the server.
 func (g *grpcTransport) Close() error {
 	return g.cc.Close()
 }
