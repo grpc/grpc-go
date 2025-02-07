@@ -61,7 +61,7 @@ func (s) TestBuild(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "ServerURI_empty",
+			name: "ServerURI_is_empty",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "",
 				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
@@ -69,12 +69,12 @@ func (s) TestBuild(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:      "Extensions_nil",
+			name:      "Extensions is nil",
 			serverCfg: clients.ServerConfig{ServerURI: "server-address"},
 			wantErr:   true,
 		},
 		{
-			name: "Extensions_not_ServerConfigExtension",
+			name: "Extensions is not a ServerConfigExtension",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "server-address",
 				Extensions: 1,
@@ -82,7 +82,7 @@ func (s) TestBuild(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "ServerConfigExtension_Credentials_nil",
+			name: "ServerConfigExtension Credentials is nil",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "server-address",
 				Extensions: ServerConfigExtension{},
