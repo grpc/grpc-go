@@ -33,8 +33,8 @@ type ResourceType interface {
 	TypeURL() string
 
 	// TypeName identifies resources in a transport protocol agnostic way. This
-	// can be used for logging/debugging purposes, as well in cases where the
-	// resource type name is to be uniquely identified but the actual
+	// can be used for logging/debugging purposes, as well as in cases where
+	// the resource type name is to be uniquely identified but the actual
 	// functionality provided by the resource type is not required.
 	TypeName() string
 
@@ -50,12 +50,12 @@ type ResourceType interface {
 	// If protobuf deserialization fails or resource validation fails,
 	// returns a non-nil error. Otherwise, returns a fully populated
 	// DecodeResult.
-	Decode(ResourceDecodeOptions, any) (*ResourceDecodeResult, error)
+	Decode(DecodeOptions, any) (*DecodeResult, error)
 }
 
-// ResourceDecodeOptions wraps the options required by ResourceType implementation for
+// DecodeOptions wraps the options required by ResourceType implementation for
 // decoding configuration received from the xDS management server.
-type ResourceDecodeOptions struct {
+type DecodeOptions struct {
 	// Config contains the complete configuration passed to the xDS client.
 	// This contains useful data for resource validation.
 	Config *Config
@@ -66,8 +66,8 @@ type ResourceDecodeOptions struct {
 	ServerConfig *clients.ServerConfig
 }
 
-// ResourceDecodeResult is the result of a decode operation.
-type ResourceDecodeResult struct {
+// DecodeResult is the result of a decode operation.
+type DecodeResult struct {
 	// Name is the name of the resource being watched.
 	Name string
 

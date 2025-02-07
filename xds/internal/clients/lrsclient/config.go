@@ -22,13 +22,14 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// Config provides parameters for configuring the LRS client.
+// A Config structure is used to configure an LRS client. After one has been
+// passed to an LRS function it must not be modified. A Config may be used;
+// the LRS package will also not modify it.
 type Config struct {
 	// Node is the identity of the client application reporting load to the
-	// xDS management server.
+	// LRS server.
 	Node clients.Node
 
-	// TransportBuilder is the implementation to create a communication channel
-	// to an xDS management server.
+	// TransportBuilder is used to connect to the LRS server.
 	TransportBuilder clients.TransportBuilder
 }
