@@ -28,16 +28,23 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const (
@@ -161,6 +168,39 @@ func init() {
 	wtbParser = wtbBuilder.(balancer.ConfigParser)
 
 	NewRandomWRR = testutils.NewTestWRR
+}
+
+// Tests the behavior of the weighted_target LB policy when there are no targets
+// configured. It verifies that the LB policy sets the overall channel state to
+// TRANSIENT_FAILURE and fails RPCs with an expected status code and message.
+func (s) TestWeightedTarget_NoTargets(t *testing.T) {
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"weighted_target_experimental":{}}]}`),
+	}
+	cc, err := grpc.NewClient("passthrough:///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	cc.Connect()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
+	if err == nil {
+		t.Error("EmptyCall() succeeded, want failure")
+	}
+	if gotCode, wantCode := status.Code(err), codes.Unavailable; gotCode != wantCode {
+		t.Errorf("EmptyCall() failed with code = %v, want %s", gotCode, wantCode)
+	}
+	if gotMsg, wantMsg := err.Error(), "no targets to pick from"; !strings.Contains(gotMsg, wantMsg) {
+		t.Errorf("EmptyCall() failed with message = %q, want to contain %q", gotMsg, wantMsg)
+	}
+	if gotState, wantState := cc.GetState(), connectivity.TransientFailure; gotState != wantState {
+		t.Errorf("cc.GetState() = %v, want %v", gotState, wantState)
+	}
 }
 
 // TestWeightedTarget covers the cases that a sub-balancer is added and a
@@ -326,6 +366,7 @@ func (s) TestWeightedTarget(t *testing.T) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
 	}
+
 	// Update the Weighted Target Balancer with an empty address list and no
 	// targets. This should cause a Transient Failure State update to the Client
 	// Conn.
@@ -343,6 +384,11 @@ func (s) TestWeightedTarget(t *testing.T) {
 	state := <-cc.NewStateCh
 	if state != connectivity.TransientFailure {
 		t.Fatalf("Empty target update should have triggered a TF state update, got: %v", state)
+	}
+	p = <-cc.NewPickerCh
+	const wantErr = "no targets to pick from"
+	if _, err := p.Pick(balancer.PickInfo{}); !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("Pick() returned error: %v, want: %v", err, wantErr)
 	}
 }
 
