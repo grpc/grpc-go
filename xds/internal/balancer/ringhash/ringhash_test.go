@@ -62,10 +62,6 @@ func init() {
 	}
 }
 
-func ctxWithHash(h uint64) context.Context {
-	return SetRequestHash(context.Background(), h)
-}
-
 // setupTest creates the balancer, and does an initial sanity check.
 func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.BalancerClientConn, balancer.Balancer, balancer.Picker) {
 	t.Helper()
@@ -153,7 +149,10 @@ func (s) TestOneSubConn(t *testing.T) {
 	testHash := firstHash - 1
 	// The first pick should be queued, and should trigger Connect() on the only
 	// SubConn.
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	sc0 := ring0.items[0].sc.sc.(*testutils.TestSubConn)
@@ -170,7 +169,7 @@ func (s) TestOneSubConn(t *testing.T) {
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -196,7 +195,9 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	testHash := firstHash + 1
 	// The first pick should be queued, and should trigger Connect() on the only
 	// SubConn.
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	// The picked SubConn should be the second in the ring.
@@ -212,7 +213,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -223,7 +224,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	p2 := <-cc.NewPickerCh
 	// Pick with the same hash should be queued, because the SubConn after the
 	// first picked is Idle.
-	if _, err := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 
@@ -241,7 +242,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	// New picks should all return this SubConn.
 	p3 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
@@ -263,7 +264,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p4 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p4.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p4.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -289,7 +290,10 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	testHash := firstHash + 1
 	// The first pick should be queued, and should trigger Connect() on the only
 	// SubConn.
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	sc0 := ring0.items[1].sc.sc.(*testutils.TestSubConn)
@@ -306,7 +310,7 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	// First hash should always pick sc0.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -315,7 +319,7 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	secondHash := ring0.items[1].hash
 	// secondHash+1 will pick the third SubConn from the ring.
 	testHash2 := secondHash + 1
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash2)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash2)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	sc1 := ring0.items[2].sc.sc.(*testutils.TestSubConn)
@@ -330,14 +334,14 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	// With the new generated picker, hash2 always picks sc1.
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash2)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash2)})
 		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 	// But the first hash still picks sc0.
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -454,7 +458,9 @@ func (s) TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 
 	// ringhash won't tell SCs to connect until there is an RPC, so simulate
 	// one now.
-	p0.Pick(balancer.PickInfo{Ctx: context.Background()})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	p0.Pick(balancer.PickInfo{Ctx: ctx})
 
 	// Turn the first subconn to transient failure.
 	sc0 := ring0.items[0].sc.sc.(*testutils.TestSubConn)
