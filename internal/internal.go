@@ -64,6 +64,9 @@ var (
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
 	GetServerCredentials any // func (*grpc.Server) credentials.TransportCredentials
+	// MetricsRecorderForServer returns the MetricsRecorderList derived from a
+	// server's stats handlers.
+	MetricsRecorderForServer any // func (*grpc.Server) estats.MetricsRecorder
 	// CanonicalString returns the canonical string of the code defined here:
 	// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
 	//
@@ -151,8 +154,8 @@ var (
 	// other features, including the CSDS service.
 	NewXDSResolverWithConfigForTesting any // func([]byte) (resolver.Builder, error)
 
-	// NewXDSResolverWithClientForTesting creates a new xDS resolver builder
-	// using the provided xDS client instead of creating a new one using the
+	// NewXDSResolverWithPoolForTesting creates a new xDS resolver builder
+	// using the provided xDS pool instead of creating a new one using the
 	// bootstrap configuration specified by the supported environment variables.
 	// The resolver.Builder is meant to be used in conjunction with the
 	// grpc.WithResolvers DialOption. The resolver.Builder does not take
@@ -163,7 +166,7 @@ var (
 	//
 	// This function should ONLY be used for testing and may not work with some
 	// other features, including the CSDS service.
-	NewXDSResolverWithClientForTesting any // func(xdsclient.XDSClient) (resolver.Builder, error)
+	NewXDSResolverWithPoolForTesting any // func(*xdsclient.Pool) (resolver.Builder, error)
 
 	// RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
 	// Specifier Plugin for testing purposes, regardless of the XDSRLS environment
@@ -276,4 +279,10 @@ const RLSLoadBalancingPolicyName = "rls_experimental"
 // embedding.
 type EnforceSubConnEmbedding interface {
 	enforceSubConnEmbedding()
+}
+
+// EnforceClientConnEmbedding is used to enforce proper ClientConn implementation
+// embedding.
+type EnforceClientConnEmbedding interface {
+	enforceClientConnEmbedding()
 }

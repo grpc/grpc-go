@@ -49,7 +49,7 @@ git grep 'func [A-Z]' -- "*_test.go" | not grep -v 'func Test\|Benchmark\|Exampl
 
 # - Do not use time.After except in tests.  It has the potential to leak the
 #   timer since there is no way to stop it early.
-git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|test_utils\|testutils'
+git grep -l 'time.After(' -- "*.go" | not grep -v '_test.go\|soak_tests\|testutils'
 
 # - Do not use "interface{}"; use "any" instead.
 git grep -l 'interface{}' -- "*.go" 2>&1 | not grep -v '\.pb\.go\|protoc-gen-go-grpc\|grpc_testing_not_regenerated'
@@ -88,6 +88,9 @@ not git grep 'net.ParseIP' -- '*.go'
 
 misspell -error .
 
+# Get the absolute path to revive.toml relative to the script location
+REVIVE_CONFIG_PATH="$(dirname "$(realpath "$0")")/revive.toml"
+
 # - gofmt, goimports, go vet, go mod tidy.
 # Perform these checks on each module inside gRPC.
 for MOD_FILE in $(find . -name 'go.mod'); do
@@ -100,6 +103,15 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   go mod tidy -compat=1.22
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
+
+  # Error for violation of enabled lint rules in config excluding generated code.
+  revive \
+    -set_exit_status=1 \
+    -exclude "testdata/grpc_testing_not_regenerated/" \
+    -exclude "**/*.pb.go" \
+    -formatter plain \
+    -config "${REVIVE_CONFIG_PATH}" \
+    ./...
 
   # - Collection of static analysis checks
   SC_OUT="$(mktemp)"
@@ -191,14 +203,5 @@ GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
   popd
 done
-
-# Error for violation of enabled lint rules in config excluding generated code.
-revive \
-  -set_exit_status=1 \
-  -exclude "testdata/grpc_testing_not_regenerated/" \
-  -exclude "**/*.pb.go" \
-  -formatter plain \
-  -config "$(dirname "$0")/revive.toml" \
-  ./...
 
 echo SUCCESS

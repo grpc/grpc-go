@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -196,7 +195,7 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := pickfirstBuilder{}.Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{

@@ -92,6 +92,8 @@ CASES=(
   "unimplemented_service"
   "orca_per_rpc"
   "orca_oob"
+  "rpc_soak"
+  "channel_soak"
 )
 
 # Build server

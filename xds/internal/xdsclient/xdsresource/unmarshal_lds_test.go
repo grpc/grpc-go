@@ -806,6 +806,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												InstanceName:    "rootPluginInstance",
 												CertificateName: "rootCertName",
 											},
+											// SystemRootCerts is ignored when
+											// CaCertificateProviderInstance is
+											// present.
+											SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
 										},
 									},
 								},
