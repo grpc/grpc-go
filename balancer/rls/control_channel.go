@@ -29,7 +29,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/buffer"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -55,9 +57,11 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	cc     *grpc.ClientConn
-	client rlsgrpc.RouteLookupServiceClient
-	logger *internalgrpclog.PrefixLogger
+	cc          *grpc.ClientConn
+	client      rlsgrpc.RouteLookupServiceClient
+	logger      *internalgrpclog.PrefixLogger
+	state       *buffer.Unbounded
+	unsubscribe func()
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -68,6 +72,7 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 		rpcTimeout:      rpcTimeout,
 		backToReadyFunc: backToReadyFunc,
 		throttler:       newAdaptiveThrottler(),
+		state:           buffer.NewUnbounded(),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
@@ -75,15 +80,29 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	if err != nil {
 		return nil, err
 	}
-	ctrlCh.cc, err = grpc.Dial(rlsServerName, dopts...)
+	ctrlCh.cc, err = grpc.NewClient(rlsServerName, dopts...)
 	if err != nil {
 		return nil, err
 	}
+	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, ctrlCh)
+	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
-
-	go ctrlCh.monitorConnectivityState()
+	start := make(chan struct{})
+	go func() {
+		close(start)
+		ctrlCh.monitorConnectivityState()
+	}()
+	<-start
 	return ctrlCh, nil
+}
+
+func (cc *controlChannel) OnMessage(msg any) {
+	st, ok := msg.(connectivity.State)
+	if !ok {
+		panic(fmt.Sprintf("Unexpected message type %T , wanted connectectivity.State type", msg))
+	}
+	cc.state.Put(st)
 }
 
 // dialOpts constructs the dial options for the control plane channel.
@@ -97,7 +116,6 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig st
 	if bOpts.Dialer != nil {
 		dopts = append(dopts, grpc.WithContextDialer(bOpts.Dialer))
 	}
-
 	// The control channel will use the channel credentials from the parent
 	// channel, including any call creds associated with the channel creds.
 	var credsOpt grpc.DialOption
@@ -154,19 +172,21 @@ func (cc *controlChannel) monitorConnectivityState() {
 	// returning only one new picker, regardless of how many backoff timers are
 	// cancelled.
 
-	// Using the background context is fine here since we check for the ClientConn
-	// entering SHUTDOWN and return early in that case.
-	ctx := context.Background()
-
 	first := true
+	defer func() {
+		cc.unsubscribe()
+		cc.state.Close()
+	}()
 	for {
 		// Wait for the control channel to become READY.
-		for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
+		var s any
+		for s = <-cc.state.Get(); s != connectivity.Ready; s = <-cc.state.Get() {
+			cc.state.Load()
 			if s == connectivity.Shutdown {
 				return
 			}
-			cc.cc.WaitForStateChange(ctx, s)
 		}
+		cc.state.Load()
 		cc.logger.Infof("Connectivity state is READY")
 
 		if !first {
@@ -176,11 +196,13 @@ func (cc *controlChannel) monitorConnectivityState() {
 		first = false
 
 		// Wait for the control channel to move out of READY.
-		cc.cc.WaitForStateChange(ctx, connectivity.Ready)
-		if cc.cc.GetState() == connectivity.Shutdown {
+		s = <-cc.state.Get()
+		cc.state.Load()
+
+		if s == connectivity.Shutdown {
 			return
 		}
-		cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
+		cc.logger.Infof("Connectivity state is %s", s)
 	}
 }
 
