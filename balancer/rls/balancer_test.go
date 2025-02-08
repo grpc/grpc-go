@@ -54,7 +54,7 @@ import (
 // TestConfigUpdate_ControlChannel tests the scenario where a config update
 // changes the RLS server name. Verifies that the new control channel is created
 // and the old one is closed.
-func TestConfigUpdate_ControlChannel(t *testing.T) {
+func (s) TestConfigUpdate_ControlChannel(t *testing.T) {
 	// Start two RLS servers.
 	lis1 := testutils.NewListenerWrapper(t, nil)
 	rlsServer1, rlsReqCh1 := rlstest.SetupFakeRLSServer(t, lis1)
