@@ -77,7 +77,6 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", sc.ServerURI, err)
 	}
-	cc.Connect()
 
 	return &grpcTransport{cc: cc}, nil
 }
