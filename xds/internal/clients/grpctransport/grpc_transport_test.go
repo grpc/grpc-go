@@ -20,21 +20,29 @@ package grpctransport
 
 import (
 	"context"
+	"io"
+	"net"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"github.com/google/go-cmp/cmp"
 )
 
 const (
-	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
-	defaultTestTimeout            = 10 * time.Second
+	defaultTestTimeout = 10 * time.Second
+)
+
+var (
+	testDiscoverRequest  = &v3discoverypb.DiscoveryRequest{VersionInfo: "1"}
+	testDiscoverResponse = &v3discoverypb.DiscoveryResponse{VersionInfo: "1"}
 )
 
 type s struct {
@@ -43,6 +51,77 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+type testServer struct {
+	lis         net.Listener // listener used by the test gRPC server
+	requestChan chan []byte  // channel to send received requests on to verify
+}
+
+// setupTestServer starts a gRPC test server that uses the same byteCodec as
+// grpcTransport. It registers a streaming handler for the "test.Service/Stream"
+// method and returns a testServer struct that contains the listener and a
+// channel for received requests from the client on the stream.
+func setupTestServer(t *testing.T) *testServer {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen on localhost:0: %v", err)
+	}
+	ts := &testServer{
+		requestChan: make(chan []byte, 100),
+		lis:         lis,
+	}
+
+	s := grpc.NewServer(grpc.ForceServerCodec(&byteCodec{}))
+	s.RegisterService(&grpc.ServiceDesc{
+		ServiceName: "test.Service",
+		HandlerType: (*any)(nil),
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName:    "Stream",
+				Handler:       ts.streamHandler,
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+		},
+	}, struct{}{})
+	go func() {
+		if err := s.Serve(lis); err != nil {
+			t.Logf("Server exited with error: %v", err)
+		}
+	}()
+	t.Cleanup(s.Stop)
+
+	return ts
+}
+
+// streamHandler is the handler for the "test.Service/Stream" method. It waits
+// for a message from the client on the stream, and then sends a discovery
+// response message back to the client. It also put the received message in
+// requestChan for client to verify if the correct request was received. It
+// continues until the client closes the stream.
+func (s *testServer) streamHandler(_ any, stream grpc.ServerStream) error {
+	for {
+		var msg []byte
+		err := stream.RecvMsg(&msg)
+		if err == io.EOF {
+			// read done.
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		s.requestChan <- msg
+
+		// Send a discovery response message on the stream.
+		res, err := proto.Marshal(testDiscoverResponse)
+		if err != nil {
+			return err
+		}
+		if err := stream.SendMsg(res); err != nil {
+			return err
+		}
+	}
 }
 
 // TestBuild verifies that the grpctransport.Builder creates a new
@@ -116,9 +195,9 @@ func (s) TestBuild(t *testing.T) {
 }
 
 // TestNewStream verifies that grpcTransport.NewStream() successfully creates a
-// new client stream for the xDS management server.
+// new client stream for the server.
 func (s) TestNewStream(t *testing.T) {
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	ts := setupTestServer(t)
 
 	tests := []struct {
 		name      string
@@ -127,7 +206,7 @@ func (s) TestNewStream(t *testing.T) {
 	}{
 		{
 			name:      "success",
-			serverURI: mgmtServer.Address,
+			serverURI: ts.lis.Addr().String(),
 			wantErr:   false,
 		},
 		{
@@ -151,7 +230,7 @@ func (s) TestNewStream(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			_, err = transport.NewStream(ctx, "test-method")
+			_, err = transport.NewStream(ctx, "/test.Service/Stream")
 			if (err != nil) != test.wantErr {
 				t.Fatalf("transport.NewStream() error = %v, wantErr %v", err, test.wantErr)
 			}
@@ -159,19 +238,24 @@ func (s) TestNewStream(t *testing.T) {
 	}
 }
 
-// TestStream_Send verifies that grpcTransport.Stream.Send() successfully sends
-// a message on the stream. It starts a management server to create a stream
-// and sends a marshalled DiscoveryRequest proto on it.
-func (s) TestStream_Send(t *testing.T) {
+// TestStream_SendAndRecv verifies that grpcTransport.Stream.Send()
+// and grpcTransport.Stream.Recv() successfully send and receive messages
+// on the stream.
+//
+// It starts a gRPC test server using setupTestServer(). The test then sends a
+// testDiscoverRequest on the stream and verifies that the received discovery
+// on the server is same as sent. It then wait to receive a
+// testDiscoverResponse from the server and verifies that the received
+// discovery response is same as sent from the server.
+func (s) TestStream_SendAndRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Start an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	ts := setupTestServer(t)
 
-	// Build a grpc-based transport to the above xDS management server.
+	// Build a grpc-based transport to the above server.
 	serverCfg := clients.ServerConfig{
-		ServerURI:  mgmtServer.Address,
+		ServerURI:  ts.lis.Addr().String(),
 		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
@@ -181,18 +265,50 @@ func (s) TestStream_Send(t *testing.T) {
 	}
 	defer transport.Close()
 
-	// Create a new stream to the xDS management server.
-	stream, err := transport.NewStream(ctx, "test-method")
+	// Create a new stream to the server.
+	stream, err := transport.NewStream(ctx, "/test.Service/Stream")
 	if err != nil {
 		t.Fatalf("failed to create stream: %v", err)
 	}
 
 	// Send a discovery request message on the stream.
-	req, err := proto.Marshal(&v3discoverypb.DiscoveryRequest{})
+	msg, err := proto.Marshal(testDiscoverRequest)
 	if err != nil {
 		t.Fatalf("failed to marshal DiscoveryRequest: %v", err)
 	}
-	if err := stream.Send(req); err != nil {
+	if err := stream.Send(msg); err != nil {
 		t.Fatalf("failed to send message: %v", err)
+	}
+	// Verify that the DiscoveryRequest received on the server was same as
+	// sent.
+	select {
+	case res, ok := <-ts.requestChan:
+		if !ok {
+			t.Fatalf("ts.requestChan is closed")
+		}
+		var gotReq v3discoverypb.DiscoveryRequest
+		if err := proto.Unmarshal(res, &gotReq); err != nil {
+			t.Fatalf("failed to unmarshal response from ts.requestChan to DiscoveryRequest: %v", err)
+		}
+		if !cmp.Equal(testDiscoverRequest, &gotReq, protocmp.Transform()) {
+			t.Fatalf("<-ts.requestChan = %v, want %v", &gotReq, &testDiscoverRequest)
+		}
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for request to reach server")
+	}
+
+	// Wait until response message is received from the server.
+	res, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("failed to receive message: %v", err)
+	}
+	// Verify that the DiscoveryResponse received was same as sent from the
+	// server.
+	var gotRes v3discoverypb.DiscoveryResponse
+	if err := proto.Unmarshal(res, &gotRes); err != nil {
+		t.Fatalf("failed to unmarshal response from ts.requestChan to DiscoveryRequest: %v", err)
+	}
+	if !cmp.Equal(testDiscoverResponse, &gotRes, protocmp.Transform()) {
+		t.Fatalf("proto.Unmarshal(res, &gotRes) = %v, want %v", &gotRes, testDiscoverResponse)
 	}
 }
