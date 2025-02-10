@@ -22,13 +22,19 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// A Config structure is used to configure an xDS client. After one has been
-// passed to an xDS function it must not be modified. A Config may be used;
-// the xDS package will also not modify it.
+// Config is used to configure an xDS client. After one has been passed to an
+// xDS function, it must not be modified. A Config may be used; the xDS package
+// will also not modify it.
 type Config struct {
-	// Servers specifies a list of xDS management servers to connect to,
-	// including fallbacks. xDS client use the first available server from the
-	// list. To ensure high availability, list the most reliable server first.
+	// Servers specifies a list of xDS management servers to connect to. The
+	// order of the servers in this list reflects the order of preference of
+	// the data returned by those servers. xDS client use the first
+	// available server from the list.
+	//
+	// See [gRFC A71] for more details on fallback behavior when the primary
+	// xDS server is unavailable.
+	//
+	// [gRFC A71]: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
 	Servers []clients.ServerConfig
 
 	// Authorities map is used to define different authorities, in a federated

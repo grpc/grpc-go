@@ -18,32 +18,26 @@
 
 package xdsclient
 
-// OnCallbackProcessed is a function to be invoked by resource watcher
-// implementations upon completing the processing of a callback from the xDS
-// client. Failure to invoke this callback prevents the xDS client from reading
-// further messages from the xDS server.
-type OnCallbackProcessed func()
-
-// ResourceDataOrError is a struct that contains either ResourceData or
-// error. It is used to represent the result of an xDS resource update. Exactly
-// one of Data or Err will be non-nil.
-type ResourceDataOrError struct {
-	Data ResourceData
-	Err  error
-}
-
 // ResourceWatcher wraps the callbacks to be invoked for different events
 // corresponding to the resource being watched. gRFC A88 contains an exhaustive
 // list of what method is invoked under what conditions.
+//
+// onCallbackProcessed in the callbacks is a function to be invoked by
+// resource watcher implementations upon completing the processing of a
+// callback from the xDS client. Failure to invoke this callback prevents the
+// xDS client from reading further messages from the xDS server.
 type ResourceWatcher interface {
-	// ResourceChanged either indicates a new version of the resource is
-	// available or an an error occurred while trying to fetch or decode the
-	// associated resource. In case of an error, the previous version of the
-	// resource should be considered invalid.
-	ResourceChanged(ResourceDataOrError, OnCallbackProcessed)
+	// ResourceChanged indicates a new version of the resource is available.
+	ResourceChanged(resourceData ResourceData, onCallbackProcessed func())
 
-	// AmbientError indicates an error occurred while trying to fetch or decode
-	// the associated resource.  The previous version of the resource should still
-	// be considered valid.
-	AmbientError(err error, done func())
+	// ResourceError indicates an error occurred while trying to fetch or
+	// decode the associated resource. The previous version of the resource
+	// should be considered invalid.
+	ResourceError(err error, onCallbackProcessed func())
+
+	// AmbientError indicates an error occurred after a resource has been
+	// received that should not modify the use of that resource but may be
+	// useful information about the ambient state of the XdsClient. The
+	// previous version of the resource should still be considered valid.
+	AmbientError(err error, onCallbackProcessed func())
 }

@@ -16,9 +16,8 @@
  *
  */
 
-// Package clients provides implementations of the xDS and LRS clients,
-// enabling applications to communicate with xDS management servers and report
-// load.
+// Package clients provides implementations of the clients to interact with
+// envoy.
 //
 // # xDS Client
 //
@@ -104,13 +103,19 @@ func (sc *ServerConfig) equal(other *ServerConfig) bool {
 	return false
 }
 
-// Authority contains configuration for an xDS control plane [authority].
+// Authority contains configuration for an xDS control plane authority.
 //
-// [authority]: https://www.envoyproxy.io/docs/envoy/latest/xds/core/v3/authority.proto
+// See https://github.com/grpc/grpc/blob/master/doc/grpc_xds_bootstrap_format.md
 type Authority struct {
 	// XDSServers contains the list of server configurations for this authority.
-	// xDS client use the first available server from the list. To ensure high
-	// availability, list the most reliable server first.
+	// The order of the servers in this list reflects the order of preference
+	// of the data returned by those servers. xDS client use the first
+	// available server from the list.
+	//
+	// See [gRFC A71] for more details on fallback behavior when the primary
+	// xDS server is unavailable.
+	//
+	// [gRFC A71]: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
 	XDSServers []ServerConfig
 
 	// Extensions can be populated with arbitrary data to be passed to the xDS
