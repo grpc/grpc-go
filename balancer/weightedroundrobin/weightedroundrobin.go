@@ -34,7 +34,8 @@ import (
 )
 
 // attributeKey is the type used as the key to store AddrInfo in the
-// BalancerAttributes field of resolver.Address.
+// BalancerAttributes field of resolver.Address or Attributes field of
+// resolver.Endpoint.
 type attributeKey struct{}
 
 // AddrInfo will be stored in the BalancerAttributes field of Address in order

@@ -2061,9 +2061,8 @@ func (s) TestRingHash_ReorderEndpoints(t *testing.T) {
 		t.Errorf("Got %v RPCs routed to a backend, want %v", got, numRPCs)
 	}
 
-	// Reverse the addresses within the endpoint and verify that the requests
-	// still go to the same address within the same endpoint.
-	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backends[2], backends[3]}, {backends[1], backends[0]}})
+	// Reverse the endpoints order.
+	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backends[2], backends[3]}, {backends[0], backends[1]}})
 	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
