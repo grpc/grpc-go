@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -210,4 +212,164 @@ func (s) TestAuthority_XDSChannelClose(t *testing.T) {
 	if _, err := conn.CloseCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for connection to management server to be closed")
 	}
+}
+
+// Tests the scenario where the primary management server is unavailable at
+// startup and the xDS client falls back to the secondary.  The test verifies
+// that the resource watcher is not notifified of the connectivity failure until
+// all servers have failed.
+func (s) TestAuthority_Fallback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Create primary and secondary management servers with restartable
+	// listeners.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	primaryLis := testutils.NewRestartableListener(l)
+	primaryMgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: primaryLis})
+	l, err = testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	secondaryLis := testutils.NewRestartableListener(l)
+	secondaryMgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: secondaryLis})
+
+	// Create bootstrap configuration with the above primary and fallback
+	// management servers, and an xDS client with that configuration.
+	nodeID := uuid.New().String()
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`
+		[
+			{
+				"server_uri": %q,
+				"channel_creds": [{"type": "insecure"}]
+			},
+			{
+				"server_uri": %q,
+				"channel_creds": [{"type": "insecure"}]
+			}
+		]`, primaryMgmtServer.Address, secondaryMgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsC, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
+	}
+	defer close()
+
+	const clusterName = "cluster"
+	const edsPrimaryName = "eds-primary"
+	const edsSecondaryName = "eds-secondary"
+
+	// Create a Cluster resource on the primary.
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			e2e.DefaultCluster(clusterName, edsPrimaryName, e2e.SecurityLevelNone),
+		},
+		SkipValidation: true,
+	}
+	if err := primaryMgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update primary management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Create a Cluster resource on the secondary .
+	resources = e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			e2e.DefaultCluster(clusterName, edsSecondaryName, e2e.SecurityLevelNone),
+		},
+		SkipValidation: true,
+	}
+	if err := secondaryMgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update primary management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Stop the primary.
+	primaryLis.Close()
+
+	// Register a watch.
+	watcher := newClusterWatcherV2()
+	cdsCancel := xdsresource.WatchCluster(xdsC, clusterName, watcher)
+	defer cdsCancel()
+
+	// Ensure that the connectivity error callback is not called.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if v, err := watcher.errCh.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Error callback on the watcher with error:  %v", v.(error))
+	}
+
+	// Ensure that the resource update callback is invoked.
+	v, err := watcher.updateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error when waiting for a resource update callback:  %v", err)
+	}
+	gotUpdate := v.(xdsresource.ClusterUpdate)
+	wantUpdate := xdsresource.ClusterUpdate{
+		ClusterName:    clusterName,
+		EDSServiceName: edsSecondaryName,
+	}
+	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels")}
+	if diff := cmp.Diff(wantUpdate, gotUpdate, cmpOpts...); diff != "" {
+		t.Fatalf("Diff in the cluster resource update: (-want, got):\n%s", diff)
+	}
+
+	// Stop the secondary.
+	secondaryLis.Close()
+
+	// Ensure that the connectivity error callback is called.
+	if _, err := watcher.errCh.Receive(ctx); err != nil {
+		t.Fatal("Timeout when waiting for error callback on the watcher")
+	}
+}
+
+// TODO: Get rid of the clusterWatcher type in cds_watchers_test.go and use this
+// one instead. Also, rename this to clusterWatcher as part of that refactor.
+type clusterWatcherV2 struct {
+	updateCh           *testutils.Channel // Messages of type xdsresource.ClusterUpdate
+	errCh              *testutils.Channel // Messages of type error
+	resourceNotFoundCh *testutils.Channel // Messages of type error
+}
+
+func newClusterWatcherV2() *clusterWatcherV2 {
+	return &clusterWatcherV2{
+		updateCh:           testutils.NewChannel(),
+		errCh:              testutils.NewChannel(),
+		resourceNotFoundCh: testutils.NewChannel(),
+	}
+}
+
+func (cw *clusterWatcherV2) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+	cw.updateCh.Send(update.Resource)
+	onDone()
+}
+
+func (cw *clusterWatcherV2) OnError(err error, onDone xdsresource.OnDoneFunc) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here simplifies tests that want access to the most recently received
+	// error.
+	cw.errCh.Replace(err)
+	onDone()
+}
+
+func (cw *clusterWatcherV2) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here simplifies tests that want access to the most recently received
+	// error.
+	cw.resourceNotFoundCh.Replace(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response"))
+	onDone()
 }
