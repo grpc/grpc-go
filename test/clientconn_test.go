@@ -105,7 +105,7 @@ type testStatsHandler struct {
 	isDelayed bool
 }
 
-func (h *testStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *testStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	// Check for the delay key in the context.
 	if delayed, ok := ctx.Value(nameResolutionDelayKey).(bool); ok && delayed {
 		h.isDelayed = true
@@ -114,11 +114,13 @@ func (h *testStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) c
 	return ctx
 }
 
-func (h *testStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {}
-func (h *testStatsHandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+func (h *testStatsHandler) HandleRPC(_ context.Context, _ stats.RPCStats) {}
+
+func (h *testStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
-func (h *testStatsHandler) HandleConn(ctx context.Context, s stats.ConnStats) {}
+
+func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 
 // TestNameResolutionDelayInStatsHandler tests the behavior of gRPC client and
 // server to detect and handle name resolution delays.
