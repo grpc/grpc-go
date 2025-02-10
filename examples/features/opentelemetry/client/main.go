@@ -28,18 +28,15 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
+	experimental "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry"
 )
 
@@ -48,37 +45,22 @@ var (
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9465", "the Prometheus exporter endpoint")
 )
 
-// initTracer initializes OpenTelemetry tracing
-func initTracer(serviceName string) (*trace.TracerProvider, error) {
-	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdouttrace exporter: %w", err)
-	}
-
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(attribute.String("service.name", serviceName)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create resource: %w", err)
-	}
-
-	tp := trace.NewTracerProvider(
-		trace.WithSpanProcessor(trace.NewSimpleSpanProcessor(exporter)),
-		trace.WithResource(res),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-	return tp, nil
-}
-
 func main() {
-	flag.Parse()
-
 	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
+
+	spanExporter := tracetest.NewInMemoryExporter()
+	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
+	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
+	textMapPropagator := propagation.NewCompositeTextMapPropagator(opentelemetry.GRPCTraceBinPropagator{})
+	traceOptions := experimental.TraceOptions{
+		TracerProvider:    tracerProvider,
+		TextMapPropagator: textMapPropagator,
+	}
+
 	go func() {
 		log.Printf("Starting Prometheus metrics server at %s\n", *prometheusEndpoint)
 		if err := http.ListenAndServe(*prometheusEndpoint, promhttp.Handler()); err != nil {
@@ -87,27 +69,19 @@ func main() {
 	}()
 
 	ctx := context.Background()
-	// Initialize tracing
-	tp, err := initTracer("grpc-client")
-	if err != nil {
-		log.Fatalf("Error setting up tracing: %v", err)
-	}
-	defer func() { _ = tp.Shutdown(ctx) }()
+	do := opentelemetry.DialOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
+		TraceOptions:   traceOptions})
 
-	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
-
-	cc, err := grpc.NewClient(*addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		do,
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-	)
+	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
 	if err != nil {
 		log.Fatalf("Failed to create a client: %v", err)
 	}
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make an RPC every second. This should trigger telemetry to be emitted from
+	// Make an RPC every second. This should trigger telemetry on prometheous
+	// server along with traces in the in memory exporter to be emitted from
 	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
@@ -115,7 +89,12 @@ func main() {
 		if err != nil {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
-		fmt.Println(r.Message)
+		fmt.Println(r)
+
+		for _, span := range spanExporter.GetSpans() {
+			log.Printf("Span: Name=%s, Kind=%v, Status=%v", span.Name, span.SpanKind, span.Status)
+		}
+
 		time.Sleep(time.Second)
 	}
 }
