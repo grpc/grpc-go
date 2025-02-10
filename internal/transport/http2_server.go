@@ -598,6 +598,15 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
 	}
+	// Start a timer to close the stream on reaching the deadline.
+	if timeoutSet {
+		timer := time.AfterFunc(timeout, func() {
+			t.closeStream(s, true, http2.ErrCodeCancel, false)
+		})
+		s.deadlineTimerCancel = func() {
+			timer.Stop()
+		}
+	}
 	t.mu.Unlock()
 	if channelz.IsOn() {
 		t.channelz.SocketMetrics.StreamsStarted.Add(1)
@@ -1268,6 +1277,9 @@ func (t *http2Server) Close(err error) {
 	channelz.RemoveEntry(t.channelz.ID)
 	// Cancel all active streams.
 	for _, s := range streams {
+		if s.deadlineTimerCancel != nil {
+			s.deadlineTimerCancel()
+		}
 		s.cancel()
 	}
 }
@@ -1306,6 +1318,10 @@ func (t *http2Server) finishStream(s *ServerStream, rst bool, rstCode http2.ErrC
 		return
 	}
 
+	if s.deadlineTimerCancel != nil {
+		s.deadlineTimerCancel()
+	}
+
 	hdr.cleanup = &cleanupStream{
 		streamID: s.id,
 		rst:      rst,
@@ -1324,7 +1340,13 @@ func (t *http2Server) closeStream(s *ServerStream, rst bool, rstCode http2.ErrCo
 	// called to interrupt the potential blocking on other goroutines.
 	s.cancel()
 
-	s.swapState(streamDone)
+	oldState := s.swapState(streamDone)
+	if oldState == streamDone {
+		return
+	}
+	if s.deadlineTimerCancel != nil {
+		s.deadlineTimerCancel()
+	}
 	t.deleteStream(s, eosReceived)
 
 	t.controlBuf.put(&cleanupStream{

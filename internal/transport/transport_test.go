@@ -2961,3 +2961,90 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 		t.Errorf("bytesRead = %d, want = %d", bytesRead, headerLen)
 	}
 }
+
+// Tests a scenario when the client doesn't send an RST frame when the
+// configured deadline is reached. The test verifies that the server sends an
+// RST stream only after the deadline is reached.
+func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	defer server.stop()
+	// Create a client that can override server stream quota.
+	mconn, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Clent failed to dial:%v", err)
+	}
+	defer mconn.Close()
+	if err := mconn.SetWriteDeadline(time.Now().Add(time.Second * 10)); err != nil {
+		t.Fatalf("Failed to set write deadline: %v", err)
+	}
+	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+	}
+	// rstTimeChan chan indicates that reader received a RSTStream from server.
+	rstTimeChan := make(chan time.Time, 1)
+	var mu sync.Mutex
+	framer := http2.NewFramer(mconn, mconn)
+	if err := framer.WriteSettings(); err != nil {
+		t.Fatalf("Error while writing settings: %v", err)
+	}
+	go func() { // Launch a reader for this misbehaving client.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame := frame.(type) {
+			case *http2.PingFrame:
+				// Write ping ack back so that server's BDP estimation works right.
+				mu.Lock()
+				framer.WritePing(true, frame.Data)
+				mu.Unlock()
+			case *http2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeCancel {
+					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeCancel", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+				}
+				rstTimeChan <- time.Now()
+				return
+			default:
+				// Do nothing.
+			}
+		}
+	}()
+	// Create a stream.
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":authority", Value: "localhost"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: "10m"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	mu.Lock()
+	startTime := time.Now()
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		mu.Unlock()
+		t.Fatalf("Error while writing headers: %v", err)
+	}
+	mu.Unlock()
+
+	// Test server behavior for deadline expiration.
+	var rstTime time.Time
+	select {
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Test timed out.")
+	case rstTime = <-rstTimeChan:
+	}
+
+	if got, want := rstTime.Sub(startTime), 10*time.Millisecond; got < want {
+		t.Fatalf("RST frame received earlier than expected by duration: %v", want-got)
+	}
+}
