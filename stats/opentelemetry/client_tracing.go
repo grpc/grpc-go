@@ -50,5 +50,8 @@ func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method str
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	if ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo); ok && ri.ai != nil && ri.ai.resolutionDelay {
+		span.AddEvent("Name resolution completed with delay")
+	}
 	return ctx, span
 }

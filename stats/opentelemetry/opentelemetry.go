@@ -211,6 +211,7 @@ type attemptInfo struct {
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRPCAttempts uint32
+	resolutionDelay     bool
 }
 
 type clientMetrics struct {
