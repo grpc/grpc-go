@@ -18,7 +18,7 @@
  *
  */
 
-// Package lrsclient provides an [LRS] (Load Reporting Service) client.
+// Package lrsclient provides an LRS (Load Reporting Service) client.
 //
 // [LRS]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto
 package lrsclient
@@ -31,7 +31,8 @@ import (
 type LRSClient struct {
 }
 
-// ReportLoad creates a new load reporting stream for the client.
+// ReportLoad creates a new load reporting stream for the client. It creates a
+// LoadStore and return it for the caller to report loads.
 func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) *LoadStore {
 	panic("unimplemented")
 }
