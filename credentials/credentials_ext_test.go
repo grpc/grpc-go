@@ -79,17 +79,17 @@ func (s) TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 	tests := []struct {
 		name           string
 		expectedAuth   string
-		expectRPCError bool
+		wantRPCError bool
 	}{
 		{
 			name:           "CorrectAuthorityWithTLS",
 			expectedAuth:   "auth.test.example.com",
-			expectRPCError: false,
+			wantRPCError: false,
 		},
 		{
 			name:           "IncorrectAuthorityWithTLS",
 			expectedAuth:   "auth.example.com",
-			expectRPCError: true,
+			wantRPCError: true,
 		},
 	}
 	for _, tt := range tests {
@@ -122,7 +122,7 @@ func (s) TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 			defer cancel()
 
 			_, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.expectedAuth))
-			if tt.expectRPCError {
+			if tt.wantRPCError {
 				checkUnavailableRPCError(t, err)
 			} else if err != nil {
 				t.Fatalf("EmptyCall() rpc failed: %v", err)
@@ -316,18 +316,19 @@ func (c *FakeCredsWithAuthValidator) ServerHandshake(rawConn net.Conn) (net.Conn
 func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	tests := []struct {
 		name           string
+		creds any
 		expectedAuth   string
-		expectRPCError bool
+		wantRPCError bool
 	}{
 		{
 			name:           "CorrectAuthorityWithFakeCreds",
 			expectedAuth:   "auth.test.example.com",
-			expectRPCError: false,
+			wantRPCError: false,
 		},
 		{
 			name:           "IncorrectAuthorityWithFakeCreds",
 			expectedAuth:   "auth.example.com",
-			expectRPCError: true,
+			wantRPCError: true,
 		},
 	}
 	for _, tt := range tests {
@@ -355,7 +356,7 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 			defer cancel()
 
 			_, err = testgrpc.NewTestServiceClient(clientConn).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.expectedAuth))
-			if tt.expectRPCError {
+			if tt.wantRPCError {
 				checkUnavailableRPCError(t, err)
 			} else if err != nil {
 				t.Fatalf("EmptyCall() rpc failed: %v", err)

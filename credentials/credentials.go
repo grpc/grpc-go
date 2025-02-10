@@ -120,10 +120,9 @@ type AuthInfo interface {
 	AuthType() string
 }
 
-// AuthorityValidator defines an interface for validating the authority used to
-// override the `:authority` header. A struct implementing AuthInfo should also
-// implement AuthorityValidator if the credentials need to support per-RPC
-// authority overrides.
+// AuthorityValidator validates the authority used to override the `:authority`
+// header. A struct implementing AuthInfo should also implement
+// AuthorityValidator if the credentials need to support per-RPC authority overrides.
 type AuthorityValidator interface {
 	ValidateAuthority(authority string) error
 }
