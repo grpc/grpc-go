@@ -122,7 +122,7 @@ func (h *testStatsHandler) HandleConn(ctx context.Context, s stats.ConnStats) {}
 
 // TestNameResolutionDelayInStatsHandler tests the behavior of gRPC client and
 // server to detect and handle name resolution delays.
-func TestNameResolutionDelayInStatsHandler(t *testing.T) {
+func (s) TestNameResolutionDelayInStatsHandler(t *testing.T) {
 	// Manual resolver to simulate delayed resolution.
 	r := manual.NewBuilderWithScheme("test")
 	t.Logf("Registered manual resolver with scheme: %s", r.Scheme())
