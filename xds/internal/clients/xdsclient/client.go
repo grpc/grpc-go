@@ -18,8 +18,7 @@
  *
  */
 
-// Package xdsclient provides an implementation of the xDS client to
-// communicate with xDS management servers.
+// Package xdsclient provides an xDS (Extensible Discovery Service) client.
 //
 // It allows applications to:
 //   - Create xDS client instances with in-memory configurations.
@@ -48,9 +47,11 @@ func New(config Config) (*XDSClient, error) {
 
 // WatchResource starts watching the specified resource.
 //
-// typeURL must be present in the XDSClient's configured ResourceTypes. The
-// ResourceType will be used to decode the matching resource when it is
-// received, and the watcher will be called with the result.
+// typeURL must be present in the XDSClient's configured ResourceTypes. If
+// typeURL is not present, watch will not be started. The ResourceType
+// obtained from the ResourceTypes against the typeURL will be used to decode
+// the matching resource when it is received, and the watcher will be called
+// with the result.
 //
 // Cancel cancels the watch and prevents future calls to the watcher.
 func (c *XDSClient) WatchResource(typeURL string, name string, watcher ResourceWatcher) (cancel func()) {

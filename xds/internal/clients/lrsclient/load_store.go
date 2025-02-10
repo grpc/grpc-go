@@ -23,11 +23,8 @@ package lrsclient
 import "time"
 
 // LoadStore keeps the loads for multiple clusters and services to be reported
-// via LRS. It contains loads to report to one LRS server. It creates
-// multiple stores for multiple servers.
-//
-// A LoadStore is created via LRSClient.ReportLoad and returned for the caller
-// to report loads.
+// via LRS. It contains loads reported to one LRS server. Create multiple
+// stores for multiple servers.
 type LoadStore struct {
 }
 
@@ -43,8 +40,7 @@ func (s *LoadStore) Stats(clusterNames []string) []*Data {
 	panic("unimplemented")
 }
 
-// PerCluster returns the perClusterStore for the given clusterName +
-// serviceName.
+// PerCluster returns the PerClusterReporter for the given cluster and service.
 func (s *LoadStore) PerCluster(clusterName, serviceName string) PerClusterReporter {
 	panic("unimplemented")
 }
@@ -62,8 +58,7 @@ type Data struct {
 	Drops map[string]uint64
 	// LocalityStats contains load reports per locality.
 	LocalityStats map[string]LocalityData
-	// ReportInternal is the duration since last time load was reported (Stats()
-	// was called).
+	// ReportInterval is the duration over which load was reported.
 	ReportInterval time.Duration
 }
 
@@ -96,7 +91,8 @@ type ServerLoadData struct {
 	Sum float64
 }
 
-// PerClusterReporter wraps the methods from the LoadStore that are used here.
+// PerClusterReporter defines the methods that the LoadStore uses to track
+// per-cluster load reporting data.
 type PerClusterReporter interface {
 	CallStarted(locality string)
 	CallFinished(locality string, err error)

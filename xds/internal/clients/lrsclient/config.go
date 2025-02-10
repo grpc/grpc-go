@@ -22,9 +22,9 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// A Config structure is used to configure an LRS client. After one has been
-// passed to an LRS function it must not be modified. A Config may be used;
-// the LRS package will also not modify it.
+// Config is used to configure an LRS client. After one has been passed to an
+// LRS function, it must not be modified. A Config may be used; the LRS package
+// will also not modify it.
 type Config struct {
 	// Node is the identity of the client application reporting load to the
 	// LRS server.
