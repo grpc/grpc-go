@@ -96,7 +96,7 @@ type server struct {
 }
 
 // EmptyCall is a simple RPC that returns an empty response.
-func (s *server) EmptyCall(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+func (s *server) EmptyCall(_ context.Context, req *testpb.Empty) (*testpb.Empty, error) {
 	return &testpb.Empty{}, nil
 }
 
@@ -124,7 +124,7 @@ func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 
 // TestNameResolutionDelayInStatsHandler tests the behavior of gRPC client and
 // server to detect and handle name resolution delays.
-func (s) TestNameResolutionDelayInStatsHandler(t *testing.T) {
+func TestNameResolutionDelayInStatsHandler(t *testing.T) {
 	// Manual resolver to simulate delayed resolution.
 	r := manual.NewBuilderWithScheme("test")
 	t.Logf("Registered manual resolver with scheme: %s", r.Scheme())
