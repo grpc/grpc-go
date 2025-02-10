@@ -38,6 +38,21 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
+var cert tls.Certificate
+var creds credentials.TransportCredentials
+
+func init() {
+	var err error
+	cert, err = tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		log.Fatalf("failed to load key pair: %s", err)
+	}
+	creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+	if err != nil {
+		log.Fatalf("Failed to create credentials %v", err)
+	}
+}
+
 func authorityChecker(ctx context.Context, expectedAuthority string) (*testpb.Empty, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -77,27 +92,23 @@ func checkUnavailableRPCError(t *testing.T, err error) {
 // the latter case.
 func (s) TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 	tests := []struct {
-		name           string
-		expectedAuth   string
+		name         string
+		expectedAuth string
 		wantRPCError bool
 	}{
 		{
-			name:           "CorrectAuthorityWithTLS",
-			expectedAuth:   "auth.test.example.com",
+			name:         "CorrectAuthorityWithTLS",
+			expectedAuth: "auth.test.example.com",
 			wantRPCError: false,
 		},
 		{
-			name:           "IncorrectAuthorityWithTLS",
-			expectedAuth:   "auth.example.com",
+			name:         "IncorrectAuthorityWithTLS",
+			expectedAuth: "auth.example.com",
 			wantRPCError: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
-			if err != nil {
-				log.Fatalf("failed to load key pair: %s", err)
-			}
 			ss := &stubserver.StubServer{
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					return authorityChecker(ctx, tt.expectedAuth)
@@ -107,10 +118,6 @@ func (s) TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}
 			defer ss.Stop()
-			creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
-			if err != nil {
-				t.Fatalf("Failed to create credentials %v", err)
-			}
 
 			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(creds))
 			if err != nil {
@@ -132,10 +139,6 @@ func (s) TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 }
 
 func (s) TestTLSCredsWithNoAuthorityOverride(t *testing.T) {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
-	if err != nil {
-		log.Fatalf("failed to load key pair: %s", err)
-	}
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return authorityChecker(ctx, "x.test.example.com")
@@ -145,10 +148,6 @@ func (s) TestTLSCredsWithNoAuthorityOverride(t *testing.T) {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
-	if err != nil {
-		t.Fatalf("Failed to create credentials %v", err)
-	}
 
 	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(creds))
 	if err != nil {
@@ -230,41 +229,6 @@ func (c *FakeCredsNoAuthValidator) ServerHandshake(rawConn net.Conn) (net.Conn, 
 	return rawConn, TestAuthInfo{}, nil
 }
 
-// TestCallOptionWithNoAuthorityValidator tests the CallAuthority call option
-// with custom credentials that do not implement AuthorityValidator and verifies
-// that it fails with `UNAVAILABLE` status code.
-func (s) TestCallOptionWithNoAuthorityValidator(t *testing.T) {
-	const expectedAuthority = "auth.test.example.com"
-
-	// Initialize a stub server with a basic handler.
-	ss := stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	if err := ss.StartServer(); err != nil {
-		t.Fatalf("Failed to start stub server: %v", err)
-	}
-	defer ss.Stop()
-
-	// Create a gRPC client connection with FakeCredsNoAuthValidator.
-	clientConn, err := grpc.NewClient(ss.Address,
-		grpc.WithTransportCredentials(&FakeCredsNoAuthValidator{}))
-	if err != nil {
-		t.Fatalf("Failed to create gRPC client connection: %v", err)
-	}
-	defer clientConn.Close()
-
-	// Perform a test RPC with a specified call authority.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	_, err = testgrpc.NewTestServiceClient(clientConn).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(expectedAuthority))
-
-	// Verify that the RPC fails with an UNAVAILABLE error.
-	checkUnavailableRPCError(t, err)
-}
-
 // FakeCredsWithAuthValidator is a test credential that does not implement AuthorityValidator.
 type FakeCredsWithAuthValidator struct {
 }
@@ -315,19 +279,27 @@ func (c *FakeCredsWithAuthValidator) ServerHandshake(rawConn net.Conn) (net.Conn
 // it with both correct and incorrect authority override.
 func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	tests := []struct {
-		name           string
-		creds any
-		expectedAuth   string
+		name         string
+		creds        credentials.TransportCredentials
+		expectedAuth string
 		wantRPCError bool
 	}{
 		{
-			name:           "CorrectAuthorityWithFakeCreds",
-			expectedAuth:   "auth.test.example.com",
+			name:         "CorrectAuthorityWithFakeCreds",
+			expectedAuth: "auth.test.example.com",
+			creds:        &FakeCredsWithAuthValidator{},
 			wantRPCError: false,
 		},
 		{
-			name:           "IncorrectAuthorityWithFakeCreds",
-			expectedAuth:   "auth.example.com",
+			name:         "IncorrectAuthorityWithFakeCreds",
+			expectedAuth: "auth.example.com",
+			creds:        &FakeCredsWithAuthValidator{},
+			wantRPCError: true,
+		},
+		{
+			name:         "FakeCredsWithNoAuthValidator",
+			creds:        &FakeCredsNoAuthValidator{},
+			expectedAuth: "auth.test.example.com",
 			wantRPCError: true,
 		},
 	}
@@ -345,7 +317,7 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 
 			// Create a gRPC client connection with FakeCredsWithAuthValidator.
 			clientConn, err := grpc.NewClient(ss.Address,
-				grpc.WithTransportCredentials(&FakeCredsWithAuthValidator{}))
+				grpc.WithTransportCredentials(tt.creds))
 			if err != nil {
 				t.Fatalf("Failed to create gRPC client connection: %v", err)
 			}
