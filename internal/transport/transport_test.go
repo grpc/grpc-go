@@ -381,21 +381,23 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		h := &testStreamHandler{t: transport.(*http2Server)}
 		s.h = h
 		s.mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
 		switch ht {
 		case notifyCall:
-			go transport.HandleStreams(context.Background(), h.handleStreamAndNotify)
+			go transport.HandleStreams(ctx, h.handleStreamAndNotify)
 		case suspended:
-			go transport.HandleStreams(context.Background(), func(*ServerStream) {})
+			go transport.HandleStreams(ctx, func(*ServerStream) {})
 		case misbehaved:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamMisbehave(t, s)
 			})
 		case encodingRequiredStatus:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamEncodingRequiredStatus(s)
 			})
 		case invalidHeaderField:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamInvalidHeaderField(s)
 			})
 		case delayRead:
@@ -404,15 +406,15 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			s.mu.Lock()
 			close(s.ready)
 			s.mu.Unlock()
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamDelayRead(t, s)
 			})
 		case pingpong:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamPingPong(t, s)
 			})
 		default:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStream(t, s)
 			})
 		}
@@ -464,13 +466,15 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	addr := resolver.Address{Addr: "localhost:" + server.port}
 	copts.ChannelzParent = channelzSubChannel(t)
 
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	ct, connErr := NewHTTP2Client(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	t.Cleanup(cancel)
+	connectCtx, cCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ct, connErr := NewHTTP2Client(connectCtx, ctx, addr, copts, func(GoAwayReason) {})
 	if connErr != nil {
-		cancel() // Do not cancel in success path.
+		cCancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
-	return server, ct.(*http2Client), cancel
+	return server, ct.(*http2Client), cCancel
 }
 
 func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
@@ -495,10 +499,12 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		}
 		connCh <- conn
 	}()
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	t.Cleanup(cancel)
+	connectCtx, cCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	tr, err := NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
-		cancel() // Do not cancel in success path.
+		cCancel() // Do not cancel in success path.
 		// Server clean-up.
 		lis.Close()
 		if conn, ok := <-connCh; ok {
@@ -506,7 +512,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		}
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	return tr.(*http2Client), cancel
+	return tr.(*http2Client), cCancel
 }
 
 // TestInflightStreamClosing ensures that closing in-flight stream
@@ -739,7 +745,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.Large",
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
@@ -833,7 +839,7 @@ func (s) TestGracefulClose(t *testing.T) {
 		// Correctly clean up the server
 		server.stop()
 	}()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	// Create a stream that will exist for this whole test and confirm basic
@@ -969,7 +975,7 @@ func (s) TestMaxStreams(t *testing.T) {
 	// Try and create a new stream.
 	go func() {
 		defer close(done)
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 		if _, err := ct.NewStream(ctx, callHdr); err != nil {
 			t.Errorf("Failed to open stream: %v", err)
@@ -1353,7 +1359,9 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 
 	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	_, err = NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
 		t.Fatalf("NewHTTP2Client() returned successfully; wanted error")
 	}
@@ -1365,7 +1373,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	// Test context deadline.
 	connectCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, err = NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	_, err = NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
 		t.Fatalf("NewHTTP2Client() returned successfully; wanted error")
 	}
@@ -1440,12 +1448,14 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 			}
 		}
 	}()
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	connectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	ct, err := NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ct, err := NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -1779,9 +1789,11 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 // If any error occurs on a call to Stream.Read, future calls
 // should continue to return that same error.
 func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
-		ctx:         context.Background(),
+		ctx:         ctx,
 		buf:         testRecvBuffer,
 		requestRead: func(int) {},
 	}
@@ -2450,7 +2462,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 		Addr:       "localhost:" + server.port,
 		Attributes: attributes.New(testAttrKey, testAttrVal),
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	creds := &attrTransportCreds{}
 
@@ -2485,7 +2497,7 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		Addr:       "localhost:" + server.port,
 		Attributes: attributes.New(testAttrKey, testAttrVal),
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	var attr *attributes.Attributes
@@ -2829,7 +2841,7 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 
 	// Create a client transport with a custom dialer that hangs the Read()
 	// after Close().
-	ct, err := NewHTTP2Client(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, err := NewHTTP2Client(ctx, ctx, addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Failed to create transport: %v", err)
 	}
@@ -2915,14 +2927,14 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	}
 	copts := ConnectOptions{Dialer: dialer}
 	copts.ChannelzParent = channelzSubChannel(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Create client transport with custom dialer
-	ct, connErr := NewHTTP2Client(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, connErr := NewHTTP2Client(connectCtx, ctx, addr, copts, func(GoAwayReason) {})
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
