@@ -19,6 +19,7 @@ package balancergroup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -42,16 +43,19 @@ const (
 )
 
 var (
-	rrBuilder        = balancer.Get(roundrobin.Name)
-	testBalancerIDs  = []string{"b1", "b2", "b3"}
-	testBackendAddrs []resolver.Address
+	rrBuilder            = balancer.Get(roundrobin.Name)
+	testBalancerIDs      = []string{"b1", "b2", "b3"}
+	testBackendAddrs     []resolver.Address
+	testBackendEndpoints []resolver.Endpoint
 )
 
 const testBackendAddrsCount = 12
 
 func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
-		testBackendAddrs = append(testBackendAddrs, resolver.Address{Addr: fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i)})
+		addr := resolver.Address{Addr: fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i)}
+		testBackendAddrs = append(testBackendAddrs, addr)
+		testBackendEndpoints = append(testBackendEndpoints, resolver.Endpoint{Addresses: []resolver.Address{addr}})
 	}
 }
 
@@ -88,18 +92,18 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	// balancers.
 	gator.Add(testBalancerIDs[0], 2)
 	bg.Add(testBalancerIDs[0], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[0:2]}})
 	gator.Add(testBalancerIDs[1], 1)
 	bg.Add(testBalancerIDs[1], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[2:4]}})
 
 	bg.Start()
 
-	m1 := make(map[resolver.Address]balancer.SubConn)
+	m1 := make(map[string]balancer.SubConn)
 	for i := 0; i < 4; i++ {
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
-		m1[addrs[0]] = sc
+		m1[addrs[0].Addr] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
@@ -107,9 +111,9 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
-		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
+		m1[testBackendAddrs[0].Addr], m1[testBackendAddrs[0].Addr],
+		m1[testBackendAddrs[1].Addr], m1[testBackendAddrs[1].Addr],
+		m1[testBackendAddrs[2].Addr], m1[testBackendAddrs[3].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
@@ -124,7 +128,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	// Add b3, weight 1, backends [1,2].
 	gator.Add(testBalancerIDs[2], 1)
 	bg.Add(testBalancerIDs[2], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[1:3]}})
+	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[1:3]}})
 
 	// Remove b1.
 	gator.Remove(testBalancerIDs[0])
@@ -132,16 +136,16 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 
 	// Update b2 to weight 3, backends [0,3].
 	gator.UpdateWeight(testBalancerIDs[1], 3)
-	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: append([]resolver.Address(nil), testBackendAddrs[0], testBackendAddrs[3])}})
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: append([]resolver.Endpoint(nil), testBackendEndpoints[0], testBackendEndpoints[3])}})
 
 	gator.Start()
 	bg.Start()
 
-	m2 := make(map[resolver.Address]balancer.SubConn)
+	m2 := make(map[string]balancer.SubConn)
 	for i := 0; i < 4; i++ {
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
-		m2[addrs[0]] = sc
+		m2[addrs[0].Addr] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
@@ -149,9 +153,9 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	// Test roundrobin on the last picker.
 	p2 := <-cc.NewPickerCh
 	want = []balancer.SubConn{
-		m2[testBackendAddrs[0]], m2[testBackendAddrs[0]], m2[testBackendAddrs[0]],
-		m2[testBackendAddrs[3]], m2[testBackendAddrs[3]], m2[testBackendAddrs[3]],
-		m2[testBackendAddrs[1]], m2[testBackendAddrs[2]],
+		m2[testBackendAddrs[0].Addr], m2[testBackendAddrs[0].Addr], m2[testBackendAddrs[0].Addr],
+		m2[testBackendAddrs[3].Addr], m2[testBackendAddrs[3].Addr], m2[testBackendAddrs[3].Addr],
+		m2[testBackendAddrs[1].Addr], m2[testBackendAddrs[2].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
@@ -203,7 +207,7 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 // Two rr balancers are added to bg, each with 2 ready subConns. A sub-balancer
 // is removed later, so the balancer group returned has one sub-balancer in its
 // own map, and one sub-balancer in cache.
-func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.BalancerClientConn, map[resolver.Address]*testutils.TestSubConn) {
+func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duration) (*weightedaggregator.Aggregator, *BalancerGroup, *testutils.BalancerClientConn, map[string]*testutils.TestSubConn) {
 	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
@@ -219,18 +223,18 @@ func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duratio
 	// balancers.
 	gator.Add(testBalancerIDs[0], 2)
 	bg.Add(testBalancerIDs[0], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[0:2]}})
 	gator.Add(testBalancerIDs[1], 1)
 	bg.Add(testBalancerIDs[1], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[2:4]}})
 
 	bg.Start()
 
-	m1 := make(map[resolver.Address]*testutils.TestSubConn)
+	m1 := make(map[string]*testutils.TestSubConn)
 	for i := 0; i < 4; i++ {
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
-		m1[addrs[0]] = sc
+		m1[addrs[0].Addr] = sc
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
@@ -238,9 +242,9 @@ func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duratio
 	// Test roundrobin on the last picker.
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[0]],
-		m1[testBackendAddrs[1]], m1[testBackendAddrs[1]],
-		m1[testBackendAddrs[2]], m1[testBackendAddrs[3]],
+		m1[testBackendAddrs[0].Addr], m1[testBackendAddrs[0].Addr],
+		m1[testBackendAddrs[1].Addr], m1[testBackendAddrs[1].Addr],
+		m1[testBackendAddrs[2].Addr], m1[testBackendAddrs[3].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
@@ -261,7 +265,7 @@ func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duratio
 	// Test roundrobin on the with only sub-balancer0.
 	p2 := <-cc.NewPickerCh
 	want = []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
+		m1[testBackendAddrs[0].Addr], m1[testBackendAddrs[1].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
@@ -277,7 +281,10 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 
 	// Turn down subconn for addr2, shouldn't get picker update because
 	// sub-balancer1 was removed.
-	addrToSC[testBackendAddrs[2]].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	addrToSC[testBackendAddrs[2].Addr].UpdateState(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   errors.New("test error"),
+	})
 	for i := 0; i < 10; i++ {
 		select {
 		case <-cc.NewPickerCh:
@@ -295,10 +302,10 @@ func (s) TestBalancerGroup_locality_caching(t *testing.T) {
 
 	p3 := <-cc.NewPickerCh
 	want := []balancer.SubConn{
-		addrToSC[testBackendAddrs[0]], addrToSC[testBackendAddrs[0]],
-		addrToSC[testBackendAddrs[1]], addrToSC[testBackendAddrs[1]],
+		addrToSC[testBackendAddrs[0].Addr], addrToSC[testBackendAddrs[0].Addr],
+		addrToSC[testBackendAddrs[1].Addr], addrToSC[testBackendAddrs[1].Addr],
 		// addr2 is down, b2 only has addr3 in READY state.
-		addrToSC[testBackendAddrs[3]], addrToSC[testBackendAddrs[3]],
+		addrToSC[testBackendAddrs[3].Addr], addrToSC[testBackendAddrs[3].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
@@ -324,10 +331,10 @@ func (s) TestBalancerGroup_locality_caching_close_group(t *testing.T) {
 	// The balancer group is closed. The subconns should be shutdown immediately.
 	shutdownTimeout := time.After(time.Millisecond * 500)
 	scToShutdown := map[balancer.SubConn]int{
-		addrToSC[testBackendAddrs[0]]: 1,
-		addrToSC[testBackendAddrs[1]]: 1,
-		addrToSC[testBackendAddrs[2]]: 1,
-		addrToSC[testBackendAddrs[3]]: 1,
+		addrToSC[testBackendAddrs[0].Addr]: 1,
+		addrToSC[testBackendAddrs[1].Addr]: 1,
+		addrToSC[testBackendAddrs[2].Addr]: 1,
+		addrToSC[testBackendAddrs[3].Addr]: 1,
 	}
 	for i := 0; i < len(scToShutdown); i++ {
 		select {
@@ -353,8 +360,8 @@ func (s) TestBalancerGroup_locality_caching_not_read_within_timeout(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	scToShutdown := map[balancer.SubConn]int{
-		addrToSC[testBackendAddrs[2]]: 1,
-		addrToSC[testBackendAddrs[3]]: 1,
+		addrToSC[testBackendAddrs[2].Addr]: 1,
+		addrToSC[testBackendAddrs[3].Addr]: 1,
 	}
 	for i := 0; i < len(scToShutdown); i++ {
 		select {
@@ -399,8 +406,8 @@ func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testi
 	// shut down immediately.
 	shutdownTimeout := time.After(time.Millisecond * 500)
 	scToShutdown := map[balancer.SubConn]int{
-		addrToSC[testBackendAddrs[2]]: 1,
-		addrToSC[testBackendAddrs[3]]: 1,
+		addrToSC[testBackendAddrs[2].Addr]: 1,
+		addrToSC[testBackendAddrs[3].Addr]: 1,
 	}
 	for i := 0; i < len(scToShutdown); i++ {
 		select {
@@ -415,23 +422,23 @@ func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testi
 		}
 	}
 
-	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[4:6]}})
+	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[4:6]}})
 
 	newSCTimeout := time.After(time.Millisecond * 500)
-	scToAdd := map[resolver.Address]int{
-		testBackendAddrs[4]: 1,
-		testBackendAddrs[5]: 1,
+	scToAdd := map[string]int{
+		testBackendAddrs[4].Addr: 1,
+		testBackendAddrs[5].Addr: 1,
 	}
 	for i := 0; i < len(scToAdd); i++ {
 		select {
 		case addr := <-cc.NewSubConnAddrsCh:
-			c := scToAdd[addr[0]]
+			c := scToAdd[addr[0].Addr]
 			if c == 0 {
 				t.Fatalf("Got newSubConn for %v when there's %d new expected", addr, c)
 			}
-			scToAdd[addr[0]] = c - 1
+			scToAdd[addr[0].Addr] = c - 1
 			sc := <-cc.NewSubConnCh
-			addrToSC[addr[0]] = sc
+			addrToSC[addr[0].Addr] = sc
 			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 			sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 		case <-newSCTimeout:
@@ -442,9 +449,9 @@ func (s) TestBalancerGroup_locality_caching_read_with_different_builder(t *testi
 	// Test roundrobin on the new picker.
 	p3 := <-cc.NewPickerCh
 	want := []balancer.SubConn{
-		addrToSC[testBackendAddrs[0]], addrToSC[testBackendAddrs[0]],
-		addrToSC[testBackendAddrs[1]], addrToSC[testBackendAddrs[1]],
-		addrToSC[testBackendAddrs[4]], addrToSC[testBackendAddrs[5]],
+		addrToSC[testBackendAddrs[0].Addr], addrToSC[testBackendAddrs[0].Addr],
+		addrToSC[testBackendAddrs[1].Addr], addrToSC[testBackendAddrs[1].Addr],
+		addrToSC[testBackendAddrs[4].Addr], addrToSC[testBackendAddrs[5].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
@@ -572,17 +579,17 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	})
 	gator.Add(testBalancerIDs[0], 1)
 	bg.Add(testBalancerIDs[0], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[0:2]}})
 
 	bg.Start()
 	defer bg.Close()
 
-	m1 := make(map[resolver.Address]balancer.SubConn)
+	m1 := make(map[string]balancer.SubConn)
 	scs := make(map[balancer.SubConn]bool)
 	for i := 0; i < 2; i++ {
 		addrs := <-cc.NewSubConnAddrsCh
 		sc := <-cc.NewSubConnCh
-		m1[addrs[0]] = sc
+		m1[addrs[0].Addr] = sc
 		scs[sc] = true
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -590,7 +597,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 
 	p1 := <-cc.NewPickerCh
 	want := []balancer.SubConn{
-		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
+		m1[testBackendAddrs[0].Addr], m1[testBackendAddrs[1].Addr],
 	}
 	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p1)); err != nil {
 		t.Fatal(err)
@@ -609,7 +616,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 			bd.Data.(balancer.Balancer).Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			ccs.ResolverState.Addresses = ccs.ResolverState.Addresses[1:]
+			ccs.ResolverState.Endpoints = ccs.ResolverState.Endpoints[1:]
 			bal := bd.Data.(balancer.Balancer)
 			return bal.UpdateClientConnState(ccs)
 		},
@@ -620,7 +627,7 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 		t.Fatalf("ParseConfig(%s) failed: %v", string(cfgJSON), err)
 	}
 	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: testBackendAddrs[2:4]},
+		ResolverState:  resolver.State{Endpoints: testBackendEndpoints[2:4]},
 		BalancerConfig: lbCfg,
 	}); err != nil {
 		t.Fatalf("error updating ClientConn state: %v", err)
