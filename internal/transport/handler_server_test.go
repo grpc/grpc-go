@@ -453,7 +453,7 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handleStreamTest, s *ServerStream)) {
 	st := newHandleStreamTest(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	t.Cleanup(cancel)
 	st.ht.HandleStreams(
 		ctx, func(s *ServerStream) { go handleStream(st, s) },
 	)
