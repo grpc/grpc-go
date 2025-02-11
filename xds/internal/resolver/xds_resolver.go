@@ -79,10 +79,24 @@ func newBuilderWithPoolForTesting(pool *xdsclient.Pool) (resolver.Builder, error
 	}, nil
 }
 
+// newBuilderWithClientForTesting creates a new xds resolver builder using the
+// specific xDS client, so that tests have complete control over the exact
+// specific xDS client being used.
+func newBuilderWithClientForTesting(client xdsclient.XDSClient) (resolver.Builder, error) {
+	return &xdsResolverBuilder{
+		newXDSClient: func(string, estats.MetricsRecorder) (xdsclient.XDSClient, func(), error) {
+			// Returning an empty close func here means that the responsibility
+			// of closing the client lies with the caller.
+			return client, func() {}, nil
+		},
+	}, nil
+}
+
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 	internal.NewXDSResolverWithConfigForTesting = newBuilderWithConfigForTesting
 	internal.NewXDSResolverWithPoolForTesting = newBuilderWithPoolForTesting
+	internal.NewXDSResolverWithClientForTesting = newBuilderWithClientForTesting
 
 	rinternal.NewWRR = wrr.NewRandom
 	rinternal.NewXDSClient = xdsclient.DefaultPool.NewClient
