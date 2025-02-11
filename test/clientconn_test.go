@@ -95,7 +95,7 @@ type server struct {
 }
 
 // EmptyCall is a simple RPC that returns an empty response.
-func (s *server) EmptyCall(_ context.Context, req *testgrpc.Empty) (*testgrpc.Empty, error) {
+func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
 	return &testgrpc.Empty{}, nil
 }
 
@@ -104,8 +104,10 @@ type testStatsHandler struct {
 	isDelayed bool
 }
 
+// TagRPC is testStatsHandler's implementation of TagRPC.
+// It checks if the name resolution delay flag is present in the context and
+// updates isDelayed accordingly.
 func (h *testStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	// Check for the delay key in the context.
 	if delayed, ok := ctx.Value(nameResolutionDelayKey).(bool); ok && delayed {
 		h.isDelayed = true
 		fmt.Println("StatsHandler detected name resolution delay.")
@@ -113,22 +115,23 @@ func (h *testStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) cont
 	return ctx
 }
 
+// HandleRPC is testStatsHandler's implementation of HandleRPC.
 func (h *testStatsHandler) HandleRPC(_ context.Context, _ stats.RPCStats) {}
 
+// TagConn is testStatsHandler's implementation of TagConn.
 func (h *testStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
+// HandleConn is testStatsHandler's implementation of HandleConn.
 func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 
 // TestNameResolutionDelayInStatsHandler tests the behavior of gRPC client and
 // server to detect and handle name resolution delays.
 func (s) TestNameResolutionDelayInStatsHandler(t *testing.T) {
-	// Manual resolver to simulate delayed resolution.
-	r := manual.NewBuilderWithScheme("test")
+	r := manual.NewBuilderWithScheme("whatever")
 	t.Logf("Registered manual resolver with scheme: %s", r.Scheme())
 
-	// Start a gRPC server.
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
