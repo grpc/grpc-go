@@ -889,6 +889,8 @@ func (s) TestGracefulClose(t *testing.T) {
 func (s) TestLargeMessageSuspension(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	defer server.stop()
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -900,12 +902,6 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
-	// Launch a goroutine similar to the stream monitoring goroutine in
-	// stream.go to keep track of context timeout and call CloseStream.
-	go func() {
-		<-ctx.Done()
-		s.Close(ContextErr(ctx.Err()))
-	}()
 	// Write should not be done successfully due to flow control.
 	msg := make([]byte, initialWindowSize*8)
 	s.Write(nil, newBufferSlice(msg), &WriteOptions{})
@@ -913,12 +909,14 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != errStreamDone {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
-	expectedErr := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
-	if _, err := s.readTo(make([]byte, 8)); err.Error() != expectedErr.Error() {
-		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
+	// The server will send an RST stream frame on observing the deadline
+	// expiration making the client stream fail with a DeadlineExceeded status.
+	if _, err := s.readTo(make([]byte, 8)); err != io.EOF {
+		t.Fatalf("Read got unexpected error: %v, want %v", err, io.EOF)
 	}
-	ct.Close(fmt.Errorf("closed manually by test"))
-	server.stop()
+	if got, want := s.Status().Code(), codes.DeadlineExceeded; got != want {
+		t.Fatalf("Read got status %v with code %v, want %v", s.Status(), got, want)
+	}
 }
 
 func (s) TestMaxStreams(t *testing.T) {
