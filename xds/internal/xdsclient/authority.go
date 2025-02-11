@@ -238,7 +238,6 @@ func (a *authority) propagateConnectivityErrorToAllWatchers(err error) {
 	for _, rType := range a.resources {
 		for _, state := range rType {
 			for watcher := range state.watchers {
-				watcher := watcher
 				a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
 					watcher.OnError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
 				})

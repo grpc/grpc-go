@@ -708,7 +708,6 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
 
 	// Make an RPC (without the `wait_for_ready` call option) and expect it to
 	// succeed since the fallback management server is up and running.
