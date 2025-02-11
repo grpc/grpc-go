@@ -118,11 +118,6 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			es = &endpointState{}
 			b.endpointStates.Set(endpoint, es)
 			b.shouldRegenerateRing = true
-			// Set the first address only during creation time since its hash
-			// is used to create the ring. Even if the address ordering changes
-			// in subsequent resolver updates, the endpoint hash should remain
-			// the same.
-			es.firstAddr = endpoint.Addresses[0].Addr
 			es.balancer = childState.Balancer
 		} else {
 			// We have seen this endpoint before and created a `endpointState`
@@ -133,6 +128,12 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			if oldWeight := es.weight; oldWeight != newWeight {
 				b.shouldRegenerateRing = true
 			}
+			if es.firstAddr != endpoint.Addresses[0].Addr {
+				// If the order of the addresses for a given endpoint change,
+				// that will change the position of the endpoint in the ring.
+				// -A61
+				b.shouldRegenerateRing = true
+			}
 			oldState := es.state.ConnectivityState
 			newState := childState.State.ConnectivityState
 			if oldState != newState && newState == connectivity.TransientFailure {
@@ -141,6 +142,7 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 		}
 		es.weight = newWeight
 		es.state = childState.State
+		es.firstAddr = endpoint.Addresses[0].Addr
 	}
 
 	for _, endpoint := range b.endpointStates.Keys() {

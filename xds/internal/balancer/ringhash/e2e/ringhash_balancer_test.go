@@ -2011,95 +2011,34 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 }
 
-// Tests that requests are sent to the same address after the ordering of
-// the endpoints is reversed.
-func (s) TestRingHash_ReorderEndpoints(t *testing.T) {
-	origDualstackEndpointsEnabled := envconfig.XDSDualstackEndpointsEnabled
-	defer func() {
-		envconfig.XDSDualstackEndpointsEnabled = origDualstackEndpointsEnabled
-	}()
-	envconfig.XDSDualstackEndpointsEnabled = true
-	backends := backendAddrs(startTestServiceBackends(t, 4))
-
-	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
-
-	const clusterName = "cluster"
-	endpoints := endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backends[0], backends[1]}, {backends[2], backends[3]}})
-	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
-		ClusterName: clusterName,
-		ServiceName: clusterName,
-		Policy:      e2e.LoadBalancingPolicyRingHash,
-	})
-	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
-	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
-		t.Fatalf("Failed to update xDS resources: %v", err)
-	}
-
-	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to create client: %s", err)
-	}
-	defer conn.Close()
-	client := testgrpc.NewTestServiceClient(conn)
-
-	const numRPCs = 5
-	received := checkRPCSendOK(ctx, t, client, numRPCs)
-	if len(received) != 1 {
-		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
-	}
-	var got int
-	var initialAddr string
-	for initialAddr, got = range received {
-	}
-	if got != numRPCs {
-		t.Errorf("Got %v RPCs routed to a backend, want %v", got, numRPCs)
-	}
-
-	// Reverse the endpoints order.
-	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backends[2], backends[3]}, {backends[0], backends[1]}})
-	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
-		t.Fatalf("Failed to update xDS resources: %v", err)
-	}
-
-	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer cancel()
-	for ; shortCtx.Err() != nil; <-time.After(time.Millisecond) {
-		var remote peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
-			t.Fatalf("rpc EmptyCall() failed: %v", err)
-		}
-		newAddr := remote.Addr.String()
-		if newAddr != initialAddr {
-			t.Fatalf("RPCs went to different backend post update, got=%q, want=%q", newAddr, initialAddr)
-		}
-	}
-}
-
-// Tests that requests are sent to the same address after the ordering of
-// addresses within the endpoints is reversed.
+// Tests that first address of an endpoint is used to generate the ring. The
+// test sends a request to a random endpoint. The test then reverses the
+// addresses of every endpoint and verifies that an RPC with header pointing to
+// the second address of the endpoint is sent to the initial address. The test
+// then swaps the second and third address of the endpoint and verifies that an
+// RPC with the header used earlier still reaches the same backend.
 func (s) TestRingHash_ReorderAddressessWithinEndpoint(t *testing.T) {
 	origDualstackEndpointsEnabled := envconfig.XDSDualstackEndpointsEnabled
 	defer func() {
 		envconfig.XDSDualstackEndpointsEnabled = origDualstackEndpointsEnabled
 	}()
 	envconfig.XDSDualstackEndpointsEnabled = true
-	backends := backendAddrs(startTestServiceBackends(t, 4))
+	backends := backendAddrs(startTestServiceBackends(t, 6))
 
 	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
 
 	const clusterName = "cluster"
-	endpoints := endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backends[0], backends[1]}, {backends[2], backends[3]}})
+	addrGroups := [][]string{
+		{backends[0], backends[1], backends[2]},
+		{backends[3], backends[4], backends[5]},
+	}
+	endpoints := endpointResourceForBackendsWithMultipleAddrs(t, clusterName, addrGroups)
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: clusterName,
 		Policy:      e2e.LoadBalancingPolicyRingHash,
 	})
-	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
 	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -2116,37 +2055,83 @@ func (s) TestRingHash_ReorderAddressessWithinEndpoint(t *testing.T) {
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 
-	const numRPCs = 5
-	received := checkRPCSendOK(ctx, t, client, numRPCs)
-	if len(received) != 1 {
-		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
-	}
-	var got int
-	var initialAddr string
-	for initialAddr, got = range received {
-	}
-	if got != numRPCs {
-		t.Errorf("Got %v RPCs routed to a backend, want %v", got, numRPCs)
+	rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"address_hash", fmt.Sprintf("%d", rand.Int()),
+	))
+	var remote peer.Peer
+	if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 
-	// Reverse the addresses within the endpoint and verify that the requests
-	// still go to the same address within the same endpoint.
-	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backends[1], backends[0]}, {backends[3], backends[2]}})
+	initialFirstAddr := ""
+	newFirstAddr := ""
+	switch remote.Addr.String() {
+	case addrGroups[0][0]:
+		initialFirstAddr = addrGroups[0][0]
+		newFirstAddr = addrGroups[0][2]
+	case addrGroups[1][0]:
+		initialFirstAddr = addrGroups[1][0]
+		newFirstAddr = addrGroups[1][2]
+	default:
+		t.Fatalf("Request went to unexpected address: %q", remote.Addr)
+	}
+
+	t.Log("Reversing addresses within each endpoint.")
+	addrGroups1 := [][]string{
+		{addrGroups[0][2], addrGroups[0][1], addrGroups[0][0]},
+		{addrGroups[1][2], addrGroups[1][1], addrGroups[1][0]},
+	}
+	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, addrGroups1)
 	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer cancel()
-	for ; shortCtx.Err() != nil; <-time.After(time.Millisecond) {
-		var remote peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+	// The first address of an endpoint is used to create the ring. This means
+	// that requests should continue to go to the first address, but the hash
+	// should be computed based on the last address in the original list.
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+			"address_hash", newFirstAddr+"_0",
+		))
+		if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
 			t.Fatalf("rpc EmptyCall() failed: %v", err)
 		}
-		newAddr := remote.Addr.String()
-		if newAddr != initialAddr {
-			t.Fatalf("RPCs went to different backend post update, got=%q, want=%q", newAddr, initialAddr)
+		if remote.Addr.String() == initialFirstAddr {
+			break
 		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatalf("Context timed out waiting for request to be sent to %q, last request went to %q", initialFirstAddr, remote.Addr)
+	}
+
+	t.Log("Swapping the second and third addresses within each endpoint.")
+	// This should not effect the ring, since only the first address is used
+	// by the ring.
+	addrGroups2 := [][]string{
+		{addrGroups1[0][0], addrGroups[0][2], addrGroups[0][1]},
+		{addrGroups1[1][0], addrGroups[1][2], addrGroups[1][1]},
+	}
+	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, addrGroups2)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	// Verify that requests with the hash of the last address in chosenAddrGroup
+	// continue reaching the first address in chosenAddrGroup.
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	for ; shortCtx.Err() == nil; <-time.After(time.Millisecond) {
+		rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+			"address_hash", newFirstAddr+"_0",
+		))
+		if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+			t.Fatalf("rpc EmptyCall() failed: %v", err)
+		}
+		if remote.Addr.String() == initialFirstAddr {
+			continue
+		}
+		t.Fatalf("Request went to unexpected backend %q, want backend %q", remote.Addr, initialFirstAddr)
 	}
 }
 
