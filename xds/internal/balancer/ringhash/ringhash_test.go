@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 )
@@ -61,7 +60,7 @@ func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.Balancer
 	t.Helper()
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(Name)
-	b := builder.Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	b := builder.Build(cc, balancer.BuildOptions{})
 	if b == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
