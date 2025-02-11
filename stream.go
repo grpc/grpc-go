@@ -291,8 +291,14 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		return nil, err
 	}
 
+	host := cc.authority
+	if mc.Host != "" {
+		host = mc.Host
+		ctx = context.WithValue(ctx, transport.CtxValAllowHostOverride{}, true)
+	}
+
 	callHdr := &transport.CallHdr{
-		Host:           cc.authority,
+		Host:           host,
 		Method:         method,
 		ContentSubtype: callInfo.contentSubtype,
 		DoneFunc:       doneFunc,

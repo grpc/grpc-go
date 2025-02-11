@@ -733,6 +733,10 @@ func (e NewStreamError) Error() string {
 	return e.Err.Error()
 }
 
+// CtxValAllowHostOverride can be added to the context given to NewStream with
+// a bool value of true to allow the CallHdr host to override the server name.
+type CtxValAllowHostOverride struct{}
+
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.  All non-nil errors returned will be *NewStreamError.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error) {
@@ -743,7 +747,18 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 	// the ServerName field takes precedence for server authentication during
 	// TLS handshake, and the :authority header should match the value used
 	// for server authentication.
-	if t.address.ServerName != "" {
+
+	// If the caller passes a context with CtxValAllowHostOverride set to true, allow callHdr to override the host.
+	// This is necessary for XDS host rewrite settings.
+	allowHostOverride := false
+	if allowHostOverrideVal := ctx.Value(CtxValAllowHostOverride{}); allowHostOverrideVal != nil {
+		allow, ok := allowHostOverrideVal.(bool)
+		if ok && allow {
+			allowHostOverride = true
+		}
+	}
+
+	if t.address.ServerName != "" && !allowHostOverride {
 		newCallHdr := *callHdr
 		newCallHdr.Host = t.address.ServerName
 		callHdr = &newCallHdr

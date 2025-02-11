@@ -149,6 +149,8 @@ type MethodConfig struct {
 	MaxRespSize *int
 	// RetryPolicy configures retry options for the method.
 	RetryPolicy *RetryPolicy
+
+	Host string
 }
 
 // RetryPolicy defines the go-native version of the retry policy defined by the

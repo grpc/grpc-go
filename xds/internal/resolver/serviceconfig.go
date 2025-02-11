@@ -117,6 +117,8 @@ type route struct {
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
 	retryConfig              *xdsresource.RetryConfig
 	hashPolicies             []*xdsresource.HashPolicy
+
+	hostRewriteLiteral string
 }
 
 func (r route) String() string {
@@ -198,6 +200,8 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	} else if cs.virtualHost.retryConfig != nil {
 		config.MethodConfig.RetryPolicy = retryConfigToPolicy(cs.virtualHost.retryConfig)
 	}
+
+	config.MethodConfig.Host = rt.hostRewriteLiteral
 
 	return config, nil
 }
