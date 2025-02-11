@@ -298,6 +298,7 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 	verifyAddressInNewSubConn(t, cc, addr3)
 
+	// The subconn from the test_config_balancer should be shut down.
 	scShutdown = <-cc.ShutdownSubConnCh
 	// The same SubConn is closed by gracefulswitch and pickfirstleaf when they
 	// are closed. Remove duplicate events.
@@ -306,7 +307,6 @@ func (s) TestWeightedTarget(t *testing.T) {
 	// shutting down SubConns.
 	<-cc.ShutdownSubConnCh
 
-	// The subconn from the test_config_balancer should be shut down.
 	if scShutdown != sc2 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc2, scShutdown)
 	}

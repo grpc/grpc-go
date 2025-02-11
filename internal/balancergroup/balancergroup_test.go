@@ -360,8 +360,8 @@ func (s) TestBalancerGroup_locality_caching_not_read_within_timeout(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	scToShutdown := map[balancer.SubConn]int{
-		addrToSC[testBackendAddrs[2].Addr]: 3,
-		addrToSC[testBackendAddrs[3].Addr]: 3,
+		addrToSC[testBackendAddrs[2].Addr]: 1,
+		addrToSC[testBackendAddrs[3].Addr]: 1,
 	}
 	for i := 0; i < len(scToShutdown); i++ {
 		select {
