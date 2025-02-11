@@ -45,7 +45,7 @@ type Config struct {
 	// management server.
 	Node clients.Node
 
-	// TransportBuilder is used to connect to the management server.
+	// TransportBuilder is used to connect to the xDS management server.
 	TransportBuilder clients.TransportBuilder
 
 	// ResourceTypes is a map from resource type URLs to resource type

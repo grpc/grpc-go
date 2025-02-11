@@ -20,7 +20,7 @@
 
 // Package lrsclient provides an LRS (Load Reporting Service) client.
 //
-// [LRS]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto
+// See: https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto
 package lrsclient
 
 import (

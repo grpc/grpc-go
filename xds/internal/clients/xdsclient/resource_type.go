@@ -25,32 +25,40 @@ import (
 
 // ResourceType wraps all resource-type specific functionality. Each supported
 // resource type needs to provide an implementation of this interface.
-type ResourceType interface {
+type ResourceType struct {
 	// TypeURL is the xDS type URL of this resource type for the v3 xDS
 	// protocol. This URL is used as the key to look up the corresponding
 	// ResourceType implementation in the ResourceTypes map provided in the
 	// Config.
-	TypeURL() string
+	TypeURL string
 
 	// TypeName identifies resources in a transport protocol agnostic way. This
 	// can be used for logging/debugging purposes, as well as in cases where
 	// the resource type name is to be uniquely identified but the actual
 	// functionality provided by the resource type is not required.
-	TypeName() string
+	TypeName string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
 	// that all resources be present in every SotW response from the server. If
 	// true, a response that does not include a previously seen resource will
 	// be interpreted as a deletion of that resource.
-	AllResourcesRequiredInSotW() bool
+	AllResourcesRequiredInSotW bool
 
+	// Decoder is used to deserialize and validate an xDS resource received
+	// from the xDS management server.
+	Decoder Decoder
+}
+
+// Decoder wraps the resource-type specific functionality for validation
+// and deserialization.
+type Decoder interface {
 	// Decode deserializes and validates an xDS resource serialized inside the
 	// provided `Any` proto, as received from the xDS management server.
 	//
 	// If protobuf deserialization fails or resource validation fails,
 	// returns a non-nil error. Otherwise, returns a fully populated
 	// DecodeResult.
-	Decode(DecodeOptions, any) (*DecodeResult, error)
+	Decode(resource any, options DecodeOptions) (*DecodeResult, error)
 }
 
 // DecodeOptions wraps the options required by ResourceType implementation for

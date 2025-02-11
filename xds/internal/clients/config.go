@@ -105,7 +105,7 @@ func (sc *ServerConfig) equal(other *ServerConfig) bool {
 
 // Authority contains configuration for an xDS control plane authority.
 //
-// See https://github.com/grpc/grpc/blob/master/doc/grpc_xds_bootstrap_format.md
+// See: https://github.com/grpc/grpc/blob/master/doc/grpc_xds_bootstrap_format.md
 type Authority struct {
 	// XDSServers contains the list of server configurations for this authority.
 	// The order of the servers in this list reflects the order of preference
