@@ -31,10 +31,10 @@ type Config struct {
 	// the data returned by those servers. xDS client use the first
 	// available server from the list.
 	//
-	// See [gRFC A71] for more details on fallback behavior when the primary
+	// See gRFC A71 for more details on fallback behavior when the primary
 	// xDS server is unavailable.
 	//
-	// [gRFC A71]: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
+	// gRFC A71: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
 	Servers []clients.ServerConfig
 
 	// Authorities map is used to define different authorities, in a federated
@@ -45,7 +45,7 @@ type Config struct {
 	// management server.
 	Node clients.Node
 
-	// TransportBuilder is used to connect to the management server.
+	// TransportBuilder is used to connect to the xDS management server.
 	TransportBuilder clients.TransportBuilder
 
 	// ResourceTypes is a map from resource type URLs to resource type

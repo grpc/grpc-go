@@ -20,14 +20,14 @@
 
 // Package lrsclient provides an LRS (Load Reporting Service) client.
 //
-// [LRS]: https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto
+// See: https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/load_stats/v3/lrs.proto
 package lrsclient
 
 import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// LRSClient is an LRS client.
+// LRSClient is an LRS (Load Reporting Service) client.
 type LRSClient struct {
 }
 
@@ -37,7 +37,7 @@ func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) *LoadStore {
 	panic("unimplemented")
 }
 
-// Close closes the LRS client and releases all resources.
+// Close closes the LRS client.
 func (c *LRSClient) Close() error {
 	panic("unimplemented")
 }

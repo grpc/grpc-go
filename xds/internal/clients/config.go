@@ -17,7 +17,7 @@
  */
 
 // Package clients provides implementations of the clients to interact with
-// envoy.
+// xDS and LRS servers.
 //
 // # xDS Client
 //
@@ -51,14 +51,14 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
-// ServerConfig holds settings for connecting to an xDS management server.
+// ServerConfig holds settings for connecting to an xDS management or LRS server.
 type ServerConfig struct {
-	// ServerURI is the target URI of the xDS management server.
+	// ServerURI is the target URI of the server.
 	ServerURI string
 
 	// IgnoreResourceDeletion is a server feature which if set to true,
-	// indicates that resource deletion errors can be ignored and cached
-	// resource data can be used.
+	// indicates that resource deletion errors from xDS management servers can
+	// be ignored and cached resource data can be used.
 	//
 	// This will be removed in the future once we implement gRFC A88
 	// and two new fields FailOnDataErrors and
@@ -105,17 +105,17 @@ func (sc *ServerConfig) equal(other *ServerConfig) bool {
 
 // Authority contains configuration for an xDS control plane authority.
 //
-// See https://github.com/grpc/grpc/blob/master/doc/grpc_xds_bootstrap_format.md
+// See: https://github.com/grpc/grpc/blob/master/doc/grpc_xds_bootstrap_format.md
 type Authority struct {
 	// XDSServers contains the list of server configurations for this authority.
 	// The order of the servers in this list reflects the order of preference
 	// of the data returned by those servers. xDS client use the first
 	// available server from the list.
 	//
-	// See [gRFC A71] for more details on fallback behavior when the primary
+	// See gRFC A71 for more details on fallback behavior when the primary
 	// xDS server is unavailable.
 	//
-	// [gRFC A71]: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
+	// gRFC A71: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
 	XDSServers []ServerConfig
 
 	// Extensions can be populated with arbitrary data to be passed to the xDS
@@ -129,8 +129,8 @@ type Authority struct {
 	Extensions any
 }
 
-// Node represents the identity of the xDS client, allowing
-// management servers to identify the source of xDS requests.
+// Node represents the identity of the xDS client, allowing xDS and LRS servers
+// to identify the source of xDS requests.
 type Node struct {
 	// ID is a string identifier of the application.
 	ID string
