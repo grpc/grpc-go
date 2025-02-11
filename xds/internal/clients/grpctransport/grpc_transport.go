@@ -32,10 +32,10 @@ import (
 )
 
 // ServerConfigExtension holds settings for connecting to a gRPC server,
-// such as an xDS or LRS server.
+// such as an xDS management or an LRS server.
 type ServerConfigExtension struct {
-	// Credentials will be used for all gRPC transports. If is unset, transport
-	// creation will fail.
+	// Credentials will be used for all gRPC transports. If it is unset,
+	// transport creation will fail.
 	Credentials credentials.Bundle
 }
 
@@ -62,13 +62,14 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	}
 
 	// TODO: Incorporate reference count map for existing transports and
-	// deduplicate transports based on server URI and credentials so that
+	// deduplicate transports based on the provided ServerConfig so that
 	// transport channel to same server can be shared between xDS and LRS
 	// client.
 
-	// Dial the xDS management server with the provided credentials, server URI,
-	// and a static keepalive configuration that is common across gRPC language
-	// implementations.
+	// Create a new gRPC client/channel for the xDS management server with the
+	// provided credentials, server URI, and a byte codec to send and receive
+	// messages. Aso set a static keepalive configuration that is common across
+	// gRPC language implementations.
 	kpCfg := grpc.WithKeepaliveParams(keepalive.ClientParameters{
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
