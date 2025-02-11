@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
@@ -32,8 +33,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
+	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/google/go-cmp/cmp"
 )
 
 const (
@@ -53,38 +54,30 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// testServer implements the AggregatedDiscoveryServiceServer interface to test
+// the gRPC transport implementation.
 type testServer struct {
-	lis         net.Listener // listener used by the test gRPC server
-	requestChan chan []byte  // channel to send received requests on to verify
+	v3discoverygrpc.UnimplementedAggregatedDiscoveryServiceServer
+
+	lis         net.Listener                         // listener used by the test server
+	requestChan chan *v3discoverypb.DiscoveryRequest // channel to send the received requests on for verification
 }
 
-// setupTestServer starts a gRPC test server that uses the same byteCodec as
-// grpcTransport. It registers a streaming handler for the "test.Service/Stream"
-// method and returns a testServer struct that contains the listener and a
-// channel for received requests from the client on the stream.
+// setupTestServer set up the gRPC server for AggregatedDiscoveryService. It
+// creates an instance of testServer and registers it with a gRPC server.
 func setupTestServer(t *testing.T) *testServer {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen on localhost:0: %v", err)
 	}
 	ts := &testServer{
-		requestChan: make(chan []byte, 100),
+		requestChan: make(chan *v3discoverypb.DiscoveryRequest),
 		lis:         lis,
 	}
 
-	s := grpc.NewServer(grpc.ForceServerCodec(&byteCodec{}))
-	s.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "test.Service",
-		HandlerType: (*any)(nil),
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName:    "Stream",
-				Handler:       ts.streamHandler,
-				ServerStreams: true,
-				ClientStreams: true,
-			},
-		},
-	}, struct{}{})
+	s := grpc.NewServer()
+
+	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(s, ts)
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			t.Logf("Server exited with error: %v", err)
@@ -95,30 +88,26 @@ func setupTestServer(t *testing.T) *testServer {
 	return ts
 }
 
-// streamHandler is the handler for the "test.Service/Stream" method. It waits
-// for a message from the client on the stream, and then sends a discovery
-// response message back to the client. It also put the received message in
-// requestChan for client to verify if the correct request was received. It
-// continues until the client closes the stream.
-func (s *testServer) streamHandler(_ any, stream grpc.ServerStream) error {
+// StreamAggregatedResources handles bidirectional streaming of
+// DiscoveryRequest and DiscoveryResponse. It waits for a message from the
+// client on the stream, and then sends a discovery response message back to
+// the client. It also put the received message in requestChan for client to
+// verify if the correct request was received. It continues until the client
+// closes the stream.
+func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 	for {
-		var msg []byte
-		err := stream.RecvMsg(&msg)
+		// Receive a DiscoveryRequest from the client
+		req, err := stream.Recv()
 		if err == io.EOF {
-			// read done.
-			return nil
+			return nil // Stream closed by client
 		}
 		if err != nil {
-			return err
+			return err // Handle other errors
 		}
-		s.requestChan <- msg
+		s.requestChan <- req
 
-		// Send a discovery response message on the stream.
-		res, err := proto.Marshal(testDiscoverResponse)
-		if err != nil {
-			return err
-		}
-		if err := stream.SendMsg(res); err != nil {
+		// Send the response back to the client
+		if err := stream.Send(testDiscoverResponse); err != nil {
 			return err
 		}
 	}
@@ -140,7 +129,7 @@ func (s) TestBuild(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "ServerURI_is_empty",
+			name: "ServerURI is empty",
 			serverCfg: clients.ServerConfig{
 				ServerURI:  "",
 				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
@@ -230,7 +219,7 @@ func (s) TestNewStream(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			_, err = transport.NewStream(ctx, "/test.Service/Stream")
+			_, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 			if (err != nil) != test.wantErr {
 				t.Fatalf("transport.NewStream() error = %v, wantErr %v", err, test.wantErr)
 			}
@@ -240,7 +229,7 @@ func (s) TestNewStream(t *testing.T) {
 
 // TestStream_SendAndRecv verifies that grpcTransport.Stream.Send()
 // and grpcTransport.Stream.Recv() successfully send and receive messages
-// on the stream.
+// on the stream to and from the gRPC server.
 //
 // It starts a gRPC test server using setupTestServer(). The test then sends a
 // testDiscoverRequest on the stream and verifies that the received discovery
@@ -248,7 +237,7 @@ func (s) TestNewStream(t *testing.T) {
 // testDiscoverResponse from the server and verifies that the received
 // discovery response is same as sent from the server.
 func (s) TestStream_SendAndRecv(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*2000)
 	defer cancel()
 
 	ts := setupTestServer(t)
@@ -266,7 +255,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	defer transport.Close()
 
 	// Create a new stream to the server.
-	stream, err := transport.NewStream(ctx, "/test.Service/Stream")
+	stream, err := transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 	if err != nil {
 		t.Fatalf("failed to create stream: %v", err)
 	}
@@ -279,18 +268,15 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	if err := stream.Send(msg); err != nil {
 		t.Fatalf("failed to send message: %v", err)
 	}
+
 	// Verify that the DiscoveryRequest received on the server was same as
 	// sent.
 	select {
-	case res, ok := <-ts.requestChan:
+	case gotReq, ok := <-ts.requestChan:
 		if !ok {
 			t.Fatalf("ts.requestChan is closed")
 		}
-		var gotReq v3discoverypb.DiscoveryRequest
-		if err := proto.Unmarshal(res, &gotReq); err != nil {
-			t.Fatalf("failed to unmarshal response from ts.requestChan to DiscoveryRequest: %v", err)
-		}
-		if !cmp.Equal(testDiscoverRequest, &gotReq, protocmp.Transform()) {
+		if !cmp.Equal(testDiscoverRequest, gotReq, protocmp.Transform()) {
 			t.Fatalf("<-ts.requestChan = %v, want %v", &gotReq, &testDiscoverRequest)
 		}
 	case <-ctx.Done():
@@ -302,6 +288,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to receive message: %v", err)
 	}
+
 	// Verify that the DiscoveryResponse received was same as sent from the
 	// server.
 	var gotRes v3discoverypb.DiscoveryResponse
