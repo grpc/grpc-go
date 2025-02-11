@@ -141,41 +141,41 @@ func (l *ListenerResourceData) Raw() *anypb.Any {
 }
 
 // ListenerWatcher wraps the callbacks to be invoked for different
-// events corresponding to the listener resource being watched.
+// events corresponding to the listener resource being watched. gRFC A88
+// contains an exhaustive list of what method is invoked under what conditions.
 type ListenerWatcher interface {
-	// OnUpdate is invoked to report an update for the resource being watched.
-	OnUpdate(*ListenerResourceData, OnDoneFunc)
+	// OnResourceChanged is invoked to notify the watcher of a new version of
+	// the resource received from the xDS server or an error indicating the
+	// reason why the resource cannot be obtained.
+	//
+	// Upon receiving this, in case of an error, the watcher should
+	// stop using any previously seen resource. xDS client will remove the
+	// resource from its cache.
+	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
 
-	// OnError is invoked under different error conditions including but not
-	// limited to the following:
-	//	- authority mentioned in the resource is not found
-	//	- resource name parsing error
-	//	- resource deserialization error
-	//	- resource validation error
-	//	- ADS stream failure
-	//	- connection failure
-	OnError(error, OnDoneFunc)
-
-	// OnResourceDoesNotExist is invoked for a specific error condition where
-	// the requested resource is not found on the xDS management server.
-	OnResourceDoesNotExist(OnDoneFunc)
+	// OnAmbientError is invoked if resource is already cached under different
+	// error conditions.
+	//
+	// Upon receiving this, the watcher should not stop using the previously
+	// seen resource. xDS client will not remove the resource from its cache.
+	OnAmbientError(error, OnDoneFunc)
 }
 
 type delegatingListenerWatcher struct {
 	watcher ListenerWatcher
 }
 
-func (d *delegatingListenerWatcher) OnUpdate(data ResourceData, onDone OnDoneFunc) {
-	l := data.(*ListenerResourceData)
-	d.watcher.OnUpdate(l, onDone)
+func (d *delegatingListenerWatcher) OnResourceChanged(update ResourceDataOrError, onDone OnDoneFunc) {
+	if update.Err != nil {
+		d.watcher.OnResourceChanged(&ResourceDataOrError{Err: update.Err}, onDone)
+		return
+	}
+	l := update.Data.(*ListenerResourceData)
+	d.watcher.OnResourceChanged(&ResourceDataOrError{Data: l}, onDone)
 }
 
-func (d *delegatingListenerWatcher) OnError(err error, onDone OnDoneFunc) {
-	d.watcher.OnError(err, onDone)
-}
-
-func (d *delegatingListenerWatcher) OnResourceDoesNotExist(onDone OnDoneFunc) {
-	d.watcher.OnResourceDoesNotExist(onDone)
+func (d *delegatingListenerWatcher) OnAmbientError(err error, onDone OnDoneFunc) {
+	d.watcher.OnAmbientError(err, onDone)
 }
 
 // WatchListener uses xDS to discover the configuration associated with the

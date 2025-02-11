@@ -71,49 +71,37 @@ func Test(t *testing.T) {
 
 type nopListenerWatcher struct{}
 
-func (nopListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+func (nopListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (nopListenerWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (nopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (nopListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
 type nopRouteConfigWatcher struct{}
 
-func (nopRouteConfigWatcher) OnUpdate(_ *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (nopRouteConfigWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (nopRouteConfigWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (nopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (nopRouteConfigWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
 type nopClusterWatcher struct{}
 
-func (nopClusterWatcher) OnUpdate(_ *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+func (nopClusterWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (nopClusterWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (nopClusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (nopClusterWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
 type nopEndpointsWatcher struct{}
 
-func (nopEndpointsWatcher) OnUpdate(_ *xdsresource.EndpointsResourceData, onDone xdsresource.OnDoneFunc) {
+func (nopEndpointsWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
-func (nopEndpointsWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
-	onDone()
-}
-func (nopEndpointsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (nopEndpointsWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
@@ -138,13 +126,10 @@ func newBlockingListenerWatcher(testCtxDone <-chan struct{}) *blockingListenerWa
 	}
 }
 
-func (w *blockingListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+func (w *blockingListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
-func (w *blockingListenerWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
-	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
-}
-func (w *blockingListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (w *blockingListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
 	writeOnDone(w.testCtxDone, w.onDoneCh, onDone)
 }
 

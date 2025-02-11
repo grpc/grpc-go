@@ -147,7 +147,7 @@ type rdsWatcher struct {
 	canceled bool // eats callbacks if true
 }
 
-func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -155,13 +155,21 @@ func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDo
 		return
 	}
 	rw.mu.Unlock()
-	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
+	if update.Err != nil {
+		if rw.logger.V(2) {
+			rw.logger.Infof("RDS watch for resource %q received error: %v", rw.routeName, update.Err)
+		}
+		rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: update.Err})
+		return
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &update.Resource})
+	u := update.Data.(*xdsresource.RouteConfigResourceData)
+	if rw.logger.V(2) {
+		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, u.Resource)
+	}
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &u.Resource})
 }
 
-func (rw *rdsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -172,20 +180,5 @@ func (rw *rdsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q reported error: %v", rw.routeName, err)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
-}
-
-func (rw *rdsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	defer onDone()
-	rw.mu.Lock()
-	if rw.canceled {
-		rw.mu.Unlock()
-		return
-	}
-	rw.mu.Unlock()
-	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q reported resource-does-not-exist error: %v", rw.routeName)
-	}
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", rw.routeName)
 	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
 }
