@@ -131,6 +131,8 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			wantSCToConnect:    testSubConns[1],
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ring, epStates := testRingAndEndpointStates(tt.connectivityStates)
@@ -140,7 +142,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 				endpointStates: epStates,
 			}
 			got, err := p.Pick(balancer.PickInfo{
-				Ctx: SetRequestHash(context.Background(), tt.hash),
+				Ctx: SetRequestHash(ctx, tt.hash),
 			})
 			if err != tt.wantErr {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)

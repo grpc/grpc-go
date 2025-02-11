@@ -121,6 +121,8 @@ func TestClusterPicks(t *testing.T) {
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	p1 := <-cc.NewPickerCh
 	for _, tt := range []struct {
 		pickInfo balancer.PickInfo
@@ -129,19 +131,19 @@ func TestClusterPicks(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "notacluster"),
+				Ctx: SetPickedCluster(ctx, "notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "notacluster"`),
 		},
@@ -201,6 +203,8 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tt := range []struct {
 		pickInfo balancer.PickInfo
 		wantSC   balancer.SubConn
@@ -208,19 +212,19 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -281,25 +285,25 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_3"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_3"),
 			},
 			wantSC: m1[wantAddrs[2]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -359,6 +363,8 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tt := range []struct {
 		pickInfo balancer.PickInfo
 		wantSC   balancer.SubConn
@@ -366,19 +372,19 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -409,7 +415,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, err := p2.Pick(balancer.PickInfo{Ctx: SetPickedCluster(context.Background(), "cds:notacluster")})
+		gotSCSt, err := p2.Pick(balancer.PickInfo{Ctx: SetPickedCluster(ctx, "cds:notacluster")})
 		if fmt.Sprint(err) != status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`).Error() {
 			t.Fatalf("picker.Pick, got %v, %v, want error %v", gotSCSt, err, `unknown cluster selected for RPC: "cds:notacluster"`)
 		}
@@ -450,19 +456,19 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m2[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m2[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -635,8 +641,10 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p1 := <-cc.NewPickerCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	pi := balancer.PickInfo{
-		Ctx: SetPickedCluster(context.Background(), "csp:cluster"),
+		Ctx: SetPickedCluster(ctx, "csp:cluster"),
 	}
 	testPick(t, p1, pi, sc1, nil)
 
@@ -676,8 +684,6 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	// the pick first balancer to UpdateState() with CONNECTING, which shouldn't send
 	// a Picker update back, as the Graceful Switch process is not complete.
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
 	select {
 	case <-cc.NewPickerCh:
 		t.Fatalf("No new picker should have been sent due to the Graceful Switch process not completing")
