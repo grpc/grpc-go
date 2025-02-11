@@ -173,14 +173,15 @@ func (cc *controlChannel) monitorConnectivityState() {
 	// cancelled.
 
 	first := true
-	defer func() {
-		cc.unsubscribe()
-		cc.state.Close()
-	}()
 	for {
 		// Wait for the control channel to become READY.
 		var s any
-		for s = <-cc.state.Get(); s != connectivity.Ready; s = <-cc.state.Get() {
+		var ok bool
+		for s, ok = <-cc.state.Get(); s != connectivity.Ready; s, ok = <-cc.state.Get() {
+			if !ok {
+				cc.logger.Infof("Control channel closed")
+				return
+			}
 			cc.state.Load()
 			if s == connectivity.Shutdown {
 				return
@@ -208,6 +209,8 @@ func (cc *controlChannel) monitorConnectivityState() {
 
 func (cc *controlChannel) close() {
 	cc.logger.Infof("Closing control channel")
+	cc.unsubscribe()
+	cc.state.Close()
 	cc.cc.Close()
 }
 
