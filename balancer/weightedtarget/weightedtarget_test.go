@@ -387,7 +387,7 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 	p = <-cc.NewPickerCh
 	const wantErr = "no targets to pick from"
-	if _, err := p.Pick(balancer.PickInfo{}); !strings.Contains(err.Error(), wantErr) {
+	if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("Pick() returned error: %v, want: %v", err, wantErr)
 	}
 }
