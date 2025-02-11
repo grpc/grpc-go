@@ -26,8 +26,12 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/experimental/stats"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
+
+	istats "google.golang.org/grpc/internal/stats"
 )
 
 // TestSubConn implements the SubConn interface, to be used in tests.
@@ -38,9 +42,8 @@ type TestSubConn struct {
 	ConnectCh      chan struct{}
 	stateListener  func(balancer.SubConnState)
 	healthListener func(balancer.SubConnState)
-
-	connectCalled *grpcsync.Event
-	Addresses     []resolver.Address
+	connectCalled  *grpcsync.Event
+	Addresses      []resolver.Address
 }
 
 // NewTestSubConn returns a newly initialized SubConn.  Typically, subconns
@@ -109,6 +112,7 @@ func (tsc *TestSubConn) RegisterHealthListener(lis func(balancer.SubConnState)) 
 
 // BalancerClientConn is a mock balancer.ClientConn used in tests.
 type BalancerClientConn struct {
+	internal.EnforceClientConnEmbedding
 	logger Logger
 
 	NewSubConnAddrsCh      chan []resolver.Address // the last 10 []Address to create subconn.
@@ -162,6 +166,11 @@ func (tcc *BalancerClientConn) NewSubConn(a []resolver.Address, o balancer.NewSu
 	}
 
 	return sc, nil
+}
+
+// MetricsRecorder returns an empty MetricsRecorderList.
+func (*BalancerClientConn) MetricsRecorder() stats.MetricsRecorder {
+	return istats.NewMetricsRecorderList(nil)
 }
 
 // RemoveSubConn is a nop; tests should all be updated to use sc.Shutdown()

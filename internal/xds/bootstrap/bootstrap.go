@@ -31,7 +31,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -578,9 +577,6 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 // specified at ${GRPC_XDS_BOOTSTRAP_CONFIG}. If both env vars are set, the
 // former is preferred.
 //
-// If none of the env vars are set, this function returns the fallback
-// configuration if it is not nil. Else, it returns an error.
-//
 // This function tries to process as much of the bootstrap file as possible (in
 // the presence of the errors) and may return a Config object with certain
 // fields left unspecified, in which case the caller should use some sane
@@ -597,27 +593,22 @@ func GetConfiguration() (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("xds: failed to read bootstrap config from file %q: %v", fName, err)
 		}
-		return newConfigFromContents(cfg)
+		return NewConfigFromContents(cfg)
 	}
 
 	if fContent != "" {
 		if logger.V(2) {
 			logger.Infof("Using bootstrap contents from GRPC_XDS_BOOTSTRAP_CONFIG environment variable")
 		}
-		return newConfigFromContents([]byte(fContent))
+		return NewConfigFromContents([]byte(fContent))
 	}
 
-	if cfg := fallbackBootstrapConfig(); cfg != nil {
-		if logger.V(2) {
-			logger.Infof("Using bootstrap contents from fallback config")
-		}
-		return cfg, nil
-	}
-
-	return nil, fmt.Errorf("bootstrap environment variables (%q or %q) not defined, and no fallback config set", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
+	return nil, fmt.Errorf("bootstrap environment variables (%q or %q) not defined", envconfig.XDSBootstrapFileNameEnv, envconfig.XDSBootstrapFileContentEnv)
 }
 
-func newConfigFromContents(data []byte) (*Config, error) {
+// NewConfigFromContents creates a new bootstrap configuration from the provided
+// contents.
+func NewConfigFromContents(data []byte) (*Config, error) {
 	// Normalize the input configuration.
 	buf := bytes.Buffer{}
 	err := json.Indent(&buf, data, "", "")
@@ -698,14 +689,6 @@ func NewContentsForTesting(opts ConfigOptionsForTesting) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal bootstrap configuration for provided options %+v: %v", opts, err)
 	}
 	return contents, nil
-}
-
-// NewConfigForTesting creates a new bootstrap configuration from the provided
-// contents, for testing purposes.
-//
-// # Testing-Only
-func NewConfigForTesting(contents []byte) (*Config, error) {
-	return newConfigFromContents(contents)
 }
 
 // certproviderNameAndConfig is the internal representation of
@@ -810,44 +793,3 @@ func (n node) toProto() *v3corepb.Node {
 		ClientFeatures:       slices.Clone(n.clientFeatures),
 	}
 }
-
-// SetFallbackBootstrapConfig sets the fallback bootstrap configuration to be
-// used when the bootstrap environment variables are unset.
-//
-// The provided configuration must be valid JSON. Returns a non-nil error if
-// parsing the provided configuration fails.
-func SetFallbackBootstrapConfig(cfgJSON []byte) error {
-	config, err := newConfigFromContents(cfgJSON)
-	if err != nil {
-		return err
-	}
-
-	configMu.Lock()
-	defer configMu.Unlock()
-	fallbackBootstrapCfg = config
-	return nil
-}
-
-// UnsetFallbackBootstrapConfigForTesting unsets the fallback bootstrap
-// configuration to be used when the bootstrap environment variables are unset.
-//
-// # Testing-Only
-func UnsetFallbackBootstrapConfigForTesting() {
-	configMu.Lock()
-	defer configMu.Unlock()
-	fallbackBootstrapCfg = nil
-}
-
-// fallbackBootstrapConfig returns the fallback bootstrap configuration
-// that will be used by the xDS client when the bootstrap environment
-// variables are unset.
-func fallbackBootstrapConfig() *Config {
-	configMu.Lock()
-	defer configMu.Unlock()
-	return fallbackBootstrapCfg
-}
-
-var (
-	configMu             sync.Mutex
-	fallbackBootstrapCfg *Config
-)
