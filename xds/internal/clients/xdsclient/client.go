@@ -58,13 +58,13 @@ func (c *XDSClient) WatchResource(typeURL string, name string, watcher ResourceW
 	panic("unimplemented")
 }
 
-// Close closes the xDS client and releases all resources.
+// Close closes the xDS client.
 func (c *XDSClient) Close() error {
 	panic("unimplemented")
 }
 
-// DumpResources returns the status and contents of all xDS resources from the
-// xDS client.
+// DumpResources returns the status and contents of all xDS resources being
+// watched by the xDS client.
 func (c *XDSClient) DumpResources() *v3statuspb.ClientStatusResponse {
 	panic("unimplemented")
 }

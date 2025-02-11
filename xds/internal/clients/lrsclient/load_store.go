@@ -22,9 +22,10 @@ package lrsclient
 
 import "time"
 
-// LoadStore keeps the loads for multiple clusters and services to be reported
-// via LRS. It contains loads reported to one LRS server. Create multiple
-// stores for multiple servers.
+// LoadStore keep track of the loads for multiple clusters and services that
+// are intended to be reported via LRS. One store contains loads reported to
+// one LRS server. To track loads for multiple servers, multiple stores can be
+// created.
 type LoadStore struct {
 }
 
