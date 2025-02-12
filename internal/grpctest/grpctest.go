@@ -58,11 +58,13 @@ func (Tester) Setup(t *testing.T) {
 	//  completely addressed, and this can be turned back on as soon as this issue is
 	//  fixed.
 	leakcheck.SetTrackingBufferPool(logger{t: t})
+	leakcheck.SetTimerTracker(logger{t: t})
 }
 
 // Teardown performs a leak check.
 func (Tester) Teardown(t *testing.T) {
 	leakcheck.CheckTrackingBufferPool()
+	leakcheck.CheckTimers(5 * time.Second)
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		return
 	}

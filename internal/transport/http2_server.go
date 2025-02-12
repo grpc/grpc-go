@@ -35,6 +35,7 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
@@ -600,7 +601,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 	// Start a timer to close the stream on reaching the deadline.
 	if timeoutSet {
-		timer := time.AfterFunc(timeout, func() {
+		timer := internal.TimeAfterFunc(timeout, func() {
 			t.closeStream(s, true, http2.ErrCodeCancel, false)
 		})
 		s.deadlineTimerCancel = func() {
