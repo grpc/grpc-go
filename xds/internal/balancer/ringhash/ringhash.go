@@ -96,7 +96,7 @@ type ringhashBalancer struct {
 // UpdateState intercepts child balancer state updates. It updates the
 // per-endpoint state stored in the ring, and also the aggregated state based on
 // the child picker. It also reconciles the endpoint list. It sets
-// `b.shouldRegenerateRing` to true if the new endpoints list is different from
+// `b.shouldRegenerateRing` to true if the new endpoint list is different from
 // the previous, i.e. any of the following is true:
 // - an endpoint was added
 // - an endpoint was removed
