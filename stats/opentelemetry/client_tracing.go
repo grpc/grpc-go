@@ -19,11 +19,21 @@ package opentelemetry
 import (
 	"context"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel"
+	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
+	grpccodes "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
+	"google.golang.org/grpc/status"
 )
+
+type clientTracingStatsHandler struct {
+	*clientStatsHandler
+}
 
 // traceTagRPC populates provided context with a new span using the
 // TextMapPropagator supplied in trace options and internal itracing.carrier.
@@ -51,4 +61,64 @@ func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method str
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	return ctx, span
+}
+
+func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: h.determineMethod(method, opts...),
+	}
+	ctx = setCallInfo(ctx, ci)
+	if h.options.MetricsOptions.pluginOption != nil {
+		md := h.options.MetricsOptions.pluginOption.GetMetadata()
+		for k, vs := range md {
+			for _, v := range vs {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
+			}
+		}
+	}
+
+	startTime := time.Now()
+	var span trace.Span
+	ctx, span = h.createCallTraceSpan(ctx, method)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	h.perCallTraces(ctx, err, startTime, ci, span)
+	return err
+}
+
+func (h *clientTracingStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: h.determineMethod(method, opts...),
+	}
+	ctx = setCallInfo(ctx, ci)
+
+	if h.options.MetricsOptions.pluginOption != nil {
+		md := h.options.MetricsOptions.pluginOption.GetMetadata()
+		for k, vs := range md {
+			for _, v := range vs {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
+			}
+		}
+	}
+
+	startTime := time.Now()
+	var span trace.Span
+	ctx, span = h.createCallTraceSpan(ctx, method)
+	callback := func(err error) {
+		h.perCallTraces(ctx, err, startTime, ci, span)
+	}
+	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
+	return streamer(ctx, desc, cc, method, opts...)
+}
+
+// perCallTraces records per call trace spans and metrics.
+func (h *clientTracingStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
+	s := status.Convert(err)
+	if s.Code() == grpccodes.OK {
+		ts.SetStatus(otelcodes.Ok, s.Message())
+	} else {
+		ts.SetStatus(otelcodes.Error, s.Message())
+	}
+	ts.End()
 }
