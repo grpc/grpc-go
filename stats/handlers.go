@@ -37,7 +37,8 @@ type RPCTagInfo struct {
 	FullMethodName string
 	// FailFast indicates if this RPC is failfast.
 	// This field is only valid on client side, it's always false on server side.
-	FailFast            bool
+	FailFast bool
+	// NameResolutionDelay indicates if the RPC was delayed due to address resolution.
 	NameResolutionDelay bool
 }
 

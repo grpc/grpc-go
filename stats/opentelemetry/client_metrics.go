@@ -190,7 +190,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		xdsLabels: labels.TelemetryLabels,
 		method:    removeLeadingSlash(info.FullMethodName),
 	}
-	ai.resolutionDelay = info.NameResolutionDelay
+	ai.nameResolutionDelayed = info.NameResolutionDelay
 	if h.options.isTracingEnabled() {
 		ctx, ai = h.traceTagRPC(ctx, ai)
 	}

@@ -52,7 +52,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		)
 		// increment previous rpc attempts applicable for next attempt
 		atomic.AddUint32(&ai.previousRPCAttempts, 1)
-		if ai.resolutionDelay {
+		if ai.nameResolutionDelayed {
 			span.AddEvent("Name resolution completed with delay")
 		}
 	case *stats.PickerUpdated:

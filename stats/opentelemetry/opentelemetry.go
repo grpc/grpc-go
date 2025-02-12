@@ -211,7 +211,8 @@ type attemptInfo struct {
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRPCAttempts uint32
-	resolutionDelay     bool
+	// nameResolutionDelayed indicates if the RPC was delayed by address resolution.
+	nameResolutionDelayed bool
 }
 
 type clientMetrics struct {
