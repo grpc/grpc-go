@@ -30,8 +30,10 @@ type picker struct {
 	ring   *ring
 	logger *grpclog.PrefixLogger
 	// endpointStates is a cache of endpoint connectivity states and pickers.
-	// The cache is used to avoid locking the mutex for reading the state at RPC
-	// time.
+	// The ringhash balancer stores endpoint states in a `resolver.EndpointMap`,
+	// with access guarded by `ringhashBalancer.mu`. The `endpointStates` cache
+	// in the picker helps avoid locking the ringhash balancer's mutex when
+	// reading the latest state at RPC time.
 	endpointStates map[string]balancer.State // endpointState.firstAddr -> balancer.State
 }
 
