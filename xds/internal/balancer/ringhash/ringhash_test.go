@@ -599,7 +599,7 @@ func (s) TestAutoConnectEndpointOnTransientFailure(t *testing.T) {
 	// will be CONNECTING.
 	cc.WaitForConnectivityState(ctx, connectivity.Connecting)
 	p1 := <-cc.NewPickerCh
-	p1.Pick(balancer.PickInfo{Ctx: context.Background()})
+	p1.Pick(balancer.PickInfo{Ctx: ctx})
 	select {
 	case <-sc0.ConnectCh:
 	case <-time.After(defaultTestTimeout):

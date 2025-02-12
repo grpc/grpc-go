@@ -113,36 +113,39 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 		endpoint := childState.Endpoint
 		endpointsSet.Set(endpoint, true)
 		newWeight := getWeightAttribute(endpoint)
-		var es *endpointState
 		if val, ok := b.endpointStates.Get(endpoint); !ok {
-			es = &endpointState{}
+			es := &endpointState{
+				balancer:  childState.Balancer,
+				weight:    newWeight,
+				firstAddr: endpoint.Addresses[0].Addr,
+				state:     childState.State,
+			}
 			b.endpointStates.Set(endpoint, es)
 			b.shouldRegenerateRing = true
-			es.balancer = childState.Balancer
 		} else {
 			// We have seen this endpoint before and created a `endpointState`
-			// object for it. If the weight associated with the endpoint has
-			// changed, update the endpoint state map with the new weight.
+			// object for it. If the weight or the first address of the endpoint
+			// has changed, update the endpoint state map with the new weight.
 			// This will be used when a new ring is created.
-			es = val.(*endpointState)
+			es := val.(*endpointState)
 			if oldWeight := es.weight; oldWeight != newWeight {
 				b.shouldRegenerateRing = true
+				es.weight = newWeight
 			}
 			if es.firstAddr != endpoint.Addresses[0].Addr {
 				// If the order of the addresses for a given endpoint change,
 				// that will change the position of the endpoint in the ring.
 				// -A61
 				b.shouldRegenerateRing = true
+				es.firstAddr = endpoint.Addresses[0].Addr
 			}
 			oldState := es.state.ConnectivityState
 			newState := childState.State.ConnectivityState
 			if oldState != newState && newState == connectivity.TransientFailure {
 				endpointEnteredTF = true
 			}
+			es.state = childState.State
 		}
-		es.weight = newWeight
-		es.state = childState.State
-		es.firstAddr = endpoint.Addresses[0].Addr
 	}
 
 	for _, endpoint := range b.endpointStates.Keys() {

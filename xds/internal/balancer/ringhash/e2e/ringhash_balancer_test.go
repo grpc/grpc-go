@@ -162,8 +162,8 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	}
 }
 
-// startTestServiceBackends starts num stub servers. It returns their addresses.
-// Servers are closed when the test is stopped.
+// startTestServiceBackends starts num stub servers. It returns the list of
+// stubservers. Servers are closed when the test is stopped.
 func startTestServiceBackends(t *testing.T, num int) []*stubserver.StubServer {
 	t.Helper()
 
@@ -176,6 +176,7 @@ func startTestServiceBackends(t *testing.T, num int) []*stubserver.StubServer {
 	return servers
 }
 
+// backendAddrs returns a list of address strings for the given stubservers.
 func backendAddrs(servers []*stubserver.StubServer) []string {
 	addrs := make([]string, 0, len(servers))
 	for _, s := range servers {
@@ -2185,24 +2186,18 @@ func (s) TestRingHash_FallBackWithinEndpoint(t *testing.T) {
 		t.Errorf("Got %v RPCs routed to a backend, want %v", got, numRPCs)
 	}
 
-	var otherEndpointAddr string
+	// Due to the channel ID hashing policy, the request could go to the first
+	// address of either endpoint.
 	var backendIdx int
 	switch initialAddr {
 	case backendAddrs[0]:
-		otherEndpointAddr = backendAddrs[1]
 		backendIdx = 0
-	case backendAddrs[1]:
-		otherEndpointAddr = backendAddrs[0]
-		backendIdx = 1
 	case backendAddrs[2]:
-		otherEndpointAddr = backendAddrs[3]
 		backendIdx = 2
-	case backendAddrs[3]:
-		otherEndpointAddr = backendAddrs[2]
-		backendIdx = 3
 	default:
-		t.Fatalf("Request sent to unknown backend: %q", initialAddr)
+		t.Fatalf("Request sent to unexpected backend: %q", initialAddr)
 	}
+	otherEndpointAddr := backendAddrs[backendIdx+1]
 
 	// Shut down the previously used backend.
 	backends[backendIdx].Stop()

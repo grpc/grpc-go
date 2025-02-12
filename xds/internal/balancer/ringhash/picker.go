@@ -19,6 +19,8 @@
 package ringhash
 
 import (
+	"fmt"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
@@ -49,7 +51,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			return balState.Picker.Pick(info)
 		case connectivity.TransientFailure:
 		default:
-			p.logger.Errorf("Found child balancer in unknown state: %v", balState.ConnectivityState)
+			panic(fmt.Sprintf("Found child balancer in unknown state: %v", balState.ConnectivityState))
 		}
 	}
 	// All children are in transient failure. Return the first failure.
