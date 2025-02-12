@@ -120,7 +120,18 @@ type MetricsOptions struct {
 func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
+	var interceptors []grpc.DialOption
+	if o.isMetricsEnabled() {
+		metricsHandler := &clientMetricsStatsHandler{clientStatsHandler: csh}
+		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor))
+	}
+	if o.isTracingEnabled() {
+		tracingHandler := &clientTracingStatsHandler{clientStatsHandler: csh}
+		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor))
+	}
+	interceptors = append(interceptors, grpc.WithStatsHandler(csh))
+
+	return joinDialOptions(interceptors...)
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
