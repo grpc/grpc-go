@@ -189,7 +189,7 @@ func (es *endpointSharding) ResolverError(err error) {
 	}()
 	children := es.children.Load()
 	for _, child := range children.Values() {
-		child.(balancer.Balancer).ResolverError(err)
+		child.(*balancerWrapper).resolverErrorLocked(err)
 	}
 }
 
@@ -349,9 +349,10 @@ func (bw *balancerWrapper) updateClientConnStateLocked(ccs balancer.ClientConnSt
 // closeLocked closes the child balancer. Callers must hold the child mutext of
 // the parent endpointsharding balancer.
 func (bw *balancerWrapper) closeLocked() {
-	if bw.isClosed {
-		return
-	}
 	bw.child.Close()
 	bw.isClosed = true
+}
+
+func (bw *balancerWrapper) resolverErrorLocked(err error) {
+	bw.child.ResolverError(err)
 }

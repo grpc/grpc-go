@@ -105,11 +105,13 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			wantSCToConnect: testSubConns[1],
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := newPicker(tt.ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
 			got, err := p.Pick(balancer.PickInfo{
-				Ctx: SetRequestHash(context.Background(), tt.hash),
+				Ctx: SetRequestHash(ctx, tt.hash),
 			})
 			if err != tt.wantErr {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
@@ -138,7 +140,9 @@ func (s) TestPickerPickTriggerTFConnect(t *testing.T) {
 		connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
 	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, 5)})
 	if err == nil {
 		t.Fatalf("Pick() error = %v, want non-nil", err)
 	}
@@ -168,7 +172,9 @@ func (s) TestPickerPickTriggerTFReturnReady(t *testing.T) {
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Ready,
 	})
 	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-	pr, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	pr, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, 5)})
 	if err != nil {
 		t.Fatalf("Pick() error = %v, want nil", err)
 	}
@@ -194,7 +200,9 @@ func (s) TestPickerPickTriggerTFWithIdle(t *testing.T) {
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
 	p := newPicker(ring, igrpclog.NewPrefixLogger(grpclog.Component("xds"), "rh_test"))
-	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(context.Background(), 5)})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := p.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, 5)})
 	if err == balancer.ErrNoSubConnAvailable {
 		t.Fatalf("Pick() error = %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}

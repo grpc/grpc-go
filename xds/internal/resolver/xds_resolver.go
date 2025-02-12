@@ -25,6 +25,7 @@ import (
 	rand "math/rand/v2"
 	"sync/atomic"
 
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -50,13 +51,16 @@ const Scheme = "xds"
 // the provided config and a new xDS client in that pool.
 func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
-		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
+		newXDSClient: func(name string, mr estats.MetricsRecorder) (xdsclient.XDSClient, func(), error) {
 			config, err := bootstrap.NewConfigFromContents(config)
 			if err != nil {
 				return nil, nil, err
 			}
 			pool := xdsclient.NewPool(config)
-			return pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name})
+			return pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name:            name,
+				MetricsRecorder: mr,
+			})
 		},
 	}, nil
 }
@@ -66,8 +70,24 @@ func newBuilderWithConfigForTesting(config []byte) (resolver.Builder, error) {
 // specific xds client pool being used.
 func newBuilderWithPoolForTesting(pool *xdsclient.Pool) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
-		newXDSClient: func(name string) (xdsclient.XDSClient, func(), error) {
-			return pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: name})
+		newXDSClient: func(name string, mr estats.MetricsRecorder) (xdsclient.XDSClient, func(), error) {
+			return pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name:            name,
+				MetricsRecorder: mr,
+			})
+		},
+	}, nil
+}
+
+// newBuilderWithClientForTesting creates a new xds resolver builder using the
+// specific xDS client, so that tests have complete control over the exact
+// specific xDS client being used.
+func newBuilderWithClientForTesting(client xdsclient.XDSClient) (resolver.Builder, error) {
+	return &xdsResolverBuilder{
+		newXDSClient: func(string, estats.MetricsRecorder) (xdsclient.XDSClient, func(), error) {
+			// Returning an empty close func here means that the responsibility
+			// of closing the client lies with the caller.
+			return client, func() {}, nil
 		},
 	}, nil
 }
@@ -76,13 +96,14 @@ func init() {
 	resolver.Register(&xdsResolverBuilder{})
 	internal.NewXDSResolverWithConfigForTesting = newBuilderWithConfigForTesting
 	internal.NewXDSResolverWithPoolForTesting = newBuilderWithPoolForTesting
+	internal.NewXDSResolverWithClientForTesting = newBuilderWithClientForTesting
 
 	rinternal.NewWRR = wrr.NewRandom
 	rinternal.NewXDSClient = xdsclient.DefaultPool.NewClient
 }
 
 type xdsResolverBuilder struct {
-	newXDSClient func(string) (xdsclient.XDSClient, func(), error)
+	newXDSClient func(string, estats.MetricsRecorder) (xdsclient.XDSClient, func(), error)
 }
 
 // Build helps implement the resolver.Builder interface.
@@ -115,11 +136,11 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 	r.serializerCancel = cancel
 
 	// Initialize the xDS client.
-	newXDSClient := rinternal.NewXDSClient.(func(string) (xdsclient.XDSClient, func(), error))
+	newXDSClient := rinternal.NewXDSClient.(func(string, estats.MetricsRecorder) (xdsclient.XDSClient, func(), error))
 	if b.newXDSClient != nil {
 		newXDSClient = b.newXDSClient
 	}
-	client, closeFn, err := newXDSClient(target.String())
+	client, closeFn, err := newXDSClient(target.String(), opts.MetricsRecorder)
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
