@@ -563,6 +563,15 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		t.Fatalf("Failed to update management server with initial resources: %v", err)
 	}
 
+	// Force a connection attempt to trigger state transition based on the bad
+	// security config. We expect this RPC to fail because of the bad TLS config.
+	client := testgrpc.NewTestServiceClient(cc)
+	dummyCtx, dummyCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer dummyCancel()
+	if _, err := client.EmptyCall(dummyCtx, &testpb.Empty{}); err == nil {
+		t.Fatalf("EmptyCall() succeeded unexpectedly with bad security config")
+	}
+
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Update the management server with a Cluster resource that contains a
@@ -579,7 +588,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	}
 
 	// Verify that a successful RPC can be made over a secure connection.
-	client := testgrpc.NewTestServiceClient(cc)
+	client = testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
