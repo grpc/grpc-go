@@ -57,11 +57,12 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	cc          *grpc.ClientConn
-	client      rlsgrpc.RouteLookupServiceClient
-	logger      *internalgrpclog.PrefixLogger
-	state       *buffer.Unbounded
-	unsubscribe func()
+	cc                   *grpc.ClientConn
+	client               rlsgrpc.RouteLookupServiceClient
+	logger               *internalgrpclog.PrefixLogger
+	connectivity_stateCh *buffer.Unbounded
+	unsubscribe          func()
+	monitorDoneCh        chan struct{}
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -69,10 +70,11 @@ type controlChannel struct {
 // gRPC channel.
 func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
-		rpcTimeout:      rpcTimeout,
-		backToReadyFunc: backToReadyFunc,
-		throttler:       newAdaptiveThrottler(),
-		state:           buffer.NewUnbounded(),
+		rpcTimeout:           rpcTimeout,
+		backToReadyFunc:      backToReadyFunc,
+		throttler:            newAdaptiveThrottler(),
+		connectivity_stateCh: buffer.NewUnbounded(),
+		monitorDoneCh:        make(chan struct{}),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
@@ -84,6 +86,8 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	if err != nil {
 		return nil, err
 	}
+	// Subscribe to connectivity state before connecting to avoid missing initial
+	// updates, which are only delivered to active subscribers.
 	ctrlCh.unsubscribe = internal.SubscribeToConnectivityStateChanges.(func(cc *grpc.ClientConn, s grpcsync.Subscriber) func())(ctrlCh.cc, ctrlCh)
 	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
@@ -102,7 +106,7 @@ func (cc *controlChannel) OnMessage(msg any) {
 	if !ok {
 		panic(fmt.Sprintf("Unexpected message type %T , wanted connectectivity.State type", msg))
 	}
-	cc.state.Put(st)
+	cc.connectivity_stateCh.Put(st)
 }
 
 // dialOpts constructs the dial options for the control plane channel.
@@ -151,6 +155,8 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig st
 
 func (cc *controlChannel) monitorConnectivityState() {
 	cc.logger.Infof("Starting connectivity state monitoring goroutine")
+	defer close(cc.monitorDoneCh)
+
 	// Since we use two mechanisms to deal with RLS server being down:
 	//   - adaptive throttling for the channel as a whole
 	//   - exponential backoff on a per-request basis
@@ -171,38 +177,39 @@ func (cc *controlChannel) monitorConnectivityState() {
 	// them while we were in backoff. However, we should optimize this case by
 	// returning only one new picker, regardless of how many backoff timers are
 	// cancelled.
+	var s any
+	var ok bool
+	// Wait for the control channel to become READY for the first time.
+	for s, ok = <-cc.connectivity_stateCh.Get(); s != connectivity.Ready; s, ok = <-cc.connectivity_stateCh.Get() {
+		if !ok {
+			cc.logger.Infof("Control channel closed")
+			return
+		}
 
-	first := true
+		cc.connectivity_stateCh.Load()
+		if s == connectivity.Shutdown {
+			return
+		}
+	}
+	cc.connectivity_stateCh.Load()
+	cc.logger.Infof("Connectivity state is READY")
+
 	for {
-		// Wait for the control channel to become READY.
-		var s any
-		var ok bool
-		for s, ok = <-cc.state.Get(); s != connectivity.Ready; s, ok = <-cc.state.Get() {
-			if !ok {
-				cc.logger.Infof("Control channel closed")
-				return
-			}
-			cc.state.Load()
-			if s == connectivity.Shutdown {
-				return
-			}
+		s, ok = <-cc.connectivity_stateCh.Get()
+		if !ok {
+			cc.logger.Infof("Control channel closed")
+			return
 		}
-		cc.state.Load()
-		cc.logger.Infof("Connectivity state is READY")
-
-		if !first {
-			cc.logger.Infof("Control channel back to READY")
-			cc.backToReadyFunc()
-		}
-		first = false
-
-		// Wait for the control channel to move out of READY.
-		s = <-cc.state.Get()
-		cc.state.Load()
+		cc.connectivity_stateCh.Load()
 
 		if s == connectivity.Shutdown {
 			return
 		}
+		if s == connectivity.Ready {
+			cc.logger.Infof("Control channel back to READY")
+			cc.backToReadyFunc()
+		}
+
 		cc.logger.Infof("Connectivity state is %s", s)
 	}
 }
@@ -210,7 +217,8 @@ func (cc *controlChannel) monitorConnectivityState() {
 func (cc *controlChannel) close() {
 	cc.logger.Infof("Closing control channel")
 	cc.unsubscribe()
-	cc.state.Close()
+	cc.connectivity_stateCh.Close()
+	<-cc.monitorDoneCh
 	cc.cc.Close()
 }
 
