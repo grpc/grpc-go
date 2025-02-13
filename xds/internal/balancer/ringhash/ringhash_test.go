@@ -24,8 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -479,9 +480,9 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
 			endpoints[0],
-			weightedroundrobin.SetAddrInfoInEndpoint(
+			SetAddrInfo(
 				endpoints[1],
-				weightedroundrobin.AddrInfo{Weight: 2}),
+				AddrInfo{Weight: 2}),
 		}},
 		BalancerConfig: testConfig,
 	}); err != nil {
@@ -715,5 +716,60 @@ func (s) TestAddrBalancerAttributesChange(t *testing.T) {
 	case <-cc.NewSubConnCh:
 		t.Fatal("new subConn created for an update with the same addresses")
 	case <-time.After(defaultTestShortTimeout):
+	}
+}
+
+func (s) TestAddrInfoToAndFromAttributes(t *testing.T) {
+	tests := []struct {
+		desc            string
+		inputAddrInfo   AddrInfo
+		inputAttributes *attributes.Attributes
+		wantAddrInfo    AddrInfo
+	}{
+		{
+			desc:            "empty attributes",
+			inputAddrInfo:   AddrInfo{Weight: 100},
+			inputAttributes: nil,
+			wantAddrInfo:    AddrInfo{Weight: 100},
+		},
+		{
+			desc:            "non-empty attributes",
+			inputAddrInfo:   AddrInfo{Weight: 100},
+			inputAttributes: attributes.New("foo", "bar"),
+			wantAddrInfo:    AddrInfo{Weight: 100},
+		},
+		{
+			desc:            "addrInfo not present in empty attributes",
+			inputAddrInfo:   AddrInfo{},
+			inputAttributes: nil,
+			wantAddrInfo:    AddrInfo{},
+		},
+		{
+			desc:            "addrInfo not present in non-empty attributes",
+			inputAddrInfo:   AddrInfo{},
+			inputAttributes: attributes.New("foo", "bar"),
+			wantAddrInfo:    AddrInfo{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			endpoint := resolver.Endpoint{Attributes: test.inputAttributes}
+			endpoint = SetAddrInfo(endpoint, test.inputAddrInfo)
+			gotAddrInfo := addrInfo(endpoint)
+			if !cmp.Equal(gotAddrInfo, test.wantAddrInfo) {
+				t.Errorf("gotAddrInfo: %v, wantAddrInfo: %v", gotAddrInfo, test.wantAddrInfo)
+			}
+
+		})
+	}
+}
+
+func (s) TestAddrInfoEmpty(t *testing.T) {
+	ep := resolver.Endpoint{}
+	gotAddrInfo := addrInfo(ep)
+	wantAddrInfo := AddrInfo{}
+	if !cmp.Equal(gotAddrInfo, wantAddrInfo) {
+		t.Errorf("gotAddrInfo: %v, wantAddrInfo: %v", gotAddrInfo, wantAddrInfo)
 	}
 }

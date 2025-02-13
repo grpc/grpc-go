@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/lazy"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
@@ -350,7 +349,7 @@ func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 // non-zero. But, when used in a non-xDS context, the weight attribute could be
 // unset. A Default of 1 is used in the latter case.
 func getWeightAttribute(e resolver.Endpoint) uint32 {
-	w := weightedroundrobin.AddrInfoFromEndpoint(e).Weight
+	w := addrInfo(e).Weight
 	if w == 0 {
 		return 1
 	}
@@ -369,4 +368,39 @@ type endpointState struct {
 	// the channel and picker updates from its children. Access to it is guarded
 	// by ringhashBalancer.mu.
 	state balancer.State
+}
+
+// attributeKey is the type used as the key to store AddrInfo in the
+// BalancerAttributes field of resolver.Address or Attributes field of
+// resolver.Endpoint.
+type attributeKey struct{}
+
+// AddrInfo will be stored in the BalancerAttributes field of Address in order
+// to use the ringhash balancer.
+type AddrInfo struct {
+	Weight uint32
+}
+
+// Equal allows the values to be compared by Attributes.Equal.
+func (a AddrInfo) Equal(o any) bool {
+	oa, ok := o.(AddrInfo)
+	return ok && oa.Weight == a.Weight
+}
+
+// SetAddrInfo returns a copy of endpoint in which the Attributes field is
+// updated with addrInfo.
+func SetAddrInfo(endpoint resolver.Endpoint, addrInfo AddrInfo) resolver.Endpoint {
+	endpoint.Attributes = endpoint.Attributes.WithValue(attributeKey{}, addrInfo)
+	return endpoint
+}
+
+func (a AddrInfo) String() string {
+	return fmt.Sprintf("Weight: %d", a.Weight)
+}
+
+// addrInfo returns the AddrInfo stored in the Attributes field of endpoint.
+func addrInfo(endpoint resolver.Endpoint) AddrInfo {
+	v := endpoint.Attributes.Value(attributeKey{})
+	ai, _ := v.(AddrInfo)
+	return ai
 }
