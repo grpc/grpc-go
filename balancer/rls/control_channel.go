@@ -57,12 +57,12 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	cc                   *grpc.ClientConn
-	client               rlsgrpc.RouteLookupServiceClient
-	logger               *internalgrpclog.PrefixLogger
+	cc                  *grpc.ClientConn
+	client              rlsgrpc.RouteLookupServiceClient
+	logger              *internalgrpclog.PrefixLogger
 	connectivityStateCh *buffer.Unbounded
-	unsubscribe          func()
-	monitorDoneCh        chan struct{}
+	unsubscribe         func()
+	monitorDoneCh       chan struct{}
 }
 
 // newControlChannel creates a controlChannel to rlsServerName and uses
@@ -70,11 +70,11 @@ type controlChannel struct {
 // gRPC channel.
 func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
-		rpcTimeout:           rpcTimeout,
-		backToReadyFunc:      backToReadyFunc,
-		throttler:            newAdaptiveThrottler(),
+		rpcTimeout:          rpcTimeout,
+		backToReadyFunc:     backToReadyFunc,
+		throttler:           newAdaptiveThrottler(),
 		connectivityStateCh: buffer.NewUnbounded(),
-		monitorDoneCh:        make(chan struct{}),
+		monitorDoneCh:       make(chan struct{}),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
