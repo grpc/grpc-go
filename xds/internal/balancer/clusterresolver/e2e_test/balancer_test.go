@@ -102,6 +102,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 		xdsClose()
 		t.Fatalf("Failed to create a client for server: %v", err)
 	}
+	cc.Connect()
 	return cc, func() {
 		xdsClose()
 		cc.Close()

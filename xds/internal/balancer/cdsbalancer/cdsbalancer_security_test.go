@@ -562,13 +562,6 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with initial resources: %v", err)
 	}
-
-	// Verify that a successful RPC can be made over a secure connection.
-	client := testgrpc.NewTestServiceClient(cc)
-	go func() {
-		_, _ = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
-	}()
-
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Update the management server with a Cluster resource that contains a
@@ -584,8 +577,8 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		t.Fatalf("Failed to update management server with valid resources: %v", err)
 	}
 
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
-
+	// Verify that a successful RPC can be made over a secure connection.
+	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)

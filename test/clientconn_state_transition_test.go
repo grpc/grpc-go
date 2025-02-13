@@ -243,11 +243,11 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	client.Connect()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
-
+	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
 	want := []connectivity.State{

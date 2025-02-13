@@ -77,7 +77,7 @@ func (s) TestNewClientWithTimeout(t *testing.T) {
 	defer lis.Close()
 	lisAddr := resolver.Address{Addr: lis.Addr().String()}
 	lisDone := make(chan struct{})
-	newclientDone := make(chan struct{})
+	connectDone := make(chan struct{})
 	// 1st listener accepts the connection and then does nothing
 	go func() {
 		defer close(lisDone)
@@ -91,17 +91,17 @@ func (s) TestNewClientWithTimeout(t *testing.T) {
 			t.Errorf("Error while writing settings. Err: %v", err)
 			return
 		}
-		<-newclientDone // Close conn only after newclient returns.
+		<-connectDone // Close conn only after newclient returns.
 	}()
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
 	client, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
-	close(newclientDone)
 	if err != nil {
 		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	client.Connect()
+	close(connectDone)
 	defer client.Close()
 	timeout := time.After(1 * time.Second)
 	select {
@@ -868,31 +868,31 @@ type backoffForever struct{}
 func (b backoffForever) Backoff(int) time.Duration { return time.Duration(math.MaxInt64) }
 
 func (s) TestResetConnectBackoff(t *testing.T) {
-	clients := make(chan struct{})
-	defer func() { // If we fail, let the http2client break out of newclient.
+	dials := make(chan struct{})
+	defer func() { // If we fail, let the http2client break out of dialing.
 		select {
-		case <-clients:
+		case <-dials:
 		default:
 		}
 	}()
-	newclient := func(string, time.Duration) (net.Conn, error) {
-		clients <- struct{}{}
-		return nil, errors.New("Failed to create a fake NewClient")
+	dialer := func(string, time.Duration) (net.Conn, error) {
+		dials <- struct{}{}
+		return nil, errors.New("failed to fake dial")
 	}
-	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(newclient), withBackoff(backoffForever{}))
+	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
 		t.Fatalf("NewClient() = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
 	select {
-	case <-clients:
+	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Fatal("Failed to call NewClient within 10s")
 	}
 
 	select {
-	case <-clients:
+	case <-dials:
 		t.Fatal("NewClient called unexpectedly before resetting backoff")
 	case <-time.NewTimer(100 * time.Millisecond).C:
 	}
@@ -900,16 +900,16 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	cc.ResetConnectBackoff()
 
 	select {
-	case <-clients:
+	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
 		t.Fatal("Failed to call NewClient within 10s after resetting backoff")
 	}
 }
 
 func (s) TestBackoffCancel(t *testing.T) {
-	newClientStrCh := make(chan string)
+	dialStrCh := make(chan string)
 	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
-		newClientStrCh <- t
+		dialStrCh <- t
 		return nil, fmt.Errorf("Failed to create a client")
 	}))
 	if err != nil {
@@ -920,8 +920,8 @@ func (s) TestBackoffCancel(t *testing.T) {
 
 	select {
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for custom newclient to be invoked during NewClient")
-	case <-newClientStrCh:
+		t.Fatal("Timeout when waiting for custom dialer to be invoked during Dial")
+	case <-dialStrCh:
 	}
 }
 
@@ -975,9 +975,10 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 			return
 		}
 
-		// nextStateNotifier() is updated after balancerBuilder.Build(), which is
-		// called by grpc.NewClient. It's safe to do it here because lis1.Accept blocks
-		// until balancer is built to process the addresses.
+		// nextStateNotifier() is updated after balancerBuilder.Build(), which
+		// is called by ClientConn.Connect in stayConnected. It's safe to do it
+		// here because lis1.Accept blocks until ClientConn.Connect is called
+		// and the balancer is built to process the addresses.
 		stateNotifications := testBalancerBuilder.nextStateNotifier()
 		// Wait for the transport to become ready.
 		for {
