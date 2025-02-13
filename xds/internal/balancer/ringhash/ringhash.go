@@ -101,14 +101,12 @@ type ringhashBalancer struct {
 // - an endpoint was added
 // - an endpoint was removed
 // - an endpoint's weight was updated
-// - the first addresses of the endpoint has changed
 func (b *ringhashBalancer) UpdateState(state balancer.State) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	childStates := endpointsharding.ChildStatesFromPicker(state.Picker)
 	// endpointsSet is the set converted from endpoints, used for quick lookup.
 	endpointsSet := resolver.NewEndpointMap()
-	endpointEnteredTF := false
 
 	for _, childState := range childStates {
 		endpoint := childState.Endpoint
@@ -140,11 +138,6 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 				b.shouldRegenerateRing = true
 				es.firstAddr = endpoint.Addresses[0].Addr
 			}
-			oldState := es.state.ConnectivityState
-			newState := childState.State.ConnectivityState
-			if oldState != newState && newState == connectivity.TransientFailure {
-				endpointEnteredTF = true
-			}
 			es.state = childState.State
 		}
 	}
@@ -158,7 +151,7 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 		b.shouldRegenerateRing = true
 	}
 
-	b.updatePickerLocked(endpointEnteredTF)
+	b.updatePickerLocked()
 }
 
 func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -178,7 +171,7 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 	defer func() {
 		b.mu.Lock()
 		b.inhibitChildUpdates = false
-		b.updatePickerLocked(false)
+		b.updatePickerLocked()
 		b.mu.Unlock()
 	}()
 
@@ -219,10 +212,10 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 	b.logger.Errorf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state)
 }
 
-func (b *ringhashBalancer) updatePickerLocked(endpointEnteredTF bool) {
+func (b *ringhashBalancer) updatePickerLocked() {
 	state := b.aggregatedStateLocked()
 	// Start connecting to new endpoints if necessary.
-	if endpointEnteredTF && (state == connectivity.Connecting || state == connectivity.TransientFailure) {
+	if state == connectivity.Connecting || state == connectivity.TransientFailure {
 		// When overall state is TransientFailure, we need to make sure at least
 		// one endpoint is attempting to connect, otherwise this balancer may
 		// never get picks if the parent is priority.
@@ -235,6 +228,17 @@ func (b *ringhashBalancer) updatePickerLocked(endpointEnteredTF bool) {
 		// endpoint attempting to connect is deleted, and the overall state is
 		// TF. Since there must be at least one endpoint attempting to connect,
 		// we need to trigger one.
+		//
+		// TODO: https://github.com/grpc/grpc-go/issues/8085 - Restrict the
+		// condition under which an endpoint is connected. The pseudocode
+		// mentioned in A61 doesn't handle the following edge cases where the
+		// aggregated state is TF, but no endpoint actually enters TF:
+		// 1. There are four endpoints in the following states: TF, TF, READY,
+		//    and IDLE. If the READY endpoint fails, it transitions to IDLE,
+		//    resulting in the new states: TF, TF, IDLE, IDLE.
+		// 2. There are four endpoints in the following states: TF, TF,
+		//    CONNECTING, and IDLE. If the CONNECTING endpoint is removed, the
+		//    new states become: TF, TF, IDLE.
 		var idleBalancer balancer.ExitIdler
 		for _, val := range b.endpointStates.Values() {
 			es := val.(*endpointState)

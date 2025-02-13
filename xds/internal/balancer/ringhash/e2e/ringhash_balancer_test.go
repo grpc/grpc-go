@@ -1766,7 +1766,7 @@ func (s) TestRingHash_ReattemptWhenAllEndpointsUnreachable(t *testing.T) {
 	t.Log("Restarting the backend server")
 	restartableListener.Restart()
 
-	// Wait for channel to become connected without any pending RPC.
+	// Wait for channel to become READY without any pending RPC.
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 }
 
@@ -2008,7 +2008,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 	}
 	holds[1].Resume()
 
-	// Wait for channel to become connected without any pending RPC.
+	// Wait for channel to become READY without any pending RPC.
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 }
 
@@ -2221,18 +2221,19 @@ func (s) TestRingHash_FallBackWithinEndpoint(t *testing.T) {
 	}
 }
 
-// Tests that the ringhash balancer automatically connects to an IDLE endpoint
-// when the first endpoint fails. The test then verifies that the balancer
-// doesn't automatically re-connect to the endpoint when the READY endpoint
-// enters IDLE.
-func (s) TestRingHash_NoReconnectWhenEndpointEntersIdle(t *testing.T) {
-	unhealthyAddrs := makeUnreachableBackends(t, 1)
-	healthyBackends := startTestServiceBackends(t, 1)
-	healthyAddrs := backendAddrs(healthyBackends)
+// Tests that ringhash is able to recover automatically in situations when a
+// READY endpoint enters IDLE making the aggregated state TRANSIENT_FAILURE. The
+// test creates 4 endpoints in the following connectivity states: [TF, TF,
+// READY, IDLE]. The test fails the READY backend and verifies that the last
+// IDLE endopint is dialed and the channel enters READY.
+func (s) TestRingHash_RecoverWhenEndpointEntersIdle(t *testing.T) {
+	const backendsCount = 4
+	backends := startTestServiceBackends(t, backendsCount)
+	backendAddrs := backendAddrs(backends)
 
 	const clusterName = "cluster"
 
-	endpoints := endpointResource(t, clusterName, append(healthyAddrs, unhealthyAddrs...))
+	endpoints := endpointResource(t, clusterName, backendAddrs)
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: clusterName,
@@ -2264,15 +2265,17 @@ func (s) TestRingHash_NoReconnectWhenEndpointEntersIdle(t *testing.T) {
 
 	// Create holds for each backend address to delay a successful connection
 	// until the end of the test.
-	holdUnhealthy := dialer.Hold(unhealthyAddrs[0])
-	holdHealthy := dialer.Hold(healthyAddrs[0])
+	holds := make([]*testutils.Hold, backendsCount)
+	for i := 0; i < len(backendAddrs); i++ {
+		holds[i] = dialer.Hold(backendAddrs[i])
+	}
 
 	client := testgrpc.NewTestServiceClient(conn)
 
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)
 	go func() {
-		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", unhealthyAddrs[0]+"_0"))
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", backendAddrs[0]+"_0"))
 		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
 		if status.Code(err) == codes.Canceled {
 			errCh <- nil
@@ -2283,52 +2286,251 @@ func (s) TestRingHash_NoReconnectWhenEndpointEntersIdle(t *testing.T) {
 
 	// Wait for the RPC to trigger a connection attempt to the first address,
 	// then cancel the RPC.  No other connection attempts should be started yet.
-	if !holdUnhealthy.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend %q.", unhealthyAddrs[0])
-	}
-
-	if holdHealthy.IsStarted() {
-		t.Fatalf("Backend %q dialed unexpectedly before backend %q failed.", healthyAddrs[0], unhealthyAddrs[0])
+	if !holds[0].Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend 0")
 	}
 	rpcCancel()
 	if err := <-errCh; err != nil {
 		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
 	}
 
-	// Once the first endpoint fails, the next endpoint should be connected
-	// automatically.
-	holdUnhealthy.Resume()
-	if !holdHealthy.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend %q.", healthyAddrs[0])
+	// The number of dialed backends to increase by 1 in every iteration of the
+	// loop as ringhash tries to exit TRANSIENT_FAILURE. Run the loop twice to
+	// get two endpoints in TRANSIENT_FAILURE.
+	activeAddrs := map[string]bool{}
+	for wantFailingBackendCount := 1; wantFailingBackendCount <= 2; wantFailingBackendCount++ {
+		for ; ctx.Err() == nil && len(activeAddrs) < wantFailingBackendCount; <-time.After(time.Millisecond) {
+			for i, hold := range holds {
+				if hold.IsStarted() {
+					activeAddrs[backendAddrs[i]] = true
+				}
+			}
+		}
+		if len(activeAddrs) > wantFailingBackendCount {
+			t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantFailingBackendCount)
+		}
+
+		// Create new holds and fail existing requests.
+		for i, hold := range holds {
+			if !hold.IsStarted() {
+				continue
+			}
+			holds[i] = dialer.Hold(backendAddrs[i])
+			hold.Fail(errors.New("Test error"))
+		}
 	}
 
-	holdHealthy.Resume()
-	// Wait for channel to become connected without any pending RPC.
-	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
-
-	// Shutting down the healthy backend should cause the channel to enter
-	// CONNECTING. Since the endpoint has not entered TF, ringhash should
-	// not automatically try to re-connect. It should wait for an RPC.
-	holdHealthy = dialer.Hold(healthyAddrs[0])
-	healthyBackends[0].Stop()
-	testutils.AwaitState(ctx, t, conn, connectivity.Connecting)
-	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer cancel()
-	testutils.AwaitNoStateChange(shortCtx, t, conn, connectivity.Connecting)
-	if holdHealthy.IsStarted() {
-		t.Fatalf("Backend %q dialed unexpectedly without an RPC being made.", healthyAddrs[0])
-	}
-
-	// Making an RPC should cause a re-connection attempt to the healthy
-	// backend.
-	go func() {
-		rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", unhealthyAddrs[0]+"_0"))
-		client.EmptyCall(rpcCtx, &testpb.Empty{})
-	}()
-	if !holdHealthy.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend %q.", healthyAddrs[0])
-	}
-	// Once the second endpoint fails, the channel should enter
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Two endpoints failing should cause the channel to enter
 	// TRANSIENT_FAILURE.
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// Allow the request to the backend dialed next to succeed.
+	readyBackendIdx := -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for the next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Stopping the READY backend should cause the channel to re-enter
+	// TRANSIENT_FAILURE.
+	backends[readyBackendIdx].Stop()
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// To recover from TRANSIENT_FAILURE, ringhash should automatically try to
+	// connect to the final endpoint.
+	readyBackendIdx = -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+}
+
+// Tests that ringhash is able to recover automatically in situations when a
+// READY endpoint is removed by the resolver making the aggregated state
+// TRANSIENT_FAILURE. The test creates 4 endpoints in the following
+// connectivity states: [TF, TF, READY, IDLE]. The test removes the
+// READY endpoint and verifies that the last IDLE endopint is dialed and the
+// channel enters READY.
+func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
+	const backendsCount = 4
+	backends := startTestServiceBackends(t, backendsCount)
+	backendAddrs := backendAddrs(backends)
+
+	const clusterName = "cluster"
+
+	endpoints := endpointResource(t, clusterName, backendAddrs)
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	dialer := testutils.NewBlockingDialer()
+	dialOpts := []grpc.DialOption{
+		grpc.WithResolvers(xdsResolver),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithConnectParams(fastConnectParams),
+	}
+	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
+	}
+	defer conn.Close()
+
+	// Create holds for each backend address to delay a successful connection
+	// until the end of the test.
+	holds := make([]*testutils.Hold, backendsCount)
+	for i := 0; i < len(backendAddrs); i++ {
+		holds[i] = dialer.Hold(backendAddrs[i])
+	}
+
+	client := testgrpc.NewTestServiceClient(conn)
+
+	rpcCtx, rpcCancel := context.WithCancel(ctx)
+	errCh := make(chan error, 1)
+	go func() {
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", backendAddrs[0]+"_0"))
+		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
+		if status.Code(err) == codes.Canceled {
+			errCh <- nil
+			return
+		}
+		errCh <- err
+	}()
+
+	// Wait for the RPC to trigger a connection attempt to the first address,
+	// then cancel the RPC.  No other connection attempts should be started yet.
+	if !holds[0].Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend 0")
+	}
+	rpcCancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
+	}
+
+	// The number of dialed backends to increase by 1 in every iteration of the
+	// loop as ringhash tries to exit TRANSIENT_FAILURE. Run the loop twice to
+	// get two endpoints in TRANSIENT_FAILURE.
+	activeAddrs := map[string]bool{}
+	for wantFailingBackendCount := 1; wantFailingBackendCount <= 2; wantFailingBackendCount++ {
+		for ; ctx.Err() == nil && len(activeAddrs) < wantFailingBackendCount; <-time.After(time.Millisecond) {
+			for i, hold := range holds {
+				if hold.IsStarted() {
+					activeAddrs[backendAddrs[i]] = true
+				}
+			}
+		}
+		if len(activeAddrs) > wantFailingBackendCount {
+			t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantFailingBackendCount)
+		}
+
+		// Create new holds and fail existing requests.
+		for i, hold := range holds {
+			if !hold.IsStarted() {
+				continue
+			}
+			holds[i] = dialer.Hold(backendAddrs[i])
+			hold.Fail(errors.New("Test error"))
+		}
+	}
+
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Two endpoints failing should cause the channel to enter
+	// TRANSIENT_FAILURE.
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// Allow the request to the backend dialed next to succeed.
+	readyBackendIdx := -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for the next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Removing the READY backend should cause the channel to re-enter
+	// TRANSIENT_FAILURE.
+	updatedAddrs := append([]string{}, backendAddrs[:readyBackendIdx]...)
+	updatedAddrs = append(updatedAddrs, backendAddrs[readyBackendIdx+1:]...)
+	updatedEndpoints := endpointResource(t, clusterName, updatedAddrs)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, updatedEndpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// To recover from TRANSIENT_FAILURE, ringhash should automatically try to
+	// connect to the final endpoint.
+	readyBackendIdx = -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 }
