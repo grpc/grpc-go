@@ -265,7 +265,6 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 	if err != nil {
 		t.Fatalf("Failed to create a client for server: %v", err)
 	}
-
 	t.Cleanup(func() { cc.Close() })
 
 	return mgmtServer, nodeID, cc, r, xdsC, cdsResourceRequestedCh, cdsResourceCanceledCh
