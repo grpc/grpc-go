@@ -1955,51 +1955,43 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 	// iteration of the loop as ringhash tries to exit TRANSIENT_FAILURE.
 	activeAddrs := map[string]bool{}
 	for wantBackendCount := 1; wantBackendCount <= backendsCount; wantBackendCount++ {
+		newAddrIdx := -1
 		for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
-			dialedCount := 0
-			for _, hold := range holds {
-				if hold.IsStarted() {
-					dialedCount++
+			for i, hold := range holds {
+				if !hold.IsStarted() {
+					continue
 				}
+				if _, ok := activeAddrs[backends[i]]; ok {
+					continue
+				}
+				activeAddrs[backends[i]] = true
+				newAddrIdx = i
 			}
-			if dialedCount > wantBackendCount {
-				t.Fatalf("More backends dialed than expected: got %d, want %d", dialedCount, wantBackendCount)
+			if len(activeAddrs) > wantBackendCount {
+				t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantBackendCount)
 			}
-			if dialedCount == wantBackendCount {
+			if len(activeAddrs) == wantBackendCount {
 				break
 			}
 		}
 
 		// Wait for a short time and verify no more backends are contacted.
 		<-time.After(defaultTestShortTimeout)
-		dialedCount := 0
-		newAddrsCount := 0
 		for i, hold := range holds {
 			if !hold.IsStarted() {
 				continue
 			}
-			dialedCount++
-			if _, ok := activeAddrs[backends[i]]; !ok {
-				newAddrsCount++
-				activeAddrs[backends[i]] = true
-			}
+			activeAddrs[backends[i]] = true
 		}
-		if dialedCount != wantBackendCount {
-			t.Fatalf("Unexpected number of backends dialed: got %d, want %d", dialedCount, wantBackendCount)
-		}
-		// Only one new address should be added in every iteration.
-		if newAddrsCount != 1 {
-			t.Fatalf("Unexpected number of new addresses added in iteration: got %d, want %d", newAddrsCount, 1)
+		if len(activeAddrs) != wantBackendCount {
+			t.Fatalf("Unexpected number of backends dialed: got %d, want %d", len(activeAddrs), wantBackendCount)
 		}
 
-		// Create new holds and fail existing requests.
-		for i, hold := range holds {
-			if !hold.IsStarted() {
-				continue
-			}
-			holds[i] = dialer.Hold(backends[i])
-			hold.Fail(errors.New("Test error"))
-		}
+		// Create a new hold for the address dialed in this iteration and fail
+		// the existing hold.
+		hold := holds[newAddrIdx]
+		holds[newAddrIdx] = dialer.Hold(backends[newAddrIdx])
+		hold.Fail(errors.New("Test error"))
 	}
 
 	// Allow the request to a backend to succeed.
@@ -2294,30 +2286,37 @@ func (s) TestRingHash_RecoverWhenEndpointEntersIdle(t *testing.T) {
 		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
 	}
 
-	// The number of dialed backends to increase by 1 in every iteration of the
+	// The number of dialed backends increases by 1 in every iteration of the
 	// loop as ringhash tries to exit TRANSIENT_FAILURE. Run the loop twice to
 	// get two endpoints in TRANSIENT_FAILURE.
 	activeAddrs := map[string]bool{}
 	for wantFailingBackendCount := 1; wantFailingBackendCount <= 2; wantFailingBackendCount++ {
+		newAddrIdx := -1
 		for ; ctx.Err() == nil && len(activeAddrs) < wantFailingBackendCount; <-time.After(time.Millisecond) {
 			for i, hold := range holds {
-				if hold.IsStarted() {
-					activeAddrs[backendAddrs[i]] = true
+				if !hold.IsStarted() {
+					continue
 				}
+				if _, ok := activeAddrs[backendAddrs[i]]; ok {
+					continue
+				}
+				activeAddrs[backendAddrs[i]] = true
+				newAddrIdx = i
 			}
+		}
+
+		if ctx.Err() != nil {
+			t.Fatal("Context timed out waiting for new backneds to be dialed.")
 		}
 		if len(activeAddrs) > wantFailingBackendCount {
 			t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantFailingBackendCount)
 		}
 
-		// Create new holds and fail existing requests.
-		for i, hold := range holds {
-			if !hold.IsStarted() {
-				continue
-			}
-			holds[i] = dialer.Hold(backendAddrs[i])
-			hold.Fail(errors.New("Test error"))
-		}
+		// Create a new hold for the address dialed in this iteration and fail
+		// the existing hold.
+		hold := holds[newAddrIdx]
+		holds[newAddrIdx] = dialer.Hold(backendAddrs[newAddrIdx])
+		hold.Fail(errors.New("Test error"))
 	}
 
 	// Current state of endpoints: [TF, TF, READY, IDLE].
@@ -2449,30 +2448,37 @@ func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
 		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
 	}
 
-	// The number of dialed backends to increase by 1 in every iteration of the
+	// The number of dialed backends increases by 1 in every iteration of the
 	// loop as ringhash tries to exit TRANSIENT_FAILURE. Run the loop twice to
 	// get two endpoints in TRANSIENT_FAILURE.
 	activeAddrs := map[string]bool{}
 	for wantFailingBackendCount := 1; wantFailingBackendCount <= 2; wantFailingBackendCount++ {
+		newAddrIdx := -1
 		for ; ctx.Err() == nil && len(activeAddrs) < wantFailingBackendCount; <-time.After(time.Millisecond) {
 			for i, hold := range holds {
-				if hold.IsStarted() {
-					activeAddrs[backendAddrs[i]] = true
+				if !hold.IsStarted() {
+					continue
 				}
+				if _, ok := activeAddrs[backendAddrs[i]]; ok {
+					continue
+				}
+				activeAddrs[backendAddrs[i]] = true
+				newAddrIdx = i
 			}
+		}
+
+		if ctx.Err() != nil {
+			t.Fatal("Context timed out waiting for new backneds to be dialed.")
 		}
 		if len(activeAddrs) > wantFailingBackendCount {
 			t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantFailingBackendCount)
 		}
 
-		// Create new holds and fail existing requests.
-		for i, hold := range holds {
-			if !hold.IsStarted() {
-				continue
-			}
-			holds[i] = dialer.Hold(backendAddrs[i])
-			hold.Fail(errors.New("Test error"))
-		}
+		// Create a new hold for the address dialed in this iteration and fail
+		// the existing hold.
+		hold := holds[newAddrIdx]
+		holds[newAddrIdx] = dialer.Hold(backendAddrs[newAddrIdx])
+		hold.Fail(errors.New("Test error"))
 	}
 
 	// Current state of endpoints: [TF, TF, READY, IDLE].

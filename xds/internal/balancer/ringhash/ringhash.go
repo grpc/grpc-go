@@ -101,6 +101,7 @@ type ringhashBalancer struct {
 // - an endpoint was added
 // - an endpoint was removed
 // - an endpoint's weight was updated
+// - the first addresses of the endpoint has changed
 func (b *ringhashBalancer) UpdateState(state balancer.State) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
