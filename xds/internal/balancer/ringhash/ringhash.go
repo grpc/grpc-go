@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -240,9 +241,24 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		// 2. There are four endpoints in the following states: TF, TF,
 		//    CONNECTING, and IDLE. If the CONNECTING endpoint is removed, the
 		//    new states become: TF, TF, IDLE.
+
+		// After calling `ExitIdle` on a child balancer, the child will send a
+		// picker update asynchronously. A race condition may occur if another
+		// picker update from endpointsharding arrives before the child's
+		// picker update. The received picker may trigger a re-execution of the
+		// loop below to find an idle child. Since map iteration order is
+		// non-deterministic, the list of `endpointState`s must be sorted to
+		// ensure `ExitIdle` is called on the same child, preventing unnecessary
+		// connections.
+		var endpointStates = make([]*endpointState, b.endpointStates.Len())
+		for i, val := range b.endpointStates.Values() {
+			endpointStates[i] = val.(*endpointState)
+		}
+		sort.Slice(endpointStates, func(i, j int) bool {
+			return endpointStates[i].firstAddr < endpointStates[j].firstAddr
+		})
 		var idleBalancer balancer.ExitIdler
-		for _, val := range b.endpointStates.Values() {
-			es := val.(*endpointState)
+		for _, es := range endpointStates {
 			connState := es.state.ConnectivityState
 			if connState == connectivity.Connecting {
 				idleBalancer = nil
