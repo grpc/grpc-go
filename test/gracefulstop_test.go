@@ -140,12 +140,10 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	// Dial the server. This will cause a connection to be accepted. This will
 	// also unblock the Close method .
-	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer dialCancel()
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
-	cc, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
+	cc, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
 	if err != nil {
-		t.Fatalf("grpc.DialContext(_, %q, _) = %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(_, %q, _) = %v", lis.Addr().String(), err)
 	}
 	client := testgrpc.NewTestServiceClient(cc)
 	defer cc.Close()
