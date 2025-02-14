@@ -75,11 +75,10 @@ func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Dura
 	if err != nil {
 		return nil, err
 	}
-	ctrlCh.cc, err = grpc.NewClient(rlsServerName, dopts...)
+	ctrlCh.cc, err = grpc.Dial(rlsServerName, dopts...)
 	if err != nil {
 		return nil, err
 	}
-	ctrlCh.cc.Connect()
 	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
 
