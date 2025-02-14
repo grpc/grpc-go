@@ -54,7 +54,6 @@ func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.Echo
 }
 
 func main() {
-
 	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)

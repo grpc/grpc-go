@@ -85,7 +85,6 @@ func main() {
 	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
-
 		if err != nil {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
