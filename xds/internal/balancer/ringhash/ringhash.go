@@ -257,18 +257,25 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		sort.Slice(endpointStates, func(i, j int) bool {
 			return endpointStates[i].firstAddr < endpointStates[j].firstAddr
 		})
+
+		var foundActive bool
 		var idleBalancer balancer.ExitIdler
 		for _, es := range endpointStates {
 			connState := es.state.ConnectivityState
-			if connState == connectivity.Connecting {
-				idleBalancer = nil
+			if connState == connectivity.Ready || connState == connectivity.Connecting {
+				foundActive = true
 				break
 			}
+			// connState := es.state.ConnectivityState
+			// if connState == connectivity.Connecting {
+			// 	idleBalancer = nil
+			// 	break
+			// }
 			if idleBalancer == nil && connState == connectivity.Idle {
 				idleBalancer = es.balancer
 			}
 		}
-		if idleBalancer != nil {
+		if !foundActive && idleBalancer != nil {
 			idleBalancer.ExitIdle()
 		}
 	}
