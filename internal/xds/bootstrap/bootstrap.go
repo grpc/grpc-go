@@ -22,11 +22,9 @@ package bootstrap
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
-	"net"
 	"net/url"
 	"os"
 	"slices"
@@ -281,13 +279,6 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(server)
 }
 
-// dialer captures the Dialer method specified via the credentials bundle.
-// Deprecated: use extradDialOptions. Will take precedence over this.
-type dialer interface {
-	// Dialer specifies how to dial the xDS server.
-	Dialer(context.Context, string) (net.Conn, error)
-}
-
 // extraDialOptions captures custom dial options specified via
 // credentials.Bundle.
 type extraDialOptions interface {
@@ -319,8 +310,6 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
 		if d, ok := bundle.(extraDialOptions); ok {
 			sc.extraDialOptions = d.DialOptions()
-		} else if d, ok := bundle.(dialer); ok {
-			sc.extraDialOptions = []grpc.DialOption{grpc.WithContextDialer(d.Dialer)}
 		}
 		sc.cleanups = append(sc.cleanups, cancel)
 		break
