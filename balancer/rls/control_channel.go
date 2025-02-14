@@ -177,12 +177,10 @@ func (cc *controlChannel) monitorConnectivityState() {
 	// them while we were in backoff. However, we should optimize this case by
 	// returning only one new picker, regardless of how many backoff timers are
 	// cancelled.
-	var s any
-	var ok bool
+
 	// Wait for the control channel to become READY for the first time.
-	for s, ok = <-cc.connectivityStateCh.Get(); s != connectivity.Ready; s, ok = <-cc.connectivityStateCh.Get() {
+	for s, ok := <-cc.connectivityStateCh.Get(); s != connectivity.Ready; s, ok = <-cc.connectivityStateCh.Get() {
 		if !ok {
-			cc.logger.Infof("Control channel closed")
 			return
 		}
 
@@ -195,9 +193,8 @@ func (cc *controlChannel) monitorConnectivityState() {
 	cc.logger.Infof("Connectivity state is READY")
 
 	for {
-		s, ok = <-cc.connectivityStateCh.Get()
+		s, ok := <-cc.connectivityStateCh.Get()
 		if !ok {
-			cc.logger.Infof("Control channel closed")
 			return
 		}
 		cc.connectivityStateCh.Load()
@@ -215,11 +212,11 @@ func (cc *controlChannel) monitorConnectivityState() {
 }
 
 func (cc *controlChannel) close() {
-	cc.logger.Infof("Closing control channel")
 	cc.unsubscribe()
 	cc.connectivityStateCh.Close()
 	<-cc.monitorDoneCh
 	cc.cc.Close()
+	cc.logger.Infof("Shutdown")
 }
 
 type lookupCallback func(targets []string, headerData string, err error)
