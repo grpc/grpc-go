@@ -69,7 +69,7 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

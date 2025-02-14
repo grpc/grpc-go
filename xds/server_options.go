@@ -74,7 +74,7 @@ type ServingModeChangeArgs struct {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func BootstrapContentsForTesting(bootstrapContents []byte) grpc.ServerOption {
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		logger.Warningf("Failed to parse bootstrap contents %s for server options: %v", string(bootstrapContents), err)
 		return &serverOption{apply: func(o *serverOptions) { o.clientPoolForTesting = nil }}

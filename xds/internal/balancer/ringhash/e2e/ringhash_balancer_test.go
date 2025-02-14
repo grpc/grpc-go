@@ -72,7 +72,8 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestTimeout = 10 * time.Second
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 
 	errorTolerance = .05 // For tests that rely on statistical significance.
 
@@ -161,16 +162,25 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	}
 }
 
-// startTestServiceBackends starts num stub servers. It returns their addresses.
-// Servers are closed when the test is stopped.
-func startTestServiceBackends(t *testing.T, num int) []string {
+// startTestServiceBackends starts num stub servers. It returns the list of
+// stubservers. Servers are closed when the test is stopped.
+func startTestServiceBackends(t *testing.T, num int) []*stubserver.StubServer {
 	t.Helper()
 
-	addrs := make([]string, 0, num)
+	servers := make([]*stubserver.StubServer, 0, num)
 	for i := 0; i < num; i++ {
 		server := stubserver.StartTestService(t, nil)
 		t.Cleanup(server.Stop)
-		addrs = append(addrs, server.Address)
+		servers = append(servers, server)
+	}
+	return servers
+}
+
+// backendAddrs returns a list of address strings for the given stubservers.
+func backendAddrs(servers []*stubserver.StubServer) []string {
+	addrs := make([]string, 0, len(servers))
+	for _, s := range servers {
+		addrs = append(addrs, s.Address)
 	}
 	return addrs
 }
@@ -179,10 +189,25 @@ func startTestServiceBackends(t *testing.T, num int) []string {
 // addresses.
 func backendOptions(t *testing.T, serverAddrs []string) []e2e.BackendOptions {
 	t.Helper()
+	backendAddrs := [][]string{}
+	for _, addr := range serverAddrs {
+		backendAddrs = append(backendAddrs, []string{addr})
+	}
+	return backendOptionsForEndpointsWithMultipleAddrs(t, backendAddrs)
+}
+
+// backendOptions returns a slice of e2e.BackendOptions for the given server
+// addresses. Each endpoint can have multiple addresses.
+func backendOptionsForEndpointsWithMultipleAddrs(t *testing.T, backendAddrs [][]string) []e2e.BackendOptions {
+	t.Helper()
 
 	var backendOpts []e2e.BackendOptions
-	for _, addr := range serverAddrs {
-		backendOpts = append(backendOpts, e2e.BackendOptions{Ports: []uint32{testutils.ParsePort(t, addr)}})
+	for _, backend := range backendAddrs {
+		ports := []uint32{}
+		for _, addr := range backend {
+			ports = append(ports, testutils.ParsePort(t, addr))
+		}
+		backendOpts = append(backendOpts, e2e.BackendOptions{Ports: ports})
 	}
 	return backendOpts
 }
@@ -291,7 +316,7 @@ func xdsUpdateOpts(nodeID string, endpoints *v3endpointpb.ClusterLoadAssignment,
 // the first cluster is in transient failure, all RPCs are sent to the second
 // cluster using the ring hash policy.
 func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T) {
-	addrs := startTestServiceBackends(t, 2)
+	addrs := backendAddrs(startTestServiceBackends(t, 2))
 
 	const primaryClusterName = "new_cluster_1"
 	const primaryServiceName = "new_eds_service_1"
@@ -396,7 +421,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	const logicalDNSClusterName = "logical_dns_cluster"
 	const clusterName = "aggregate_cluster"
 
-	backends := startTestServiceBackends(t, 1)
+	backends := backendAddrs(startTestServiceBackends(t, 1))
 
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: edsClusterName,
@@ -473,7 +498,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	const logicalDNSClusterName = "logical_dns_cluster"
 	const clusterName = "aggregate_cluster"
 
-	backends := startTestServiceBackends(t, 1)
+	backends := backendAddrs(startTestServiceBackends(t, 1))
 
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: edsClusterName,
@@ -601,10 +626,21 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 // with the given addresses.
 func endpointResource(t *testing.T, clusterName string, addrs []string) *v3endpointpb.ClusterLoadAssignment {
 	t.Helper()
+	backendAddrs := [][]string{}
+	for _, addr := range addrs {
+		backendAddrs = append(backendAddrs, []string{addr})
+	}
+	return endpointResourceForBackendsWithMultipleAddrs(t, clusterName, backendAddrs)
+}
+
+// endpointResourceForBackendsWithMultipleAddrs creates a ClusterLoadAssignment
+// containing a single locality with the given addresses.
+func endpointResourceForBackendsWithMultipleAddrs(t *testing.T, clusterName string, addrs [][]string) *v3endpointpb.ClusterLoadAssignment {
+	t.Helper()
 
 	// We must set the host name socket address in EDS, as the ring hash policy
 	// uses it to construct the ring.
-	host, _, err := net.SplitHostPort(addrs[0])
+	host, _, err := net.SplitHostPort(addrs[0][0])
 	if err != nil {
 		t.Fatalf("Failed to split host and port from stubserver: %v", err)
 	}
@@ -613,7 +649,7 @@ func endpointResource(t *testing.T, clusterName string, addrs []string) *v3endpo
 		ClusterName: clusterName,
 		Host:        host,
 		Localities: []e2e.LocalityOptions{{
-			Backends: backendOptions(t, addrs),
+			Backends: backendOptionsForEndpointsWithMultipleAddrs(t, addrs),
 			Weight:   1,
 		}},
 	})
@@ -622,7 +658,7 @@ func endpointResource(t *testing.T, clusterName string, addrs []string) *v3endpo
 // Tests that ring hash policy that hashes using channel id ensures all RPCs to
 // go 1 particular backend.
 func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
-	backends := startTestServiceBackends(t, 4)
+	backends := backendAddrs(startTestServiceBackends(t, 4))
 
 	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
 
@@ -682,7 +718,7 @@ func headerHashRoute(routeName, virtualHostName, clusterName, header string) *v3
 // Tests that ring hash policy that hashes using a header value can send RPCs
 // to specific backends based on their hash.
 func (s) TestRingHash_HeaderHashing(t *testing.T) {
-	backends := startTestServiceBackends(t, 4)
+	backends := backendAddrs(startTestServiceBackends(t, 4))
 
 	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
 
@@ -726,7 +762,7 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 // Tests that ring hash policy that hashes using a header value and regex
 // rewrite to aggregate RPCs to 1 backend.
 func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
-	backends := startTestServiceBackends(t, 4)
+	backends := backendAddrs(startTestServiceBackends(t, 4))
 
 	clusterName := "cluster"
 	endpoints := endpointResource(t, clusterName, backends)
@@ -826,7 +862,7 @@ func setRingHashLBPolicyWithHighMinRingSize(t *testing.T, cluster *v3clusterpb.C
 
 // Tests that ring hash policy that hashes using a random value.
 func (s) TestRingHash_NoHashPolicy(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 	numRPCs := computeIdealNumberOfRPCs(t, .5, errorTolerance)
 
 	const clusterName = "cluster"
@@ -867,7 +903,7 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 
 // Tests that we observe endpoint weights.
 func (s) TestRingHash_EndpointWeights(t *testing.T) {
-	backends := startTestServiceBackends(t, 3)
+	backends := backendAddrs(startTestServiceBackends(t, 3))
 
 	const clusterName = "cluster"
 	backendOpts := []e2e.BackendOptions{
@@ -933,7 +969,7 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 // Tests that ring hash policy evaluation will continue past the terminal hash
 // policy if no results are produced yet.
 func (s) TestRingHash_ContinuesPastTerminalPolicyThatDoesNotProduceResult(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 
 	const clusterName = "cluster"
 	endpoints := endpointResource(t, clusterName, backends)
@@ -1002,7 +1038,7 @@ func (s) TestRingHash_ContinuesPastTerminalPolicyThatDoesNotProduceResult(t *tes
 // Tests that a random hash is used when header hashing policy specified a
 // header field that the RPC did not have.
 func (s) TestRingHash_HashOnHeaderThatIsNotPresent(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 	wantFractionPerBackend := .5
 	numRPCs := computeIdealNumberOfRPCs(t, wantFractionPerBackend, errorTolerance)
 
@@ -1053,7 +1089,7 @@ func (s) TestRingHash_HashOnHeaderThatIsNotPresent(t *testing.T) {
 // Tests that a random hash is used when only unsupported hash policies are
 // configured.
 func (s) TestRingHash_UnsupportedHashPolicyDefaultToRandomHashing(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 	wantFractionPerBackend := .5
 	numRPCs := computeIdealNumberOfRPCs(t, wantFractionPerBackend, errorTolerance)
 
@@ -1120,7 +1156,7 @@ func (s) TestRingHash_UnsupportedHashPolicyDefaultToRandomHashing(t *testing.T) 
 // Tests that unsupported hash policy types are all ignored before a supported
 // hash policy.
 func (s) TestRingHash_UnsupportedHashPolicyUntilChannelIdHashing(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 
 	const clusterName = "cluster"
 	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
@@ -1196,7 +1232,7 @@ func (s) TestRingHash_UnsupportedHashPolicyUntilChannelIdHashing(t *testing.T) {
 // Tests that ring hash policy that hashes using a random value can spread RPCs
 // across all the backends according to locality weight.
 func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWeight(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 
 	const clusterName = "cluster"
 	const locality1Weight = uint32(1)
@@ -1267,7 +1303,7 @@ func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWei
 // to go 1 particular backend; and that subsequent hashing policies are ignored
 // due to the setting of terminal.
 func (s) TestRingHash_FixedHashingTerminalPolicy(t *testing.T) {
-	backends := startTestServiceBackends(t, 2)
+	backends := backendAddrs(startTestServiceBackends(t, 2))
 	const clusterName = "cluster"
 	endpoints := endpointResource(t, clusterName, backends)
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
@@ -1344,7 +1380,7 @@ func (s) TestRingHash_FixedHashingTerminalPolicy(t *testing.T) {
 // before moving to ready via the public API).
 // TODO: we should be able to catch all state transitions by using the internal.SubscribeToConnectivityStateChanges API.
 func (s) TestRingHash_IdleToReady(t *testing.T) {
-	backends := startTestServiceBackends(t, 1)
+	backends := backendAddrs(startTestServiceBackends(t, 1))
 
 	const clusterName = "cluster"
 	endpoints := endpointResource(t, clusterName, backends)
@@ -1452,7 +1488,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 // Tests that when the first pick is down leading to a transient failure, we
 // will move on to the next ring hash entry.
 func (s) TestRingHash_TransientFailureCheckNextOne(t *testing.T) {
-	backends := startTestServiceBackends(t, 1)
+	backends := backendAddrs(startTestServiceBackends(t, 1))
 	unReachableBackends := makeUnreachableBackends(t, 1)
 
 	const clusterName = "cluster"
@@ -1535,7 +1571,7 @@ func (s) TestRingHash_ReattemptWhenGoingFromTransientFailureToIdle(t *testing.T)
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
 	t.Log("Updating EDS with a new backend endpoint.")
-	backends := startTestServiceBackends(t, 1)
+	backends := backendAddrs(startTestServiceBackends(t, 1))
 	endpoints = e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
 		ClusterName: clusterName,
 		Localities: []e2e.LocalityOptions{{
@@ -1730,7 +1766,7 @@ func (s) TestRingHash_ReattemptWhenAllEndpointsUnreachable(t *testing.T) {
 	t.Log("Restarting the backend server")
 	restartableListener.Restart()
 
-	// Wait for channel to become connected without any pending RPC.
+	// Wait for channel to become READY without any pending RPC.
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 }
 
@@ -1751,7 +1787,7 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 	})
 	defer restartableServer.Stop()
 
-	otherBackend := startTestServiceBackends(t, 1)[0]
+	otherBackend := backendAddrs(startTestServiceBackends(t, 1))[0]
 
 	// We must set the host name socket address in EDS, as the ring hash policy
 	// uses it to construct the ring.
@@ -1844,15 +1880,15 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 	}
 }
 
-// Tests that when we trigger internal connection attempts without picks, we do
-// so for only one subchannel at a time.
-func (s) TestRingHash_ContinuesConnectingWithoutPicksOneSubchannelAtATime(t *testing.T) {
-	backends := startTestServiceBackends(t, 1)
-	unReachableBackends := makeUnreachableBackends(t, 3)
+// Tests that when we trigger internal connection attempts without picks, we
+// keep retrying all the SubConns that have reported TF previously.
+func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurrently(t *testing.T) {
+	const backendsCount = 4
+	backends := backendAddrs(startTestServiceBackends(t, backendsCount))
 
 	const clusterName = "cluster"
 
-	endpoints := endpointResource(t, clusterName, append(unReachableBackends, backends...))
+	endpoints := endpointResource(t, clusterName, backends)
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: clusterName,
@@ -1881,17 +1917,20 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksOneSubchannelAtATime(t *tes
 		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
-	client := testgrpc.NewTestServiceClient(conn)
 
-	holdNonExistent0 := dialer.Hold(unReachableBackends[0])
-	holdNonExistent1 := dialer.Hold(unReachableBackends[1])
-	holdNonExistent2 := dialer.Hold(unReachableBackends[2])
-	holdGood := dialer.Hold(backends[0])
+	// Create holds for each backend address to delay a successful connection
+	// until the end of the test.
+	holds := make([]*testutils.Hold, backendsCount)
+	for i := 0; i < len(backends); i++ {
+		holds[i] = dialer.Hold(backends[i])
+	}
+
+	client := testgrpc.NewTestServiceClient(conn)
 
 	rpcCtx, rpcCancel := context.WithCancel(ctx)
 	errCh := make(chan error, 1)
 	go func() {
-		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", unReachableBackends[0]+"_0"))
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", backends[0]+"_0"))
 		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
 		if status.Code(err) == codes.Canceled {
 			errCh <- nil
@@ -1902,7 +1941,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksOneSubchannelAtATime(t *tes
 
 	// Wait for the RPC to trigger a connection attempt to the first address,
 	// then cancel the RPC.  No other connection attempts should be started yet.
-	if !holdNonExistent0.Wait(ctx) {
+	if !holds[0].Wait(ctx) {
 		t.Fatalf("Timeout waiting for connection attempt to backend 0")
 	}
 	rpcCancel()
@@ -1910,86 +1949,594 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksOneSubchannelAtATime(t *tes
 		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
 	}
 
-	// Since the connection attempt to the first address is still blocked, no
-	// other connection attempts should be started yet.
-	if holdNonExistent1.IsStarted() {
-		t.Errorf("Got connection attempt to backend 1, expected no connection attempt.")
-	}
-	if holdNonExistent2.IsStarted() {
-		t.Errorf("Got connection attempt to backend 2, expected no connection attempt.")
-	}
-	if holdGood.IsStarted() {
-		t.Errorf("Got connection attempt to good backend, expected no connection attempt.")
+	// In every iteration of the following loop, we count the number of backends
+	// that are dialed. After counting, we fail all the connection attempts.
+	// This should cause the number of dialed backends to increase by 1 in every
+	// iteration of the loop as ringhash tries to exit TRANSIENT_FAILURE.
+	activeAddrs := map[string]bool{}
+	for wantBackendCount := 1; wantBackendCount <= backendsCount; wantBackendCount++ {
+		newAddrIdx := -1
+		for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+			for i, hold := range holds {
+				if !hold.IsStarted() {
+					continue
+				}
+				if _, ok := activeAddrs[backends[i]]; ok {
+					continue
+				}
+				activeAddrs[backends[i]] = true
+				newAddrIdx = i
+			}
+			if len(activeAddrs) > wantBackendCount {
+				t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantBackendCount)
+			}
+			if len(activeAddrs) == wantBackendCount {
+				break
+			}
+		}
+
+		// Wait for a short time and verify no more backends are contacted.
+		<-time.After(defaultTestShortTimeout)
+		for i, hold := range holds {
+			if !hold.IsStarted() {
+				continue
+			}
+			activeAddrs[backends[i]] = true
+		}
+		if len(activeAddrs) != wantBackendCount {
+			t.Fatalf("Unexpected number of backends dialed: got %d, want %d", len(activeAddrs), wantBackendCount)
+		}
+
+		// Create a new hold for the address dialed in this iteration and fail
+		// the existing hold.
+		hold := holds[newAddrIdx]
+		holds[newAddrIdx] = dialer.Hold(backends[newAddrIdx])
+		hold.Fail(errors.New("Test error"))
 	}
 
-	// Allow the connection attempt to the first address to resume and wait for
-	// the attempt for the second address. No other connection attempts should
-	// be started yet.
-	holdNonExistent0Again := dialer.Hold(unReachableBackends[0])
-	holdNonExistent0.Resume()
-	if !holdNonExistent1.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend 1")
+	// Allow the request to a backend to succeed.
+	if !holds[1].Wait(ctx) {
+		t.Fatalf("Context timed out waiting %q to be dialed again.", backends[1])
 	}
-	if holdNonExistent0Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 0 again, expected no connection attempt.")
+	holds[1].Resume()
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+}
+
+// Tests that first address of an endpoint is used to generate the ring. The
+// test sends a request to a random endpoint. The test then reverses the
+// addresses of every endpoint and verifies that an RPC with header pointing to
+// the second address of the endpoint is sent to the initial address. The test
+// then swaps the second and third address of the endpoint and verifies that an
+// RPC with the header used earlier still reaches the same backend.
+func (s) TestRingHash_ReorderAddressessWithinEndpoint(t *testing.T) {
+	origDualstackEndpointsEnabled := envconfig.XDSDualstackEndpointsEnabled
+	defer func() {
+		envconfig.XDSDualstackEndpointsEnabled = origDualstackEndpointsEnabled
+	}()
+	envconfig.XDSDualstackEndpointsEnabled = true
+	backends := backendAddrs(startTestServiceBackends(t, 6))
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
+	const clusterName = "cluster"
+	addrGroups := [][]string{
+		{backends[0], backends[1], backends[2]},
+		{backends[3], backends[4], backends[5]},
 	}
-	if holdNonExistent2.IsStarted() {
-		t.Errorf("Got connection attempt to backend 2, expected no connection attempt.")
-	}
-	if holdGood.IsStarted() {
-		t.Errorf("Got connection attempt to good backend, expected no connection attempt.")
+	endpoints := endpointResourceForBackendsWithMultipleAddrs(t, clusterName, addrGroups)
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	// Allow the connection attempt to the second address to resume and wait for
-	// the attempt for the third address.  No other connection attempts should
-	// be started yet.
-	holdNonExistent1Again := dialer.Hold(unReachableBackends[1])
-	holdNonExistent1.Resume()
-	if !holdNonExistent2.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to backend 2")
+	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
 	}
-	if holdNonExistent0Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 0 again, expected no connection attempt.")
-	}
-	if holdNonExistent1Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 1 again, expected no connection attempt.")
-	}
-	if holdGood.IsStarted() {
-		t.Errorf("Got connection attempt to good backend, expected no connection attempt.")
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+
+	rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		"address_hash", fmt.Sprintf("%d", rand.Int()),
+	))
+	var remote peer.Peer
+	if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 
-	// Allow the connection attempt to the third address to resume and wait
-	// for the attempt for the final address. No other connection attempts
-	// should be started yet.
-	holdNonExistent2Again := dialer.Hold(unReachableBackends[2])
-	holdNonExistent2.Resume()
-	if !holdGood.Wait(ctx) {
-		t.Fatalf("Timeout waiting for connection attempt to good backend")
-	}
-	if holdNonExistent0Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 0 again, expected no connection attempt.")
-	}
-	if holdNonExistent1Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 1 again, expected no connection attempt.")
-	}
-	if holdNonExistent2Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 2 again, expected no connection attempt.")
+	initialFirstAddr := ""
+	newFirstAddr := ""
+	switch remote.Addr.String() {
+	case addrGroups[0][0]:
+		initialFirstAddr = addrGroups[0][0]
+		newFirstAddr = addrGroups[0][2]
+	case addrGroups[1][0]:
+		initialFirstAddr = addrGroups[1][0]
+		newFirstAddr = addrGroups[1][2]
+	default:
+		t.Fatalf("Request went to unexpected address: %q", remote.Addr)
 	}
 
-	// Allow the final attempt to resume.
-	holdGood.Resume()
+	t.Log("Reversing addresses within each endpoint.")
+	addrGroups1 := [][]string{
+		{addrGroups[0][2], addrGroups[0][1], addrGroups[0][0]},
+		{addrGroups[1][2], addrGroups[1][1], addrGroups[1][0]},
+	}
+	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, addrGroups1)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
 
-	// Wait for channel to become connected without any pending RPC.
+	// The first address of an endpoint is used to create the ring. This means
+	// that requests should continue to go to the first address, but the hash
+	// should be computed based on the last address in the original list.
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+			"address_hash", newFirstAddr+"_0",
+		))
+		if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+			t.Fatalf("rpc EmptyCall() failed: %v", err)
+		}
+		if remote.Addr.String() == initialFirstAddr {
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatalf("Context timed out waiting for request to be sent to %q, last request went to %q", initialFirstAddr, remote.Addr)
+	}
+
+	t.Log("Swapping the second and third addresses within each endpoint.")
+	// This should not effect the ring, since only the first address is used
+	// by the ring.
+	addrGroups2 := [][]string{
+		{addrGroups1[0][0], addrGroups[0][2], addrGroups[0][1]},
+		{addrGroups1[1][0], addrGroups[1][2], addrGroups[1][1]},
+	}
+	endpoints = endpointResourceForBackendsWithMultipleAddrs(t, clusterName, addrGroups2)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	// Verify that requests with the hash of the last address in chosenAddrGroup
+	// continue reaching the first address in chosenAddrGroup.
+	shortCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	for ; shortCtx.Err() == nil; <-time.After(time.Millisecond) {
+		rpcCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+			"address_hash", newFirstAddr+"_0",
+		))
+		if _, err := client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+			t.Fatalf("rpc EmptyCall() failed: %v", err)
+		}
+		if remote.Addr.String() == initialFirstAddr {
+			continue
+		}
+		t.Fatalf("Request went to unexpected backend %q, want backend %q", remote.Addr, initialFirstAddr)
+	}
+}
+
+// Tests that requests are sent to the next address within the same endpoint
+// after the first address becomes unreachable.
+func (s) TestRingHash_FallBackWithinEndpoint(t *testing.T) {
+	origDualstackEndpointsEnabled := envconfig.XDSDualstackEndpointsEnabled
+	defer func() {
+		envconfig.XDSDualstackEndpointsEnabled = origDualstackEndpointsEnabled
+	}()
+	envconfig.XDSDualstackEndpointsEnabled = true
+	backends := startTestServiceBackends(t, 4)
+	backendAddrs := backendAddrs(backends)
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+
+	const clusterName = "cluster"
+	endpoints := endpointResourceForBackendsWithMultipleAddrs(t, clusterName, [][]string{{backendAddrs[0], backendAddrs[1]}, {backendAddrs[2], backendAddrs[3]}})
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := channelIDHashRoute("new_route", virtualHostName, clusterName)
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+
+	const numRPCs = 5
+	received := checkRPCSendOK(ctx, t, client, numRPCs)
+	if len(received) != 1 {
+		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
+	}
+	var got int
+	var initialAddr string
+	for initialAddr, got = range received {
+	}
+	if got != numRPCs {
+		t.Errorf("Got %v RPCs routed to a backend, want %v", got, numRPCs)
+	}
+
+	// Due to the channel ID hashing policy, the request could go to the first
+	// address of either endpoint.
+	var backendIdx int
+	switch initialAddr {
+	case backendAddrs[0]:
+		backendIdx = 0
+	case backendAddrs[2]:
+		backendIdx = 2
+	default:
+		t.Fatalf("Request sent to unexpected backend: %q", initialAddr)
+	}
+	otherEndpointAddr := backendAddrs[backendIdx+1]
+
+	// Shut down the previously used backend.
+	backends[backendIdx].Stop()
+	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
+
+	// Verify that the requests go to the remaining address in the same
+	// endpoint.
+	received = checkRPCSendOK(ctx, t, client, numRPCs)
+	if len(received) != 1 {
+		t.Errorf("Got RPCs routed to %v backends, want %v", len(received), 1)
+	}
+	var newAddr string
+	for newAddr, got = range received {
+	}
+	if got != numRPCs {
+		t.Errorf("Got %v RPCs routed to a backend, want %v", got, numRPCs)
+	}
+
+	if newAddr != otherEndpointAddr {
+		t.Errorf("Requests went to unexpected address, got=%q, want=%q", newAddr, otherEndpointAddr)
+	}
+}
+
+// Tests that ringhash is able to recover automatically in situations when a
+// READY endpoint enters IDLE making the aggregated state TRANSIENT_FAILURE. The
+// test creates 4 endpoints in the following connectivity states: [TF, TF,
+// READY, IDLE]. The test fails the READY backend and verifies that the last
+// IDLE endopint is dialed and the channel enters READY.
+func (s) TestRingHash_RecoverWhenEndpointEntersIdle(t *testing.T) {
+	const backendsCount = 4
+	backends := startTestServiceBackends(t, backendsCount)
+	backendAddrs := backendAddrs(backends)
+
+	const clusterName = "cluster"
+
+	endpoints := endpointResource(t, clusterName, backendAddrs)
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	dialer := testutils.NewBlockingDialer()
+	dialOpts := []grpc.DialOption{
+		grpc.WithResolvers(xdsResolver),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithConnectParams(fastConnectParams),
+	}
+	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
+	}
+	defer conn.Close()
+
+	// Create holds for each backend address to delay a successful connection
+	// until the end of the test.
+	holds := make([]*testutils.Hold, backendsCount)
+	for i := 0; i < len(backendAddrs); i++ {
+		holds[i] = dialer.Hold(backendAddrs[i])
+	}
+
+	client := testgrpc.NewTestServiceClient(conn)
+
+	rpcCtx, rpcCancel := context.WithCancel(ctx)
+	errCh := make(chan error, 1)
+	go func() {
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", backendAddrs[0]+"_0"))
+		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
+		if status.Code(err) == codes.Canceled {
+			errCh <- nil
+			return
+		}
+		errCh <- err
+	}()
+
+	// Wait for the RPC to trigger a connection attempt to the first address,
+	// then cancel the RPC.  No other connection attempts should be started yet.
+	if !holds[0].Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend 0")
+	}
+	rpcCancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
+	}
+
+	// The number of dialed backends increases by 1 in every iteration of the
+	// loop as ringhash tries to exit TRANSIENT_FAILURE. Run the loop twice to
+	// get two endpoints in TRANSIENT_FAILURE.
+	activeAddrs := map[string]bool{}
+	for wantFailingBackendCount := 1; wantFailingBackendCount <= 2; wantFailingBackendCount++ {
+		newAddrIdx := -1
+		for ; ctx.Err() == nil && len(activeAddrs) < wantFailingBackendCount; <-time.After(time.Millisecond) {
+			for i, hold := range holds {
+				if !hold.IsStarted() {
+					continue
+				}
+				if _, ok := activeAddrs[backendAddrs[i]]; ok {
+					continue
+				}
+				activeAddrs[backendAddrs[i]] = true
+				newAddrIdx = i
+			}
+		}
+
+		if ctx.Err() != nil {
+			t.Fatal("Context timed out waiting for new backneds to be dialed.")
+		}
+		if len(activeAddrs) > wantFailingBackendCount {
+			t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantFailingBackendCount)
+		}
+
+		// Create a new hold for the address dialed in this iteration and fail
+		// the existing hold.
+		hold := holds[newAddrIdx]
+		holds[newAddrIdx] = dialer.Hold(backendAddrs[newAddrIdx])
+		hold.Fail(errors.New("Test error"))
+	}
+
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Two endpoints failing should cause the channel to enter
+	// TRANSIENT_FAILURE.
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// Allow the request to the backend dialed next to succeed.
+	readyBackendIdx := -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for the next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 
-	// No other connection attempts should have been started
-	if holdNonExistent0Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 0 again, expected no connection attempt.")
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Stopping the READY backend should cause the channel to re-enter
+	// TRANSIENT_FAILURE.
+	backends[readyBackendIdx].Stop()
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// To recover from TRANSIENT_FAILURE, ringhash should automatically try to
+	// connect to the final endpoint.
+	readyBackendIdx = -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
 	}
-	if holdNonExistent1Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 1 again, expected no connection attempt.")
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for next backend to be contacted.")
 	}
-	if holdNonExistent2Again.IsStarted() {
-		t.Errorf("Got connection attempt to backend 2 again, expected no connection attempt.")
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+}
+
+// Tests that ringhash is able to recover automatically in situations when a
+// READY endpoint is removed by the resolver making the aggregated state
+// TRANSIENT_FAILURE. The test creates 4 endpoints in the following
+// connectivity states: [TF, TF, READY, IDLE]. The test removes the
+// READY endpoint and verifies that the last IDLE endopint is dialed and the
+// channel enters READY.
+func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
+	const backendsCount = 4
+	backends := startTestServiceBackends(t, backendsCount)
+	backendAddrs := backendAddrs(backends)
+
+	const clusterName = "cluster"
+
+	endpoints := endpointResource(t, clusterName, backendAddrs)
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
+
+	dialer := testutils.NewBlockingDialer()
+	dialOpts := []grpc.DialOption{
+		grpc.WithResolvers(xdsResolver),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(dialer.DialContext),
+		grpc.WithConnectParams(fastConnectParams),
+	}
+	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
+	}
+	defer conn.Close()
+
+	// Create holds for each backend address to delay a successful connection
+	// until the end of the test.
+	holds := make([]*testutils.Hold, backendsCount)
+	for i := 0; i < len(backendAddrs); i++ {
+		holds[i] = dialer.Hold(backendAddrs[i])
+	}
+
+	client := testgrpc.NewTestServiceClient(conn)
+
+	rpcCtx, rpcCancel := context.WithCancel(ctx)
+	errCh := make(chan error, 1)
+	go func() {
+		rpcCtx = metadata.NewOutgoingContext(rpcCtx, metadata.Pairs("address_hash", backendAddrs[0]+"_0"))
+		_, err := client.EmptyCall(rpcCtx, &testpb.Empty{})
+		if status.Code(err) == codes.Canceled {
+			errCh <- nil
+			return
+		}
+		errCh <- err
+	}()
+
+	// Wait for the RPC to trigger a connection attempt to the first address,
+	// then cancel the RPC.  No other connection attempts should be started yet.
+	if !holds[0].Wait(ctx) {
+		t.Fatalf("Timeout waiting for connection attempt to backend 0")
+	}
+	rpcCancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("Expected RPC to fail be canceled, got %v", err)
+	}
+
+	// The number of dialed backends increases by 1 in every iteration of the
+	// loop as ringhash tries to exit TRANSIENT_FAILURE. Run the loop twice to
+	// get two endpoints in TRANSIENT_FAILURE.
+	activeAddrs := map[string]bool{}
+	for wantFailingBackendCount := 1; wantFailingBackendCount <= 2; wantFailingBackendCount++ {
+		newAddrIdx := -1
+		for ; ctx.Err() == nil && len(activeAddrs) < wantFailingBackendCount; <-time.After(time.Millisecond) {
+			for i, hold := range holds {
+				if !hold.IsStarted() {
+					continue
+				}
+				if _, ok := activeAddrs[backendAddrs[i]]; ok {
+					continue
+				}
+				activeAddrs[backendAddrs[i]] = true
+				newAddrIdx = i
+			}
+		}
+
+		if ctx.Err() != nil {
+			t.Fatal("Context timed out waiting for new backneds to be dialed.")
+		}
+		if len(activeAddrs) > wantFailingBackendCount {
+			t.Fatalf("More backends dialed than expected: got %d, want %d", len(activeAddrs), wantFailingBackendCount)
+		}
+
+		// Create a new hold for the address dialed in this iteration and fail
+		// the existing hold.
+		hold := holds[newAddrIdx]
+		holds[newAddrIdx] = dialer.Hold(backendAddrs[newAddrIdx])
+		hold.Fail(errors.New("Test error"))
+	}
+
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Two endpoints failing should cause the channel to enter
+	// TRANSIENT_FAILURE.
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// Allow the request to the backend dialed next to succeed.
+	readyBackendIdx := -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for the next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+
+	// Current state of endpoints: [TF, TF, READY, IDLE].
+	// Removing the READY backend should cause the channel to re-enter
+	// TRANSIENT_FAILURE.
+	updatedAddrs := append([]string{}, backendAddrs[:readyBackendIdx]...)
+	updatedAddrs = append(updatedAddrs, backendAddrs[readyBackendIdx+1:]...)
+	updatedEndpoints := endpointResource(t, clusterName, updatedAddrs)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, updatedEndpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
+
+	// To recover from TRANSIENT_FAILURE, ringhash should automatically try to
+	// connect to the final endpoint.
+	readyBackendIdx = -1
+	for ; ctx.Err() == nil && readyBackendIdx == -1; <-time.After(time.Millisecond) {
+		for i, addr := range backendAddrs {
+			if _, ok := activeAddrs[addr]; ok || !holds[i].IsStarted() {
+				continue
+			}
+			readyBackendIdx = i
+			activeAddrs[addr] = true
+			holds[i].Resume()
+			break
+		}
+	}
+
+	if ctx.Err() != nil {
+		t.Fatal("Context timed out waiting for next backend to be contacted.")
+	}
+
+	// Wait for channel to become READY without any pending RPC.
+	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 }

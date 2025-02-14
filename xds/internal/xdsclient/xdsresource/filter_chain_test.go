@@ -25,6 +25,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -52,6 +53,8 @@ const (
 	vhLevel  = "virtual host level"
 	rLevel   = "route level"
 )
+
+var defaultTestTimeout = 10 * time.Second
 
 func emptyValidNetworkFilters(t *testing.T) []*v3listenerpb.Filter {
 	return []*v3listenerpb.Filter{
@@ -2912,6 +2915,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			wantErrs: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fc := FilterChain{
@@ -2927,7 +2932,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			for _, vh := range urc.VHS {
 				for _, r := range vh.Routes {
 					for _, int := range r.Interceptors {
-						errs = append(errs, int.AllowRPC(context.Background()).Error())
+						errs = append(errs, int.AllowRPC(ctx).Error())
 					}
 				}
 			}
