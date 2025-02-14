@@ -467,12 +467,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
 	}
-	if err := xdsServer.Update(ctx, updateOpts); err != nil {
-		t.Fatalf("Failed to update xDS resources: %v", err)
-	}
 
 	dnsR := replaceDNSResolver(t)
 	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+
+	if err := xdsServer.Update(ctx, updateOpts); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -544,12 +545,13 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		Routes:    []*v3routepb.RouteConfiguration{route},
 		Listeners: []*v3listenerpb.Listener{listener},
 	}
-	if err := xdsServer.Update(ctx, updateOpts); err != nil {
-		t.Fatalf("Failed to update xDS resources: %v", err)
-	}
 
 	dnsR := replaceDNSResolver(t)
 	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+
+	if err := xdsServer.Update(ctx, updateOpts); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
 
 	dialer := testutils.NewBlockingDialer()
 	cp := grpc.ConnectParams{
