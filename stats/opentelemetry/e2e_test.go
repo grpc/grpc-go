@@ -1614,9 +1614,7 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	testgrpc.RegisterTestServiceServer(srv, &server{})
 	go srv.Serve(lis)
 	defer srv.Stop()
-	t.Logf("Started gRPC server at %s", lis.Addr().String())
 
-	// Create a gRPC client using the manual resolver and tracing options
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
@@ -1644,7 +1642,6 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 		t.Logf("Pushed resolver state update: %v", state)
 	}()
 
-	// Second RPC should succeed after the resolver state update
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -1656,7 +1653,6 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 		t.Fatal("No spans were exported. Expected at least one span with trace evgo test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...ents.")
 	}
 
-	// Verify the name of the event at span[1].Events[0]
 	if got, want := spans[1].Events[0].Name, "Name resolution completed with delay"; got != want {
 		t.Fatalf("Got event name %s, want %s", got, want)
 	}
