@@ -82,7 +82,6 @@ type xdsChannelWithConfig struct {
 type authority struct {
 	// The following fields are initialized at creation time and are read-only
 	// afterwards, and therefore don't need to be protected with a mutex.
-	nodeID                    string                       // Node ID for the xDS client
 	name                      string                       // Name of the authority from bootstrap configuration.
 	watcherCallbackSerializer *grpcsync.CallbackSerializer // Serializer to run watcher callbacks, owned by the xDS client implementation.
 	getChannelForADS          xdsChannelForADS             // Function to get an xdsChannel for ADS, provided by the xDS client implementation.
@@ -119,7 +118,6 @@ type authority struct {
 
 // authorityBuildOptions wraps arguments required to create a new authority.
 type authorityBuildOptions struct {
-	nodeID           string                       // Node ID for the xDS client
 	serverConfigs    bootstrap.ServerConfigs      // Server configs for the authority
 	name             string                       // Name of the authority
 	serializer       *grpcsync.CallbackSerializer // Callback serializer for invoking watch callbacks
@@ -143,7 +141,6 @@ func newAuthority(args authorityBuildOptions) *authority {
 	l := grpclog.Component("xds")
 	logPrefix := args.logPrefix + fmt.Sprintf("[authority %q] ", args.name)
 	ret := &authority{
-		nodeID:                    args.nodeID,
 		name:                      args.name,
 		watcherCallbackSerializer: args.serializer,
 		getChannelForADS:          args.getChannelForADS,
@@ -609,9 +606,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 
 		xdsChannel, err := a.xdsChannelToUse()
 		if err != nil {
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-				watcher.OnError(fmt.Errorf("[xDS node id: %v]: %v", a.nodeID, err), func() {})
-			})
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(err, func() {}) })
 			return
 		}
 
@@ -756,7 +751,6 @@ func (a *authority) xdsChannelToUse() (*xdsChannelWithConfig, error) {
 	sc := a.xdsChannelConfigs[0].serverConfig
 	xc, cleanup, err := a.getChannelForADS(sc, a)
 	if err != nil {
-		a.logger.Warningf("Failed to create xDS channel: %v", err)
 		return nil, err
 	}
 	a.xdsChannelConfigs[0].channel = xc

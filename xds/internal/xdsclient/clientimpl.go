@@ -87,7 +87,6 @@ type clientImpl struct {
 	topLevelAuthority  *authority                   // The top-level authority, used only for old-style names without an authority.
 	authorities        map[string]*authority        // Map from authority names in bootstrap to authority struct.
 	config             *bootstrap.Config            // Complete bootstrap configuration.
-	nodeID             string                       // Node ID from bootstrap config.
 	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
 	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
 	transportBuilder   transport.Builder            // Builder to create transports to xDS server.
@@ -138,7 +137,6 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, s
 		done:               grpcsync.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
-		nodeID:             config.Node().GetId(),
 		watchExpiryTimeout: watchExpiryTimeout,
 		backoff:            streamBackoff,
 		serializer:         grpcsync.NewCallbackSerializer(ctx),
@@ -156,7 +154,6 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, s
 			serverCfg = cfg.XDSServers
 		}
 		c.authorities[name] = newAuthority(authorityBuildOptions{
-			nodeID:           c.nodeID,
 			serverConfigs:    serverCfg,
 			name:             name,
 			serializer:       c.serializer,
@@ -167,7 +164,6 @@ func newClientImpl(config *bootstrap.Config, watchExpiryTimeout time.Duration, s
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
-		nodeID:           c.nodeID,
 		serverConfigs:    config.XDSServers(),
 		name:             "",
 		serializer:       c.serializer,

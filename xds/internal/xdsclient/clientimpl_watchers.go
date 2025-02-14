@@ -26,6 +26,24 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
+// wrappingWatcher is a wrapper around an xdsresource.ResourceWatcher that adds
+// the node ID to the error messages reported to the watcher.
+type wrappingWatcher struct {
+	nodeID  string
+	watcher xdsresource.ResourceWatcher
+}
+
+func (w *wrappingWatcher) OnUpdate(update xdsresource.ResourceData, done xdsresource.OnDoneFunc) {
+	w.watcher.OnUpdate(update, done)
+}
+
+func (w *wrappingWatcher) OnError(err error, done xdsresource.OnDoneFunc) {
+	w.watcher.OnError(fmt.Errorf("[xDS node id: %v]: %v", w.nodeID, err), done)
+}
+func (w *wrappingWatcher) OnResourceDoesNotExist(done xdsresource.OnDoneFunc) {
+	w.watcher.OnResourceDoesNotExist(done)
+}
+
 // WatchResource uses xDS to discover the resource associated with the provided
 // resource name. The resource type implementation determines how xDS responses
 // are are deserialized and validated, as received from the xDS management
@@ -43,11 +61,14 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 		return func() {}
 	}
 
+	watcher = &wrappingWatcher{
+		nodeID:  c.config.Node().GetId(),
+		watcher: watcher,
+	}
+
 	if err := c.resourceTypes.maybeRegister(rType); err != nil {
 		logger.Warningf("Watch registered for name %q of type %q which is already registered", rType.TypeName(), resourceName)
-		c.serializer.TrySchedule(func(context.Context) {
-			watcher.OnError(fmt.Errorf("[xDS node id: %v]: %v", c.nodeID, err), func() {})
-		})
+		c.serializer.TrySchedule(func(context.Context) { watcher.OnError(err, func() {}) })
 		return func() {}
 	}
 
@@ -55,9 +76,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	a := c.getAuthorityForResource(n)
 	if a == nil {
 		logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName(), resourceName, n.Authority)
-		c.serializer.TrySchedule(func(context.Context) {
-			watcher.OnError(fmt.Errorf("[xDS node id: %v]: authority %q not found in bootstrap config for resource %q", c.nodeID, n.Authority, resourceName), func() {})
-		})
+		watcher.OnError(fmt.Errorf("authority %q not found in bootstrap config for resource %q", n.Authority, resourceName), func() {})
 		return func() {}
 	}
 	// The watchResource method on the authority is invoked with n.String()
