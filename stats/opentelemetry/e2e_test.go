@@ -1597,10 +1597,10 @@ func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empt
 
 // TestEventForNameResolutionDelay verifies that an event is emitted for name
 // resolution delay during RPC calls.
-func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
+func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	to, spanExporter := defaultTraceOptions(t)
 
-	r := manual.NewBuilderWithScheme("test")
+	r := manual.NewBuilderWithScheme("whatever")
 	t.Logf("Registered manual resolver with scheme: %s", r.Scheme())
 
 	// Start a gRPC server
@@ -1638,7 +1638,7 @@ func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
 	}
 
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * time.Second)
 		state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
 		r.UpdateState(state)
 		t.Logf("Pushed resolver state update: %v", state)
@@ -1653,7 +1653,7 @@ func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
 
 	spans := spanExporter.GetSpans()
 	if len(spans) == 0 {
-		t.Fatal("No spans were exported. Expected at least one span with trace events.")
+		t.Fatal("No spans were exported. Expected at least one span with trace evgo test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...ents.")
 	}
 
 	// Verify the name of the event at span[1].Events[0]
