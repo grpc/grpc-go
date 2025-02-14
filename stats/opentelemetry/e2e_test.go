@@ -1616,7 +1616,6 @@ func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
 	defer srv.Stop()
 	t.Logf("Started gRPC server at %s", lis.Addr().String())
 
-	// Create a gRPC client using the manual resolver and tracing options
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
@@ -1636,7 +1635,6 @@ func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("Expected EmptyCall() to fail with DeadlineExceeded, but got: %v", err)
 	}
-
 	go func() {
 		time.Sleep(2 * time.Second)
 		state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
@@ -1650,7 +1648,6 @@ func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("Expected EmptyCall() to succeed, but got: %v", err)
 	}
-	t.Log("Second RPC succeeded after the resolver state update.")
 
 	spans := spanExporter.GetSpans()
 	if len(spans) == 0 {

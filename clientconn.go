@@ -679,7 +679,7 @@ func (cc *ClientConn) Connect() {
 // context expires, whichever happens first.
 //
 // If the name resolution took longer than expected (indicating a delay before
-// addresses were resolved), it returns `true`. Otherwise, it returns false.
+// addresses were resolved), it returns true. Otherwise, it returns false.
 //
 // Returns an error if the context expires before resolution completes. If the
 // client connection is closing, ErrClientConnClosing is returned.
