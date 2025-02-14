@@ -29,19 +29,12 @@ import (
 // wrappingWatcher is a wrapper around an xdsresource.ResourceWatcher that adds
 // the node ID to the error messages reported to the watcher.
 type wrappingWatcher struct {
-	nodeID  string
-	watcher xdsresource.ResourceWatcher
-}
-
-func (w *wrappingWatcher) OnUpdate(update xdsresource.ResourceData, done xdsresource.OnDoneFunc) {
-	w.watcher.OnUpdate(update, done)
+	xdsresource.ResourceWatcher
+	nodeID string
 }
 
 func (w *wrappingWatcher) OnError(err error, done xdsresource.OnDoneFunc) {
-	w.watcher.OnError(fmt.Errorf("[xDS node id: %v]: %v", w.nodeID, err), done)
-}
-func (w *wrappingWatcher) OnResourceDoesNotExist(done xdsresource.OnDoneFunc) {
-	w.watcher.OnResourceDoesNotExist(done)
+	w.ResourceWatcher.OnError(fmt.Errorf("[xDS node id: %v]: %v", w.nodeID, err), done)
 }
 
 // WatchResource uses xDS to discover the resource associated with the provided
@@ -62,8 +55,8 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	}
 
 	watcher = &wrappingWatcher{
-		nodeID:  c.config.Node().GetId(),
-		watcher: watcher,
+		ResourceWatcher: watcher,
+		nodeID:          c.config.Node().GetId(),
 	}
 
 	if err := c.resourceTypes.maybeRegister(rType); err != nil {
