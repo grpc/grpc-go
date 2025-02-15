@@ -91,7 +91,7 @@ func (s) TestNewClientWithTimeout(t *testing.T) {
 			t.Errorf("Error while writing settings. Err: %v", err)
 			return
 		}
-		<-connectDone // Close conn only after newclient returns.
+		<-connectDone // connectDone is closed only after cc.Connect is called.
 	}()
 
 	r := manual.NewBuilderWithScheme("whatever")
@@ -920,7 +920,7 @@ func (s) TestBackoffCancel(t *testing.T) {
 
 	select {
 	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for custom dialer to be invoked during Dial")
+		t.Fatal("Timeout when waiting for custom dialer to be invoked during Connect()")
 	case <-dialStrCh:
 	}
 }
