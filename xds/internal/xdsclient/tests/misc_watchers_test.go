@@ -22,9 +22,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
@@ -32,6 +34,7 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -370,4 +373,136 @@ func readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx context.Context, reqC
 		return fmt.Errorf("Empty node proto received in DiscoveryRequest message, want non-empty node proto")
 	}
 	return nil
+}
+
+type testRouteConfigResourceType struct{}
+
+func (testRouteConfigResourceType) TypeURL() string                  { return version.V3RouteConfigURL }
+func (testRouteConfigResourceType) TypeName() string                 { return "RouteConfigResource" }
+func (testRouteConfigResourceType) AllResourcesRequiredInSotW() bool { return false }
+func (testRouteConfigResourceType) Decode(*xdsresource.DecodeOptions, *anypb.Any) (*xdsresource.DecodeResult, error) {
+	return nil, nil
+}
+
+// Tests that the errors returned by the xDS client when watching a resource
+// contain the node ID that was used to create the client. This test covers two
+// scenarios:
+//
+//  1. When a watch is registered for an already registered resource type, but
+//     this time with a different implementation,
+//  2. When a watch is registered for a resource name whose authority is not
+//     found in the bootstrap configuration.
+func (s) TestWatchErrorsContainNodeID(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create an xDS client with the above bootstrap contents.
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	t.Run("Multiple_ResourceType_Implementations", func(t *testing.T) {
+		const routeConfigName = "route-config-name"
+		watcher := xdstestutils.NewTestResourceWatcher()
+		client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
+
+		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+		defer sCancel()
+		select {
+		case <-sCtx.Done():
+		case <-watcher.UpdateCh:
+			t.Fatal("Unexpected resource update")
+		case <-watcher.ErrorCh:
+			t.Fatal("Unexpected resource error")
+		case <-watcher.ResourceDoesNotExistCh:
+			t.Fatal("Unexpected resource does not exist")
+		}
+
+		client.WatchResource(testRouteConfigResourceType{}, routeConfigName, watcher)
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timeout when waiting for error callback to be invoked")
+		case err := <-watcher.ErrorCh:
+			if err == nil || !strings.Contains(err.Error(), nodeID) {
+				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
+			}
+		}
+	})
+
+	t.Run("Missing_Authority", func(t *testing.T) {
+		const routeConfigName = "xdstp://nonexistant-authority/envoy.config.route.v3.RouteConfiguration/route-config-name"
+		watcher := xdstestutils.NewTestResourceWatcher()
+		client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
+
+		select {
+		case <-ctx.Done():
+			t.Fatal("Timeout when waiting for error callback to be invoked")
+		case err := <-watcher.ErrorCh:
+			if err == nil || !strings.Contains(err.Error(), nodeID) {
+				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
+			}
+		}
+	})
+}
+
+// Tests that the errors returned by the xDS client when watching a resource
+// contain the node ID when channel creation to the management server fails.
+func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// Create an xDS client with the above bootstrap contents.
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Override the xDS channel dialer with one that always fails.
+	origDialer := xdsclientinternal.GRPCNewClient
+	xdsclientinternal.GRPCNewClient = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		return nil, fmt.Errorf("failed to create channel")
+	}
+	defer func() { xdsclientinternal.GRPCNewClient = origDialer }()
+
+	const routeConfigName = "route-config-name"
+	watcher := xdstestutils.NewTestResourceWatcher()
+	client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for error callback to be invoked")
+	case err := <-watcher.ErrorCh:
+		if err == nil || !strings.Contains(err.Error(), nodeID) {
+			t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
+		}
+	}
 }

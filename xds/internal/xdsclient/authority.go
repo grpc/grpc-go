@@ -604,8 +604,9 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.logger.Infof("New watch for type %q, resource name %q", rType.TypeName(), resourceName)
 		}
 
-		xdsChannel := a.xdsChannelToUse()
-		if xdsChannel == nil {
+		xdsChannel, err := a.xdsChannelToUse()
+		if err != nil {
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(err, func() {}) })
 			return
 		}
 
@@ -739,22 +740,23 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 // Otherwise, it creates a new channel using the first server configuration in
 // the list of configurations, and returns that.
 //
+// A non-nil error is returned if the channel creation fails.
+//
 // Only executed in the context of a serializer callback.
-func (a *authority) xdsChannelToUse() *xdsChannelWithConfig {
+func (a *authority) xdsChannelToUse() (*xdsChannelWithConfig, error) {
 	if a.activeXDSChannel != nil {
-		return a.activeXDSChannel
+		return a.activeXDSChannel, nil
 	}
 
 	sc := a.xdsChannelConfigs[0].serverConfig
 	xc, cleanup, err := a.getChannelForADS(sc, a)
 	if err != nil {
-		a.logger.Warningf("Failed to create xDS channel: %v", err)
-		return nil
+		return nil, err
 	}
 	a.xdsChannelConfigs[0].channel = xc
 	a.xdsChannelConfigs[0].cleanup = cleanup
 	a.activeXDSChannel = a.xdsChannelConfigs[0]
-	return a.activeXDSChannel
+	return a.activeXDSChannel, nil
 }
 
 // closeXDSChannels closes all the xDS channels associated with this authority,
