@@ -34,9 +34,10 @@ import (
 type ServerStream struct {
 	*Stream // Embed for common stream functionality.
 
-	st      internalServerTransport
-	ctxDone <-chan struct{}    // closed at the end of stream.  Cache of ctx.Done() (for performance)
-	cancel  context.CancelFunc // invoked at the end of stream to cancel ctx.
+	st                  internalServerTransport
+	ctxDone             <-chan struct{}    // closed at the end of stream.  Cache of ctx.Done() (for performance)
+	cancel              context.CancelFunc // invoked at the end of stream to cancel ctx.
+	deadlineTimerCancel func()             // Invoked at the end of stream.
 
 	// Holds compressor names passed in grpc-accept-encoding metadata from the
 	// client.
