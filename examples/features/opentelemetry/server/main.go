@@ -27,13 +27,16 @@ import (
 	"net"
 	"net/http"
 
-	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
-	"google.golang.org/grpc/stats/opentelemetry"
-
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"google.golang.org/grpc"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
+	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/stats/opentelemetry"
 )
 
 var (
@@ -56,9 +59,28 @@ func main() {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
-	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
+	spanExporter := tracetest.NewInMemoryExporter()
+	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
+	textMapPropagator := propagation.NewCompositeTextMapPropagator(opentelemetry.GRPCTraceBinPropagator{})
+
+	traceOptions := experimental.TraceOptions{
+		TracerProvider:    tp,
+		TextMapPropagator: textMapPropagator,
+	}
+
+	go func() {
+		log.Printf("Starting Prometheus metrics server at %s\n", *prometheusEndpoint)
+		if err := http.ListenAndServe(*prometheusEndpoint, promhttp.Handler()); err != nil {
+			log.Fatalf("Failed to start Prometheus server: %v", err)
+		}
+	}()
+
+	so := opentelemetry.ServerOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
+		TraceOptions:   traceOptions,
+	})
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
