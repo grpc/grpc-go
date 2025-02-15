@@ -1649,6 +1649,7 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	}
 
 	go func() {
+		time.Sleep(3 * time.Second)
 		state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
 		r.UpdateState(state)
 		t.Logf("Pushed resolver state update: %v", state)
