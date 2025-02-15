@@ -167,9 +167,9 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 	r.InitialState(state)
 
 	// Create a ClientConn with the specified transport credentials.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
@@ -393,7 +393,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 
 	// Create a grpc channel with xDS creds.
 	cc, _ := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
-
+	cc.Connect()
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
 	resources := e2e.UpdateOptions{
@@ -460,6 +460,7 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 
 	// Create a grpc channel with xDS creds.
 	cc, _ := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
+	cc.Connect()
 
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
@@ -535,7 +536,8 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
-
+	defer cc.Close()
+	cc.Connect()
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource contains security configuration with a certificate
 	// provider instance that is missing in the bootstrap configuration.
@@ -563,7 +565,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with initial resources: %v", err)
 	}
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
@@ -578,7 +580,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with valid resources: %v", err)
 	}
 
 	// Verify that a successful RPC can be made over a secure connection.

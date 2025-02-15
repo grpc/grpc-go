@@ -635,7 +635,7 @@ func (s) TestRetryStats(t *testing.T) {
       }
     }]}`)))
 	if err != nil {
-		t.Fatalf("failed to dial due to err: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer cc.Close()
 

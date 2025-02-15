@@ -102,11 +102,12 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		xdsClose()
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
+	cc.Connect()
 	return cc, func() {
 		xdsClose()
 		cc.Close()
@@ -250,7 +251,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// Wait for the EDS resource to be requested.
 	select {
 	case <-ctx.Done():
@@ -395,9 +396,9 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 
 	// Create xDS client, configure cds_experimental LB policy with a manual
 	// resolver, and dial the test backends.
-	_, cleanup := setupAndDial(t, bootstrapContents)
+	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-
+	cc.Connect()
 	// The priority configuration generated should have Outlier Detection as a
 	// direct child due to Outlier Detection being turned on.
 	wantCfg := &priority.LBConfig{
