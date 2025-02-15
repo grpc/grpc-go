@@ -21,7 +21,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
@@ -30,15 +32,19 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type clientStatsHandler struct {
 	estats.MetricsRecorder
 	options       Options
 	clientMetrics clientMetrics
+}
+
+type clientMetricsStatsHandler struct {
+	*clientStatsHandler
+}
+type clientTracingStatsHandler struct {
+	*clientStatsHandler
 }
 
 func (h *clientStatsHandler) initializeMetrics() {
@@ -71,7 +77,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func (h *clientMetricsStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
@@ -88,12 +94,8 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 
 	startTime := time.Now()
-	var span trace.Span
-	if h.options.isTracingEnabled() {
-		ctx, span = h.createCallTraceSpan(ctx, method)
-	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
+	h.perCallMetrics(ctx, err, startTime, ci)
 	return err
 }
 
@@ -109,7 +111,65 @@ func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOpt
 	return "other"
 }
 
-func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (h *clientMetricsStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: h.determineMethod(method, opts...),
+	}
+	ctx = setCallInfo(ctx, ci)
+
+	if h.options.MetricsOptions.pluginOption != nil {
+		md := h.options.MetricsOptions.pluginOption.GetMetadata()
+		for k, vs := range md {
+			for _, v := range vs {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
+			}
+		}
+	}
+
+	startTime := time.Now()
+	callback := func(err error) {
+		h.perCallMetrics(ctx, err, startTime, ci)
+	}
+	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
+	return streamer(ctx, desc, cc, method, opts...)
+}
+
+// perCallMetrics records per call metrics.
+func (h *clientMetricsStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
+	callLatency := float64(time.Since(startTime)) / float64(time.Second)
+	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
+		otelattribute.String("grpc.method", ci.method),
+		otelattribute.String("grpc.target", ci.target),
+		otelattribute.String("grpc.status", canonicalString(status.Code(err))),
+	))
+	h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
+}
+
+func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: h.determineMethod(method, opts...),
+	}
+	ctx = setCallInfo(ctx, ci)
+	if h.options.MetricsOptions.pluginOption != nil {
+		md := h.options.MetricsOptions.pluginOption.GetMetadata()
+		for k, vs := range md {
+			for _, v := range vs {
+				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
+			}
+		}
+	}
+
+	startTime := time.Now()
+	var span trace.Span
+	ctx, span = h.createCallTraceSpan(ctx, method)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	h.perCallTraces(ctx, err, startTime, ci, span)
+	return err
+}
+
+func (h *clientTracingStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: h.determineMethod(method, opts...),
@@ -127,36 +187,23 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 
 	startTime := time.Now()
 	var span trace.Span
-	if h.options.isTracingEnabled() {
-		ctx, span = h.createCallTraceSpan(ctx, method)
-	}
+	ctx, span = h.createCallTraceSpan(ctx, method)
 	callback := func(err error) {
-		h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
+		h.perCallTraces(ctx, err, startTime, ci, span)
 	}
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-// perCallTracesAndMetrics records per call trace spans and metrics.
-func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
-	if h.options.isTracingEnabled() {
-		s := status.Convert(err)
-		if s.Code() == grpccodes.OK {
-			ts.SetStatus(otelcodes.Ok, s.Message())
-		} else {
-			ts.SetStatus(otelcodes.Error, s.Message())
-		}
-		ts.End()
+// perCallTraces records per call trace spans and metrics.
+func (h *clientTracingStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
+	s := status.Convert(err)
+	if s.Code() == grpccodes.OK {
+		ts.SetStatus(otelcodes.Ok, s.Message())
+	} else {
+		ts.SetStatus(otelcodes.Error, s.Message())
 	}
-	if h.options.isMetricsEnabled() {
-		callLatency := float64(time.Since(startTime)) / float64(time.Second)
-		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
-			otelattribute.String("grpc.method", ci.method),
-			otelattribute.String("grpc.target", ci.target),
-			otelattribute.String("grpc.status", canonicalString(status.Code(err))),
-		))
-		h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
-	}
+	ts.End()
 }
 
 // TagConn exists to satisfy stats.Handler.
