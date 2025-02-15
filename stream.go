@@ -177,6 +177,10 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return cc.NewStream(ctx, desc, method, opts...)
 }
 
+type ctxKey string
+
+const nameResolutionDelayKey ctxKey = "nameResolutionDelay"
+
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	// Start tracking the RPC for idleness purposes. This is where a stream is
 	// created for both streaming and unary RPCs, and hence is a good place to
@@ -212,8 +216,12 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
-	if err := cc.waitForResolvedAddrs(ctx); err != nil {
+	isDelayed, err := cc.waitForResolvedAddrs(ctx)
+	if err != nil {
 		return nil, err
+	}
+	if isDelayed {
+		ctx = context.WithValue(ctx, nameResolutionDelayKey, isDelayed)
 	}
 
 	var mc serviceconfig.MethodConfig
@@ -416,8 +424,9 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	method := cs.callHdr.Method
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
+	isDelayed, _ := ctx.Value(nameResolutionDelayKey).(bool)
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: isDelayed})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,

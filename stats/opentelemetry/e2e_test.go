@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"testing"
 	"time"
 
@@ -46,6 +47,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
@@ -58,8 +60,11 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
+	"google.golang.org/grpc/status"
 )
 
 var defaultTestTimeout = 5 * time.Second
@@ -1577,5 +1582,91 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	// Verify spans has error status with rpcErrorMsg as error message.
 	if got, want := spans[0].Status.Description, rpcErrorMsg; got != want {
 		t.Fatalf("got rpc error %s, want %s", spans[0].Status.Description, rpcErrorMsg)
+	}
+}
+
+// gRPC server implementation
+type server struct {
+	testgrpc.UnimplementedTestServiceServer
+}
+
+// EmptyCall is a simple RPC that returns an empty response.
+func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
+	return &testgrpc.Empty{}, nil
+}
+
+// TestEventForNameResolutionDelay verifies that an event is emitted for name
+// resolution delay during RPC calls.
+func TestNameResolutionDelayTraceEvent(t *testing.T) {
+	to, spanExporter := defaultTraceOptions(t)
+
+	r := manual.NewBuilderWithScheme("whatever")
+	t.Logf("Registered manual resolver with scheme: %s", r.Scheme())
+
+	// Start a gRPC server
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	srv := grpc.NewServer()
+	testgrpc.RegisterTestServiceServer(srv, &server{})
+	go srv.Serve(lis)
+	defer srv.Stop()
+
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+
+	// Define metrics options for OpenTelemetry
+	mo := opentelemetry.MetricsOptions{
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"),
+		OptionalLabels: []string{"grpc.lb.locality"},
+	}
+
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		opentelemetry.DialOption(opentelemetry.Options{
+			MetricsOptions: mo,
+			TraceOptions:   *to,
+		}),
+	}
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+	t.Log("Created a gRPC client with OpenTelemetry tracing.")
+
+	// First RPC should fail due to the absence of any addresses
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("Expected EmptyCall() to fail with DeadlineExceeded, but got: %v", err)
+	}
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
+		r.UpdateState(state)
+		t.Logf("Pushed resolver state update: %v", state)
+	}()
+
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("Expected EmptyCall() to succeed, but got: %v", err)
+	}
+
+	spans := spanExporter.GetSpans()
+	if len(spans) == 0 {
+		t.Fatal("No spans were exported. Expected at least one span with trace evgo test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...ents.")
+	}
+
+	if got, want := spans[1].Events[0].Name, "Name resolution completed with delay"; got != want {
+		t.Fatalf("Got event name %s, want %s", got, want)
 	}
 }
