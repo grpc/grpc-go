@@ -23,9 +23,10 @@ import (
 	"math"
 	"testing"
 
-	xxhash "github.com/cespare/xxhash/v2"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/resolver"
+
+	xxhash "github.com/cespare/xxhash/v2"
 )
 
 var testEndpoints []resolver.Endpoint
@@ -43,9 +44,9 @@ func init() {
 	testEndpointStateMap.Set(testEndpoints[2], &endpointState{firstAddr: "c", weight: 4})
 }
 
-func testEndpoint(addr string, weight uint32) resolver.Endpoint {
+func testEndpoint(addr string, endpointWeight uint32) resolver.Endpoint {
 	ep := resolver.Endpoint{Addresses: []resolver.Address{{Addr: addr}}}
-	return weightedroundrobin.SetAddrInfoInEndpoint(ep, weightedroundrobin.AddrInfo{Weight: weight})
+	return weight.Set(ep, weight.EndpointInfo{Weight: endpointWeight})
 }
 
 func (s) TestRingNew(t *testing.T) {

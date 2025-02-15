@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/hierarchy"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -653,7 +653,7 @@ func testEndpointWithAttrs(addrStrs []string, localityWeight, endpointWeight uin
 	}
 	endpoint = hierarchy.SetInEndpoint(endpoint, path)
 	endpoint = wrrlocality.SetAddrInfoInEndpoint(endpoint, wrrlocality.AddrInfo{LocalityWeight: localityWeight})
-	endpoint = weightedroundrobin.SetAddrInfoInEndpoint(endpoint, weightedroundrobin.AddrInfo{Weight: localityWeight * endpointWeight})
+	endpoint = weight.Set(endpoint, weight.EndpointInfo{Weight: localityWeight * endpointWeight})
 	return endpoint
 }
 
