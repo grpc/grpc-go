@@ -1615,10 +1615,23 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	go srv.Serve(lis)
 	defer srv.Stop()
 
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+
+	// Define metrics options for OpenTelemetry
+	mo := opentelemetry.MetricsOptions{
+		MeterProvider:  provider,
+		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"),
+		OptionalLabels: []string{"grpc.lb.locality"},
+	}
+
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(r),
-		opentelemetry.DialOption(opentelemetry.Options{TraceOptions: *to}),
+		opentelemetry.DialOption(opentelemetry.Options{
+			MetricsOptions: mo,
+			TraceOptions:   *to,
+		}),
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
@@ -1636,7 +1649,6 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	}
 
 	go func() {
-		time.Sleep(3 * time.Second)
 		state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
 		r.UpdateState(state)
 		t.Logf("Pushed resolver state update: %v", state)
