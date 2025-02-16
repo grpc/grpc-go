@@ -43,7 +43,7 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: '1.22'
+            goversion: '1.23'
 
           - type: extras
             goversion: '1.23'
@@ -64,7 +64,7 @@ jobs:
             goarch: arm64
 
           - type: tests
-            goversion: '1.22'
+            goversion: '1.23'
 
           - type: tests
             goversion: '1.23'
