@@ -138,8 +138,8 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
 
-	// Attempt to dial the server using a custom dialer.
-        // Since the listener is already closed, no new connections should be established.
+	// Attempt to dial the server using a custom dialer. Since the listener is
+	// already closed, no new connections should be established.
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 	cc, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
 	if err != nil {
