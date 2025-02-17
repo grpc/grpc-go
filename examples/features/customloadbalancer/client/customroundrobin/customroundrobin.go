@@ -41,16 +41,16 @@ const customRRName = "custom_round_robin"
 type customRRConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	// ChooseSecond represents how often pick iterations choose the second
-	// SubConn in the list. Defaults to 3. If 0 never choose the second SubConn.
-	ChooseSecond uint32 `json:"chooseSecond,omitempty"`
+	// RepeatCount represents how many times each endpoint is picked before
+	// moving to the next endpoint in the list. Defaults to 3.
+	RepeatCount uint32 `json:"repeatCount,omitempty"`
 }
 
 type customRoundRobinBuilder struct{}
 
 func (customRoundRobinBuilder) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	lbConfig := &customRRConfig{
-		ChooseSecond: 3,
+		RepeatCount: 3,
 	}
 
 	if err := json.Unmarshal(s, lbConfig); err != nil {
@@ -91,15 +91,15 @@ func (crr *customRoundRobin) UpdateClientConnState(state balancer.ClientConnStat
 	if !ok {
 		return balancer.ErrBadResolverState
 	}
-	if el := state.ResolverState.Endpoints; len(el) != 2 {
-		return fmt.Errorf("UpdateClientConnState wants two endpoints, got: %v", el)
-	}
 	crr.cfg.Store(crrCfg)
 	// A call to UpdateClientConnState should always produce a new Picker.  That
 	// is guaranteed to happen since the aggregator will always call
 	// UpdateChildState in its UpdateClientConnState.
 	return crr.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: state.ResolverState,
+		// Enable the health listener in pickfirst children. This is required
+		// for client side health checking and outlier detection to work, if
+		// configured.
+		ResolverState: pickfirstleaf.EnableHealthListener(state.ResolverState),
 	})
 }
 
@@ -112,13 +112,13 @@ func (crr *customRoundRobin) UpdateState(state balancer.State) {
 				readyPickers = append(readyPickers, childState.State.Picker)
 			}
 		}
-		// If both children are ready, pick using the custom round robin
+		// If all the children are ready, pick using the custom round robin
 		// algorithm.
-		if len(readyPickers) == 2 {
+		if len(readyPickers) == len(childStates) {
 			picker := &customRoundRobinPicker{
-				pickers:      readyPickers,
-				chooseSecond: crr.cfg.Load().ChooseSecond,
-				next:         0,
+				pickers:     readyPickers,
+				repeatCount: crr.cfg.Load().RepeatCount,
+				next:        0,
 			}
 			crr.ClientConn.UpdateState(balancer.State{
 				ConnectivityState: connectivity.Ready,
@@ -127,22 +127,25 @@ func (crr *customRoundRobin) UpdateState(state balancer.State) {
 			return
 		}
 	}
+	if state.ConnectivityState == connectivity.Ready {
+		// Wait for all endpoints to report READY.
+		return
+	}
 	// Delegate to default behavior/picker from below.
 	crr.ClientConn.UpdateState(state)
 }
 
 type customRoundRobinPicker struct {
-	pickers      []balancer.Picker
-	chooseSecond uint32
-	next         uint32
+	pickers     []balancer.Picker
+	repeatCount uint32
+	next        uint32
 }
 
 func (crrp *customRoundRobinPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	next := atomic.AddUint32(&crrp.next, 1)
-	index := 0
-	if next != 0 && next%crrp.chooseSecond == 0 {
-		index = 1
-	}
-	childPicker := crrp.pickers[index%len(crrp.pickers)]
+	// Subtract 1 to ensure the first address in the list is used "repeatCount"
+	// times.
+	index := (atomic.AddUint32(&crrp.next, 1) - 1) / crrp.repeatCount
+	epCount := uint32(len(crrp.pickers))
+	childPicker := crrp.pickers[index%epCount]
 	return childPicker.Pick(info)
 }

@@ -90,6 +90,7 @@ declare -A CLIENT_ARGS=(
 declare -A SERVER_WAIT_COMMAND=(
     ["features/unix_abstract"]="lsof -U | grep $UNIX_ADDR"
     ["default"]="lsof -i :$SERVER_PORT | grep $SERVER_PORT"
+    ["features/customloadbalancer"]="lsof -i :50052 | grep 50052"
 )
 
 wait_for_server () {
@@ -114,7 +115,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/authz"]="unary echoing message \"hello world\""
     ["features/cancellation"]="server: error receiving from stream: rpc error: code = Canceled desc = context canceled"
     ["features/compression"]="UnaryEcho called with message \"compress\""
-    ["features/customloadbalancer"]="serving on localhost:50051"
+    ["features/customloadbalancer"]="serving on 127\.0\.0\.1:50050, \[::1\]:50051, \[::\]:50052"
     ["features/deadline"]=""
     ["features/encryption/TLS"]=""
     ["features/error_details"]=""
@@ -140,7 +141,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/authz"]="UnaryEcho:  hello world"
     ["features/cancellation"]="cancelling context"
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>"
-    ["features/customloadbalancer"]="Successful multiple iterations of 1:2 ratio"
+    ["features/customloadbalancer"]="Successful multiple iterations of 1:1:1 ratio"
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded"
     ["features/encryption/TLS"]="UnaryEcho:  hello world"
     ["features/error_details"]="Greeting: Hello world"
