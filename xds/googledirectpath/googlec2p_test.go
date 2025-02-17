@@ -37,9 +37,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const (
-	defaultTestTimeout = 5 * time.Second
-)
+const defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -337,7 +335,7 @@ func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	wantErr := "google-c2p URI scheme does not support authorities"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.NewClient(%s) returned error: %v, want: %v", uri, err, wantErr)
+		t.Fatalf("client.EmptyCall(%s) returned error: %v, want: %v", uri, err, wantErr)
 	}
 }
 
