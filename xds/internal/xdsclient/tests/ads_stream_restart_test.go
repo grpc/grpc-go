@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -112,9 +113,13 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap configuration.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bootstrapContents,
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

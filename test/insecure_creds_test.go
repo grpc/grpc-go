@@ -20,7 +20,6 @@ package test
 
 import (
 	"context"
-	"net"
 	"strings"
 	"testing"
 
@@ -29,6 +28,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -83,7 +83,13 @@ func (s) TestInsecureCreds(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
+			lis, err := testutils.LocalTCPListener()
+			if err != nil {
+				t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
+			}
+
 			ss := &stubserver.StubServer{
+				Listener: lis,
 				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					if !test.serverInsecureCreds {
 						return &testpb.Empty{}, nil
@@ -104,28 +110,16 @@ func (s) TestInsecureCreds(t *testing.T) {
 					return &testpb.Empty{}, nil
 				},
 			}
-
 			sOpts := []grpc.ServerOption{}
 			if test.serverInsecureCreds {
-				sOpts = append(sOpts, grpc.Creds(insecure.NewCredentials()))
+				ss.S = grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+			} else {
+				ss.S = grpc.NewServer(sOpts...)
 			}
-			s := grpc.NewServer(sOpts...)
-			defer s.Stop()
-
-			testgrpc.RegisterTestServiceServer(s, ss)
-
-			lis, err := net.Listen("tcp", "localhost:0")
-			if err != nil {
-				t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
-			}
-
-			go s.Serve(lis)
-
+			stubserver.StartTestService(t, ss)
+			defer ss.S.Stop()
 			addr := lis.Addr().String()
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			if test.clientInsecureCreds {
-				opts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			}
 			cc, err := grpc.NewClient(addr, opts...)
 			if err != nil {
 				t.Fatalf("grpc.NewClient(%q) failed: %v", addr, err)
@@ -143,21 +137,20 @@ func (s) TestInsecureCreds(t *testing.T) {
 }
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-
-	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, ss)
-
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}
-	go s.Serve(lis)
+
+	ss := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
+	}
+	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	addr := lis.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -179,21 +172,19 @@ func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 }
 
 func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-
-	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
-	defer s.Stop()
-	testgrpc.RegisterTestServiceServer(s, ss)
-
-	lis, err := net.Listen("tcp", "localhost:0")
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
 	}
-	go s.Serve(lis)
+	ss := &stubserver.StubServer{
+		Listener: lis,
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		S: grpc.NewServer(grpc.Creds(insecure.NewCredentials())),
+	}
+	stubserver.StartTestService(t, ss)
+	defer ss.S.Stop()
 
 	addr := lis.Addr().String()
 	dopts := []grpc.DialOption{

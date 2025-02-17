@@ -1,19 +1,19 @@
 /*
- *
- * Copyright 2014 gRPC authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
+*
+* Copyright 2014 gRPC authors.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*
  */
 
 package interop
@@ -36,9 +36,9 @@ import (
 
 // SoakWorkerResults stores the aggregated results for a specific worker during the soak test.
 type SoakWorkerResults struct {
-	IterationsDone int
-	Failures       int
-	Latencies      *stats.Histogram
+	iterationsSucceeded int
+	Failures            int
+	Latencies           *stats.Histogram
 }
 
 // SoakIterationConfig holds the parameters required for a single soak iteration.
@@ -95,6 +95,15 @@ func doOneSoakIteration(ctx context.Context, config SoakIterationConfig) (latenc
 func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTime time.Time, workerID int, soakWorkerResults *SoakWorkerResults) {
 	timeoutDuration := config.OverallTimeout
 	soakIterationsPerWorker := config.Iterations / config.NumWorkers
+	if soakWorkerResults.Latencies == nil {
+		soakWorkerResults.Latencies = stats.NewHistogram(stats.HistogramOptions{
+			NumBuckets:     20,
+			GrowthFactor:   1,
+			BaseBucketSize: 1,
+			MinValue:       0,
+		})
+	}
+
 	for i := 0; i < soakIterationsPerWorker; i++ {
 		if ctx.Err() != nil {
 			return
@@ -122,15 +131,15 @@ func executeSoakTestInWorker(ctx context.Context, config SoakTestConfig, startTi
 			continue
 		}
 		if latency > config.PerIterationMaxAcceptableLatency {
-			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latency, p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s exceeds max acceptable latency: %d\n", workerID, i, latency.Milliseconds(), p.Addr, config.ServerAddr, config.PerIterationMaxAcceptableLatency.Milliseconds())
 			soakWorkerResults.Failures++
 			<-earliestNextStart
 			continue
 		}
 		// Success: log the details of the iteration.
 		soakWorkerResults.Latencies.Add(latency.Milliseconds())
-		soakWorkerResults.IterationsDone++
-		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency, p.Addr, config.ServerAddr)
+		soakWorkerResults.iterationsSucceeded++
+		fmt.Fprintf(os.Stderr, "Worker %d: soak iteration: %d elapsed_ms: %d peer: %v server_uri: %s succeeded\n", workerID, i, latency.Milliseconds(), p.Addr, config.ServerAddr)
 		<-earliestNextStart
 	}
 }
@@ -156,8 +165,8 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 	// Wait for all goroutines to complete.
 	wg.Wait()
 
-	//Handle results.
-	totalIterations := 0
+	// Handle results.
+	totalSuccesses := 0
 	totalFailures := 0
 	latencies := stats.NewHistogram(stats.HistogramOptions{
 		NumBuckets:     20,
@@ -166,7 +175,7 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		MinValue:       0,
 	})
 	for _, worker := range soakWorkerResults {
-		totalIterations += worker.IterationsDone
+		totalSuccesses += worker.iterationsSucceeded
 		totalFailures += worker.Failures
 		if worker.Latencies != nil {
 			// Add latencies from the worker's Histogram to the main latencies.
@@ -174,17 +183,18 @@ func DoSoakTest(ctx context.Context, soakConfig SoakTestConfig) {
 		}
 	}
 	var b bytes.Buffer
+	totalIterations := totalSuccesses + totalFailures
 	latencies.Print(&b)
 	fmt.Fprintf(os.Stderr,
-		"(server_uri: %s) soak test ran: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
-		soakConfig.ServerAddr, totalIterations, soakConfig.Iterations, totalFailures, b.String())
+		"(server_uri: %s) soak test successes: %d / %d iterations. Total failures: %d. Latencies in milliseconds: %s\n",
+		soakConfig.ServerAddr, totalSuccesses, soakConfig.Iterations, totalFailures, b.String())
 
 	if totalIterations != soakConfig.Iterations {
-		fmt.Fprintf(os.Stderr, "Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalIterations, soakConfig.Iterations)
+		logger.Fatalf("Soak test consumed all %v of time and quit early, ran %d out of %d iterations.\n", soakConfig.OverallTimeout, totalIterations, soakConfig.Iterations)
 	}
 
 	if totalFailures > soakConfig.MaxFailures {
-		fmt.Fprintf(os.Stderr, "Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, soakConfig.MaxFailures)
+		logger.Fatalf("Soak test total failures: %d exceeded max failures threshold: %d\n", totalFailures, soakConfig.MaxFailures)
 	}
 	if soakConfig.ChannelForTest != nil {
 		_, cleanup := soakConfig.ChannelForTest()
