@@ -116,6 +116,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient(_, _) = _, %v; want _, nil", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	cc.Connect()
 	scpr := r.CC.ParseServiceConfig("bad json service config")

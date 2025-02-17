@@ -22,6 +22,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials"
@@ -30,6 +31,8 @@ import (
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 )
+
+var defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -103,6 +106,8 @@ func overrideNewCredsFuncs() func() {
 // modes), ClientHandshake does either tls or alts base on the cluster name in
 // attributes.
 func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	defer overrideNewCredsFuncs()()
 	for bundleTyp, tc := range map[string]credentials.Bundle{
 		"defaultCredsWithOptions": NewDefaultCredentialsWithOptions(DefaultCredentialsOptions{}),
@@ -116,12 +121,12 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 		}{
 			{
 				name:    "no cluster name",
-				ctx:     context.Background(),
+				ctx:     ctx,
 				wantTyp: "tls",
 			},
 			{
 				name: "with non-CFE cluster name",
-				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+				ctx: icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{
 					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "lalala").Attributes,
 				}),
 				// non-CFE backends should use alts.
@@ -129,7 +134,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			},
 			{
 				name: "with CFE cluster name",
-				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+				ctx: icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{
 					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// CFE should use tls.
@@ -137,7 +142,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			},
 			{
 				name: "with xdstp CFE cluster name",
-				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+				ctx: icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{
 					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// CFE should use tls.
@@ -145,7 +150,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			},
 			{
 				name: "with xdstp non-CFE cluster name",
-				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+				ctx: icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{
 					Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://other.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// non-CFE should use atls.
@@ -176,6 +181,8 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 }
 
 func TestDefaultCredentialsWithOptions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	md1 := map[string]string{"foo": "tls"}
 	md2 := map[string]string{"foo": "alts"}
 	tests := []struct {
@@ -248,7 +255,7 @@ func TestDefaultCredentialsWithOptions(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			bundle := NewDefaultCredentialsWithOptions(tc.defaultCredsOpts)
 			ri := credentials.RequestInfo{AuthInfo: tc.authInfo}
-			ctx := icredentials.NewRequestInfoContext(context.Background(), ri)
+			ctx := icredentials.NewRequestInfoContext(ctx, ri)
 			got, err := bundle.PerRPCCredentials().GetRequestMetadata(ctx, "uri")
 			if err != nil {
 				t.Fatalf("Bundle's PerRPCCredentials().GetRequestMetadata() unexpected error = %v", err)

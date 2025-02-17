@@ -85,7 +85,7 @@ func testLocalCredsE2ESucceed(t *testing.T, network, address string) error {
 
 	switch network {
 	case "unix":
-		cc, err = grpc.Dial(lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
+		cc, err = grpc.NewClient("passthrough:///"+lisAddr, grpc.WithTransportCredentials(local.NewCredentials()), grpc.WithContextDialer(
 			func(_ context.Context, addr string) (net.Conn, error) {
 				return net.Dial("unix", addr)
 			}))
@@ -95,7 +95,7 @@ func testLocalCredsE2ESucceed(t *testing.T, network, address string) error {
 		return fmt.Errorf("unsupported network %q", network)
 	}
 	if err != nil {
-		return fmt.Errorf("Failed to dial server: %v, %v", err, lisAddr)
+		return fmt.Errorf("Failed to create a client for server: %v, %v", err, lisAddr)
 	}
 	defer cc.Close()
 

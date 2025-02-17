@@ -1181,7 +1181,7 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 
 	// Create an xDS client talking to the above management server, configured
 	// with a short watch expiry timeout.
-	config, err := bootstrap.NewConfigForTesting(bootstrapContents)
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}

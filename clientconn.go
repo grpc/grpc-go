@@ -118,12 +118,26 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 
 // NewClient creates a new gRPC "channel" for the target URI provided.  No I/O
 // is performed.  Use of the ClientConn for RPCs will automatically cause it to
-// connect.  Connect may be used to manually create a connection, but for most
-// users this is unnecessary.
+// connect.  The Connect method may be called to manually create a connection,
+// but for most users this should be unnecessary.
 //
 // The target name syntax is defined in
-// https://github.com/grpc/grpc/blob/master/doc/naming.md.  e.g. to use dns
-// resolver, a "dns:///" prefix should be applied to the target.
+// https://github.com/grpc/grpc/blob/master/doc/naming.md.  E.g. to use the dns
+// name resolver, a "dns:///" prefix may be applied to the target.  The default
+// name resolver will be used if no scheme is detected, or if the parsed scheme
+// is not a registered name resolver.  The default resolver is "dns" but can be
+// overridden using the resolver package's SetDefaultScheme.
+//
+// Examples:
+//
+//   - "foo.googleapis.com:8080"
+//   - "dns:///foo.googleapis.com:8080"
+//   - "dns:///foo.googleapis.com"
+//   - "dns:///10.0.0.213:8080"
+//   - "dns:///%5B2001:db8:85a3:8d3:1319:8a2e:370:7348%5D:443"
+//   - "dns://8.8.8.8/foo.googleapis.com:8080"
+//   - "dns://8.8.8.8/foo.googleapis.com"
+//   - "zookeeper://zk.example.com:9900/example_service"
 //
 // The DialOptions returned by WithBlock, WithTimeout,
 // WithReturnConnectionError, and FailOnNonTempDialError are ignored by this
@@ -872,7 +886,13 @@ func (cc *ClientConn) Target() string {
 	return cc.target
 }
 
-// CanonicalTarget returns the canonical target string of the ClientConn.
+// CanonicalTarget returns the canonical target string used when creating cc.
+//
+// This always has the form "<scheme>://[authority]/<endpoint>".  For example:
+//
+//   - "dns:///example.com:42"
+//   - "dns://8.8.8.8/example.com:42"
+//   - "unix:///path/to/socket"
 func (cc *ClientConn) CanonicalTarget() string {
 	return cc.parsedTarget.String()
 }

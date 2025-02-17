@@ -24,9 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -34,14 +31,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
-)
-
-var (
-	cmpOpts = cmp.Options{
-		cmp.AllowUnexported(testutils.TestSubConn{}, ringEntry{}, subConn{}),
-		cmpopts.IgnoreFields(subConn{}, "mu"),
-		cmpopts.IgnoreFields(testutils.TestSubConn{}, "connectCalled"),
-	}
 )
 
 const (
@@ -62,12 +51,8 @@ func init() {
 	}
 }
 
-func ctxWithHash(h uint64) context.Context {
-	return SetRequestHash(context.Background(), h)
-}
-
 // setupTest creates the balancer, and does an initial sanity check.
-func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.BalancerClientConn, balancer.Balancer, balancer.Picker) {
+func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.BalancerClientConn, balancer.Balancer, balancer.Picker) {
 	t.Helper()
 	cc := testutils.NewBalancerClientConn(t)
 	builder := balancer.Get(Name)
@@ -76,28 +61,32 @@ func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.BalancerClien
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
+		ResolverState:  resolver.State{Endpoints: endpoints},
 		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
 
-	for _, addr := range addrs {
-		addr1 := <-cc.NewSubConnAddrsCh
-		if want := []resolver.Address{addr}; !cmp.Equal(addr1, want, cmp.AllowUnexported(attributes.Attributes{})) {
-			t.Fatalf("got unexpected new subconn addrs: %v", cmp.Diff(addr1, want, cmp.AllowUnexported(attributes.Attributes{})))
-		}
-		sc1 := <-cc.NewSubConnCh
-		// All the SubConns start in Idle, and should not Connect().
-		select {
-		case <-sc1.ConnectCh:
-			t.Errorf("unexpected Connect() from SubConn %v", sc1)
-		case <-time.After(defaultTestShortTimeout):
-		}
+	// The leaf pickfirst are created lazily, only when their endpoint is picked
+	// or other endpoints are in TF. No SubConns should be created immediately.
+	select {
+	case sc := <-cc.NewSubConnCh:
+		t.Errorf("unexpected SubConn creation: %v", sc)
+	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Should also have a picker, with all SubConns in Idle.
+	// Should also have a picker, with all endpoints in Idle.
 	p1 := <-cc.NewPickerCh
+
+	ringHashPicker := p1.(*picker)
+	if got, want := len(ringHashPicker.endpointStates), len(endpoints); got != want {
+		t.Errorf("Number of child balancers = %d, want = %d", got, want)
+	}
+	for firstAddr, bs := range ringHashPicker.endpointStates {
+		if got, want := bs.ConnectivityState, connectivity.Idle; got != want {
+			t.Errorf("Child balancer connectivity state for address %q = %v, want = %v", firstAddr, got, want)
+		}
+	}
 	return cc, b, p1
 }
 
@@ -117,15 +106,15 @@ func (s) TestUpdateClientConnState_NewRingSize(t *testing.T) {
 	origMinRingSize, origMaxRingSize := 1, 10 // Configured from `testConfig` in `setupTest`
 	newMinRingSize, newMaxRingSize := 20, 100
 
-	addrs := []resolver.Address{{Addr: testBackendAddrStrs[0]}}
-	cc, b, p1 := setupTest(t, addrs)
+	endpoints := []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}}}
+	cc, b, p1 := setupTest(t, endpoints)
 	ring1 := p1.(*picker).ring
 	if ringSize := len(ring1.items); ringSize < origMinRingSize || ringSize > origMaxRingSize {
 		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, origMinRingSize, origMaxRingSize)
 	}
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
+		ResolverState:  resolver.State{Endpoints: endpoints},
 		BalancerConfig: &LBConfig{MinRingSize: uint64(newMinRingSize), MaxRingSize: uint64(newMaxRingSize)},
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
@@ -143,20 +132,30 @@ func (s) TestUpdateClientConnState_NewRingSize(t *testing.T) {
 	}
 }
 
-func (s) TestOneSubConn(t *testing.T) {
+func (s) TestOneEndpoint(t *testing.T) {
 	wantAddr1 := resolver.Address{Addr: testBackendAddrStrs[0]}
-	cc, _, p0 := setupTest(t, []resolver.Address{wantAddr1})
+	cc, _, p0 := setupTest(t, []resolver.Endpoint{{Addresses: []resolver.Address{wantAddr1}}})
 	ring0 := p0.(*picker).ring
 
 	firstHash := ring0.items[0].hash
 	// firstHash-1 will pick the first (and only) SubConn from the ring.
 	testHash := firstHash - 1
-	// The first pick should be queued, and should trigger Connect() on the only
-	// SubConn.
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	// The first pick should be queued, and should trigger a connection to the
+	// only Endpoint which has a single address.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
-	sc0 := ring0.items[0].sc.sc.(*testutils.TestSubConn)
+	var sc0 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc0 = <-cc.NewSubConnCh:
+	}
+	if got, want := sc0.Addresses[0].Addr, wantAddr1.Addr; got != want {
+		t.Fatalf("SubConn.Addresses = %v, want = %v", got, want)
+	}
 	select {
 	case <-sc0.ConnectCh:
 	case <-time.After(defaultTestTimeout):
@@ -166,11 +165,14 @@ func (s) TestOneSubConn(t *testing.T) {
 	// Send state updates to Ready.
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatal(err)
+	}
 
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -181,91 +183,144 @@ func (s) TestOneSubConn(t *testing.T) {
 // same hash always pick the same SubConn. When the one picked is down, another
 // one will be picked.
 func (s) TestThreeSubConnsAffinity(t *testing.T) {
-	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0]},
-		{Addr: testBackendAddrStrs[1]},
-		{Addr: testBackendAddrStrs[2]},
+	endpoints := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[2]}}},
 	}
-	cc, _, p0 := setupTest(t, wantAddrs)
+	remainingAddrs := map[string]bool{
+		testBackendAddrStrs[0]: true,
+		testBackendAddrStrs[1]: true,
+		testBackendAddrStrs[2]: true,
+	}
+	cc, _, p0 := setupTest(t, endpoints)
 	// This test doesn't update addresses, so this ring will be used by all the
 	// pickers.
-	ring0 := p0.(*picker).ring
+	ring := p0.(*picker).ring
 
-	firstHash := ring0.items[0].hash
-	// firstHash+1 will pick the second SubConn from the ring.
+	firstHash := ring.items[0].hash
+	// firstHash+1 will pick the second endpoint from the ring.
 	testHash := firstHash + 1
 	// The first pick should be queued, and should trigger Connect() on the only
 	// SubConn.
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
-	// The picked SubConn should be the second in the ring.
-	sc0 := ring0.items[1].sc.sc.(*testutils.TestSubConn)
-	select {
-	case <-sc0.ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
-	}
 
-	// Send state updates to Ready.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	p1 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
-		if gotSCSt.SubConn != sc0 {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
-		}
+	// The picked endpoint should be the second in the ring.
+	var subConns [3]*testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case subConns[1] = <-cc.NewSubConnCh:
 	}
+	if got, want := subConns[1].Addresses[0].Addr, ring.items[1].firstAddr; got != want {
+		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
+	}
+	select {
+	case <-subConns[1].ConnectCh:
+	case <-time.After(defaultTestTimeout):
+		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
+	}
+	delete(remainingAddrs, ring.items[1].firstAddr)
 
 	// Turn down the subConn in use.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	p2 := <-cc.NewPickerCh
-	// Pick with the same hash should be queued, because the SubConn after the
-	// first picked is Idle.
-	if _, err := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
-		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
-	}
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
-	// The third SubConn in the ring should connect.
-	sc1 := ring0.items[2].sc.sc.(*testutils.TestSubConn)
+	// This should trigger a connection to a new endpoint.
+	<-cc.NewPickerCh
+	var sc *testutils.TestSubConn
 	select {
-	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc = <-cc.NewSubConnCh:
+	}
+	scAddr := sc.Addresses[0].Addr
+	if _, ok := remainingAddrs[scAddr]; !ok {
+		t.Fatalf("New SubConn created with previously used address: %q", scAddr)
+	}
+	delete(remainingAddrs, scAddr)
+	select {
+	case <-sc.ConnectCh:
 	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc1)
+		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
+	}
+	if scAddr == ring.items[0].firstAddr {
+		subConns[0] = sc
+	} else if scAddr == ring.items[2].firstAddr {
+		subConns[2] = sc
 	}
 
-	// Send state updates to Ready.
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	// New picks should all return this SubConn.
-	p3 := <-cc.NewPickerCh
+	// Turning down the SubConn should cause creation of a connection to the
+	// final endpoint.
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc = <-cc.NewSubConnCh:
+	}
+	scAddr = sc.Addresses[0].Addr
+	if _, ok := remainingAddrs[scAddr]; !ok {
+		t.Fatalf("New SubConn created with previously used address: %q", scAddr)
+	}
+	delete(remainingAddrs, scAddr)
+	select {
+	case <-sc.ConnectCh:
+	case <-time.After(defaultTestTimeout):
+		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
+	}
+	if scAddr == ring.items[0].firstAddr {
+		subConns[0] = sc
+	} else if scAddr == ring.items[2].firstAddr {
+		subConns[2] = sc
+	}
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
+	// All endpoints are in TransientFailure. Make the first endpoint in the
+	// ring report Ready. All picks should go to this endpoint which is two
+	// indexes away from the endpoint with the chosen hash.
+	subConns[0].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	subConns[0].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[0].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatalf("Context timed out while waiting for channel to report Ready.")
+	}
+	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
-		if gotSCSt.SubConn != sc1 {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		if gotSCSt.SubConn != subConns[0] {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[0])
 		}
 	}
 
-	// Now, after backoff, the first picked SubConn will turn Idle.
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
-	// The picks above should have queued Connect() for the first picked
-	// SubConn, so this Idle state change will trigger a Connect().
-	select {
-	case <-sc0.ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
+	// Make the last endpoint in the ring report Ready. All picks should go to
+	// this endpoint since it is one index away from the chosen hash.
+	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	p2 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		if gotSCSt.SubConn != subConns[2] {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[2])
+		}
 	}
 
-	// After the first picked SubConn turn Ready, new picks should return it
-	// again (even though the second picked SubConn is also Ready).
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	p4 := <-cc.NewPickerCh
+	// Make the second endpoint in the ring report Ready. All picks should go to
+	// this endpoint as it is the one with the chosen hash.
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	p3 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p4.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
-		if gotSCSt.SubConn != sc0 {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		if gotSCSt.SubConn != subConns[1] {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[1])
 		}
 	}
 }
@@ -273,13 +328,13 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 // TestThreeBackendsAffinity covers that there are 3 SubConns, RPCs with the
 // same hash always pick the same SubConn. Then try different hash to pick
 // another backend, and verify the first hash still picks the first backend.
-func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
-	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0]},
-		{Addr: testBackendAddrStrs[1]},
-		{Addr: testBackendAddrStrs[2]},
+func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
+	wantEndpoints := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[2]}}},
 	}
-	cc, _, p0 := setupTest(t, wantAddrs)
+	cc, _, p0 := setupTest(t, wantEndpoints)
 	// This test doesn't update addresses, so this ring will be used by all the
 	// pickers.
 	ring0 := p0.(*picker).ring
@@ -289,10 +344,21 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	testHash := firstHash + 1
 	// The first pick should be queued, and should trigger Connect() on the only
 	// SubConn.
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
-	sc0 := ring0.items[1].sc.sc.(*testutils.TestSubConn)
+	// The picked SubConn should be the second in the ring.
+	var sc0 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc0 = <-cc.NewSubConnCh:
+	}
+	if got, want := sc0.Addresses[0].Addr, ring0.items[1].firstAddr; got != want {
+		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
+	}
 	select {
 	case <-sc0.ConnectCh:
 	case <-time.After(defaultTestTimeout):
@@ -302,11 +368,14 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	// Send state updates to Ready.
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if err := cc.WaitForConnectivityState(ctx, connectivity.Ready); err != nil {
+		t.Fatal(err)
+	}
 
 	// First hash should always pick sc0.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -315,10 +384,18 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	secondHash := ring0.items[1].hash
 	// secondHash+1 will pick the third SubConn from the ring.
 	testHash2 := secondHash + 1
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash2)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash2)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
-	sc1 := ring0.items[2].sc.sc.(*testutils.TestSubConn)
+	var sc1 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc1 = <-cc.NewSubConnCh:
+	}
+	if got, want := sc1.Addresses[0].Addr, ring0.items[2].firstAddr; got != want {
+		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
+	}
 	select {
 	case <-sc1.ConnectCh:
 	case <-time.After(defaultTestTimeout):
@@ -330,14 +407,14 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	// With the new generated picker, hash2 always picks sc1.
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash2)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash2)})
 		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 	// But the first hash still picks sc0.
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -353,33 +430,18 @@ func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 //     sent.  And the new ring should contain the correct number of entries
 //     and weights.
 func (s) TestAddrWeightChange(t *testing.T) {
-	addrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0]},
-		{Addr: testBackendAddrStrs[1]},
-		{Addr: testBackendAddrStrs[2]},
+	endpoints := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[2]}}},
 	}
-	cc, b, p0 := setupTest(t, addrs)
+	cc, b, p0 := setupTest(t, endpoints)
 	ring0 := p0.(*picker).ring
 
-	// Update with the same addresses, should not send a new Picker.
+	// Update with the same addresses, it will result in a new picker, but with
+	// the same ring.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs},
-		BalancerConfig: testConfig,
-	}); err != nil {
-		t.Fatalf("UpdateClientConnState returned err: %v", err)
-	}
-	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("unexpected picker after UpdateClientConn with the same addresses")
-	case <-time.After(defaultTestShortTimeout):
-	}
-
-	// Delete an address, should send a new Picker.
-	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			{Addr: testBackendAddrStrs[0]},
-			{Addr: testBackendAddrStrs[1]},
-		}},
+		ResolverState:  resolver.State{Endpoints: endpoints},
 		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
@@ -388,21 +450,16 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	select {
 	case p1 = <-cc.NewPickerCh:
 	case <-time.After(defaultTestTimeout):
-		t.Fatalf("timeout waiting for picker after UpdateClientConn with different addresses")
+		t.Fatalf("timeout waiting for picker after UpdateClientConn with same addresses")
 	}
 	ring1 := p1.(*picker).ring
-	if ring1 == ring0 {
-		t.Fatalf("new picker after removing address has the same ring as before, want different")
+	if ring1 != ring0 {
+		t.Fatalf("new picker with same address has a different ring than before, want same")
 	}
 
-	// Another update with the same addresses, but different weight.
+	// Delete an address, should send a new Picker.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			{Addr: testBackendAddrStrs[0]},
-			weightedroundrobin.SetAddrInfo(
-				resolver.Address{Addr: testBackendAddrStrs[1]},
-				weightedroundrobin.AddrInfo{Weight: 2}),
-		}},
+		ResolverState:  resolver.State{Endpoints: endpoints[:2]},
 		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
@@ -413,57 +470,100 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for picker after UpdateClientConn with different addresses")
 	}
-	if p2.(*picker).ring == ring1 {
+	ring2 := p2.(*picker).ring
+	if ring2 == ring0 {
+		t.Fatalf("new picker after removing address has the same ring as before, want different")
+	}
+
+	// Another update with the same addresses, but different weight.
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			endpoints[0],
+			weightedroundrobin.SetAddrInfoInEndpoint(
+				endpoints[1],
+				weightedroundrobin.AddrInfo{Weight: 2}),
+		}},
+		BalancerConfig: testConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+	var p3 balancer.Picker
+	select {
+	case p3 = <-cc.NewPickerCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("timeout waiting for picker after UpdateClientConn with different addresses")
+	}
+	if p3.(*picker).ring == ring2 {
 		t.Fatalf("new picker after changing address weight has the same ring as before, want different")
 	}
 	// With the new update, the ring must look like this:
 	//   [
-	//     {idx:0 sc: {addr: testBackendAddrStrs[0], weight: 1}},
-	//     {idx:1 sc: {addr: testBackendAddrStrs[1], weight: 2}},
-	//     {idx:2 sc: {addr: testBackendAddrStrs[2], weight: 2}},
+	//     {idx:0 endpoint: {addr: testBackendAddrStrs[0], weight: 1}},
+	//     {idx:1 endpoint: {addr: testBackendAddrStrs[1], weight: 2}},
+	//     {idx:2 endpoint: {addr: testBackendAddrStrs[2], weight: 1}},
 	//   ].
-	if len(p2.(*picker).ring.items) != 3 {
-		t.Fatalf("new picker after changing address weight has %d entries, want 3", len(p2.(*picker).ring.items))
+	if len(p3.(*picker).ring.items) != 3 {
+		t.Fatalf("new picker after changing address weight has %d entries, want 3", len(p3.(*picker).ring.items))
 	}
-	for _, i := range p2.(*picker).ring.items {
-		if i.sc.addr == testBackendAddrStrs[0] {
-			if i.sc.weight != 1 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.sc.weight, i.sc.addr)
+	for _, i := range p3.(*picker).ring.items {
+		if i.firstAddr == testBackendAddrStrs[0] {
+			if i.weight != 1 {
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.weight, i.firstAddr)
 			}
 		}
-		if i.sc.addr == testBackendAddrStrs[1] {
-			if i.sc.weight != 2 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.sc.weight, i.sc.addr)
+		if i.firstAddr == testBackendAddrStrs[1] {
+			if i.weight != 2 {
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.weight, i.firstAddr)
 			}
 		}
 	}
 }
 
-// TestSubConnToConnectWhenOverallTransientFailure covers the situation when the
-// overall state is TransientFailure, the SubConns turning Idle will trigger the
-// next SubConn in the ring to Connect(). But not when the overall state is not
-// TransientFailure.
-func (s) TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
-	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0]},
-		{Addr: testBackendAddrStrs[1]},
-		{Addr: testBackendAddrStrs[2]},
+// TestAutoConnectEndpointOnTransientFailure covers the situation when an
+// endpoint fails. It verifies that a new endpoint is automatically tried
+// (without a pick) when there is no endpoint already in Connecting state.
+func (s) TestAutoConnectEndpointOnTransientFailure(t *testing.T) {
+	wantEndpoints := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[0]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[1]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[2]}}},
+		{Addresses: []resolver.Address{{Addr: testBackendAddrStrs[3]}}},
 	}
-	_, _, p0 := setupTest(t, wantAddrs)
-	ring0 := p0.(*picker).ring
+	cc, _, p0 := setupTest(t, wantEndpoints)
 
 	// ringhash won't tell SCs to connect until there is an RPC, so simulate
 	// one now.
-	p0.Pick(balancer.PickInfo{Ctx: context.Background()})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	p0.Pick(balancer.PickInfo{Ctx: ctx})
 
-	// Turn the first subconn to transient failure.
-	sc0 := ring0.items[0].sc.sc.(*testutils.TestSubConn)
+	// The picked SubConn should be the second in the ring.
+	var sc0 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc0 = <-cc.NewSubConnCh:
+	}
+	select {
+	case <-sc0.ConnectCh:
+	case <-time.After(defaultTestTimeout):
+		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
+	}
+
+	// Turn the first subconn to transient failure. This should set the overall
+	// connectivity state to CONNECTING.
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	cc.WaitForConnectivityState(ctx, connectivity.Connecting)
 
-	// It will trigger the second subconn to connect (because overall state is
-	// Connect (when one subconn is TF)).
-	sc1 := ring0.items[1].sc.sc.(*testutils.TestSubConn)
+	// It will trigger the second subconn to connect since there is only one
+	// endpoint, which is in TF.
+	var sc1 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc1 = <-cc.NewSubConnCh:
+	}
 	select {
 	case <-sc1.ConnectCh:
 	case <-time.After(defaultTestShortTimeout):
@@ -471,35 +571,49 @@ func (s) TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	}
 
 	// Turn the second subconn to TF. This will set the overall state to TF.
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	cc.WaitForConnectivityState(ctx, connectivity.TransientFailure)
 
 	// It will trigger the third subconn to connect.
-	sc2 := ring0.items[2].sc.sc.(*testutils.TestSubConn)
+	var sc2 *testutils.TestSubConn
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case sc2 = <-cc.NewSubConnCh:
+	}
 	select {
 	case <-sc2.ConnectCh:
 	case <-time.After(defaultTestShortTimeout):
 		t.Fatalf("timeout waiting for Connect() from SubConn %v", sc2)
 	}
 
-	// Turn the third subconn to TF. This will set the overall state to TF.
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 
-	// It will trigger the first subconn to connect.
+	// Send the first SubConn into CONNECTING. To do this, first make it READY,
+	// then CONNECTING.
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	cc.WaitForConnectivityState(ctx, connectivity.Ready)
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	// Since one endpoint is in TF and one in CONNECTING, the aggregated state
+	// will be CONNECTING.
+	cc.WaitForConnectivityState(ctx, connectivity.Connecting)
+	p1 := <-cc.NewPickerCh
+	p1.Pick(balancer.PickInfo{Ctx: ctx})
 	select {
 	case <-sc0.ConnectCh:
-	case <-time.After(defaultTestShortTimeout):
-		t.Fatalf("timeout waiting for Connect() from SubConn %v", sc0)
+	case <-time.After(defaultTestTimeout):
+		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
 	}
+	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 
-	// Turn the third subconn to TF again.
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
-
-	// This will not trigger any new Connect() on the SubConns, because sc0 is
+	// This will not trigger any new SubCOnns to be created, because sc0 is
 	// still attempting to connect, and we only need one SubConn to connect.
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
 	select {
+	case sc := <-cc.NewSubConnCh:
+		t.Fatalf("unexpected SubConn creation: %v", sc)
 	case <-sc0.ConnectCh:
 		t.Fatalf("unexpected Connect() from SubConn %v", sc0)
 	case <-sc1.ConnectCh:
@@ -510,52 +624,49 @@ func (s) TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	}
 }
 
-func (s) TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
+func (s) TestAggregatedConnectivityState(t *testing.T) {
 	tests := []struct {
-		name     string
-		from, to []connectivity.State
-		want     connectivity.State
+		name           string
+		endpointStates []connectivity.State
+		want           connectivity.State
 	}{
 		{
-			name: "one ready",
-			from: []connectivity.State{connectivity.Idle},
-			to:   []connectivity.State{connectivity.Ready},
-			want: connectivity.Ready,
+			name:           "one ready",
+			endpointStates: []connectivity.State{connectivity.Ready},
+			want:           connectivity.Ready,
 		},
 		{
-			name: "one connecting",
-			from: []connectivity.State{connectivity.Idle},
-			to:   []connectivity.State{connectivity.Connecting},
-			want: connectivity.Connecting,
+			name:           "one connecting",
+			endpointStates: []connectivity.State{connectivity.Connecting},
+			want:           connectivity.Connecting,
 		},
 		{
-			name: "one ready one transient failure",
-			from: []connectivity.State{connectivity.Idle, connectivity.Idle},
-			to:   []connectivity.State{connectivity.Ready, connectivity.TransientFailure},
-			want: connectivity.Ready,
+			name:           "one ready one transient failure",
+			endpointStates: []connectivity.State{connectivity.Ready, connectivity.TransientFailure},
+			want:           connectivity.Ready,
 		},
 		{
-			name: "one connecting one transient failure",
-			from: []connectivity.State{connectivity.Idle, connectivity.Idle},
-			to:   []connectivity.State{connectivity.Connecting, connectivity.TransientFailure},
-			want: connectivity.Connecting,
+			name:           "one connecting one transient failure",
+			endpointStates: []connectivity.State{connectivity.Connecting, connectivity.TransientFailure},
+			want:           connectivity.Connecting,
 		},
 		{
-			name: "one connecting two transient failure",
-			from: []connectivity.State{connectivity.Idle, connectivity.Idle, connectivity.Idle},
-			to:   []connectivity.State{connectivity.Connecting, connectivity.TransientFailure, connectivity.TransientFailure},
-			want: connectivity.TransientFailure,
+			name:           "one connecting two transient failure",
+			endpointStates: []connectivity.State{connectivity.Connecting, connectivity.TransientFailure, connectivity.TransientFailure},
+			want:           connectivity.TransientFailure,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cse := &connectivityStateEvaluator{}
-			var got connectivity.State
-			for i, fff := range tt.from {
-				ttt := tt.to[i]
-				got = cse.recordTransition(fff, ttt)
+			bal := &ringhashBalancer{endpointStates: resolver.NewEndpointMap()}
+			for i, cs := range tt.endpointStates {
+				es := &endpointState{
+					state: balancer.State{ConnectivityState: cs},
+				}
+				ep := resolver.Endpoint{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i)}}}
+				bal.endpointStates.Set(ep, es)
 			}
-			if got != tt.want {
+			if got := bal.aggregatedStateLocked(); got != tt.want {
 				t.Errorf("recordTransition() = %v, want %v", got, tt.want)
 			}
 		})
@@ -564,16 +675,38 @@ func (s) TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
 
 // TestAddrBalancerAttributesChange tests the case where the ringhash balancer
 // receives a ClientConnUpdate with the same config and addresses as received in
-// the previous update. Although the `BalancerAttributes` contents are the same,
-// the pointer is different. This test verifies that subConns are not recreated
-// in this scenario.
+// the previous update. Although the `BalancerAttributes` and endpoint
+// attributes contents are the same, the pointers are different. This test
+// verifies that subConns are not recreated in this scenario.
 func (s) TestAddrBalancerAttributesChange(t *testing.T) {
-	addrs1 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
-	cc, b, _ := setupTest(t, addrs1)
+	locality := internal.LocalityID{Region: "americas"}
+	addrs1 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, locality)}
+	wantEndpoints1 := []resolver.Endpoint{
+		internal.SetLocalityIDInEndpoint(resolver.Endpoint{Addresses: addrs1}, locality),
+	}
+	cc, b, p0 := setupTest(t, wantEndpoints1)
+	ring0 := p0.(*picker).ring
 
-	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	firstHash := ring0.items[0].hash
+	// The first pick should be queued, and should trigger a connection to the
+	// only Endpoint which has a single address.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, firstHash)}); err != balancer.ErrNoSubConnAvailable {
+		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for SubConn creation.")
+	case <-cc.NewSubConnCh:
+	}
+
+	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, locality)}
+	wantEndpoints2 := []resolver.Endpoint{
+		internal.SetLocalityIDInEndpoint(resolver.Endpoint{Addresses: addrs2}, locality),
+	}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  resolver.State{Addresses: addrs2},
+		ResolverState:  resolver.State{Endpoints: wantEndpoints2},
 		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)

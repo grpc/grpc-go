@@ -573,7 +573,7 @@ func (s) TestServersSwap(t *testing.T) {
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: addr1}}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -622,11 +622,12 @@ func (s) TestWaitForReady(t *testing.T) {
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Report an error so non-WFR RPCs will give up early.
