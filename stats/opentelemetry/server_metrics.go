@@ -251,8 +251,8 @@ func (h *serverTracingStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCS
 func (h *serverMetricsStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if ai.pluginOptionLabels == nil && h.serverStatsHandler.options.MetricsOptions.pluginOption != nil { // Use serverStatsHandler to access options
-			labels := h.serverStatsHandler.options.MetricsOptions.pluginOption.GetLabels(st.Header) // Use serverStatsHandler to access options
+		if ai.pluginOptionLabels == nil && h.serverStatsHandler.options.MetricsOptions.pluginOption != nil {
+			labels := h.serverStatsHandler.options.MetricsOptions.pluginOption.GetLabels(st.Header)
 			if labels == nil {
 				labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
 			}
@@ -261,7 +261,7 @@ func (h *serverMetricsStatsHandler) processRPCData(ctx context.Context, s stats.
 		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
 			otelattribute.String("grpc.method", ai.method),
 		))
-		h.serverStatsHandler.serverMetrics.callStarted.Add(ctx, 1, attrs) // Use serverStatsHandler to access serverMetrics
+		h.serverStatsHandler.serverMetrics.callStarted.Add(ctx, 1, attrs)
 	case *stats.OutPayload:
 		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
