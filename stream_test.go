@@ -20,15 +20,19 @@ package grpc_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -65,4 +69,97 @@ func (s) TestStream_Header_TrailersOnly(t *testing.T) {
 	if _, err := s.Recv(); status.Code(err) != codes.NotFound {
 		t.Fatalf("s.Recv() = _, %v; want _, err.Code()=codes.NotFound", err)
 	}
+}
+
+func TestCardinalityViolation(t *testing.T) {
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			stream.Recv()
+			// if err != nil {
+			// 	return err
+			// }
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+	// Establish a connection to the server.
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%v) failed: %v", ss.Address, err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// ctx = metadata.NewOutgoingContext(ctx, test.md)
+
+	// Verifying authorization decision for Streaming RPC.
+	stream, err := client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("failed StreamingInputCall err: %v", err)
+	}
+	req := &testpb.StreamingInputCallRequest{
+		Payload: &testpb.Payload{
+			Body: []byte("hi"),
+		},
+	}
+	err = stream.Send(req)
+	if err != nil {
+		t.Fatalf("failed stream.Send err: %v", err)
+	}
+	_, err = stream.CloseAndRecv()
+	t.Fatalf("error should have been received , %v", err)
+	if err == nil {
+		t.Fatalf("error should have been received , %v", err)
+	}
+}
+
+func TestCardinalityViolation2(t *testing.T) {
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			stream.SendAndClose(&testgrpc.StreamingInputCallResponse{})
+			_, err := stream.Recv()
+			return err
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+	// Establish a connection to the server.
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%v) failed: %v", ss.Address, err)
+	}
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// ctx = metadata.NewOutgoingContext(ctx, test.md)
+
+	// Verifying authorization decision for Streaming RPC.
+	stream, err := client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("failed StreamingInputCall err: %v", err)
+	}
+	req := &testpb.StreamingInputCallRequest{
+		Payload: &testpb.Payload{
+			Body: []byte("hi"),
+		},
+	}
+	for {
+		if err := stream.Send(req); err != nil && err != io.EOF {
+			t.Fatalf("failed stream.Send err: %v", err)
+		}
+	}
+	// _, err = stream.CloseAndRecv()
+	// t.Fatalf("error should have been received , %v", err)
+	// if err == nil {
+	// 	t.Fatalf("error should have been received , %v", err)
+	// }
 }
