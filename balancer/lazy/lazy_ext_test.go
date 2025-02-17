@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -196,14 +197,14 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 	backend := stubserver.StartTestService(t, nil)
 	defer backend.Stop()
 	resolverStateReceived := false
-	resolverErrorReceived := false
+	resolverErrorReceived := grpcsync.NewEvent()
 
 	childBF := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			if resolverErrorReceived {
+			if resolverErrorReceived.HasFired() {
 				t.Error("Received resolver error before resolver state.")
 			}
 			resolverStateReceived = true
@@ -213,7 +214,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 			if !resolverStateReceived {
 				t.Error("Received resolver error before resolver state.")
 			}
-			resolverErrorReceived = true
+			resolverErrorReceived.Fire()
 			bd.Data.(balancer.Balancer).ResolverError(err)
 		},
 		Close: func(bd *stub.BalancerData) {
@@ -286,8 +287,10 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 		t.Fatalf("Child balancer did not receive resolver state.")
 	}
 
-	if !resolverErrorReceived {
-		t.Fatalf("Child balancer did not receive error.")
+	select {
+	case <-resolverErrorReceived.Done():
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for resolver error to be delivered to child balancer.")
 	}
 }
 
