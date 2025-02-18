@@ -828,7 +828,9 @@ func (s) TestGracefulClose(t *testing.T) {
 		server.lis.Close()
 		// Check for goroutine leaks (i.e. GracefulClose with an active stream
 		// doesn't eventually close the connection when that stream completes).
-		leakcheck.CheckGoroutines(t, 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		leakcheck.CheckGoroutines(ctx, t)
 		leakcheck.CheckTrackingBufferPool()
 		// Correctly clean up the server
 		server.stop()

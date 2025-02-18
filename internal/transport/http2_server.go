@@ -601,12 +601,19 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 	// Start a timer to close the stream on reaching the deadline.
 	if timeoutSet {
+		// We need to wait for s.cancel to be updated before calling
+		// t.closeStream to avoid data races.
+		cancelUpdated := make(chan struct{})
 		timer := internal.TimeAfterFunc(timeout, func() {
+			<-cancelUpdated
 			t.closeStream(s, true, http2.ErrCodeCancel, false)
 		})
-		s.deadlineTimerCancel = func() {
+		oldCancel := s.cancel
+		s.cancel = func() {
+			oldCancel()
 			timer.Stop()
 		}
+		close(cancelUpdated)
 	}
 	t.mu.Unlock()
 	if channelz.IsOn() {
@@ -1278,16 +1285,12 @@ func (t *http2Server) Close(err error) {
 	channelz.RemoveEntry(t.channelz.ID)
 	// Cancel all active streams.
 	for _, s := range streams {
-		if s.deadlineTimerCancel != nil {
-			s.deadlineTimerCancel()
-		}
 		s.cancel()
 	}
 }
 
 // deleteStream deletes the stream s from transport's active streams.
 func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
-
 	t.mu.Lock()
 	if _, ok := t.activeStreams[s.id]; ok {
 		delete(t.activeStreams, s.id)
@@ -1319,10 +1322,6 @@ func (t *http2Server) finishStream(s *ServerStream, rst bool, rstCode http2.ErrC
 		return
 	}
 
-	if s.deadlineTimerCancel != nil {
-		s.deadlineTimerCancel()
-	}
-
 	hdr.cleanup = &cleanupStream{
 		streamID: s.id,
 		rst:      rst,
@@ -1344,9 +1343,6 @@ func (t *http2Server) closeStream(s *ServerStream, rst bool, rstCode http2.ErrCo
 	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
 		return
-	}
-	if s.deadlineTimerCancel != nil {
-		s.deadlineTimerCancel()
 	}
 	t.deleteStream(s, eosReceived)
 

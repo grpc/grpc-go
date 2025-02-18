@@ -24,6 +24,7 @@
 package leakcheck
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -244,16 +245,14 @@ type Logger interface {
 // CheckGoroutines looks at the currently-running goroutines and checks if there
 // are any interesting (created by gRPC) goroutines leaked. It waits up to 10
 // seconds in the error cases.
-func CheckGoroutines(logger Logger, timeout time.Duration) {
+func CheckGoroutines(ctx context.Context, logger Logger) {
 	// Loop, waiting for goroutines to shut down.
 	// Wait up to timeout, but finish as quickly as possible.
-	deadline := time.Now().Add(timeout)
 	var leaked []string
-	for time.Now().Before(deadline) {
+	for ; ctx.Err() == nil; <-time.After(50 * time.Millisecond) {
 		if leaked = interestingGoroutines(); len(leaked) == 0 {
 			return
 		}
-		time.Sleep(50 * time.Millisecond)
 	}
 	for _, g := range leaked {
 		logger.Errorf("Leaked goroutine: %v", g)
@@ -264,13 +263,6 @@ func CheckGoroutines(logger Logger, timeout time.Duration) {
 // convenient method to set up leak check tests in a unit test.
 type LeakChecker struct {
 	logger Logger
-}
-
-// Check executes the leak check tests, failing the unit test if any buffer or
-// goroutine leaks are detected.
-func (lc *LeakChecker) Check() {
-	CheckTrackingBufferPool()
-	CheckGoroutines(lc.logger, 10*time.Second)
 }
 
 // NewLeakChecker offers a convenient way to set up the leak checks for a
@@ -287,19 +279,15 @@ func NewLeakChecker(logger Logger) *LeakChecker {
 }
 
 type timerFactory struct {
-	logger Logger
-
-	originalTimeAfterFunc func(time.Duration, func()) internal.Timer
-	mu                    sync.Mutex
-	bufferCount           int
-	allocatedTimers       map[internal.Timer][]uintptr
+	mu              sync.Mutex
+	allocatedTimers map[internal.Timer][]uintptr
 }
 
 func (tf *timerFactory) timeAfterFunc(d time.Duration, f func()) internal.Timer {
 	tf.mu.Lock()
 	defer tf.mu.Unlock()
 	ch := make(chan internal.Timer, 1)
-	timer := tf.originalTimeAfterFunc(d, func() {
+	timer := time.AfterFunc(d, func() {
 		f()
 		tf.remove(<-ch)
 	})
@@ -337,40 +325,39 @@ func (t *trackingTimer) Stop() bool {
 	return t.Timer.Stop()
 }
 
-// SetTimerTracker replaces internal.TimerAfterFunc  with a one that tracks
-// timer creations. CheckTimers should then be invoked at the end of the test to
-// validate that all timers created have either executed or are cancelled.
-func SetTimerTracker(logger Logger) {
+// TrackTimers replaces internal.TimerAfterFunc  with one that tracks timer
+// creations, stoppages and expirations. CheckTimers should then be invoked at
+// the end of the test to validate that all timers created have either executed
+// or are cancelled.
+func TrackTimers() {
 	globalTimerTracker = &timerFactory{
-		logger:                logger,
-		allocatedTimers:       make(map[internal.Timer][]uintptr),
-		originalTimeAfterFunc: internal.TimeAfterFunc,
+		allocatedTimers: make(map[internal.Timer][]uintptr),
 	}
 	internal.TimeAfterFunc = globalTimerTracker.timeAfterFunc
 }
 
-// CheckTimers undoes the effects of SetTimerTracker, and fails unit tests if
-// not all timers were cancelled or executed. It is invalid to invoke this
-// function without previously having invoked SetTimerTracker.
-func CheckTimers(timeout time.Duration) {
-	// Reset the internal function.
+// CheckTimers undoes the effects of TrackTimers, and fails unit tests if not
+// all timers were cancelled or executed. It is invalid to invoke this function
+// without previously having invoked TrackTimers.
+func CheckTimers(ctx context.Context, logger Logger) {
 	tt := globalTimerTracker
 
 	// Loop, waiting for timers to be cancelled.
 	// Wait up to timeout, but finish as quickly as possible.
-	deadline := time.Now().Add(timeout)
 	var leaked []string
-	for time.Now().Before(deadline) {
+	for ; ctx.Err() == nil; <-time.After(50 * time.Millisecond) {
 		if leaked = tt.pendingTimers(); len(leaked) == 0 {
 			return
 		}
-		time.Sleep(50 * time.Millisecond)
 	}
 	for _, g := range leaked {
-		tt.logger.Errorf("Leaked timers: %v", g)
+		logger.Errorf("Leaked timers: %v", g)
 	}
 
-	internal.TimeAfterFunc = tt.originalTimeAfterFunc
+	// Reset the internal function.
+	internal.TimeAfterFunc = func(d time.Duration, f func()) internal.Timer {
+		return time.AfterFunc(d, f)
+	}
 }
 
 func currentStack(skip int) []uintptr {
