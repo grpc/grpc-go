@@ -249,10 +249,11 @@ func CheckGoroutines(ctx context.Context, logger Logger) {
 	// Loop, waiting for goroutines to shut down.
 	// Wait up to timeout, but finish as quickly as possible.
 	var leaked []string
-	for ; ctx.Err() == nil; <-time.After(50 * time.Millisecond) {
+	for ctx.Err() == nil {
 		if leaked = interestingGoroutines(); len(leaked) == 0 {
 			return
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	for _, g := range leaked {
 		logger.Errorf("Leaked goroutine: %v", g)
@@ -345,10 +346,11 @@ func CheckTimers(ctx context.Context, logger Logger) {
 	// Loop, waiting for timers to be cancelled.
 	// Wait up to timeout, but finish as quickly as possible.
 	var leaked []string
-	for ; ctx.Err() == nil; <-time.After(50 * time.Millisecond) {
+	for ctx.Err() == nil {
 		if leaked = tt.pendingTimers(); len(leaked) == 0 {
 			return
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	for _, g := range leaked {
 		logger.Errorf("Leaked timers: %v", g)
