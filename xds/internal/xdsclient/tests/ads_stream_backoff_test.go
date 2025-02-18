@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -130,13 +129,8 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	}
 
 	// Verify that the received stream error is reported to the watcher.
-	u, err := lw.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatal("Timeout when waiting for an error callback on the listener watcher")
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if !strings.Contains(gotErr.Error(), streamErr.Error()) {
-		t.Fatalf("Received stream error: %v, wantErr: %v", gotErr, streamErr)
+	if err := verifyListenerError(ctx, lw.updateCh, streamErr.Error(), nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that the stream is closed.
@@ -157,6 +151,11 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName}); err != nil {
 		t.Fatal(err)
 	}
+
+	// To prevent indefinite blocking during xDS client close, which is caused
+	// by a blocking backoff channel write, cancel the test context early given
+	// that the test is complete.
+	cancel()
 }
 
 // Tests the case where a stream breaks because the server goes down. Verifies
