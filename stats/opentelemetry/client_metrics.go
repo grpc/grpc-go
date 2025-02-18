@@ -247,34 +247,17 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 
 // HandleRPC implements per RPC tracing and stats implementation.
 func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
+		return
+	}
 	if h.options.isMetricsEnabled() {
-		metricsHandler := &clientMetricsStatsHandler{clientStatsHandler: h}
-		metricsHandler.HandleRPC(ctx, rs)
+		h.processRPCEvent(ctx, rs, ri.ai)
 	}
 	if h.options.isTracingEnabled() {
-		tracingHandler := &clientTracingStatsHandler{clientStatsHandler: h}
-		tracingHandler.HandleRPC(ctx, rs)
+		populateSpan(rs, ri.ai)
 	}
-}
-
-// HandleRPC implements per RPC stats handling for metrics.
-func (h *clientMetricsStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
-		return
-	}
-	h.processRPCEvent(ctx, rs, ri.ai)
-}
-
-// HandleRPC implements per RPC tracing handling for tracing.
-func (h *clientTracingStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
-		return
-	}
-	populateSpan(rs, ri.ai)
 }
 
 func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {

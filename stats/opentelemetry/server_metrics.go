@@ -267,15 +267,12 @@ func (h *serverMetricsStatsHandler) processRPCData(ctx context.Context, s stats.
 	case *stats.InPayload:
 		atomic.AddInt64(&ai.recvCompressedBytes, int64(st.CompressedLength))
 	case *stats.End:
-		h.processMetricsRPCEnd(ctx, ai, st)
+		h.processRPCEnd(ctx, ai, st)
 	default:
 	}
 }
-func (h *serverMetricsStatsHandler) processMetricsRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
-	h.serverStatsHandler.processRPCEndInternal(ctx, ai, e)
-}
 
-func (h *serverStatsHandler) processRPCEndInternal(ctx context.Context, ai *attemptInfo, e *stats.End) {
+func (h *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	latency := float64(time.Since(ai.startTime)) / float64(time.Second)
 	st := "OK"
 	if e.Error != nil {
