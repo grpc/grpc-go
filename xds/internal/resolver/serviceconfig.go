@@ -125,8 +125,27 @@ func (r route) String() string {
 	return fmt.Sprintf("%s -> { clusters: %v, maxStreamDuration: %v }", r.m.String(), r.clusters, r.maxStreamDuration)
 }
 
+type stoppableConfigSelector interface {
+	iresolver.ConfigSelector
+	stop()
+}
+type erroringConfigSelector struct {
+	xdsNodeID string
+}
+
+func (cs *erroringConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
+	return nil, annotateErrorWithNodeID(status.Errorf(codes.Unavailable, "no valid clusters"), cs.xdsNodeID)
+}
+func (cs *erroringConfigSelector) stop() {}
+
+func isErroringConfigSelector(cs stoppableConfigSelector) bool {
+	_, ok := cs.(*erroringConfigSelector)
+	return ok
+}
+
 type configSelector struct {
 	r                *xdsResolver
+	xdsNodeID        string
 	virtualHost      virtualHost
 	routes           []route
 	clusters         map[string]*clusterInfo
@@ -136,10 +155,11 @@ type configSelector struct {
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 var errUnsupportedClientRouteAction = status.Errorf(codes.Unavailable, "matched route does not have a supported route action type")
 
+func annotateErrorWithNodeID(err error, nodeID string) error {
+	return fmt.Errorf("[xDS node id: %s]: %w", nodeID, err)
+}
+
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
-	if cs == nil {
-		return nil, status.Errorf(codes.Unavailable, "no valid clusters")
-	}
 	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
@@ -150,16 +170,16 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	if rt == nil || rt.clusters == nil {
-		return nil, errNoMatchedRouteFound
+		return nil, annotateErrorWithNodeID(errNoMatchedRouteFound, cs.xdsNodeID)
 	}
 
 	if rt.actionType != xdsresource.RouteActionRoute {
-		return nil, errUnsupportedClientRouteAction
+		return nil, annotateErrorWithNodeID(errUnsupportedClientRouteAction, cs.xdsNodeID)
 	}
 
 	cluster, ok := rt.clusters.Next().(*routeCluster)
 	if !ok {
-		return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
+		return nil, annotateErrorWithNodeID(status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster), cs.xdsNodeID)
 	}
 
 	// Add a ref to the selected cluster, as this RPC needs this cluster until
@@ -169,7 +189,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 
 	interceptor, err := cs.newInterceptor(rt, cluster)
 	if err != nil {
-		return nil, err
+		return nil, annotateErrorWithNodeID(err, cs.xdsNodeID)
 	}
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
