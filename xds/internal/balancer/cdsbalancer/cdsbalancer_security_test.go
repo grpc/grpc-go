@@ -536,7 +536,6 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
-	defer cc.Close()
 	cc.Connect()
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource contains security configuration with a certificate

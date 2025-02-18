@@ -385,7 +385,7 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	}
 	cc, err := NewClient(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
 	if err != nil {
-		t.Fatalf("Unexpected error from NewClient(%v) = %v", lis.Addr(), err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
@@ -624,7 +624,7 @@ func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential,
 	opts = append(opts, WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := NewClient("passthrough:///foo:80", opts...)
 	if err != nil {
-		t.Fatalf("unexpected error newclient connection: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer conn.Close()
 
@@ -813,6 +813,7 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
 	}
 	cc.Connect()
 	defer cc.Close()
+
 	m := cc.GetMethodConfig("/foo/Bar")
 	if m.WaitForReady == nil {
 		t.Fatalf("want: method (%q) config to fallback to the default service", "/foo/Bar")
@@ -888,12 +889,12 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	select {
 	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
-		t.Fatal("Failed to call NewClient within 10s")
+		t.Fatal("Failed to call dial within 10s")
 	}
 
 	select {
 	case <-dials:
-		t.Fatal("NewClient called unexpectedly before resetting backoff")
+		t.Fatal("Dial called unexpectedly before resetting backoff")
 	case <-time.NewTimer(100 * time.Millisecond).C:
 	}
 
@@ -902,7 +903,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	select {
 	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
-		t.Fatal("Failed to call NewClient within 10s after resetting backoff")
+		t.Fatal("Failed to call dial within 10s after resetting backoff")
 	}
 }
 
@@ -910,10 +911,10 @@ func (s) TestBackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
 	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
 		dialStrCh <- t
-		return nil, fmt.Errorf("Failed to create a client")
+		return nil, fmt.Errorf("test dialer, always error")
 	}))
 	if err != nil {
-		t.Fatalf("Failed to create ClientConn: %v", err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
