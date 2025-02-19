@@ -479,9 +479,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
 			endpoints[0],
-			weight.Set(
-				endpoints[1],
-				weight.EndpointInfo{Weight: 2}),
+			weight.Set(endpoints[1], weight.EndpointInfo{Weight: 2}),
 		}},
 		BalancerConfig: testConfig,
 	}); err != nil {

@@ -36,57 +36,48 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestAddrInfoToAndFromAttributes(t *testing.T) {
+func (s) TestEndpointInfoToAndFromAttributes(t *testing.T) {
 	tests := []struct {
-		desc             string
-		inputAddrInfo    weight.EndpointInfo
-		inputAttributes  *attributes.Attributes
-		wantEndpointInfo weight.EndpointInfo
+		desc              string
+		inputEndpointInfo weight.EndpointInfo
+		inputAttributes   *attributes.Attributes
+		wantEndpointInfo  weight.EndpointInfo
 	}{
 		{
-			desc:             "empty attributes",
-			inputAddrInfo:    weight.EndpointInfo{Weight: 100},
-			inputAttributes:  nil,
-			wantEndpointInfo: weight.EndpointInfo{Weight: 100},
+			desc:              "empty_attributes",
+			inputEndpointInfo: weight.EndpointInfo{Weight: 100},
+			inputAttributes:   nil,
+			wantEndpointInfo:  weight.EndpointInfo{Weight: 100},
 		},
 		{
-			desc:             "non-empty attributes",
-			inputAddrInfo:    weight.EndpointInfo{Weight: 100},
-			inputAttributes:  attributes.New("foo", "bar"),
-			wantEndpointInfo: weight.EndpointInfo{Weight: 100},
+			desc:              "non-empty_attributes",
+			inputEndpointInfo: weight.EndpointInfo{Weight: 100},
+			inputAttributes:   attributes.New("foo", "bar"),
+			wantEndpointInfo:  weight.EndpointInfo{Weight: 100},
 		},
 		{
-			desc:             "endpointInfo not present in empty attributes",
-			inputAddrInfo:    weight.EndpointInfo{},
-			inputAttributes:  nil,
-			wantEndpointInfo: weight.EndpointInfo{},
+			desc:              "endpointInfo_not_present_in_empty_attributes",
+			inputEndpointInfo: weight.EndpointInfo{},
+			inputAttributes:   nil,
+			wantEndpointInfo:  weight.EndpointInfo{},
 		},
 		{
-			desc:             "endpointInfo not present in non-empty attributes",
-			inputAddrInfo:    weight.EndpointInfo{},
-			inputAttributes:  attributes.New("foo", "bar"),
-			wantEndpointInfo: weight.EndpointInfo{},
+			desc:              "endpointInfo_not_present_in_non-empty_attributes",
+			inputEndpointInfo: weight.EndpointInfo{},
+			inputAttributes:   attributes.New("foo", "bar"),
+			wantEndpointInfo:  weight.EndpointInfo{},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			endpoint := resolver.Endpoint{Attributes: test.inputAttributes}
-			endpoint = weight.Set(endpoint, test.inputAddrInfo)
-			gotEndpointInfo := weight.ForEndpoint(endpoint)
+			endpoint = weight.Set(endpoint, test.inputEndpointInfo)
+			gotEndpointInfo := weight.FromEndpoint(endpoint)
 			if !cmp.Equal(gotEndpointInfo, test.wantEndpointInfo) {
 				t.Errorf("gotEndpointInfo: %v, wantEndpointInfo: %v", gotEndpointInfo, test.wantEndpointInfo)
 			}
 
 		})
-	}
-}
-
-func (s) TestEndpointInfoEmpty(t *testing.T) {
-	ep := resolver.Endpoint{}
-	gotEndpointInfo := weight.ForEndpoint(ep)
-	wantEndpointInfo := weight.EndpointInfo{}
-	if !cmp.Equal(gotEndpointInfo, wantEndpointInfo) {
-		t.Errorf("gotEndpointInfo: %v, wantEndpointInfo: %v", gotEndpointInfo, wantEndpointInfo)
 	}
 }

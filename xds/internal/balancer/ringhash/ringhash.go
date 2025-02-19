@@ -350,7 +350,7 @@ func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 // non-zero. But, when used in a non-xDS context, the weight attribute could be
 // unset. A Default of 1 is used in the latter case.
 func getWeightAttribute(e resolver.Endpoint) uint32 {
-	w := weight.ForEndpoint(e).Weight
+	w := weight.FromEndpoint(e).Weight
 	if w == 0 {
 		return 1
 	}

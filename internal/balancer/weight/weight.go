@@ -50,13 +50,16 @@ func Set(endpoint resolver.Endpoint, epInfo EndpointInfo) resolver.Endpoint {
 	return endpoint
 }
 
+// String returns a human-readable representation of EndpointInfo.
+// This method is intended for logging, testing, and debugging purposes only.
+// Do not rely on the output format, as it is not guaranteed to remain stable.
 func (a EndpointInfo) String() string {
 	return fmt.Sprintf("Weight: %d", a.Weight)
 }
 
-// ForEndpoint returns the EndpointInfo stored in the Attributes field of an
-// endpoint.
-func ForEndpoint(endpoint resolver.Endpoint) EndpointInfo {
+// FromEndpoint returns the EndpointInfo stored in the Attributes field of an
+// endpoint. It returns an empty EndpointInfo if attribute is not found.
+func FromEndpoint(endpoint resolver.Endpoint) EndpointInfo {
 	v := endpoint.Attributes.Value(attributeKey{})
 	ei, _ := v.(EndpointInfo)
 	return ei
