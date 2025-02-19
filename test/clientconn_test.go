@@ -92,7 +92,7 @@ type server struct {
 }
 
 // EmptyCall is a simple RPC that returns an empty response.
-func (s *server) EmptyCall(_ context.Context, req *testgrpc.Empty) (*testgrpc.Empty, error) {
+func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
 	return &testgrpc.Empty{}, nil
 }
 
@@ -101,8 +101,8 @@ type testStatsHandler struct {
 	nameResolutionDelayed bool
 }
 
-func (h *testStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	if info.NameResolutionDelay {
+func (h *testStatsHandler) TagRPC(ctx context.Context, rpcInfo *stats.RPCTagInfo) context.Context {
+	if rpcInfo.NameResolutionDelay {
 		h.nameResolutionDelayed = true
 		fmt.Println("StatsHandler detected name resolution delay via RPCInfo.")
 	}
