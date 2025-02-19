@@ -103,13 +103,15 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Override the backoff implementation to push on a channel that is read by
 	// the test goroutine.
+	backoffCtx, backoffCancel := context.WithCancel(ctx)
 	streamBackoff := func(v int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
-		case <-ctx.Done():
+		case <-backoffCtx.Done():
 		}
 		return 0
 	}
+	defer backoffCancel()
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
@@ -153,9 +155,10 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	}
 
 	// To prevent indefinite blocking during xDS client close, which is caused
-	// by a blocking backoff channel write, cancel the test context early given
-	// that the test is complete.
-	cancel()
+	// by a blocking backoff channel write, cancel the backoff context early
+	// given that the test is complete.
+	backoffCancel()
+
 }
 
 // Tests the case where a stream breaks because the server goes down. Verifies
