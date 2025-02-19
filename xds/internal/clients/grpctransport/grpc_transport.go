@@ -40,7 +40,7 @@ type ServerConfigExtension struct {
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerConfigs
-// that contain its ServerConfigExtension.
+// that contain Extension field of type ServerConfigExtension.
 type Builder struct{}
 
 // Build returns a gRPC-based clients.Transport.
@@ -53,11 +53,11 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	if sc.Extensions == nil {
 		return nil, fmt.Errorf("ServerConfig's Extensions field cannot be nil for gRPC transport")
 	}
-	gtsce, ok := sc.Extensions.(ServerConfigExtension)
+	sce, ok := sc.Extensions.(ServerConfigExtension)
 	if !ok {
 		return nil, fmt.Errorf("ServerConfig Extensions field is %T, but must be %T", sc.Extensions, ServerConfigExtension{})
 	}
-	if gtsce.Credentials == nil {
+	if sce.Credentials == nil {
 		return nil, fmt.Errorf("ServerConfigExtensions's Credentials field cannot be nil for gRPC transport")
 	}
 
@@ -66,15 +66,15 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	// transport channel to same server can be shared between xDS and LRS
 	// client.
 
-	// Create a new gRPC client/channel for the xDS management server with the
-	// provided credentials, server URI, and a byte codec to send and receive
-	// messages. Aso set a static keepalive configuration that is common across
-	// gRPC language implementations.
+	// Create a new gRPC client/channel for the server with the provided
+	// credentials, server URI, and a byte codec to send and receive messages.
+	// Also set a static keepalive configuration that is common across gRPC
+	// language implementations.
 	kpCfg := grpc.WithKeepaliveParams(keepalive.ClientParameters{
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(gtsce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(sce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
 		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", sc.ServerURI, err)
 	}
@@ -107,14 +107,14 @@ func (s *stream) Send(msg []byte) error {
 // Recv receives a message from the server.
 func (s *stream) Recv() ([]byte, error) {
 	var typedRes []byte
-	err := s.stream.RecvMsg(&typedRes)
-	if err != nil {
+
+	if err := s.stream.RecvMsg(&typedRes); err != nil {
 		return typedRes, err
 	}
 	return typedRes, nil
 }
 
-// Close closes all the gRPC streams to the server.
+// Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() error {
 	return g.cc.Close()
 }
@@ -137,5 +137,5 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 }
 
 func (c *byteCodec) Name() string {
-	return "byteCodec"
+	return "grpc.xds.internal.clients.grpctransport.byte_codec"
 }
