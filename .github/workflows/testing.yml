@@ -27,7 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache-dependency-path: "**/go.sum"
 
       # Run the vet-proto checks.
@@ -43,31 +43,31 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: '1.22'
+            goversion: '1.23'
 
           - type: extras
-            goversion: '1.23'
+            goversion: '1.24'
 
           - type: tests
-            goversion: '1.23'
+            goversion: '1.24'
 
           - type: tests
-            goversion: '1.23'
+            goversion: '1.24'
             testflags: -race
 
           - type: tests
-            goversion: '1.23'
+            goversion: '1.24'
             goarch: 386
 
           - type: tests
-            goversion: '1.23'
+            goversion: '1.24'
             goarch: arm64
 
           - type: tests
-            goversion: '1.22'
+            goversion: '1.23'
 
           - type: tests
-            goversion: '1.23'
+            goversion: '1.24'
             testflags: -race
             grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=true'
 
