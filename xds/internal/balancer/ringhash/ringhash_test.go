@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -479,9 +479,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
 			endpoints[0],
-			weightedroundrobin.SetAddrInfoInEndpoint(
-				endpoints[1],
-				weightedroundrobin.AddrInfo{Weight: 2}),
+			weight.Set(endpoints[1], weight.EndpointInfo{Weight: 2}),
 		}},
 		BalancerConfig: testConfig,
 	}); err != nil {
