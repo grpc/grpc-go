@@ -41,11 +41,6 @@ const (
 	defaultTestTimeout = 10 * time.Second
 )
 
-var (
-	testDiscoverRequest  = &v3discoverypb.DiscoveryRequest{VersionInfo: "1"}
-	testDiscoverResponse = &v3discoverypb.DiscoveryResponse{VersionInfo: "1"}
-)
-
 type s struct {
 	grpctest.Tester
 }
@@ -59,20 +54,23 @@ func Test(t *testing.T) {
 type testServer struct {
 	v3discoverygrpc.UnimplementedAggregatedDiscoveryServiceServer
 
-	lis         net.Listener                         // listener used by the test server
+	address     string                               // address of the server
 	requestChan chan *v3discoverypb.DiscoveryRequest // channel to send the received requests on for verification
+	response    *v3discoverypb.DiscoveryResponse     // response to send back to the client from handler
 }
 
 // setupTestServer set up the gRPC server for AggregatedDiscoveryService. It
-// creates an instance of testServer and registers it with a gRPC server.
-func setupTestServer(t *testing.T) *testServer {
+// creates an instance of testServer that returns the provided response from
+// the StreamAggregatedResources() handler and registers it with a gRPC server.
+func setupTestServer(t *testing.T, response *v3discoverypb.DiscoveryResponse) *testServer {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen on localhost:0: %v", err)
 	}
 	ts := &testServer{
 		requestChan: make(chan *v3discoverypb.DiscoveryRequest),
-		lis:         lis,
+		address:     lis.Addr().String(),
+		response:    response,
 	}
 
 	s := grpc.NewServer()
@@ -107,7 +105,7 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 		s.requestChan <- req
 
 		// Send the response back to the client
-		if err := stream.Send(testDiscoverResponse); err != nil {
+		if err := stream.Send(s.response); err != nil {
 			return err
 		}
 	}
@@ -179,51 +177,56 @@ func (s) TestBuild(t *testing.T) {
 			if !test.wantErr && tr == nil {
 				t.Fatalf("got non-nil transport from Build(), want nil")
 			}
+			if test.wantErr && tr != nil {
+				t.Fatalf("got nil transport from Build(), want non-nil")
+			}
 		})
 	}
 }
 
-// TestNewStream verifies that grpcTransport.NewStream() successfully creates a
-// new client stream for the server.
-func (s) TestNewStream(t *testing.T) {
-	ts := setupTestServer(t)
+// TestNewStream_Success verifies that grpcTransport.NewStream() successfully
+// creates a new client stream for the server when provided a valid server URI.
+func (s) TestNewStream_Success(t *testing.T) {
+	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
 
-	tests := []struct {
-		name      string
-		serverURI string
-		wantErr   bool
-	}{
-		{
-			name:      "success",
-			serverURI: ts.lis.Addr().String(),
-			wantErr:   false,
-		},
-		{
-			name:      "error",
-			serverURI: "invalid-server-uri",
-			wantErr:   true,
-		},
+	serverCfg := clients.ServerConfig{
+		ServerURI:  ts.address,
+		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			serverCfg := clients.ServerConfig{
-				ServerURI:  test.serverURI,
-				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
-			}
-			builder := Builder{}
-			transport, err := builder.Build(serverCfg)
-			if err != nil {
-				t.Fatalf("failed to build transport: %v", err)
-			}
-			defer transport.Close()
+	builder := Builder{}
+	transport, err := builder.Build(serverCfg)
+	if err != nil {
+		t.Fatalf("Failed to build transport: %v", err)
+	}
+	defer transport.Close()
 
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			_, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
-			if (err != nil) != test.wantErr {
-				t.Fatalf("transport.NewStream() error = %v, wantErr %v", err, test.wantErr)
-			}
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
+	if err != nil {
+		t.Fatalf("transport.NewStream() failed: %v", err)
+	}
+}
+
+// TestNewStream_Error verifies that grpcTransport.NewStream() returns an error
+// when attempting to create a stream with an invalid server URI.
+func (s) TestNewStream_Error(t *testing.T) {
+	serverCfg := clients.ServerConfig{
+		ServerURI:  "invalid-server-uri",
+		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+	}
+	builder := Builder{}
+	transport, err := builder.Build(serverCfg)
+	if err != nil {
+		t.Fatalf("Failed to build transport: %v", err)
+	}
+	defer transport.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
+	if err == nil {
+		t.Fatal("transport.NewStream() succeeded, want failure")
 	}
 }
 
@@ -240,43 +243,41 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*2000)
 	defer cancel()
 
-	ts := setupTestServer(t)
+	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
 
 	// Build a grpc-based transport to the above server.
 	serverCfg := clients.ServerConfig{
-		ServerURI:  ts.lis.Addr().String(),
+		ServerURI:  ts.address,
 		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
-		t.Fatalf("failed to build transport: %v", err)
+		t.Fatalf("Failed to build transport: %v", err)
 	}
 	defer transport.Close()
 
 	// Create a new stream to the server.
 	stream, err := transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 	if err != nil {
-		t.Fatalf("failed to create stream: %v", err)
+		t.Fatalf("Failed to create stream: %v", err)
 	}
 
 	// Send a discovery request message on the stream.
+	testDiscoverRequest := &v3discoverypb.DiscoveryRequest{VersionInfo: "1"}
 	msg, err := proto.Marshal(testDiscoverRequest)
 	if err != nil {
-		t.Fatalf("failed to marshal DiscoveryRequest: %v", err)
+		t.Fatalf("Failed to marshal DiscoveryRequest: %v", err)
 	}
 	if err := stream.Send(msg); err != nil {
-		t.Fatalf("failed to send message: %v", err)
+		t.Fatalf("Failed to send message: %v", err)
 	}
 
 	// Verify that the DiscoveryRequest received on the server was same as
 	// sent.
 	select {
-	case gotReq, ok := <-ts.requestChan:
-		if !ok {
-			t.Fatalf("ts.requestChan is closed")
-		}
-		if !cmp.Equal(testDiscoverRequest, gotReq, protocmp.Transform()) {
+	case gotReq := <-ts.requestChan:
+		if !cmp.Equal(gotReq, testDiscoverRequest, protocmp.Transform()) {
 			t.Fatalf("<-ts.requestChan = %v, want %v", &gotReq, &testDiscoverRequest)
 		}
 	case <-ctx.Done():
@@ -286,16 +287,16 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// Wait until response message is received from the server.
 	res, err := stream.Recv()
 	if err != nil {
-		t.Fatalf("failed to receive message: %v", err)
+		t.Fatalf("Failed to receive message: %v", err)
 	}
 
 	// Verify that the DiscoveryResponse received was same as sent from the
 	// server.
 	var gotRes v3discoverypb.DiscoveryResponse
 	if err := proto.Unmarshal(res, &gotRes); err != nil {
-		t.Fatalf("failed to unmarshal response from ts.requestChan to DiscoveryRequest: %v", err)
+		t.Fatalf("Failed to unmarshal response from ts.requestChan to DiscoveryResponse: %v", err)
 	}
-	if !cmp.Equal(testDiscoverResponse, &gotRes, protocmp.Transform()) {
-		t.Fatalf("proto.Unmarshal(res, &gotRes) = %v, want %v", &gotRes, testDiscoverResponse)
+	if !cmp.Equal(&gotRes, ts.response, protocmp.Transform()) {
+		t.Fatalf("proto.Unmarshal(res, &gotRes) = %v, want %v", &gotRes, ts.response)
 	}
 }
