@@ -23,8 +23,8 @@ import (
 )
 
 // Config is used to configure an xDS client. After one has been passed to an
-// xDS function, it must not be modified. A Config may be used; the xDS package
-// will also not modify it.
+// xDS function, it must not be modified. A Config may be reused; the xDS
+// package will also not modify it.
 type Config struct {
 	// Servers specifies a list of xDS management servers to connect to. The
 	// order of the servers in this list reflects the order of preference of
@@ -71,13 +71,15 @@ type Authority struct {
 	// gRFC A71: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
 	XDSServers []clients.ServerConfig
 
-	// Extensions can be populated with arbitrary data to be passed to the xDS
-	// Client's user specific implementations. This field can be used to
-	// provide additional configuration or context specific to the user's
-	// needs.
+	// Extensions can be populated with arbitrary authority-specific data to be
+	// passed from the xDS client configuration down to the user defined
+	// resource decoder implementations. This allows the user to provide
+	// authority-specific context or configuration to their resource
+	// processing logic.
+
 	//
-	// The xDS and LRS clients do not interpret the contents of this field. It
-	// is the responsibility of the user's implementations to handle and
-	// interpret these extensions.
+	// The xDS client do not interpret the contents of this field. It is the
+	// responsibility of the user's implementations to handle and interpret
+	// these extensions.
 	Extensions any
 }

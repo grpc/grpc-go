@@ -37,7 +37,7 @@ type ResourceWatcher interface {
 
 	// AmbientError indicates an error occurred after a resource has been
 	// received that should not modify the use of that resource but may be
-	// provide useful information about the ambient state of the XdsClient for
+	// provide useful information about the ambient state of the XDSClient for
 	// debugging purposes. The previous version of the resource should still be
 	// considered valid.
 	AmbientError(err error, onCallbackProcessed func())

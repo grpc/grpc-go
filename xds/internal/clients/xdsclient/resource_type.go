@@ -24,7 +24,7 @@ import (
 )
 
 // ResourceType wraps all resource-type specific functionality. Each supported
-// resource type needs to provide an implementation of this interface.
+// resource type needs to provide an implementation of the Decoder.
 type ResourceType struct {
 	// TypeURL is the xDS type URL of this resource type for the v3 xDS
 	// protocol. This URL is used as the key to look up the corresponding
@@ -32,10 +32,8 @@ type ResourceType struct {
 	// Config.
 	TypeURL string
 
-	// TypeName identifies resources in a transport protocol agnostic way. This
-	// can be used for logging/debugging purposes, as well as in cases where
-	// the resource type name is to be uniquely identified but the actual
-	// functionality provided by the resource type is not required.
+	// TypeName is the shorter representation of the TypeURL to identify the
+	// resource type. It can be used for logging/debugging purposes.
 	TypeName string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
