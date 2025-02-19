@@ -31,6 +31,11 @@ import (
 type LRSClient struct {
 }
 
+// New returns a new LRS Client configured with the provided config.
+func New(config Config) (*LRSClient, error) {
+	panic("unimplemented")
+}
+
 // ReportLoad creates a new load reporting stream for the client. It creates a
 // LoadStore and return it for the caller to report loads.
 func (c *LRSClient) ReportLoad(serverConfig clients.ServerConfig) *LoadStore {

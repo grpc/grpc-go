@@ -23,9 +23,12 @@ package lrsclient
 import "time"
 
 // LoadStore keep track of the loads for multiple clusters and services that
-// are intended to be reported via LRS. One store contains loads reported to
-// one LRS server. To track loads for multiple servers, multiple stores can be
-// created.
+// are intended to be reported via LRS.
+//
+// LoadStore stores loads reported to a single LRS server. Use multiple stores
+// for multiple servers.
+//
+// It is safe for concurrent use.
 type LoadStore struct {
 }
 
@@ -37,6 +40,8 @@ type LoadStore struct {
 //
 // If a cluster's Data is empty (no load to report), it's not appended to the
 // returned slice.
+//
+// Calling Stats clears the previous load data from the LoadStore.
 func (s *LoadStore) Stats(clusterNames []string) []*Data {
 	panic("unimplemented")
 }
@@ -95,8 +100,12 @@ type ServerLoadData struct {
 // PerClusterReporter defines the methods that the LoadStore uses to track
 // per-cluster load reporting data.
 type PerClusterReporter interface {
+	// CallStarted records a call started in the LoadStore.
 	CallStarted(locality string)
+	// CallFinished records a call finished in the LoadStore.
 	CallFinished(locality string, err error)
+	// CallServerLoad records the server load in the LoadStore.
 	CallServerLoad(locality, name string, val float64)
+	// CallDropped records a call dropped in the LoadStore.
 	CallDropped(category string)
 }
