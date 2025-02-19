@@ -1597,7 +1597,7 @@ func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empt
 
 // TestEventForNameResolutionDelay verifies that an event is emitted for name
 // resolution delay during RPC calls.
-func TestNameResolutionDelayTraceEvent(t *testing.T) {
+func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
 	to, spanExporter := defaultTraceOptions(t)
 
 	r := manual.NewBuilderWithScheme("whatever")

@@ -43,6 +43,9 @@ type RPCInfo struct {
 	// efficiency reasons.  SelectConfig should not be blocking.
 	Context context.Context
 	Method  string // i.e. "/Service/Method"
+	// NameResolutionDelay indicates if there was a delay in the name resolution.
+	// This field is only valid on client side, it's always false on server side.
+	NameResolutionDelay bool
 }
 
 // RPCConfig describes the configuration to use for each RPC.

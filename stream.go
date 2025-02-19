@@ -177,10 +177,6 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return cc.NewStream(ctx, desc, method, opts...)
 }
 
-type ctxKey string
-
-const nameResolutionDelayKey ctxKey = "nameResolutionDelay"
-
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	// Start tracking the RPC for idleness purposes. This is where a stream is
 	// created for both streaming and unary RPCs, and hence is a good place to
@@ -216,21 +212,18 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
-	isDelayed, err := cc.waitForResolvedAddrs(ctx)
+	nameResolutionDelay, err := cc.waitForResolvedAddrs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if isDelayed {
-		ctx = context.WithValue(ctx, nameResolutionDelayKey, isDelayed)
-	}
 
+	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method, NameResolutionDelay: nameResolutionDelay}
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
 	newStream := func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, rpcInfo, opts...)
 	}
 
-	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
 	rpcConfig, err := cc.safeConfigSelector.SelectConfig(rpcInfo)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -265,7 +258,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return newStream(ctx, func() {})
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), opts ...CallOption) (_ iresolver.ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), rpcInfo iresolver.RPCInfo, opts ...CallOption) (_ iresolver.ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -329,19 +322,20 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	}
 
 	cs := &clientStream{
-		callHdr:      callHdr,
-		ctx:          ctx,
-		methodConfig: &mc,
-		opts:         opts,
-		callInfo:     callInfo,
-		cc:           cc,
-		desc:         desc,
-		codec:        callInfo.codec,
-		compressorV0: compressorV0,
-		compressorV1: compressorV1,
-		cancel:       cancel,
-		firstAttempt: true,
-		onCommit:     onCommit,
+		callHdr:             callHdr,
+		ctx:                 ctx,
+		methodConfig:        &mc,
+		opts:                opts,
+		callInfo:            callInfo,
+		cc:                  cc,
+		desc:                desc,
+		codec:               callInfo.codec,
+		compressorV0:        compressorV0,
+		compressorV1:        compressorV1,
+		cancel:              cancel,
+		firstAttempt:        true,
+		onCommit:            onCommit,
+		NameResolutionDelay: rpcInfo.NameResolutionDelay,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
@@ -424,9 +418,8 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	method := cs.callHdr.Method
 	var beginTime time.Time
 	shs := cs.cc.dopts.copts.StatsHandlers
-	isDelayed, _ := ctx.Value(nameResolutionDelayKey).(bool)
 	for _, sh := range shs {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: isDelayed})
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast, NameResolutionDelay: cs.NameResolutionDelay})
 		beginTime = time.Now()
 		begin := &stats.Begin{
 			Client:                    true,
@@ -582,6 +575,9 @@ type clientStream struct {
 	onCommit         func()
 	replayBuffer     []replayOp // operations to replay on retry
 	replayBufferSize int        // current size of replayBuffer
+	// NameResolutionDelay indicates if there was a delay in the name resolution.
+	// This field is only valid on client side, it's always false on server side.
+	NameResolutionDelay bool
 }
 
 type replayOp struct {

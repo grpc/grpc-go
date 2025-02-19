@@ -86,44 +86,35 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 	}
 }
 
-// Custom key to indicate name resolution delay in context
-const nameResolutionDelayKey ctxKey = "nameResolutionDelay"
-
 // gRPC server implementation
 type server struct {
 	testgrpc.UnimplementedTestServiceServer
 }
 
 // EmptyCall is a simple RPC that returns an empty response.
-func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
+func (s *server) EmptyCall(_ context.Context, req *testgrpc.Empty) (*testgrpc.Empty, error) {
 	return &testgrpc.Empty{}, nil
 }
 
 // Custom StatsHandler to verify if the delay is detected.
 type testStatsHandler struct {
-	isDelayed bool
+	nameResolutionDelayed bool
 }
 
-// TagRPC is testStatsHandler's implementation of TagRPC.
-// It checks if the name resolution delay flag is present in the context and
-// updates isDelayed accordingly.
-func (h *testStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	if delayed, ok := ctx.Value(nameResolutionDelayKey).(bool); ok && delayed {
-		h.isDelayed = true
-		fmt.Println("StatsHandler detected name resolution delay.")
+func (h *testStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	if info.NameResolutionDelay {
+		h.nameResolutionDelayed = true
+		fmt.Println("StatsHandler detected name resolution delay via RPCInfo.")
 	}
 	return ctx
 }
 
-// HandleRPC is testStatsHandler's implementation of HandleRPC.
 func (h *testStatsHandler) HandleRPC(_ context.Context, _ stats.RPCStats) {}
 
-// TagConn is testStatsHandler's implementation of TagConn.
 func (h *testStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
-// HandleConn is testStatsHandler's implementation of HandleConn.
 func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 
 // TestNameResolutionDelayInStatsHandler tests the behavior of gRPC client and
@@ -174,16 +165,14 @@ func (s) TestNameResolutionDelayInStatsHandler(t *testing.T) {
 		t.Logf("Pushed resolver state update: %v", state)
 	}()
 
-	// Second RPC should succeed after the resolver state is updated.
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	ctx = context.WithValue(ctx, nameResolutionDelayKey, true)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 	}
 	t.Log("Made an RPC which succeeded...")
 
-	if !statsHandler.isDelayed {
+	if !statsHandler.nameResolutionDelayed {
 		t.Errorf("Expected StatsHandler to detect name resolution delay, but it did not")
 	}
 }
