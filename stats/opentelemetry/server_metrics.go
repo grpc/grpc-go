@@ -41,6 +41,7 @@ type serverStatsHandler struct {
 type serverMetricsStatsHandler struct {
 	*serverStatsHandler
 }
+
 type serverTracingStatsHandler struct {
 	*serverStatsHandler
 }

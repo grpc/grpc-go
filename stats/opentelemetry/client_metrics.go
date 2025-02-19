@@ -43,6 +43,7 @@ type clientStatsHandler struct {
 type clientMetricsStatsHandler struct {
 	*clientStatsHandler
 }
+
 type clientTracingStatsHandler struct {
 	*clientStatsHandler
 }
@@ -152,20 +153,11 @@ func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method
 		method: h.determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
-	if h.options.MetricsOptions.pluginOption != nil {
-		md := h.options.MetricsOptions.pluginOption.GetMetadata()
-		for k, vs := range md {
-			for _, v := range vs {
-				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
-			}
-		}
-	}
 
-	startTime := time.Now()
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	h.perCallTraces(ctx, err, startTime, ci, span)
+	h.perCallTraces(err, span)
 	return err
 }
 
@@ -176,27 +168,17 @@ func (h *clientTracingStatsHandler) streamInterceptor(ctx context.Context, desc 
 	}
 	ctx = setCallInfo(ctx, ci)
 
-	if h.options.MetricsOptions.pluginOption != nil {
-		md := h.options.MetricsOptions.pluginOption.GetMetadata()
-		for k, vs := range md {
-			for _, v := range vs {
-				ctx = metadata.AppendToOutgoingContext(ctx, k, v)
-			}
-		}
-	}
-
-	startTime := time.Now()
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
 	callback := func(err error) {
-		h.perCallTraces(ctx, err, startTime, ci, span)
+		h.perCallTraces(err, span)
 	}
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
 // perCallTraces records per call trace spans.
-func (h *clientTracingStatsHandler) perCallTraces(_ context.Context, err error, _ time.Time, _ *callInfo, ts trace.Span) {
+func (h *clientTracingStatsHandler) perCallTraces(err error, ts trace.Span) {
 	s := status.Convert(err)
 	if s.Code() == grpccodes.OK {
 		ts.SetStatus(otelcodes.Ok, s.Message())
