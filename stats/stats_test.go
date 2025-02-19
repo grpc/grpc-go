@@ -818,24 +818,35 @@ func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
 	h.gotConn = append(h.gotConn, &gotData{ctx, s.IsClient(), s})
 }
 
+const (
+	beginEvt      = "Begin"
+	endEvt        = "End"
+	inPayloadEvt  = "InPayload"
+	inHeaderEvt   = "InHeader"
+	inTrailerEvt  = "InTrailer"
+	outPayloadEvt = "OutPayload"
+	outHeaderEvt  = "OutHeader"
+	outTrailerEvt = "OutTrailer"
+)
+
 func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	switch s.(type) {
 	case *stats.Begin:
-		h.recordEvent("Begin")
+		h.recordEvent(beginEvt)
 	case *stats.InHeader:
-		h.recordEvent("InHeader")
+		h.recordEvent(inHeaderEvt)
 	case *stats.InPayload:
-		h.recordEvent("InPayload")
+		h.recordEvent(inPayloadEvt)
 	case *stats.OutHeader:
-		h.recordEvent("OutHeader")
+		h.recordEvent(outHeaderEvt)
 	case *stats.OutPayload:
-		h.recordEvent("OutPayload")
+		h.recordEvent(outPayloadEvt)
 	case *stats.InTrailer:
-		h.recordEvent("InTrailer")
+		h.recordEvent(inTrailerEvt)
 	case *stats.OutTrailer:
-		h.recordEvent("OutTrailer")
+		h.recordEvent(outTrailerEvt)
 	case *stats.End:
-		h.recordEvent("End")
+		h.recordEvent(endEvt)
 	}
 
 	h.mu.Lock()
@@ -1549,175 +1560,4 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	wg.Wait()
-}
-
-// TestServerStatsUnaryRPCEventSequence tests that the sequence of server-side stats
-// events for a Unary RPC matches the expected flow.
-func (s) TestServerStatsUnaryRPCEventSequence(t *testing.T) {
-	h := &statshandler{}
-	te := newTest(t, &testConfig{compress: ""}, nil, []stats.Handler{h})
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	_, _, err := te.doUnaryCall(&rpcConfig{success: true, callType: unaryRPC})
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	// To verify if the Unary RPC server stats events are logged in the
-	// correct order.
-	wantUnarySequence := []string{
-		"ConnStats",
-		"InHeader",
-		"Begin",
-		"InPayload",
-		"OutHeader",
-		"OutPayload",
-		"OutTrailer",
-		"End",
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	for {
-		h.mu.Lock()
-		eventCount := len(h.events)
-		h.mu.Unlock()
-
-		if eventCount >= len(wantUnarySequence) {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantUnarySequence)))
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-
-	// Verify sequence
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	verifyEventSequence(t, h.events, wantUnarySequence)
-}
-
-// TestServerStatsClientStreamEventSequence tests that the sequence of server-side
-// stats events for a Client Stream RPC matches the expected flow.
-func (s) TestServerStatsClientStreamEventSequence(t *testing.T) {
-	h := &statshandler{}
-	te := newTest(t, &testConfig{compress: "gzip"}, nil, []stats.Handler{h})
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	_, _, err := te.doClientStreamCall(&rpcConfig{count: 5, success: true, callType: clientStreamRPC})
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	// To verify if the Client Stream RPC server stats events are logged in the
-	// correct order.
-	wantClientStreamSequence := []string{
-		"ConnStats",
-		"InHeader",
-		"Begin",
-		"OutHeader",
-		"InPayload",
-		"InPayload",
-		"InPayload",
-		"InPayload",
-		"InPayload",
-		"OutPayload",
-		"OutTrailer",
-		"End",
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	for {
-		h.mu.Lock()
-		eventCount := len(h.events)
-		h.mu.Unlock()
-
-		if eventCount >= len(wantClientStreamSequence) {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantClientStreamSequence)))
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	verifyEventSequence(t, h.events, wantClientStreamSequence)
-}
-
-// TestServerStatsClientStreamEventSequence tests that the sequence of server-side
-// stats events for a Client Stream RPC matches the expected flow.
-func (s) TestServerStatsServerStreamEventSequence(t *testing.T) {
-	h := &statshandler{}
-	te := newTest(t, &testConfig{compress: "gzip"}, nil, []stats.Handler{h})
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	_, _, err := te.doServerStreamCall(&rpcConfig{count: 5, success: true, callType: serverStreamRPC})
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	// To verify if the Server Stream RPC server stats events are logged in the
-	// correct order.
-	wantServerStreamSequence := []string{
-		"ConnStats",
-		"InHeader",
-		"Begin",
-		"InPayload",
-		"OutHeader",
-		"OutPayload",
-		"OutPayload",
-		"OutPayload",
-		"OutPayload",
-		"OutPayload",
-		"OutTrailer",
-		"End",
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	for {
-		h.mu.Lock()
-		eventCount := len(h.events)
-		h.mu.Unlock()
-
-		if eventCount >= len(wantServerStreamSequence) {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for events to propagate: Diff (-got +want):\n%s", cmp.Diff(eventCount, len(wantServerStreamSequence)))
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	verifyEventSequence(t, h.events, wantServerStreamSequence)
-}
-
-// verifyEventSequence verifies that a sequence of recorded events matches
-// the expected sequence.
-func verifyEventSequence(t *testing.T, got []string, want []string) {
-	t.Helper()
-
-	if !cmp.Equal(got, want) {
-		t.Errorf("Event sequence mismatch. Diff (-got +want):\n%s", cmp.Diff(got, want))
-	}
 }
