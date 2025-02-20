@@ -59,7 +59,7 @@ type Decoder interface {
 	Decode(resource any, options DecodeOptions) (*DecodeResult, error)
 }
 
-// DecodeOptions wraps the options required by ResourceType implementation for
+// DecodeOptions wraps the options required by ResourceType implementations for
 // decoding configuration received from the xDS management server.
 type DecodeOptions struct {
 	// Config contains the complete configuration passed to the xDS client.

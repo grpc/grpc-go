@@ -22,9 +22,9 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// Config is used to configure an xDS client. After one has been passed to an
-// xDS function, it must not be modified. A Config may be reused; the xDS
-// package will also not modify it.
+// Config is used to configure an xDS client. After one has been passed to the
+// xDS client's New function, it must not be modified. A Config may be reused;
+// the xdsclient package will also not modify it.
 type Config struct {
 	// Servers specifies a list of xDS management servers to connect to. The
 	// order of the servers in this list reflects the order of preference of
@@ -73,13 +73,12 @@ type Authority struct {
 
 	// Extensions can be populated with arbitrary authority-specific data to be
 	// passed from the xDS client configuration down to the user defined
-	// resource decoder implementations. This allows the user to provide
+	// resource type implementations. This allows the user to provide
 	// authority-specific context or configuration to their resource
 	// processing logic.
-
 	//
-	// The xDS client do not interpret the contents of this field. It is the
-	// responsibility of the user's implementations to handle and interpret
-	// these extensions.
+	// The xDS client does not interpret the contents of this field. It is the
+	// responsibility of the user's resource type implementations to handle and
+	// interpret these extensions.
 	Extensions any
 }
