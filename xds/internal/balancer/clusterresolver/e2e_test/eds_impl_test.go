@@ -820,7 +820,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		SkipValidation: true,
 	}
 	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatalf("Failed to update management server resources: %v", err)
+		t.Fatal(err)
 	}
 
 	// Create xDS client, configure cds_experimental LB policy with a manual
@@ -850,7 +850,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 	// Change the cluster resource to not contain an eds_service_name.
 	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, "", e2e.SecurityLevelNone)}
 	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatalf("Failed to update cluster resources: %v", err)
+		t.Fatal(err)
 	}
 
 	// Ensure that an EDS watch for eds_service_name is canceled and new watch
@@ -893,7 +893,7 @@ func (s) TestEDS_ClusterResourceUpdates(t *testing.T) {
 		},
 	}
 	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatalf("Failed to update cluster circuit breakers: %v", err)
+		t.Fatal(err)
 	}
 
 	// Ensure that RPCs continue to get routed to the second backend for the
