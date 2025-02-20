@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/pickfirst"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
+	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -50,47 +49,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
-
-const healthCheckingPetiolePolicyName = "health_checking_petiole_policy"
-
-var (
-	// healthCheckTestPolicyName is the LB policy used for testing the health check
-	// service.
-	healthCheckTestPolicyName = "round_robin"
-)
-
-func init() {
-	balancer.Register(&healthCheckingPetiolePolicyBuilder{})
-	// Till dualstack changes are not implemented and round_robin doesn't
-	// delegate to pickfirst, test a fake petiole policy that delegates to
-	// the new pickfirst balancer.
-	// TODO: https://github.com/grpc/grpc-go/issues/7906 - Remove the fake
-	// petiole policy one round robin starts delegating to pickfirst.
-	if envconfig.NewPickFirstEnabled {
-		healthCheckTestPolicyName = healthCheckingPetiolePolicyName
-	}
-}
-
-type healthCheckingPetiolePolicyBuilder struct{}
-
-func (bb *healthCheckingPetiolePolicyBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &healthCheckingPetiolePolicy{
-		Balancer: balancer.Get(pickfirstleaf.Name).Build(cc, opts),
-	}
-}
-
-func (bb *healthCheckingPetiolePolicyBuilder) Name() string {
-	return healthCheckingPetiolePolicyName
-}
-
-func (b *healthCheckingPetiolePolicy) UpdateClientConnState(state balancer.ClientConnState) error {
-	state.ResolverState = pickfirstleaf.EnableHealthListener(state.ResolverState)
-	return b.Balancer.UpdateClientConnState(state)
-}
-
-type healthCheckingPetiolePolicy struct {
-	balancer.Balancer
-}
 
 func newTestHealthServer() *testHealthServer {
 	return newTestHealthServerWithWatchFunc(defaultWatchFunc)
@@ -224,10 +182,11 @@ func setupClient(t *testing.T, c *clientConfig) (*grpc.ClientConn, *manual.Resol
 		opts = append(opts, c.extraDialOption...)
 	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", opts...)
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", opts...)
 	if err != nil {
-		t.Fatalf("grpc.Dial() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 	return cc, r
 }
@@ -312,7 +271,7 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 				"serviceName": "foo"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -339,7 +298,7 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 				"serviceName": "foo"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -417,7 +376,7 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 				"serviceName": "foo"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -465,7 +424,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 			"serviceName": "foo"
 		},
 		"loadBalancingConfig": [{"%s":{}}]
-	}`, healthCheckTestPolicyName))
+	}`, roundrobin.Name))
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -547,7 +506,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 				"serviceName": "foo"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName)))})
+		}`, roundrobin.Name)))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -614,7 +573,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 			"serviceName": "delay"
 		},
 		"loadBalancingConfig": [{"%s":{}}]
-	}`, healthCheckTestPolicyName))
+	}`, roundrobin.Name))
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lis.Addr().String()}},
 		ServiceConfig: sc,
@@ -679,7 +638,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 				"serviceName": "delay"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	select {
 	case <-hcExitChan:
@@ -717,7 +676,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 				"serviceName": "foo"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -823,7 +782,7 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 				"serviceName": "channelzSuccess"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -872,7 +831,7 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 				"serviceName": "channelzFailure"
 			},
 			"loadBalancingConfig": [{"%s":{}}]
-		}`, healthCheckTestPolicyName))})
+		}`, roundrobin.Name))})
 
 	if err := verifyResultWithDelay(func() (bool, error) {
 		cm, _ := channelz.GetTopChannels(0, 0)
@@ -985,7 +944,7 @@ func (s) TestHealthCheckFailure(t *testing.T) {
 		name:     "tcp-tls",
 		network:  "tcp",
 		security: "tls",
-		balancer: healthCheckTestPolicyName,
+		balancer: roundrobin.Name,
 	}
 	te := newTest(t, e)
 	te.declareLogNoise(

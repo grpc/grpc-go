@@ -146,7 +146,7 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	// short resource expiry timeout.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}

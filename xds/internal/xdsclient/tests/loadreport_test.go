@@ -119,16 +119,16 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	nodeID := uuid.New().String()
 	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, mgmtServer1.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer1.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			"test-authority": []byte(fmt.Sprintf(`{
-				 "xds_servers": [{
-					 "server_uri": %q,
-					 "channel_creds": [{"type": "insecure"}]
-				 }]}`, mgmtServer2.Address)),
+				"xds_servers": [{
+					"server_uri": %q,
+					"channel_creds": [{"type": "insecure"}]
+				}]}`, mgmtServer2.Address)),
 		},
 	})
 	if err != nil {

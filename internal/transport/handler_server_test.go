@@ -312,8 +312,10 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		st.bodyw.Close() // no body
 		s.WriteStatus(status.New(codes.OK, ""))
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	st.ht.HandleStreams(
-		context.Background(), func(s *ServerStream) { go handleStream(s) },
+		ctx, func(s *ServerStream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":          nil,
@@ -345,8 +347,10 @@ func handleStreamCloseBodyTest(t *testing.T, statusCode codes.Code, msg string) 
 	handleStream := func(s *ServerStream) {
 		s.WriteStatus(status.New(statusCode, msg))
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	st.ht.HandleStreams(
-		context.Background(), func(s *ServerStream) { go handleStream(s) },
+		ctx, func(s *ServerStream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -394,8 +398,10 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		}
 		s.WriteStatus(status.New(codes.DeadlineExceeded, "too slow"))
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	ht.HandleStreams(
-		context.Background(), func(s *ServerStream) { go runStream(s) },
+		ctx, func(s *ServerStream) { go runStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,
@@ -446,8 +452,10 @@ func (s) TestHandlerTransport_HandleStreams_WriteStatusWrite(t *testing.T) {
 
 func testHandlerTransportHandleStreams(t *testing.T, handleStream func(st *handleStreamTest, s *ServerStream)) {
 	st := newHandleStreamTest(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	t.Cleanup(cancel)
 	st.ht.HandleStreams(
-		context.Background(), func(s *ServerStream) { go handleStream(st, s) },
+		ctx, func(s *ServerStream) { go handleStream(st, s) },
 	)
 }
 
@@ -479,8 +487,10 @@ func (s) TestHandlerTransport_HandleStreams_ErrDetails(t *testing.T) {
 	handleStream := func(s *ServerStream) {
 		s.WriteStatus(st)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	hst.ht.HandleStreams(
-		context.Background(), func(s *ServerStream) { go handleStream(s) },
+		ctx, func(s *ServerStream) { go handleStream(s) },
 	)
 	wantHeader := http.Header{
 		"Date":         nil,

@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 )
@@ -97,9 +96,9 @@ func TestClusterPicks(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -122,6 +121,8 @@ func TestClusterPicks(t *testing.T) {
 		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	p1 := <-cc.NewPickerCh
 	for _, tt := range []struct {
 		pickInfo balancer.PickInfo
@@ -130,19 +131,19 @@ func TestClusterPicks(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "notacluster"),
+				Ctx: SetPickedCluster(ctx, "notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "notacluster"`),
 		},
@@ -176,9 +177,9 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -202,6 +203,8 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tt := range []struct {
 		pickInfo balancer.PickInfo
 		wantSC   balancer.SubConn
@@ -209,19 +212,19 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -244,10 +247,10 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}
 	wantAddrs = append(wantAddrs, resolver.Address{Addr: testBackendAddrStrs[2], BalancerAttributes: nil})
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
-			hierarchy.Set(wantAddrs[2], []string{"cds:cluster_3"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[2]}}, []string{"cds:cluster_3"}),
 		}},
 		BalancerConfig: config2,
 	}); err != nil {
@@ -282,25 +285,25 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_3"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_3"),
 			},
 			wantSC: m1[wantAddrs[2]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -334,9 +337,9 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -360,6 +363,8 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}
 
 	p1 := <-cc.NewPickerCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, tt := range []struct {
 		pickInfo balancer.PickInfo
 		wantSC   balancer.SubConn
@@ -367,19 +372,19 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m1[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m1[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -410,7 +415,7 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, err := p2.Pick(balancer.PickInfo{Ctx: SetPickedCluster(context.Background(), "cds:notacluster")})
+		gotSCSt, err := p2.Pick(balancer.PickInfo{Ctx: SetPickedCluster(ctx, "cds:notacluster")})
 		if fmt.Sprint(err) != status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`).Error() {
 			t.Fatalf("picker.Pick, got %v, %v, want error %v", gotSCSt, err, `unknown cluster selected for RPC: "cds:notacluster"`)
 		}
@@ -418,9 +423,9 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	// Resend the previous config with clusters
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
-			hierarchy.Set(wantAddrs[1], []string{"cds:cluster_2"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"cds:cluster_2"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -451,19 +456,19 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	}{
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_1"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_1"),
 			},
 			wantSC: m2[wantAddrs[0]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:cluster_2"),
+				Ctx: SetPickedCluster(ctx, "cds:cluster_2"),
 			},
 			wantSC: m2[wantAddrs[1]],
 		},
 		{
 			pickInfo: balancer.PickInfo{
-				Ctx: SetPickedCluster(context.Background(), "cds:notacluster"),
+				Ctx: SetPickedCluster(ctx, "cds:notacluster"),
 			},
 			wantErr: status.Errorf(codes.Unavailable, `unknown cluster selected for RPC: "cds:notacluster"`),
 		},
@@ -577,8 +582,8 @@ func TestInitialIdle(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -624,8 +629,8 @@ func TestClusterGracefulSwitch(t *testing.T) {
 		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"csp:cluster"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"csp:cluster"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {
@@ -636,15 +641,16 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p1 := <-cc.NewPickerCh
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	pi := balancer.PickInfo{
-		Ctx: SetPickedCluster(context.Background(), "csp:cluster"),
+		Ctx: SetPickedCluster(ctx, "csp:cluster"),
 	}
 	testPick(t, p1, pi, sc1, nil)
 
 	childPolicyName := t.Name()
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.BuildOptions.MetricsRecorder = &stats.NoopMetricsRecorder{}
 			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
@@ -666,8 +672,8 @@ func TestClusterGracefulSwitch(t *testing.T) {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[1], []string{"csp:cluster"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[1]}}, []string{"csp:cluster"}),
 		}},
 		BalancerConfig: config2,
 	}); err != nil {
@@ -678,8 +684,6 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	// the pick first balancer to UpdateState() with CONNECTING, which shouldn't send
 	// a Picker update back, as the Graceful Switch process is not complete.
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer cancel()
 	select {
 	case <-cc.NewPickerCh:
 		t.Fatalf("No new picker should have been sent due to the Graceful Switch process not completing")
@@ -753,8 +757,8 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
 	if err := bal.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: []resolver.Address{
-			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
+		ResolverState: resolver.State{Endpoints: []resolver.Endpoint{
+			hierarchy.SetInEndpoint(resolver.Endpoint{Addresses: []resolver.Address{wantAddrs[0]}}, []string{"cds:cluster_1"}),
 		}},
 		BalancerConfig: config1,
 	}); err != nil {

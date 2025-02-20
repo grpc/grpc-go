@@ -180,7 +180,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	return nil
 }
 
-func verifyUnknownListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr string) error {
+func verifyListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr, wantNodeID string) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
@@ -188,6 +188,9 @@ func verifyUnknownListenerError(ctx context.Context, updateCh *testutils.Channel
 	gotErr := u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
 		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
+	}
+	if !strings.Contains(gotErr.Error(), wantNodeID) {
+		return fmt.Errorf("update received with error: %v, want error with node ID: %q", gotErr, wantNodeID)
 	}
 	return nil
 }
@@ -265,7 +268,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			}
 
 			// Create an xDS client with the above bootstrap contents.
-			config, err := bootstrap.NewConfigForTesting(bc)
+			config, err := bootstrap.NewConfigFromContents(bc)
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
@@ -418,7 +421,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Create an xDS client with the above bootstrap contents.
-			config, err := bootstrap.NewConfigForTesting(bc)
+			config, err := bootstrap.NewConfigFromContents(bc)
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
@@ -525,7 +528,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -620,7 +623,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -697,7 +700,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client talking to the above management server.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -740,7 +743,7 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client talking to the above management server.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -827,7 +830,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -945,7 +948,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -1025,7 +1028,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -1058,7 +1061,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyListenerError(ctx, lw.updateCh, wantListenerNACKErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1066,7 +1069,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyListenerError(ctx, lw2.updateCh, wantListenerNACKErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1083,7 +1086,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -1138,7 +1141,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyListenerError(ctx, lw1.updateCh, wantListenerNACKErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1151,7 +1154,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyListenerError(ctx, lw2.updateCh, wantListenerNACKErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1185,7 +1188,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -1229,7 +1232,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyListenerError(ctx, lw1.updateCh, wantListenerNACKErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1277,7 +1280,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
