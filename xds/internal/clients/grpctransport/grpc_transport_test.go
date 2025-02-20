@@ -294,7 +294,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// server.
 	var gotRes v3discoverypb.DiscoveryResponse
 	if err := proto.Unmarshal(res, &gotRes); err != nil {
-		t.Fatalf("Failed to unmarshal response from ts.requestChan to DiscoveryRequest: %v", err)
+		t.Fatalf("Failed to unmarshal response from ts.requestChan to DiscoveryResponse: %v", err)
 	}
 	if !cmp.Equal(&gotRes, ts.response, protocmp.Transform()) {
 		t.Fatalf("proto.Unmarshal(res, &gotRes) = %v, want %v", &gotRes, ts.response)
