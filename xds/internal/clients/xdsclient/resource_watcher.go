@@ -22,23 +22,24 @@ package xdsclient
 // corresponding to the resource being watched. gRFC A88 contains an exhaustive
 // list of what method is invoked under what conditions.
 //
-// onCallbackProcessed in the callbacks is a function to be invoked by
-// resource watcher implementations upon completing the processing of a
-// callback from the xDS client. Failure to invoke this callback prevents the
-// xDS client from reading further messages from the xDS server.
+// changeProcessed and errorProcessed in the callbacks are functions to be
+// invoked by resource watcher implementations upon completing the processing
+// of a callback from the xDS client for change and error respectively. Failure
+// to invoke this callback prevents the xDS client from reading further
+// messages from the xDS server.
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resourceData ResourceData, onCallbackProcessed func())
+	ResourceChanged(resourceData ResourceData, changeProcessed func())
 
 	// ResourceError indicates an error occurred while trying to fetch or
 	// decode the associated resource. The previous version of the resource
 	// should be considered invalid.
-	ResourceError(err error, onCallbackProcessed func())
+	ResourceError(err error, errorProcessed func())
 
 	// AmbientError indicates an error occurred after a resource has been
 	// received that should not modify the use of that resource but may be
 	// provide useful information about the ambient state of the XDSClient for
 	// debugging purposes. The previous version of the resource should still be
 	// considered valid.
-	AmbientError(err error, onCallbackProcessed func())
+	AmbientError(err error, errorProcessed func())
 }

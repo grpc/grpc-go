@@ -53,7 +53,7 @@ func New(config Config) (*XDSClient, error) {
 //
 // The returned function cancels the watch and prevents future calls to the
 // watcher.
-func (c *XDSClient) WatchResource(typeURL string, name string, watcher ResourceWatcher) (cancel func()) {
+func (c *XDSClient) WatchResource(typeURL, name string, watcher ResourceWatcher) (cancel func()) {
 	panic("unimplemented")
 }
 
