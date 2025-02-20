@@ -28,14 +28,18 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
-	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry"
 )
 
@@ -60,12 +64,29 @@ func main() {
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
 
-	spanExporter := tracetest.NewInMemoryExporter()
-	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
-	tp := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
-	textMapPropagator := propagation.NewCompositeTextMapPropagator(opentelemetry.GRPCTraceBinPropagator{})
+	client := otlptracehttp.NewClient(
+		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithInsecure(),
+	)
+	traceExporter, err := otlptrace.New(context.Background(), client)
+	if err != nil {
+		log.Fatalf("Failed to create otlp trace exporter: %v", err)
+	}
 
-	traceOptions := experimental.TraceOptions{
+	res, err := resource.New(context.Background(),
+		resource.WithTelemetrySDK(),
+		resource.WithAttributes(semconv.ServiceName("grpc-server")),
+	)
+	if err != nil {
+		log.Fatalf("Could not set resources: %v", err)
+	}
+	spanProcessor := trace.NewSimpleSpanProcessor(traceExporter)
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor), trace.WithResource(res))
+	otel.SetTracerProvider(tp)
+
+	textMapPropagator := propagation.TraceContext{}
+
+	traceOptions := oteltracing.TraceOptions{
 		TracerProvider:    tp,
 		TextMapPropagator: textMapPropagator,
 	}
@@ -77,10 +98,7 @@ func main() {
 		}
 	}()
 
-	so := opentelemetry.ServerOption(opentelemetry.Options{
-		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
-		TraceOptions:   traceOptions,
-	})
+	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: traceOptions})
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {

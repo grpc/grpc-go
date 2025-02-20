@@ -28,15 +28,19 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
-	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry"
 )
 
@@ -52,26 +56,34 @@ func main() {
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
 
-	spanExporter := tracetest.NewInMemoryExporter()
-	spanProcessor := trace.NewSimpleSpanProcessor(spanExporter)
-	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor))
-	textMapPropagator := propagation.NewCompositeTextMapPropagator(opentelemetry.GRPCTraceBinPropagator{})
-	traceOptions := experimental.TraceOptions{
+	otlpclient := otlptracehttp.NewClient(
+		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithInsecure(),
+	)
+	traceExporter, err := otlptrace.New(context.Background(), otlpclient)
+	if err != nil {
+		log.Fatalf("Failed to create otlp trace exporter: %v", err)
+	}
+	res, err := resource.New(context.Background(),
+		resource.WithTelemetrySDK(),
+		resource.WithAttributes(semconv.ServiceName("grpc-client")),
+	)
+	if err != nil {
+		log.Fatalf("Could not set resources: %v", err)
+	}
+	spanProcessor := trace.NewSimpleSpanProcessor(traceExporter)
+	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor), trace.WithResource(res))
+	otel.SetTracerProvider(tracerProvider)
+	textMapPropagator := propagation.TraceContext{}
+
+	traceOptions := oteltracing.TraceOptions{
 		TracerProvider:    tracerProvider,
 		TextMapPropagator: textMapPropagator,
 	}
-
-	go func() {
-		log.Printf("Starting Prometheus metrics server at %s\n", *prometheusEndpoint)
-		if err := http.ListenAndServe(*prometheusEndpoint, promhttp.Handler()); err != nil {
-			log.Fatalf("Failed to start Prometheus server: %v", err)
-		}
-	}()
+	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
 	ctx := context.Background()
-	do := opentelemetry.DialOption(opentelemetry.Options{
-		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
-		TraceOptions:   traceOptions})
+	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: traceOptions})
 
 	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
 	if err != nil {
@@ -81,7 +93,7 @@ func main() {
 	c := echo.NewEchoClient(cc)
 
 	// Make an RPC every second. This should trigger telemetry on prometheus
-	// server along with traces in the in memory exporter to be emitted from
+	// server along with traces in the otlptracer exporter to be emitted from
 	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
@@ -89,10 +101,6 @@ func main() {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
 		fmt.Println(r)
-
-		for _, span := range spanExporter.GetSpans() {
-			log.Printf("Span: Name=%s, Kind=%v, Status=%v", span.Name, span.SpanKind, span.Status)
-		}
 
 		time.Sleep(time.Second)
 	}
