@@ -68,7 +68,11 @@ type s struct {
 	grpctest.Tester
 }
 
-// traceSpanInfois the information received about the trace span. It contains
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+// traceSpanInfo is the information received about the trace span. It contains
 // subset of information that is needed to verify if correct trace is being
 // attributed to the rpc.
 type traceSpanInfo struct {
@@ -76,10 +80,6 @@ type traceSpanInfo struct {
 	name       string
 	events     []trace.Event
 	attributes []attribute.KeyValue
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
 }
 
 // defaultMetricsOptions creates default metrics options
@@ -177,370 +177,6 @@ func waitForTraceSpans(ctx context.Context, exporter *tracetest.InMemoryExporter
 		return nil, fmt.Errorf("error waiting for complete trace spans %v: %v", wantSpans, ctx.Err())
 	}
 	return exporter.GetSpans(), nil
-}
-
-// traceDataWithCompressor returns a traceSpanInfo for a unary RPC and
-// streaming RPC with certain compression and message flow sent, when
-// compressor is used
-func traceDataWithCompressor() []traceSpanInfo {
-	return []traceSpanInfo{
-		{
-			name:     "grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Inbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
-						},
-					},
-				},
-				{
-					Name: "Outbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
-						},
-					},
-				},
-			},
-		},
-		{
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Outbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
-						},
-					},
-				},
-				{
-					Name: "Inbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(57),
-						},
-					},
-				},
-			},
-		},
-		{
-			name:       "grpc.testing.TestService.UnaryCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
-			attributes: []attribute.KeyValue{},
-			events:     []trace.Event{},
-		},
-		{
-			name:     "grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{},
-		},
-		{
-			name:       "grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
-			attributes: []attribute.KeyValue{},
-			events:     []trace.Event{},
-		},
-		{
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{},
-		},
-	}
-}
-
-// traceDataWithoutCompressor returns a traceSpanInfo for a unary RPC and
-// streaming RPC with certain compression and message flow sent, when
-// compressor is not used.
-func traceDataWithoutCompressor() []traceSpanInfo {
-	return []traceSpanInfo{
-		{
-			name:     "grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Inbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-				{
-					Name: "Outbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-			},
-		},
-		{
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Outbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-				{
-					Name: "Inbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-			},
-		},
-		{
-			name:       "grpc.testing.TestService.UnaryCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
-			attributes: []attribute.KeyValue{},
-			events:     []trace.Event{},
-		},
-		{
-			name:     "grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{},
-		},
-		{
-			name:       "grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
-			attributes: []attribute.KeyValue{},
-			events:     []trace.Event{},
-		},
-		{
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.IntValue(1),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.IntValue(0),
-				},
-			},
-			events: []trace.Event{},
-		},
-	}
 }
 
 // verifyAndCompareTraces first waits for the exporter to receive the expected
@@ -1238,7 +874,182 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	testutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
 
 	// Verify traces
-	wantSI := traceDataWithCompressor()
+	wantSI := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(57),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+		{
+			name:       "grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+	}
 	verifyAndCompareTraces(ctx, t, exporter, wantSI)
 }
 
@@ -1283,7 +1094,182 @@ func (s) TestSpan(t *testing.T) {
 	}
 
 	// Verify traces
-	wantSI := traceDataWithoutCompressor()
+	wantSI := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+		{
+			name:       "grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+	}
 	verifyAndCompareTraces(ctx, t, exporter, wantSI)
 }
 
@@ -1330,7 +1316,182 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	}
 
 	// Verify traces
-	wantSI := traceDataWithoutCompressor()
+	wantSI := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:       "grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+		{
+			name:       "grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: []attribute.KeyValue{},
+			events:     []trace.Event{},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.IntValue(0),
+				},
+			},
+			events: []trace.Event{},
+		},
+	}
 	verifyAndCompareTraces(ctx, t, exporter, wantSI)
 }
 

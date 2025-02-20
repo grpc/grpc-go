@@ -769,6 +769,44 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 // and for duration metrics makes sure the data point is within possible testing
 // time (five seconds from context timeout).
 func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
+	gotMetrics = waitForEventualServerMetrics(ctx, t, mr, gotMetrics, wantMetrics)
+
+	for _, metric := range wantMetrics {
+		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
+			val := gotMetrics[metric.Name]
+			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
+				t.Errorf("Metrics data type not equal for metric: %v", metric.Name)
+			}
+			continue
+		}
+
+		// If one of the duration metrics, ignore the bucket counts, and make
+		// sure it count falls within a bucket <= 5 seconds (maximum duration of
+		// test due to context).
+		if metric.Name == "grpc.client.attempt.duration" || metric.Name == "grpc.client.call.duration" || metric.Name == "grpc.server.call.duration" {
+			val := gotMetrics[metric.Name]
+			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars(), metricdatatest.IgnoreValue()) {
+				t.Errorf("Metrics data type not equal for metric: %v", metric.Name)
+			}
+			if err := checkDataPointWithinFiveSeconds(val); err != nil {
+				t.Errorf("Data point not within five seconds for metric %v: %v", metric.Name, err)
+			}
+			continue
+		}
+
+		val, ok := gotMetrics[metric.Name]
+		if !ok {
+			t.Errorf("Metric %v not present in recorded metrics", metric.Name)
+		}
+		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
+			t.Errorf("Metrics data type not equal for metric: %v", metric.Name)
+		}
+	}
+}
+
+// waitForEventualServerMetrics waits for eventual server metrics (not emitted
+// synchronously with client side rpc returning).
+func waitForEventualServerMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) map[string]metricdata.Metrics {
 	for _, metric := range wantMetrics {
 		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
 			// Sync the metric reader to see the event because stats.End is
@@ -778,37 +816,19 @@ func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, 
 			if gotMetrics, err = waitForServerCompletedRPCs(ctx, mr, metric); err != nil { // move to shared helper
 				t.Fatal(err)
 			}
-			val := gotMetrics[metric.Name]
-			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-				t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
-			}
 			continue
 		}
-
-		// If one of the duration metrics, ignore the bucket counts, and make
-		// sure it count falls within a bucket <= 5 seconds (maximum duration of
-		// test due to context).
 		if metric.Name == "grpc.client.attempt.duration" || metric.Name == "grpc.client.call.duration" || metric.Name == "grpc.server.call.duration" {
+			// Sync the metric reader to see the event because stats.End is
+			// handled async server side. Thus, poll until metrics created from
+			// stats.End show up.
 			var err error
 			if gotMetrics, err = waitForServerCompletedRPCs(ctx, mr, metric); err != nil { // move to shared helper
 				t.Fatal(err)
 			}
-			val := gotMetrics[metric.Name]
-			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars(), metricdatatest.IgnoreValue()) {
-				t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
-			}
-			if err := checkDataPointWithinFiveSeconds(val); err != nil {
-				t.Fatalf("Data point not within five seconds for metric %v: %v", metric.Name, err)
-			}
 			continue
 		}
-
-		val, ok := gotMetrics[metric.Name]
-		if !ok {
-			t.Fatalf("Metric %v not present in recorded metrics", metric.Name)
-		}
-		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
-			t.Fatalf("Metrics data type not equal for metric: %v", metric.Name)
-		}
 	}
+
+	return gotMetrics
 }
