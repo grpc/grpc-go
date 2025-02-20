@@ -635,7 +635,7 @@ func (s) TestRetryStats(t *testing.T) {
       }
     }]}`)))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 

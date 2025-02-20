@@ -169,8 +169,9 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 	// Create a ClientConn with the specified transport credentials.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 
 	// Start a test service backend with the specified transport credentials.
@@ -393,7 +394,7 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 
 	// Create a grpc channel with xDS creds.
 	cc, _ := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
-	cc.Connect()
+
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
 	resources := e2e.UpdateOptions{
@@ -460,7 +461,6 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 
 	// Create a grpc channel with xDS creds.
 	cc, _ := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
-	cc.Connect()
 
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
@@ -536,7 +536,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// Create a grpc channel with xDS creds talking to a test server with TLS
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
-	cc.Connect()
+
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource contains security configuration with a certificate
 	// provider instance that is missing in the bootstrap configuration.

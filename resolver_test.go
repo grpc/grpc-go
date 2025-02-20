@@ -125,7 +125,7 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 		WithResolvers(r),
 		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, balancerName)))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()

@@ -267,8 +267,9 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
+	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 
 	return mgmtServer, nodeID, cc, r, xdsC, cdsResourceRequestedCh, cdsResourceCanceledCh
@@ -308,8 +309,8 @@ func compareLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.
 // configuration changes, it stops requesting the old cluster resource and
 // starts requesting the new one.
 func (s) TestConfigurationUpdate_Success(t *testing.T) {
-	_, _, cc, r, xdsClient, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
-	cc.Connect()
+	_, _, _, r, xdsClient, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
+
 	// Verify that the specified cluster resource is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -402,7 +403,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Create a ClientConn with the above manual resolver.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
@@ -440,7 +441,7 @@ func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
 	// Create a ClientConn with the above manual resolver.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
@@ -603,8 +604,8 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-			mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-			cc.Connect()
+			mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
@@ -627,8 +628,8 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 // balancing configuration pushed to the child is as expected.
 func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 	clusterResource := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		ServiceName: serviceName,
@@ -680,7 +681,7 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 func (s) TestClusterUpdate_Failure(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
-	cc.Connect()
+
 	// Verify that the specified cluster resource is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -827,7 +828,7 @@ func (s) TestResolverError(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
 	lis := testutils.NewListenerWrapper(t, nil)
 	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerAndListener(t, lis)
-	cc.Connect()
+
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

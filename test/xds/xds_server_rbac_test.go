@@ -247,7 +247,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -680,7 +680,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 
 				cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 				if err != nil {
-					t.Fatalf("Failed to create a client for server: %v", err)
+					t.Fatalf("NewClient() failed: %v", err)
 				}
 				defer cc.Close()
 
@@ -862,7 +862,7 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 

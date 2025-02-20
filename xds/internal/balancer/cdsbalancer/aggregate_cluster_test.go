@@ -131,8 +131,8 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-			mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-			cc.Connect()
+			mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 			// Push the first cluster resource through the management server and
 			// verify the configuration pushed to the child policy.
 			resources := e2e.UpdateOptions{
@@ -174,8 +174,8 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 // contains the expected discovery mechanisms.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 	// Configure the management server with the aggregate cluster resource
 	// pointing to two child clusters, one EDS and one LogicalDNS. Include the
 	// resource corresponding to the EDS cluster here, but don't include
@@ -281,8 +281,8 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 // policy contains a single discovery mechanism.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 	// Configure the management server with the aggregate cluster resource
 	// pointing to two child clusters.
 	resources := e2e.UpdateOptions{
@@ -356,8 +356,8 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // discovery mechanisms.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 	// Start off with the requested cluster being a leaf EDS cluster.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
@@ -451,7 +451,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 // verifies that an RPC can be made successfully.
 func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
@@ -538,8 +538,8 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 	// Configure the management server with an aggregate cluster resource having
 	// a diamond dependency pattern, (A->[B,C]; B->D; C->D). Includes resources
 	// for cluster A, B and D, but don't include the resource for cluster C yet.
@@ -605,8 +605,8 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
 	// Configure the management server with an aggregate cluster resource that
 	// has duplicates in the graph, (A->[B, C]; B->[C, D]). Include resources
 	// for clusters A, B and D, but don't configure the resource for cluster C
@@ -684,7 +684,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
 		clusterNameB = clusterName + "-B"
@@ -769,7 +769,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
 		clusterNameB = clusterName + "-B"
@@ -817,7 +817,7 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
-	cc.Connect()
+
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
 	t.Cleanup(server.Stop)

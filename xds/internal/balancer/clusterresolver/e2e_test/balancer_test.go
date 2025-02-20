@@ -105,7 +105,7 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		xdsClose()
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	return cc, func() {
@@ -251,7 +251,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	// resolver, and dial the test backends.
 	cc, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-	cc.Connect()
+
 	// Wait for the EDS resource to be requested.
 	select {
 	case <-ctx.Done():

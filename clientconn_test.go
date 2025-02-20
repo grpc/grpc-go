@@ -98,7 +98,7 @@ func (s) TestNewClientWithTimeout(t *testing.T) {
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
 	client, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	client.Connect()
 	close(connectDone)
@@ -319,7 +319,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	}()
 	client, err := NewClient(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 
 	go stayConnected(client)
@@ -385,7 +385,7 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	}
 	cc, err := NewClient(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
@@ -624,7 +624,7 @@ func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential,
 	opts = append(opts, WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := NewClient("passthrough:///foo:80", opts...)
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer conn.Close()
 
@@ -647,7 +647,7 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	mct := 1 * time.Minute
 	conn, err := NewClient("passthrough:///foo:80", WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
 	if err != nil {
-		t.Fatalf("Failed to create a client: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer conn.Close()
 
@@ -661,7 +661,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 
 	cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -677,7 +677,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		r := manual.NewBuilderWithScheme(fmt.Sprintf("whatever-%d", i))
 		cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 		if err != nil {
-			t.Fatalf("Failed to create a client for server: %v", err)
+			t.Fatalf("NewClient() failed: %v", err)
 		}
 		cc.Connect()
 		// Send a new service config while closing the ClientConn.
@@ -691,7 +691,7 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 
 	cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -914,7 +914,7 @@ func (s) TestBackoffCancel(t *testing.T) {
 		return nil, fmt.Errorf("test dialer, always error")
 	}))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
