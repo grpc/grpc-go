@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"slices"
 	"strings"
 	"time"
 
@@ -38,11 +37,9 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-const (
-	port1       = 50050
-	port2       = 50051
-	port3       = 50052
-	repeatCount = 3
+var (
+	addr1 = "localhost:50050"
+	addr2 = "localhost:50051"
 )
 
 func main() {
@@ -50,27 +47,14 @@ func main() {
 	defer mr.Close()
 
 	// You can also plug in your own custom lb policy, which needs to be
-	// configurable. This "repeatCount" is configurable. Try changing it and
-	// see how the behavior changes.
-	json := fmt.Sprintf(`{"loadBalancingConfig": [{"custom_round_robin":{"repeatCount": %d}}]}`, repeatCount)
+	// configurable. This n is configurable. Try changing n and see how the
+	// behavior changes.
+	json := `{"loadBalancingConfig": [{"custom_round_robin":{"chooseSecond": 3}}]}`
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
-	// The resolver will produce both IPv4 and IPv6 addresses for each server.
-	// The leaf pickfirst balancers will handle connection attempts to each
-	// address within an endpoint.
 	mr.InitialState(resolver.State{
 		Endpoints: []resolver.Endpoint{
-			{Addresses: []resolver.Address{
-				{Addr: fmt.Sprintf("[::1]:%d", port1)},
-				{Addr: fmt.Sprintf("127.0.0.1:%d", port1)},
-			}},
-			{Addresses: []resolver.Address{
-				{Addr: fmt.Sprintf("[::1]:%d", port2)},
-				{Addr: fmt.Sprintf("127.0.0.1:%d", port2)},
-			}},
-			{Addresses: []resolver.Address{
-				{Addr: fmt.Sprintf("[::1]:%d", port3)},
-				{Addr: fmt.Sprintf("127.0.0.1:%d", port3)},
-			}},
+			{Addresses: []resolver.Address{{Addr: addr1}}},
+			{Addresses: []resolver.Address{{Addr: addr2}}},
 		},
 		ServiceConfig: sc,
 	})
@@ -86,72 +70,86 @@ func main() {
 	if err := waitForDistribution(ctx, ec); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Successful multiple iterations of 1:1:1 ratio")
+	fmt.Println("Successful multiple iterations of 1:2 ratio")
 }
 
-// waitForDistribution makes RPC's on the echo client until 9 RPC's follow the
-// same 1:1:1 address ratio for the peer. Returns an error if fails to do so
+// waitForDistribution makes RPC's on the echo client until 3 RPC's follow the
+// same 1:2 address ratio for the peer. Returns an error if fails to do so
 // before context timeout.
 func waitForDistribution(ctx context.Context, ec pb.EchoClient) error {
-	wantPeers := []string{
-		// Server 1 is listening only on the IPv4 loopback address.
-		fmt.Sprintf("127.0.0.1:%d", port1),
-		// Server 2 is listening only on the IPv6 loopback address.
-		fmt.Sprintf("[::1]:%d", port2),
-		// Server 3 is listening on both IPv4 and IPv6 loopback addresses.
-		// Since the IPv6 address is first in the list, it will be given
-		// higher priority.
-		fmt.Sprintf("[::1]:%d", port3),
-	}
 	for {
 		results := make(map[string]uint32)
 	InnerLoop:
 		for {
 			if ctx.Err() != nil {
-				return fmt.Errorf("timeout waiting for 1:1:1 distribution between addresses %v", wantPeers)
+				return fmt.Errorf("timeout waiting for 1:2 distribution between addresses %v and %v", addr1, addr2)
 			}
 
 			for i := 0; i < 3; i++ {
 				res := make(map[string]uint32)
 				for j := 0; j < 3; j++ {
-					prevAddr := ""
-					for repeat := 0; repeat < repeatCount; repeat++ {
-						var peer peer.Peer
-						r, err := ec.UnaryEcho(ctx, &pb.EchoRequest{Message: "this is examples/customloadbalancing"}, grpc.Peer(&peer))
-						if err != nil {
-							return fmt.Errorf("UnaryEcho failed: %v", err)
-						}
-						peerAddr := peer.Addr.String()
-						fmt.Printf("Response from peer %q: %v\n", peerAddr, r)
-						if !slices.Contains(wantPeers, peerAddr) {
-							return fmt.Errorf("peer address was not one of %q, got: %v", strings.Join(wantPeers, ", "), peerAddr)
-						}
-						// We expect to see the peer repeated "repeatCount"
-						// times.
-						if prevAddr != "" && peerAddr != prevAddr {
-							break InnerLoop
-						}
-						prevAddr = peerAddr
-						res[peerAddr]++
-						time.Sleep(time.Millisecond)
+					var peer peer.Peer
+					r, err := ec.UnaryEcho(ctx, &pb.EchoRequest{Message: "this is examples/customloadbalancing"}, grpc.Peer(&peer))
+					if err != nil {
+						return fmt.Errorf("UnaryEcho failed: %v", err)
 					}
+					fmt.Println(r)
+					peerAddr := peer.Addr.String()
+					if !strings.HasSuffix(peerAddr, "50050") && !strings.HasSuffix(peerAddr, "50051") {
+						return fmt.Errorf("peer address was not one of %v or %v, got: %v", addr1, addr2, peerAddr)
+					}
+					res[peerAddr]++
+					time.Sleep(time.Millisecond)
 				}
-				// Make sure the addresses come in a 1:1:1 ratio for this
+				// Make sure the addresses come in a 1:2 ratio for this
 				// iteration.
-				for _, count := range res {
-					if count != repeatCount {
+				var seen1, seen2 bool
+				for addr, count := range res {
+					if count != 1 && count != 2 {
 						break InnerLoop
 					}
+					if count == 1 {
+						if seen1 {
+							break InnerLoop
+						}
+						seen1 = true
+					}
+					if count == 2 {
+						if seen2 {
+							break InnerLoop
+						}
+						seen2 = true
+					}
+					results[addr] = results[addr] + count
 				}
-			}
-			// Make sure iteration is 9 for addresses seen. This makes sure the
-			// distribution is the same 1:1:1 ratio for each iteration.
-			for _, count := range results {
-				if count != 3*repeatCount {
+				if !seen1 || !seen2 {
 					break InnerLoop
 				}
 			}
-			return nil
+			// Make sure iteration is 3 and 6 for addresses seen. This makes
+			// sure the distribution is the same 1:2 ratio for each iteration.
+			var seen3, seen6 bool
+			for _, count := range results {
+				if count != 3 && count != 6 {
+					break InnerLoop
+				}
+				if count == 3 {
+					if seen3 {
+						break InnerLoop
+					}
+					seen3 = true
+				}
+				if count == 6 {
+					if seen6 {
+						break InnerLoop
+					}
+					seen6 = true
+				}
+				return nil
+			}
+			if !seen3 || !seen6 {
+				break InnerLoop
+			}
 		}
 	}
 }

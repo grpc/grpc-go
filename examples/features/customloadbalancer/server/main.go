@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strings"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -32,11 +31,7 @@ import (
 )
 
 var (
-	addrs = []string{
-		"127.0.0.1:50050", // IPv4 loopback address.
-		"[::1]:50051",     // IPv6 loopback address.
-		"[::]:50052",      // All IPv6 and IPv4 addresses (Dual-Stack).
-	}
+	addrs = []string{"localhost:50050", "localhost:50051"}
 )
 
 type echoServer struct {
@@ -56,7 +51,10 @@ func main() {
 			log.Fatalf("failed to listen: %v", err)
 		}
 		s := grpc.NewServer()
-		pb.RegisterEchoServer(s, &echoServer{addr: addr})
+		pb.RegisterEchoServer(s, &echoServer{
+			addr: addr,
+		})
+		log.Printf("serving on %s\n", addr)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -65,6 +63,5 @@ func main() {
 			}
 		}()
 	}
-	log.Printf("serving on %v", strings.Join(addrs, ", "))
 	wg.Wait()
 }
