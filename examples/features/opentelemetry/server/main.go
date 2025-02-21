@@ -91,12 +91,7 @@ func main() {
 		TextMapPropagator: textMapPropagator,
 	}
 
-	go func() {
-		log.Printf("Starting Prometheus metrics server at %s\n", *prometheusEndpoint)
-		if err := http.ListenAndServe(*prometheusEndpoint, promhttp.Handler()); err != nil {
-			log.Fatalf("Failed to start Prometheus server: %v", err)
-		}
-	}()
+	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
 	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: traceOptions})
 
