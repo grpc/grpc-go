@@ -58,6 +58,7 @@ EXAMPLES=(
     "features/compression"
     "features/customloadbalancer"
     "features/deadline"
+    "features/dualstack"
     "features/encryption/TLS"
     "features/error_details"
     "features/error_handling"
@@ -90,6 +91,7 @@ declare -A CLIENT_ARGS=(
 declare -A SERVER_WAIT_COMMAND=(
     ["features/unix_abstract"]="lsof -U | grep $UNIX_ADDR"
     ["default"]="lsof -i :$SERVER_PORT | grep $SERVER_PORT"
+    ["features/dualstack"]="lsof -i :50053 | grep 50053"
 )
 
 wait_for_server () {
@@ -116,6 +118,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/compression"]="UnaryEcho called with message \"compress\""
     ["features/customloadbalancer"]="serving on localhost:50051"
     ["features/deadline"]=""
+    ["features/dualstack"]="serving on \[::\]:50051"
     ["features/encryption/TLS"]=""
     ["features/error_details"]=""
     ["features/error_handling"]=""
@@ -142,6 +145,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>"
     ["features/customloadbalancer"]="Successful multiple iterations of 1:2 ratio"
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded"
+    ["features/dualstack"]="Successful multiple iterations of 1:1:1 ratio"
     ["features/encryption/TLS"]="UnaryEcho:  hello world"
     ["features/error_details"]="Greeting: Hello world"
     ["features/error_handling"]="Received error"
