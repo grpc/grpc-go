@@ -242,6 +242,8 @@ func newTest(t *testing.T, tc *testConfig, chs []stats.Handler, shs []stats.Hand
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
+//
+// Uses deprecated opts rpc.(RPCCompressor, RPCDecompressor, WithBlock, Dial)
 func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testServer = ts
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -680,13 +682,13 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 		payloads = e.responses
 	}
 
-	expectedPayload := payloads[*idx]
-	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
-		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
+	wantPayload := payloads[*idx]
+	if !proto.Equal(st.Payload.(proto.Message), wantPayload) {
+		t.Fatalf("st.Payload = %v, want %v", st.Payload, wantPayload)
 	}
 	*idx++
-	if st.Length != proto.Size(expectedPayload) {
-		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
+	if st.Length != proto.Size(wantPayload) {
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(wantPayload))
 	}
 
 	// Below are sanity checks that Length, CompressedLength and SentTime are populated.
@@ -742,8 +744,8 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("expected st.Error to be a statusError, got %v (type %T)", st.Error, st.Error)
 	}
 
-	expectedStatus, _ := status.FromError(e.err)
-	if actual.Code() != expectedStatus.Code() || actual.Message() != expectedStatus.Message() {
+	wantStatus, _ := status.FromError(e.err)
+	if actual.Code() != wantStatus.Code() || actual.Message() != wantStatus.Message() {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
 
@@ -788,6 +790,7 @@ func checkConnEnd(t *testing.T, d *gotData) {
 
 type statshandler struct {
 	mu      sync.Mutex
+	events  []string
 	gotRPC  []*gotData
 	gotConn []*gotData
 }
@@ -800,13 +803,52 @@ func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) conte
 	return context.WithValue(ctx, rpcCtxKey{}, info)
 }
 
+// recordEvent records an event in the statshandler along with a timestamp.
+func (h *statshandler) recordEvent(eventType string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.events = append(h.events, eventType)
+}
+
 func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
+	h.recordEvent("ConnStats")
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.gotConn = append(h.gotConn, &gotData{ctx, s.IsClient(), s})
 }
 
+const (
+	beginEvt      = "Begin"
+	endEvt        = "End"
+	inPayloadEvt  = "InPayload"
+	inHeaderEvt   = "InHeader"
+	inTrailerEvt  = "InTrailer"
+	outPayloadEvt = "OutPayload"
+	outHeaderEvt  = "OutHeader"
+	outTrailerEvt = "OutTrailer"
+)
+
 func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	switch s.(type) {
+	case *stats.Begin:
+		h.recordEvent(beginEvt)
+	case *stats.InHeader:
+		h.recordEvent(inHeaderEvt)
+	case *stats.InPayload:
+		h.recordEvent(inPayloadEvt)
+	case *stats.OutHeader:
+		h.recordEvent(outHeaderEvt)
+	case *stats.OutPayload:
+		h.recordEvent(outPayloadEvt)
+	case *stats.InTrailer:
+		h.recordEvent(inTrailerEvt)
+	case *stats.OutTrailer:
+		h.recordEvent(outTrailerEvt)
+	case *stats.End:
+		h.recordEvent(endEvt)
+	}
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
@@ -909,7 +951,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	expect := &expectedData{
+	want := &expectedData{
 		serverAddr:     te.srvAddr,
 		compression:    tc.compress,
 		method:         method,
@@ -923,7 +965,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	h.mu.Lock()
 	checkConnStats(t, h.gotConn)
 	h.mu.Unlock()
-	checkServerStats(t, h.gotRPC, expect, checkFuncs)
+	checkServerStats(t, h.gotRPC, want, checkFuncs)
 }
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
