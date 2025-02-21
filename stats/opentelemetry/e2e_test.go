@@ -1652,7 +1652,7 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	}()
 
 	time.Sleep(2 * time.Second)
-
+	// Update the resolver with valid addresses, unblocking RPC
 	resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: listener.Addr().String()}}})
 
 	// Wait for the first RPC attempt before proceeding
@@ -1677,7 +1677,8 @@ func TestNameResolutionDelayTraceEvent(t *testing.T) {
 	}
 }
 
-// containsSpanEvent checks if any span contains an event with the specified name.
+// containsSpanEvent checks if any span contains an event with the
+// specified name.
 func containsSpanEvent(spans []tracetest.SpanStub, eventName string) bool {
 	for _, span := range spans {
 		for _, event := range span.Events {
