@@ -47,9 +47,16 @@ import (
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9465", "the Prometheus exporter endpoint")
+	otlpEndpoint       = flag.String("otlp_endpoint", "localhost:4318", "the OTLP collector endpoint")
+	serviceName        = "grpc-client"
 )
 
 func main() {
+	flag.Parse()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
@@ -57,16 +64,16 @@ func main() {
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
 
 	otlpclient := otlptracehttp.NewClient(
-		otlptracehttp.WithEndpoint("localhost:4318"),
+		otlptracehttp.WithEndpoint(*otlpEndpoint),
 		otlptracehttp.WithInsecure(),
 	)
 	traceExporter, err := otlptrace.New(context.Background(), otlpclient)
 	if err != nil {
 		log.Fatalf("Failed to create otlp trace exporter: %v", err)
 	}
-	res, err := resource.New(context.Background(),
+	res, err := resource.New(ctx,
 		resource.WithTelemetrySDK(),
-		resource.WithAttributes(semconv.ServiceName("grpc-client")),
+		resource.WithAttributes(semconv.ServiceName(serviceName)),
 	)
 	if err != nil {
 		log.Fatalf("Could not set resources: %v", err)
@@ -82,7 +89,6 @@ func main() {
 	}
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	ctx := context.Background()
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: traceOptions})
 
 	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
