@@ -38,6 +38,14 @@ type serverStatsHandler struct {
 	serverMetrics serverMetrics
 }
 
+type serverMetricsStatsHandler struct {
+	*serverStatsHandler
+}
+
+type serverTracingStatsHandler struct {
+	*serverStatsHandler
+}
+
 func (h *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
@@ -211,24 +219,41 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 
 // HandleRPC implements per RPC tracing and stats implementation.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
-		return
+	if h.options.isMetricsEnabled() {
+		metricsHandler := &serverMetricsStatsHandler{serverStatsHandler: h}
+		metricsHandler.HandleRPC(ctx, rs)
 	}
 	if h.options.isTracingEnabled() {
-		populateSpan(rs, ri.ai)
-	}
-	if h.options.isMetricsEnabled() {
-		h.processRPCData(ctx, rs, ri.ai)
+		tracingHandler := &serverTracingStatsHandler{serverStatsHandler: h}
+		tracingHandler.HandleRPC(ctx, rs)
 	}
 }
 
-func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
+// HandleRPC implements per RPC stats handling for metrics.
+func (h *serverMetricsStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("ctx passed into server metrics stats handler metrics event handling has no server call data present")
+		return
+	}
+	h.processRPCData(ctx, rs, ri.ai)
+}
+
+// HandleRPC implements per RPC tracing handling for tracing.
+func (h *serverTracingStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("ctx passed into server tracing stats handler tracing event handling has no server call data present")
+		return
+	}
+	populateSpan(rs, ri.ai)
+}
+
+func (h *serverMetricsStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if ai.pluginOptionLabels == nil && h.options.MetricsOptions.pluginOption != nil {
-			labels := h.options.MetricsOptions.pluginOption.GetLabels(st.Header)
+		if ai.pluginOptionLabels == nil && h.serverStatsHandler.options.MetricsOptions.pluginOption != nil {
+			labels := h.serverStatsHandler.options.MetricsOptions.pluginOption.GetLabels(st.Header)
 			if labels == nil {
 				labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
 			}
@@ -237,7 +262,7 @@ func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStat
 		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
 			otelattribute.String("grpc.method", ai.method),
 		))
-		h.serverMetrics.callStarted.Add(ctx, 1, attrs)
+		h.serverStatsHandler.serverMetrics.callStarted.Add(ctx, 1, attrs)
 	case *stats.OutPayload:
 		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
