@@ -71,7 +71,7 @@ func newClient(target, binaryPath, bootstrap string, logger io.Writer, flags ...
 	)
 	cmd.Start()
 
-	cc, err := grpc.Dial(fmt.Sprintf("localhost:%d", clientStatsPort), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
+	cc, err := grpc.NewClient(fmt.Sprintf("localhost:%d", clientStatsPort), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	if err != nil {
 		return nil, err
 	}
