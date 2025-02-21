@@ -84,8 +84,7 @@ func (*exampleResolver) Scheme() string {
 }
 
 func main() {
-	// First it sends 5 requests using the default DNS and pickfirst load
-	// balancer.
+	// First send 5 requests using the default DNS and pickfirst load balancer.
 	log.Print("**** Use default DNS resolver ****")
 	target := fmt.Sprintf("localhost:%d", port1)
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -122,8 +121,7 @@ func main() {
 	// Send 10 requests using the example nameresolver and round robin load
 	// balancer. These requests are evenly distributed among the 3 servers
 	// rather than favoring the server listening on both addresses because the
-	// resolver groups the 3 servers as 3 endpoints each
-	// with 2 addresses.
+	// resolver groups the 3 servers as 3 endpoints each with 2 addresses.
 	if err := waitForDistribution(ctx, client); err != nil {
 		log.Panic(err)
 	}
@@ -139,7 +137,7 @@ func waitForDistribution(ctx context.Context, client hwpb.GreeterClient) error {
 		// Since the IPv6 address comes first in the resolver list, it will be
 		// given higher priority.
 		fmt.Sprintf("[::1]:%d", port1),
-		// Server 1 is listening only on the IPv4 loopback address.
+		// Server 2 is listening only on the IPv4 loopback address.
 		fmt.Sprintf("127.0.0.1:%d", port2),
 		// Server 3 is listening only on the IPv6 loopback address.
 		fmt.Sprintf("[::1]:%d", port3),
