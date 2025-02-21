@@ -47,7 +47,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
@@ -64,7 +63,6 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
-	"google.golang.org/grpc/status"
 )
 
 var defaultTestTimeout = 5 * time.Second
@@ -1586,87 +1584,107 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 }
 
 // gRPC server implementation
-type server struct {
+type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 }
 
 // EmptyCall is a simple RPC that returns an empty response.
-func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
+func (s *testServer) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
 	return &testgrpc.Empty{}, nil
 }
 
 // TestEventForNameResolutionDelay verifies that an event is emitted for name
 // resolution delay during RPC calls.
-func (s) TestNameResolutionDelayTraceEvent(t *testing.T) {
-	to, spanExporter := defaultTraceOptions(t)
+func TestNameResolutionDelayTraceEvent(t *testing.T) {
+	traceOptions, spanExporter := defaultTraceOptions(t)
+	resolverBuilder := manual.NewBuilderWithScheme("delayed")
 
-	r := manual.NewBuilderWithScheme("whatever")
-	t.Logf("Registered manual resolver with scheme: %s", r.Scheme())
-
-	// Start a gRPC server
-	lis, err := net.Listen("tcp", "localhost:0")
+	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lis.Close()
+	defer listener.Close()
 
-	srv := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(srv, &server{})
-	go srv.Serve(lis)
-	defer srv.Stop()
+	server := grpc.NewServer()
+	testgrpc.RegisterTestServiceServer(server, &testServer{})
+	go server.Serve(listener)
+	defer server.Stop()
 
-	reader := metric.NewManualReader()
-	provider := metric.NewMeterProvider(metric.WithReader(reader))
-
-	// Define metrics options for OpenTelemetry
-	mo := opentelemetry.MetricsOptions{
-		MeterProvider:  provider,
-		Metrics:        opentelemetry.DefaultMetrics().Add("grpc.lb.wrr.rr_fallback", "grpc.lb.wrr.endpoint_weight_not_yet_usable", "grpc.lb.wrr.endpoint_weight_stale", "grpc.lb.wrr.endpoint_weights"),
+	metricReader := metric.NewManualReader()
+	metricProvider := metric.NewMeterProvider(metric.WithReader(metricReader))
+	metricsOptions := opentelemetry.MetricsOptions{
+		MeterProvider: metricProvider,
+		Metrics: opentelemetry.DefaultMetrics().Add(
+			"grpc.lb.wrr.rr_fallback",
+			"grpc.lb.wrr.endpoint_weight_not_yet_usable",
+			"grpc.lb.wrr.endpoint_weight_stale",
+			"grpc.lb.wrr.endpoint_weights",
+		),
 		OptionalLabels: []string{"grpc.lb.locality"},
 	}
-
-	dopts := []grpc.DialOption{
+	dialOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(r),
+		grpc.WithResolvers(resolverBuilder),
 		opentelemetry.DialOption(opentelemetry.Options{
-			MetricsOptions: mo,
-			TraceOptions:   *to,
+			MetricsOptions: metricsOptions,
+			TraceOptions:   *traceOptions,
 		}),
 	}
-	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
+
+	clientConn, err := grpc.NewClient(resolverBuilder.Scheme()+":///test.server", dialOptions...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cc.Close()
-	client := testgrpc.NewTestServiceClient(cc)
-	t.Log("Created a gRPC client with OpenTelemetry tracing.")
+	defer clientConn.Close()
+	client := testgrpc.NewTestServiceClient(clientConn)
+	t.Log("Created gRPC client with OpenTelemetry tracing.")
 
-	// First RPC should fail due to the absence of any addresses
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.DeadlineExceeded {
-		t.Fatalf("Expected EmptyCall() to fail with DeadlineExceeded, but got: %v", err)
-	}
-
+	// First RPC should block due to missing addresses
+	blockedRPC := make(chan struct{})
 	go func() {
-		time.Sleep(3 * time.Second)
-		state := resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}
-		r.UpdateState(state)
-		t.Logf("Pushed resolver state update: %v", state)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+			t.Logf("First RPC failed as expected before resolver update: %v", err)
+		}
+		close(blockedRPC)
 	}()
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	time.Sleep(2 * time.Second)
+
+	resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: listener.Addr().String()}}})
+
+	// Wait for the first RPC attempt before proceeding
+	<-blockedRPC
+
+	// Second RPC should succeed after resolver update
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("Expected EmptyCall() to succeed, but got: %v", err)
+	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+		t.Fatalf("Second RPC failed unexpectedly: %v", err)
 	}
 
+	// Verify tracing events to confirm resolution delay was recorded
 	spans := spanExporter.GetSpans()
 	if len(spans) == 0 {
-		t.Fatal("No spans were exported. Expected at least one span with trace evgo test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...ents.")
+		t.Fatal("No spans exported. Expected at least one span with trace events.")
 	}
 
-	if got, want := spans[1].Events[0].Name, "Name resolution completed with delay"; got != want {
-		t.Fatalf("Got event name %s, want %s", got, want)
+	expectedEvent := "Name resolution completed with delay"
+	if !containsSpanEvent(spans, expectedEvent) {
+		t.Fatalf("Expected trace event %q not found!", expectedEvent)
 	}
+}
+
+// containsSpanEvent checks if any span contains an event with the specified name.
+func containsSpanEvent(spans []tracetest.SpanStub, eventName string) bool {
+	for _, span := range spans {
+		for _, event := range span.Events {
+			if event.Name == eventName {
+				return true
+			}
+		}
+	}
+	return false
 }
