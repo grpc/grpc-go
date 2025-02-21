@@ -396,9 +396,9 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 
 	// Create xDS client, configure cds_experimental LB policy with a manual
 	// resolver, and dial the test backends.
-	cc, cleanup := setupAndDial(t, bootstrapContents)
+	_, cleanup := setupAndDial(t, bootstrapContents)
 	defer cleanup()
-	cc.Connect()
+
 	// The priority configuration generated should have Outlier Detection as a
 	// direct child due to Outlier Detection being turned on.
 	wantCfg := &priority.LBConfig{
