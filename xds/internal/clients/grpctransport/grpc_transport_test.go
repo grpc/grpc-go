@@ -63,6 +63,8 @@ type testServer struct {
 // creates an instance of testServer that returns the provided response from
 // the StreamAggregatedResources() handler and registers it with a gRPC server.
 func setupTestServer(t *testing.T, response *v3discoverypb.DiscoveryResponse) *testServer {
+	t.Helper()
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen on localhost:0: %v", err)
@@ -111,20 +113,41 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 	}
 }
 
-// TestBuild verifies that the grpctransport.Builder creates a new
-// grpc.ClientConn every time Build() is called.
+// TestBuild_Success verifies that the Builder successfully creates a new
+// Transport with a non-nil grpc.ClientConn.
+func (s) TestBuild_Success(t *testing.T) {
+	serverCfg := clients.ServerConfig{
+		ServerURI:  "server-address",
+		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+	}
+
+	b := &Builder{}
+	tr, err := b.Build(serverCfg)
+	if err != nil {
+		t.Fatalf("Build() failed: %v", err)
+	}
+	defer tr.Close()
+
+	if tr == nil {
+		t.Fatalf("Got nil transport from Build(), want non-nil")
+	}
+	if tr.(*grpcTransport).cc == nil {
+		t.Fatalf("Got nil grpc.ClientConn in transport, want non-nil")
+	}
+}
+
+// TestBuild_Failure verifies that the Builder returns error when incorrect
+// ServerConfig is provided.
 //
 // It covers the following scenarios:
 // - ServerURI is empty.
 // - Extensions is nil.
 // - Extensions is not ServerConfigExtension.
 // - Credentials are nil.
-// - Success cases.
-func (s) TestBuild(t *testing.T) {
+func (s) TestBuild_Failure(t *testing.T) {
 	tests := []struct {
 		name      string
 		serverCfg clients.ServerConfig
-		wantErr   bool
 	}{
 		{
 			name: "ServerURI is empty",
@@ -132,12 +155,10 @@ func (s) TestBuild(t *testing.T) {
 				ServerURI:  "",
 				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
 			},
-			wantErr: true,
 		},
 		{
 			name:      "Extensions is nil",
 			serverCfg: clients.ServerConfig{ServerURI: "server-address"},
-			wantErr:   true,
 		},
 		{
 			name: "Extensions is not a ServerConfigExtension",
@@ -145,7 +166,6 @@ func (s) TestBuild(t *testing.T) {
 				ServerURI:  "server-address",
 				Extensions: 1,
 			},
-			wantErr: true,
 		},
 		{
 			name: "ServerConfigExtension Credentials is nil",
@@ -153,39 +173,24 @@ func (s) TestBuild(t *testing.T) {
 				ServerURI:  "server-address",
 				Extensions: ServerConfigExtension{},
 			},
-			wantErr: true,
-		},
-		{
-			name: "success",
-			serverCfg: clients.ServerConfig{
-				ServerURI:  "server-address",
-				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
-			},
-			wantErr: false,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			b := &Builder{}
 			tr, err := b.Build(test.serverCfg)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("Build() error = %v, wantErr %v", err, test.wantErr)
+			if err == nil {
+				t.Fatalf("Build() succeeded, want error")
 			}
 			if tr != nil {
-				defer tr.Close()
-			}
-			if !test.wantErr && tr == nil {
-				t.Fatalf("got non-nil transport from Build(), want nil")
-			}
-			if test.wantErr && tr != nil {
-				t.Fatalf("got nil transport from Build(), want non-nil")
+				t.Fatalf("Got non-nil transport from Build(), want nil")
 			}
 		})
 	}
 }
 
-// TestNewStream_Success verifies that grpcTransport.NewStream() successfully
-// creates a new client stream for the server when provided a valid server URI.
+// TestNewStream_Success verifies that NewStream() successfully creates a new
+// client stream for the server when provided a valid server URI.
 func (s) TestNewStream_Success(t *testing.T) {
 	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
 
@@ -208,7 +213,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 	}
 }
 
-// TestNewStream_Error verifies that grpcTransport.NewStream() returns an error
+// TestNewStream_Error verifies that NewStream() returns an error
 // when attempting to create a stream with an invalid server URI.
 func (s) TestNewStream_Error(t *testing.T) {
 	serverCfg := clients.ServerConfig{
@@ -230,13 +235,12 @@ func (s) TestNewStream_Error(t *testing.T) {
 	}
 }
 
-// TestStream_SendAndRecv verifies that grpcTransport.Stream.Send()
-// and grpcTransport.Stream.Recv() successfully send and receive messages
-// on the stream to and from the gRPC server.
+// TestStream_SendAndRecv verifies that Send() and Recv() successfully send
+// and receive messages on the stream to and from the gRPC server.
 //
 // It starts a gRPC test server using setupTestServer(). The test then sends a
 // testDiscoverRequest on the stream and verifies that the received discovery
-// on the server is same as sent. It then wait to receive a
+// request on the server is same as sent. It then wait to receive a
 // testDiscoverResponse from the server and verifies that the received
 // discovery response is same as sent from the server.
 func (s) TestStream_SendAndRecv(t *testing.T) {
@@ -277,11 +281,11 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// sent.
 	select {
 	case gotReq := <-ts.requestChan:
-		if !cmp.Equal(gotReq, testDiscoverRequest, protocmp.Transform()) {
-			t.Fatalf("<-ts.requestChan = %v, want %v", &gotReq, &testDiscoverRequest)
+		if diff := cmp.Diff(gotReq, testDiscoverRequest, protocmp.Transform()); diff != "" {
+			t.Fatalf("Unexpected diff in request received on server (-want +got):\n%s", diff)
 		}
 	case <-ctx.Done():
-		t.Fatalf("timeout waiting for request to reach server")
+		t.Fatalf("Timeout waiting for request to reach server")
 	}
 
 	// Wait until response message is received from the server.
@@ -296,7 +300,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	if err := proto.Unmarshal(res, &gotRes); err != nil {
 		t.Fatalf("Failed to unmarshal response from ts.requestChan to DiscoveryResponse: %v", err)
 	}
-	if !cmp.Equal(&gotRes, ts.response, protocmp.Transform()) {
-		t.Fatalf("proto.Unmarshal(res, &gotRes) = %v, want %v", &gotRes, ts.response)
+	if diff := cmp.Diff(&gotRes, ts.response, protocmp.Transform()); diff != "" {
+		t.Fatalf("proto.Unmarshal(res, &gotRes) returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
