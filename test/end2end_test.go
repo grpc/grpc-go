@@ -145,6 +145,8 @@ type testServer struct {
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 	unaryCallSleepTime time.Duration
+	earlyNil           bool // whether to return nil without calling SendAndClose().
+	recvAfterClose     bool // whether to call Recv() after calling SendAndClose().
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -283,6 +285,17 @@ func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 
 func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
 	var sum int
+	if s.earlyNil {
+		return nil
+	}
+	if s.recvAfterClose {
+		fmt.Printf("reAfetclose")
+		err := stream.SendAndClose(&testpb.StreamingInputCallResponse{
+			AggregatedPayloadSize: int32(sum),
+		})
+		_, err = stream.Recv()
+		return err
+	}
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -3578,6 +3591,77 @@ func testClientStreamingError(t *testing.T, e env) {
 		if err := stream.Send(req); err != io.EOF {
 			continue
 		}
+		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.NotFound {
+			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
+		}
+		break
+	}
+}
+
+func (s) TestClientStreamingMissingSendAndCloseError(t *testing.T) {
+	t.Skip()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testClientStreamingMissingSendAndCloseError(t, e)
+	}
+}
+
+func testClientStreamingMissingSendAndCloseError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, earlyNil: true})
+	defer te.tearDown()
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
+
+	stream, err := tc.StreamingInputCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
+	}
+
+	if _, err := stream.CloseAndRecv(); status.Code(err) == codes.OK {
+		// TODO : replace with whatever error is decided for this.
+		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, "not OK")
+	}
+}
+
+func (s) TestClientStreamingRecvAfterCloseError(t *testing.T) {
+	t.Skip()
+	for _, e := range listTestEnv() {
+		if e.name == "handler-tls" {
+			continue
+		}
+		testClientStreamingRecvAfterCloseError(t, e)
+	}
+}
+
+func testClientStreamingRecvAfterCloseError(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security, recvAfterClose: true})
+	defer te.tearDown()
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
+
+	stream, err := tc.StreamingInputCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.StreamingInputCallRequest{
+		Payload: payload,
+	}
+	// The 1st request should go through.
+	if err := stream.Send(req); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
+	}
+	for {
+		if err := stream.Send(req); err != io.EOF {
+			continue
+		}
+		// emchandwani : check what error is expected.
 		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.NotFound {
 			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
 		}
