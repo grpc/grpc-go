@@ -4959,6 +4959,7 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		maxSendSize []int
 		compressor  []string
 		subtype     []string
+		authority   []string
 	}
 	var observedOpts observedOptions
 	populateOpts := func(opts []grpc.CallOption) {
@@ -4982,6 +4983,8 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 				observedOpts.compressor = append(observedOpts.compressor, o.CompressorType)
 			case grpc.ContentSubtypeCallOption:
 				observedOpts.subtype = append(observedOpts.subtype, o.ContentSubtype)
+			case grpc.AuthorityOverrideCallOption:
+				observedOpts.authority = append(observedOpts.authority, o.Authority)
 			}
 		}
 	}
@@ -5012,7 +5015,8 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		grpc.PerRPCCredentials(testPerRPCCredentials{}),
 		grpc.Header(&headers),
 		grpc.Trailer(&trailers),
-		grpc.Peer(&pr))
+		grpc.Peer(&pr),
+		grpc.CallAuthority("test-authority"))
 	expected := observedOptions{
 		failFast:    []bool{false},
 		maxRecvSize: []int{1010, 100},
@@ -5021,6 +5025,7 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		headers:     []*metadata.MD{&headers},
 		trailers:    []*metadata.MD{&trailers},
 		peer:        []*peer.Peer{&pr},
+		authority:   []string{"test-authority"},
 	}
 
 	if !reflect.DeepEqual(expected, observedOpts) {
@@ -5033,13 +5038,15 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		grpc.WaitForReady(false),
 		grpc.MaxCallSendMsgSize(2020),
 		grpc.UseCompressor("comp-type"),
-		grpc.CallContentSubtype("json"))
+		grpc.CallContentSubtype("json"),
+		grpc.CallAuthority("test-authority"))
 	expected = observedOptions{
 		failFast:    []bool{false, true},
 		maxRecvSize: []int{1010},
 		maxSendSize: []int{2020},
 		compressor:  []string{"comp-type"},
 		subtype:     []string{"json"},
+		authority:   []string{"test-authority"},
 	}
 
 	if !reflect.DeepEqual(expected, observedOpts) {
