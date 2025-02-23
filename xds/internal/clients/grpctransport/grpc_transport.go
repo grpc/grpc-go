@@ -48,17 +48,17 @@ type Builder struct{}
 // The Extension field of the ServerConfig must be a ServerConfigExtension.
 func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	if sc.ServerURI == "" {
-		return nil, fmt.Errorf("ServerConfig's ServerURI field cannot be empty")
+		return nil, fmt.Errorf("grpctransport: ServerURI is not set in ServerConfig")
 	}
 	if sc.Extensions == nil {
-		return nil, fmt.Errorf("ServerConfig's Extensions field cannot be nil for gRPC transport")
+		return nil, fmt.Errorf("grpctransport: Extensions is not set in ServerConfig")
 	}
 	sce, ok := sc.Extensions.(ServerConfigExtension)
 	if !ok {
-		return nil, fmt.Errorf("ServerConfig Extensions field is %T, but must be %T", sc.Extensions, ServerConfigExtension{})
+		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerConfig", sc.Extensions, ServerConfigExtension{})
 	}
 	if sce.Credentials == nil {
-		return nil, fmt.Errorf("ServerConfigExtensions's Credentials field cannot be nil for gRPC transport")
+		return nil, fmt.Errorf("grptransport: Credentials field is not set in ServerConfigExtension")
 	}
 
 	// TODO: Incorporate reference count map for existing transports and
@@ -76,7 +76,7 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 	})
 	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(sce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
-		return nil, fmt.Errorf("error creating grpc client for server uri %s, %v", sc.ServerURI, err)
+		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", sc.ServerURI, err)
 	}
 
 	return &grpcTransport{cc: cc}, nil
@@ -125,7 +125,7 @@ func (c *byteCodec) Marshal(v any) ([]byte, error) {
 	if b, ok := v.([]byte); ok {
 		return b, nil
 	}
-	return nil, fmt.Errorf("message must be a byte slice")
+	return nil, fmt.Errorf("message is %T, but must be a byte slice ", v)
 }
 
 func (c *byteCodec) Unmarshal(data []byte, v any) error {
@@ -133,9 +133,9 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 		*b = data
 		return nil
 	}
-	return fmt.Errorf("target must be a pointer to a byte slice")
+	return fmt.Errorf("target is %T, but must be a pointer to a byte slice", v)
 }
 
 func (c *byteCodec) Name() string {
-	return "grpc.xds.internal.clients.grpctransport.byte_codec"
+	return "grpctransport.byteCodec"
 }

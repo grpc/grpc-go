@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,34 +16,35 @@
  *
  */
 
-package xdsclient
+// Package xdsresource provides resource specific helpers for the xDS client.
+package xdsresource
 
 import "fmt"
 
-// errorType is the type of the error that the watcher will receive from the xds
+// ErrorType is the type of the error that the watcher will receive from the xds
 // client.
-type errorType int
+type ErrorType int
 
 const (
-	// errorTypeUnknown indicates the error doesn't have a specific type. It is
+	// ErrorTypeUnknown indicates the error doesn't have a specific type. It is
 	// the default value, and is returned if the error is not an xds error.
-	errorTypeUnknown errorType = iota
+	ErrorTypeUnknown ErrorType = iota
 	// ErrorTypeConnection indicates a connection error from the gRPC client.
-	errorTypeConnection
-	// errorTypeResourceNotFound indicates a resource is not found from the xds
+	ErrorTypeConnection
+	// ErrorTypeResourceNotFound indicates a resource is not found from the xds
 	// response. It's typically returned if the resource is removed in the xds
 	// server.
-	errorTypeResourceNotFound
-	// errorTypeResourceTypeUnsupported indicates the receipt of a message from
+	ErrorTypeResourceNotFound
+	// ErrorTypeResourceTypeUnsupported indicates the receipt of a message from
 	// the management server with resources of an unsupported resource type.
-	errorTypeResourceTypeUnsupported
+	ErrorTypeResourceTypeUnsupported
 	// ErrTypeStreamFailedAfterRecv indicates an ADS stream error, after
 	// successful receipt of at least one message from the server.
-	errTypeStreamFailedAfterRecv
+	ErrTypeStreamFailedAfterRecv
 )
 
 type xdsClientError struct {
-	t    errorType
+	t    ErrorType
 	desc string
 }
 
@@ -51,16 +52,16 @@ func (e *xdsClientError) Error() string {
 	return e.desc
 }
 
-// newErrorf creates an xDS client error. The callbacks are called with this
+// NewErrorf creates an xDS client error. The callbacks are called with this
 // error, to pass additional information about the error.
-func newErrorf(t errorType, format string, args ...any) error {
+func NewErrorf(t ErrorType, format string, args ...any) error {
 	return &xdsClientError{t: t, desc: fmt.Sprintf(format, args...)}
 }
 
-// errType returns the error's type.
-func errType(e error) errorType {
+// ErrType returns the error's type.
+func ErrType(e error) ErrorType {
 	if xe, ok := e.(*xdsClientError); ok {
 		return xe.t
 	}
-	return errorTypeUnknown
+	return ErrorTypeUnknown
 }

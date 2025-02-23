@@ -31,7 +31,7 @@ type LoadStore struct {
 }
 
 // PerCluster returns the PerClusterReporter for the given cluster and service.
-func (s *LoadStore) PerCluster(clusterName, serviceName string) PerClusterReporter {
+func (ls *LoadStore) PerCluster(clusterName, serviceName string) PerClusterReporter {
 	panic("unimplemented")
 }
 
