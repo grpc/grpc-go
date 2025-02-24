@@ -548,6 +548,8 @@ func (bg *BalancerGroup) Close() {
 	bg.incomingMu.Unlock()
 
 	bg.outgoingMu.Lock()
+	// Setting `outgoingClosed` ensures that no entries are added to
+	// `deletedBalancerCache` after this point.
 	bg.outgoingClosed = true
 	bg.outgoingMu.Unlock()
 
