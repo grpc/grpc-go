@@ -94,13 +94,11 @@ type timerWrapper struct {
 type priorityBalancer struct {
 	logger                   *grpclog.PrefixLogger
 	cc                       balancer.ClientConn
+	bg                       *balancergroup.BalancerGroup
 	done                     *grpcsync.Event
 	childBalancerStateUpdate *buffer.Unbounded
 
-	mu sync.Mutex
-	// bg holds balancers for different priorities. mu must be held during calls
-	// into bg to uphold the serial call guarantee of ClientConn.
-	bg         *balancergroup.BalancerGroup
+	mu         sync.Mutex
 	childInUse string
 	// priorities is a list of child names from higher to lower priority.
 	priorities []string
@@ -212,8 +210,6 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 }
 
 func (b *priorityBalancer) ResolverError(err error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.bg.ResolverError(err)
 }
 
@@ -222,11 +218,11 @@ func (b *priorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 }
 
 func (b *priorityBalancer) Close() {
+	b.bg.Close()
 	b.childBalancerStateUpdate.Close()
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.bg.Close()
 	b.done.Fire()
 	// Clear states of the current child in use, so if there's a race in picker
 	// update, it will be dropped.
@@ -239,8 +235,6 @@ func (b *priorityBalancer) Close() {
 }
 
 func (b *priorityBalancer) ExitIdle() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.bg.ExitIdle()
 }
 
