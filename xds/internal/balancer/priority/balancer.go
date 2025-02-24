@@ -71,7 +71,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		Logger:                  b.logger,
 		SubBalancerCloseTimeout: DefaultSubBalancerCloseTimeout,
 	})
-	b.bg.Start()
 	go b.run()
 	b.logger.Infof("Created")
 	return b
