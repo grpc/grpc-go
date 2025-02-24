@@ -38,6 +38,9 @@ type RPCTagInfo struct {
 	// FailFast indicates if this RPC is failfast.
 	// This field is only valid on client side, it's always false on server side.
 	FailFast bool
+	// NameResolutionDelay indicates if there was a delay in the name resolution.
+	// This field is only valid on client side, it's always false on server side.
+	NameResolutionDelay bool
 }
 
 // Handler defines the interface for the related stats handling (e.g., RPCs, connections).
