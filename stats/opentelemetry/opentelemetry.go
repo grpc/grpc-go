@@ -118,9 +118,34 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
-	csh := &clientStatsHandler{options: o}
+	csh := &clientStatsHandler{
+		MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+		options:         o,
+		clientMetrics:   clientAttemptMetrics{},
+	}
 	csh.initializeMetrics()
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
+	var interceptors []grpc.DialOption
+
+	metricsHandler := &clientMetricsStatsHandler{
+		options:       o,
+		clientMetrics: clientCallMetrics{},
+	}
+	metricsHandler.initializeMetrics()
+
+	tracingHandler := &clientTracingStatsHandler{
+		options:        o,
+		tracerProvider: o.TraceOptions.TracerProvider,
+	}
+	tracingHandler.initializeTraces()
+
+	if o.isMetricsEnabled() {
+		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor))
+	}
+	if o.isTracingEnabled() {
+		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor))
+	}
+	interceptors = append(interceptors, grpc.WithStatsHandler(csh))
+	return joinDialOptions(interceptors...)
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -140,7 +165,17 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
-	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
+	var interceptors []grpc.ServerOption
+	if o.isMetricsEnabled() {
+		metricsHandler := &serverMetricsStatsHandler{serverStatsHandler: ssh}
+		interceptors = append(interceptors, grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor))
+	}
+	if o.isTracingEnabled() {
+		tracingHandler := &serverTracingStatsHandler{serverStatsHandler: ssh}
+		interceptors = append(interceptors, grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor))
+	}
+	interceptors = append(interceptors, grpc.StatsHandler(ssh))
+	return joinServerOptions(interceptors...)
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
@@ -213,7 +248,7 @@ type attemptInfo struct {
 	previousRPCAttempts uint32
 }
 
-type clientMetrics struct {
+type clientAttemptMetrics struct {
 	// "grpc.client.attempt.started"
 	attemptStarted otelmetric.Int64Counter
 	// "grpc.client.attempt.duration"
@@ -222,6 +257,9 @@ type clientMetrics struct {
 	attemptSentTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.client.attempt.rcvd_total_compressed_message_size"
 	attemptRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
+}
+
+type clientCallMetrics struct {
 	// "grpc.client.call.duration"
 	callDuration otelmetric.Float64Histogram
 }
