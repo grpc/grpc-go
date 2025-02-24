@@ -18,6 +18,7 @@ package opentelemetry
 
 import (
 	"context"
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -37,15 +38,17 @@ import (
 type clientStatsHandler struct {
 	estats.MetricsRecorder
 	options       Options
-	clientMetrics clientMetrics
+	clientMetrics clientAttemptMetrics
 }
 
 type clientMetricsStatsHandler struct {
-	*clientStatsHandler
+	options       Options
+	clientMetrics clientCallMetrics
 }
 
 type clientTracingStatsHandler struct {
-	*clientStatsHandler
+	options        Options
+	tracerProvider trace.TracerProvider
 }
 
 func (h *clientStatsHandler) initializeMetrics() {
@@ -69,7 +72,6 @@ func (h *clientStatsHandler) initializeMetrics() {
 	h.clientMetrics.attemptDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.attempt.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("End-to-end time taken to complete a client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 	h.clientMetrics.attemptSentTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.sent_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes sent per client call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
 	h.clientMetrics.attemptRcvdTotalCompressedMessageSize = createInt64Histogram(metrics.Metrics(), "grpc.client.attempt.rcvd_total_compressed_message_size", meter, otelmetric.WithUnit("By"), otelmetric.WithDescription("Compressed message bytes received per call attempt."), otelmetric.WithExplicitBucketBoundaries(DefaultSizeBounds...))
-	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 
 	rm := &registryMetrics{
 		optionalLabels: h.options.MetricsOptions.OptionalLabels,
@@ -78,10 +80,39 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
+func (h *clientMetricsStatsHandler) initializeMetrics() {
+	if !h.options.isMetricsEnabled() {
+		return
+	}
+	if h.options.MetricsOptions.MeterProvider == nil {
+		return
+	}
+
+	meter := h.options.MetricsOptions.MeterProvider.Meter("grpc-go", otelmetric.WithInstrumentationVersion(grpc.Version))
+	if meter == nil {
+		return
+	}
+
+	metrics := h.options.MetricsOptions.Metrics
+	if metrics == nil {
+		metrics = DefaultMetrics()
+	}
+	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+}
+
+func (h *clientTracingStatsHandler) initializeTraces() {
+	if !h.options.isTracingEnabled() {
+		return
+	}
+	if h.options.TraceOptions.TracerProvider == nil {
+		log.Printf("TraceProvider is not provided in trace options")
+	}
+}
+
 func (h *clientMetricsStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
-		method: h.determineMethod(method, opts...),
+		method: determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -103,7 +134,7 @@ func (h *clientMetricsStatsHandler) unaryInterceptor(ctx context.Context, method
 // determineMethod determines the method to record attributes with. This will be
 // "other" if StaticMethod isn't specified or if method filter is set and
 // specifies, the method name as is otherwise.
-func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOption) string {
+func determineMethod(method string, opts ...grpc.CallOption) string {
 	for _, opt := range opts {
 		if _, ok := opt.(grpc.StaticMethodCallOption); ok {
 			return removeLeadingSlash(method)
@@ -115,7 +146,7 @@ func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOpt
 func (h *clientMetricsStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
-		method: h.determineMethod(method, opts...),
+		method: determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -150,7 +181,7 @@ func (h *clientMetricsStatsHandler) perCallMetrics(ctx context.Context, err erro
 func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
-		method: h.determineMethod(method, opts...),
+		method: determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -164,7 +195,7 @@ func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method
 func (h *clientTracingStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
-		method: h.determineMethod(method, opts...),
+		method: determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 

@@ -118,15 +118,30 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
-	csh := &clientStatsHandler{options: o}
+	csh := &clientStatsHandler{
+		MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+		options:         o,
+		clientMetrics:   clientAttemptMetrics{},
+	}
 	csh.initializeMetrics()
 	var interceptors []grpc.DialOption
+
+	metricsHandler := &clientMetricsStatsHandler{
+		options:       o,
+		clientMetrics: clientCallMetrics{},
+	}
+	metricsHandler.initializeMetrics()
+
+	tracingHandler := &clientTracingStatsHandler{
+		options:        o,
+		tracerProvider: o.TraceOptions.TracerProvider,
+	}
+	tracingHandler.initializeTraces()
+
 	if o.isMetricsEnabled() {
-		metricsHandler := &clientMetricsStatsHandler{clientStatsHandler: csh}
 		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor))
 	}
 	if o.isTracingEnabled() {
-		tracingHandler := &clientTracingStatsHandler{clientStatsHandler: csh}
 		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor))
 	}
 	interceptors = append(interceptors, grpc.WithStatsHandler(csh))
@@ -233,7 +248,7 @@ type attemptInfo struct {
 	previousRPCAttempts uint32
 }
 
-type clientMetrics struct {
+type clientAttemptMetrics struct {
 	// "grpc.client.attempt.started"
 	attemptStarted otelmetric.Int64Counter
 	// "grpc.client.attempt.duration"
@@ -242,6 +257,9 @@ type clientMetrics struct {
 	attemptSentTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.client.attempt.rcvd_total_compressed_message_size"
 	attemptRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
+}
+
+type clientCallMetrics struct {
 	// "grpc.client.call.duration"
 	callDuration otelmetric.Float64Histogram
 }
