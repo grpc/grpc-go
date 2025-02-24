@@ -20,6 +20,7 @@ package testutils
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -59,13 +60,13 @@ func waitForServerCompletedRPCs(ctx context.Context, reader metric.Reader, wantM
 		if !ok {
 			continue
 		}
-		if _, ok := val.Data.(metricdata.Histogram[int64]); ok {
-			if len(wantMetric.Data.(metricdata.Histogram[int64]).DataPoints) > len(val.Data.(metricdata.Histogram[int64]).DataPoints) {
+		switch data := val.Data.(type) {
+		case metricdata.Histogram[int64]:
+			if len(wantMetric.Data.(metricdata.Histogram[int64]).DataPoints) > len(data.DataPoints) {
 				continue
 			}
-		}
-		if _, ok := val.Data.(metricdata.Histogram[float64]); ok {
-			if len(wantMetric.Data.(metricdata.Histogram[float64]).DataPoints) > len(val.Data.(metricdata.Histogram[float64]).DataPoints) {
+		case metricdata.Histogram[float64]:
+			if len(wantMetric.Data.(metricdata.Histogram[float64]).DataPoints) > len(data.DataPoints) {
 				continue
 			}
 		}
@@ -764,13 +765,10 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 	}
 }
 
-// CompareMetrics asserts wantMetrics are what we expect. It polls for eventual
-// server metrics (not emitted synchronously with client side rpc returning),
-// and for duration metrics makes sure the data point is within possible testing
-// time (five seconds from context timeout).
-func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
-	gotMetrics = waitForEventualServerMetrics(ctx, t, mr, gotMetrics, wantMetrics)
-
+// CompareMetrics asserts wantMetrics are what we expect. For duration metrics
+// makes sure the data point is within possible testing time (five seconds from
+// context timeout).
+func CompareMetrics(t *testing.T, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
 	for _, metric := range wantMetrics {
 		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
 			val := gotMetrics[metric.Name]
@@ -804,29 +802,26 @@ func CompareMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, 
 	}
 }
 
-// waitForEventualServerMetrics waits for eventual server metrics (not emitted
+// WaitForServerMetrics waits for eventual server metrics (not emitted
 // synchronously with client side rpc returning).
-func waitForEventualServerMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) map[string]metricdata.Metrics {
+func WaitForServerMetrics(ctx context.Context, t *testing.T, mr *metric.ManualReader, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) map[string]metricdata.Metrics {
+	terminalMetrics := []string{
+		"grpc.server.call.sent_total_compressed_message_size",
+		"grpc.server.call.rcvd_total_compressed_message_size",
+		"grpc.client.attempt.duration",
+		"grpc.client.call.duration",
+		"grpc.server.call.duration",
+	}
 	for _, metric := range wantMetrics {
-		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
-			// Sync the metric reader to see the event because stats.End is
-			// handled async server side. Thus, poll until metrics created from
-			// stats.End show up.
-			var err error
-			if gotMetrics, err = waitForServerCompletedRPCs(ctx, mr, metric); err != nil { // move to shared helper
-				t.Fatal(err)
-			}
+		if !slices.Contains(terminalMetrics, metric.Name) {
 			continue
 		}
-		if metric.Name == "grpc.client.attempt.duration" || metric.Name == "grpc.client.call.duration" || metric.Name == "grpc.server.call.duration" {
-			// Sync the metric reader to see the event because stats.End is
-			// handled async server side. Thus, poll until metrics created from
-			// stats.End show up.
-			var err error
-			if gotMetrics, err = waitForServerCompletedRPCs(ctx, mr, metric); err != nil { // move to shared helper
-				t.Fatal(err)
-			}
-			continue
+		// Sync the metric reader to see the event because stats.End is
+		// handled async server side. Thus, poll until metrics created from
+		// stats.End show up.
+		var err error
+		if gotMetrics, err = waitForServerCompletedRPCs(ctx, mr, metric); err != nil { // move to shared helper
+			t.Fatal(err)
 		}
 	}
 
