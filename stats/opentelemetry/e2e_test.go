@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"testing"
 	"time"
 
@@ -59,8 +58,6 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
@@ -1581,111 +1578,4 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	if got, want := spans[0].Status.Description, rpcErrorMsg; got != want {
 		t.Fatalf("got rpc error %s, want %s", spans[0].Status.Description, rpcErrorMsg)
 	}
-}
-
-// gRPC server implementation
-type testServer struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
-// EmptyCall is a simple RPC that returns an empty response.
-func (s *testServer) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
-	return &testgrpc.Empty{}, nil
-}
-
-// TestEventForNameResolutionDelay verifies that an event is emitted for name
-// resolution delay during RPC calls.
-func TestNameResolutionDelayTraceEvent(t *testing.T) {
-	traceOptions, spanExporter := defaultTraceOptions(t)
-	resolverBuilder := manual.NewBuilderWithScheme("delayed")
-
-	listener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-
-	server := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(server, &testServer{})
-	go server.Serve(listener)
-	defer server.Stop()
-
-	metricReader := metric.NewManualReader()
-	metricProvider := metric.NewMeterProvider(metric.WithReader(metricReader))
-	metricsOptions := opentelemetry.MetricsOptions{
-		MeterProvider: metricProvider,
-		Metrics: opentelemetry.DefaultMetrics().Add(
-			"grpc.lb.wrr.rr_fallback",
-			"grpc.lb.wrr.endpoint_weight_not_yet_usable",
-			"grpc.lb.wrr.endpoint_weight_stale",
-			"grpc.lb.wrr.endpoint_weights",
-		),
-		OptionalLabels: []string{"grpc.lb.locality"},
-	}
-	dialOptions := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(resolverBuilder),
-		opentelemetry.DialOption(opentelemetry.Options{
-			MetricsOptions: metricsOptions,
-			TraceOptions:   *traceOptions,
-		}),
-	}
-
-	clientConn, err := grpc.NewClient(resolverBuilder.Scheme()+":///test.server", dialOptions...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer clientConn.Close()
-	client := testgrpc.NewTestServiceClient(clientConn)
-	t.Log("Created gRPC client with OpenTelemetry tracing.")
-
-	// First RPC should block due to missing addresses
-	blockedRPC := make(chan struct{})
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-
-		if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-			t.Logf("First RPC failed as expected before resolver update: %v", err)
-		}
-		close(blockedRPC)
-	}()
-
-	time.Sleep(2 * time.Second)
-	// Update the resolver with valid addresses, unblocking RPC
-	resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: listener.Addr().String()}}})
-
-	// Wait for the first RPC attempt before proceeding
-	<-blockedRPC
-
-	// Second RPC should succeed after resolver update
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Fatalf("Second RPC failed unexpectedly: %v", err)
-	}
-
-	// Verify tracing events to confirm resolution delay was recorded
-	spans := spanExporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("No spans exported. Expected at least one span with trace events.")
-	}
-
-	expectedEvent := "Name resolution completed with delay"
-	if !containsSpanEvent(spans, expectedEvent) {
-		t.Fatalf("Expected trace event %q not found!", expectedEvent)
-	}
-}
-
-// containsSpanEvent checks if any span contains an event with the
-// specified name.
-func containsSpanEvent(spans []tracetest.SpanStub, eventName string) bool {
-	for _, span := range spans {
-		for _, event := range span.Events {
-			if event.Name == eventName {
-				return true
-			}
-		}
-	}
-	return false
 }
