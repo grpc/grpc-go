@@ -48,9 +48,9 @@ func main() {
 	}
 	altsTC := alts.NewClientCreds(opts)
 	// Block until the server is ready.
-	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(altsTC), grpc.WithBlock())
+	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(altsTC))
 	if err != nil {
-		logger.Fatalf("gRPC Client: failed to create a client for server at %q: %v", *serverAddr, err)
+		logger.Fatalf("grpc.NewClient(%q) = %v", *serverAddr, err)
 	}
 	defer conn.Close()
 	grpcClient := testgrpc.NewTestServiceClient(conn)

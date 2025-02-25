@@ -95,7 +95,7 @@ func main() {
 		}
 		cc, err := grpc.NewClient(uris[i], opts...)
 		if err != nil {
-			logger.Fatalf("Failed to create a client for server %q: %v", uris[i], err)
+			logger.Fatalf("grpc.NewClient(%q) = %v", uris[i], err)
 		}
 		defer cc.Close()
 		clients = append(clients, clientConfig{

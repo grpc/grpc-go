@@ -280,7 +280,7 @@ func main() {
 	}
 	conn, err := grpc.NewClient(serverAddr, opts...)
 	if err != nil {
-		logger.Fatalf("Failed to create a client: %v", err)
+		logger.Fatalf("grpc.NewClient(%q) = %v", serverAddr, err)
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)

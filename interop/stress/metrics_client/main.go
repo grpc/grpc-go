@@ -77,7 +77,7 @@ func main() {
 
 	conn, err := grpc.NewClient(*metricsServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		logger.Fatalf("cannot connect to metrics server: %v", err)
+		logger.Fatalf("grpc.NewClient(%q) = %v", metricsServerAddress, err)
 	}
 	defer conn.Close()
 
