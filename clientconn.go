@@ -675,13 +675,24 @@ func (cc *ClientConn) Connect() {
 	cc.mu.Unlock()
 }
 
-// waitForResolvedAddrs blocks until the resolver has provided addresses or the
+// waitForResolvedAddrs blocks until the resolver provides addresses or the
 // context expires, whichever happens first.
 //
-// If the name resolution did not succeed in first attempt, it returns true
-// indicating delay in name resolution completion. In all other cases,
-// including name resolution failure and name resolution succeeding in first
-// attempt, it returns false.
+// The returned boolean indicates whether the function had to wait for
+// resolution (true) or not (false). If name resolution was delayed (the
+// first address update was not received immediately), the function blocks
+// and returns `true` once resolution happens. Otherwise, if the resolver
+// had already provided addresses before, or an error occurs, it returns
+// false.
+//
+// If firstResolveEvent.HasFired() is true, resolution has already occurred
+// in the past, so the function immediately returns false.
+//
+// If the function blocks and waits for firstResolveEvent.Done(),
+// resolution was delayed, and it returns true when the update arrives.
+//
+// If the context expires or the connection is closing, it returns `false`
+// along with the error.
 func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) (bool, error) {
 	// This is on the RPC path, so we use a fast path to avoid the
 	// more-expensive "select" below after the resolver has returned once.

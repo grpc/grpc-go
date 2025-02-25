@@ -212,18 +212,18 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	}
 	// Provide an opportunity for the first RPC to see the first service config
 	// provided by the resolver.
-	nameResolutionDelay, err := cc.waitForResolvedAddrs(ctx)
+	nameResolutionDelayed, err := cc.waitForResolvedAddrs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method, NameResolutionDelay: nameResolutionDelay}
 	var mc serviceconfig.MethodConfig
 	var onCommit func()
 	newStream := func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
-		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, rpcInfo, opts...)
+		return newClientStreamWithParams(ctx, desc, cc, method, mc, onCommit, done, nameResolutionDelayed, opts...)
 	}
 
+	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
 	rpcConfig, err := cc.safeConfigSelector.SelectConfig(rpcInfo)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -258,7 +258,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	return newStream(ctx, func() {})
 }
 
-func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), rpcInfo iresolver.RPCInfo, opts ...CallOption) (_ iresolver.ClientStream, err error) {
+func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, mc serviceconfig.MethodConfig, onCommit, doneFunc func(), nameResolutionDelayed bool, opts ...CallOption) (_ iresolver.ClientStream, err error) {
 	callInfo := defaultCallInfo()
 	if mc.WaitForReady != nil {
 		callInfo.failFast = !*mc.WaitForReady
@@ -335,7 +335,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		cancel:              cancel,
 		firstAttempt:        true,
 		onCommit:            onCommit,
-		NameResolutionDelay: rpcInfo.NameResolutionDelay,
+		NameResolutionDelay: nameResolutionDelayed,
 	}
 	if !cc.dopts.disableRetry {
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)

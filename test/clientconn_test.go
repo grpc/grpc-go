@@ -21,7 +21,6 @@ package test
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +29,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats"
@@ -55,7 +56,7 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 	go func() {
 		// This RPC would block until the ClientConn is closed, because the
 		// resolver has not provided its first update yet.
-		_, err := client.EmptyCall(ctx, &testgrpc.Empty{})
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if status.Code(err) != codes.Canceled || !strings.Contains(err.Error(), "client connection is closing") {
 			doneErrCh <- fmt.Errorf("EmptyCall() = %v, want %s", err, codes.Canceled)
 		}
@@ -86,29 +87,16 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 	}
 }
 
-// EmptyCall is a simple RPC that returns an empty response.
-func (s *server) EmptyCall(_ context.Context, _ *testgrpc.Empty) (*testgrpc.Empty, error) {
-	return &testgrpc.Empty{}, nil
-}
-
-// gRPC server implementation
-type server struct {
-	testgrpc.UnimplementedTestServiceServer
-}
-
 // Custom StatsHandler to verify if the delay is detected.
 type testStatsHandler struct {
 	nameResolutionDelayed bool
 }
 
-// TagRPC is called when an RPC is initiated and allows adding metadata to the context.
-// It checks if the RPC experienced a name resolution delay and updates the handler's state.
-// If a delay is detected, it logs the event for debugging.
+// TagRPC is called when an RPC is initiated and allows adding metadata to the
+// context. It checks if the RPC experienced a name resolution delay and updates
+// the handler's state.
 func (h *testStatsHandler) TagRPC(ctx context.Context, rpcInfo *stats.RPCTagInfo) context.Context {
-	if rpcInfo.NameResolutionDelay {
-		h.nameResolutionDelayed = true
-		fmt.Println("StatsHandler detected name resolution delay via RPCInfo.")
-	}
+	h.nameResolutionDelayed = rpcInfo.NameResolutionDelay
 	return ctx
 }
 
@@ -116,96 +104,53 @@ func (h *testStatsHandler) TagRPC(ctx context.Context, rpcInfo *stats.RPCTagInfo
 // This method is required to satisfy the stats.Handler interface.
 func (h *testStatsHandler) HandleRPC(_ context.Context, _ stats.RPCStats) {}
 
-// TagConn is called when a new connection is established and allows tagging the connection context.
-// This implementation simply returns the existing context without modification.
+// TagConn exists to satisfy stats.Handler.
 func (h *testStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
-// HandleConn is a no-op implementation for handling connection stats.
-// This method is required to satisfy the stats.Handler interface.
+// HandleConn exists to satisfy stats.Handler.
 func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 
-// startTestGRPCServer initializes a test gRPC server on a random port.
-// Returns the server address and a cleanup function.
-func startTestGRPCServer(t *testing.T) (string, func()) {
-	lis, err := net.Listen("tcp", "localhost:0") // Random available port
-	if err != nil {
-		t.Fatalf("Failed to create test gRPC server: %v", err)
+// startStubServer initializes a stub gRPC server and returns its address and cleanup function.
+func startStubServer(t *testing.T) (*stubserver.StubServer, func()) {
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+			t.Log("EmptyCall received and processed")
+			return &testpb.Empty{}, nil
+		},
 	}
-
-	srv := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(srv, &server{})
-	go srv.Serve(lis)
-
-	// Return server address and cleanup function
-	return lis.Addr().String(), func() {
-		srv.Stop()
-		lis.Close()
+	if err := stub.Start(nil); err != nil {
+		t.Fatalf("Failed to start StubServer: %v", err)
 	}
+	return stub, func() { stub.Stop() }
 }
 
-// TestRPCSucceedsWithImmediateResolution verifies gRPC instantly resolves addresses when
-// available.Uses a manual resolver, ensuring both RPCs succeed without delay.
-func (s) TestRPCSucceedsWithImmediateResolution(t *testing.T) {
-	serverAddress, cleanup := startTestGRPCServer(t)
-	defer cleanup()
-
-	// Create a manual resolver that immediately returns an address
-	resolverBuilder := manual.NewBuilderWithScheme("instant")
-	resolverBuilder.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: serverAddress}}})
-
-	// Create a ClientConn using the manual resolver
-	clientConn, err := grpc.NewClient(resolverBuilder.Scheme()+":///test.server",
+// createTestClient sets up a gRPC client connection with a manual resolver.
+func createTestClient(t *testing.T, scheme string, stub *stubserver.StubServer, statsHandler *testStatsHandler) (*grpc.ClientConn, *manual.Resolver) {
+	resolverBuilder := manual.NewBuilderWithScheme(scheme)
+	clientConn, err := grpc.NewClient(
+		fmt.Sprintf("%s:///test.server", scheme),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(resolverBuilder), // Resolver already has addresses
+		grpc.WithResolvers(resolverBuilder),
+		grpc.WithStatsHandler(statsHandler),
 	)
 	if err != nil {
 		t.Fatalf("grpc.NewClient error: %v", err)
 	}
-	defer clientConn.Close()
-
-	// Call an RPC to trigger waitForResolvedAddrs
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	client := testgrpc.NewTestServiceClient(clientConn)
-
-	// First RPC call should succeed immediately
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Fatalf("First RPC failed unexpectedly: %v", err)
-	}
-	t.Log("First RPC succeeded immediately.")
-
-	// Second RPC should also succeed without re-resolving
-	ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Fatalf("Second RPC failed unexpectedly: %v", err)
-	}
-	t.Log("Second RPC succeeded, confirming resolution stability.")
+	return clientConn, resolverBuilder
 }
 
-// TestStatsHandlerDetectsResolutionDelay verifies that RPCs properly wait for
-// name resolution when using a manual resolver that initially lacks addresses.
-// The first RPC blocks until the resolver provides addresses.
-// The resolver is updated after a simulated delay, unblocking RPCs.
-// The second RPC succeeds after resolution is completed.
-// The StatsHandler correctly detects and tracks the name resolution delay.
-func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
-	// Create a manual resolver WITHOUT immediately providing addresses
-	resolverBuilder := manual.NewBuilderWithScheme("delayed")
-
-	// Create a channel to simulate delay before providing addresses
-	resolutionReady := make(chan struct{})
-
-	// Start a gRPC test server
-	serverAddress, cleanup := startTestGRPCServer(t)
+// TestRPCSucceedsWithImmediateResolution ensures that when a resolver
+// provides addresses immediately, RPC calls proceed without delay.
+func (s) TestRPCSucceedsWithImmediateResolution(t *testing.T) {
+	stub, cleanup := startStubServer(t)
 	defer cleanup()
 
-	// Create a stats handler to track name resolution delay
 	statsHandler := &testStatsHandler{}
-
-	// Create a ClientConn using the resolver and stats handler
+	resolverBuilder := manual.NewBuilderWithScheme("instant")
+	resolverBuilder.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
+	// Create a ClientConn using the manual resolver.
 	clientConn, err := grpc.NewClient(resolverBuilder.Scheme()+":///test.server",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(resolverBuilder),
@@ -216,33 +161,70 @@ func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
 	}
 	defer clientConn.Close()
 
-	// Start an RPC in a goroutine (it should block)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		client := testgrpc.NewTestServiceClient(clientConn)
-		// This RPC should block until resolver returns addresses
-		if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-			t.Logf("First RPC failed as expected (before addresses available): %v", err)
-		}
-		close(resolutionReady)
-	}()
-
-	// Simulate a delay before updating resolver
-	time.Sleep(2 * time.Second)
-
-	// Update the resolver with valid addresses, unblocking RPC
-	resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: serverAddress}}})
-
-	// Second RPC should succeed after resolver update
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Call an RPC to trigger waitForResolvedAddrs.
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(clientConn)
+	// First RPC call should succeed immediately.
 	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
-		t.Fatalf("Second RPC failed unexpectedly: %v", err)
+		t.Fatalf("First RPC failed unexpectedly: %v", err)
 	}
-	t.Log("Second RPC succeeded after resolver update, confirming resolution completion.")
+	// Ensure that resolution was not delayed.
+	if statsHandler.nameResolutionDelayed {
+		t.Fatalf("Expected no name resolution delay, but it was detected.")
+	}
+}
 
+// TestStatsHandlerDetectsResolutionDelay verifies that the StatsHandler
+// detects delays in name resolution when using a manual resolver.
+// Ensures that once resolution is updated, the RPC completes successfully.
+// Checks that the StatsHandler correctly detects the name resolution delay.
+func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
+	stub, cleanup := startStubServer(t)
+	defer cleanup()
+
+	statsHandler := &testStatsHandler{}
+	clientConn, resolverBuilder := createTestClient(t, "delayed", stub, statsHandler)
+	defer clientConn.Close()
+
+	client := testgrpc.NewTestServiceClient(clientConn)
+	resolutionReady := make(chan struct{})
+	rpcCompleted := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		rpcCompleted <- err
+	}()
+	// Simulate delayed resolution and unblock it via resolutionReady
+	go func() {
+		<-resolutionReady
+		resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
+		t.Log("Resolver state updated, unblocking RPC.")
+	}()
+	// Block until we’re ready to test the resolution delay
+	select {
+	case <-time.After(100 * time.Millisecond):
+		t.Log("Initial delay passed, signaling resolution to proceed.")
+		close(resolutionReady)
+	case <-rpcCompleted:
+		t.Fatal("RPC completed prematurely before resolution was updated!")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test setup timed out unexpectedly.")
+	}
+
+	// Wait for the RPC to complete after resolution
+	select {
+	case err := <-rpcCompleted:
+		if err != nil {
+			t.Fatalf("RPC failed after resolution: %v", err)
+		}
+		t.Log("RPC completed successfully after resolution.")
+	case <-time.After(5 * time.Second):
+		t.Fatal("RPC did not complete within timeout after resolver update.")
+	}
+
+	// Verify StatsHandler detected the name resolution delay
 	if !statsHandler.nameResolutionDelayed {
 		t.Errorf("Expected StatsHandler to detect name resolution delay, but it did not!")
 	}
