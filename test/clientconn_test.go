@@ -128,17 +128,17 @@ func startStubServer(t *testing.T) (*stubserver.StubServer, func()) {
 
 // createTestClient sets up a gRPC client connection with a manual resolver.
 func createTestClient(t *testing.T, scheme string, statsHandler *testStatsHandler) (*grpc.ClientConn, *manual.Resolver) {
-	resolverBuilder := manual.NewBuilderWithScheme(scheme)
-	clientConn, err := grpc.NewClient(
+	rb := manual.NewBuilderWithScheme(scheme)
+	cc, err := grpc.NewClient(
 		fmt.Sprintf("%s:///test.server", scheme),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(resolverBuilder),
+		grpc.WithResolvers(rb),
 		grpc.WithStatsHandler(statsHandler),
 	)
 	if err != nil {
 		t.Fatalf("grpc.NewClient error: %v", err)
 	}
-	return clientConn, resolverBuilder
+	return cc, rb
 }
 
 // TestRPCSucceedsWithImmediateResolution ensures that when a resolver
@@ -148,25 +148,24 @@ func (s) TestRPCSucceedsWithImmediateResolution(t *testing.T) {
 	defer cleanup()
 
 	statsHandler := &testStatsHandler{}
-	resolverBuilder := manual.NewBuilderWithScheme("instant")
-	resolverBuilder.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
-	// Create a ClientConn using the manual resolver.
-	clientConn, err := grpc.NewClient(resolverBuilder.Scheme()+":///test.server",
+	rb := manual.NewBuilderWithScheme("instant")
+	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
+	cc, err := grpc.NewClient(rb.Scheme()+":///test.server",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(resolverBuilder),
+		grpc.WithResolvers(rb),
 		grpc.WithStatsHandler(statsHandler),
 	)
 	if err != nil {
 		t.Fatalf("grpc.NewClient error: %v", err)
 	}
-	defer clientConn.Close()
+	defer cc.Close()
 
 	// Call an RPC to trigger waitForResolvedAddrs.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	client := testgrpc.NewTestServiceClient(clientConn)
+	client := testgrpc.NewTestServiceClient(cc)
 	// First RPC call should succeed immediately.
-	if _, err := client.EmptyCall(ctx, &testgrpc.Empty{}); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("First RPC failed unexpectedly: %v", err)
 	}
 	// Ensure that resolution was not delayed.
@@ -184,22 +183,23 @@ func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
 	defer cleanup()
 
 	statsHandler := &testStatsHandler{}
-	clientConn, resolverBuilder := createTestClient(t, "delayed", statsHandler)
-	defer clientConn.Close()
+	cc, rb := createTestClient(t, "delayed", statsHandler)
+	defer cc.Close()
 
-	client := testgrpc.NewTestServiceClient(clientConn)
+	client := testgrpc.NewTestServiceClient(cc)
 	resolutionReady := make(chan struct{})
 	rpcCompleted := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		rpcCompleted <- err
 	}()
 	// Simulate delayed resolution and unblock it via resolutionReady
 	go func() {
 		<-resolutionReady
-		resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
+		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
 		t.Log("Resolver state updated, unblocking RPC.")
 	}()
 	// Block until we’re ready to test the resolution delay
@@ -209,7 +209,7 @@ func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
 		close(resolutionReady)
 	case <-rpcCompleted:
 		t.Fatal("RPC completed prematurely before resolution was updated!")
-	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
 		t.Fatal("Test setup timed out unexpectedly.")
 	}
 
@@ -220,7 +220,7 @@ func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
 			t.Fatalf("RPC failed after resolution: %v", err)
 		}
 		t.Log("RPC completed successfully after resolution.")
-	case <-time.After(5 * time.Second):
+	case <-ctx.Done():
 		t.Fatal("RPC did not complete within timeout after resolver update.")
 	}
 
