@@ -41,12 +41,12 @@ type clientStatsHandler struct {
 	clientMetrics clientAttemptMetrics
 }
 
-type clientMetricsStatsHandler struct {
+type clientMetricsHandler struct {
 	options       Options
 	clientMetrics clientCallMetrics
 }
 
-type clientTracingStatsHandler struct {
+type clientTracingHandler struct {
 	options        Options
 	tracerProvider trace.TracerProvider
 }
@@ -80,7 +80,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-func (h *clientMetricsStatsHandler) initializeMetrics() {
+func (h *clientMetricsHandler) initializeMetrics() {
 	if !h.options.isMetricsEnabled() {
 		return
 	}
@@ -100,7 +100,7 @@ func (h *clientMetricsStatsHandler) initializeMetrics() {
 	h.clientMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.client.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
 }
 
-func (h *clientTracingStatsHandler) initializeTraces() {
+func (h *clientTracingHandler) initializeTraces() {
 	if !h.options.isTracingEnabled() {
 		return
 	}
@@ -109,7 +109,7 @@ func (h *clientTracingStatsHandler) initializeTraces() {
 	}
 }
 
-func (h *clientMetricsStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func (h *clientMetricsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: determineMethod(method, opts...),
@@ -143,7 +143,7 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 	return "other"
 }
 
-func (h *clientMetricsStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (h *clientMetricsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: determineMethod(method, opts...),
@@ -168,7 +168,7 @@ func (h *clientMetricsStatsHandler) streamInterceptor(ctx context.Context, desc 
 }
 
 // perCallMetrics records per call metrics.
-func (h *clientMetricsStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
+func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
 	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
 		otelattribute.String("grpc.method", ci.method),
@@ -178,7 +178,7 @@ func (h *clientMetricsStatsHandler) perCallMetrics(ctx context.Context, err erro
 	h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
 }
 
-func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: determineMethod(method, opts...),
@@ -192,7 +192,7 @@ func (h *clientTracingStatsHandler) unaryInterceptor(ctx context.Context, method
 	return err
 }
 
-func (h *clientTracingStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
 		method: determineMethod(method, opts...),
@@ -209,7 +209,7 @@ func (h *clientTracingStatsHandler) streamInterceptor(ctx context.Context, desc 
 }
 
 // perCallTraces records per call trace spans.
-func (h *clientTracingStatsHandler) perCallTraces(err error, ts trace.Span) {
+func (h *clientTracingHandler) perCallTraces(err error, ts trace.Span) {
 	s := status.Convert(err)
 	if s.Code() == grpccodes.OK {
 		ts.SetStatus(otelcodes.Ok, s.Message())

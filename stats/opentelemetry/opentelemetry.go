@@ -126,13 +126,13 @@ func DialOption(o Options) grpc.DialOption {
 	csh.initializeMetrics()
 	var interceptors []grpc.DialOption
 
-	metricsHandler := &clientMetricsStatsHandler{
+	metricsHandler := &clientMetricsHandler{
 		options:       o,
 		clientMetrics: clientCallMetrics{},
 	}
 	metricsHandler.initializeMetrics()
 
-	tracingHandler := &clientTracingStatsHandler{
+	tracingHandler := &clientTracingHandler{
 		options:        o,
 		tracerProvider: o.TraceOptions.TracerProvider,
 	}
@@ -163,15 +163,26 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
-	ssh := &serverStatsHandler{options: o}
+	ssh := &serverStatsHandler{
+		options:         o,
+		MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+		serverMetrics:   serverMetrics{},
+	}
 	ssh.initializeMetrics()
+
 	var interceptors []grpc.ServerOption
+
+	metricsHandler := &serverMetricsHandler{
+		options:       o,
+		serverMetrics: serverMetrics{},
+	}
+	metricsHandler.initializeMetrics()
+
 	if o.isMetricsEnabled() {
-		metricsHandler := &serverMetricsStatsHandler{serverStatsHandler: ssh}
 		interceptors = append(interceptors, grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor))
 	}
 	if o.isTracingEnabled() {
-		tracingHandler := &serverTracingStatsHandler{serverStatsHandler: ssh}
+		tracingHandler := &serverTracingHandler{options: o}
 		interceptors = append(interceptors, grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor))
 	}
 	interceptors = append(interceptors, grpc.StatsHandler(ssh))

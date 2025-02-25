@@ -21,15 +21,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type serverStatsHandler struct {
@@ -38,12 +38,13 @@ type serverStatsHandler struct {
 	serverMetrics serverMetrics
 }
 
-type serverMetricsStatsHandler struct {
-	*serverStatsHandler
+type serverMetricsHandler struct {
+	options       Options
+	serverMetrics serverMetrics
 }
 
-type serverTracingStatsHandler struct {
-	*serverStatsHandler
+type serverTracingHandler struct {
+	options Options
 }
 
 func (h *serverStatsHandler) initializeMetrics() {
@@ -74,6 +75,26 @@ func (h *serverStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
+func (h *serverMetricsHandler) initializeMetrics() {
+	if !h.options.isMetricsEnabled() {
+		return
+	}
+	if h.options.MetricsOptions.MeterProvider == nil {
+		return
+	}
+
+	meter := h.options.MetricsOptions.MeterProvider.Meter("grpc-go", otelmetric.WithInstrumentationVersion(grpc.Version))
+	if meter == nil {
+		return
+	}
+
+	metrics := h.options.MetricsOptions.Metrics
+	if metrics == nil {
+		metrics = DefaultMetrics()
+	}
+	h.serverMetrics.callDuration = createFloat64Histogram(metrics.Metrics(), "grpc.server.call.duration", meter, otelmetric.WithUnit("s"), otelmetric.WithDescription("Time taken by gRPC to complete an RPC from application's perspective."), otelmetric.WithExplicitBucketBoundaries(DefaultLatencyBounds...))
+}
+
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
 // underlying ServerTransportStream to attach metadataExchangeLabels.
 type attachLabelsTransportStream struct {
@@ -98,7 +119,7 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
-func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func (h *serverMetricsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
 		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -159,7 +180,7 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
-func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (h *serverMetricsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
 		metadataExchangeLabels = h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -176,6 +197,14 @@ func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ 
 		als.SetTrailer(als.metadataExchangeLabels)
 	}
 	return err
+}
+
+func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return handler(ctx, req)
+}
+
+func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return handler(srv, ss)
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -219,41 +248,25 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 
 // HandleRPC implements per RPC tracing and stats implementation.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("ctx passed into server side stats handler has no server call data present")
+		return
+	}
+
 	if h.options.isMetricsEnabled() {
-		metricsHandler := &serverMetricsStatsHandler{serverStatsHandler: h}
-		metricsHandler.HandleRPC(ctx, rs)
+		h.processRPCData(ctx, rs, ri.ai)
 	}
 	if h.options.isTracingEnabled() {
-		tracingHandler := &serverTracingStatsHandler{serverStatsHandler: h}
-		tracingHandler.HandleRPC(ctx, rs)
+		populateSpan(rs, ri.ai)
 	}
 }
 
-// HandleRPC implements per RPC stats handling for metrics.
-func (h *serverMetricsStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into server metrics stats handler metrics event handling has no server call data present")
-		return
-	}
-	h.processRPCData(ctx, rs, ri.ai)
-}
-
-// HandleRPC implements per RPC tracing handling for tracing.
-func (h *serverTracingStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into server tracing stats handler tracing event handling has no server call data present")
-		return
-	}
-	populateSpan(rs, ri.ai)
-}
-
-func (h *serverMetricsStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
+func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
-		if ai.pluginOptionLabels == nil && h.serverStatsHandler.options.MetricsOptions.pluginOption != nil {
-			labels := h.serverStatsHandler.options.MetricsOptions.pluginOption.GetLabels(st.Header)
+		if ai.pluginOptionLabels == nil && h.options.MetricsOptions.pluginOption != nil {
+			labels := h.options.MetricsOptions.pluginOption.GetLabels(st.Header)
 			if labels == nil {
 				labels = map[string]string{} // Shouldn't return a nil map. Make it empty if so to ignore future Get Calls for this Attempt.
 			}
@@ -262,7 +275,7 @@ func (h *serverMetricsStatsHandler) processRPCData(ctx context.Context, s stats.
 		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
 			otelattribute.String("grpc.method", ai.method),
 		))
-		h.serverStatsHandler.serverMetrics.callStarted.Add(ctx, 1, attrs)
+		h.serverMetrics.callStarted.Add(ctx, 1, attrs)
 	case *stats.OutPayload:
 		atomic.AddInt64(&ai.sentCompressedBytes, int64(st.CompressedLength))
 	case *stats.InPayload:
