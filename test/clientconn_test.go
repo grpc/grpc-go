@@ -130,13 +130,13 @@ func startStubServer(t *testing.T) (*stubserver.StubServer, func()) {
 func createTestClient(t *testing.T, scheme string, statsHandler *testStatsHandler) (*grpc.ClientConn, *manual.Resolver) {
 	rb := manual.NewBuilderWithScheme(scheme)
 	cc, err := grpc.NewClient(
-		fmt.Sprintf("%s:///test.server", scheme),
+		scheme+":///test.server",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(rb),
 		grpc.WithStatsHandler(statsHandler),
 	)
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	return cc, rb
 }
