@@ -3660,9 +3660,10 @@ func testClientStreamingRecvAfterCloseError(t *testing.T, e env) {
 		if err = stream.Send(req); err == nil {
 			continue
 		}
-		if status.Code(err) != codes.Internal {
+		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
 			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
 		}
+		break
 	}
 }
 
