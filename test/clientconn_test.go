@@ -115,7 +115,7 @@ func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 // startStubServer initializes a stub gRPC server and returns its address and cleanup function.
 func startStubServer(t *testing.T) (*stubserver.StubServer, func()) {
 	stub := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			t.Log("EmptyCall received and processed")
 			return &testpb.Empty{}, nil
 		},
@@ -127,7 +127,7 @@ func startStubServer(t *testing.T) (*stubserver.StubServer, func()) {
 }
 
 // createTestClient sets up a gRPC client connection with a manual resolver.
-func createTestClient(t *testing.T, scheme string, stub *stubserver.StubServer, statsHandler *testStatsHandler) (*grpc.ClientConn, *manual.Resolver) {
+func createTestClient(t *testing.T, scheme string, statsHandler *testStatsHandler) (*grpc.ClientConn, *manual.Resolver) {
 	resolverBuilder := manual.NewBuilderWithScheme(scheme)
 	clientConn, err := grpc.NewClient(
 		fmt.Sprintf("%s:///test.server", scheme),
@@ -184,7 +184,7 @@ func (s) TestStatsHandlerDetectsResolutionDelay(t *testing.T) {
 	defer cleanup()
 
 	statsHandler := &testStatsHandler{}
-	clientConn, resolverBuilder := createTestClient(t, "delayed", stub, statsHandler)
+	clientConn, resolverBuilder := createTestClient(t, "delayed", statsHandler)
 	defer clientConn.Close()
 
 	client := testgrpc.NewTestServiceClient(clientConn)
