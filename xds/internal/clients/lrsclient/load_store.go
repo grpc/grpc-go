@@ -50,3 +50,8 @@ type PerClusterReporter interface {
 	// CallDropped records a call dropped in the LoadStore.
 	CallDropped(category string)
 }
+
+// Stop stops the LoadStore's load reporting stream.
+func (ls *LoadStore) Stop() error {
+	panic("unimplemented")
+}
