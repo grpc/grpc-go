@@ -770,6 +770,12 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 // context timeout).
 func CompareMetrics(t *testing.T, gotMetrics map[string]metricdata.Metrics, wantMetrics []metricdata.Metrics) {
 	for _, metric := range wantMetrics {
+		val, ok := gotMetrics[metric.Name]
+		if !ok {
+			t.Errorf("Metric %v not present in recorded metrics", metric.Name)
+			continue
+		}
+
 		if metric.Name == "grpc.server.call.sent_total_compressed_message_size" || metric.Name == "grpc.server.call.rcvd_total_compressed_message_size" {
 			val := gotMetrics[metric.Name]
 			if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
@@ -792,10 +798,6 @@ func CompareMetrics(t *testing.T, gotMetrics map[string]metricdata.Metrics, want
 			continue
 		}
 
-		val, ok := gotMetrics[metric.Name]
-		if !ok {
-			t.Errorf("Metric %v not present in recorded metrics", metric.Name)
-		}
 		if !metricdatatest.AssertEqual(t, metric, val, metricdatatest.IgnoreTimestamp(), metricdatatest.IgnoreExemplars()) {
 			t.Errorf("Metrics data type not equal for metric: %v", metric.Name)
 		}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"testing"
 	"time"
 
@@ -162,30 +163,19 @@ func setupStubServer(t *testing.T, metricsOptions *opentelemetry.MetricsOptions,
 func waitForTraceSpans(ctx context.Context, exporter *tracetest.InMemoryExporter, wantSpans []traceSpanInfo) (tracetest.SpanStubs, error) {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		spans := exporter.GetSpans()
-		allFound := true
-
+		missingAnySpan := false
 		for _, wantSpan := range wantSpans {
-			found := false
-			for _, span := range spans {
-				if span.Name == wantSpan.name && span.SpanKind.String() == wantSpan.spanKind {
-					found = true
-					break
-				}
-			}
-			if !found {
-				allFound = false
-				break
+			if !slices.ContainsFunc(spans, func(span tracetest.SpanStub) bool {
+				return span.Name == wantSpan.name && span.SpanKind.String() == wantSpan.spanKind
+			}) {
+				missingAnySpan = true
 			}
 		}
-
-		if allFound {
+		if !missingAnySpan {
 			return spans, nil
 		}
 	}
-	if ctx.Err() != nil {
-		return nil, fmt.Errorf("error waiting for complete trace spans %v: %v", wantSpans, ctx.Err())
-	}
-	return exporter.GetSpans(), nil
+	return nil, fmt.Errorf("error waiting for complete trace spans %v: %v", wantSpans, ctx.Err())
 }
 
 // validateTraces first first groups the received spans by their TraceID. For
@@ -303,19 +293,19 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		attributesSort := cmpopts.SortSlices(func(a, b attribute.KeyValue) bool {
 			return a.Key < b.Key
 		})
-		attributesValueIgnoreUnexported := cmpopts.IgnoreUnexported(attribute.KeyValue{}.Value)
+		attributesValueComparable := cmpopts.EquateComparable(attribute.KeyValue{}.Value)
 		eventsSort := cmpopts.SortSlices(func(a, b trace.Event) bool {
 			return a.Name < b.Name
 		})
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 
 		// attributes
-		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueIgnoreUnexported); diff != "" {
+		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
 			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 		// events
-		if diff := cmp.Diff(want.events, span.Events, eventsSort, attributesSort, attributesValueIgnoreUnexported, eventsTimeIgnore); diff != "" {
-			t.Errorf("Events m mismatch for span %s (-want +got):\n%s", span.Name, diff)
+		if diff := cmp.Diff(want.events, span.Events, eventsSort, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
+			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 	}
 }
