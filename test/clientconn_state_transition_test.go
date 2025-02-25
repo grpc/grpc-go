@@ -164,7 +164,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := grpc.Dial("",
+	client, err := grpc.NewClient("passthrough:///",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithDialer(pl.Dialer()),
@@ -181,6 +181,9 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
 
+	// Wait for the test balancer to be built before capturing it's state
+	// notification channel.
+	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	for i := 0; i < len(want); i++ {
 		select {

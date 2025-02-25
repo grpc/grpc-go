@@ -21,6 +21,7 @@ package endpointsharding_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -28,15 +29,19 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/endpointsharding"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -80,7 +85,7 @@ func (fakePetioleBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptio
 		ClientConn: cc,
 		bOpts:      opts,
 	}
-	fp.Balancer = endpointsharding.NewBalancer(fp, opts)
+	fp.Balancer = endpointsharding.NewBalancer(fp, opts, balancer.Get(pickfirstleaf.Name).Build, endpointsharding.Options{})
 	return fp
 }
 
@@ -103,10 +108,7 @@ func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) err
 		return fmt.Errorf("UpdateClientConnState wants two endpoints, got: %v", el)
 	}
 
-	return fp.Balancer.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: endpointsharding.PickFirstConfig,
-		ResolverState:  state.ResolverState,
-	})
+	return fp.Balancer.UpdateClientConnState(state)
 }
 
 func (fp *fakePetiole) UpdateState(state balancer.State) {
@@ -127,7 +129,9 @@ func (fp *fakePetiole) UpdateState(state balancer.State) {
 // special picker, so it should fallback to the default behavior, which is to
 // round_robin amongst the endpoint children that are in the aggregated state.
 // It also verifies the petiole has access to the raw child state in case it
-// wants to implement a custom picker.
+// wants to implement a custom picker. The test sends a resolver error to the
+// endpointsharding balancer and verifies an error picker from the children
+// is used while making an RPC.
 func (s) TestEndpointShardingBasic(t *testing.T) {
 	backend1 := stubserver.StartTestService(t, nil)
 	defer backend1.Stop()
@@ -137,7 +141,7 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	mr := manual.NewBuilderWithScheme("e2e-test")
 	defer mr.Close()
 
-	json := `{"loadBalancingConfig": [{"fake_petiole":{}}]}`
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, fakePetioleName)
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
 	mr.InitialState(resolver.State{
 		Endpoints: []resolver.Endpoint{
@@ -147,7 +151,20 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 		ServiceConfig: sc,
 	})
 
-	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	dOpts := []grpc.DialOption{
+		grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Use a large backoff delay to avoid the error picker being updated
+		// too quickly.
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  2 * defaultTestTimeout,
+				Multiplier: float64(0),
+				Jitter:     float64(0),
+				MaxDelay:   2 * defaultTestTimeout,
+			},
+		}),
+	}
+	cc, err := grpc.NewClient(mr.Scheme()+":///", dOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create new client: %v", err)
 	}
@@ -160,6 +177,29 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	// start in state READY.
 	if err = roundrobin.CheckRoundRobinRPCs(ctx, client, []resolver.Address{{Addr: backend1.Address}, {Addr: backend2.Address}}); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// Stopping both the backends should make the channel enter
+	// TransientFailure.
+	backend1.Stop()
+	backend2.Stop()
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// When the resolver reports an error, the picker should get updated to
+	// return the resolver error.
+	mr.ReportError(errors.New("test error"))
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		if err == nil {
+			t.Fatalf("EmptyCall succeeded when expected to fail with %q", "test error")
+		}
+		if strings.Contains(err.Error(), "test error") {
+			break
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Context timed out waiting for picker with resolver error.")
 	}
 }
 
@@ -182,13 +222,11 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = endpointsharding.NewBalancerWithoutAutoReconnect(bd.ClientConn, bd.BuildOptions)
+			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
+			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(balancer.ClientConnState{
-				BalancerConfig: endpointsharding.PickFirstConfig,
-				ResolverState:  ccs.ResolverState,
-			})
+			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
 			bd.Data.(balancer.Balancer).Close()

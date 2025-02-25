@@ -29,8 +29,10 @@ import (
 )
 
 func (s) TestIsDirectPathCluster(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	c := func(cluster string) context.Context {
-		return icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+		return icredentials.NewClientHandshakeInfoContext(ctx, credentials.ClientHandshakeInfo{
 			Attributes: xds.SetXDSHandshakeClusterName(resolver.Address{}, cluster).Attributes,
 		})
 	}
@@ -40,7 +42,7 @@ func (s) TestIsDirectPathCluster(t *testing.T) {
 		ctx  context.Context
 		want bool
 	}{
-		{"not an xDS cluster", context.Background(), false},
+		{"not an xDS cluster", ctx, false},
 		{"cfe", c("google_cfe_bigtable.googleapis.com"), false},
 		{"non-cfe", c("google_bigtable.googleapis.com"), true},
 		{"starts with xdstp but not cfe format", c("xdstp:google_cfe_bigtable.googleapis.com"), true},

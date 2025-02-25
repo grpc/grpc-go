@@ -239,7 +239,7 @@ func (s) TestEDSWatch(t *testing.T) {
 			}
 
 			// Create an xDS client with the above bootstrap contents.
-			config, err := bootstrap.NewConfigForTesting(bc)
+			config, err := bootstrap.NewConfigFromContents(bc)
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
@@ -432,7 +432,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Create an xDS client with the above bootstrap contents.
-			config, err := bootstrap.NewConfigForTesting(bc)
+			config, err := bootstrap.NewConfigFromContents(bc)
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
@@ -539,7 +539,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -644,7 +644,7 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -731,7 +731,7 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -775,7 +775,7 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client talking to the above management server.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -847,7 +847,7 @@ func (s) TestEDSWatch_NACKError(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
@@ -919,7 +919,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 	}
 
 	// Create an xDS client with the above bootstrap contents.
-	config, err := bootstrap.NewConfigForTesting(bc)
+	config, err := bootstrap.NewConfigFromContents(bc)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}

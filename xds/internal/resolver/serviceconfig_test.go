@@ -22,6 +22,7 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
@@ -33,6 +34,8 @@ import (
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
+
+var defaultTestTimeout = 10 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -67,6 +70,8 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			channelID: channelID,
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	tests := []struct {
 		name            string
 		hashPolicies    []*xdsresource.HashPolicy
@@ -85,7 +90,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			}},
 			requestHashWant: xxhash.Sum64String("/new-products"),
 			rpcInfo: iresolver.RPCInfo{
-				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs(":path", "/products")),
+				Context: metadata.NewOutgoingContext(ctx, metadata.Pairs(":path", "/products")),
 				Method:  "/some-method",
 			},
 		},
@@ -113,7 +118,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			}},
 			requestHashWant: xxhash.Sum64String("eaebece"),
 			rpcInfo: iresolver.RPCInfo{
-				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs(":path", "abc")),
+				Context: metadata.NewOutgoingContext(ctx, metadata.Pairs(":path", "abc")),
 				Method:  "/some-method",
 			},
 		},
@@ -128,7 +133,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			}},
 			requestHashWant: channelID,
 			rpcInfo: iresolver.RPCInfo{
-				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("something-bin", "xyz")),
+				Context: metadata.NewOutgoingContext(ctx, metadata.Pairs("something-bin", "xyz")),
 			},
 		},
 		// Tests that extra metadata takes precedence over the user's metadata.
@@ -141,7 +146,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			requestHashWant: xxhash.Sum64String("grpc value"),
 			rpcInfo: iresolver.RPCInfo{
 				Context: grpcutil.WithExtraMetadata(
-					metadata.NewOutgoingContext(context.Background(), metadata.Pairs("content-type", "user value")),
+					metadata.NewOutgoingContext(ctx, metadata.Pairs("content-type", "user value")),
 					metadata.Pairs("content-type", "grpc value"),
 				),
 			},
