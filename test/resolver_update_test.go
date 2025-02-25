@@ -118,7 +118,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 	}
 	cc.Connect()
 	defer cc.Close()
-	cc.Connect()
+
 	scpr := r.CC.ParseServiceConfig("bad json service config")
 	r.UpdateState(resolver.State{ServiceConfig: scpr})
 
