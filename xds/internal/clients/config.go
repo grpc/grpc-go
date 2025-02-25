@@ -175,3 +175,9 @@ func (l Locality) isEmpty() bool {
 func (l Locality) equal(other Locality) bool {
 	return l.Region == other.Region && l.Zone == other.Zone && l.SubZone == other.SubZone
 }
+
+// NodeProto converts the provided instance of Node to its protobuf
+// representation.
+func NodeProto(n Node) *v3corepb.Node {
+	return n.toProto()
+}
