@@ -317,9 +317,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 	defer cc1.Close()
 
-	_, err = testgrpc.NewTestServiceClient(cc1).FullDuplexCall(ctx)
-	if err == nil || status.Code(err) != codes.Unavailable {
-		t.Fatalf("FullDuplexCall failed with status code %v, want status code %v: %v", status.Code(err), codes.Unavailable, err)
+	if _, err := testgrpc.NewTestServiceClient(cc1).FullDuplexCall(ctx); status.Code(err) != codes.Unavailable {
+		t.Fatalf("Expected FullDuplexCall to fail with status code Unavailable, got: %v", err)
 	}
 
 	// Update the management server with both listener resources.

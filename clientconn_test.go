@@ -69,7 +69,7 @@ func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 	return scpr
 }
 
-func (s) TestNewClientWithTimeout(t *testing.T) {
+func (s) TestDialWithTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -77,7 +77,7 @@ func (s) TestNewClientWithTimeout(t *testing.T) {
 	defer lis.Close()
 	lisAddr := resolver.Address{Addr: lis.Addr().String()}
 	lisDone := make(chan struct{})
-	connectDone := make(chan struct{})
+	dialDone := make(chan struct{})
 	// 1st listener accepts the connection and then does nothing
 	go func() {
 		defer close(lisDone)
@@ -91,17 +91,16 @@ func (s) TestNewClientWithTimeout(t *testing.T) {
 			t.Errorf("Error while writing settings. Err: %v", err)
 			return
 		}
-		<-connectDone // connectDone is closed only after cc.Connect is called.
+		<-dialDone // Close conn only after dial returns.
 	}()
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
+	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
+	close(dialDone)
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("Dial failed. Err: %v", err)
 	}
-	client.Connect()
-	close(connectDone)
 	defer client.Close()
 	timeout := time.After(1 * time.Second)
 	select {
@@ -559,7 +558,7 @@ func (b *fakeBundleCreds) TransportCredentials() credentials.TransportCredential
 func (s) TestCredentialsMisuse(t *testing.T) {
 	// Use of no transport creds and no creds bundle must fail.
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80"); err != errNoTransportSecurity {
-		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errNoTransportSecurity)
+		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errNoTransportSecurity)
 	}
 
 	// Use of both transport creds and creds bundle must fail.
