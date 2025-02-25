@@ -199,11 +199,11 @@ func (h *serverMetricsHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 	return err
 }
 
-func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return handler(ctx, req)
 }
 
-func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return handler(srv, ss)
 }
 
@@ -250,15 +250,14 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into server side stats handler has no server call data present")
+		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
-	}
-
-	if h.options.isMetricsEnabled() {
-		h.processRPCData(ctx, rs, ri.ai)
 	}
 	if h.options.isTracingEnabled() {
 		populateSpan(rs, ri.ai)
+	}
+	if h.options.isMetricsEnabled() {
+		h.processRPCData(ctx, rs, ri.ai)
 	}
 }
 
