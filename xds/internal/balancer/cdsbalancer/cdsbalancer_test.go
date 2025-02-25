@@ -672,9 +672,6 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 //   - when a bad cluster resource update is received after a previous good
 //     update from the management server, the cds LB policy is expected to
 //     continue using the previous good update.
-//   - when the cluster resource is removed after a previous good
-//     update from the management server, the cds LB policy is expected to put
-//     the channel in TRANSIENT_FAILURE.
 func (s) TestClusterUpdate_Failure(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
@@ -778,34 +775,6 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
 	}
-
-	// Remove the cluster resource from the management server, triggering a
-	// resource-not-found error.
-	resources = e2e.UpdateOptions{
-		NodeID:         nodeID,
-		SkipValidation: true,
-	}
-	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify that the watch for the cluster resource is not cancelled.
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-cdsResourceCanceledCh:
-		t.Fatal("Watch for cluster resource is cancelled when not expected to")
-	}
-
-	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
-
-	// Ensure RPC fails with Unavailable. The actual error message depends on
-	// the picker returned from the priority LB policy, and therefore not
-	// checking for it here.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
-		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
-	}
 }
 
 // Tests the following scenarios for resolver errors:
@@ -822,7 +791,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 //     is expected to push the error down the child policy and put the channel in
 //     TRANSIENT_FAILURE. It is also expected to cancel the CDS watch.
 func (s) TestResolverError(t *testing.T) {
-	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
+	_, resolverErrCh, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
 	lis := testutils.NewListenerWrapper(t, nil)
 	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerAndListener(t, lis)
 
@@ -938,12 +907,9 @@ func (s) TestResolverError(t *testing.T) {
 
 	// Verify that the resolver error is pushed to the child policy.
 	select {
-	case err := <-resolverErrCh:
-		if err != resolverErr {
-			t.Fatalf("Error pushed to child policy is %v, want %v", err, resolverErr)
-		}
+	case <-childPolicyCloseCh:
 	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
+		t.Fatal("Timeout when waiting for child policy to be closed")
 	}
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
@@ -953,6 +919,91 @@ func (s) TestResolverError(t *testing.T) {
 	// checking for it here.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
+	}
+}
+
+// Tests scenarios involving removal of a cluster resource from the management
+// server.
+//
+//   - when the cluster resource is removed after a previous good
+//     update from the management server, the cds LB policy is expected to put
+//     the channel in TRANSIENT_FAILURE.
+//   - when the cluster resource is re-sent by the management server, RPCs
+//     should start succeeding.
+func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
+	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
+
+	// Verify that the specified cluster resource is requested.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	wantNames := []string{clusterName}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure cluster and endpoints resources in the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Remove the cluster resource from the management server, triggering a
+	// resource-not-found error.
+	resources.Clusters = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the watch for the cluster resource is not cancelled.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-cdsResourceCanceledCh:
+		t.Fatal("Watch for cluster resource is cancelled when not expected to")
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Ensure RPC fails with Unavailable.
+	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("EmptyCall() failed with error: %v, want %v", err, wantErr)
+	}
+
+	// Re-add the cluster resource to the management server.
+	resources = e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
 

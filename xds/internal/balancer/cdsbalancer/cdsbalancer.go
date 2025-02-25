@@ -344,10 +344,14 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 // ResolverError handles errors reported by the xdsResolver.
 func (b *cdsBalancer) ResolverError(err error) {
 	b.serializer.TrySchedule(func(context.Context) {
-		// Resource not found error is reported by the resolver when the
-		// top-level cluster resource is removed by the management server.
+		// Missing Listener or RouteConfiguration on the management server
+		// results in a 'resource not found' error from the xDS resolver. In
+		// these cases, we should stap watching all of the current clusters
+		// being watched.
 		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
 			b.closeAllWatchers()
+			b.closeChildPolicyAndReportTF(err)
+			return
 		}
 		var root string
 		if b.lbCfg != nil {
@@ -370,6 +374,22 @@ func (b *cdsBalancer) closeAllWatchers() {
 		state.cancelWatch()
 		delete(b.watchers, name)
 	}
+}
+
+// closeChildPolicyAndReportTF closes the child policy, if it exists, and
+// updates the connectivity state of the channel to TransientFailure with an
+// error picker.
+//
+// Only executed in the context of a serializer callback.
+func (b *cdsBalancer) closeChildPolicyAndReportTF(err error) {
+	if b.childLB != nil {
+		b.childLB.Close()
+		b.childLB = nil
+	}
+	b.ccw.UpdateState(balancer.State{
+		ConnectivityState: connectivity.TransientFailure,
+		Picker:            base.NewErrPicker(err),
+	})
 }
 
 // Close cancels the CDS watch, closes the child policy and closes the
@@ -537,16 +557,8 @@ func (b *cdsBalancer) onClusterError(name string, err error) {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceNotFound(name string) {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Cluster not found in received response", name)
-	if b.childLB != nil {
-		b.childLB.ResolverError(err)
-	} else {
-		// If child balancer was never created, fail the RPCs with errors.
-		b.ccw.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            base.NewErrPicker(err),
-		})
-	}
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cluster %q not found", name)
+	b.closeChildPolicyAndReportTF(err)
 }
 
 // Generates discovery mechanisms for the cluster graph rooted at `name`. This
