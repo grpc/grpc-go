@@ -15,6 +15,11 @@ type partialParsedSpiffeBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
 }
 
+// Loads a SPIFFE Bundle Map from a file. See the SPIFFE Bundle Map spec for
+// more detail -
+// https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
+//
+// This API is experimental.
 func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
 	bundleMapFile, err := os.Open(filePath)
 	if err != nil {
