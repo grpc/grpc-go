@@ -20,7 +20,6 @@ package xdsclient_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -162,7 +161,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	}
 	gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
-	wantNackErr := errors.New("unexpected http connection manager resource type")
+	wantNackErr := xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +308,7 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 	gotResp := r.(*v3discoverypb.DiscoveryResponse)
 
 	// Verify that the error is propagated to the watcher.
-	var wantNackErr = errors.New("unexpected http connection manager resource type")
+	var wantNackErr = xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
