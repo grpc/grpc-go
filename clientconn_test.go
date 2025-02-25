@@ -746,7 +746,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		PermitWithoutStream: true,
 	}))
 	if err != nil {
-		t.Fatalf("DialContext(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("DialContext(%s) failed: %v, want: nil", addr, err)
 	}
 	defer cc.Close()
 	connected.Fire()
