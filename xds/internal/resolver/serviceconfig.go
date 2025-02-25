@@ -71,10 +71,10 @@ type xdsClusterManagerConfig struct {
 	Children map[string]xdsChildConfig `json:"children"`
 }
 
-// serviceConfigJSON produces a service config in JSON format representing all
-// the clusters referenced in activeClusters.  This includes clusters with zero
-// references, so they must be pruned first.
-func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
+// serviceConfigJSON produces a service config in JSON format that contains LB
+// policy config for the "xds_cluster_manager" LB policy, with entries in the
+// children map for all active clusters.
+func serviceConfigJSON(activeClusters map[string]*clusterInfo) []byte {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster, ci := range activeClusters {
@@ -87,11 +87,13 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
 		),
 	}
 
+	// This is not expected to fail as we have constructed the service config by
+	// hand right above, and therefore ok to panic.
 	bs, err := json.Marshal(sc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal json: %v", err)
+		panic(fmt.Sprintf("failed to marshal service config %+v: %v", sc, err))
 	}
-	return bs, nil
+	return bs
 }
 
 type virtualHost struct {
