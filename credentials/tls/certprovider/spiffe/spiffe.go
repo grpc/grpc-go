@@ -25,7 +25,7 @@ func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, erro
 	var result partialParsedSpiffeBundleMap
 	json.Unmarshal([]byte(byteValue), &result)
 	if result.Bundles == nil {
-		return nil, errors.New("no content in spiffe bundle map file.")
+		return nil, errors.New("no content in spiffe bundle map file")
 	}
 	bundleMap := map[string]*spiffebundle.Bundle{}
 	for trustDomain, jsonBundle := range result.Bundles {
