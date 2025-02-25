@@ -44,7 +44,7 @@ const (
 	// successful receipt of at least one message from the server.
 	ErrTypeStreamFailedAfterRecv
 	// ErrorTypeNACKed indicates that configuration provided by the xDS management
-	// server was NACKed
+	// server was NACKed.
 	ErrorTypeNACKed
 )
 
@@ -61,6 +61,12 @@ func (e *xdsClientError) Error() string {
 // error, to pass additional information about the error.
 func NewErrorf(t ErrorType, format string, args ...any) error {
 	return &xdsClientError{t: t, desc: fmt.Sprintf(format, args...)}
+}
+
+// NewError creates an xDS client error. The callbacks are called with this
+// error, to pass additional information about the error.
+func NewError(t ErrorType, message string) error {
+	return NewErrorf(t, "%s", message)
 }
 
 // ErrType returns the error's type.

@@ -923,7 +923,7 @@ func (s) TestResolverError(t *testing.T) {
 	}
 
 	// Push a resource-not-found-error this time around.
-	resolverErr = xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error")
+	resolverErr = xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error")
 	r.ReportError(resolverErr)
 
 	// Wait for the CDS resource to be not requested anymore, or the connection

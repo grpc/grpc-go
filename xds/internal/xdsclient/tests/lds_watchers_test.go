@@ -86,7 +86,7 @@ func (lw *listenerWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 }
 
 func (lw *listenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	lw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	lw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
@@ -111,7 +111,7 @@ func (lw *listenerWatcherMultiple) OnError(err error, onDone xdsresource.OnDoneF
 }
 
 func (lw *listenerWatcherMultiple) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	lw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	lw.updateCh.Send(listenerUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
@@ -737,7 +737,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
+	wantErr := xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -911,7 +911,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not see an update.
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, listenerUpdateErrTuple{
-		err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
+		err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1013,7 +1013,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	}
 
 	// The existing watcher should receive a resource removed error.
-	updateError := listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}
+	updateError := listenerUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, updateError); err != nil {
 		t.Fatal(err)
 	}
