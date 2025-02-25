@@ -104,7 +104,6 @@ func TestLoadSpiffeBundleMapFailures(t *testing.T) {
 			}
 			if tc.expectNoX509 && len(bundle["example.com"].X509Authorities()) != 0 {
 				t.Fatalf("Did not have empty bundle but should have.")
-
 			}
 		})
 	}
