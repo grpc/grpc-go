@@ -275,19 +275,17 @@ func (bg *BalancerGroup) AddWithClientConn(id, balancerName string, cc balancer.
 	bg.logger.Infof("Adding child policy of type %q for child %q", balancerName, id)
 	builder := balancer.Get(balancerName)
 	if builder == nil {
-		return fmt.Errorf("unregistered balancer name %q", balancerName)
+		return fmt.Errorf("balancergroup: unregistered balancer name %q", balancerName)
 	}
 
 	// Store data in static map, and then check to see if bg is started.
 	bg.outgoingMu.Lock()
 	defer bg.outgoingMu.Unlock()
 	if bg.outgoingClosed {
-		return fmt.Errorf("BalancerGroup already closed")
+		return fmt.Errorf("balancergroup: already closed")
 	}
 	var sbc *subBalancerWrapper
-	// If caching is enabled, search in the cache. Otherwise, cache is
-	// guaranteed to be empty, searching is unnecessary. Also, skip the cache
-	// if caching is disabled.
+	// Skip searching the cache if disabled.
 	if bg.deletedBalancerCache != nil {
 		if old, ok := bg.deletedBalancerCache.Remove(id); ok {
 			if bg.logger.V(2) {
@@ -505,7 +503,7 @@ func (bg *BalancerGroup) newSubConn(config *subBalancerWrapper, addrs []resolver
 	bg.incomingMu.Lock()
 	if bg.incomingClosed {
 		bg.incomingMu.Unlock()
-		return nil, fmt.Errorf("NewSubConn is called after balancer group is closed")
+		return nil, fmt.Errorf("balancergroup: NewSubConn is called after balancer group is closed")
 	}
 	var sc balancer.SubConn
 	oldListener := opts.StateListener
