@@ -571,18 +571,18 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 		WithCredentialsBundle(&fakeBundleCreds{transportCreds: creds}),
 	}
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80", dopts...); err != errTransportCredsAndBundle {
-		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
+		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errTransportCredsAndBundle)
 	}
 
 	// Use of perRPC creds requiring transport security over an insecure
 	// transport must fail.
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithTransportCredentials(insecure.NewCredentials())); err != errTransportCredentialsMissing {
-		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
+		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errTransportCredentialsMissing)
 	}
 
 	// Use of a creds bundle with nil transport credentials must fail.
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80", WithCredentialsBundle(&fakeBundleCreds{})); err != errNoTransportCredsInBundle {
-		t.Fatalf("NewClient(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
+		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errTransportCredsAndBundle)
 	}
 }
 
@@ -771,7 +771,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 	addr := r.Scheme() + ":///non.existent"
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDisableServiceConfig())
 	if err != nil {
-		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -808,7 +808,7 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
   }]
 }`))
 	if err != nil {
-		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -850,7 +850,7 @@ func (s) TestClientConnCanonicalTarget(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cc, err := NewClient(test.addr, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", test.addr, err)
+				t.Fatalf("NewClient(%s) failed: %v, want: nil", test.addr, err)
 			}
 			defer cc.Close()
 			if cc.Target() != test.addr {
@@ -881,7 +881,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	}
 	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
-		t.Fatalf("NewClient() = _, %v; want _, nil", err)
+		t.Fatalf("NewClient() failed with error: %v, want: nil", err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
@@ -1171,7 +1171,7 @@ func testInvalidDefaultServiceConfig(t *testing.T, r *manual.Resolver, addr, sc 
 func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *manual.Resolver, addr string, js string) {
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1188,7 +1188,7 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *
 func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1203,7 +1203,7 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("NewClient(%s, _) = _, %v, want _, <nil>", addr, err)
+		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
