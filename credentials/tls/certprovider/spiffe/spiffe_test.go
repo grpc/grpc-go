@@ -1,81 +1,111 @@
 package spiffe
 
 import (
-	"encoding/json"
-	"fmt"
+	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"google.golang.org/grpc/testdata"
 )
 
-var (
-	td = spiffeid.RequireTrustDomainFromString("example.com")
-)
+var SpiffeTrustBundle map[string]*spiffebundle.Bundle
 
-// type PartialParsedBundle struct {
-// 	string TrustDomain `json:"trust_domains"`
-// }
-
-func TestLoad(t *testing.T) {
-	bundleMapFile, err := os.Open(testdata.Path("spiffe/spiffebundle.json"))
+func TestKnownSpiffeBundle(t *testing.T) {
+	bundles, err := LoadSpiffeBundleMap(testdata.Path("spiffe/spiffebundle.json"))
 	if err != nil {
-		fmt.Println(err)
+		t.Fatalf("Error during parsing: %v", err)
 	}
-	defer bundleMapFile.Close()
+	if len(bundles) != 2 {
+		t.Fatal("did not parse correct bundle length")
+	}
+	if bundles["example.com"] == nil {
+		t.Fatal("expected bundle for example.com")
+	}
+	if bundles["test.example.com"] == nil {
+		t.Fatal("expected bundle for test.example.com")
+	}
 
-	byteValue, _ := io.ReadAll(bundleMapFile)
-	var result map[string]map[string]json.RawMessage
-	json.Unmarshal([]byte(byteValue), &result)
-	// var bundleMap map[spiffeid.TrustDomain]spiffebundle.Bundle
-	if len(result["trust_domains"]) == 0 {
-		t.Fatalf("No trust domain key")
+	expectedExampleComCert := loadX509Cert(testdata.Path("spiffe/spiffe_cert.pem"))
+	expectedTestExampleComCert := loadX509Cert(testdata.Path("spiffe/server1_spiffe.pem"))
+	if !bundles["example.com"].X509Authorities()[0].Equal(expectedExampleComCert) {
+		t.Fatalf("expected cert for example.com bundle not correct.")
 	}
-	// fmt.Printf("GREG:%v\n", result)
-	for trustDomain, jsonBundle := range result["trust_domains"] {
-		// fmt.Printf("Json Bundle: %v\n", jsonBundle)
-		// fmt.Printf("%v\n", trustDomain)
-		// byteBundle, err := json.Marshal(jsonBundle)
-		// if err != nil {
-		// 	t.Fatalf("error marshaling bundle back to bytes %v", err)
-		// }
-		// TODO(GREG) issue - getting the subbytes to pass to here
-		bundle, err := spiffebundle.Parse(spiffeid.RequireTrustDomainFromString(trustDomain), jsonBundle)
-		if err != nil {
-			t.Fatalf("Error parsing bundle %v", err)
-		}
-		if bundle == nil {
-			t.Fatalf("blah")
-		}
+	if !bundles["test.example.com"].X509Authorities()[0].Equal(expectedTestExampleComCert) {
+		t.Fatalf("expected cert for test.example.com bundle not correct.")
 	}
-	fmt.Printf("Done")
-
-	// bundle, err := spiffebundle.Load(td, testdata.Path("spiffe/spiffebundle.json"))
-	// if err != nil {
-	// 	t.Fatalf("%v", err)
-	// }
-	// if bundle == nil {
-	// 	t.Fatal("Bundle shouldn't be nil")
-	// }
 
 }
 
-func TestSmallLoad(t *testing.T) {
-	// bundleFile, err := os.Open(testdata.Path("spiffe/spiffe_test.json"))
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// defer bundleMapFile.Close()
-	bundle, err := spiffebundle.Load(spiffeid.RequireTrustDomainFromString("example.com"), testdata.Path("spiffe/spiffe_test.json"))
-	if err != nil {
-		fmt.Println(err)
-		t.Fail()
+func loadX509Cert(filePath string) *x509.Certificate {
+	certFile, _ := os.Open(filePath)
+	certRaw, _ := io.ReadAll(certFile)
+	block, _ := pem.Decode([]byte(certRaw))
+	if block == nil {
+		panic("failed to parse certificate PEM")
 	}
-	if bundle == nil {
-		t.Fail()
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		panic("failed to parse certificate: " + err.Error())
+	}
+	return cert
+}
+
+func TestLoadSpiffeBundleMapFailures(t *testing.T) {
+	testCases := []struct {
+		filePath     string
+		expectError  bool
+		expectNoX509 bool
+	}{
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_corrupted_cert.json"),
+			expectError: true,
+		},
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_malformed.json"),
+			expectError: true,
+		},
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_wrong_kid.json"),
+			expectError: true,
+		},
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_wrong_kty.json"),
+			expectError: true,
+		},
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_wrong_multi_certs.json"),
+			expectError: true,
+		},
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_wrong_root.json"),
+			expectError: true,
+		},
+		{
+			filePath:    testdata.Path("spiffe/spiffebundle_wrong_seq_type.json"),
+			expectError: true,
+		},
+		{
+			// SPIFFE Bundles only support a use of x509-svid and jwt-svid. If a
+			// use other than this is specified, the parser does not fail, it
+			// just doesn't add an x509 authority or jwt authority to the bundle
+			filePath:     testdata.Path("spiffe/spiffebundle_wrong_use.json"),
+			expectNoX509: true,
+		},
 	}
 
+	for _, tc := range testCases {
+		t.Run(tc.filePath, func(t *testing.T) {
+			bundle, err := LoadSpiffeBundleMap(tc.filePath)
+			if tc.expectError && err == nil {
+				t.Fatalf("Did not fail but should have.")
+			}
+			if tc.expectNoX509 && len(bundle["example.com"].X509Authorities()) != 0 {
+				t.Fatalf("Did not have empty bundle but should have.")
+
+			}
+		})
+	}
 }
