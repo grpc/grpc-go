@@ -289,11 +289,10 @@ func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInp
 		return nil
 	}
 	if s.recvAfterClose {
-		fmt.Printf("reAfetclose")
-		err := stream.SendAndClose(&testpb.StreamingInputCallResponse{
+		stream.SendAndClose(&testpb.StreamingInputCallResponse{
 			AggregatedPayloadSize: int32(sum),
 		})
-		_, err = stream.Recv()
+		_, err := stream.Recv()
 		return err
 	}
 	for {
@@ -3599,6 +3598,8 @@ func testClientStreamingError(t *testing.T, e env) {
 }
 
 func (s) TestClientStreamingMissingSendAndCloseError(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
 	t.Skip()
 	for _, e := range listTestEnv() {
 		if e.name == "handler-tls" {
@@ -3619,13 +3620,14 @@ func testClientStreamingMissingSendAndCloseError(t *testing.T, e env) {
 		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
 	}
 
-	if _, err := stream.CloseAndRecv(); status.Code(err) == codes.OK {
-		// TODO : replace with whatever error is decided for this.
-		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, "not OK")
+	if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
+		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
 	}
 }
 
 func (s) TestClientStreamingRecvAfterCloseError(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
 	t.Skip()
 	for _, e := range listTestEnv() {
 		if e.name == "handler-tls" {
@@ -3653,19 +3655,14 @@ func testClientStreamingRecvAfterCloseError(t *testing.T, e env) {
 	req := &testpb.StreamingInputCallRequest{
 		Payload: payload,
 	}
-	// The 1st request should go through.
-	if err := stream.Send(req); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
-	}
+
 	for {
-		if err := stream.Send(req); err != io.EOF {
+		if err = stream.Send(req); err == nil {
 			continue
 		}
-		// emchandwani : check what error is expected.
-		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.NotFound {
-			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
+		if status.Code(err) != codes.Internal {
+			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
 		}
-		break
 	}
 }
 
