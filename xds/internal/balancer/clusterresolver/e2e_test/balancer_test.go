@@ -278,11 +278,12 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 
 	// Ensure that RPCs start to fail with expected error.
+	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 		defer sCancel()
 		_, err := client.EmptyCall(sCtx, &testpb.Empty{})
-		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "all priorities are removed") {
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
 			break
 		}
 		if err != nil {
