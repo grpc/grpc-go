@@ -18,14 +18,15 @@
 
 package xdsclient
 
-// ResourceWatcher wraps the callbacks to be invoked for different events
-// corresponding to the resource being watched. gRFC A88 contains an exhaustive
-// list of what method is invoked under what conditions.
+// ResourceWatcher is notified of the resource updates and errors that are
+// received by the xDS client from the management server.
 //
-// done() in the callbacks is a function to be invoked by resource watcher
-// implementations upon completing the processing of a callback from the xDS
-// client for change and error respectively. Failure to invoke this callback
-// prevents the xDS client from reading further messages from the xDS server.
+// All methods contain a done parameter which should be called when processing
+// of the update has completed.  For example, if processing a resource requires
+// watching new resources, those watches should be completed before done is
+// called, which can happen after the ResourceWatcher method has returned.
+// Failure to call done will prevent the xDS client from providing future
+// ResourceWatcher notifications.
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
 	ResourceChanged(resourceData ResourceData, done func())
@@ -36,9 +37,9 @@ type ResourceWatcher interface {
 	ResourceError(err error, done func())
 
 	// AmbientError indicates an error occurred after a resource has been
-	// received that should not modify the use of that resource but may be
-	// provide useful information about the ambient state of the XDSClient for
-	// debugging purposes. The previous version of the resource should still be
+	// received that should not modify the use of that resource but may provide
+	// useful information about the state of the XDSClient for debugging
+	// purposes. The previous version of the resource should still be
 	// considered valid.
 	AmbientError(err error, done func())
 }

@@ -23,8 +23,8 @@ import (
 )
 
 // Config is used to configure an LRS client. After one has been passed to the
-// LRS client's New function, it must not be modified. A Config may be reused;
-// the lrsclient package will also not modify it.
+// LRS client's New function, no part of it may modified. A Config may be
+// reused; the lrsclient package will also not modify it.
 type Config struct {
 	// Node is the identity of the client application reporting load to the
 	// LRS server.

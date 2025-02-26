@@ -20,8 +20,8 @@
 
 package lrsclient
 
-// LoadStore keep track of the loads for multiple clusters and services that
-// are intended to be reported via LRS.
+// A LoadStore aggregates loads for multiple clusters and services that are
+// intended to be reported via LRS.
 //
 // LoadStore stores loads reported to a single LRS server. Use multiple stores
 // for multiple servers.
@@ -30,28 +30,39 @@ package lrsclient
 type LoadStore struct {
 }
 
-// PerCluster returns the PerClusterReporter for the given cluster and service.
-func (ls *LoadStore) PerCluster(clusterName, serviceName string) PerClusterReporter {
+// Stop stops the LoadStore's load reporting stream.
+func (ls *LoadStore) Stop() error {
 	panic("unimplemented")
 }
 
-// PerClusterReporter defines the methods that the LoadStore uses to track
-// per-cluster load reporting data.
-//
-// The lrsclient package provides an implementation of this which can be used
-// to push loads to the received LoadStore from the LRS client.
-type PerClusterReporter interface {
-	// CallStarted records a call started in the LoadStore.
-	CallStarted(locality string)
-	// CallFinished records a call finished in the LoadStore.
-	CallFinished(locality string, err error)
-	// CallServerLoad records the server load in the LoadStore.
-	CallServerLoad(locality, name string, val float64)
-	// CallDropped records a call dropped in the LoadStore.
-	CallDropped(category string)
+// ReporterForCluster returns the PerClusterReporter for the given cluster and
+// service.
+func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) PerClusterReporter {
+	panic("unimplemented")
 }
 
-// Stop stops the LoadStore's load reporting stream.
-func (ls *LoadStore) Stop() error {
+// PerClusterReporter records load data pertaining to a single cluster. It
+// provides methods to record call starts, finishes, server-reported loads,
+// and dropped calls.
+type PerClusterReporter struct {
+}
+
+// CallStarted records a call started in the LoadStore.
+func (p *PerClusterReporter) CallStarted(locality string) {
+	panic("unimplemented")
+}
+
+// CallFinished records a call finished in the LoadStore.
+func (p *PerClusterReporter) CallFinished(locality string, err error) {
+	panic("unimplemented")
+}
+
+// CallServerLoad records the server load in the LoadStore.
+func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) {
+	panic("unimplemented")
+}
+
+// CallDropped records a call dropped in the LoadStore.
+func (p *PerClusterReporter) CallDropped(category string) {
 	panic("unimplemented")
 }
