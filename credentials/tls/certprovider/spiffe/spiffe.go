@@ -28,7 +28,10 @@ func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, erro
 	defer bundleMapFile.Close()
 	byteValue, _ := io.ReadAll(bundleMapFile)
 	var result partialParsedSpiffeBundleMap
-	json.Unmarshal([]byte(byteValue), &result)
+	err = json.Unmarshal([]byte(byteValue), &result)
+	if err != nil {
+		return nil, err
+	}
 	if result.Bundles == nil {
 		return nil, errors.New("no content in spiffe bundle map file")
 	}
@@ -37,7 +40,6 @@ func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, erro
 		bundle, err := spiffebundle.Parse(spiffeid.RequireTrustDomainFromString(trustDomain), jsonBundle)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bundle in map: %v", err)
-
 		}
 		bundleMap[trustDomain] = bundle
 	}
