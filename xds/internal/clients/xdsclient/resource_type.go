@@ -20,7 +20,6 @@ package xdsclient
 
 import (
 	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ResourceType wraps all resource-type specific functionality. Each supported
@@ -32,8 +31,8 @@ type ResourceType struct {
 	// Config.
 	TypeURL string
 
-	// TypeName is the shorter representation of the TypeURL to identify the
-	// resource type. It can be used for logging/debugging purposes.
+	// TypeName is a shorter representation of the TypeURL to identify the
+	// resource type. It is used for logging/debugging purposes.
 	TypeName string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
@@ -50,12 +49,11 @@ type ResourceType struct {
 // Decoder wraps the resource-type specific functionality for validation
 // and deserialization.
 type Decoder interface {
-	// Decode deserializes and validates an xDS resource serialized inside the
-	// provided `Any` proto, as received from the xDS management server.
+	// Decode deserializes and validates an xDS resource as received from the
+	// xDS management server.
 	//
-	// If protobuf deserialization fails or resource validation fails,
-	// returns a non-nil error. Otherwise, returns a fully populated
-	// DecodeResult.
+	// If deserialization fails or resource validation fails, it returns a
+	// non-nil error. Otherwise, returns a fully populated DecodeResult.
 	Decode(resource any, options DecodeOptions) (*DecodeResult, error)
 }
 
@@ -66,19 +64,18 @@ type DecodeOptions struct {
 	// This contains useful data for resource validation.
 	Config *Config
 
-	// ServerConfig contains the server config (from the above bootstrap
-	// configuration) of the xDS server from which the current resource, for
-	// which Decode() is being invoked, was received.
+	// ServerConfig contains the configuration of the xDS server that provided
+	// the current resource being decoded.
 	ServerConfig *clients.ServerConfig
 }
 
 // DecodeResult is the result of a decode operation.
 type DecodeResult struct {
-	// Name is the name of the resource being watched.
+	// Name is the name of the decoded resource.
 	Name string
 
-	// Resource contains the configuration associated with the resource being
-	// watched.
+	// Resource contains the configuration associated with the decoded
+	// resource.
 	Resource ResourceData
 }
 
@@ -88,9 +85,9 @@ type DecodeResult struct {
 // received from the xDS management server.
 type ResourceData interface {
 	// RawEqual returns true if the passed in resource data is equal to that of
-	// the receiver, based on the underlying raw protobuf message.
+	// the receiver, based on the underlying raw message.
 	RawEqual(ResourceData) bool
 
-	// Raw returns the underlying raw protobuf form of the resource.
-	Raw() *anypb.Any
+	// Raw returns the underlying raw form of the resource.
+	Raw() any
 }

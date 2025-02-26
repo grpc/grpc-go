@@ -18,12 +18,14 @@
  *
  */
 
-// Package xdsclient provides an xDS (Discovery Service) client.
+// Package xdsclient provides an xDS (*Discovery Service) client.
 //
 // It allows applications to:
 //   - Create xDS client instances with in-memory configurations.
 //   - Register watches for named resources.
 //   - Receive resources via an ADS (Aggregated Discovery Service) stream.
+//   - Register watches for named resources (e.g. listeners, routes, or
+//     clusters).
 //
 // This enables applications to dynamically discover and configure resources
 // such as listeners, routes, clusters, and endpoints from an xDS management
