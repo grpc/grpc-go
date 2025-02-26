@@ -24,17 +24,17 @@
           /OHQHlYnwZFrk6sp4wPyR+A95S0toZBcyDVz7u+hOW0pGK3wviOe9lvRgj/H3Pwt
           bewb0l+MhRig0/DVHamyVxrDRbqInU1/GTNCwcZkXKYFWSf92U+kIcTth24Q1gcw
           eZiLl5FfrWokUNytFElXob0V0a5/kbhiLc3yWmvWqHTpqCALbVyF+rKJo2f5Kw=="],
-          "n": "<base64urlUint-encoded value>",
-          "e": "AQAB"
-        }
-      ]
-    },
-    "foo.bar.com": {
-      "keys": [
-        {
-          "kty": "RSA",
-          "use": "x509-svid",
-          "x5c": ["MIIDWjCCAkKgAwIBAgIUWrP0VvHcy+LP6UuYNtiL9gBhD5owDQYJKoZIhvcNAQEL
+            "n": "<base64urlUint-encoded value>",
+            "e": "AQAB"
+          }
+        ]
+      },
+      "foo.bar.com": {
+        "keys": [
+          {
+            "kty": "RSA",
+            "use": "x509-svid",
+            "x5c": ["MIIDWjCCAkKgAwIBAgIUWrP0VvHcy+LP6UuYNtiL9gBhD5owDQYJKoZIhvcNAQEL
             BQAwVjELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
             GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDEPMA0GA1UEAwwGdGVzdGNhMB4XDTIw
             MDMxNzE4NTk1MVoXDTMwMDMxNTE4NTk1MVowVjELMAkGA1UEBhMCQVUxEzARBgNV
@@ -52,8 +52,9 @@
             /OHQHlYnwZFrk6sp4wPyR+A95S0toZBcyDVz7u+hOW0pGK3wviOe9lvRgj/H3Pwt
             bewb0l+MhRig0/DVHamyVxrDRbqInU1/GTNCwcZkXKYFWSf92U+kIcTth24Q1gcw
             eZiLl5FfrWokUNytFElXob0V0a5/kbhiLc3yWmvWqHTpqCALbVyF+rKJo2f5Kw=="]
+            }
+          ]
         }
-      ]
+      }
     }
-  }
-}
+    
