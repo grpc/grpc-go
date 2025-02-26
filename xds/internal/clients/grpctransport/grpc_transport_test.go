@@ -27,7 +27,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/proto"
@@ -78,11 +80,7 @@ func setupTestServer(t *testing.T, response *v3discoverypb.DiscoveryResponse) *t
 	s := grpc.NewServer()
 
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(s, ts)
-	go func() {
-		if err := s.Serve(lis); err != nil {
-			t.Logf("Server exited with error: %v", err)
-		}
-	}()
+	go s.Serve(lis)
 	t.Cleanup(s.Stop)
 
 	return ts
@@ -113,12 +111,21 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 	}
 }
 
+type testCredentials struct {
+	credentials.Bundle
+	transportCredentials credentials.TransportCredentials
+}
+
+func (tc *testCredentials) TransportCredentials() credentials.TransportCredentials {
+	return tc.transportCredentials
+}
+
 // TestBuild_Success verifies that the Builder successfully creates a new
 // Transport with a non-nil grpc.ClientConn.
 func (s) TestBuild_Success(t *testing.T) {
 	serverCfg := clients.ServerConfig{
 		ServerURI:  "server-address",
-		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+		Extensions: ServerConfigExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 
 	b := &Builder{}

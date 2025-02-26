@@ -40,7 +40,7 @@ type ServerConfigExtension struct {
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerConfigs
-// that contain Extension field of type ServerConfigExtension.
+// that contain an Extension field of type ServerConfigExtension.
 type Builder struct{}
 
 // Build returns a gRPC-based clients.Transport.
@@ -88,11 +88,16 @@ type grpcTransport struct {
 
 // NewStream creates a new gRPC stream to the server for the specified method.
 func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream, error) {
-	s, err := g.cc.NewStream(ctx, &grpc.StreamDesc{StreamName: method, ClientStreams: true, ServerStreams: true}, method)
+	s, err := g.cc.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, method)
 	if err != nil {
 		return nil, err
 	}
 	return &stream{stream: s}, nil
+}
+
+// Close closes the gRPC channel to the server.
+func (g *grpcTransport) Close() error {
+	return g.cc.Close()
 }
 
 type stream struct {
@@ -109,14 +114,9 @@ func (s *stream) Recv() ([]byte, error) {
 	var typedRes []byte
 
 	if err := s.stream.RecvMsg(&typedRes); err != nil {
-		return typedRes, err
+		return nil, err
 	}
 	return typedRes, nil
-}
-
-// Close closes the gRPC channel to the server.
-func (g *grpcTransport) Close() error {
-	return g.cc.Close()
 }
 
 type byteCodec struct{}
@@ -125,7 +125,7 @@ func (c *byteCodec) Marshal(v any) ([]byte, error) {
 	if b, ok := v.([]byte); ok {
 		return b, nil
 	}
-	return nil, fmt.Errorf("message is %T, but must be a byte slice ", v)
+	return nil, fmt.Errorf("message is %T, but must be a []byte", v)
 }
 
 func (c *byteCodec) Unmarshal(data []byte, v any) error {
@@ -133,7 +133,7 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 		*b = data
 		return nil
 	}
-	return fmt.Errorf("target is %T, but must be a pointer to a byte slice", v)
+	return fmt.Errorf("target is %T, but must be *[]byte", v)
 }
 
 func (c *byteCodec) Name() string {
