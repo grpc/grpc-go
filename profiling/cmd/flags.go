@@ -42,11 +42,10 @@ func exactlyOneOf(opts ...bool) bool {
 			continue
 		}
 
-		if first {
-			first = false
-		} else {
+		if !first {
 			return false
 		}
+		first = false
 	}
 
 	return !first

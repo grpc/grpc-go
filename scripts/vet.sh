@@ -77,10 +77,7 @@ git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.
 
 # - Ensure all context usages are done with timeout.
 # Context tests under benchmark are excluded as they are testing the performance of context.Background() and context.TODO().
-# TODO: Remove the exclusions once the tests are updated to use context.WithTimeout().
-# See https://github.com/grpc/grpc-go/issues/7304
-git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v "credential
-s/google" | grep -v "internal/transport/" | grep -v "xds/internal/" | grep -v "security/advancedtls" | grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
+git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | grep -v "benchmark/primitives/context_test.go" | grep -v 'context.WithTimeout(' | not grep -v 'context.WithCancel('
 
 # Disallow usage of net.ParseIP in favour of netip.ParseAddr as the former
 # can't parse link local IPv6 addresses.
@@ -100,7 +97,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.22
+  go mod tidy -compat=1.23
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 

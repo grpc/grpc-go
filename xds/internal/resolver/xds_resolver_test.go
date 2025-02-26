@@ -1436,7 +1436,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 					}
 
 					var doneFunc func()
-					_, err = res.Interceptor.NewStream(context.Background(), iresolver.RPCInfo{}, func() {}, func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+					_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{}, func() {}, func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
 						doneFunc = done
 						return nil, nil
 					})
