@@ -291,8 +291,14 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		return nil, err
 	}
 
+	host := cc.authority
+	hostRewriteLiteral := transport.GetHostRewriteLiteral(ctx)
+	if hostRewriteLiteral != "" {
+		host = hostRewriteLiteral
+	}
+
 	callHdr := &transport.CallHdr{
-		Host:           cc.authority,
+		Host:           host,
 		Method:         method,
 		ContentSubtype: callInfo.contentSubtype,
 		DoneFunc:       doneFunc,

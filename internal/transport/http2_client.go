@@ -733,6 +733,23 @@ func (e NewStreamError) Error() string {
 	return e.Err.Error()
 }
 
+type ctxKeyHostRewriteLiteral struct{}
+
+// SetHostRewriteLiteral sets a hostRewriteLiteral to be retrieved later
+func SetHostRewriteLiteral(ctx context.Context, hostRewriteLiteral string) context.Context {
+	return context.WithValue(ctx, ctxKeyHostRewriteLiteral{}, hostRewriteLiteral)
+}
+
+func IsHostRewriteLiteralNonEmpty(ctx context.Context) bool {
+	hostRewriteLiteral, _ := ctx.Value(ctxKeyHostRewriteLiteral{}).(string)
+	return hostRewriteLiteral != ""
+}
+
+func GetHostRewriteLiteral(ctx context.Context) string {
+	hostRewriteLiteral, _ := ctx.Value(ctxKeyHostRewriteLiteral{}).(string)
+	return hostRewriteLiteral
+}
+
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.  All non-nil errors returned will be *NewStreamError.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientStream, error) {
@@ -743,7 +760,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 	// the ServerName field takes precedence for server authentication during
 	// TLS handshake, and the :authority header should match the value used
 	// for server authentication.
-	if t.address.ServerName != "" {
+	if t.address.ServerName != "" && !IsHostRewriteLiteralNonEmpty(ctx) {
 		newCallHdr := *callHdr
 		newCallHdr.Host = t.address.ServerName
 		callHdr = &newCallHdr
