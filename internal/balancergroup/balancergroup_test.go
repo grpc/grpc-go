@@ -67,15 +67,12 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// Create a new balancer group, add balancer and backends, but not start.
+// Create a new balancer group, add balancer and backends.
 // - b1, weight 2, backends [0,1]
 // - b2, weight 1, backends [2,3]
 // Start the balancer group and check behavior.
 //
-// Close the balancer group, call add/remove/change weight/change address.
-// - b2, weight 3, backends [0,3]
-// - b3, weight 1, backends [1,2]
-// Start the balancer group again and check for behavior.
+// Close the balancer group.
 func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewBalancerClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
@@ -96,8 +93,6 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	gator.Add(testBalancerIDs[1], 1)
 	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[2:4]}})
-
-	bg.Start()
 
 	m1 := make(map[string]balancer.SubConn)
 	for i := 0; i < 4; i++ {
@@ -123,42 +118,6 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	bg.Close()
 	for i := 0; i < 4; i++ {
 		(<-cc.ShutdownSubConnCh).UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
-	}
-
-	// Add b3, weight 1, backends [1,2].
-	gator.Add(testBalancerIDs[2], 1)
-	bg.Add(testBalancerIDs[2], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[2], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[1:3]}})
-
-	// Remove b1.
-	gator.Remove(testBalancerIDs[0])
-	bg.Remove(testBalancerIDs[0])
-
-	// Update b2 to weight 3, backends [0,3].
-	gator.UpdateWeight(testBalancerIDs[1], 3)
-	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: append([]resolver.Endpoint(nil), testBackendEndpoints[0], testBackendEndpoints[3])}})
-
-	gator.Start()
-	bg.Start()
-
-	m2 := make(map[string]balancer.SubConn)
-	for i := 0; i < 4; i++ {
-		addrs := <-cc.NewSubConnAddrsCh
-		sc := <-cc.NewSubConnCh
-		m2[addrs[0].Addr] = sc
-		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-		sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	}
-
-	// Test roundrobin on the last picker.
-	p2 := <-cc.NewPickerCh
-	want = []balancer.SubConn{
-		m2[testBackendAddrs[0].Addr], m2[testBackendAddrs[0].Addr], m2[testBackendAddrs[0].Addr],
-		m2[testBackendAddrs[3].Addr], m2[testBackendAddrs[3].Addr], m2[testBackendAddrs[3].Addr],
-		m2[testBackendAddrs[1].Addr], m2[testBackendAddrs[2].Addr],
-	}
-	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p2)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
 	}
 }
 
@@ -197,8 +156,6 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	gator.Add(testBalancerIDs[1], 1)
 	bg.Add(testBalancerIDs[1], builder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
-
-	bg.Start()
 }
 
 // initBalancerGroupForCachingTest creates a balancer group, and initialize it
@@ -227,8 +184,6 @@ func initBalancerGroupForCachingTest(t *testing.T, idleCacheTimeout time.Duratio
 	gator.Add(testBalancerIDs[1], 1)
 	bg.Add(testBalancerIDs[1], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[2:4]}})
-
-	bg.Start()
 
 	m1 := make(map[string]*testutils.TestSubConn)
 	for i := 0; i < 4; i++ {
@@ -517,7 +472,6 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		StateAggregator: nil,
 		Logger:          nil,
 	})
-	bg.Start()
 
 	// Add the stub balancer build above as a child policy.
 	balancerBuilder := balancer.Get(balancerName)
@@ -545,7 +499,6 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 		StateAggregator: nil,
 		Logger:          nil,
 	})
-	bg.Start()
 	defer bg.Close()
 
 	// Add the stub balancer build above as a child policy.
@@ -581,7 +534,6 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 	bg.Add(testBalancerIDs[0], rrBuilder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Endpoints: testBackendEndpoints[0:2]}})
 
-	bg.Start()
 	defer bg.Close()
 
 	m1 := make(map[string]balancer.SubConn)

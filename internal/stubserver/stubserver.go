@@ -163,8 +163,7 @@ func (ss *StubServer) setupServer(sopts ...grpc.ServerOption) (net.Listener, err
 		ss.S = grpc.NewServer(sopts...)
 	}
 	for _, so := range sopts {
-		switch x := so.(type) {
-		case *registerServiceServerOption:
+		if x, ok := so.(*registerServiceServerOption); ok {
 			x.f(ss.S)
 		}
 	}

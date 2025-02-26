@@ -370,6 +370,6 @@ func (cw *clusterWatcherV2) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here simplifies tests that want access to the most recently received
 	// error.
-	cw.resourceNotFoundCh.Replace(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response"))
+	cw.resourceNotFoundCh.Replace(xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response"))
 	onDone()
 }
