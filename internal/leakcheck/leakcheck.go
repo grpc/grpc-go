@@ -326,7 +326,7 @@ func (t *trackingTimer) Stop() bool {
 	return t.Timer.Stop()
 }
 
-// TrackTimers replaces internal.TimerAfterFunc  with one that tracks timer
+// TrackTimers replaces internal.TimerAfterFunc with one that tracks timer
 // creations, stoppages and expirations. CheckTimers should then be invoked at
 // the end of the test to validate that all timers created have either executed
 // or are cancelled.
