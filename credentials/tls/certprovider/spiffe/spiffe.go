@@ -35,8 +35,8 @@ type partialParsedSpiffeBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
 }
 
-// Loads a SPIFFE Bundle Map from a file. See the SPIFFE Bundle Map spec for
-// more detail -
+// LoadSpiffeBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
+// Bundle Map spec for more detail -
 // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
 // behavior occurs which causes the last processed entry to be the entry in the
