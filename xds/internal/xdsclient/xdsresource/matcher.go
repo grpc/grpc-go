@@ -41,6 +41,8 @@ func RouteToMatcher(r *Route) *CompositeMatcher {
 		pm = newPathExactMatcher(*r.Path, r.CaseInsensitive)
 	case r.Prefix != nil:
 		pm = newPathPrefixMatcher(*r.Prefix, r.CaseInsensitive)
+	default:
+		panic("illegal route: missing path_matcher")
 	}
 
 	headerMatchers := make([]matcher.HeaderMatcher, 0, len(r.Headers))
@@ -62,6 +64,8 @@ func RouteToMatcher(r *Route) *CompositeMatcher {
 			matcherT = matcher.NewHeaderPresentMatcher(h.Name, *h.PresentMatch, invert)
 		case h.StringMatch != nil:
 			matcherT = matcher.NewHeaderStringMatcher(h.Name, *h.StringMatch, invert)
+		default:
+			panic("illegal route: missing header_match_specifier")
 		}
 		headerMatchers = append(headerMatchers, matcherT)
 	}
