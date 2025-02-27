@@ -169,7 +169,7 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 	// Create a ClientConn with the specified transport credentials.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })

@@ -72,7 +72,7 @@ func (s) TestBalancer_StateListenerBeforeConnect(t *testing.T) {
 
 	cc, err := NewClient("passthrough:///test.server", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(svcCfg))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	started.Fire()

@@ -150,7 +150,7 @@ func (s) TestNewClientWithMultipleBackendsNotSendingServerPreface(t *testing.T) 
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
 	client, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient failed. Err: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	client.Connect()
 	defer client.Close()
@@ -558,7 +558,7 @@ func (b *fakeBundleCreds) TransportCredentials() credentials.TransportCredential
 func (s) TestCredentialsMisuse(t *testing.T) {
 	// Use of no transport creds and no creds bundle must fail.
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80"); err != errNoTransportSecurity {
-		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errNoTransportSecurity)
+		t.Fatalf("grpc.NewClient() failed with error: %v, want: %v", err, errNoTransportSecurity)
 	}
 
 	// Use of both transport creds and creds bundle must fail.
@@ -571,18 +571,18 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 		WithCredentialsBundle(&fakeBundleCreds{transportCreds: creds}),
 	}
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80", dopts...); err != errTransportCredsAndBundle {
-		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errTransportCredsAndBundle)
+		t.Fatalf("grpc.NewClient() failed with error: %v, want: %v", err, errTransportCredsAndBundle)
 	}
 
 	// Use of perRPC creds requiring transport security over an insecure
 	// transport must fail.
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithTransportCredentials(insecure.NewCredentials())); err != errTransportCredentialsMissing {
-		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errTransportCredentialsMissing)
+		t.Fatalf("grpc.NewClient() failed with error: %v, want: %v", err, errTransportCredentialsMissing)
 	}
 
 	// Use of a creds bundle with nil transport credentials must fail.
 	if _, err := NewClient("passthrough:///Non-Existent.Server:80", WithCredentialsBundle(&fakeBundleCreds{})); err != errNoTransportCredsInBundle {
-		t.Fatalf("NewClient() failed with error: %v, want: %v", err, errTransportCredsAndBundle)
+		t.Fatalf("grpc.NewClient() failed with error: %v, want: %v", err, errTransportCredsAndBundle)
 	}
 }
 
@@ -623,7 +623,7 @@ func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential,
 	opts = append(opts, WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := NewClient("passthrough:///foo:80", opts...)
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer conn.Close()
 
@@ -646,7 +646,7 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	mct := 1 * time.Minute
 	conn, err := NewClient("passthrough:///foo:80", WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer conn.Close()
 
@@ -660,7 +660,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 
 	cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -676,7 +676,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		r := manual.NewBuilderWithScheme(fmt.Sprintf("whatever-%d", i))
 		cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 		if err != nil {
-			t.Fatalf("NewClient() failed: %v", err)
+			t.Fatalf("grpc.NewClient() failed: %v", err)
 		}
 		cc.Connect()
 		// Send a new service config while closing the ClientConn.
@@ -690,7 +690,7 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 
 	cc, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -771,7 +771,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 	addr := r.Scheme() + ":///non.existent"
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDisableServiceConfig())
 	if err != nil {
-		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -808,7 +808,7 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
   }]
 }`))
 	if err != nil {
-		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -850,7 +850,7 @@ func (s) TestClientConnCanonicalTarget(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cc, err := NewClient(test.addr, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("NewClient(%s) failed: %v, want: nil", test.addr, err)
+				t.Fatalf("grpc.NewClient(%s) failed: %v, want: nil", test.addr, err)
 			}
 			defer cc.Close()
 			if cc.Target() != test.addr {
@@ -881,7 +881,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 	}
 	cc, err := NewClient("passthrough:///", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
-		t.Fatalf("NewClient() failed with error: %v, want: nil", err)
+		t.Fatalf("grpc.NewClient() failed with error: %v, want: nil", err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
@@ -913,7 +913,7 @@ func (s) TestBackoffCancel(t *testing.T) {
 		return nil, fmt.Errorf("test dialer, always error")
 	}))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1164,14 +1164,14 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 func testInvalidDefaultServiceConfig(t *testing.T, r *manual.Resolver, addr, sc string) {
 	_, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(sc))
 	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
-		t.Fatalf("NewClient got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
+		t.Fatalf("grpc.NewClient() got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
 	}
 }
 
 func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *manual.Resolver, addr string, js string) {
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1188,7 +1188,7 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *
 func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()
@@ -1203,7 +1203,7 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
 	cc, err := NewClient(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
-		t.Fatalf("NewClient(%s) failed: %v, want: nil", addr, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v, want: nil", addr, err)
 	}
 	cc.Connect()
 	defer cc.Close()

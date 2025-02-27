@@ -403,7 +403,7 @@ func (s) TestConfigurationUpdate_EmptyCluster(t *testing.T) {
 	// Create a ClientConn with the above manual resolver.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
@@ -441,7 +441,7 @@ func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
 	// Create a ClientConn with the above manual resolver.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("NewClient() failed: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
