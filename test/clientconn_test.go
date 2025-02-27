@@ -188,10 +188,11 @@ func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 
 	client := testgrpc.NewTestServiceClient(cc)
 	rpcError := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	go func() {
+		t.Log("RPC waiting for resolved addresses")
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		rpcError <- err
 	}()
