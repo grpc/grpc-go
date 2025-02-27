@@ -46,7 +46,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// correctness.
 		span.SetAttributes(
 			attribute.Bool("Client", rs.Client),
-			attribute.Bool("FailFast", rs.Client),
+			attribute.Bool("FailFast", rs.FailFast),
 			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
 			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
