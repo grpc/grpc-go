@@ -32,7 +32,7 @@ elif [[ "$#" -ne 0 ]]; then
 fi
 
 # - Check that generated proto files are up to date.
-go ./... && git status --porcelain 2>&1 | fail_on_output || \
+go generate ./... && git status --porcelain 2>&1 | fail_on_output || \
 (git status; git --no-pager diff; exit 1)
 
 echo SUCCESS
