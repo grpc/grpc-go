@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"testing"
 	"time"
 
@@ -65,6 +66,10 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
 
+	if gotBundle, wantBundle := got.SpiffeBundleMap, want.SpiffeBundleMap; !reflect.DeepEqual(gotBundle, wantBundle) {
+		return fmt.Errorf("keyMaterial spiffe bundle map = %v, want %v", gotBundle, wantBundle)
+	}
+
 	return nil
 }
 
@@ -105,6 +110,12 @@ func (s) TestNewProvider(t *testing.T) {
 			desc: "Only root certs are specified",
 			options: Options{
 				RootFile: testdata.Path("x509/client_ca_cert.pem"),
+			},
+		},
+		{
+			desc: "Only spiffe bundle map specified",
+			options: Options{
+				SpiffeBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
 			},
 		},
 		{
