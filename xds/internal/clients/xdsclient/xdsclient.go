@@ -32,10 +32,6 @@
 // server.
 package xdsclient
 
-import (
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-)
-
 // XDSClient is a client which queries a set of discovery APIs (collectively
 // termed as xDS) on a remote management server, to discover
 // various dynamic resources.
@@ -66,6 +62,6 @@ func (c *XDSClient) Close() error {
 
 // DumpResources returns the status and contents of all xDS resources being
 // watched by the xDS client.
-func (c *XDSClient) DumpResources() *v3statuspb.ClientStatusResponse {
+func (c *XDSClient) DumpResources() []byte {
 	panic("unimplemented")
 }

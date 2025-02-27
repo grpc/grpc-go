@@ -35,7 +35,7 @@ type Config struct {
 	// xDS server is unavailable.
 	//
 	// gRFC A71: https://github.com/grpc/proposal/blob/master/A71-xds-fallback.md
-	Servers []clients.ServerConfig
+	Servers []ServerConfig
 
 	// Authorities defines the configuration for each xDS authority.  Federated resources
 	// will be fetched from the servers specified by the corresponding Authority.
@@ -53,7 +53,24 @@ type Config struct {
 	// kind of xDS resource, and the corresponding resource type implementation
 	// provides logic for parsing, validating, and processing resources of that
 	// type.
+	//
+	// "type.googleapis.com/envoy.service.discovery.v3.Resource" is an example
+	// URL for listener resource type.
 	ResourceTypes map[string]ResourceType
+}
+
+// ServerConfig contains configuration for an xDS management server.
+type ServerConfig struct {
+	ServerIdentifier clients.ServerIdentifier
+
+	// IgnoreResourceDeletion is a server feature which if set to true,
+	// indicates that resource deletion errors from xDS management servers can
+	// be ignored and cached resource data can be used.
+	//
+	// This will be removed in the future once we implement gRFC A88
+	// and two new fields FailOnDataErrors and
+	// ResourceTimerIsTransientError will be introduced.
+	IgnoreResourceDeletion bool
 }
 
 // Authority contains configuration for an xDS control plane authority.
@@ -63,16 +80,5 @@ type Authority struct {
 	// XDSServers contains the list of server configurations for this authority.
 	//
 	// See Config.Servers for more details.
-	XDSServers []clients.ServerConfig
-
-	// Extensions can be populated with arbitrary authority-specific data to be
-	// passed from the xDS client configuration down to the user defined
-	// resource type implementations. This allows the user to provide
-	// authority-specific context or configuration to their resource
-	// processing logic.
-	//
-	// The xDS client does not interpret the contents of this field. It is the
-	// responsibility of the user's resource type implementations to handle and
-	// interpret these extensions.
-	Extensions any
+	XDSServers []ServerConfig
 }

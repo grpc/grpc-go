@@ -26,8 +26,8 @@ import (
 // channel to an xDS or LRS server.
 type TransportBuilder interface {
 	// Build creates a new Transport instance to the server based on the
-	// provided ServerConfig.
-	Build(ServerConfig ServerConfig) (Transport, error)
+	// provided ServerIdentifier.
+	Build(ServerIdentifier ServerIdentifier) (Transport, error)
 }
 
 // Transport provides the functionality to communicate with an xDS or LRS
