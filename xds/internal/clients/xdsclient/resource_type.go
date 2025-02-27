@@ -18,10 +18,6 @@
 
 package xdsclient
 
-import (
-	"google.golang.org/grpc/xds/internal/clients"
-)
-
 // ResourceType wraps all resource-type specific functionality. Each supported
 // resource type needs to provide an implementation of the Decoder.
 type ResourceType struct {
@@ -66,7 +62,7 @@ type DecodeOptions struct {
 
 	// ServerConfig contains the configuration of the xDS server that provided
 	// the current resource being decoded.
-	ServerConfig *clients.ServerConfig
+	ServerConfig *ServerConfig
 }
 
 // DecodeResult is the result of a decode operation.
@@ -89,5 +85,5 @@ type ResourceData interface {
 	RawEqual(ResourceData) bool
 
 	// Raw returns the underlying raw form of the resource.
-	Raw() any
+	Raw() []byte
 }

@@ -51,19 +51,11 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
-// ServerConfig holds settings for connecting to an xDS management or LRS server.
-type ServerConfig struct {
+// ServerIdentifier holds identifying information for connecting to an xDS
+// management or LRS server.
+type ServerIdentifier struct {
 	// ServerURI is the target URI of the server.
 	ServerURI string
-
-	// IgnoreResourceDeletion is a server feature which if set to true,
-	// indicates that resource deletion errors from xDS management servers can
-	// be ignored and cached resource data can be used.
-	//
-	// This will be removed in the future once we implement gRFC A88
-	// and two new fields FailOnDataErrors and
-	// ResourceTimerIsTransientError will be introduced.
-	IgnoreResourceDeletion bool
 
 	// Extensions can be populated with arbitrary data to be passed to the
 	// TransportBuilder and/or xDS Client's ResourceType implementations.
@@ -83,21 +75,19 @@ type ServerConfig struct {
 }
 
 // equal returns true if sc and other are considered equal.
-func (sc *ServerConfig) equal(other *ServerConfig) bool {
+func (si *ServerIdentifier) equal(other *ServerIdentifier) bool {
 	switch {
-	case sc == nil && other == nil:
+	case si == nil && other == nil:
 		return true
-	case (sc != nil) != (other != nil):
+	case (si != nil) != (other != nil):
 		return false
-	case sc.ServerURI != other.ServerURI:
-		return false
-	case sc.IgnoreResourceDeletion != other.IgnoreResourceDeletion:
+	case si.ServerURI != other.ServerURI:
 		return false
 	}
-	if sc.Extensions == nil && other.Extensions == nil {
+	if si.Extensions == nil && other.Extensions == nil {
 		return true
 	}
-	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
+	if ex, ok := si.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
 		return true
 	}
 	return false

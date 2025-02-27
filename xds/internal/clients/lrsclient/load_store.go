@@ -30,7 +30,17 @@ package lrsclient
 type LoadStore struct {
 }
 
-// Stop stops the LoadStore's load reporting stream.
+// Stop stops the LRS stream associated with this LoadStore.
+//
+// If this LoadStore is the only one using the underlying LRS stream, the
+// stream will be closed. If other LoadStores are also using the same stream,
+// the reference count to the stream is decremented, and the stream remains
+// open until all LoadStores have called Stop().
+//
+// If the stream is being closed, this method attempts to flush any remaining
+// load data to the LRS server within the specified ReportLoadTimeout in the
+// client's Config. If the data cannot be written within the timeout, the
+// stream is canceled without flushing the data.
 func (ls *LoadStore) Stop() error {
 	panic("unimplemented")
 }

@@ -36,10 +36,10 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type testServerConfigExtension struct{ x int }
+type testServerIdentifierExtension struct{ x int }
 
-func (ts testServerConfigExtension) Equal(other any) bool {
-	ots, ok := other.(testServerConfigExtension)
+func (ts testServerIdentifierExtension) Equal(other any) bool {
+	ots, ok := other.(testServerIdentifierExtension)
 	if !ok {
 		return false
 	}
@@ -56,11 +56,11 @@ func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct 
 	return ret
 }
 
-func (s) TestServerConfig_Equal(t *testing.T) {
+func (s) TestServerIdentifier_Equal(t *testing.T) {
 	tests := []struct {
 		name   string
-		s1     *ServerConfig
-		s2     *ServerConfig
+		s1     *ServerIdentifier
+		s2     *ServerIdentifier
 		wantEq bool
 	}{
 		{
@@ -72,104 +72,96 @@ func (s) TestServerConfig_Equal(t *testing.T) {
 		{
 			name:   "one_nil",
 			s1:     nil,
-			s2:     &ServerConfig{},
+			s2:     &ServerIdentifier{},
 			wantEq: false,
 		},
 		{
 			name:   "other_nil",
-			s1:     &ServerConfig{},
+			s1:     &ServerIdentifier{},
 			s2:     nil,
 			wantEq: false,
 		},
 		{
 			name:   "both_empty_and_equal",
-			s1:     &ServerConfig{},
-			s2:     &ServerConfig{},
+			s1:     &ServerIdentifier{},
+			s2:     &ServerIdentifier{},
 			wantEq: true,
 		},
 		{
 			name:   "different_ServerURI",
-			s1:     &ServerConfig{ServerURI: "foo"},
-			s2:     &ServerConfig{ServerURI: "bar"},
-			wantEq: false,
-		},
-		{
-			name:   "different_IgnoreResourceDeletion",
-			s1:     &ServerConfig{IgnoreResourceDeletion: true},
-			s2:     &ServerConfig{},
+			s1:     &ServerIdentifier{ServerURI: "foo"},
+			s2:     &ServerIdentifier{ServerURI: "bar"},
 			wantEq: false,
 		},
 		{
 			name: "different_Extensions_with_no_Equal_method",
-			s1: &ServerConfig{
+			s1: &ServerIdentifier{
 				Extensions: 1,
 			},
-			s2: &ServerConfig{
+			s2: &ServerIdentifier{
 				Extensions: 2,
 			},
 			wantEq: false, // By default, if there's no Equal method, they are unequal
 		},
 		{
 			name: "same_Extensions_with_no_Equal_method",
-			s1: &ServerConfig{
+			s1: &ServerIdentifier{
 				Extensions: 1,
 			},
-			s2: &ServerConfig{
+			s2: &ServerIdentifier{
 				Extensions: 1,
 			},
 			wantEq: false, // By default, if there's no Equal method, they are unequal
 		},
 		{
 			name: "different_Extensions_with_Equal_method",
-			s1: &ServerConfig{
-				Extensions: testServerConfigExtension{1},
+			s1: &ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
 			},
-			s2: &ServerConfig{
-				Extensions: testServerConfigExtension{2},
+			s2: &ServerIdentifier{
+				Extensions: testServerIdentifierExtension{2},
 			},
 			wantEq: false,
 		},
 		{
 			name: "same_Extensions_same_with_Equal_method",
-			s1: &ServerConfig{
-				Extensions: testServerConfigExtension{1},
+			s1: &ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
 			},
-			s2: &ServerConfig{
-				Extensions: testServerConfigExtension{1},
+			s2: &ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
 			},
 			wantEq: true,
 		},
 		{
 			name: "first_config_Extensions_is_nil",
-			s1: &ServerConfig{
-				Extensions: testServerConfigExtension{1},
+			s1: &ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
 			},
-			s2: &ServerConfig{
+			s2: &ServerIdentifier{
 				Extensions: nil,
 			},
 			wantEq: false,
 		},
 		{
 			name: "other_config_Extensions_is_nil",
-			s1: &ServerConfig{
+			s1: &ServerIdentifier{
 				Extensions: nil,
 			},
-			s2: &ServerConfig{
-				Extensions: testServerConfigExtension{2},
+			s2: &ServerIdentifier{
+				Extensions: testServerIdentifierExtension{2},
 			},
 			wantEq: false,
 		},
 		{
 			name: "all_fields_same",
-			s1: &ServerConfig{
-				ServerURI:              "foo",
-				IgnoreResourceDeletion: true,
-				Extensions:             testServerConfigExtension{1},
+			s1: &ServerIdentifier{
+				ServerURI:  "foo",
+				Extensions: testServerIdentifierExtension{1},
 			},
-			s2: &ServerConfig{
-				ServerURI:              "foo",
-				IgnoreResourceDeletion: true,
-				Extensions:             testServerConfigExtension{1},
+			s2: &ServerIdentifier{
+				ServerURI:  "foo",
+				Extensions: testServerIdentifierExtension{1},
 			},
 			wantEq: true,
 		},
