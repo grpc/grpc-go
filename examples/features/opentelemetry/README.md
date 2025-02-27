@@ -1,6 +1,7 @@
 # OpenTelemetry
 
-This example demonstrates how to configure OpenTelemetry on a gRPC client and server, showcasing the telemetry data it produces for RPC interactions.
+This example demonstrates how to configure OpenTelemetry on a gRPC client and 
+server, showcasing the telemetry data it produces for RPC interactions.
 
 ## Try it
 
@@ -10,7 +11,8 @@ This example demonstrates how to configure OpenTelemetry on a gRPC client and se
     go run server/main.go
     ```
 
-    * This starts the gRPC server, which also exposes a Prometheus metrics endpoint.
+    * This starts the gRPC server, which also exposes a Prometheus metrics 
+      endpoint.
 
 2.  **Run the gRPC Client:**
 
@@ -18,7 +20,8 @@ This example demonstrates how to configure OpenTelemetry on a gRPC client and se
     go run client/main.go
     ```
 
-    * This starts the gRPC client, which continuously makes RPC calls to the server.
+    * This starts the gRPC client, which continuously makes RPC calls to the 
+      server.
     * The client also exposes a Prometheus metrics endpoint.
 
 3.  **View Prometheus Metrics:**
@@ -29,7 +32,8 @@ This example demonstrates how to configure OpenTelemetry on a gRPC client and se
         curl localhost:9464/metrics
         ```
 
-        * This command retrieves the Prometheus metrics exposed by the gRPC server.
+        * This command retrieves the Prometheus metrics exposed by the gRPC 
+          server.
 
     * **Client Metrics:**
 
@@ -37,21 +41,29 @@ This example demonstrates how to configure OpenTelemetry on a gRPC client and se
         curl localhost:9465/metrics
         ```
 
-        * This command retrieves the Prometheus metrics exposed by the gRPC client.
+        * This command retrieves the Prometheus metrics exposed by the gRPC 
+          client.
 
 ## Explanation
 
-* **Continuous RPC Calls:** The client continuously makes RPC calls to the server, generating telemetry data.
-* **Prometheus Exporter:** Both the client and server are configured with a Prometheus exporter, which listens and provides metrics.
+* **Continuous RPC Calls:** The client continuously makes RPC calls to the 
+server, generating telemetry data.
+* **Prometheus Exporter:** Both the client and server are configured with a 
+Prometheus exporter, which listens and provides metrics.
     * The server's Prometheus endpoint defaults to `:9464`.
     * The client's Prometheus endpoint defaults to `:9465`.
-* **OpenTelemetry Configuration:** OpenTelemetry is configured on both the client and server to capture metrics and traces.
-* **Metrics Export:** The OpenTelemetry configuration exports metrics to the Prometheus exporter.
-* **Viewing Metrics:** By curling the exposed Prometheus ports, you can view the metrics recorded by the client and server. These metrics provide insights into the performance and behavior of the gRPC calls.
+* **OpenTelemetry Configuration:** OpenTelemetry is configured on both the 
+client and server to capture metrics and traces.
+* **Metrics Export:** The OpenTelemetry configuration exports metrics to the 
+Prometheus exporter.
+* **Viewing Metrics:** By curling the exposed Prometheus ports, you can view 
+the metrics recorded by the client and server. These metrics provide insights 
+into the performance and behavior of the gRPC calls.
 
 ## Adding Trace Visualization (Optional)
 
-To visualize traces, you'll need to set up an OTLP Collector and a trace backend like Jaeger.
+To visualize traces, you'll need to set up an OTLP Collector and a trace backend
+like Jaeger.
 
 1.  **Start Jaeger (or another trace backend):**
 
@@ -71,10 +83,12 @@ To visualize traces, you'll need to set up an OTLP Collector and a trace backend
 
     * **Local Collector:**
         * Install the `otelcol-contrib` binary.
-        * Create a configuration file (e.g., `collector-config.yaml`) specifying OTLP receiver, batch processor, and Jaeger exporter.
+        * Create a configuration file (e.g., `collector-config.yaml`) specifying 
+          OTLP receiver, batch processor, and Jaeger exporter.
         * Run the collector: `./otelcol-contrib --config collector-config.yaml`
     * **Docker Collector:**
-        * Create a configuration file (e.g., `collector-config.yaml`) specifying OTLP receiver, batch processor, and Jaeger exporter.
+        * Create a configuration file (e.g., `collector-config.yaml`) specifying
+          OTLP receiver, batch processor, and Jaeger exporter.
         * Run the collector with Docker, mounting your configuration file:
             ```
             docker run -d -p 4317:4317 -p 4318:4318 \
