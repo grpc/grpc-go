@@ -92,8 +92,8 @@ type testStatsHandler struct {
 }
 
 // TagRPC is called when an RPC is initiated and allows adding metadata to the
-// context. It checks if the RPC experienced a name resolution delay and updates
-// the handler's state.
+// context. It checks if the RPC experienced a name resolution delay and
+// updates the handler's state.
 func (h *testStatsHandler) TagRPC(ctx context.Context, rpcInfo *stats.RPCTagInfo) context.Context {
 	h.nameResolutionDelayed = rpcInfo.NameResolutionDelay
 	return ctx
@@ -170,7 +170,7 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 	}
 	// Verify that name resolution did not happen.
 	if statsHandler.nameResolutionDelayed {
-		t.Fatalf("Expected no name resolution delay, but it was detected.")
+		t.Fatalf("Expected nameResolutionDelayed to be false, but got %v", statsHandler.nameResolutionDelayed)
 	}
 }
 
@@ -198,7 +198,7 @@ func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 
 	timer := time.AfterFunc(100*time.Millisecond, func() {
 		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
-		t.Log("Resolver state updated, unblocking RPC.")
+		t.Log("Resolver updated to return addresses.")
 	})
 	defer timer.Stop()
 
