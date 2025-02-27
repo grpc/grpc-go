@@ -112,9 +112,9 @@ func createTestConn() *grpc.ClientConn {
 	default:
 		errorLog.Fatalf("Invalid --custom_credentials_type:%v", *customCredentialsType)
 	}
-	conn, err := grpc.Dial(*serverURI, opts...)
+	conn, err := grpc.NewClient(*serverURI, opts...)
 	if err != nil {
-		errorLog.Fatalf("Fail to dial: %v", err)
+		errorLog.Fatalf("grpc.NewClient(%q) = %v", *serverURI, err)
 	}
 	return conn
 }

@@ -57,9 +57,9 @@ func main() {
 	if *serverPort != 0 {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	}
-	conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Fail to dial: %v", err)
+		log.Fatalf("grpc.NewClient(%q) = %v", serverAddr, err)
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)

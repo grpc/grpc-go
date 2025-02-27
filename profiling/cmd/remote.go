@@ -79,9 +79,9 @@ func remoteCommand() error {
 	}
 
 	logger.Infof("dialing %s", *flagAddress)
-	cc, err := grpc.Dial(*flagAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(*flagAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		logger.Errorf("cannot dial %s: %v", *flagAddress, err)
+		logger.Fatalf("grpc.NewClient(%q) = %v", *flagAddress, err)
 		return err
 	}
 	defer cc.Close()

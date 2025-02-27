@@ -437,9 +437,9 @@ func main() {
 
 	clients := make([]testgrpc.TestServiceClient, *numChannels)
 	for i := 0; i < *numChannels; i++ {
-		conn, err := grpc.Dial(*server, grpc.WithTransportCredentials(creds))
+		conn, err := grpc.NewClient(*server, grpc.WithTransportCredentials(creds))
 		if err != nil {
-			logger.Fatalf("Fail to dial: %v", err)
+			logger.Fatalf("grpc.NewClient(%q) = %v", *server, err)
 		}
 		defer conn.Close()
 		clients[i] = testgrpc.NewTestServiceClient(conn)

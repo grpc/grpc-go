@@ -280,7 +280,7 @@ func main() {
 	}
 	conn, err := grpc.NewClient(serverAddr, opts...)
 	if err != nil {
-		logger.Fatalf("Fail to dial: %v", err)
+		logger.Fatalf("grpc.NewClient(%q) = %v", serverAddr, err)
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)
