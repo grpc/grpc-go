@@ -1,9 +1,16 @@
 module google.golang.org/grpc/examples
 
+// NOTE:
+// To see the builder manifests used for official binaries,
+// check https://github.com/open-telemetry/opentelemetry-collector-releases
+//
+// For the OpenTelemetry Collector Core distribution specifically, see
+// https://github.com/open-telemetry/opentelemetry-collector-releases/tree/main/distributions/otelcol
+
 go 1.23
 
 require (
-	github.com/cncf/xds/go v0.0.0-20241223141626-cff3c89139a3
+	github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42
 	github.com/prometheus/client_golang v1.20.5
 	go.opentelemetry.io/otel v1.34.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.34.0
@@ -74,15 +81,15 @@ require (
 	go.opentelemetry.io/otel/metric v1.34.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
-	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/time v0.9.0 // indirect
-	google.golang.org/api v0.216.0 // indirect
-	google.golang.org/genproto v0.0.0-20250106144421-5f5ef82da422 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250115164207-1a7da9e5054f // indirect
+	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/time v0.10.0 // indirect
+	google.golang.org/api v0.221.0 // indirect
+	google.golang.org/genproto v0.0.0-20250218202821-56aae31c358a // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
 	google.golang.org/grpc/stats/opencensus v1.0.0 // indirect
 )
 
