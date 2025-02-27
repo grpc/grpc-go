@@ -294,9 +294,6 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 			return a.Key < b.Key
 		})
 		attributesValueComparable := cmpopts.EquateComparable(attribute.KeyValue{}.Value)
-		eventsSort := cmpopts.SortSlices(func(a, b trace.Event) bool {
-			return a.Name < b.Name
-		})
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 
 		// attributes
@@ -304,7 +301,7 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 		// events
-		if diff := cmp.Diff(want.events, span.Events, eventsSort, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
+		if diff := cmp.Diff(want.events, span.Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
 			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 	}
