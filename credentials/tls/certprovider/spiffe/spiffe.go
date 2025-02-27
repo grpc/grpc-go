@@ -59,12 +59,16 @@ func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, erro
 		return nil, errors.New("no content in spiffe bundle map file")
 	}
 	bundleMap := map[string]*spiffebundle.Bundle{}
-	for trustDomain, jsonBundle := range result.Bundles {
-		bundle, err := spiffebundle.Parse(spiffeid.RequireTrustDomainFromString(trustDomain), jsonBundle)
+	for trustDomainString, jsonBundle := range result.Bundles {
+		trustDomain, err := spiffeid.TrustDomainFromString(trustDomainString)
+		if err != nil {
+			return nil, fmt.Errorf("invalud trust domain found when parsing map: %v", err)
+		}
+		bundle, err := spiffebundle.Parse(trustDomain, jsonBundle)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bundle in map: %v", err)
 		}
-		bundleMap[trustDomain] = bundle
+		bundleMap[trustDomainString] = bundle
 	}
 	return bundleMap, nil
 }
