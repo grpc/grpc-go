@@ -156,7 +156,7 @@ func (s) TestRPCSucceedsWithImmediateResolution(t *testing.T) {
 		grpc.WithStatsHandler(statsHandler),
 	)
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
