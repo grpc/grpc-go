@@ -16,8 +16,8 @@
  *
  */
 
-// Package spiffe implements utilities for grpc-go for work with SPIFFE bundles
-// and SPIFFE bundle maps.
+// Package spiffe implements utilities for working with SPIFFE bundles and
+// SPIFFE bundle maps.
 package spiffe
 
 import (
