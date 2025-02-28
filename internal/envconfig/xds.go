@@ -56,7 +56,7 @@ var (
 
 	// XDSDualstackEndpointsEnabled is true if gRPC should read the
 	// "additional addresses" in the xDS endpoint resource.
-	XDSDualstackEndpointsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_DUALSTACK_ENDPOINTS", false)
+	XDSDualstackEndpointsEnabled = boolFromEnv("GRPC_EXPERIMENTAL_XDS_DUALSTACK_ENDPOINTS", true)
 
 	// XDSSystemRootCertsEnabled is true when xDS enabled gRPC clients can use
 	// the system's default root certificates for TLS certificate validation.
