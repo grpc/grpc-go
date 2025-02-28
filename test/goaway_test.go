@@ -591,16 +591,13 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-
-	t.Log("Waiting for the ClientConn to enter READY state.")
-	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	// We make a streaming RPC and do an one-message-round-trip to make sure
 	// it's created on connection 1.

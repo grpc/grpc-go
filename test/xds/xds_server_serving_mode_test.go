@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -247,7 +249,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Create a ClientConn to the first listener and make a successful RPCs.
 	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc1.Close()
 	waitForSuccessfulRPC(ctx, t, cc1)
@@ -255,7 +257,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Create a ClientConn to the second listener and make a successful RPCs.
 	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc2.Close()
 	waitForSuccessfulRPC(ctx, t, cc2)
@@ -309,12 +311,14 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	waitForFailedRPC(ctx, t, cc1)
 	waitForFailedRPC(ctx, t, cc2)
 
-	// Make sure new connection attempts to "not-serving" servers fail. We use a
-	// short timeout since we expect this to fail.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := grpc.DialContext(sCtx, lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())); err == nil {
-		t.Fatal("successfully created clientConn to a server in \"not-serving\" state")
+	// Make sure new connection attempts to "not-serving" servers fail.
+	if cc1, err = grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+		t.Fatal("Failed to create clientConn to a server in \"not-serving\" state")
+	}
+	defer cc1.Close()
+
+	if _, err := testgrpc.NewTestServiceClient(cc1).FullDuplexCall(ctx); status.Code(err) != codes.Unavailable {
+		t.Fatalf("FullDuplexCall failed with status code: %v, want: Unavailable", status.Code(err))
 	}
 
 	// Update the management server with both listener resources.

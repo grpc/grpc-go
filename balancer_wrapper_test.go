@@ -70,10 +70,11 @@ func (s) TestBalancer_StateListenerBeforeConnect(t *testing.T) {
 	stub.Register(t.Name(), bf)
 	svcCfg := fmt.Sprintf(`{ "loadBalancingConfig": [{%q: {}}] }`, t.Name())
 
-	cc, err := Dial("fake", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(svcCfg))
+	cc, err := NewClient("passthrough:///test.server", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(svcCfg))
 	if err != nil {
-		t.Fatal("Error dialing:", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	started.Fire()
 
 	// Wait for the LB policy to call NewSubConn and cc.Close.

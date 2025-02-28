@@ -31,8 +31,8 @@ import (
 	"google.golang.org/grpc/balancer/endpointsharding"
 	"google.golang.org/grpc/balancer/lazy"
 	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
-	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
@@ -231,17 +231,6 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		// TF. Since there must be at least one endpoint attempting to connect,
 		// we need to trigger one.
 		//
-		// TODO: https://github.com/grpc/grpc-go/issues/8085 - Restrict the
-		// condition under which an endpoint is connected. The pseudocode
-		// mentioned in A61 doesn't handle the following edge cases where the
-		// aggregated state is TF, but no endpoint actually enters TF:
-		// 1. There are four endpoints in the following states: TF, TF, READY,
-		//    and IDLE. If the READY endpoint fails, it transitions to IDLE,
-		//    resulting in the new states: TF, TF, IDLE, IDLE.
-		// 2. There are four endpoints in the following states: TF, TF,
-		//    CONNECTING, and IDLE. If the CONNECTING endpoint is removed, the
-		//    new states become: TF, TF, IDLE.
-
 		// After calling `ExitIdle` on a child balancer, the child will send a
 		// picker update asynchronously. A race condition may occur if another
 		// picker update from endpointsharding arrives before the child's
@@ -366,7 +355,7 @@ func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 // non-zero. But, when used in a non-xDS context, the weight attribute could be
 // unset. A Default of 1 is used in the latter case.
 func getWeightAttribute(e resolver.Endpoint) uint32 {
-	w := weightedroundrobin.AddrInfoFromEndpoint(e).Weight
+	w := weight.FromEndpoint(e).Weight
 	if w == 0 {
 		return 1
 	}

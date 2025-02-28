@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"sort"
 
-	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
@@ -281,7 +281,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			if endpoint.Weight != 0 {
 				ew = endpoint.Weight
 			}
-			resolverEndpoint = weightedroundrobin.SetAddrInfoInEndpoint(resolverEndpoint, weightedroundrobin.AddrInfo{Weight: lw * ew})
+			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}
