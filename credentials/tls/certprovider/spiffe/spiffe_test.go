@@ -110,6 +110,10 @@ func TestLoadSpiffeBundleMapFailures(t *testing.T) {
 			expectError: true,
 		},
 		{
+			filePath:    testdata.Path("spiffe/spiffebundle_invalid_trustdomain.json"),
+			expectError: true,
+		},
+		{
 			// SPIFFE Bundles only support a use of x509-svid and jwt-svid. If a
 			// use other than this is specified, the parser does not fail, it
 			// just doesn't add an x509 authority or jwt authority to the bundle
