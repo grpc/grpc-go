@@ -211,6 +211,9 @@ type attemptInfo struct {
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRPCAttempts uint32
+	// NameResolutionDelay indicates if there was a delay in the name resolution.
+	// This field is only valid on client side, it's always false on server side.
+	nameResolutionDelayed bool
 }
 
 type clientMetrics struct {
