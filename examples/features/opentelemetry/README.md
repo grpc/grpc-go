@@ -87,7 +87,8 @@ to send trace data via OTLP.
         * Install the `otelcol-contrib` binary.
         * Create a configuration file (e.g., `collector-config.yaml`)
             specifying:
-            * An OTLP receiver (to receive traces from your client and server).
+            * An OTLP receiver (to receive traces from your client and
+                server).
             * A batch processor (recommended for performance).
             * A Jaeger exporter (to send traces to Jaeger).
         * Run the collector: `./otelcol-contrib --config collector-config.yaml`
