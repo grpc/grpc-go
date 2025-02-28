@@ -123,4 +123,3 @@ send trace data via OTLP.
     which visualizes the traces.
 * **Trace Visualization (Tracing):** By using the Jaeger UI, you can see the
     flow of RPC calls and analyze the performance of your gRPC services.
-    
