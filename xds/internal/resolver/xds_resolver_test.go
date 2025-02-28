@@ -646,7 +646,7 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
 
 	// "Make another RPC" by invoking the config selector.
-	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
 		t.Fatal(err)
 	}
