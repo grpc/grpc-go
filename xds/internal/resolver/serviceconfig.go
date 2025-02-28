@@ -125,23 +125,30 @@ func (r route) String() string {
 	return fmt.Sprintf("%s -> { clusters: %v, maxStreamDuration: %v }", r.m.String(), r.clusters, r.maxStreamDuration)
 }
 
+// stoppableConfigSelector extends the iresolver.ConfigSelector interface with a
+// stop() method. This makes it possible to swap the current config selector
+// with an erroring config selector when the LDS or RDS resource is not found on
+// the management server.
 type stoppableConfigSelector interface {
 	iresolver.ConfigSelector
 	stop()
 }
+
+// erroringConfigSelector always returns an error, with the xDS node ID included
+// in the error message. It is used to swap out the current config selector
+// when the LDS or RDS resource is not found on the management server.
 type erroringConfigSelector struct {
-	xdsNodeID string
+	err error
+}
+
+func newErroringConfigSelector(xdsNodeID string) *erroringConfigSelector {
+	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Errorf(codes.Unavailable, "no valid clusters"), xdsNodeID)}
 }
 
 func (cs *erroringConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
-	return nil, annotateErrorWithNodeID(status.Errorf(codes.Unavailable, "no valid clusters"), cs.xdsNodeID)
+	return nil, cs.err
 }
 func (cs *erroringConfigSelector) stop() {}
-
-func isErroringConfigSelector(cs stoppableConfigSelector) bool {
-	_, ok := cs.(*erroringConfigSelector)
-	return ok
-}
 
 type configSelector struct {
 	r                *xdsResolver
@@ -155,6 +162,9 @@ type configSelector struct {
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 var errUnsupportedClientRouteAction = status.Errorf(codes.Unavailable, "matched route does not have a supported route action type")
 
+// annotateErrorWithNodeID annotates the given error with the provided xDS node
+// ID. This is used by the real config selector when it runs into errors, and
+// also by the erroring config selector.
 func annotateErrorWithNodeID(err error, nodeID string) error {
 	return fmt.Errorf("[xDS node id: %s]: %w", nodeID, err)
 }

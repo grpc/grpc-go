@@ -290,16 +290,20 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	// them.
 	r.pruneActiveClusters()
 
-	if isErroringConfigSelector(cs) && len(r.activeClusters) == 0 {
+	errCS, ok := cs.(*erroringConfigSelector)
+	if ok && len(r.activeClusters) == 0 {
 		// There are no clusters and we are sending a failing configSelector.
 		// Send an empty config, which picks pick-first, with no address, and
 		// puts the ClientConn into transient failure.
-		if err := r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")}); err != nil {
-			if r.logger.V(2) {
-				r.logger.Infof("Channel rejected new state (with empty service config) with error: %v", err)
-			}
-			return false
-		}
+		//
+		// This call to UpdateState is expected to return ErrBadResolverState
+		// since pick_first doesn't like an update with no addresses.
+		r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")})
+
+		// Send a resolver error to pick_first so that RPCs will fail with a
+		// more meaningful error, as opposed to one that says that pick_first
+		// received no addresses.
+		r.cc.ReportError(errCS.err)
 		return true
 	}
 
@@ -487,7 +491,7 @@ func (r *xdsResolver) onResourceNotFound() {
 	// service config with no addresses. This results in the pick-first
 	// LB policy being configured on the channel, and since there are no
 	// address, pick-first will put the channel in TRANSIENT_FAILURE.
-	cs := &erroringConfigSelector{xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId()}
+	cs := newErroringConfigSelector(r.xdsClient.BootstrapConfig().Node().GetId())
 	r.sendNewServiceConfig(cs)
 
 	// Stop and dereference the active config selector, if one exists.

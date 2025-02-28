@@ -729,7 +729,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 	const wantClusterNACKErr = "unsupported config_source_specifier"
 	client := testgrpc.NewTestServiceClient(cc)
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if err := verifyRPCError(err, codes.Unavailable, wantClusterNACKErr, nodeID); err != nil{
+	if err := verifyRPCError(err, codes.Unavailable, wantClusterNACKErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
