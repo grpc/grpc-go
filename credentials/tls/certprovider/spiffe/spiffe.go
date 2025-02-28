@@ -22,9 +22,7 @@ package spiffe
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
@@ -44,31 +42,28 @@ type partialParsedSpiffeBundleMap struct {
 //
 // This API is experimental.
 func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
-	bundleMapFile, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open spiffe bundle map file: %v", err)
-	}
-	defer bundleMapFile.Close()
-	byteValue, _ := io.ReadAll(bundleMapFile)
-	var result partialParsedSpiffeBundleMap
-	err = json.Unmarshal([]byte(byteValue), &result)
+	bundleMapRaw, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
+	var result partialParsedSpiffeBundleMap
+	if err := json.Unmarshal(bundleMapRaw, &result); err != nil {
+		return nil, err
+	}
 	if result.Bundles == nil {
-		return nil, errors.New("no content in spiffe bundle map file")
+		return nil, fmt.Errorf("spiffe: no content in spiffe bundle map file %v", filePath)
 	}
 	bundleMap := map[string]*spiffebundle.Bundle{}
-	for trustDomainString, jsonBundle := range result.Bundles {
-		trustDomain, err := spiffeid.TrustDomainFromString(trustDomainString)
+	for td, jsonBundle := range result.Bundles {
+		trustDomain, err := spiffeid.TrustDomainFromString(td)
 		if err != nil {
-			return nil, fmt.Errorf("invalud trust domain found when parsing map: %v", err)
+			return nil, fmt.Errorf("spiffe: invalid trust domain (%v) found when parsing map file (%v): %v", td, filePath, err)
 		}
 		bundle, err := spiffebundle.Parse(trustDomain, jsonBundle)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse bundle in map: %v", err)
+			return nil, fmt.Errorf("spiffe: failed to parse bundle in map file (%v): %v", filePath, err)
 		}
-		bundleMap[trustDomainString] = bundle
+		bundleMap[td] = bundle
 	}
 	return bundleMap, nil
 }
