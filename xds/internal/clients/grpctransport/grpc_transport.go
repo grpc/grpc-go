@@ -125,7 +125,7 @@ func (c *byteCodec) Marshal(v any) ([]byte, error) {
 	if b, ok := v.([]byte); ok {
 		return b, nil
 	}
-	return nil, fmt.Errorf("message is %T, but must be a []byte", v)
+	return nil, fmt.Errorf("grpctransport: message is %T, but must be a []byte", v)
 }
 
 func (c *byteCodec) Unmarshal(data []byte, v any) error {
@@ -133,7 +133,7 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 		*b = data
 		return nil
 	}
-	return fmt.Errorf("target is %T, but must be *[]byte", v)
+	return fmt.Errorf("grpctransport: target is %T, but must be *[]byte", v)
 }
 
 func (c *byteCodec) Name() string {

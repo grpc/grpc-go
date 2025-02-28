@@ -93,6 +93,8 @@ func setupTestServer(t *testing.T, response *v3discoverypb.DiscoveryResponse) *t
 // verify if the correct request was received. It continues until the client
 // closes the stream.
 func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	ctx := stream.Context()
+
 	for {
 		// Receive a DiscoveryRequest from the client
 		req, err := stream.Recv()
@@ -102,7 +104,12 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 		if err != nil {
 			return err // Handle other errors
 		}
-		s.requestChan <- req
+
+		select {
+		case s.requestChan <- req:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 
 		// Send the response back to the client
 		if err := stream.Send(s.response); err != nil {
@@ -214,8 +221,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
-	if err != nil {
+	if _, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources"); err != nil {
 		t.Fatalf("transport.NewStream() failed: %v", err)
 	}
 }
@@ -236,8 +242,7 @@ func (s) TestNewStream_Error(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
-	if err == nil {
+	if _, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources"); err == nil {
 		t.Fatal("transport.NewStream() succeeded, want failure")
 	}
 }
@@ -288,7 +293,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// sent.
 	select {
 	case gotReq := <-ts.requestChan:
-		if diff := cmp.Diff(gotReq, testDiscoverRequest, protocmp.Transform()); diff != "" {
+		if diff := cmp.Diff(testDiscoverRequest, gotReq, protocmp.Transform()); diff != "" {
 			t.Fatalf("Unexpected diff in request received on server (-want +got):\n%s", diff)
 		}
 	case <-ctx.Done():
@@ -305,9 +310,9 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// server.
 	var gotRes v3discoverypb.DiscoveryResponse
 	if err := proto.Unmarshal(res, &gotRes); err != nil {
-		t.Fatalf("Failed to unmarshal response from ts.requestChan to DiscoveryResponse: %v", err)
+		t.Fatalf("Failed to unmarshal response from server to DiscoveryResponse: %v", err)
 	}
-	if diff := cmp.Diff(&gotRes, ts.response, protocmp.Transform()); diff != "" {
+	if diff := cmp.Diff(ts.response, &gotRes, protocmp.Transform()); diff != "" {
 		t.Fatalf("proto.Unmarshal(res, &gotRes) returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
