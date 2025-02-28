@@ -107,7 +107,6 @@ func main() {
 			log.Fatalf("UnaryEcho failed: %v", err)
 		}
 		fmt.Println(r)
-
 		time.Sleep(time.Second)
 	}
 }

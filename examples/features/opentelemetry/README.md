@@ -1,7 +1,7 @@
 # OpenTelemetry
 
-This example demonstrates how to configure OpenTelemetry on a gRPC client and 
-server, showcasing the telemetry data it produces for RPC interactions.
+This example demonstrates how to configure OpenTelemetry on a gRPC client
+and server, showcasing the telemetry data it produces for RPC interactions.
 
 ## Try it
 
@@ -11,8 +11,8 @@ server, showcasing the telemetry data it produces for RPC interactions.
     go run server/main.go
     ```
 
-    * This starts the gRPC server, which also exposes a Prometheus metrics 
-      endpoint.
+    * This starts the gRPC server, which also exposes a Prometheus
+        metrics endpoint.
 
 2.  **Run the gRPC Client:**
 
@@ -20,8 +20,8 @@ server, showcasing the telemetry data it produces for RPC interactions.
     go run client/main.go
     ```
 
-    * This starts the gRPC client, which continuously makes RPC calls to the 
-      server.
+    * This starts the gRPC client, which continuously makes RPC calls
+        to the server.
     * The client also exposes a Prometheus metrics endpoint.
 
 3.  **View Prometheus Metrics:**
@@ -32,8 +32,8 @@ server, showcasing the telemetry data it produces for RPC interactions.
         curl localhost:9464/metrics
         ```
 
-        * This command retrieves the Prometheus metrics exposed by the gRPC 
-          server.
+        * This command retrieves the Prometheus metrics exposed by the
+            gRPC server.
 
     * **Client Metrics:**
 
@@ -41,29 +41,30 @@ server, showcasing the telemetry data it produces for RPC interactions.
         curl localhost:9465/metrics
         ```
 
-        * This command retrieves the Prometheus metrics exposed by the gRPC 
-          client.
+        * This command retrieves the Prometheus metrics exposed by the
+            gRPC client.
 
 ## Explanation
 
-* **Continuous RPC Calls:** The client continuously makes RPC calls to the 
-server, generating telemetry data.
-* **Prometheus Exporter:** Both the client and server are configured with a 
-Prometheus exporter, which listens and provides metrics.
+* **Continuous RPC Calls:** The client continuously makes RPC calls to
+    the server, generating telemetry data.
+* **Prometheus Exporter:** Both the client and server are configured
+    with a Prometheus exporter, which listens and provides metrics.
     * The server's Prometheus endpoint defaults to `:9464`.
     * The client's Prometheus endpoint defaults to `:9465`.
-* **OpenTelemetry Configuration:** OpenTelemetry is configured on both the 
-client and server to capture metrics and traces.
-* **Metrics Export:** The OpenTelemetry configuration exports metrics to the 
-Prometheus exporter.
-* **Viewing Metrics:** By curling the exposed Prometheus ports, you can view 
-the metrics recorded by the client and server. These metrics provide insights 
-into the performance and behavior of the gRPC calls.
+* **OpenTelemetry Configuration:** OpenTelemetry is configured on both
+    the client and server to capture metrics and traces.
+* **Metrics Export:** The OpenTelemetry configuration exports metrics to
+    the Prometheus exporter.
+* **Viewing Metrics:** By curling the exposed Prometheus ports, you can
+    view the metrics recorded by the client and server. These metrics
+    provide insights into the performance and behavior of the gRPC calls.
 
 ## Adding Trace Visualization (Optional)
 
-To visualize traces, you'll need to set up an OTLP Collector and a trace backend
-like Jaeger.
+To visualize traces, you'll need to set up an OTLP Collector and a trace
+backend like Jaeger. The client and server code are already configured
+to send trace data via OTLP.
 
 1.  **Start Jaeger (or another trace backend):**
 
@@ -76,20 +77,26 @@ like Jaeger.
     * **Docker Jaeger:**
 
         ```
-        docker run -d -p 16686:16686 -p 14268:14268 jaegertracing/all-in-one:latest
+        docker run -d -p 16686:16686 -p 14268:14268 \
+        jaegertracing/all-in-one:latest
         ```
 
 2.  **Start the OpenTelemetry Collector:**
 
     * **Local Collector:**
         * Install the `otelcol-contrib` binary.
-        * Create a configuration file (e.g., `collector-config.yaml`) specifying 
-          OTLP receiver, batch processor, and Jaeger exporter.
+        * Create a configuration file (e.g., `collector-config.yaml`)
+            specifying:
+            * An OTLP receiver (to receive traces from your client and server).
+            * A batch processor (recommended for performance).
+            * A Jaeger exporter (to send traces to Jaeger).
         * Run the collector: `./otelcol-contrib --config collector-config.yaml`
     * **Docker Collector:**
-        * Create a configuration file (e.g., `collector-config.yaml`) specifying
-          OTLP receiver, batch processor, and Jaeger exporter.
-        * Run the collector with Docker, mounting your configuration file:
+        * Create a configuration file (e.g., `collector-config.yaml`)
+            specifying the same components as above.
+        * Run the collector with Docker, mounting your configuration
+            file:
+
             ```
             docker run -d -p 4317:4317 -p 4318:4318 \
             -v $(pwd)/collector-config.yaml:/etc/otel-collector-config.yaml \
@@ -100,4 +107,6 @@ like Jaeger.
 3.  **View Traces in Jaeger UI:**
 
     * Open `http://localhost:16686` in your browser.
-    * Search for traces to visualize the RPC call flow.
+    * Search for traces to visualize the RPC call flow. The traces will
+        be generated by the client and server, sent to the collector,
+        and then displayed by Jaeger.
