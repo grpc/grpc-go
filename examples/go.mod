@@ -1,12 +1,5 @@
 module google.golang.org/grpc/examples
 
-// NOTE:
-// To see the builder manifests used for official binaries,
-// check https://github.com/open-telemetry/opentelemetry-collector-releases
-//
-// For the OpenTelemetry Collector Core distribution specifically, see
-// https://github.com/open-telemetry/opentelemetry-collector-releases/tree/main/distributions/otelcol
-
 go 1.23
 
 require (
