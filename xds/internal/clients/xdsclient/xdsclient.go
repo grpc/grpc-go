@@ -18,7 +18,7 @@
  *
  */
 
-// Package xdsclient provides an xDS (*Discovery Service) client.
+// Package xdsclient provides an xDS (* Discovery Service) client.
 //
 // It allows applications to:
 //   - Create xDS client instances with in-memory configurations.

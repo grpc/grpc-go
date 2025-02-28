@@ -27,7 +27,7 @@ import (
 type TransportBuilder interface {
 	// Build creates a new Transport instance to the server based on the
 	// provided ServerIdentifier.
-	Build(ServerIdentifier ServerIdentifier) (Transport, error)
+	Build(serverIdentifier ServerIdentifier) (Transport, error)
 }
 
 // Transport provides the functionality to communicate with an xDS or LRS

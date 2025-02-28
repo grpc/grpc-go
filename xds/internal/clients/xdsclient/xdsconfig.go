@@ -54,8 +54,7 @@ type Config struct {
 	// provides logic for parsing, validating, and processing resources of that
 	// type.
 	//
-	// "type.googleapis.com/envoy.service.discovery.v3.Resource" is an example
-	// URL for listener resource type.
+	// For example: "type.googleapis.com/envoy.config.listener.v3.Listener"
 	ResourceTypes map[string]ResourceType
 }
 
@@ -70,6 +69,8 @@ type ServerConfig struct {
 	// This will be removed in the future once we implement gRFC A88
 	// and two new fields FailOnDataErrors and
 	// ResourceTimerIsTransientError will be introduced.
+	//
+	// TODO: Link to gRFC A88
 	IgnoreResourceDeletion bool
 }
 
