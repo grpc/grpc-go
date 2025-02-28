@@ -105,6 +105,8 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 			return err // Handle other errors
 		}
 
+		// Push received request for client to verify the correct request was
+		// received.
 		select {
 		case s.requestChan <- req:
 		case <-ctx.Done():
@@ -130,9 +132,9 @@ func (tc *testCredentials) TransportCredentials() credentials.TransportCredentia
 // TestBuild_Success verifies that the Builder successfully creates a new
 // Transport with a non-nil grpc.ClientConn.
 func (s) TestBuild_Success(t *testing.T) {
-	serverCfg := clients.ServerConfig{
+	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ServerConfigExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+		Extensions: ServerIdentifierExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 
 	b := &Builder{}
@@ -151,41 +153,41 @@ func (s) TestBuild_Success(t *testing.T) {
 }
 
 // TestBuild_Failure verifies that the Builder returns error when incorrect
-// ServerConfig is provided.
+// ServerIdentifier is provided.
 //
 // It covers the following scenarios:
 // - ServerURI is empty.
 // - Extensions is nil.
-// - Extensions is not ServerConfigExtension.
+// - Extensions is not ServerIdentifierExtension.
 // - Credentials are nil.
 func (s) TestBuild_Failure(t *testing.T) {
 	tests := []struct {
 		name      string
-		serverCfg clients.ServerConfig
+		serverCfg clients.ServerIdentifier
 	}{
 		{
 			name: "ServerURI is empty",
-			serverCfg: clients.ServerConfig{
+			serverCfg: clients.ServerIdentifier{
 				ServerURI:  "",
-				Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+				Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 			},
 		},
 		{
 			name:      "Extensions is nil",
-			serverCfg: clients.ServerConfig{ServerURI: "server-address"},
+			serverCfg: clients.ServerIdentifier{ServerURI: "server-address"},
 		},
 		{
-			name: "Extensions is not a ServerConfigExtension",
-			serverCfg: clients.ServerConfig{
+			name: "Extensions is not a ServerIdentifierExtension",
+			serverCfg: clients.ServerIdentifier{
 				ServerURI:  "server-address",
 				Extensions: 1,
 			},
 		},
 		{
-			name: "ServerConfigExtension Credentials is nil",
-			serverCfg: clients.ServerConfig{
+			name: "ServerIdentifierExtension Credentials is nil",
+			serverCfg: clients.ServerIdentifier{
 				ServerURI:  "server-address",
-				Extensions: ServerConfigExtension{},
+				Extensions: ServerIdentifierExtension{},
 			},
 		},
 	}
@@ -208,9 +210,9 @@ func (s) TestBuild_Failure(t *testing.T) {
 func (s) TestNewStream_Success(t *testing.T) {
 	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
 
-	serverCfg := clients.ServerConfig{
+	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)
@@ -229,9 +231,9 @@ func (s) TestNewStream_Success(t *testing.T) {
 // TestNewStream_Error verifies that NewStream() returns an error
 // when attempting to create a stream with an invalid server URI.
 func (s) TestNewStream_Error(t *testing.T) {
-	serverCfg := clients.ServerConfig{
+	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "invalid-server-uri",
-		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)
@@ -262,9 +264,9 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
 
 	// Build a grpc-based transport to the above server.
-	serverCfg := clients.ServerConfig{
+	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerConfigExtension{Credentials: insecure.NewBundle()},
+		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)

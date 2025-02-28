@@ -69,9 +69,9 @@ type ServerConfig struct {
 	// This will be removed in the future once we implement gRFC A88
 	// and two new fields FailOnDataErrors and
 	// ResourceTimerIsTransientError will be introduced.
-	//
-	// TODO: Link to gRFC A88
 	IgnoreResourceDeletion bool
+
+	// TODO: Link to gRFC A88
 }
 
 // Authority contains configuration for an xDS control plane authority.

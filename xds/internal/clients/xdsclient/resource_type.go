@@ -27,6 +27,9 @@ type ResourceType struct {
 	// Config.
 	TypeURL string
 
+	// TODO: Revisit if we need TypeURL to be part of the struct because it is
+	// already a key in config's ResouceTypes map.
+
 	// TypeName is a shorter representation of the TypeURL to identify the
 	// resource type. It is used for logging/debugging purposes.
 	TypeName string
@@ -50,7 +53,7 @@ type Decoder interface {
 	//
 	// If deserialization fails or resource validation fails, it returns a
 	// non-nil error. Otherwise, returns a fully populated DecodeResult.
-	Decode(resource any, options DecodeOptions) (*DecodeResult, error)
+	Decode(resource []byte, options DecodeOptions) (*DecodeResult, error)
 }
 
 // DecodeOptions wraps the options required by ResourceType implementations for

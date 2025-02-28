@@ -43,7 +43,9 @@
 package clients
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -70,8 +72,17 @@ type ServerIdentifier struct {
 	// configure a specific security credentials.
 	//
 	// Note: For custom types used in Extensions, ensure an Equal(any) bool
-	// method is implemented for equality checks on ServerConfig.
+	// method is implemented for equality checks on ServerIdentifier.
 	Extensions any
+}
+
+// String returns a string representation of the ServerIdentifier.
+//
+// WARNING: This method is primarily intended for logging and testing
+// purposes. The output returned by this method is not guaranteed to be stable
+// and may change at any time. Do not rely on it for production use.
+func (si *ServerIdentifier) String() string {
+	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
 }
 
 // equal returns true if sc and other are considered equal.
