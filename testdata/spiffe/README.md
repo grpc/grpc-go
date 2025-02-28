@@ -1,5 +1,3 @@
-The files in this directory are as follows:
-
 ## File Purposes
 * spiffe_cert.pem - the certificate that is placed in spiffe bundles (copied into the `x5c` field)
 * server1_spiffe.pem - another certificate placed in spiffe bundles
