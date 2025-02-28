@@ -246,7 +246,8 @@ func (s) TestCSMPluginOptionUnary(t *testing.T) {
 			opts := test.opts
 			opts.Target = ss.Target
 			wantMetrics := itestutils.MetricDataUnary(opts)
-			itestutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+			gotMetrics = itestutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+			itestutils.CompareMetrics(t, gotMetrics, wantMetrics)
 		})
 	}
 }
@@ -419,7 +420,8 @@ func (s) TestCSMPluginOptionStreaming(t *testing.T) {
 			opts := test.opts
 			opts.Target = ss.Target
 			wantMetrics := itestutils.MetricDataStreaming(opts)
-			itestutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+			gotMetrics = itestutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+			itestutils.CompareMetrics(t, gotMetrics, wantMetrics)
 		})
 	}
 }
@@ -603,7 +605,8 @@ func (s) TestXDSLabels(t *testing.T) {
 		},
 	}
 
-	itestutils.CompareMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	gotMetrics = itestutils.WaitForServerMetrics(ctx, t, reader, gotMetrics, wantMetrics)
+	itestutils.CompareMetrics(t, gotMetrics, wantMetrics)
 }
 
 // TestObservability tests that Observability global function compiles and runs

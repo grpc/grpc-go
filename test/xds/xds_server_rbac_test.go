@@ -245,9 +245,9 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -678,9 +678,9 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+				cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 				if err != nil {
-					t.Fatalf("failed to dial local test server: %v", err)
+					t.Fatalf("grpc.NewClient() failed: %v", err)
 				}
 				defer cc.Close()
 
@@ -860,9 +860,9 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 

@@ -120,13 +120,14 @@ func (s) TestResolverAddressesToEndpoints(t *testing.T) {
 	a2 := attributes.New("a", "b")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "addr1", BalancerAttributes: a1}, {Addr: "addr2", BalancerAttributes: a2}}})
 
-	cc, err := Dial(r.Scheme()+":///",
+	cc, err := NewClient(r.Scheme()+":///",
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(r),
 		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, balancerName)))
 	if err != nil {
-		t.Fatalf("Unexpected error dialing: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	select {

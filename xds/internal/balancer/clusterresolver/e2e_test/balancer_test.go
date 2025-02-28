@@ -102,11 +102,12 @@ func setupAndDial(t *testing.T, bootstrapContents []byte) (*grpc.ClientConn, fun
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		xdsClose()
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	return cc, func() {
 		xdsClose()
 		cc.Close()
@@ -278,11 +279,12 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 
 	// Ensure that RPCs start to fail with expected error.
+	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 		defer sCancel()
 		_, err := client.EmptyCall(sCtx, &testpb.Empty{})
-		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "all priorities are removed") {
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
 			break
 		}
 		if err != nil {

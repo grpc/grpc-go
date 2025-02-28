@@ -61,7 +61,7 @@ func main() {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to dial: %v", err)
+		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
