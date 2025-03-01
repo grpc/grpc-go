@@ -70,9 +70,9 @@ func NewError(t ErrorType, message string) error {
 }
 
 // ErrType returns the error's type.
-func ErrType(e error) ErrorType {
+func ErrType(err error) ErrorType {
 	var xe *xdsClientError
-	if ok := errors.As(e, &xe); ok {
+	if errors.As(err, &xe) {
 		return xe.t
 	}
 	return ErrorTypeUnknown

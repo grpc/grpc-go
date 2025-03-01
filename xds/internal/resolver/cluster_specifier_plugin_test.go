@@ -115,7 +115,7 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
@@ -205,7 +205,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
