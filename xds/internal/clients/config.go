@@ -16,11 +16,10 @@
  *
  */
 
-// Package clients provides implementations of the xDS and LRS clients,
-// enabling applications to communicate with xDS management servers and report
-// load.
+// Package clients provides implementations of the clients to interact with
+// xDS and LRS servers.
 //
-// xDS Client
+// # xDS Client
 //
 // The xDS client allows applications to:
 //   - Create client instances with in-memory configurations.
@@ -41,8 +40,6 @@
 //
 // NOTICE: This package is EXPERIMENTAL and may be changed or removed
 // in a later release.
-//
-// See [README](https://github.com/grpc/grpc-go/tree/master/xds/clients/README.md).
 package clients
 
 import (
@@ -56,85 +53,59 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
-// ServerConfig holds settings for connecting to an xDS management server.
-type ServerConfig struct {
-	// ServerURI is the target URI of the xDS management server.
+// ServerIdentifier holds identifying information for connecting to an xDS
+// management or LRS server.
+type ServerIdentifier struct {
+	// ServerURI is the target URI of the server.
 	ServerURI string
 
-	// IgnoreResourceDeletion is a server feature which if set to true,
-	// indicates that resource deletion errors can be ignored and cached
-	// resource data can be used.
-	//
-	// This will be removed in the future once we implement gRFC A88
-	// and two new fields FailOnDataErrors and
-	// ResourceTimerIsTransientError will be introduced.
-	IgnoreResourceDeletion bool
-
 	// Extensions can be populated with arbitrary data to be passed to the
-	// [TransportBuilder] and/or xDS Client's ResourceType implementations.
+	// TransportBuilder and/or xDS Client's ResourceType implementations.
 	// This field can be used to provide additional configuration or context
 	// specific to the user's needs.
 	//
 	// The xDS and LRS clients do not interpret the contents of this field.
-	// It is the responsibility of the user's custom [TransportBuilder] and/or
+	// It is the responsibility of the user's custom TransportBuilder and/or
 	// ResourceType implementations to handle and interpret these extensions.
 	//
-	// For example, a custom [TransportBuilder] might use this field to
+	// For example, a custom TransportBuilder might use this field to
 	// configure a specific security credentials.
 	//
 	// Note: For custom types used in Extensions, ensure an Equal(any) bool
-	// method is implemented for equality checks on ServerConfig.
+	// method is implemented for equality checks on ServerIdentifier.
 	Extensions any
 }
 
+// String returns a string representation of the ServerIdentifier.
+//
+// WARNING: This method is primarily intended for logging and testing
+// purposes. The output returned by this method is not guaranteed to be stable
+// and may change at any time. Do not rely on it for production use.
+func (si *ServerIdentifier) String() string {
+	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
+}
+
 // equal returns true if sc and other are considered equal.
-func (sc *ServerConfig) equal(other *ServerConfig) bool {
+func (si *ServerIdentifier) equal(other *ServerIdentifier) bool {
 	switch {
-	case sc == nil && other == nil:
+	case si == nil && other == nil:
 		return true
-	case (sc != nil) != (other != nil):
+	case (si != nil) != (other != nil):
 		return false
-	case sc.ServerURI != other.ServerURI:
-		return false
-	case sc.IgnoreResourceDeletion != other.IgnoreResourceDeletion:
+	case si.ServerURI != other.ServerURI:
 		return false
 	}
-	if sc.Extensions == nil && other.Extensions == nil {
+	if si.Extensions == nil && other.Extensions == nil {
 		return true
 	}
-	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
+	if ex, ok := si.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
 		return true
 	}
 	return false
 }
 
-// String returns a string representation of the [ServerConfig].
-//
-// WARNING: This method is primarily intended for logging and testing
-// purposes. The output returned by this method is not guaranteed to be stable
-// and may change at any time. Do not rely on it for production use.
-func (sc *ServerConfig) String() string {
-	return strings.Join([]string{sc.ServerURI, fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
-}
-
-// Authority contains configuration for an xDS control plane authority.
-type Authority struct {
-	// XDSServers contains the list of server configurations for this authority.
-	XDSServers []ServerConfig
-
-	// Extensions can be populated with arbitrary data to be passed to the xDS
-	// Client's user specific implementations. This field can be used to
-	// provide additional configuration or context specific to the user's
-	// needs.
-	//
-	// The xDS and LRS clients do not interpret the contents of this field. It
-	// is the responsibility of the user's implementations to handle and
-	// interpret these extensions.
-	Extensions any
-}
-
-// Node represents the identity of the xDS client, allowing
-// management servers to identify the source of xDS requests.
+// Node represents the identity of the xDS client, allowing xDS and LRS servers
+// to identify the source of xDS requests.
 type Node struct {
 	// ID is a string identifier of the application.
 	ID string
@@ -150,13 +121,13 @@ type Node struct {
 	UserAgentName string
 	// UserAgentVersion is the user agent version of application.
 	UserAgentVersion string
-	// ClientFeatures is a list of xDS features supported by this client.
+	// clientFeatures is a list of xDS features supported by this client.
 	// These features are set within the xDS client, but may be overridden only
 	// for testing purposes.
 	clientFeatures []string
 }
 
-// toProto converts an instance of [Node] to its protobuf representation.
+// toProto converts an instance of Node to its protobuf representation.
 func (n Node) toProto() *v3corepb.Node {
 	return &v3corepb.Node{
 		Id:      n.ID,
