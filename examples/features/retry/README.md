@@ -4,7 +4,7 @@ This example shows how to enable and configure retry on gRPC clients.
 
 ## Documentation
 
-[gRFC for client-side retry support](https://github.com/grpc/proposal/blob/master/A6-client-retries.md)
+[gRPC for client-side retry support](https://github.com/grpc/proposal/blob/master/A6-client-retries.md)
 
 ## Try it
 
@@ -60,5 +60,5 @@ To use the above service config, pass it with `grpc.WithDefaultServiceConfig` to
 `grpc.NewClient`.
 
 ```go
-conn, err := grpc.NewClient(ctx,grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
+conn, err := grpc.NewClient(addr,grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 ```
