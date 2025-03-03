@@ -3607,7 +3607,7 @@ func (s) TestClientStreamingMissingSendAndCloseError(t *testing.T) {
 
 func testClientStreamingMissingSendAndCloseError(t *testing.T) {
 	ss := &stubserver.StubServer{
-		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+		StreamingInputCallF: func(_ testgrpc.TestService_StreamingInputCallServer) error {
 			return nil
 		},
 	}
