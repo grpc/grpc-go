@@ -1,0 +1,107 @@
+/*
+ *
+ * Copyright 2025 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Package clientsutils contains helpers for xDS and LRS clients.
+package clientsutils
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+)
+
+// ServerIdentifierString returns a string representation of the
+// clients.ServerIdentifier si.
+//
+// WARNING: This method is primarily intended for logging and testing
+// purposes. The output returned by this method is not guaranteed to be stable
+// and may change at any time. Do not rely on it for production use.
+func ServerIdentifierString(si clients.ServerIdentifier) string {
+	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
+}
+
+// IsServerIdentifierEqual returns true if clients.ServerIdentifier si1 and si2
+// are considered equal.
+func IsServerIdentifierEqual(si1, si2 *clients.ServerIdentifier) bool {
+	switch {
+	case si1 == nil && si2 == nil:
+		return true
+	case (si1 != nil) != (si2 != nil):
+		return false
+	case si1.ServerURI != si2.ServerURI:
+		return false
+	}
+	if si1.Extensions == nil && si2.Extensions == nil {
+		return true
+	}
+	if ex, ok := si1.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(si2.Extensions) {
+		return true
+	}
+	return false
+}
+
+// NodeProto returns a protobuf representation of clients.Node n
+// and client features cf.
+//
+// This function is intended to be used by the client implementation to convert
+// the user-provided Node configuration to its protobuf representation.
+func NodeProto(n clients.Node, cf []string) *v3corepb.Node {
+	return &v3corepb.Node{
+		Id:      n.ID,
+		Cluster: n.Cluster,
+		Locality: func() *v3corepb.Locality {
+			if IsLocalityEmpty(n.Locality) {
+				return nil
+			}
+			return &v3corepb.Locality{
+				Region:  n.Locality.Region,
+				Zone:    n.Locality.Zone,
+				SubZone: n.Locality.SubZone,
+			}
+		}(),
+		Metadata: func() *structpb.Struct {
+			if n.Metadata == nil {
+				return nil
+			}
+			if md, ok := n.Metadata.(*structpb.Struct); ok {
+				return proto.Clone(md).(*structpb.Struct)
+			}
+			return nil
+		}(),
+		UserAgentName:        n.UserAgentName,
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
+		ClientFeatures:       slices.Clone(cf),
+	}
+}
+
+// IsLocalityEmpty reports whether clients.Locality l is considered empty.
+func IsLocalityEmpty(l clients.Locality) bool {
+	return IsLocalityEqual(l, clients.Locality{})
+}
+
+// IsLocalityEqual returns true if clients.Locality l1 and l2 are considered
+// equal.
+func IsLocalityEqual(l1, l2 clients.Locality) bool {
+	return l1.Region == l2.Region && l1.Zone == l2.Zone && l1.SubZone == l2.SubZone
+}

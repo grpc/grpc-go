@@ -42,17 +42,6 @@
 // in a later release.
 package clients
 
-import (
-	"fmt"
-	"slices"
-	"strings"
-
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-)
-
 // ServerIdentifier holds identifying information for connecting to an xDS
 // management or LRS server.
 type ServerIdentifier struct {
@@ -76,34 +65,6 @@ type ServerIdentifier struct {
 	Extensions any
 }
 
-// String returns a string representation of the ServerIdentifier.
-//
-// WARNING: This method is primarily intended for logging and testing
-// purposes. The output returned by this method is not guaranteed to be stable
-// and may change at any time. Do not rely on it for production use.
-func (si *ServerIdentifier) String() string {
-	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
-}
-
-// equal returns true if sc and other are considered equal.
-func (si *ServerIdentifier) equal(other *ServerIdentifier) bool {
-	switch {
-	case si == nil && other == nil:
-		return true
-	case (si != nil) != (other != nil):
-		return false
-	case si.ServerURI != other.ServerURI:
-		return false
-	}
-	if si.Extensions == nil && other.Extensions == nil {
-		return true
-	}
-	if ex, ok := si.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
-		return true
-	}
-	return false
-}
-
 // Node represents the identity of the xDS client, allowing xDS and LRS servers
 // to identify the source of xDS requests.
 type Node struct {
@@ -121,40 +82,6 @@ type Node struct {
 	UserAgentName string
 	// UserAgentVersion is the user agent version of application.
 	UserAgentVersion string
-	// clientFeatures is a list of xDS features supported by this client.
-	// These features are set within the xDS client, but may be overridden only
-	// for testing purposes.
-	clientFeatures []string
-}
-
-// toProto converts an instance of Node to its protobuf representation.
-func (n Node) toProto() *v3corepb.Node {
-	return &v3corepb.Node{
-		Id:      n.ID,
-		Cluster: n.Cluster,
-		Locality: func() *v3corepb.Locality {
-			if n.Locality.isEmpty() {
-				return nil
-			}
-			return &v3corepb.Locality{
-				Region:  n.Locality.Region,
-				Zone:    n.Locality.Zone,
-				SubZone: n.Locality.SubZone,
-			}
-		}(),
-		Metadata: func() *structpb.Struct {
-			if n.Metadata == nil {
-				return nil
-			}
-			if md, ok := n.Metadata.(*structpb.Struct); ok {
-				return proto.Clone(md).(*structpb.Struct)
-			}
-			return nil
-		}(),
-		UserAgentName:        n.UserAgentName,
-		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
-		ClientFeatures:       slices.Clone(n.clientFeatures),
-	}
 }
 
 // Locality represents the location of the xDS client application.
@@ -165,14 +92,4 @@ type Locality struct {
 	Zone string
 	// SubZone is the further subdivision within a zone.
 	SubZone string
-}
-
-// isEmpty reports whether l is considered empty.
-func (l Locality) isEmpty() bool {
-	return l.equal(Locality{})
-}
-
-// equal returns true if l and other are considered equal.
-func (l Locality) equal(other Locality) bool {
-	return l.Region == other.Region && l.Zone == other.Zone && l.SubZone == other.SubZone
 }
