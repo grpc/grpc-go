@@ -803,52 +803,13 @@ func (h *statshandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) conte
 	return context.WithValue(ctx, rpcCtxKey{}, info)
 }
 
-// recordEvent records an event in the statshandler along with a timestamp.
-func (h *statshandler) recordEvent(eventType string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.events = append(h.events, eventType)
-}
-
 func (h *statshandler) HandleConn(ctx context.Context, s stats.ConnStats) {
-	h.recordEvent("ConnStats")
-
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.gotConn = append(h.gotConn, &gotData{ctx, s.IsClient(), s})
 }
 
-const (
-	beginEvt      = "Begin"
-	endEvt        = "End"
-	inPayloadEvt  = "InPayload"
-	inHeaderEvt   = "InHeader"
-	inTrailerEvt  = "InTrailer"
-	outPayloadEvt = "OutPayload"
-	outHeaderEvt  = "OutHeader"
-	outTrailerEvt = "OutTrailer"
-)
-
 func (h *statshandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
-	switch s.(type) {
-	case *stats.Begin:
-		h.recordEvent(beginEvt)
-	case *stats.InHeader:
-		h.recordEvent(inHeaderEvt)
-	case *stats.InPayload:
-		h.recordEvent(inPayloadEvt)
-	case *stats.OutHeader:
-		h.recordEvent(outHeaderEvt)
-	case *stats.OutPayload:
-		h.recordEvent(outPayloadEvt)
-	case *stats.InTrailer:
-		h.recordEvent(inTrailerEvt)
-	case *stats.OutTrailer:
-		h.recordEvent(outTrailerEvt)
-	case *stats.End:
-		h.recordEvent(endEvt)
-	}
-
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.gotRPC = append(h.gotRPC, &gotData{ctx, s.IsClient(), s})
