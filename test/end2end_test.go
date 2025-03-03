@@ -136,6 +136,7 @@ var (
 
 var raceMode bool // set by race.go in race mode
 
+// Note : Do not use this for further tests.
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 
@@ -3601,23 +3602,26 @@ func (s) TestClientStreamingMissingSendAndCloseError(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
 	t.Skip()
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testClientStreamingMissingSendAndCloseError(t, e)
-	}
+	testClientStreamingMissingSendAndCloseError(t)
 }
 
-func testClientStreamingMissingSendAndCloseError(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security, earlyNil: true})
-	defer te.tearDown()
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+func testClientStreamingMissingSendAndCloseError(t *testing.T) {
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
 
-	stream, err := tc.StreamingInputCall(te.ctx)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
 	if err != nil {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
 
 	if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
@@ -3629,23 +3633,34 @@ func (s) TestClientStreamingRecvAfterCloseError(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
 	t.Skip()
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testClientStreamingRecvAfterCloseError(t, e)
-	}
+	testClientStreamingRecvAfterCloseError(t)
 }
 
-func testClientStreamingRecvAfterCloseError(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security, recvAfterClose: true})
-	defer te.tearDown()
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+func testClientStreamingRecvAfterCloseError(t *testing.T) {
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			sum := 0
+			in, _ := stream.Recv()
+			p := in.GetPayload().GetBody()
+			sum += len(p)
+			stream.SendAndClose(&testpb.StreamingInputCallResponse{
+				AggregatedPayloadSize: int32(sum),
+			})
+			_, err := stream.Recv()
+			return err
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
 
-	stream, err := tc.StreamingInputCall(te.ctx)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
 	if err != nil {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want <nil>", tc, err)
+		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
 	if err != nil {
