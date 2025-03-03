@@ -146,8 +146,6 @@ type testServer struct {
 	setHeaderOnly      bool   // whether to only call setHeader, not sendHeader.
 	multipleSetTrailer bool   // whether to call setTrailer multiple times.
 	unaryCallSleepTime time.Duration
-	earlyNil           bool // whether to return nil without calling SendAndClose().
-	recvAfterClose     bool // whether to call Recv() after calling SendAndClose().
 }
 
 func (s *testServer) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -286,16 +284,6 @@ func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest
 
 func (s *testServer) StreamingInputCall(stream testgrpc.TestService_StreamingInputCallServer) error {
 	var sum int
-	if s.earlyNil {
-		return nil
-	}
-	if s.recvAfterClose {
-		stream.SendAndClose(&testpb.StreamingInputCallResponse{
-			AggregatedPayloadSize: int32(sum),
-		})
-		_, err := stream.Recv()
-		return err
-	}
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
