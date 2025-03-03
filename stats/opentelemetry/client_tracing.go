@@ -30,7 +30,17 @@ import (
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
+// Additionally, if name resolution was delayed (ai.nameResolutionDelayed is
+// true) and the event has not been recorded yet, an event
+// "Delayed name resolution complete" is added to the call span.
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+	callSpan := trace.SpanFromContext(ctx)
+	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded {
+		if callSpan.SpanContext().IsValid() {
+			callSpan.AddEvent("Delayed name resolution complete")
+			ai.nameResolutionEventAdded = true
+		}
+	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
 	tracer := otel.Tracer("grpc-open-telemetry")
 	ctx, span := tracer.Start(ctx, mn)
