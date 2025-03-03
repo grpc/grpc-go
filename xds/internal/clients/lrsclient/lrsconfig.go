@@ -19,8 +19,6 @@
 package lrsclient
 
 import (
-	"time"
-
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
@@ -34,8 +32,4 @@ type Config struct {
 
 	// TransportBuilder is used to connect to the LRS server.
 	TransportBuilder clients.TransportBuilder
-
-	// ReportLoadTimeout is the timeout used when reporting load to the LRS
-	// server.
-	ReportLoadTimeout time.Duration
 }

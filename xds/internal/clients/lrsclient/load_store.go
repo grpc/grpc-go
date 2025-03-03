@@ -20,6 +20,8 @@
 
 package lrsclient
 
+import "context"
+
 // A LoadStore aggregates loads for multiple clusters and services that are
 // intended to be reported via LRS.
 //
@@ -37,11 +39,11 @@ type LoadStore struct {
 // the reference count to the stream is decremented, and the stream remains
 // open until all LoadStores have called Stop().
 //
-// If the stream is being closed, this method attempts to flush any remaining
-// load data to the LRS server within the specified ReportLoadTimeout in the
-// client's Config. If the data cannot be written within the timeout, the
-// stream is canceled without flushing the data.
-func (ls *LoadStore) Stop() error {
+// If the stream is being closed, this method makes a last attempt to flush any
+// remaining load data to the LRS server. It will either wait for this attempt
+// to succeed, or for the provided context to be done before canceling the LRS
+// stream.
+func (ls *LoadStore) Stop(ctx context.Context) error {
 	panic("unimplemented")
 }
 

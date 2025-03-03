@@ -83,9 +83,9 @@ type DecodeResult struct {
 // provide an implementation of this interface to represent the configuration
 // received from the xDS management server.
 type ResourceData interface {
-	// RawEqual returns true if the passed in resource data is equal to that of
-	// the receiver, based on the underlying raw message.
-	RawEqual(ResourceData) bool
+	// Equal returns true if the passed in resource data is equal to that of
+	// the receiver.
+	Equal(ResourceData) bool
 
 	// Raw returns the underlying raw form of the resource.
 	Raw() []byte
