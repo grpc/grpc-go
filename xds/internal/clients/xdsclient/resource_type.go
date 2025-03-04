@@ -85,8 +85,8 @@ type DecodeResult struct {
 type ResourceData interface {
 	// Equal returns true if the passed in resource data is equal to that of
 	// the receiver.
-	Equal(ResourceData) bool
+	Equal(other ResourceData) bool
 
-	// Raw returns the underlying raw form of the resource.
-	Raw() []byte
+	// Bytes returns the underlying raw bytes of the resource proto.
+	Bytes() []byte
 }

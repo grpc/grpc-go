@@ -39,10 +39,10 @@ type LoadStore struct {
 // the reference count to the stream is decremented, and the stream remains
 // open until all LoadStores have called Stop().
 //
-// If the stream is being closed, this method makes a last attempt to flush any
-// remaining load data to the LRS server. It will either wait for this attempt
-// to succeed, or for the provided context to be done before canceling the LRS
-// stream.
+// If this is the last LoadStore for the stream, this method makes a last
+// attempt to flush any unreported load data to the LRS server. It will either
+// wait for this attempt to complete, or for the provided context to be done
+// before canceling the LRS stream.
 func (ls *LoadStore) Stop(ctx context.Context) error {
 	panic("unimplemented")
 }

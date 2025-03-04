@@ -16,12 +16,11 @@
  *
  */
 
-// Package clientsutils contains helpers for xDS and LRS clients.
-package clientsutils
+// Package internal contains helpers for xDS and LRS clients.
+package internal
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"google.golang.org/grpc/xds/internal/clients"
@@ -61,17 +60,16 @@ func IsServerIdentifierEqual(si1, si2 *clients.ServerIdentifier) bool {
 	return false
 }
 
-// NodeProto returns a protobuf representation of clients.Node n
-// and client features cf.
+// NodeProto returns a protobuf representation of clients.Node n.
 //
 // This function is intended to be used by the client implementation to convert
 // the user-provided Node configuration to its protobuf representation.
-func NodeProto(n clients.Node, cf []string) *v3corepb.Node {
+func NodeProto(n clients.Node) *v3corepb.Node {
 	return &v3corepb.Node{
 		Id:      n.ID,
 		Cluster: n.Cluster,
 		Locality: func() *v3corepb.Locality {
-			if IsLocalityEmpty(n.Locality) {
+			if isLocalityEmpty(n.Locality) {
 				return nil
 			}
 			return &v3corepb.Locality{
@@ -91,17 +89,16 @@ func NodeProto(n clients.Node, cf []string) *v3corepb.Node {
 		}(),
 		UserAgentName:        n.UserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},
-		ClientFeatures:       slices.Clone(cf),
 	}
 }
 
-// IsLocalityEmpty reports whether clients.Locality l is considered empty.
-func IsLocalityEmpty(l clients.Locality) bool {
-	return IsLocalityEqual(l, clients.Locality{})
+// isLocalityEqual reports whether clients.Locality l is considered empty.
+func isLocalityEmpty(l clients.Locality) bool {
+	return isLocalityEqual(l, clients.Locality{})
 }
 
-// IsLocalityEqual returns true if clients.Locality l1 and l2 are considered
+// isLocalityEqual returns true if clients.Locality l1 and l2 are considered
 // equal.
-func IsLocalityEqual(l1, l2 clients.Locality) bool {
+func isLocalityEqual(l1, l2 clients.Locality) bool {
 	return l1.Region == l2.Region && l1.Zone == l2.Zone && l1.SubZone == l2.SubZone
 }

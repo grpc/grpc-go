@@ -16,7 +16,7 @@
  *
  */
 
-package clientsutils
+package internal
 
 import (
 	"testing"
@@ -214,7 +214,7 @@ func (s) TestIsLocalityEmpty(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := IsLocalityEmpty(test.locality); got != test.want {
+			if got := isLocalityEmpty(test.locality); got != test.want {
 				t.Errorf("IsEmpty() = %v, want %v", got, test.want)
 			}
 		})
@@ -269,7 +269,7 @@ func (s) TestIsLocalityEqual(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if gotEq := IsLocalityEqual(test.l1, test.l2); gotEq != test.wantEq {
+			if gotEq := isLocalityEqual(test.l1, test.l2); gotEq != test.wantEq {
 				t.Errorf("Equal() = %v, want %v", gotEq, test.wantEq)
 			}
 		})
@@ -278,10 +278,9 @@ func (s) TestIsLocalityEqual(t *testing.T) {
 
 func (s) TestNodeProto(t *testing.T) {
 	tests := []struct {
-		desc                string
-		inputNode           clients.Node
-		inputClientFeatures []string
-		wantProto           *v3corepb.Node
+		desc      string
+		inputNode clients.Node
+		wantProto *v3corepb.Node
 	}{
 		{
 			desc: "all_fields_set",
@@ -297,7 +296,6 @@ func (s) TestNodeProto(t *testing.T) {
 				UserAgentName:    "user agent",
 				UserAgentVersion: "version",
 			},
-			inputClientFeatures: []string{"feature1", "feature2"},
 			wantProto: &v3corepb.Node{
 				Id:      "id",
 				Cluster: "cluster",
@@ -309,7 +307,6 @@ func (s) TestNodeProto(t *testing.T) {
 				Metadata:             newStructProtoFromMap(t, map[string]any{"k1": "v1", "k2": 101, "k3": 280.0}),
 				UserAgentName:        "user agent",
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "version"},
-				ClientFeatures:       []string{"feature1", "feature2"},
 			},
 		},
 		{
@@ -321,7 +318,6 @@ func (s) TestNodeProto(t *testing.T) {
 				Id:                   "id",
 				UserAgentName:        "",
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: ""},
-				ClientFeatures:       nil,
 			},
 		},
 		{
@@ -334,14 +330,13 @@ func (s) TestNodeProto(t *testing.T) {
 				Id:                   "id",
 				UserAgentName:        "",
 				UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: ""},
-				ClientFeatures:       nil,
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotProto := NodeProto(test.inputNode, test.inputClientFeatures)
+			gotProto := NodeProto(test.inputNode)
 			if diff := cmp.Diff(test.wantProto, gotProto, protocmp.Transform()); diff != "" {
 				t.Fatalf("Unexpected diff in node proto: (-want, +got):\n%s", diff)
 			}
