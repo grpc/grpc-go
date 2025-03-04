@@ -1,7 +1,7 @@
 # OpenTelemetry
 
 This example demonstrates how to configure OpenTelemetry Tracing on a gRPC client
-and server, showcasing the telemetry data it produces for RPC interactions.
+and server, showcasing the trace data it produces for RPC interactions.
 
 ## Try it
 
@@ -12,7 +12,7 @@ and server, showcasing the telemetry data it produces for RPC interactions.
     ```
 
     * This starts the gRPC server, which is configured to send trace data via
-    OTLP and expose Prometheus metrics.
+    OTLP.
 
 2.  **Run the gRPC Client:**
 
@@ -21,28 +21,7 @@ and server, showcasing the telemetry data it produces for RPC interactions.
     ```
 
     * This starts the gRPC client, which continuously makes RPC calls to the
-    server and is configured to send trace data via OTLP and expose
-    Prometheus metrics.
-
-3.  **View Prometheus Metrics:**
-
-    * **Server Metrics:**
-
-        ```
-        curl localhost:9464/metrics
-        ```
-
-        * This command retrieves the Prometheus metrics exposed by the gRPC
-        server.
-
-    * **Client Metrics:**
-
-        ```
-        curl localhost:9465/metrics
-        ```
-
-        * This command retrieves the Prometheus metrics exposed by the gRPC
-        client.
+    server and is configured to send trace data via OTLP.
 
 ## View Traces (Optional)
 
@@ -68,31 +47,8 @@ send trace data via OTLP.
         * For the OpenTelemetry Collector Core distribution specifically, see
             [OpenTelemetry Collector Core Releases](https://github.com/open-telemetry/
             opentelemetry-collector-releases/tree/main/distributions/otelcol).
-        * Create a `collector-config.yaml` file with the following content:
-
-            ```yaml
-            receivers:
-              otlp:
-                protocols:
-                  grpc:
-                  http:
-
-            processors:
-              batch:
-
-            exporters:
-              jaeger:
-                endpoint: "localhost:14250"
-
-            service:
-              pipelines:
-                traces:
-                  receivers: [otlp]
-                  processors: [batch]
-                  exporters: [jaeger]
-            ```
-
-        * Run the collector: `./otelcol-contrib --config collector-config.yaml`
+        * The collector will use the `collector-config.yaml` file present in the
+        same directory.
 
 3.  **View Traces in Jaeger UI:**
 

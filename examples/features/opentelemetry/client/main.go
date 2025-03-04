@@ -67,10 +67,12 @@ func main() {
 		otlptracehttp.WithEndpoint(*otlpEndpoint),
 		otlptracehttp.WithInsecure(),
 	)
-	traceExporter, err := otlptrace.New(context.Background(), otlpclient)
+	traceExporter, err := otlptrace.New(ctx, otlpclient)
 	if err != nil {
 		log.Fatalf("Failed to create otlp trace exporter: %v", err)
 	}
+	// resource.New adds service metadata to telemetry, enabling context and
+	// filtering in the backend.
 	res, err := resource.New(ctx,
 		resource.WithTelemetrySDK(),
 		resource.WithAttributes(semconv.ServiceName(serviceName)),
@@ -98,9 +100,8 @@ func main() {
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make an RPC every second. This should trigger telemetry on prometheus
-	// server along with traces in the otlptracer exporter to be emitted from
-	// the client and the server.
+	// Make an RPC every second. This should trigger traces in the otlptracer
+	// exporter to be emitted from the client.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
 		if err != nil {

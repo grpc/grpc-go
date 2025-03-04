@@ -71,15 +71,16 @@ func main() {
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
 
-	client := otlptracehttp.NewClient(
+	otlpclient := otlptracehttp.NewClient(
 		otlptracehttp.WithEndpoint(*otlpEndpoint),
 		otlptracehttp.WithInsecure(),
 	)
-	traceExporter, err := otlptrace.New(context.Background(), client)
+	traceExporter, err := otlptrace.New(ctx, otlpclient)
 	if err != nil {
 		log.Fatalf("Failed to create otlp trace exporter: %v", err)
 	}
-
+	// resource.New adds service metadata to telemetry, enabling context and
+	// filtering in the backend.
 	res, err := resource.New(ctx,
 		resource.WithTelemetrySDK(),
 		resource.WithAttributes(semconv.ServiceName(serviceName)),
