@@ -23,21 +23,7 @@ and server, showcasing the trace data it produces for RPC interactions.
     * This starts the gRPC client, which continuously makes RPC calls to the
     server and is configured to send trace data via OTLP.
 
-## View Traces (Optional)
-
-To visualize traces, you'll need to set up an OTLP Collector and a trace
-backend like Jaeger. The client and server code are already configured to
-send trace data via OTLP.
-
-1.  **Start Jaeger (or another trace backend):**
-
-    * **Local Jaeger (No Docker):**
-
-        ```
-        ./jaeger-all-in-one --collector.otlp.enabled
-        ```
-
-2.  **Start the OpenTelemetry Collector:**
+3. **Start the OpenTelemetry Collector:**
 
     * **Local Collector:**
         * Install the `otelcol-contrib` binary.
@@ -50,32 +36,22 @@ send trace data via OTLP.
         * The collector will use the `collector-config.yaml` file present in the
         same directory.
 
-3.  **View Traces in Jaeger UI:**
+4.  **View Traces in the Collector Output:**
 
-    * Open `http://localhost:16686` in your browser.
-    * Search for traces. You should see traces with names like `UnaryEcho`,
-    representing the gRPC calls.
+    * The OpenTelemetry Collector, using the `debug` exporter, will print trace
+    data to the console.
+    * Monitor the collector's console output to see the trace information.
 
 ## Explanation
 
-* **Continuous RPC Calls:** The client continuously makes RPC calls to the
+* **Continuous RPC Calls:** The client continuously makes RPC calls to the 
     server, generating telemetry data.
-* **Prometheus Exporter:** Both the client and server are configured with a
-    Prometheus exporter, which listens and provides metrics.
-    * The server's Prometheus endpoint defaults to `:9464`.
-    * The client's Prometheus endpoint defaults to `:9465`.
-* **OpenTelemetry Configuration:** OpenTelemetry is configured on both the
-    client and server to capture metrics and traces.
-* **Metrics Export:** The OpenTelemetry configuration exports metrics to the
-    Prometheus exporter.
-* **Viewing Metrics:** By curling the exposed Prometheus ports, you can view
-    the metrics recorded by the client and server. These metrics provide
-    insights into the performance and behavior of the gRPC calls.
 * **OTLP Export (Tracing):** The client and server are configured to export
     trace data via OTLP.
 * **OTLP Collector (Tracing):** The OpenTelemetry Collector receives the trace
     data from the client and server.
-* **Jaeger Backend (Tracing):** The Collector exports the trace data to Jaeger,
-    which visualizes the traces.
-* **Trace Visualization (Tracing):** By using the Jaeger UI, you can see the
-    flow of RPC calls and analyze the performance of your gRPC services.
+* **Debug Exporter (Tracing):** The Collector prints the trace data to the 
+    console, allowing you to view the trace information directly.
+* **Trace Visualization (Console):** By monitoring the collector's console 
+    output, you can see the flow of RPC calls and analyze the performance of
+    your gRPC services.

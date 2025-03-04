@@ -1,20 +1,18 @@
 receivers:
   otlp:
     protocols:
-      grpc:
       http:
+        endpoint: "0.0.0.0:4318"
 
 processors:
   batch:
 
 exporters:
-  jaeger:
-    endpoint: "localhost:14250"
+  debug:
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [jaeger]
-      
+      exporters: [debug]

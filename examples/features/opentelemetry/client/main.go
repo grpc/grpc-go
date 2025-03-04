@@ -81,12 +81,12 @@ func main() {
 		log.Fatalf("Could not set resources: %v", err)
 	}
 	spanProcessor := trace.NewSimpleSpanProcessor(traceExporter)
-	tracerProvider := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor), trace.WithResource(res))
-	otel.SetTracerProvider(tracerProvider)
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor), trace.WithResource(res))
+	otel.SetTracerProvider(tp)
 	textMapPropagator := propagation.TraceContext{}
 
 	traceOptions := oteltracing.TraceOptions{
-		TracerProvider:    tracerProvider,
+		TracerProvider:    tp,
 		TextMapPropagator: textMapPropagator,
 	}
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())

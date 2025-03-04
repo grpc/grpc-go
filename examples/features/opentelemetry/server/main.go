@@ -46,7 +46,7 @@ import (
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
-	otlpEndpoint       = flag.String("otlp_endpoint", ":4318", "the OTLP collector endpoint for traces")
+	otlpEndpoint       = flag.String("otlp_endpoint", ":4319", "the OTLP collector endpoint for traces")
 	serviceName        = "grpc-server"
 )
 
