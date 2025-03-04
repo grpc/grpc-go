@@ -27,14 +27,16 @@ and server, showcasing the trace data it produces for RPC interactions.
 
     * **Local Collector:**
         * Install the `otelcol-contrib` binary.
-        * NOTE: To see the builder manifests used for official binaries, check
-            [OpenTelemetry Collector Releases]
-            (https://github.com/open-telemetry/opentelemetry-collector-releases).
-        * For the OpenTelemetry Collector Core distribution specifically, see
-            [OpenTelemetry Collector Core Releases]
-            (https://github.com/open-telemetry/opentelemetry-collector-releases/tree/main/distributions/otelcol).
-        * The collector will use the `collector-config.yaml` file present in the
-        same directory.
+        * NOTE: To see the builder manifests used for official binaries, check [OpenTelemetry Collector Releases]
+        (https://github.com/open-telemetry/opentelemetry-collector-releases).
+        * For the OpenTelemetry Collector Core distribution specifically, see [OpenTelemetry Collector Core Releases]
+        (https://github.com/open-telemetry/opentelemetry-collector-releases/tree/main/distributions/otelcol).
+        * The collector will use the `collector-config.yaml` file present in the same directory.
+        * **Execute the collector:**
+            ```bash
+            /path/to/otelcol-contrib --config=collector-config.yaml
+            ```
+            (Replace `/path/to/otelcol-contrib` with the actual path to your `otelcol-contrib` binary.)
 
 4.  **View Traces in the Collector Output:**
 
