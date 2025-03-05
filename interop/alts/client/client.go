@@ -47,7 +47,6 @@ func main() {
 		opts.HandshakerServiceAddress = *hsAddr
 	}
 	altsTC := alts.NewClientCreds(opts)
-	// Block until the server is ready.
 	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(altsTC))
 	if err != nil {
 		logger.Fatalf("grpc.NewClient(%q) = %v", *serverAddr, err)
@@ -58,7 +57,8 @@ func main() {
 	// Call the EmptyCall API.
 	ctx := context.Background()
 	request := &testpb.Empty{}
-	if _, err := grpcClient.EmptyCall(ctx, request); err != nil {
+	// Block until the server is ready.
+	if _, err := grpcClient.EmptyCall(ctx, request, grpc.WaitForReady(true)); err != nil {
 		logger.Fatalf("grpc Client: EmptyCall(_, %v) failed: %v", request, err)
 	}
 	logger.Info("grpc Client: empty call succeeded")
