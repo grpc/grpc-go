@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 //
 // This package is recommended only for scenarios which cannot be tested using
 // the xDS management server (which uses envoy-go-control-plane) provided by the
-// `internal/testutils/xds/e2e` package.
+// `internal/testutils/e2e` package.
 package fakeserver
 
 import (
@@ -31,8 +31,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/protobuf/proto"
 
 	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"

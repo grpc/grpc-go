@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
  *
  */
 
-// Package backoff implement the backoff strategy for gRPC.
+// Package backoff implement the backoff strategy for clients.
 //
-// This is kept in internal until the gRPC project decides whether or not to
+// This is kept in internal until the clients project decides whether or not to
 // allow alternative backoff strategies.
 package backoff
 
@@ -28,7 +28,7 @@ import (
 	rand "math/rand/v2"
 	"time"
 
-	grpcbackoff "google.golang.org/grpc/backoff"
+	clientsbackoff "google.golang.org/grpc/xds/internal/clients/backoff"
 )
 
 // Strategy defines the methodology for backing off after a grpc connection
@@ -42,13 +42,13 @@ type Strategy interface {
 // DefaultExponential is an exponential backoff implementation using the
 // default values for all the configurable knobs defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-var DefaultExponential = Exponential{Config: grpcbackoff.DefaultConfig}
+var DefaultExponential = Exponential{Config: clientsbackoff.DefaultConfig}
 
 // Exponential implements exponential backoff algorithm as defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 type Exponential struct {
 	// Config contains all options to configure the backoff algorithm.
-	Config grpcbackoff.Config
+	Config clientsbackoff.Config
 }
 
 // Backoff returns the amount of time to wait before the next retry given the

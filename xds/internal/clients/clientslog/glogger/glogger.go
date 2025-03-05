@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2015 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,21 @@
  *
  */
 
-// Package glogger defines glog-based logging for grpc.
-// Importing this package will install glog as the logger used by grpclog.
+// Package glogger defines glog-based logging for clients.
+// Importing this package will install glog as the logger used by clientslog.
 package glogger
 
 import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/xds/internal/clients/clientslog"
 )
 
 const d = 2
 
 func init() {
-	grpclog.SetLoggerV2(&glogger{})
+	clientslog.SetLoggerV2(&glogger{})
 }
 
 type glogger struct{}

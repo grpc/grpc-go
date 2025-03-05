@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,17 @@
  *
  */
 
-// Package grpclog defines logging for grpc.
+// Package clientslog defines logging for clients.
 //
 // In the default logger, severity level can be set by environment variable
-// GRPC_GO_LOG_SEVERITY_LEVEL, verbosity level can be set by
-// GRPC_GO_LOG_VERBOSITY_LEVEL.
-package grpclog
+// CLIENTS_GO_LOG_SEVERITY_LEVEL, verbosity level can be set by
+// CLIENTS_GO_LOG_VERBOSITY_LEVEL.
+package clientslog
 
 import (
 	"os"
 
-	"google.golang.org/grpc/grpclog/internal"
+	"google.golang.org/grpc/xds/internal/clients/clientslog/internal"
 )
 
 func init() {

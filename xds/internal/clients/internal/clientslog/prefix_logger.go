@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,21 @@
  *
  */
 
-// Package grpclog provides logging functionality for internal gRPC packages,
-// outside of the functionality provided by the external `grpclog` package.
-package grpclog
+// Package clientslog provides logging functionality for internal clients packages,
+// outside of the functionality provided by the external `clientslog` package.
+package clientslog
 
 import (
 	"fmt"
 
-	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/xds/internal/clients/clientslog"
 )
 
 // PrefixLogger does logging with a prefix.
 //
 // Logging method on a nil logs without any prefix.
 type PrefixLogger struct {
-	logger grpclog.DepthLoggerV2
+	logger clientslog.DepthLoggerV2
 	prefix string
 }
 
@@ -42,7 +42,7 @@ func (pl *PrefixLogger) Infof(format string, args ...any) {
 		pl.logger.InfoDepth(1, fmt.Sprintf(format, args...))
 		return
 	}
-	grpclog.InfoDepth(1, fmt.Sprintf(format, args...))
+	clientslog.InfoDepth(1, fmt.Sprintf(format, args...))
 }
 
 // Warningf does warning logging.
@@ -52,7 +52,7 @@ func (pl *PrefixLogger) Warningf(format string, args ...any) {
 		pl.logger.WarningDepth(1, fmt.Sprintf(format, args...))
 		return
 	}
-	grpclog.WarningDepth(1, fmt.Sprintf(format, args...))
+	clientslog.WarningDepth(1, fmt.Sprintf(format, args...))
 }
 
 // Errorf does error logging.
@@ -62,7 +62,7 @@ func (pl *PrefixLogger) Errorf(format string, args ...any) {
 		pl.logger.ErrorDepth(1, fmt.Sprintf(format, args...))
 		return
 	}
-	grpclog.ErrorDepth(1, fmt.Sprintf(format, args...))
+	clientslog.ErrorDepth(1, fmt.Sprintf(format, args...))
 }
 
 // V reports whether verbosity level l is at least the requested verbose level.
@@ -74,6 +74,6 @@ func (pl *PrefixLogger) V(l int) bool {
 }
 
 // NewPrefixLogger creates a prefix logger with the given prefix.
-func NewPrefixLogger(logger grpclog.DepthLoggerV2, prefix string) *PrefixLogger {
+func NewPrefixLogger(logger clientslog.DepthLoggerV2, prefix string) *PrefixLogger {
 	return &PrefixLogger{logger: logger, prefix: prefix}
 }

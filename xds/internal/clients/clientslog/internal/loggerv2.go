@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"os"
 )
 
-// LoggerV2 does underlying logging work for grpclog.
+// LoggerV2 does underlying logging work for clientslog.
 type LoggerV2 interface {
 	// Info logs to INFO log. Arguments are handled in the manner of fmt.Print.
 	Info(args ...any)
@@ -47,15 +47,15 @@ type LoggerV2 interface {
 	// Errorf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
 	Errorf(format string, args ...any)
 	// Fatal logs to ERROR log. Arguments are handled in the manner of fmt.Print.
-	// gRPC ensures that all Fatal logs will exit with os.Exit(1).
+	// clients ensures that all Fatal logs will exit with os.Exit(1).
 	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatal(args ...any)
 	// Fatalln logs to ERROR log. Arguments are handled in the manner of fmt.Println.
-	// gRPC ensures that all Fatal logs will exit with os.Exit(1).
+	// clients ensures that all Fatal logs will exit with os.Exit(1).
 	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatalln(args ...any)
 	// Fatalf logs to ERROR log. Arguments are handled in the manner of fmt.Printf.
-	// gRPC ensures that all Fatal logs will exit with os.Exit(1).
+	// clients ensures that all Fatal logs will exit with os.Exit(1).
 	// Implementations may also call os.Exit() with a non-zero exit code.
 	Fatalf(format string, args ...any)
 	// V reports whether verbosity level l is at least the requested verbose level.
@@ -117,7 +117,7 @@ var sprintln = fmt.Sprintln
 // This var exists to make it possible to test functions calling os.Exit.
 var exit = os.Exit
 
-// loggerT is the default logger used by grpclog.
+// loggerT is the default logger used by clientslog.
 type loggerT struct {
 	m          []*log.Logger
 	v          int

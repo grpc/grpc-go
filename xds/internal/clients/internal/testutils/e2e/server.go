@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
  *
  */
 
-// Package e2e provides utilities for end2end testing of xDS functionality.
+// Package e2e provides utilities for end2end testing of xDS and LRS clients
+// functionalities.
 package e2e
 
 import (
@@ -29,7 +30,7 @@ import (
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/fakeserver"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"

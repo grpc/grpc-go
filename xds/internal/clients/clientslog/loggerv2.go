@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2017 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  *
  */
 
-package grpclog
+package clientslog
 
 import (
 	"io"
@@ -24,17 +24,17 @@ import (
 	"strconv"
 	"strings"
 
-	"google.golang.org/grpc/grpclog/internal"
+	"google.golang.org/grpc/xds/internal/clients/clientslog/internal"
 )
 
-// LoggerV2 does underlying logging work for grpclog.
+// LoggerV2 does underlying logging work for clientslog.
 type LoggerV2 internal.LoggerV2
 
-// SetLoggerV2 sets logger that is used in grpc to a V2 logger.
+// SetLoggerV2 sets logger that is used in clients to a V2 logger.
 // Not mutex-protected, should be called before any gRPC functions.
 func SetLoggerV2(l LoggerV2) {
 	if _, ok := l.(*componentData); ok {
-		panic("cannot use component logger as grpclog logger")
+		panic("cannot use component logger as clientslog logger")
 	}
 	internal.LoggerV2Impl = l
 	internal.DepthLoggerV2Impl, _ = l.(internal.DepthLoggerV2)
@@ -62,7 +62,7 @@ func newLoggerV2() LoggerV2 {
 	warningW := io.Discard
 	infoW := io.Discard
 
-	logLevel := os.Getenv("GRPC_GO_LOG_SEVERITY_LEVEL")
+	logLevel := os.Getenv("CLIENTS_GO_LOG_SEVERITY_LEVEL")
 	switch logLevel {
 	case "", "ERROR", "error": // If env is unset, set level to ERROR.
 		errorW = os.Stderr
@@ -73,12 +73,12 @@ func newLoggerV2() LoggerV2 {
 	}
 
 	var v int
-	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	vLevel := os.Getenv("CLIENTS_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
 		v = vl
 	}
 
-	jsonFormat := strings.EqualFold(os.Getenv("GRPC_GO_LOG_FORMATTER"), "json")
+	jsonFormat := strings.EqualFold(os.Getenv("CLIENTS_GO_LOG_FORMATTER"), "json")
 
 	return internal.NewLoggerV2(infoW, warningW, errorW, internal.LoggerV2Config{
 		Verbosity:  v,
