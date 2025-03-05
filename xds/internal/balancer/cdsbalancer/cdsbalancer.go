@@ -430,6 +430,21 @@ func (b *cdsBalancer) ExitIdle() {
 	})
 }
 
+// Node ID needs to be manually added to errors generated in the following
+// scenarios:
+//   - resource-does-not-exist: since the xDS watch API uses a separate callback
+//     instead of returning an error value. TODO(gRFC A88): Once A88 is
+//     implemented, the xDS client will be able to add the node ID to
+//     resource-does-not-exist errors as well, and we can get rid of this
+//     special handling.
+//   - received a good update from the xDS client, but the update either contains
+//     an invalid security configuration or contains invalid aggragate cluster
+//     config.
+func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
+	nodeID := b.xdsClient.BootstrapConfig().Node().GetId()
+	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
+}
+
 // Handles a good Cluster update from the xDS client. Kicks off the discovery
 // mechanism generation process from the top-level cluster and if the cluster
 // graph is resolved, generates child policy config and pushes it down.
@@ -459,7 +474,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 			// If the security config is invalid, for example, if the provider
 			// instance is not found in the bootstrap config, we need to put the
 			// channel in transient failure.
-			b.onClusterError(name, fmt.Errorf("received Cluster resource contains invalid security config: %v", err))
+			b.onClusterError(name, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
 			return
 		}
 	}
@@ -467,12 +482,12 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	clustersSeen := make(map[string]bool)
 	dms, ok, err := b.generateDMsForCluster(b.lbCfg.ClusterName, 0, nil, clustersSeen)
 	if err != nil {
-		b.onClusterError(b.lbCfg.ClusterName, fmt.Errorf("failed to generate discovery mechanisms: %v", err))
+		b.onClusterError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
 		return
 	}
 	if ok {
 		if len(dms) == 0 {
-			b.onClusterError(b.lbCfg.ClusterName, fmt.Errorf("aggregate cluster graph has no leaf clusters"))
+			b.onClusterError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
 			return
 		}
 		// Child policy is built the first time we resolve the cluster graph.
@@ -557,7 +572,7 @@ func (b *cdsBalancer) onClusterError(name string, err error) {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceNotFound(name string) {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cluster %q not found", name)
+	err := b.annotateErrorWithNodeID(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cluster %q not found", name))
 	b.closeChildPolicyAndReportTF(err)
 }
 

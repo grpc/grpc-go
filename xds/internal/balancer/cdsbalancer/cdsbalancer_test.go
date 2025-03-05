@@ -19,7 +19,6 @@ package cdsbalancer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -298,6 +297,22 @@ func compareLoadBalancingConfig(ctx context.Context, lbCfgCh chan serviceconfig.
 		}
 	case <-ctx.Done():
 		return fmt.Errorf("timeout when waiting for child policy to receive its configuration")
+	}
+	return nil
+}
+
+func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID string) error {
+	if gotErr == nil {
+		return fmt.Errorf("RPC succeeded when expecting an error with code %v, message %q and nodeID %q", wantCode, wantErr, wantNodeID)
+	}
+	if gotCode := status.Code(gotErr); gotCode != wantCode {
+		return fmt.Errorf("RPC failed with code: %v, want code %v", gotCode, wantCode)
+	}
+	if !strings.Contains(gotErr.Error(), wantErr) {
+		return fmt.Errorf("RPC failed with error: %v, want %q", gotErr, wantErr)
+	}
+	if !strings.Contains(gotErr.Error(), wantNodeID) {
+		return fmt.Errorf("RPC failed with error: %v, want nodeID %q", gotErr, wantNodeID)
 	}
 	return nil
 }
@@ -712,15 +727,13 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	// Ensure that the NACK error is propagated to the RPC caller.
+	// Ensure that the NACK error and the xDS node ID are propagated to the RPC
+	// caller.
 	const wantClusterNACKErr = "unsupported config_source_specifier"
 	client := testgrpc.NewTestServiceClient(cc)
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if code := status.Code(err); code != codes.Unavailable {
-		t.Fatalf("EmptyCall() failed with code: %v, want %v", code, codes.Unavailable)
-	}
-	if err != nil && !strings.Contains(err.Error(), wantClusterNACKErr) {
-		t.Fatalf("EmptyCall() failed with err: %v, want err containing: %v", err, wantClusterNACKErr)
+	if err := verifyRPCError(err, codes.Unavailable, wantClusterNACKErr, nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// Start a test service backend.
@@ -814,8 +827,10 @@ func (s) TestResolverError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Push a resolver error that is not a resource-not-found error.
-	resolverErr := errors.New("resolver-error-not-a-resource-not-found-error")
+	// Push a resolver error that is not a resource-not-found error. Here, we
+	// assume that errors from the xDS client or from the xDS resolver contain
+	// the xDS node ID.
+	resolverErr := fmt.Errorf("[xds node id: %s]: resolver-error-not-a-resource-not-found-error", nodeID)
 	r.ReportError(resolverErr)
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
@@ -829,11 +844,8 @@ func (s) TestResolverError(t *testing.T) {
 	// Ensure that the resolver error is propagated to the RPC caller.
 	client := testgrpc.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	if code := status.Code(err); code != codes.Unavailable {
-		t.Fatalf("EmptyCall() failed with code: %v, want %v", code, codes.Unavailable)
-	}
-	if err != nil && !strings.Contains(err.Error(), resolverErr.Error()) {
-		t.Fatalf("EmptyCall() failed with err: %v, want %v", err, resolverErr)
+	if err := verifyRPCError(err, codes.Unavailable, resolverErr.Error(), nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// Also verify that the watch for the cluster resource is not cancelled.
@@ -894,8 +906,15 @@ func (s) TestResolverError(t *testing.T) {
 		t.Fatal("Timeout when waiting for resolver error to be pushed to the child policy")
 	}
 
-	// Push a resource-not-found-error this time around.
-	resolverErr = xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error")
+	// Push a resource-not-found-error this time around. Our xDS resolver does
+	// not send this error though. When an LDS or RDS resource is missing, the
+	// xDS resolver instead sends an erroring config selector which returns an
+	// error at RPC time with the xDS node ID, for new RPCs. Once ongoing RPCs
+	// complete, the xDS resolver will send an empty service config with no
+	// addresses, which will result in pick_first being configured on the
+	// channel. And pick_first will put the channel in TRANSIENT_FAILURE since
+	// it would have received an update with no addresses.
+	resolverErr = fmt.Errorf("[xds node id: %s]: %w", nodeID, xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error"))
 	r.ReportError(resolverErr)
 
 	// Wait for the CDS resource to be not requested anymore, or the connection
@@ -917,11 +936,10 @@ func (s) TestResolverError(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	// Ensure RPC fails with Unavailable. The actual error message depends on
-	// the picker returned from the priority LB policy, and therefore not
-	// checking for it here.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
-		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
+	// Ensure that the resolver error is propagated to the RPC caller.
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
+	if err := verifyRPCError(err, codes.Unavailable, resolverErr.Error(), nodeID); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -983,14 +1001,12 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
-	// Ensure RPC fails with Unavailable.
+	// Ensure RPC fails with Unavailable status code and the error message is
+	// meaningful and contains the xDS node ID.
 	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("EmptyCall() failed with code: %v, want %v", status.Code(err), codes.Unavailable)
-	}
-	if !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("EmptyCall() failed with error: %v, want %v", err, wantErr)
+	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// Re-add the cluster resource to the management server.

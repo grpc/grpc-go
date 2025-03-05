@@ -249,7 +249,7 @@ type xdsResolver struct {
 	// cluster that includes a ref count and load balancing configuration.
 	activeClusters map[string]*clusterInfo
 
-	curConfigSelector *configSelector
+	curConfigSelector stoppableConfigSelector
 }
 
 // ResolveNow is a no-op at this point.
@@ -284,22 +284,26 @@ func (r *xdsResolver) Close() {
 // false if an error occurs while sending an update to the channel.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
+func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 	// Delete entries from r.activeClusters with zero references;
 	// otherwise serviceConfigJSON will generate a config including
 	// them.
 	r.pruneActiveClusters()
 
-	if cs == nil && len(r.activeClusters) == 0 {
+	errCS, ok := cs.(*erroringConfigSelector)
+	if ok && len(r.activeClusters) == 0 {
 		// There are no clusters and we are sending a failing configSelector.
 		// Send an empty config, which picks pick-first, with no address, and
 		// puts the ClientConn into transient failure.
-		if err := r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")}); err != nil {
-			if r.logger.V(2) {
-				r.logger.Infof("Channel rejected new state (with empty service config) with error: %v", err)
-			}
-			return false
-		}
+		//
+		// This call to UpdateState is expected to return ErrBadResolverState
+		// since pick_first doesn't like an update with no addresses.
+		r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")})
+
+		// Send a resolver error to pick_first so that RPCs will fail with a
+		// more meaningful error, as opposed to one that says that pick_first
+		// received no addresses.
+		r.cc.ReportError(errCS.err)
 		return true
 	}
 
@@ -326,7 +330,8 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) newConfigSelector() *configSelector {
 	cs := &configSelector{
-		r: r,
+		r:         r,
+		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),
 		virtualHost: virtualHost{
 			httpFilterConfigOverride: r.currentVirtualHost.HTTPFilterConfigOverride,
 			retryConfig:              r.currentVirtualHost.RetryConfig,
@@ -438,14 +443,16 @@ func (r *xdsResolver) onResolutionComplete() {
 
 	cs := r.newConfigSelector()
 	if !r.sendNewServiceConfig(cs) {
-		// JSON error creating the service config (unexpected); erase
+		// Channel didn't like the update we provided (unexpected); erase
 		// this config selector and ignore this update, continuing with
 		// the previous config selector.
 		cs.stop()
 		return
 	}
 
-	r.curConfigSelector.stop()
+	if r.curConfigSelector != nil {
+		r.curConfigSelector.stop()
+	}
 	r.curConfigSelector = cs
 }
 
@@ -477,18 +484,21 @@ func (r *xdsResolver) onError(err error) {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onResourceNotFound() {
 	// We cannot remove clusters from the service config that have ongoing RPCs.
-	// Instead, what we can do is to send an erroring (nil) config selector
+	// Instead, what we can do is to send an erroring config selector
 	// along with normal service config. This will ensure that new RPCs will
 	// fail, and once the active RPCs complete, the reference counts on the
 	// clusters will come down to zero. At that point, we will send an empty
 	// service config with no addresses. This results in the pick-first
 	// LB policy being configured on the channel, and since there are no
 	// address, pick-first will put the channel in TRANSIENT_FAILURE.
-	r.sendNewServiceConfig(nil)
+	cs := newErroringConfigSelector(r.xdsClient.BootstrapConfig().Node().GetId())
+	r.sendNewServiceConfig(cs)
 
 	// Stop and dereference the active config selector, if one exists.
-	r.curConfigSelector.stop()
-	r.curConfigSelector = nil
+	if r.curConfigSelector != nil {
+		r.curConfigSelector.stop()
+	}
+	r.curConfigSelector = cs
 }
 
 // Only executed in the context of a serializer callback.
