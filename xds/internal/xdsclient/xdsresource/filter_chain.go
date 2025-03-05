@@ -99,8 +99,9 @@ type RouteWithInterceptors struct {
 // UsableRouteConfiguration contains a matchable route configuration, with
 // instantiated HTTP Filters per route.
 type UsableRouteConfiguration struct {
-	VHS []VirtualHostWithInterceptors
-	Err error
+	VHS    []VirtualHostWithInterceptors
+	Err    error
+	NodeID string // For logging purposes. Populated by the listener wrapper.
 }
 
 // ConstructUsableRouteConfiguration takes Route Configuration and converts it
