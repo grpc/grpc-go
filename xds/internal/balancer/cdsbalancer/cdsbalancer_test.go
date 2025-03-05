@@ -999,7 +999,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Ensure RPC fails with Unavailable status code and the error message is
-	// meaningul and contains the xDS node ID.
+	// meaningful and contains the xDS node ID.
 	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
 	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {

@@ -433,12 +433,13 @@ func (b *cdsBalancer) ExitIdle() {
 // Node ID needs to be manually added to errors generated in the following
 // scenarios:
 //   - resource-does-not-exist: since the xDS watch API uses a separate callback
-//     instead of returning an error value,
+//     instead of returning an error value. TODO(gRFC A88): Once A88 is
+//     implemented, the xDS client will be able to add the node ID to
+//     resource-does-not-exist errors as well, and we can get rid of this
+//     special handling.
 //   - received a good update from the xDS client, but the update either contains
 //     an invalid security configuration or contains invalid aggragate cluster
 //     config.
-//
-// Only executed in the context of a serializer callback.
 func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 	nodeID := b.xdsClient.BootstrapConfig().Node().GetId()
 	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
