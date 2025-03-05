@@ -26,6 +26,10 @@ import (
 )
 
 func (s) TestParseConfig(t *testing.T) {
+	oldEnvConfig := envconfig.RingHashSetRequestHashKey
+	defer func() { envconfig.RingHashSetRequestHashKey = oldEnvConfig }()
+	envconfig.RingHashSetRequestHashKey = true
+
 	tests := []struct {
 		name         string
 		js           string
@@ -91,6 +95,27 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name:    "max greater than upper bound",
 			js:      `{"minRingSize": 10, "maxRingSize": 8388610}`,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "request metadata key set",
+			js:   `{"request_hash_header": "x-foo"}`,
+			want: &LBConfig{
+				MinRingSize:       defaultMinSize,
+				MaxRingSize:       defaultMaxSize,
+				RequestHashHeader: "x-foo",
+			},
+		},
+		{
+			name:    "invalid request hash header",
+			js:      `{"request_hash_header": "!invalid"}`,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "binary request hash header",
+			js:      `{"request_hash_header": "header-with-bin"}`,
 			want:    nil,
 			wantErr: true,
 		},

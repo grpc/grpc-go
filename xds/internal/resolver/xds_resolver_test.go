@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/cespare/xxhash/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -495,8 +495,11 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	gotHash := ringhash.GetRequestHashForTesting(res.Context)
 	wantHash := xxhash.Sum64String("/products")
+	gotHash, ok := ringhash.GetXDSRequestHash(res.Context)
+	if !ok {
+		t.Fatalf("Got no request hash, want: %v", wantHash)
+	}
 	if gotHash != wantHash {
 		t.Fatalf("Got request hash: %v, want: %v", gotHash, wantHash)
 	}

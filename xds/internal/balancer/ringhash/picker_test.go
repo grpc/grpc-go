@@ -20,6 +20,7 @@ package ringhash
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -31,7 +32,10 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-var testSubConns []*testutils.TestSubConn
+var (
+	testSubConns []*testutils.TestSubConn
+	errPicker    = errors.New("picker in TransientFailure")
+)
 
 func init() {
 	for i := 0; i < 8; i++ {
@@ -66,15 +70,15 @@ func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]b
 	for i, st := range states {
 		testSC := testSubConns[i]
 		items = append(items, &ringEntry{
-			idx:       i,
-			hash:      uint64((i + 1) * 10),
-			firstAddr: testSC.String(),
+			idx:     i,
+			hash:    uint64((i + 1) * 10),
+			hashKey: testSC.String(),
 		})
 		epState := balancer.State{
 			ConnectivityState: st,
 			Picker: &fakeChildPicker{
 				connectivityState: st,
-				tfError:           fmt.Errorf("%d", i),
+				tfError:           fmt.Errorf("%w: %d", errPicker, i),
 				subConn:           testSC,
 			},
 		}
@@ -130,6 +134,12 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			wantErr:            balancer.ErrNoSubConnAvailable,
 			wantSCToConnect:    testSubConns[1],
 		},
+		{
+			name:               "all are in TransientFailure, return picked failure",
+			connectivityStates: []connectivity.State{connectivity.TransientFailure, connectivity.TransientFailure},
+			hash:               5,
+			wantErr:            errPicker,
+		},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -142,7 +152,95 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 				endpointStates: epStates,
 			}
 			got, err := p.Pick(balancer.PickInfo{
-				Ctx: SetRequestHash(ctx, tt.hash),
+				Ctx: SetXDSRequestHash(ctx, tt.hash),
+			})
+			if (err != nil || tt.wantErr != nil) && !errors.Is(err, tt.wantErr) {
+				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got.SubConn != tt.wantSC {
+				t.Errorf("Pick() got = %v, want picked SubConn: %v", got, tt.wantSC)
+			}
+			if sc := tt.wantSCToConnect; sc != nil {
+				select {
+				case <-sc.(*testutils.TestSubConn).ConnectCh:
+				case <-time.After(defaultTestShortTimeout):
+					t.Errorf("timeout waiting for Connect() from SubConn %v", sc)
+				}
+			}
+		})
+	}
+}
+
+func (s) TestPickerNoRequestHash(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ring, epStates := testRingAndEndpointStates([]connectivity.State{connectivity.Ready})
+	p := &picker{
+		ring:           ring,
+		logger:         internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
+		endpointStates: epStates,
+	}
+	_, err := p.Pick(balancer.PickInfo{
+		Ctx: ctx,
+	})
+	if err == nil {
+		t.Errorf("Pick() should have failed with no request hash")
+	}
+}
+
+func (s) TestPickerRandomHash(t *testing.T) {
+	tests := []struct {
+		name                         string
+		hash                         uint64
+		connectivityStates           []connectivity.State
+		wantSC                       balancer.SubConn
+		wantErr                      error
+		wantSCToConnect              balancer.SubConn
+		hasEndpointInConnectingState bool
+	}{
+		{
+			name:               "header not set, picked is Ready",
+			hash:               5,
+			connectivityStates: []connectivity.State{connectivity.Ready, connectivity.Idle},
+			wantSC:             testSubConns[0],
+		},
+		{
+			name:               "header not set, picked is Idle, another is Ready. Connect and pick Ready",
+			hash:               5,
+			connectivityStates: []connectivity.State{connectivity.Idle, connectivity.Ready},
+			wantSC:             testSubConns[1],
+			wantSCToConnect:    testSubConns[0],
+		},
+		{
+			name:                         "header not set, picked is Idle, there is at least one Connecting",
+			connectivityStates:           []connectivity.State{connectivity.Connecting, connectivity.Idle},
+			wantErr:                      balancer.ErrNoSubConnAvailable,
+			hasEndpointInConnectingState: true,
+		},
+		{
+			name:               "header not set, all Idle or TransientFailure, connect",
+			connectivityStates: []connectivity.State{connectivity.TransientFailure, connectivity.Idle},
+			wantErr:            balancer.ErrNoSubConnAvailable,
+			wantSCToConnect:    testSubConns[1],
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ring, epStates := testRingAndEndpointStates(tt.connectivityStates)
+			p := &picker{
+				ring:                         ring,
+				logger:                       internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
+				endpointStates:               epStates,
+				requestHashHeader:            "some-header",
+				hasEndpointInConnectingState: tt.hasEndpointInConnectingState,
+				randUint64:                   func() uint64 { return tt.hash },
+			}
+			got, err := p.Pick(balancer.PickInfo{
+				Ctx: ctx,
 			})
 			if err != tt.wantErr {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sort"
 	"sync"
 
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -94,6 +96,18 @@ type ringhashBalancer struct {
 	ring *ring
 }
 
+// hashKey returns the hash key to use for an endpoint. Per gRFC A61, each entry
+// in the ring is an endpoint, positioned based on the hash of the endpoint's
+// first address, unless the endpoint has an explicit hash key as described in
+// gRFC A76.
+func hashKey(endpoint resolver.Endpoint) string {
+	hk := ringhash.GetEndpointHashKey(endpoint)
+	if hk != "" {
+		return hk
+	}
+	return endpoint.Addresses[0].Addr
+}
+
 // UpdateState intercepts child balancer state updates. It updates the
 // per-endpoint state stored in the ring, and also the aggregated state based on
 // the child picker. It also reconciles the endpoint list. It sets
@@ -114,31 +128,32 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 		endpoint := childState.Endpoint
 		endpointsSet.Set(endpoint, true)
 		newWeight := getWeightAttribute(endpoint)
+		hk := hashKey(endpoint)
+		b.logger.Infof("endpoint from picker: %v (hashkey: %v)", endpoint.Addresses[0].Addr, hk)
 		if val, ok := b.endpointStates.Get(endpoint); !ok {
+			b.logger.Infof("this is a new endpoint")
 			es := &endpointState{
-				balancer:  childState.Balancer,
-				weight:    newWeight,
-				firstAddr: endpoint.Addresses[0].Addr,
-				state:     childState.State,
+				balancer: childState.Balancer,
+				hashKey:  hk,
+				weight:   newWeight,
+				state:    childState.State,
 			}
 			b.endpointStates.Set(endpoint, es)
 			b.shouldRegenerateRing = true
 		} else {
 			// We have seen this endpoint before and created a `endpointState`
-			// object for it. If the weight or the first address of the endpoint
-			// has changed, update the endpoint state map with the new weight.
-			// This will be used when a new ring is created.
+			// object for it. If the weight or the hash key of the endpoint has
+			// changed, update the endpoint state map with the new weight or
+			// hash key. This will be used when a new ring is created.
 			es := val.(*endpointState)
+			b.logger.Infof("the endpoint existed before (es: %v)", es.hashKey)
 			if oldWeight := es.weight; oldWeight != newWeight {
 				b.shouldRegenerateRing = true
 				es.weight = newWeight
 			}
-			if es.firstAddr != endpoint.Addresses[0].Addr {
-				// If the order of the addresses for a given endpoint change,
-				// that will change the position of the endpoint in the ring.
-				// -A61
+			if es.hashKey != hk {
 				b.shouldRegenerateRing = true
-				es.firstAddr = endpoint.Addresses[0].Addr
+				es.hashKey = hk
 			}
 			es.state = childState.State
 		}
@@ -192,13 +207,13 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 	//    endpoints.  Updates triggered by the child after handling the
 	//    `UpdateClientConnState` call will not change the endpoint list.
 	// 2. Change in the `LoadBalancerConfig`: Ring config such as max/min ring
-	//    size.
+	//    size or header hash key.
 	// To avoid extra ring updates, a boolean is used to track the need for a
 	// ring update and the update is done only once at the end.
 	//
 	// If the ring configuration has changed, we need to regenerate the ring
 	// while sending a new picker.
-	if b.config == nil || b.config.MinRingSize != newConfig.MinRingSize || b.config.MaxRingSize != newConfig.MaxRingSize {
+	if b.config == nil || b.config.MinRingSize != newConfig.MinRingSize || b.config.MaxRingSize != newConfig.MaxRingSize || b.config.RequestHashHeader != newConfig.RequestHashHeader {
 		b.shouldRegenerateRing = true
 	}
 	b.config = newConfig
@@ -244,7 +259,7 @@ func (b *ringhashBalancer) updatePickerLocked() {
 			endpointStates[i] = val.(*endpointState)
 		}
 		sort.Slice(endpointStates, func(i, j int) bool {
-			return endpointStates[i].firstAddr < endpointStates[j].firstAddr
+			return endpointStates[i].hashKey < endpointStates[j].hashKey
 		})
 		var idleBalancer balancer.ExitIdler
 		for _, es := range endpointStates {
@@ -300,11 +315,22 @@ func (b *ringhashBalancer) ExitIdle() {
 // re-generated every time an endpoint state is updated.
 func (b *ringhashBalancer) newPickerLocked() *picker {
 	states := make(map[string]balancer.State)
+	hasEndpointConnecting := false
 	for _, val := range b.endpointStates.Values() {
 		epState := val.(*endpointState)
-		states[epState.firstAddr] = epState.state
+		states[epState.hashKey] = epState.state
+		if epState.state.ConnectivityState == connectivity.Connecting {
+			hasEndpointConnecting = true
+		}
 	}
-	return &picker{ring: b.ring, logger: b.logger, endpointStates: states}
+	return &picker{
+		ring:                         b.ring,
+		logger:                       b.logger,
+		endpointStates:               states,
+		requestHashHeader:            b.config.RequestHashHeader,
+		hasEndpointInConnectingState: hasEndpointConnecting,
+		randUint64:                   rand.Uint64,
+	}
 }
 
 // aggregatedStateLocked returns the aggregated child balancers state
@@ -348,8 +374,7 @@ func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 }
 
 // getWeightAttribute is a convenience function which returns the value of the
-// weight attribute stored in the BalancerAttributes field of addr, using the
-// weightedroundrobin package.
+// weight endpoint Attribute.
 //
 // When used in the xDS context, the weight attribute is guaranteed to be
 // non-zero. But, when used in a non-xDS context, the weight attribute could be
@@ -363,12 +388,13 @@ func getWeightAttribute(e resolver.Endpoint) uint32 {
 }
 
 type endpointState struct {
-	// firstAddr is the first address in the endpoint. Per gRFC A61, each entry
-	// in the ring is an endpoint, positioned based on the hash of the
-	// endpoint's first address.
-	firstAddr string
-	weight    uint32
-	balancer  balancer.ExitIdler
+	// hashKey is the hash key of the endpoint. Per gRFC A61, each entry in the
+	// ring is an endpoint, positioned based on the hash of the endpoint's first
+	// address by default. Per gRFC A76, the hash key of an endpoint may be
+	// overridden, for example based on EDS endpoint metadata.
+	hashKey  string
+	weight   uint32
+	balancer balancer.ExitIdler
 
 	// state is updated by the balancer while receiving resolver updates from
 	// the channel and picker updates from its children. Access to it is guarded

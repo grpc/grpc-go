@@ -18,23 +18,24 @@
 
 package ringhash
 
-import "context"
+import (
+	"context"
+)
 
-type clusterKey struct{}
+type xdsHashKey struct{}
 
-func getRequestHash(ctx context.Context) uint64 {
-	requestHash, _ := ctx.Value(clusterKey{}).(uint64)
-	return requestHash
+// GetXDSRequestHash returns the request hash in the context, set from the
+// xDS config selector.
+func GetXDSRequestHash(ctx context.Context) (uint64, bool) {
+	requestHash := ctx.Value(xdsHashKey{})
+	if requestHash == nil {
+		return 0, false
+	}
+	return requestHash.(uint64), true
 }
 
-// GetRequestHashForTesting returns the request hash in the context; to be used
-// for testing only.
-func GetRequestHashForTesting(ctx context.Context) uint64 {
-	return getRequestHash(ctx)
-}
-
-// SetRequestHash adds the request hash to the context for use in Ring Hash Load
-// Balancing.
-func SetRequestHash(ctx context.Context, requestHash uint64) context.Context {
-	return context.WithValue(ctx, clusterKey{}, requestHash)
+// SetXDSRequestHash adds the request hash to the context for use in Ring Hash
+// Load Balancing using xDS route hash_policy.
+func SetXDSRequestHash(ctx context.Context, requestHash uint64) context.Context {
+	return context.WithValue(ctx, xdsHashKey{}, requestHash)
 }
