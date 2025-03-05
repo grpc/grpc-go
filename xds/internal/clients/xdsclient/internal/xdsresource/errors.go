@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,9 +70,9 @@ func NewError(t ErrorType, message string) error {
 }
 
 // ErrType returns the error's type.
-func ErrType(err error) ErrorType {
+func ErrType(e error) ErrorType {
 	var xe *xdsClientError
-	if errors.As(err, &xe) {
+	if ok := errors.As(e, &xe); ok {
 		return xe.t
 	}
 	return ErrorTypeUnknown

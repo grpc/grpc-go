@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"encoding/json"
 
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/matcher"
 )
 
 // ClusterType is the type of cluster from a received CDS response.
@@ -53,7 +53,7 @@ type ClusterUpdate struct {
 	// LRSServerConfig contains configuration about the xDS server that sent
 	// this cluster resource. This is also the server where load reports are to
 	// be sent, for this cluster.
-	LRSServerConfig *bootstrap.ServerConfig
+	LRSServerConfig *xdsclient.ServerConfig
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
@@ -74,7 +74,7 @@ type ClusterUpdate struct {
 	OutlierDetection json.RawMessage
 
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 	// TelemetryLabels are the string valued metadata of filter_metadata type
 	// "com.google.csm.telemetry_labels" with keys "service_name" or
 	// "service_namespace".

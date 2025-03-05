@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"time"
 
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
 )
 
 // ListenerUpdate contains information received in an LDS response, which is of
@@ -49,7 +49,7 @@ type ListenerUpdate struct {
 	InboundListenerCfg *InboundListenerConfig
 
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 }
 
 // HTTPFilter represents one HTTP filter from an LDS response's HTTP connection

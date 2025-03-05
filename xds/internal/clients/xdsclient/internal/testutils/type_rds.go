@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,20 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"regexp"
 	"time"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/xds/matcher"
+
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/matcher"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // RouteConfigUpdate contains information received in an RDS response, which is
@@ -36,7 +37,7 @@ type RouteConfigUpdate struct {
 	// ClusterSpecifierPlugins referenced by the Route Table.
 	ClusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 }
 
 // VirtualHost contains the routes for a list of Domains.

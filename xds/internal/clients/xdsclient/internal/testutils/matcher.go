@@ -15,17 +15,17 @@
  * limitations under the License.
  */
 
-package xdsresource
+package testutils
 
 import (
 	"fmt"
 	rand "math/rand/v2"
 	"strings"
 
-	"google.golang.org/grpc/internal/grpcutil"
-	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
+	iresolver "google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/resolver"
+
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/matcher"
 )
 
 // RouteToMatcher converts a route to a Matcher to match incoming RPC's against.
@@ -100,7 +100,7 @@ func (a *CompositeMatcher) Match(info iresolver.RPCInfo) bool {
 	var md metadata.MD
 	if info.Context != nil {
 		md, _ = metadata.FromOutgoingContext(info.Context)
-		if extraMD, ok := grpcutil.ExtraMetadata(info.Context); ok {
+		if extraMD, ok := ExtraMetadata(info.Context); ok {
 			md = metadata.Join(md, extraMD)
 			// Remove all binary headers. They are hard to match with. May need
 			// to add back if asked by users.

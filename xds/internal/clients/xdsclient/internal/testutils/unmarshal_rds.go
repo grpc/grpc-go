@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"fmt"
@@ -25,36 +26,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/xds/matcher"
+
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/matcher"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
-
-func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, error) {
-	r, err := UnwrapResource(r)
-	if err != nil {
-		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
-	}
-
-	if !IsRouteConfigResource(r.GetTypeUrl()) {
-		return "", RouteConfigUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
-	}
-	rc := &v3routepb.RouteConfiguration{}
-	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
-		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
-	}
-
-	u, err := generateRDSUpdateFromRouteConfiguration(rc)
-	if err != nil {
-		return rc.GetName(), RouteConfigUpdate{}, err
-	}
-	u.Raw = r
-	return rc.GetName(), u, nil
-}
 
 // generateRDSUpdateFromRouteConfiguration checks if the provided
 // RouteConfiguration meets the expected criteria. If so, it returns a
@@ -62,7 +40,7 @@ func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, erro
 //
 // A RouteConfiguration resource is considered valid when only if it contains a
 // VirtualHost whose domain field matches the server name from the URI passed
-// to the gRPC channel, and it contains a clusterName or a weighted cluster.
+// to the client channel, and it contains a clusterName or a weighted cluster.
 //
 // The RouteConfiguration includes a list of virtualHosts, which may have zero
 // or more elements. We are interested in the element whose domains field

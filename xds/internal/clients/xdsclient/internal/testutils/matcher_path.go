@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,14 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"regexp"
 	"strings"
-
-	"google.golang.org/grpc/internal/grpcutil"
 )
 
 type pathMatcher interface {
@@ -94,7 +93,7 @@ func newPathRegexMatcher(re *regexp.Regexp) *pathRegexMatcher {
 }
 
 func (prm *pathRegexMatcher) match(path string) bool {
-	return grpcutil.FullMatchWithRegex(prm.re, path)
+	return FullMatchWithRegex(prm.re, path)
 }
 
 func (prm *pathRegexMatcher) String() string {

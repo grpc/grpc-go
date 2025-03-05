@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 package httpfilter
 
 import (
-	iresolver "google.golang.org/grpc/internal/resolver"
+	iresolver "google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/resolver"
 	"google.golang.org/protobuf/proto"
 )
 

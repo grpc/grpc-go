@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"errors"
@@ -24,8 +25,9 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -533,7 +535,7 @@ func (fcm *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	tc := ts.GetTypedConfig()
-	if tc == nil || tc.TypeUrl != version.V3DownstreamTLSContextURL {
+	if tc == nil || tc.TypeUrl != xdsresource.V3DownstreamTLSContextURL {
 		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", tc.TypeUrl)
 	}
 	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
@@ -624,7 +626,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 			// TODO: Implement a registry of supported network filters (like
 			// we have for HTTP filters), when we have to support network
 			// filters other than HttpConnectionManager.
-			if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
+			if tc.GetTypeUrl() != xdsresource.V3HTTPConnManagerURL {
 				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
 			}
 			hcm := &v3httppb.HttpConnectionManager{}

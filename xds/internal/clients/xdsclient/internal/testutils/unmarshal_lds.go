@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,36 +13,32 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package xdsresource
+package testutils
 
 import (
 	"errors"
 	"fmt"
 	"strconv"
 
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+
 	v1xdsudpatypepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
-	r, err := UnwrapResource(r)
-	if err != nil {
-		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
-	}
-
-	if !IsListenerResource(r.GetTypeUrl()) {
-		return "", ListenerUpdate{}, fmt.Errorf("unexpected listener resource type: %q ", r.GetTypeUrl())
-	}
+func unmarshalListenerResource(r []byte) (string, ListenerUpdate, error) {
 	lis := &v3listenerpb.Listener{}
-	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
+	if err := proto.Unmarshal(r, lis); err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
@@ -67,7 +63,7 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	update := &ListenerUpdate{}
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
-	if !IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
+	if !xdsresource.IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
 		return nil, fmt.Errorf("unexpected http connection manager resource type: %q", apiLisAny.GetTypeUrl())
 	}
 	apiLis := &v3httppb.HttpConnectionManager{}

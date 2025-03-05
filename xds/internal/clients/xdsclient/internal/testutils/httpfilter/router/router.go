@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ package router
 import (
 	"fmt"
 
-	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
+	iresolver "google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/resolver"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -49,7 +49,7 @@ type builder struct {
 func (builder) TypeURLs() []string { return []string{TypeURL} }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
-	// The gRPC router filter does not currently use any fields from the
+	// The router filter does not currently use any fields from the
 	// config.  Verify type only.
 	if cfg == nil {
 		return nil, fmt.Errorf("router: nil configuration message provided")
@@ -88,7 +88,7 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 	if override != nil {
 		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
 	}
-	// The gRPC router is implemented within the xds resolver's config
+	// The router is implemented within the xds resolver's config
 	// selector, not as a separate plugin.  So we return a nil HTTPFilter,
 	// which will not be invoked.
 	return nil, nil
@@ -101,12 +101,12 @@ func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (ir
 	if override != nil {
 		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
 	}
-	// The gRPC router is currently unimplemented on the server side. So we
+	// The router is currently unimplemented on the server side. So we
 	// return a nil HTTPFilter, which will not be invoked.
 	return nil, nil
 }
 
-// The gRPC router filter does not currently support any configuration.  Verify
+// The router filter does not currently support any configuration.  Verify
 // type only.
 type config struct {
 	httpfilter.FilterConfig

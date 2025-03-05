@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2023 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
  *
  */
 
-package xdsresource
+package testutils
 
 import (
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/xds/internal/clients/clientslog"
+	internalclientslog "google.golang.org/grpc/xds/internal/clients/internal/clientslog"
 )
 
 const prefix = "[xds-resource] "
 
-var logger = internalgrpclog.NewPrefixLogger(grpclog.Component("xds"), prefix)
+var logger = internalclientslog.NewPrefixLogger(clientslog.Component("xds"), prefix)
