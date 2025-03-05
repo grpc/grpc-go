@@ -70,6 +70,7 @@ var (
 	serviceAccountKeyFile                  = flag.String("service_account_key_file", "", "Path to service account json key file")
 	oauthScope                             = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
 	defaultServiceAccount                  = flag.String("default_service_account", "", "Email of GCE default service account")
+	googleC2PUniverseDomain                = flag.String("google_c2p_universe_domain", "", "Universe domain for google-c2p resolve")
 	serverHost                             = flag.String("server_host", "localhost", "The server host name")
 	serverPort                             = flag.Int("server_port", 10000, "The server port number")
 	serviceConfigJSON                      = flag.String("service_config_json", "", "Disables service config lookups and sets the provided string as the default service config.")
@@ -201,6 +202,11 @@ func main() {
 	}
 
 	resolver.SetDefaultScheme("dns")
+	if len(*googleC2PUniverseDomain) > 0 {
+		if err := googlec2p.SetUniverseDomain(*googleC2PUniverseDomain); err != nil {
+			log.Fatalf("googlec2p.SetUniverseDomain(%s) failed: %v", *googleC2PUniverseDomain, err)
+		}
+	}
 	serverAddr := *serverHost
 	if *serverPort != 0 {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
