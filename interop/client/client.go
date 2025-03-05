@@ -48,9 +48,9 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 
-	_ "google.golang.org/grpc/balancer/grpclb"      // Register the grpclb load balancing policy.
-	_ "google.golang.org/grpc/balancer/rls"         // Register the RLS load balancing policy.
-	_ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
+	_ "google.golang.org/grpc/balancer/grpclb"    // Register the grpclb load balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"       // Register the RLS load balancing policy.
+	"google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -203,7 +203,7 @@ func main() {
 
 	resolver.SetDefaultScheme("dns")
 	if len(*googleC2PUniverseDomain) > 0 {
-		if err := googlec2p.SetUniverseDomain(*googleC2PUniverseDomain); err != nil {
+		if err := googledirectpath.SetUniverseDomain(*googleC2PUniverseDomain); err != nil {
 			log.Fatalf("googlec2p.SetUniverseDomain(%s) failed: %v", *googleC2PUniverseDomain, err)
 		}
 	}
