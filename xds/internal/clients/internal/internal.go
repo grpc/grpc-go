@@ -40,26 +40,6 @@ func ServerIdentifierString(si clients.ServerIdentifier) string {
 	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
 }
 
-// IsServerIdentifierEqual returns true if clients.ServerIdentifier si1 and si2
-// are considered equal.
-func IsServerIdentifierEqual(si1, si2 *clients.ServerIdentifier) bool {
-	switch {
-	case si1 == nil && si2 == nil:
-		return true
-	case (si1 != nil) != (si2 != nil):
-		return false
-	case si1.ServerURI != si2.ServerURI:
-		return false
-	}
-	if si1.Extensions == nil && si2.Extensions == nil {
-		return true
-	}
-	if ex, ok := si1.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(si2.Extensions) {
-		return true
-	}
-	return false
-}
-
 // NodeProto returns a protobuf representation of clients.Node n.
 //
 // This function is intended to be used by the client implementation to convert

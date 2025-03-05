@@ -59,9 +59,6 @@ type ServerIdentifier struct {
 	//
 	// For example, a custom TransportBuilder might use this field to
 	// configure a specific security credentials.
-	//
-	// Note: For custom types used in Extensions, ensure an Equal(any) bool
-	// method is implemented for equality checks on ServerIdentifier.
 	Extensions any
 }
 
