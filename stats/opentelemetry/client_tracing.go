@@ -37,11 +37,9 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (
 	// delay was detected and the event hasn't been recorded yet. Ensures the
 	// event is logged only once using an atomic flag, even across retries.
 	callSpan := trace.SpanFromContext(ctx)
-	if ai.nameResolutionDelayed {
-		if !ai.nameResolutionEventAdded.Swap(true) {
-			if callSpan.SpanContext().IsValid() {
-				callSpan.AddEvent("Delayed name resolution complete")
-			}
+	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded.Swap(true) {
+		if callSpan.SpanContext().IsValid() {
+			callSpan.AddEvent("Delayed name resolution complete")
 		}
 	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)

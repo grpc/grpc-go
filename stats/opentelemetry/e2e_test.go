@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync/atomic"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1651,7 +1651,7 @@ func TestNameResolutionDelay_WithRetry(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(clientConn)
 
 	rpcError := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	go func() {
@@ -1679,7 +1679,6 @@ func TestNameResolutionDelay_WithRetry(t *testing.T) {
 		t.Fatalf("Expected name resolution delay event to be detected, but it was not!")
 	}
 
-	// Introduce a failure scenario for retries
 	stub.EmptyCallF = func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
 		count := retryAttempts.Add(1)
 		t.Logf("Retry attempt: %d", count)
