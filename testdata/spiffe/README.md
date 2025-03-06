@@ -42,7 +42,7 @@ spiffebundle.json contains the "example.com" trust domain (only this entry is us
 If updating these files, the `x5c` field in the json is the raw PEM certificates and can be copy pasted from the certificate file. `n` and `e` are values from the public key. `e` should _probably_ be `AQAB` as it is the exponent. `n` can be fetched from the certificate by getting the RSA key from the cert and extracting the value. This can be done in golang with the following codeblock:
 ```
 func GetBase64ModulusFromPublicKey(key *rsa.PublicKey) string {
-	return base64.RawURLEncoding.EncodeToString(key.N.Bytes())
+  return base64.RawURLEncoding.EncodeToString(key.N.Bytes())
 }
 
 block, _ := pem.Decode(rawPemCert)
