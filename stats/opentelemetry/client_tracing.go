@@ -39,7 +39,7 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (
 	callSpan := trace.SpanFromContext(ctx)
 	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded.Swap(true) {
 		if callSpan.SpanContext().IsValid() {
-			callSpan.AddEvent("Delayed name resolution complete")
+			callSpan.AddEvent(delayedResolutionEventName)
 		}
 	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)

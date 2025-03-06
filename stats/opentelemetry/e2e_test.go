@@ -1586,7 +1586,6 @@ func (h *testStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) cont
 // HandleRPC tracks if an RPC started with a delayed name resolution.
 func (h *testStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
 	if _, ok := rs.(*stats.Begin); ok {
-		// Mark name resolution delay detected (only once)
 		h.nameResolutionDelayed.CompareAndSwap(false, true)
 	}
 }
