@@ -136,6 +136,7 @@ var (
 
 var raceMode bool // set by race.go in race mode
 
+// Note : Do not use this for further tests.
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 
@@ -3579,6 +3580,90 @@ func testClientStreamingError(t *testing.T, e env) {
 		}
 		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.NotFound {
 			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
+		}
+		break
+	}
+}
+
+func (s) TestClientStreamingMissingSendAndCloseError(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
+	t.Skip()
+	testClientStreamingMissingSendAndCloseError(t)
+}
+
+func testClientStreamingMissingSendAndCloseError(t *testing.T) {
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(_ testgrpc.TestService_StreamingInputCallServer) error {
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+
+	if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
+		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
+	}
+}
+
+func (s) TestClientStreamingRecvAfterCloseError(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
+	t.Skip()
+	testClientStreamingRecvAfterCloseError(t)
+}
+
+func testClientStreamingRecvAfterCloseError(t *testing.T) {
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			sum := 0
+			in, _ := stream.Recv()
+			p := in.GetPayload().GetBody()
+			sum += len(p)
+			stream.SendAndClose(&testpb.StreamingInputCallResponse{
+				AggregatedPayloadSize: int32(sum),
+			})
+			_, err := stream.Recv()
+			return err
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.StreamingInputCallRequest{
+		Payload: payload,
+	}
+
+	for {
+		if err = stream.Send(req); err == nil {
+			continue
+		}
+		if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
+			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
 		}
 		break
 	}
