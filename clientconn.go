@@ -683,8 +683,9 @@ func (cc *ClientConn) Connect() {
 //
 // The returned boolean indicates whether it did block or not. If the
 // resolution has already happened once before, it returns false without
-// blocking. Otherwise, it wait for the resolution and return true if resolution
-// has succeeded or return false along with error if resolution has failed.
+// blocking. Otherwise, it wait for the resolution and return true if
+// resolution has succeeded or return false along with error if resolution has
+// failed.
 func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) (bool, error) {
 	// This is on the RPC path, so we use a fast path to avoid the
 	// more-expensive "select" below after the resolver has returned once.

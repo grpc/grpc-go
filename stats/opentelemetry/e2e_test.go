@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,6 +47,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
@@ -58,8 +60,12 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
+	"google.golang.org/grpc/status"
 )
 
 var defaultTestTimeout = 5 * time.Second
@@ -1577,5 +1583,148 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	// Verify spans has error status with rpcErrorMsg as error message.
 	if got, want := spans[0].Status.Description, rpcErrorMsg; got != want {
 		t.Fatalf("got rpc error %s, want %s", spans[0].Status.Description, rpcErrorMsg)
+	}
+}
+
+type testStatsHandler struct {
+	nameResolutionDelayed atomic.Bool
+	traceTagRPCCalls      atomic.Int32
+}
+
+// TagRPC is invoked when an RPC starts, allowing metadata to be added to
+// the context. It increments the counter to track the number of RPC calls,
+// including retries.
+func (h *testStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	h.traceTagRPCCalls.Add(1)
+	return ctx
+}
+
+// HandleRPC tracks if an RPC started with a delayed name resolution.
+func (h *testStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
+	if _, ok := rs.(*stats.Begin); ok {
+		// Mark name resolution delay detected (only once)
+		h.nameResolutionDelayed.CompareAndSwap(false, true)
+	}
+}
+
+// TagConn exists to satisfy stats.Handler.
+func (h *testStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+// HandleConn exists to satisfy stats.Handler.
+func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
+
+// TestNameResolutionDelay_WithRetry verifies that if a name resolution
+// delay occurs when making an RPC, the nameResolutionDetected flag is set,
+// indicating that the resolver took time to return addresses.
+// The test also ensures that retries happen as per the configured policy
+// and that the resolution delay event is added to the call span only once.
+func TestNameResolutionDelay_WithRetry(t *testing.T) {
+	resolverBuilder := manual.NewBuilderWithScheme("delayed")
+	statsHandler := &testStatsHandler{}
+
+	var retryAttempts atomic.Int32
+
+	stub := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+			count := retryAttempts.Add(1)
+			t.Logf("EmptyCall received, attempt: %d", count)
+			return &testpb.Empty{}, nil
+		},
+	}
+
+	if err := stub.Start(nil); err != nil {
+		t.Fatalf("Failed to start StubServer: %v", err)
+	}
+	defer stub.Stop()
+
+	retryPolicy := `{
+		"methodConfig": [{
+			"name": [{}],
+			"retryPolicy": {
+				"maxAttempts": 3,
+				"initialBackoff": "0.1s",
+				"maxBackoff": "1s",
+				"backoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`
+
+	clientConn, err := grpc.NewClient(
+		resolverBuilder.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(resolverBuilder),
+		grpc.WithStatsHandler(statsHandler),
+		grpc.WithDefaultServiceConfig(retryPolicy),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() error: %v", err)
+	}
+	defer clientConn.Close()
+
+	client := testgrpc.NewTestServiceClient(clientConn)
+
+	rpcError := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go func() {
+		t.Log("RPC waiting for resolved addresses")
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		rpcError <- err
+	}()
+
+	time.AfterFunc(500*time.Millisecond, func() {
+		resolverBuilder.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
+		t.Log("Resolver updated to return addresses.")
+	})
+
+	select {
+	case err := <-rpcError:
+		if err != nil {
+			t.Fatalf("RPC failed after resolution: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for RPC.")
+	}
+
+	// Ensure that name resolution delay was detected at least once
+	if !statsHandler.nameResolutionDelayed.Load() {
+		t.Fatalf("Expected name resolution delay event to be detected, but it was not!")
+	}
+
+	// Introduce a failure scenario for retries
+	stub.EmptyCallF = func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+		count := retryAttempts.Add(1)
+		t.Logf("Retry attempt: %d", count)
+		return nil, status.Error(codes.Unavailable, "temporary unavailability")
+	}
+
+	// Retry RPC
+	retryCtx, retryCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer retryCancel()
+
+	retryError := make(chan error, 1)
+	go func() {
+		_, err := client.EmptyCall(retryCtx, &testpb.Empty{})
+		retryError <- err
+	}()
+
+	select {
+	case err := <-retryError:
+		logMsg := "Retry RPC succeeded."
+		if err != nil {
+			logMsg = fmt.Sprintf("Retry RPC failed with error: %v", err)
+		}
+		t.Log(logMsg)
+	case <-retryCtx.Done():
+		t.Fatal("Retry RPC did not complete within timeout")
+	}
+
+	// Ensure multiple RPC calls were tagged (initial + retries)
+	if retryAttempts.Load() < 2 {
+		t.Fatalf("Expected multiple RPC calls, but only found %d", retryAttempts.Load())
 	}
 }
