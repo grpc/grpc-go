@@ -67,7 +67,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
 
-	if gotBundle, wantBundle := got.SpiffeBundleMap, want.SpiffeBundleMap; !reflect.DeepEqual(gotBundle, wantBundle) {
+	if gotBundle, wantBundle := got.SPIFFEBundleMap, want.SPIFFEBundleMap; !reflect.DeepEqual(gotBundle, wantBundle) {
 		return fmt.Errorf("keyMaterial spiffe bundle map = %v, want %v", gotBundle, wantBundle)
 	}
 
@@ -116,7 +116,7 @@ func (s) TestNewProvider(t *testing.T) {
 		{
 			desc: "Only spiffe bundle map specified",
 			options: Options{
-				SpiffeBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+				SPIFFEBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
 			},
 		},
 		{
@@ -125,7 +125,7 @@ func (s) TestNewProvider(t *testing.T) {
 				KeyFile:             testdata.Path("x509/client1_key.pem"),
 				CertFile:            testdata.Path("x509/client1_cert.pem"),
 				RootFile:            testdata.Path("x509/client_ca_cert.pem"),
-				SpiffeBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+				SPIFFEBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
 			},
 			wantError: false,
 		},
@@ -201,7 +201,7 @@ func createTmpDirWithFiles(t *testing.T, dirSuffix, certSrc, keySrc, rootSrc, sp
 
 // initializeProvider performs setup steps common to all tests (except the one
 // which uses symlinks).
-func initializeProvider(t *testing.T, testName string, useSpiffeBundle bool) (string, certprovider.Provider, *testutils.Channel, func()) {
+func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (string, certprovider.Provider, *testutils.Channel, func()) {
 	t.Helper()
 
 	// Override the newDistributor to one which pushes on a channel that we
@@ -214,12 +214,12 @@ func initializeProvider(t *testing.T, testName string, useSpiffeBundle bool) (st
 	// Create a new provider to watch the files in tmpdir.
 	dir := createTmpDirWithFiles(t, testName+"*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/client_ca_cert.pem", "spiffe/spiffebundle.json")
 	var opts Options
-	if useSpiffeBundle {
+	if useSPIFFEBundle {
 		opts = Options{
 			CertFile:            path.Join(dir, certFile),
 			KeyFile:             path.Join(dir, keyFile),
 			RootFile:            path.Join(dir, rootFile),
-			SpiffeBundleMapFile: path.Join(dir, spiffeBundleFile),
+			SPIFFEBundleMapFile: path.Join(dir, spiffeBundleFile),
 			RefreshDuration:     defaultTestRefreshDuration,
 		}
 	} else {
@@ -258,13 +258,13 @@ func initializeProvider(t *testing.T, testName string, useSpiffeBundle bool) (st
 // plugin does not push new updates to the distributor in this case.
 func (s) TestProvider_NoUpdate(t *testing.T) {
 	baseName := "no_update"
-	for _, useSpiffeBundle := range []bool{true, false} {
+	for _, useSPIFFEBundle := range []bool{true, false} {
 		testName := baseName
-		if useSpiffeBundle {
-			testName = testName + "_" + "withSpiffeBundle"
+		if useSPIFFEBundle {
+			testName = testName + "_" + "withSPIFFEBundle"
 		}
 		t.Run(testName, func(t *testing.T) {
-			_, prov, distCh, cancel := initializeProvider(t, "no_update", useSpiffeBundle)
+			_, prov, distCh, cancel := initializeProvider(t, "no_update", useSPIFFEBundle)
 			defer cancel()
 
 			// Make sure the provider is healthy and returns key material.
@@ -289,13 +289,13 @@ func (s) TestProvider_NoUpdate(t *testing.T) {
 // changes are picked up by the provider.
 func (s) TestProvider_UpdateSuccess(t *testing.T) {
 	baseName := "update_success"
-	for _, useSpiffeBundle := range []bool{true, false} {
+	for _, useSPIFFEBundle := range []bool{true, false} {
 		testName := baseName
-		if useSpiffeBundle {
-			testName = testName + "_" + "withSpiffeBundle"
+		if useSPIFFEBundle {
+			testName = testName + "_" + "withSPIFFEBundle"
 		}
 		t.Run(testName, func(t *testing.T) {
-			dir, prov, distCh, cancel := initializeProvider(t, "update_success", useSpiffeBundle)
+			dir, prov, distCh, cancel := initializeProvider(t, "update_success", useSPIFFEBundle)
 			defer cancel()
 
 			// Make sure the provider is healthy and returns key material.
@@ -307,7 +307,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 			}
 
 			// Change only the root file.
-			if useSpiffeBundle {
+			if useSPIFFEBundle {
 				createTmpFile(t, testdata.Path("spiffe/spiffebundle2.json"), path.Join(dir, spiffeBundleFile))
 			} else {
 				createTmpFile(t, testdata.Path("x509/server_ca_cert.pem"), path.Join(dir, rootFile))
@@ -350,10 +350,10 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 // picked up by the provider.
 func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 	baseName := "update_with_symlink"
-	for _, useSpiffeBundle := range []bool{true, false} {
+	for _, useSPIFFEBundle := range []bool{true, false} {
 		testName := baseName
-		if useSpiffeBundle {
-			testName = testName + "_" + "withSpiffeBundle"
+		if useSPIFFEBundle {
+			testName = testName + "_" + "withSPIFFEBundle"
 		}
 		t.Run(testName, func(t *testing.T) {
 			// Override the newDistributor to one which pushes on a channel that we
@@ -380,12 +380,12 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 
 			// Create a provider which watches the files pointed to by the symlink.
 			var opts Options
-			if useSpiffeBundle {
+			if useSPIFFEBundle {
 				opts = Options{
 					CertFile:            path.Join(symLinkName, certFile),
 					KeyFile:             path.Join(symLinkName, keyFile),
 					RootFile:            path.Join(symLinkName, rootFile),
-					SpiffeBundleMapFile: path.Join(symLinkName, spiffeBundleFile),
+					SPIFFEBundleMapFile: path.Join(symLinkName, spiffeBundleFile),
 					RefreshDuration:     defaultTestRefreshDuration,
 				}
 			} else {
