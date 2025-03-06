@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2024 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
 // Package ads provides the implementation of an ADS (Aggregated Discovery
@@ -26,14 +27,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/buffer"
-	igrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/xds/internal/xdsclient/transport"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/clientslog"
+	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
+	"google.golang.org/grpc/xds/internal/clients/internal/buffer"
+	iclientslog "google.golang.org/grpc/xds/internal/clients/internal/clientslog"
+	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -41,10 +44,17 @@ import (
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 
-// Any per-RPC level logs which print complete request or response messages
-// should be gated at this verbosity level. Other per-RPC level logs which print
-// terse output should be at `INFO` and verbosity 2.
-const perRPCVerbosityLevel = 9
+const (
+	// Any per-RPC level logs which print complete request or response messages
+	// should be gated at this verbosity level. Other per-RPC level logs which print
+	// terse output should be at `INFO` and verbosity 2.
+	perRPCVerbosityLevel = 9
+	// InvalidArgument indicates client specified an invalid argument.
+	// Note that this differs from FailedPrecondition. It indicates arguments
+	// that are problematic regardless of the state of the system
+	// (e.g., a malformed file name).
+	invalidArgumentErrCode = 3
+)
 
 // Response represents a response received on the ADS stream. It contains the
 // type URL, version, and resources for the response.
@@ -57,7 +67,7 @@ type Response struct {
 // DataAndErrTuple is a struct that holds a resource and an error. It is used to
 // return a resource and any associated error from a function.
 type DataAndErrTuple struct {
-	Resource xdsresource.ResourceData
+	Resource xdsclient.ResourceData
 	Err      error
 }
 
@@ -66,7 +76,7 @@ type DataAndErrTuple struct {
 // concurrently and implementations need to handle them in a thread-safe manner.
 type StreamEventHandler interface {
 	OnADSStreamError(error)                           // Called when the ADS stream breaks.
-	OnADSWatchExpiry(xdsresource.Type, string)        // Called when the watch timer expires for a resource.
+	OnADSWatchExpiry(xdsclient.ResourceType, string)  // Called when the watch timer expires for a resource.
 	OnADSResponse(Response, func()) ([]string, error) // Called when a response is received on the ADS stream.
 }
 
@@ -113,30 +123,30 @@ type StreamImpl struct {
 	// The following fields are initialized from arguments passed to the
 	// constructor and are read-only afterwards, and hence can be accessed
 	// without a mutex.
-	transport          transport.Transport     // Transport to use for ADS stream.
+	transport          clients.Transport       // Transport to use for ADS stream.
 	eventHandler       StreamEventHandler      // Callbacks into the xdsChannel.
 	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto          *v3corepb.Node          // Identifies the gRPC application.
 	watchExpiryTimeout time.Duration           // Resource watch expiry timeout
-	logger             *igrpclog.PrefixLogger
+	logger             *iclientslog.PrefixLogger
 
 	// The following fields are initialized in the constructor and are not
 	// written to afterwards, and hence can be accessed without a mutex.
-	streamCh     chan transport.StreamingCall // New ADS streams are pushed here.
-	requestCh    *buffer.Unbounded            // Subscriptions and unsubscriptions are pushed here.
-	runnerDoneCh chan struct{}                // Notify completion of runner goroutine.
-	cancel       context.CancelFunc           // To cancel the context passed to the runner goroutine.
+	streamCh     chan clients.Stream // New ADS streams are pushed here.
+	requestCh    *buffer.Unbounded   // Subscriptions and unsubscriptions are pushed here.
+	runnerDoneCh chan struct{}       // Notify completion of runner goroutine.
+	cancel       context.CancelFunc  // To cancel the context passed to the runner goroutine.
 
 	// Guards access to the below fields (and to the contents of the map).
 	mu                sync.Mutex
-	resourceTypeState map[xdsresource.Type]*resourceTypeState // Map of resource types to their state.
-	fc                *adsFlowControl                         // Flow control for ADS stream.
-	firstRequest      bool                                    // False after the first request is sent out.
+	resourceTypeState map[xdsclient.ResourceType]*resourceTypeState // Map of resource types to their state.
+	fc                *adsFlowControl                               // Flow control for ADS stream.
+	firstRequest      bool                                          // False after the first request is sent out.
 }
 
 // StreamOpts contains the options for creating a new ADS Stream.
 type StreamOpts struct {
-	Transport          transport.Transport     // xDS transport to create the stream on.
+	Transport          clients.Transport       // xDS transport to create the stream on.
 	EventHandler       StreamEventHandler      // Callbacks for stream events.
 	Backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	NodeProto          *v3corepb.Node          // Node proto to identify the gRPC application.
@@ -155,14 +165,14 @@ func NewStreamImpl(opts StreamOpts) *StreamImpl {
 		nodeProto:          opts.NodeProto,
 		watchExpiryTimeout: opts.WatchExpiryTimeout,
 
-		streamCh:          make(chan transport.StreamingCall, 1),
+		streamCh:          make(chan clients.Stream, 1),
 		requestCh:         buffer.NewUnbounded(),
 		runnerDoneCh:      make(chan struct{}),
-		resourceTypeState: make(map[xdsresource.Type]*resourceTypeState),
+		resourceTypeState: make(map[xdsclient.ResourceType]*resourceTypeState),
 	}
 
-	l := grpclog.Component("xds")
-	s.logger = igrpclog.NewPrefixLogger(l, opts.LogPrefix+fmt.Sprintf("[ads-stream %p] ", s))
+	l := clientslog.Component("xds")
+	s.logger = iclientslog.NewPrefixLogger(l, opts.LogPrefix+fmt.Sprintf("[ads-stream %p] ", s))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
@@ -182,9 +192,9 @@ func (s *StreamImpl) Stop() {
 // subscriptions for the same resource is deduped at the caller. A discovery
 // request is sent out on the underlying stream for the resource type when there
 // is sufficient flow control quota.
-func (s *StreamImpl) Subscribe(typ xdsresource.Type, name string) {
+func (s *StreamImpl) Subscribe(typ xdsclient.ResourceType, name string) {
 	if s.logger.V(2) {
-		s.logger.Infof("Subscribing to resource %q of type %q", name, typ.TypeName())
+		s.logger.Infof("Subscribing to resource %q of type %q", name, typ.TypeName)
 	}
 
 	s.mu.Lock()
@@ -214,9 +224,9 @@ func (s *StreamImpl) Subscribe(typ xdsresource.Type, name string) {
 // the given resource does not exist. The watch expiry timer associated with the
 // resource is stopped if one is active. A discovery request is sent out on the
 // stream for the resource type when there is sufficient flow control quota.
-func (s *StreamImpl) Unsubscribe(typ xdsresource.Type, name string) {
+func (s *StreamImpl) Unsubscribe(typ xdsclient.ResourceType, name string) {
 	if s.logger.V(2) {
-		s.logger.Infof("Unsubscribing to resource %q of type %q", name, typ.TypeName())
+		s.logger.Infof("Unsubscribing to resource %q of type %q", name, typ.TypeName)
 	}
 
 	s.mu.Lock()
@@ -252,7 +262,7 @@ func (s *StreamImpl) runner(ctx context.Context) {
 	go s.send(ctx)
 
 	runStreamWithBackoff := func() error {
-		stream, err := s.transport.CreateStreamingCall(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
+		stream, err := s.transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 		if err != nil {
 			s.logger.Warningf("Failed to create a new ADS streaming RPC: %v", err)
 			s.onError(err, false)
@@ -293,7 +303,7 @@ func (s *StreamImpl) runner(ctx context.Context) {
 // - a new stream is created after the previous one failed
 func (s *StreamImpl) send(ctx context.Context) {
 	// Stores the most recent stream instance received on streamCh.
-	var stream transport.StreamingCall
+	var stream clients.Stream
 	for {
 		select {
 		case <-ctx.Done():
@@ -311,7 +321,7 @@ func (s *StreamImpl) send(ctx context.Context) {
 			}
 			s.requestCh.Load()
 
-			typ := req.(xdsresource.Type)
+			typ := req.(xdsclient.ResourceType)
 			if err := s.sendNew(stream, typ); err != nil {
 				stream = nil
 				continue
@@ -325,7 +335,7 @@ func (s *StreamImpl) send(ctx context.Context) {
 // and will be sent later. This method also starts the watch expiry timer for
 // resources that were sent in the request for the first time, i.e. their watch
 // state is `watchStateStarted`.
-func (s *StreamImpl) sendNew(stream transport.StreamingCall, typ xdsresource.Type) error {
+func (s *StreamImpl) sendNew(stream clients.Stream, typ xdsclient.ResourceType) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -356,7 +366,7 @@ func (s *StreamImpl) sendNew(stream transport.StreamingCall, typ xdsresource.Typ
 // recovering from a broken stream.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *StreamImpl) sendExisting(stream transport.StreamingCall) error {
+func (s *StreamImpl) sendExisting(stream clients.Stream) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -391,7 +401,7 @@ func (s *StreamImpl) sendExisting(stream transport.StreamingCall) error {
 // received response was not yet complete.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *StreamImpl) sendBuffered(stream transport.StreamingCall) error {
+func (s *StreamImpl) sendBuffered(stream clients.Stream) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -416,16 +426,16 @@ func (s *StreamImpl) sendBuffered(stream transport.StreamingCall) error {
 // watch timers are started for the resources in the request.
 //
 // Caller needs to hold c.mu.
-func (s *StreamImpl) sendMessageIfWritePendingLocked(stream transport.StreamingCall, typ xdsresource.Type, state *resourceTypeState) error {
+func (s *StreamImpl) sendMessageIfWritePendingLocked(stream clients.Stream, typ xdsclient.ResourceType, state *resourceTypeState) error {
 	if !state.pendingWrite {
 		if s.logger.V(2) {
-			s.logger.Infof("Skipping sending request for type %q, because all subscribed resources were already sent", typ.TypeURL())
+			s.logger.Infof("Skipping sending request for type %q, because all subscribed resources were already sent", typ.TypeURL)
 		}
 		return nil
 	}
 
 	names := resourceNames(state.subscribedResources)
-	if err := s.sendMessageLocked(stream, names, typ.TypeURL(), state.version, state.nonce, nil); err != nil {
+	if err := s.sendMessageLocked(stream, names, typ.TypeURL, state.version, state.nonce, nil); err != nil {
 		return err
 	}
 	state.pendingWrite = false
@@ -446,7 +456,7 @@ func (s *StreamImpl) sendMessageIfWritePendingLocked(stream transport.StreamingC
 // error if the request could not be sent.
 //
 // Caller needs to hold c.mu.
-func (s *StreamImpl) sendMessageLocked(stream transport.StreamingCall, names []string, url, version, nonce string, nackErr error) error {
+func (s *StreamImpl) sendMessageLocked(stream clients.Stream, names []string, url, version, nonce string, nackErr error) error {
 	req := &v3discoverypb.DiscoveryRequest{
 		ResourceNames: names,
 		TypeUrl:       url,
@@ -463,11 +473,16 @@ func (s *StreamImpl) sendMessageLocked(stream transport.StreamingCall, names []s
 
 	if nackErr != nil {
 		req.ErrorDetail = &statuspb.Status{
-			Code: int32(codes.InvalidArgument), Message: nackErr.Error(),
+			Code: int32(invalidArgumentErrCode), Message: nackErr.Error(),
 		}
 	}
 
-	if err := stream.Send(req); err != nil {
+	msg, err := proto.Marshal(req)
+	if err != nil {
+		s.logger.Warningf("Failed to marshal DiscoveryRequest: %v", err)
+		return err
+	}
+	if err := stream.Send(msg); err != nil {
 		s.logger.Warningf("Sending ADS request for type %q, resources: %v, version: %q, nonce: %q failed: %v", url, names, version, nonce, err)
 		return err
 	}
@@ -494,7 +509,7 @@ func (s *StreamImpl) sendMessageLocked(stream transport.StreamingCall, names []s
 //
 // It returns a boolean indicating whether at least one message was received
 // from the server.
-func (s *StreamImpl) recv(ctx context.Context, stream transport.StreamingCall) bool {
+func (s *StreamImpl) recv(ctx context.Context, stream clients.Stream) bool {
 	msgReceived := false
 	for {
 		// Wait for ADS stream level flow control to be available, and send out
@@ -545,19 +560,18 @@ func (s *StreamImpl) recv(ctx context.Context, stream transport.StreamingCall) b
 	}
 }
 
-func (s *StreamImpl) recvMessage(stream transport.StreamingCall) (resources []*anypb.Any, url, version, nonce string, err error) {
+func (s *StreamImpl) recvMessage(stream clients.Stream) (resources []*anypb.Any, url, version, nonce string, err error) {
 	r, err := stream.Recv()
 	if err != nil {
 		return nil, "", "", "", err
 	}
-	resp, ok := r.(*v3discoverypb.DiscoveryResponse)
-	if !ok {
-		s.logger.Infof("Message received on ADS stream of unexpected type: %T", r)
+	var resp v3discoverypb.DiscoveryResponse
+	if err := proto.Unmarshal(r, &resp); err != nil {
+		s.logger.Infof("Failed to unmarshal response to DiscoveryResponse: %v", err)
 		return nil, "", "", "", fmt.Errorf("unexpected message type %T", r)
 	}
-
 	if s.logger.V(perRPCVerbosityLevel) {
-		s.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
+		s.logger.Infof("ADS response received: %v", pretty.ToJSON(&resp))
 	} else if s.logger.V(2) {
 		s.logger.Infof("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
 	}
@@ -571,14 +585,14 @@ func (s *StreamImpl) recvMessage(stream transport.StreamingCall) (resources []*a
 //   - updates resource type specific state
 //   - updates resource specific state for resources in the response
 //   - sends an ACK or NACK to the server based on the response
-func (s *StreamImpl) onRecv(stream transport.StreamingCall, names []string, url, version, nonce string, nackErr error) {
+func (s *StreamImpl) onRecv(stream clients.Stream, names []string, url, version, nonce string, nackErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Lookup the resource type specific state based on the type URL.
-	var typ xdsresource.Type
+	var typ xdsclient.ResourceType
 	for t := range s.resourceTypeState {
-		if t.TypeURL() == url {
+		if t.TypeURL == url {
 			typ = t
 			break
 		}
@@ -677,7 +691,7 @@ func (s *StreamImpl) onError(err error, msgReceived bool) {
 // watch state is set to "timeout" and the event handler callback is called.
 //
 // The caller must hold the s.mu lock.
-func (s *StreamImpl) startWatchTimersLocked(typ xdsresource.Type, names []string) {
+func (s *StreamImpl) startWatchTimersLocked(typ xdsclient.ResourceType, names []string) {
 	typeState := s.resourceTypeState[typ]
 	for _, name := range names {
 		resourceState, ok := typeState.subscribedResources[name]
@@ -713,7 +727,7 @@ func resourceNames(m map[string]*ResourceWatchState) []string {
 // TriggerResourceNotFoundForTesting triggers a resource not found event for the
 // given resource type and name.  This is intended for testing purposes only, to
 // simulate a resource not found scenario.
-func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsresource.Type, resourceName string) {
+func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsclient.ResourceType, resourceName string) {
 	s.mu.Lock()
 
 	state, ok := s.resourceTypeState[typ]
@@ -728,7 +742,7 @@ func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsresource.Type, res
 	}
 
 	if s.logger.V(2) {
-		s.logger.Infof("Triggering resource not found for type: %s, resource name: %s", typ.TypeName(), resourceName)
+		s.logger.Infof("Triggering resource not found for type: %s, resource name: %s", typ.TypeName, resourceName)
 	}
 	resourceState.State = ResourceWatchStateTimeout
 	if resourceState.ExpiryTimer != nil {
@@ -742,7 +756,7 @@ func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsresource.Type, res
 // ResourceWatchStateForTesting returns the ResourceWatchState for the given
 // resource type and name.  This is intended for testing purposes only, to
 // inspect the internal state of the ADS stream.
-func (s *StreamImpl) ResourceWatchStateForTesting(typ xdsresource.Type, resourceName string) (ResourceWatchState, error) {
+func (s *StreamImpl) ResourceWatchStateForTesting(typ xdsclient.ResourceType, resourceName string) (ResourceWatchState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -763,7 +777,7 @@ func (s *StreamImpl) ResourceWatchStateForTesting(typ xdsresource.Type, resource
 //
 // The lifetime of the flow control is tied to the lifetime of the stream.
 type adsFlowControl struct {
-	logger *igrpclog.PrefixLogger
+	logger *iclientslog.PrefixLogger
 
 	// Whether the most recent update is pending consumption by all watchers.
 	pending atomic.Bool
@@ -773,7 +787,7 @@ type adsFlowControl struct {
 }
 
 // newADSFlowControl returns a new adsFlowControl.
-func newADSFlowControl(logger *igrpclog.PrefixLogger) *adsFlowControl {
+func newADSFlowControl(logger *iclientslog.PrefixLogger) *adsFlowControl {
 	return &adsFlowControl{
 		logger:  logger,
 		readyCh: make(chan struct{}, 1),

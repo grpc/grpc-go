@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
  *
  */
 
-// Package grpcsync implements additional synchronization primitives built upon
+// Package clientssync implements additional synchronization primitives built upon
 // the sync package.
-package grpcsync
+package clientssync
 
 import (
 	"sync"

@@ -90,15 +90,15 @@ type ListenerResourceData struct {
 	Resource ListenerUpdate
 }
 
-// RawEqual returns true if other is equal to l.
-func (l *ListenerResourceData) RawEqual(other xdsclient.ResourceData) bool {
+// Equal returns true if other is equal to l.
+func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	if l == nil && other == nil {
 		return true
 	}
 	if (l == nil) != (other == nil) {
 		return false
 	}
-	return bytes.Equal(l.Resource.Raw, other.Raw())
+	return bytes.Equal(l.Resource.Raw, other.Bytes())
 
 }
 
@@ -107,7 +107,7 @@ func (l *ListenerResourceData) ToJSON() string {
 	return pretty.ToJSON(l.Resource)
 }
 
-// Raw returns the underlying raw protobuf form of the listener resource.
-func (l *ListenerResourceData) Raw() []byte {
+// Bytes returns the underlying raw protobuf form of the listener resource.
+func (l *ListenerResourceData) Bytes() []byte {
 	return l.Resource.Raw
 }
