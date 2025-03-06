@@ -27,7 +27,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/testdata"
 )
@@ -234,30 +233,30 @@ func (s) TestSPIFFEIDFromCert(t *testing.T) {
 	}
 }
 
-var SPIFFETrustBundle map[string]*spiffebundle.Bundle
-
 func TestKnownSPIFFEBundle(t *testing.T) {
-	bundles, err := LoadSPIFFEBundleMap(testdata.Path("spiffe/spiffebundle.json"))
+	spiffeBundleFile := testdata.Path("spiffe/spiffebundle.json")
+	bundles, err := LoadSPIFFEBundleMap(spiffeBundleFile)
 	if err != nil {
-		t.Fatalf("Error during parsing: %v", err)
+		t.Fatalf("LoadSPIFFEBundleMap(%v) Error during parsing: %v", spiffeBundleFile, err)
 	}
-	if len(bundles) != 2 {
-		t.Fatal("did not parse correct bundle length")
+	wantBundleSize := 2
+	if len(bundles) != wantBundleSize {
+		t.Fatalf("LoadSPIFFEBundleMap(%v) did not parse correct bundle length. got %v want %v", spiffeBundleFile, len(bundles), wantBundleSize)
 	}
 	if bundles["example.com"] == nil {
-		t.Fatal("expected bundle for example.com")
+		t.Fatalf("LoadSPIFFEBundleMap(%v) got no bundle for example.com", spiffeBundleFile)
 	}
 	if bundles["test.example.com"] == nil {
-		t.Fatal("expected bundle for test.example.com")
+		t.Fatalf("LoadSPIFFEBundleMap(%v) got no bundle for test.example.com", spiffeBundleFile)
 	}
 
 	expectedExampleComCert := loadX509Cert(t, testdata.Path("spiffe/spiffe_cert.pem"))
 	expectedTestExampleComCert := loadX509Cert(t, testdata.Path("spiffe/server1_spiffe.pem"))
 	if !bundles["example.com"].X509Authorities()[0].Equal(expectedExampleComCert) {
-		t.Fatalf("expected cert for example.com bundle not correct.")
+		t.Fatalf("LoadSPIFFEBundleMap(%v) parsed wrong cert for example.com.", spiffeBundleFile)
 	}
 	if !bundles["test.example.com"].X509Authorities()[0].Equal(expectedTestExampleComCert) {
-		t.Fatalf("expected cert for test.example.com bundle not correct.")
+		t.Fatalf("LoadSPIFFEBundleMap(%v) parsed wrong cert for test.example.com", spiffeBundleFile)
 	}
 
 }
@@ -268,11 +267,11 @@ func loadX509Cert(t *testing.T, filePath string) *x509.Certificate {
 	certRaw, _ := io.ReadAll(certFile)
 	block, _ := pem.Decode([]byte(certRaw))
 	if block == nil {
-		panic("failed to parse certificate PEM")
+		t.Fatalf("pem.Decode(%v) = nil. Want a value.", certRaw)
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		panic("failed to parse certificate: " + err.Error())
+		t.Fatalf("x509.ParseCertificate(%v) failed %v", block.Bytes, err.Error())
 	}
 	return cert
 }

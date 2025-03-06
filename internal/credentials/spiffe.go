@@ -89,8 +89,6 @@ type partialParsedSPIFFEBundleMap struct {
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
 // behavior occurs which causes the last processed entry to be the entry in the
 // parsed map.
-//
-// This API is experimental.
 func LoadSPIFFEBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
 	bundleMapRaw, err := os.ReadFile(filePath)
 	if err != nil {
