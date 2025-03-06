@@ -29,11 +29,11 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
-type partialParsedSpiffeBundleMap struct {
+type partialParsedSPIFFEBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
 }
 
-// LoadSpiffeBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
+// LoadSPIFFEBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
 // Bundle Map spec for more detail -
 // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
@@ -41,12 +41,12 @@ type partialParsedSpiffeBundleMap struct {
 // parsed map.
 //
 // This API is experimental.
-func LoadSpiffeBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
+func LoadSPIFFEBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
 	bundleMapRaw, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
-	var result partialParsedSpiffeBundleMap
+	var result partialParsedSPIFFEBundleMap
 	if err := json.Unmarshal(bundleMapRaw, &result); err != nil {
 		return nil, err
 	}
