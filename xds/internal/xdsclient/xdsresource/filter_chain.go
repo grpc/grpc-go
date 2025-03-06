@@ -122,12 +122,8 @@ func (fc *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdat
 func (fc *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostWithInterceptors, error) {
 	rs := make([]RouteWithInterceptors, len(virtualHost.Routes))
 	for i, r := range virtualHost.Routes {
-		var err error
 		rs[i].ActionType = r.ActionType
-		rs[i].M, err = RouteToMatcher(r)
-		if err != nil {
-			return VirtualHostWithInterceptors{}, fmt.Errorf("matcher construction: %v", err)
-		}
+		rs[i].M = RouteToMatcher(r)
 		for _, filter := range fc.HTTPFilters {
 			// Route is highest priority on server side, as there is no concept
 			// of an upstream cluster on server side.

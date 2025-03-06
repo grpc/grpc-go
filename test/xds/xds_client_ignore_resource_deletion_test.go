@@ -23,12 +23,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -37,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 
 	clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -201,7 +204,7 @@ func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.
 // deleted by the xDSClient when a resource is missing the xDS response and subsequent
 // RPCs fail.
 func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e2e.UpdateOptions, updateResource func(r *e2e.UpdateOptions)) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	t.Cleanup(cancel)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 	nodeID := uuid.New().String()
@@ -230,14 +233,19 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 		t.Fatal(err)
 	}
 
-	// Spin up go routines to verify RPCs fail after the update.
+	// Spin up go routines to verify RPCs fail after the update. The xDS node ID
+	// needs to be part of the error seen by the RPC caller.
 	client := testgrpc.NewTestServiceClient(cc)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
-			if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			_, err := client.EmptyCall(ctx, &testpb.Empty{})
+			if err == nil {
+				continue
+			}
+			if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), nodeID) {
 				return
 			}
 		}
@@ -245,7 +253,11 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 	go func() {
 		defer wg.Done()
 		for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
-			if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+			_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
+			if err == nil {
+				continue
+			}
+			if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), nodeID) {
 				return
 			}
 		}
@@ -276,7 +288,7 @@ func generateBootstrapContents(t *testing.T, serverURI string, ignoreResourceDel
 	}
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers:                            serverCfgs,
-		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Node:                               fmt.Appendf(nil, `{"id": "%s"}`, nodeID),
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {

@@ -601,3 +601,130 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 		t.Fatalf("Connection to fallback server not closed once primary becomes ready: %v", err)
 	}
 }
+
+// Tests that RPCs succeed at startup when the primary management server is
+// down, but the secondary is available.
+func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
+	defer cancel()
+
+	// Create two listeners for the two management servers. The test can
+	// start/stop these listeners.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	primaryLis := testutils.NewRestartableListener(l)
+	l, err = testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	fallbackLis := testutils.NewRestartableListener(l)
+
+	// Start two management servers, primary and fallback, with the above
+	// listeners.
+	primaryManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: primaryLis})
+	fallbackManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: fallbackLis})
+
+	// Start two test service backends.
+	backend1 := stubserver.StartTestService(t, nil)
+	defer backend1.Stop()
+	backend2 := stubserver.StartTestService(t, nil)
+	defer backend2.Stop()
+
+	// Configure xDS resource on the primary management server, with a cluster
+	// resource that contains an endpoint for backend1.
+	nodeID := uuid.New().String()
+	const serviceName = "my-service-fallback-xds"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, backend1.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := primaryManagementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure xDS resource on the secondary management server, with a cluster
+	// resource that contains an endpoint for backend2. Only the listener
+	// resource has the same name on both servers.
+	fallbackRouteConfigName := "fallback-route-" + serviceName
+	fallbackClusterName := "fallback-cluster-" + serviceName
+	fallbackEndpointsName := "fallback-endpoints-" + serviceName
+	resources = e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, fallbackRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(fallbackRouteConfigName, serviceName, fallbackClusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(fallbackClusterName, fallbackEndpointsName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(fallbackEndpointsName, "localhost", []uint32{testutils.ParsePort(t, backend2.Address)})},
+	}
+	if err := fallbackManagementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Shutdown the primary management server before starting the gRPC client to
+	// trigger fallback on startup.
+	primaryLis.Stop()
+
+	// Generate bootstrap configuration with the above two servers.
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		},
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, primaryManagementServer.Address, fallbackManagementServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap file: %v", err)
+	}
+
+	// Create an xDS client with the above bootstrap configuration.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+
+	// Get the xDS resolver to use the above xDS client.
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	resolver, err := resolverBuilder(pool)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a gRPC client that uses the above xDS resolver.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("Failed to create gRPC client: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC (without the `wait_for_ready` call option) and expect it to
+	// succeed since the fallback management server is up and running.
+	client := testgrpc.NewTestServiceClient(cc)
+	var peer peer.Peer
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	if got, want := peer.Addr.String(), backend2.Address; got != want {
+		t.Fatalf("Unexpected peer address: got %q, want %q", got, want)
+	}
+
+	// Start the primary server. It can take a while before the xDS client
+	// notices this, since the ADS stream implementation uses a backoff before
+	// retrying the stream.
+	primaryLis.Restart()
+	if err := waitForRPCsToReachBackend(ctx, client, backend1.Address); err != nil {
+		t.Fatal(err)
+	}
+}

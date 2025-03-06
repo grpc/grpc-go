@@ -16,6 +16,15 @@
  *
  */
 
+// Package weightedroundrobin provides an implementation of the weighted round
+// robin LB policy, as defined in [gRFC A58].
+//
+// # Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
+//
+// [gRFC A58]: https://github.com/grpc/proposal/blob/master/A58-client-side-weighted-round-robin-lb-policy.md
 package weightedroundrobin
 
 import (
@@ -395,6 +404,7 @@ func (b *wrrBalancer) Close() {
 			ew.stopORCAListener()
 		}
 	}
+	b.child.Close()
 }
 
 func (b *wrrBalancer) ExitIdle() {

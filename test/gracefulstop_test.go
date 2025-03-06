@@ -138,14 +138,10 @@ func (s) TestGracefulStop(t *testing.T) {
 
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
 
-	// Dial the server. This will cause a connection to be accepted. This will
-	// also unblock the Close method .
-	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer dialCancel()
 	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
-	cc, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
+	cc, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
 	if err != nil {
-		t.Fatalf("grpc.DialContext(_, %q, _) = %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	client := testgrpc.NewTestServiceClient(cc)
 	defer cc.Close()
@@ -153,6 +149,8 @@ func (s) TestGracefulStop(t *testing.T) {
 	// 4. Make an RPC.
 	// The server would send a GOAWAY first, but we are delaying the server's
 	// writes for now until the client writes more than the preface.
+	// This will cause a connection to be accepted. This will
+	// also unblock the Close method.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	if _, err = client.FullDuplexCall(ctx); err == nil || status.Code(err) != codes.Unavailable {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <status code Unavailable>", err)

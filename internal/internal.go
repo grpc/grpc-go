@@ -168,6 +168,20 @@ var (
 	// other features, including the CSDS service.
 	NewXDSResolverWithPoolForTesting any // func(*xdsclient.Pool) (resolver.Builder, error)
 
+	// NewXDSResolverWithClientForTesting creates a new xDS resolver builder
+	// using the provided xDS client instead of creating a new one using the
+	// bootstrap configuration specified by the supported environment variables.
+	// The resolver.Builder is meant to be used in conjunction with the
+	// grpc.WithResolvers DialOption. The resolver.Builder does not take
+	// ownership of the provided xDS client and it is the responsibility of the
+	// caller to close the client when no longer required.
+	//
+	// Testing Only
+	//
+	// This function should ONLY be used for testing and may not work with some
+	// other features, including the CSDS service.
+	NewXDSResolverWithClientForTesting any // func(xdsclient.XDSClient) (resolver.Builder, error)
+
 	// RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
 	// Specifier Plugin for testing purposes, regardless of the XDSRLS environment
 	// variable.
@@ -245,6 +259,13 @@ var (
 	// SetBufferPoolingThresholdForTesting updates the buffer pooling threshold, for
 	// testing purposes.
 	SetBufferPoolingThresholdForTesting any // func(int)
+
+	// TimeAfterFunc is used to create timers. During tests the function is
+	// replaced to track allocated timers and fail the test if a timer isn't
+	// cancelled.
+	TimeAfterFunc = func(d time.Duration, f func()) Timer {
+		return time.AfterFunc(d, f)
+	}
 )
 
 // HealthChecker defines the signature of the client-side LB channel health
@@ -285,4 +306,10 @@ type EnforceSubConnEmbedding interface {
 // embedding.
 type EnforceClientConnEmbedding interface {
 	enforceClientConnEmbedding()
+}
+
+// Timer is an interface to allow injecting different time.Timer implementations
+// during tests.
+type Timer interface {
+	Stop() bool
 }
