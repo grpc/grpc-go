@@ -214,11 +214,6 @@ type attemptInfo struct {
 	// NameResolutionDelay indicates if there was a delay in the name resolution.
 	// This field is only valid on client side, it's always false on server side.
 	nameResolutionDelayed bool
-	// nameResolutionEventAdded tracks whether the "Delayed name resolution
-	// complete" event has already been added to prevent duplicate event
-	// logging. This field is only applicable on the client side and is always
-	// false on the server side.
-	nameResolutionEventAdded bool
 }
 
 type clientMetrics struct {

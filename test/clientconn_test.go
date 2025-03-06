@@ -168,8 +168,8 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("First RPC failed unexpectedly: %v", err)
 	}
-	// verifying that RPC was blocked on resolver to return addresses
-	// indicating name resolution delay.
+	// verifying that RPC was not blocked on resolver indicating there was no
+	// delay in name resolution.
 	if statsHandler.nameResolutionDelayed {
 		t.Fatalf("Expected nameResolutionDelayed to be false, but got %v", statsHandler.nameResolutionDelayed)
 	}
@@ -177,7 +177,7 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 
 // TestStatsHandlerDetectsResolutionDelay verifies that if this is the
 // first time resolution is happening at the time of making RPC,
-// nameResolutionDelayed flag was set indicating there was a delay in name
+// nameResolutionDelayed flag is set indicating there was a delay in name
 // resolution waiting for resolver to return addresses.
 func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 	stub, cleanup := startStubServer(t)
