@@ -119,7 +119,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 	cc.Connect()
 	defer cc.Close()
 
-	scpr := r.CC.ParseServiceConfig("bad json service config")
+	scpr := r.CC().ParseServiceConfig("bad json service config")
 	r.UpdateState(resolver.State{ServiceConfig: scpr})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -205,7 +205,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	// Push a resolver update and verify that our balancer receives the update.
 	addrs := []resolver.Address{{Addr: backend.Address}}
 	const lbCfg = "wrapping balancer LB policy config"
-	goodSC := r.CC.ParseServiceConfig(fmt.Sprintf(`
+	goodSC := r.CC().ParseServiceConfig(fmt.Sprintf(`
 {
   "loadBalancingConfig": [
     {
@@ -244,7 +244,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	// Push a bad resolver update and ensure that the update is propagated to our
 	// stub balancer. But since the pushed update contains an invalid service
 	// config, our balancer should continue to see the old loadBalancingConfig.
-	badSC := r.CC.ParseServiceConfig("bad json service config")
+	badSC := r.CC().ParseServiceConfig("bad json service config")
 	wantCCS.ResolverState.ServiceConfig = badSC
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: badSC})
 	ccs, err = ccUpdateCh.Receive(ctx)

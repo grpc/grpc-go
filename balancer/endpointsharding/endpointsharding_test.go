@@ -187,7 +187,7 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 
 	// When the resolver reports an error, the picker should get updated to
 	// return the resolver error.
-	mr.ReportError(errors.New("test error"))
+	mr.CC().ReportError(errors.New("test error"))
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})

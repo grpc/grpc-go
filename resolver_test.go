@@ -180,7 +180,7 @@ func (s) TestResolverAddressesToEndpointsUsingNewAddresses(t *testing.T) {
 	}
 	cc.Connect()
 	defer cc.Close()
-	r.CC.NewAddress(addrs)
+	r.CC().NewAddress(addrs)
 
 	select {
 	case got := <-stateCh:
