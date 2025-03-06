@@ -37,8 +37,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/credentials/tls/certprovider/spiffe"
 	"google.golang.org/grpc/grpclog"
+	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
@@ -62,11 +62,11 @@ type Options struct {
 	// RootFile is the file that holds trusted root certificate(s).
 	// Optional.
 	RootFile string
-	// SpiffeBundleMapFile is the file that holds the spiffe bundle map.
+	// SPIFFEBundleMapFile is the file that holds the spiffe bundle map.
 	// If a given provider configures both the RootFile and the
-	// SpiffeBundleMapFile, the SpiffeBundleMapFile will be preferred.
+	// SPIFFEBundleMapFile, the SPIFFEBundleMapFile will be preferred.
 	// Optional.
-	SpiffeBundleMapFile string
+	SPIFFEBundleMapFile string
 	// RefreshDuration is the amount of time the plugin waits before checking
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
@@ -74,11 +74,11 @@ type Options struct {
 }
 
 func (o Options) canonical() []byte {
-	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s", o.CertFile, o.KeyFile, o.RootFile, o.SpiffeBundleMapFile, o.RefreshDuration))
+	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s", o.CertFile, o.KeyFile, o.RootFile, o.SPIFFEBundleMapFile, o.RefreshDuration))
 }
 
 func (o Options) validate() error {
-	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SpiffeBundleMapFile == "" {
+	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {
 		return fmt.Errorf("pemfile: at least one credential file needs to be specified")
 	}
 	if keySpecified, certSpecified := o.KeyFile != "", o.CertFile != ""; keySpecified != certSpecified {
@@ -198,35 +198,35 @@ func (w *watcher) updateRootDistributor() {
 		return
 	}
 
-	// Prefer SpiffeBundleMap, if it works don't use the RootFile
-	err := w.maybeUpdateSpiffeBundleMap()
+	// Prefer SPIFFEBundleMap, if it works don't use the RootFile
+	err := w.maybeUpdateSPIFFEBundleMap()
 	if err != nil {
 		// The preferred method (spiffe bundle map) failed, try updating the root file
 		_ = w.maybeUpdateRootFile()
 	}
 }
 
-func (w *watcher) maybeUpdateSpiffeBundleMap() error {
+func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
 	// If the map file is unset, just return an error, don't create log spam.
-	if w.opts.SpiffeBundleMapFile == "" {
-		return errors.New("SpiffeBundleMapFile doesn't exist")
+	if w.opts.SPIFFEBundleMapFile == "" {
+		return errors.New("SPIFFEBundleMapFile doesn't exist")
 	}
-	spiffeBundleMapContents, err := os.ReadFile(w.opts.SpiffeBundleMapFile)
+	spiffeBundleMapContents, err := os.ReadFile(w.opts.SPIFFEBundleMapFile)
 	if err != nil {
-		logger.Warningf("spiffeBundleMapFile (%s) read failed: %v", w.opts.SpiffeBundleMapFile, err)
+		logger.Warningf("spiffeBundleMapFile (%s) read failed: %v", w.opts.SPIFFEBundleMapFile, err)
 		return err
 	}
 	// If the file contents have not changed, skip updating the distributor.
 	if bytes.Equal(w.spiffeBundleMapFileContents, spiffeBundleMapContents) {
 		return nil
 	}
-	bundleMap, err := spiffe.SpiffeBundleMapFromBytes(spiffeBundleMapContents)
+	bundleMap, err := credinternal.SPIFFEBundleMapFromBytes(spiffeBundleMapContents)
 	if err != nil {
 		logger.Warning(("failed to parse spiffe bundle map"))
 		return err
 	}
 	w.spiffeBundleMapFileContents = spiffeBundleMapContents
-	w.rootDistributor.Set(&certprovider.KeyMaterial{SpiffeBundleMap: bundleMap}, nil)
+	w.rootDistributor.Set(&certprovider.KeyMaterial{SPIFFEBundleMap: bundleMap}, nil)
 	return nil
 }
 
@@ -290,7 +290,7 @@ func (w *watcher) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, e
 		if err != nil {
 			return nil, err
 		}
-		km.SpiffeBundleMap = rootKM.SpiffeBundleMap
+		km.SPIFFEBundleMap = rootKM.SPIFFEBundleMap
 		km.Roots = rootKM.Roots
 	}
 	return km, nil
