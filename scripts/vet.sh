@@ -197,7 +197,8 @@ GetSafeRegexMatch
 GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
-XXXXX PleaseIgnoreUnused'
+XXXXX PleaseIgnoreUnused
+NewAddress is deprecated:'
   popd
 done
 
