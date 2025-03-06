@@ -251,8 +251,8 @@ func TestKnownSPIFFEBundle(t *testing.T) {
 		t.Fatal("expected bundle for test.example.com")
 	}
 
-	expectedExampleComCert := loadX509Cert(testdata.Path("spiffe/spiffe_cert.pem"))
-	expectedTestExampleComCert := loadX509Cert(testdata.Path("spiffe/server1_spiffe.pem"))
+	expectedExampleComCert := loadX509Cert(t, testdata.Path("spiffe/spiffe_cert.pem"))
+	expectedTestExampleComCert := loadX509Cert(t, testdata.Path("spiffe/server1_spiffe.pem"))
 	if !bundles["example.com"].X509Authorities()[0].Equal(expectedExampleComCert) {
 		t.Fatalf("expected cert for example.com bundle not correct.")
 	}
