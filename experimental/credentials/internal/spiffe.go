@@ -24,8 +24,13 @@ package internal
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
+	"fmt"
 	"net/url"
+	"os"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -72,4 +77,43 @@ func SPIFFEIDFromCert(cert *x509.Certificate) *url.URL {
 		spiffeID = uri
 	}
 	return spiffeID
+}
+
+type partialParsedSPIFFEBundleMap struct {
+	Bundles map[string]json.RawMessage `json:"trust_domains"`
+}
+
+// LoadSPIFFEBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
+// Bundle Map spec for more detail -
+// https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
+// If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
+// behavior occurs which causes the last processed entry to be the entry in the
+// parsed map.
+//
+// This API is experimental.
+func LoadSPIFFEBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
+	bundleMapRaw, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	var result partialParsedSPIFFEBundleMap
+	if err := json.Unmarshal(bundleMapRaw, &result); err != nil {
+		return nil, err
+	}
+	if result.Bundles == nil {
+		return nil, fmt.Errorf("spiffe: no content in spiffe bundle map file %v", filePath)
+	}
+	bundleMap := map[string]*spiffebundle.Bundle{}
+	for td, jsonBundle := range result.Bundles {
+		trustDomain, err := spiffeid.TrustDomainFromString(td)
+		if err != nil {
+			return nil, fmt.Errorf("spiffe: invalid trust domain (%v) found when parsing map file (%v): %v", td, filePath, err)
+		}
+		bundle, err := spiffebundle.Parse(trustDomain, jsonBundle)
+		if err != nil {
+			return nil, fmt.Errorf("spiffe: failed to parse bundle in map file (%v): %v", filePath, err)
+		}
+		bundleMap[td] = bundle
+	}
+	return bundleMap, nil
 }
