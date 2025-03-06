@@ -174,6 +174,7 @@ CredsBundle is deprecated:
 GetMetadata is deprecated:
 internal.Logger is deprecated:
 Metadata is deprecated: use Attributes instead.
+NewAddress is deprecated:
 NewSubConn is deprecated:
 OverrideServerName is deprecated:
 RemoveSubConn is deprecated:
@@ -197,8 +198,7 @@ GetSafeRegexMatch
 GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
-XXXXX PleaseIgnoreUnused
-NewAddress is deprecated:'
+XXXXX PleaseIgnoreUnused'
   popd
 done
 
