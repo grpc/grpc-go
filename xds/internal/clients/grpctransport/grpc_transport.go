@@ -31,38 +31,38 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-// ServerConfigExtension holds settings for connecting to a gRPC server,
+// ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
-type ServerConfigExtension struct {
+type ServerIdentifierExtension struct {
 	// Credentials will be used for all gRPC transports. If it is unset,
 	// transport creation will fail.
 	Credentials credentials.Bundle
 }
 
-// Builder creates gRPC-based Transports. It must be paired with ServerConfigs
-// that contain an Extension field of type ServerConfigExtension.
+// Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
+// that contain an Extension field of type ServerIdentifierExtension.
 type Builder struct{}
 
 // Build returns a gRPC-based clients.Transport.
 //
-// The Extension field of the ServerConfig must be a ServerConfigExtension.
-func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
-	if sc.ServerURI == "" {
-		return nil, fmt.Errorf("grpctransport: ServerURI is not set in ServerConfig")
+// The Extension field of the ServerIdentifier must be a ServerIdentifierExtension.
+func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) {
+	if si.ServerURI == "" {
+		return nil, fmt.Errorf("grpctransport: ServerURI is not set in ServerIdentifier")
 	}
-	if sc.Extensions == nil {
-		return nil, fmt.Errorf("grpctransport: Extensions is not set in ServerConfig")
+	if si.Extensions == nil {
+		return nil, fmt.Errorf("grpctransport: Extensions is not set in ServerIdentifier")
 	}
-	sce, ok := sc.Extensions.(ServerConfigExtension)
+	sce, ok := si.Extensions.(ServerIdentifierExtension)
 	if !ok {
-		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerConfig", sc.Extensions, ServerConfigExtension{})
+		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}
 	if sce.Credentials == nil {
-		return nil, fmt.Errorf("grptransport: Credentials field is not set in ServerConfigExtension")
+		return nil, fmt.Errorf("grptransport: Credentials field is not set in ServerIdentifierExtension")
 	}
 
 	// TODO: Incorporate reference count map for existing transports and
-	// deduplicate transports based on the provided ServerConfig so that
+	// deduplicate transports based on the provided ServerIdentifier so that
 	// transport channel to same server can be shared between xDS and LRS
 	// client.
 
@@ -74,9 +74,9 @@ func (b *Builder) Build(sc clients.ServerConfig) (clients.Transport, error) {
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(sc.ServerURI, kpCfg, grpc.WithCredentialsBundle(sce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(sce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
-		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", sc.ServerURI, err)
+		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
 	}
 
 	return &grpcTransport{cc: cc}, nil
