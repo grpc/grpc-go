@@ -276,7 +276,7 @@ func (ss *StubServer) Stop() {
 }
 
 func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
-	g := r.CC.ParseServiceConfig(s)
+	g := r.CC().ParseServiceConfig(s)
 	if g.Err != nil {
 		panic(fmt.Sprintf("Error parsing config %q: %v", s, g.Err))
 	}

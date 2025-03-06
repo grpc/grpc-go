@@ -449,7 +449,7 @@ func (s) TestBalancer_TwoAddresses_OOBThenPerCall(t *testing.T) {
 
 	// Update to per-call weights.
 	c := svcConfig(t, perCallConfig)
-	parsedCfg := srv1.R.CC.ParseServiceConfig(c)
+	parsedCfg := srv1.R.CC().ParseServiceConfig(c)
 	if parsedCfg.Err != nil {
 		panic(fmt.Sprintf("Error parsing config %q: %v", c, parsedCfg.Err))
 	}
@@ -563,7 +563,7 @@ func (s) TestBalancer_TwoAddresses_ErrorPenalty(t *testing.T) {
 	newCfg := oobConfig
 	newCfg.ErrorUtilizationPenalty = float64p(0.9)
 	c := svcConfig(t, newCfg)
-	parsedCfg := srv1.R.CC.ParseServiceConfig(c)
+	parsedCfg := srv1.R.CC().ParseServiceConfig(c)
 	if parsedCfg.Err != nil {
 		panic(fmt.Sprintf("Error parsing config %q: %v", c, parsedCfg.Err))
 	}
