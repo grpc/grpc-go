@@ -52,7 +52,8 @@ func newClientStatsHandler(options MetricsOptions) metricsRecorderForTest {
 }
 
 func newServerStatsHandler(options MetricsOptions) metricsRecorderForTest {
-	return &serverStatsHandler{options: Options{MetricsOptions: options}}
+	rm := &registryMetrics{optionalLabels: options.OptionalLabels}
+	return &serverStatsHandler{MetricsRecorder: rm, options: Options{MetricsOptions: options}}
 }
 
 // TestMetricsRegistryMetrics tests the OpenTelemetry behavior with respect to
