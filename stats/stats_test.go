@@ -790,7 +790,6 @@ func checkConnEnd(t *testing.T, d *gotData) {
 
 type statshandler struct {
 	mu      sync.Mutex
-	events  []string
 	gotRPC  []*gotData
 	gotConn []*gotData
 }
