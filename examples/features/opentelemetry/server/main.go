@@ -27,18 +27,27 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
-	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint")
+	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
+	otlpEndpoint       = flag.String("otlp_endpoint", ":4319", "the OTLP collector endpoint for traces")
+	serviceName        = "grpc-server"
 )
 
 type echoServer struct {
@@ -51,14 +60,48 @@ func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.Echo
 }
 
 func main() {
+	flag.Parse()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	provider := metric.NewMeterProvider(metric.WithReader(exporter))
+
+	otlpclient := otlptracehttp.NewClient(
+		otlptracehttp.WithEndpoint(*otlpEndpoint),
+		otlptracehttp.WithInsecure(),
+	)
+	traceExporter, err := otlptrace.New(ctx, otlpclient)
+	if err != nil {
+		log.Fatalf("Failed to create otlp trace exporter: %v", err)
+	}
+	// resource.New adds service metadata to telemetry, enabling context and
+	// filtering in the backend.
+	res, err := resource.New(ctx,
+		resource.WithTelemetrySDK(),
+		resource.WithAttributes(semconv.ServiceName(serviceName)),
+	)
+	if err != nil {
+		log.Fatalf("Could not set resources: %v", err)
+	}
+	spanProcessor := trace.NewSimpleSpanProcessor(traceExporter)
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor), trace.WithResource(res))
+	otel.SetTracerProvider(tp)
+
+	textMapPropagator := propagation.TraceContext{}
+
+	traceOptions := oteltracing.TraceOptions{
+		TracerProvider:    tp,
+		TextMapPropagator: textMapPropagator,
+	}
+
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
+	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: traceOptions})
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
