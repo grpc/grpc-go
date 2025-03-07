@@ -61,6 +61,8 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
@@ -1562,4 +1564,283 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	if got, want := spans[0].Status.Description, rpcErrorMsg; got != want {
 		t.Fatalf("got rpc error %s, want %s", spans[0].Status.Description, rpcErrorMsg)
 	}
+}
+
+// TestSpan_WithRetriesAndResolutionDelay verifies gRPC retry
+// behavior using a manual resolver with delayed name resolution. It ensures
+// the retry policy is correctly applied and that the resolution delay event
+// ("Delayed name resolution complete") is recorded only once in the expected
+// call spans (UnaryCall and FullDuplexCall).
+func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
+	to, exporter := defaultTraceOptions(t)
+
+	// Use a manual resolver to simulate delayed name resolution.
+	rb := manual.NewBuilderWithScheme("delayed")
+
+	// Start the stub server but do not provide its address immediately.
+	ss := setupStubServer(t, mo, to)
+	defer ss.Stop()
+
+	// Create a retry policy.
+	retryPolicy := `{
+        "methodConfig": [{
+            "name": [{"service": "grpc.testing.TestService"}],
+            "retryPolicy": {
+                "maxAttempts": 3,
+                "initialBackoff": "0.1s",
+                "maxBackoff": "1s",
+                "backoffMultiplier": 2.0,
+                "retryableStatusCodes": ["UNAVAILABLE"]
+            }
+        }]
+    }`
+
+	// Create a gRPC client connection with retries and tracing enabled.
+	cc, err := grpc.NewClient(rb.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(rb),
+		opentelemetry.DialOption(opentelemetry.Options{
+			MetricsOptions: *mo,
+			TraceOptions:   *to,
+		}),
+		grpc.WithDefaultServiceConfig(retryPolicy),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient error: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	time.AfterFunc(100*time.Millisecond, func() {
+		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+		t.Log("Resolver updated to return addresses.")
+	})
+
+	rpcError := make(chan error, 1)
+	go func() {
+		t.Log("RPC waiting for resolved addresses")
+		_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
+			Body: make([]byte, 10000),
+		}})
+		rpcError <- err
+	}()
+
+	// Make a FullDuplexCall RPC.
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall failed: %v", err)
+	}
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
+	}
+
+	wantSpanInfos := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.BoolValue(false),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.BoolValue(false),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.BoolValue(false),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.BoolValue(true),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.BoolValue(true),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.BoolValue(false),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Delayed LB pick complete",
+					Time: time.Unix(0, 114899306),
+				},
+				{
+					Name: "Outbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+				{
+					Name: "Inbound compressed message",
+					Attributes: []attribute.KeyValue{
+						{
+							Key:   "sequence-number",
+							Value: attribute.IntValue(1),
+						},
+						{
+							Key:   "message-size",
+							Value: attribute.IntValue(10006),
+						},
+						{
+							Key:   "message-size-compressed",
+							Value: attribute.IntValue(10006),
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindClient.String(),
+			events: []trace.Event{
+				{
+					Name: "Delayed name resolution complete",
+				},
+			},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.BoolValue(false),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.BoolValue(false),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.BoolValue(false),
+				},
+			},
+			events: nil,
+		},
+		{
+			name:       "grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: nil,
+			events:     nil,
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				{
+					Key:   "Client",
+					Value: attribute.BoolValue(true),
+				},
+				{
+					Key:   "FailFast",
+					Value: attribute.BoolValue(true),
+				},
+				{
+					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
+					Key:   "transparent-retry",
+					Value: attribute.BoolValue(false),
+				},
+			},
+			events: []trace.Event{
+				{
+					Name: "Delayed LB pick complete",
+					Time: time.Unix(0, 114899306),
+				},
+			},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindClient.String(),
+			events: []trace.Event{
+				{
+					Name: "Delayed name resolution complete",
+				},
+			},
+		},
+	}
+
+	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validateTraces(t, spans, wantSpanInfos)
 }
