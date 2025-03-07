@@ -47,11 +47,13 @@ type metricsRecorderForTest interface {
 }
 
 func newClientStatsHandler(options MetricsOptions) metricsRecorderForTest {
-	return &clientStatsHandler{options: Options{MetricsOptions: options}}
+	rm := &registryMetrics{optionalLabels: options.OptionalLabels}
+	return &clientStatsHandler{MetricsRecorder: rm, options: Options{MetricsOptions: options}}
 }
 
 func newServerStatsHandler(options MetricsOptions) metricsRecorderForTest {
-	return &serverStatsHandler{options: Options{MetricsOptions: options}}
+	rm := &registryMetrics{optionalLabels: options.OptionalLabels}
+	return &serverStatsHandler{MetricsRecorder: rm, options: Options{MetricsOptions: options}}
 }
 
 // TestMetricsRegistryMetrics tests the OpenTelemetry behavior with respect to

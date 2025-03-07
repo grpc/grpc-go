@@ -18,10 +18,13 @@ package opentelemetry
 
 import (
 	"context"
+	"log"
 	"sync/atomic"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
@@ -30,15 +33,17 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type clientStatsHandler struct {
 	estats.MetricsRecorder
 	options       Options
 	clientMetrics clientMetrics
+}
+
+type clientTracingHandler struct {
+	options Options
+	tracer  trace.Tracer
 }
 
 func (h *clientStatsHandler) initializeMetrics() {
@@ -71,10 +76,18 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
+func (h *clientTracingHandler) initializeTraces() {
+	if h.options.TraceOptions.TracerProvider == nil {
+		log.Printf("TraceProvider is not provided in trace options")
+		return
+	}
+	h.tracer = h.options.TraceOptions.TracerProvider.Tracer("grpc-open-telemetry")
+}
+
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
-		method: h.determineMethod(method, opts...),
+		method: determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -88,19 +101,15 @@ func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string
 	}
 
 	startTime := time.Now()
-	var span trace.Span
-	if h.options.isTracingEnabled() {
-		ctx, span = h.createCallTraceSpan(ctx, method)
-	}
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
+	h.perCallMetrics(ctx, err, startTime, ci)
 	return err
 }
 
 // determineMethod determines the method to record attributes with. This will be
 // "other" if StaticMethod isn't specified or if method filter is set and
 // specifies, the method name as is otherwise.
-func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOption) string {
+func determineMethod(method string, opts ...grpc.CallOption) string {
 	for _, opt := range opts {
 		if _, ok := opt.(grpc.StaticMethodCallOption); ok {
 			return removeLeadingSlash(method)
@@ -112,7 +121,7 @@ func (h *clientStatsHandler) determineMethod(method string, opts ...grpc.CallOpt
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
-		method: h.determineMethod(method, opts...),
+		method: determineMethod(method, opts...),
 	}
 	ctx = setCallInfo(ctx, ci)
 
@@ -126,37 +135,63 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 	}
 
 	startTime := time.Now()
-	var span trace.Span
-	if h.options.isTracingEnabled() {
-		ctx, span = h.createCallTraceSpan(ctx, method)
-	}
 	callback := func(err error) {
-		h.perCallTracesAndMetrics(ctx, err, startTime, ci, span)
+		h.perCallMetrics(ctx, err, startTime, ci)
 	}
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-// perCallTracesAndMetrics records per call trace spans and metrics.
-func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo, ts trace.Span) {
-	if h.options.isTracingEnabled() {
-		s := status.Convert(err)
-		if s.Code() == grpccodes.OK {
-			ts.SetStatus(otelcodes.Ok, s.Message())
-		} else {
-			ts.SetStatus(otelcodes.Error, s.Message())
-		}
-		ts.End()
+// perCallMetrics records per call metrics.
+func (h *clientStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
+	callLatency := float64(time.Since(startTime)) / float64(time.Second)
+	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
+		otelattribute.String("grpc.method", ci.method),
+		otelattribute.String("grpc.target", ci.target),
+		otelattribute.String("grpc.status", canonicalString(status.Code(err))),
+	))
+	h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
+}
+
+func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: determineMethod(method, opts...),
 	}
-	if h.options.isMetricsEnabled() {
-		callLatency := float64(time.Since(startTime)) / float64(time.Second)
-		attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
-			otelattribute.String("grpc.method", ci.method),
-			otelattribute.String("grpc.target", ci.target),
-			otelattribute.String("grpc.status", canonicalString(status.Code(err))),
-		))
-		h.clientMetrics.callDuration.Record(ctx, callLatency, attrs)
+	ctx = setCallInfo(ctx, ci)
+
+	var span trace.Span
+	ctx, span = h.createCallTraceSpan(ctx, method)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	h.perCallTraces(err, span)
+	return err
+}
+
+func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: determineMethod(method, opts...),
 	}
+	ctx = setCallInfo(ctx, ci)
+
+	var span trace.Span
+	ctx, span = h.createCallTraceSpan(ctx, method)
+	callback := func(err error) {
+		h.perCallTraces(err, span)
+	}
+	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
+	return streamer(ctx, desc, cc, method, opts...)
+}
+
+// perCallTraces records per call trace spans.
+func (h *clientTracingHandler) perCallTraces(err error, ts trace.Span) {
+	s := status.Convert(err)
+	if s.Code() == grpccodes.OK {
+		ts.SetStatus(otelcodes.Ok, s.Message())
+	} else {
+		ts.SetStatus(otelcodes.Error, s.Message())
+	}
+	ts.End()
 }
 
 // TagConn exists to satisfy stats.Handler.
@@ -166,6 +201,14 @@ func (h *clientStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 
 // HandleConn exists to satisfy stats.Handler.
 func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
+
+// TagConn exists to satisfy stats.Handler for tracing.
+func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+
+// HandleConn exists to satisfy stats.Handler for tracing.
+func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management.
 func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
@@ -190,12 +233,21 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		xdsLabels: labels.TelemetryLabels,
 		method:    removeLeadingSlash(info.FullMethodName),
 	}
-	if h.options.isTracingEnabled() {
-		ctx, ai = h.traceTagRPC(ctx, ai)
-	}
 	return setRPCInfo(ctx, &rpcInfo{
 		ai: ai,
 	})
+}
+
+func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
+		return ctx
+	}
+	ai := ri.ai
+
+	ctx, _ = h.traceTagRPC(ctx, ai)
+	return ctx
 }
 
 func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
@@ -204,12 +256,16 @@ func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return
 	}
-	if h.options.isMetricsEnabled() {
-		h.processRPCEvent(ctx, rs, ri.ai)
+	h.processRPCEvent(ctx, rs, ri.ai)
+}
+
+func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
+		return
 	}
-	if h.options.isTracingEnabled() {
-		populateSpan(rs, ri.ai)
-	}
+	populateSpan(rs, ri.ai)
 }
 
 func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {

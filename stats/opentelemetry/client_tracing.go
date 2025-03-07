@@ -30,10 +30,9 @@ import (
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
-	tracer := otel.Tracer("grpc-open-telemetry")
-	ctx, span := tracer.Start(ctx, mn)
+	ctx, span := h.tracer.Start(ctx, mn)
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 	ai.traceSpan = span
@@ -42,13 +41,12 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (
 
 // createCallTraceSpan creates a call span to put in the provided context using
 // provided TraceProvider. If TraceProvider is nil, it returns context as is.
-func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
+func (h *clientTracingHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
 	if h.options.TraceOptions.TracerProvider == nil {
 		logger.Error("TraceProvider is not provided in trace options")
 		return ctx, nil
 	}
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
-	tracer := otel.Tracer("grpc-open-telemetry")
-	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	ctx, span := h.tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	return ctx, span
 }

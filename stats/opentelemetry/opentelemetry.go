@@ -118,9 +118,33 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
-	csh := &clientStatsHandler{options: o}
-	csh.initializeMetrics()
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
+	var do []grpc.DialOption
+
+	if o.isMetricsEnabled() {
+		metricsHandler := &clientStatsHandler{
+			MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+			options:         o,
+			clientMetrics:   clientMetrics{},
+		}
+		metricsHandler.initializeMetrics()
+		do = append(do,
+			grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor),
+			grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor),
+			grpc.WithStatsHandler(metricsHandler),
+		)
+	}
+	if o.isTracingEnabled() {
+		tracingHandler := &clientTracingHandler{
+			options: o,
+		}
+		tracingHandler.initializeTraces()
+		do = append(do,
+			grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor),
+			grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor),
+			grpc.WithStatsHandler(tracingHandler),
+		)
+	}
+	return joinDialOptions(do...)
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -138,9 +162,35 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
-	ssh := &serverStatsHandler{options: o}
-	ssh.initializeMetrics()
-	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
+	var so []grpc.ServerOption
+
+	if o.isMetricsEnabled() {
+		metricsHandler := &serverStatsHandler{
+			MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+			options:         o,
+			serverMetrics:   serverMetrics{},
+		}
+		metricsHandler.initializeMetrics()
+		so = append(so,
+			grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor),
+			grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor),
+			grpc.StatsHandler(metricsHandler),
+		)
+	}
+
+	if o.isTracingEnabled() {
+		tracingHandler := &serverTracingHandler{
+			options: o,
+		}
+		tracingHandler.initializeTraces()
+		so = append(so,
+			grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor),
+			grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor),
+			grpc.StatsHandler(tracingHandler),
+		)
+	}
+
+	return joinServerOptions(so...)
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
