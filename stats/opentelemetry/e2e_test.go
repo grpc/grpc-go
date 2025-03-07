@@ -1566,7 +1566,7 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	}
 }
 
-// TestRetries_WithManualResolverAndDelayedResolution verifies gRPC retry
+// TestSpan_WithRetriesAndResolutionDelay verifies gRPC retry
 // behavior using a manual resolver with delayed name resolution. It ensures
 // the retry policy is correctly applied and that the resolution delay event
 // ("Delayed name resolution complete") is recorded only once in the expected
@@ -1723,6 +1723,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 			events: []trace.Event{
 				{
 					Name: "Delayed LB pick complete",
+					Time: time.Unix(0, 114899306),
 				},
 				{
 					Name: "Outbound compressed message",
@@ -1822,6 +1823,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 			events: []trace.Event{
 				{
 					Name: "Delayed LB pick complete",
+					Time: time.Unix(0, 114899306),
 				},
 			},
 		},
