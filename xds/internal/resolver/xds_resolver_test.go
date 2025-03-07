@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -165,7 +164,7 @@ func (s) TestResolverResourceName(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			nodeID := uuid.New().String()
-			mgmtServer, lisCh, _, _ := setupManagementServerForTest(ctx, t, nodeID)
+			mgmtServer, lisCh, _, _ := setupManagementServerForTest(t, nodeID)
 
 			// Create a bootstrap configuration with test options.
 			opts := bootstrap.ConfigOptionsForTesting{
@@ -300,7 +299,7 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure a listener resource that is expected to be NACKed because it
 	// does not contain the `RouteSpecifier` field in the HTTPConnectionManager.
@@ -323,7 +322,9 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 	// Build the resolver and expect an error update from it.
 	stateCh, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 	wantErr := "no RouteSpecifier"
-	verifyErrorFromResolver(ctx, t, errCh, wantErr)
+	if err := waitForErrorFromResolver(ctx, errCh, wantErr, nodeID); err != nil {
+		t.Fatal(err)
+	}
 
 	// Configure good listener and route configuration resources on the
 	// management server.
@@ -337,7 +338,9 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 	// Configure another bad resource on the management server and expect an
 	// error update from the resolver.
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
-	verifyErrorFromResolver(ctx, t, errCh, wantErr)
+	if err := waitForErrorFromResolver(ctx, errCh, wantErr, nodeID); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestResolverGoodServiceUpdate tests the case where the resource returned by
@@ -404,7 +407,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			nodeID := uuid.New().String()
-			mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+			mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 			// Configure the management server with a good listener resource and a
 			// route configuration resource, as specified by the test case.
@@ -445,7 +448,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure the management server with a good listener resource and a
 	// route configuration resource that specifies a hash policy.
@@ -508,7 +511,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
@@ -537,8 +540,8 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// return an erroring config selector which will fail new RPCs.
 	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
 	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err == nil || status.Code(err) != codes.Unavailable {
-		t.Fatalf("cs.SelectConfig() returned: %v, want: %v", err, codes.Unavailable)
+	if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
@@ -610,14 +613,14 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
 	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
-	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
+	stateCh, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Read the update pushed by the resolver to the ClientConn.
 	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
@@ -643,9 +646,9 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
 
 	// "Make another RPC" by invoking the config selector.
-	res, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err == nil || status.Code(err) != codes.Unavailable {
-		t.Fatalf("cs.SelectConfig() got %v, %v, expected UNAVAILABLE error", res, err)
+	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// In the meantime, an empty ServiceConfig update should have been sent.
@@ -662,6 +665,16 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 		}
 	}
+
+	// The xDS resolver is expected to report an error to the channel.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for an error from the resolver: %v", ctx.Err())
+	case err := <-errCh:
+		if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 // Tests the case where the resolver receives max stream duration as part of the
@@ -674,7 +687,7 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -807,7 +820,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
 	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
@@ -917,7 +930,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure the management server with a listener resource, but no route
 	// configuration resource.
@@ -975,7 +988,7 @@ func (s) TestResolverWRR(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	nodeID := uuid.New().String()
-	mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
@@ -1174,7 +1187,7 @@ func (s) TestConfigSelector_FailureCases(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			nodeID := uuid.New().String()
-			mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+			mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 			// Build an xDS resolver.
 			stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
@@ -1188,8 +1201,8 @@ func (s) TestConfigSelector_FailureCases(t *testing.T) {
 
 			// Ensure that it returns the expected error.
 			_, err := cs.SelectConfig(iresolver.RPCInfo{Method: methodName, Context: ctx})
-			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
-				t.Errorf("SelectConfig(_) = _, %v; want _, Contains(%v)", err, test.wantErr)
+			if err := verifyResolverError(err, codes.Unavailable, test.wantErr, nodeID); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
@@ -1413,7 +1426,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			nodeID := uuid.New().String()
-			mgmtServer, _, _, bc := setupManagementServerForTest(ctx, t, nodeID)
+			mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 			// Build an xDS resolver.
 			stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)

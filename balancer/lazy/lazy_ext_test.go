@@ -271,7 +271,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 	defer cc.Close()
 	cc.Connect()
 
-	mr.ReportError(errors.New("test error"))
+	mr.CC().ReportError(errors.New("test error"))
 	// The channel should remain in IDLE as the ExitIdle calls are not
 	// propagated to the lazy balancer from the stub balancer.
 	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -367,7 +367,7 @@ func (s) TestResolverErrorThenGoodUpdate(t *testing.T) {
 	cc.Connect()
 
 	// Send an error followed by a good update.
-	mr.ReportError(errors.New("test error"))
+	mr.CC().ReportError(errors.New("test error"))
 	mr.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{
 			{Addresses: []resolver.Address{{Addr: backend.Address}}},

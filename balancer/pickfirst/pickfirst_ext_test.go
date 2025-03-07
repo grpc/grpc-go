@@ -73,7 +73,7 @@ func Test(t *testing.T) {
 func parseServiceConfig(t *testing.T, r *manual.Resolver, sc string) *serviceconfig.ParseResult {
 	t.Helper()
 
-	scpr := r.CC.ParseServiceConfig(sc)
+	scpr := r.CC().ParseServiceConfig(sc)
 	if scpr.Err != nil {
 		t.Fatalf("Failed to parse service config %q: %v", sc, scpr.Err)
 	}
@@ -756,7 +756,7 @@ func (s) TestPickFirst_ResolverError_NoPreviousUpdate(t *testing.T) {
 	cc, r, _ := setupPickFirst(t, 0)
 
 	nrErr := errors.New("error from name resolver")
-	r.ReportError(nrErr)
+	r.CC().ReportError(nrErr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -789,7 +789,7 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_Ready(t *testing.T) {
 	}
 
 	nrErr := errors.New("error from name resolver")
-	r.ReportError(nrErr)
+	r.CC().ReportError(nrErr)
 
 	// Ensure that RPCs continue to succeed for the next second.
 	client := testgrpc.NewTestServiceClient(cc)
@@ -848,7 +848,7 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_Connecting(t *testing.T)
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	nrErr := errors.New("error from name resolver")
-	r.ReportError(nrErr)
+	r.CC().ReportError(nrErr)
 
 	// RPCs should fail with deadline exceed error as long as they are in
 	// CONNECTING and not the error returned by the name resolver.
@@ -909,7 +909,7 @@ func (s) TestPickFirst_ResolverError_WithPreviousUpdate_TransientFailure(t *test
 	// error instead of the old error that caused the channel to move to
 	// TRANSIENT_FAILURE in the first place.
 	nrErr := errors.New("error from name resolver")
-	r.ReportError(nrErr)
+	r.CC().ReportError(nrErr)
 	client := testgrpc.NewTestServiceClient(cc)
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); strings.Contains(err.Error(), nrErr.Error()) {

@@ -95,7 +95,7 @@ func main() {
 		}
 		cc, err := grpc.NewClient(uris[i], opts...)
 		if err != nil {
-			logger.Fatalf("Fail to dial %v: %v", uris[i], err)
+			logger.Fatalf("grpc.NewClient(%q) = %v", uris[i], err)
 		}
 		defer cc.Close()
 		clients = append(clients, clientConfig{

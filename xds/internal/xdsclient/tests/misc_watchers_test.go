@@ -90,7 +90,7 @@ func (rw *testRouteConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFu
 }
 
 func (rw *testRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
+	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
 	onDone()
 }
 

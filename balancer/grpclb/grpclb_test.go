@@ -859,7 +859,7 @@ func (s) TestGRPCLB_Fallback(t *testing.T) {
 	// Push another update to the resolver, this time with a valid balancer
 	// address in the attributes field.
 	rs = resolver.State{
-		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
+		ServiceConfig: r.CC().ParseServiceConfig(grpclbConfig),
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 	}
 	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
@@ -1023,7 +1023,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		// fallback and use the fallback backend.
 		r.UpdateState(resolver.State{
 			Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
-			ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
+			ServiceConfig: r.CC().ParseServiceConfig(grpclbConfig),
 		})
 
 		sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -1051,7 +1051,7 @@ func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 		// be used.
 		rs := resolver.State{
 			Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
-			ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
+			ServiceConfig: r.CC().ParseServiceConfig(grpclbConfig),
 		}
 		rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
 		r.UpdateState(rs)
@@ -1112,7 +1112,7 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 
 	// Push a service config with grpclb as the load balancing policy and
 	// configure pick_first as its child policy.
-	rs := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(`{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`)}
+	rs := resolver.State{ServiceConfig: r.CC().ParseServiceConfig(`{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`)}
 
 	// Push a resolver update with the remote balancer address specified via
 	// attributes.
@@ -1152,7 +1152,7 @@ func (s) TestGRPCLB_PickFirst(t *testing.T) {
 			},
 		},
 	}
-	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
+	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
 	testC := testgrpc.NewTestServiceClient(cc)
 	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, beServerAddrs[1:]); err != nil {
@@ -1261,7 +1261,7 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 			},
 		},
 	}
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(svcfg)}, s)
+	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(svcfg)}, s)
 	r.UpdateState(rs)
 	t.Log("Perform an initial RPC and expect it to succeed...")
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
@@ -1329,7 +1329,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push a resolver update with grpclb configuration which does not contain the
 	// target_name field. Our fake remote balancer is configured to always
 	// expect `beServerName` as the server name in the initial request.
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
+	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(grpclbConfig)},
 		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
 			Addr:       tss.lbAddr,
 			ServerName: lbServerName,
@@ -1366,7 +1366,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 			},
 		},
 	}
-	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(lbCfg)}, s)
+	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(lbCfg)}, s)
 	r.UpdateState(rs)
 	select {
 	case <-ctx.Done():
@@ -1432,7 +1432,7 @@ func runAndCheckStats(t *testing.T, drop bool, statsChan chan *lbpb.ClientStats,
 	cc.Connect()
 	defer cc.Close()
 
-	rstate := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}
+	rstate := resolver.State{ServiceConfig: r.CC().ParseServiceConfig(grpclbConfig)}
 	r.UpdateState(grpclbstate.Set(rstate, &grpclbstate.State{BalancerAddresses: []resolver.Address{{
 		Addr:       tss.lbAddr,
 		ServerName: lbServerName,

@@ -191,9 +191,9 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			}
 
 			// Create a ClientConn with the xds scheme and make an RPC.
-			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
 			if err != nil {
-				t.Fatalf("failed to dial local test server: %v", err)
+				t.Fatalf("grpc.NewClient() failed: %v", err)
 			}
 			defer cc.Close()
 
@@ -359,7 +359,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 
 			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 			if err != nil {
-				t.Fatalf("failed to dial local test server: %v", err)
+				t.Fatalf("grpc.NewClient() failed: %v", err)
 			}
 			defer cc.Close()
 

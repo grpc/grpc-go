@@ -82,7 +82,7 @@ func (cw *clusterWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 }
 
 func (cw *clusterWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
+	cw.updateCh.Replace(clusterUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response")})
 	onDone()
 }
 
@@ -670,7 +670,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
+	wantErr := xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyClusterUpdate(ctx, cw.updateCh, clusterUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -847,7 +847,7 @@ func (s) TestCDSWatch_ResourceRemoved(t *testing.T) {
 
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not receive an update.
-	if err := verifyClusterUpdate(ctx, cw1.updateCh, clusterUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
+	if err := verifyClusterUpdate(ctx, cw1.updateCh, clusterUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
 		t.Fatal(err)
 	}
 	if err := verifyNoClusterUpdate(ctx, cw2.updateCh); err != nil {

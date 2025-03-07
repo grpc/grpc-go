@@ -36,26 +36,14 @@ func TestResolver(t *testing.T) {
 		},
 	})
 
-	t.Run("update_state_panics", func(t *testing.T) {
+	t.Run("cc_panics", func(t *testing.T) {
 		defer func() {
-			want := "cannot update state as grpc.Dial with resolver has not been called"
+			want := "Manual resolver instance has not yet been built."
 			if r := recover(); r != want {
 				t.Errorf("expected panic %q, got %q", want, r)
 			}
 		}()
-		r.UpdateState(resolver.State{Addresses: []resolver.Address{
-			{Addr: "address"},
-			{Addr: "anotheraddress"},
-		}})
-	})
-	t.Run("report_error_panics", func(t *testing.T) {
-		defer func() {
-			want := "cannot report error as grpc.Dial with resolver has not been called"
-			if r := recover(); r != want {
-				t.Errorf("expected panic %q, got %q", want, r)
-			}
-		}()
-		r.ReportError(errors.New("example"))
+		r.CC()
 	})
 
 	t.Run("happy_path", func(t *testing.T) {
@@ -70,6 +58,6 @@ func TestResolver(t *testing.T) {
 		r.UpdateState(resolver.State{Addresses: []resolver.Address{
 			{Addr: "ok"},
 		}})
-		r.ReportError(errors.New("example"))
+		r.CC().ReportError(errors.New("example"))
 	})
 }

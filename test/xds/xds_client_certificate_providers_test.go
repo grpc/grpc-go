@@ -169,7 +169,7 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Failure(t *test
 	// Create a ClientConn and ensure that it moves to TRANSIENT_FAILURE.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()

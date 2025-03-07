@@ -24,6 +24,8 @@
 package leakcheck
 
 import (
+	"context"
+	"fmt"
 	"runtime"
 	"runtime/debug"
 	"slices"
@@ -53,6 +55,7 @@ func init() {
 }
 
 var globalPool swappableBufferPool
+var globalTimerTracker *timerFactory
 
 type swappableBufferPool struct {
 	atomic.Pointer[mem.BufferPool]
@@ -81,7 +84,7 @@ func SetTrackingBufferPool(logger Logger) {
 
 // CheckTrackingBufferPool undoes the effects of SetTrackingBufferPool, and fails
 // unit tests if not all buffers were returned. It is invalid to invoke this
-// method without previously having invoked SetTrackingBufferPool.
+// function without previously having invoked SetTrackingBufferPool.
 func CheckTrackingBufferPool() {
 	p := (*globalPool.Load()).(*trackingBufferPool)
 	p.lock.Lock()
@@ -148,24 +151,9 @@ type trackingBufferPool struct {
 func (p *trackingBufferPool) Get(length int) *[]byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-
 	p.bufferCount++
-
 	buf := p.pool.Get(length)
-
-	var stackBuf [16]uintptr
-	var stack []uintptr
-	skip := 2
-	for {
-		n := runtime.Callers(skip, stackBuf[:])
-		stack = append(stack, stackBuf[:n]...)
-		if n < len(stackBuf) {
-			break
-		}
-		skip += len(stackBuf)
-	}
-	p.allocatedBuffers[buf] = stack
-
+	p.allocatedBuffers[buf] = currentStack(2)
 	return buf
 }
 
@@ -257,12 +245,11 @@ type Logger interface {
 // CheckGoroutines looks at the currently-running goroutines and checks if there
 // are any interesting (created by gRPC) goroutines leaked. It waits up to 10
 // seconds in the error cases.
-func CheckGoroutines(logger Logger, timeout time.Duration) {
+func CheckGoroutines(ctx context.Context, logger Logger) {
 	// Loop, waiting for goroutines to shut down.
 	// Wait up to timeout, but finish as quickly as possible.
-	deadline := time.Now().Add(timeout)
 	var leaked []string
-	for time.Now().Before(deadline) {
+	for ctx.Err() == nil {
 		if leaked = interestingGoroutines(); len(leaked) == 0 {
 			return
 		}
@@ -279,13 +266,6 @@ type LeakChecker struct {
 	logger Logger
 }
 
-// Check executes the leak check tests, failing the unit test if any buffer or
-// goroutine leaks are detected.
-func (lc *LeakChecker) Check() {
-	CheckTrackingBufferPool()
-	CheckGoroutines(lc.logger, 10*time.Second)
-}
-
 // NewLeakChecker offers a convenient way to set up the leak checks for a
 // specific unit test. It can be used as follows, at the beginning of tests:
 //
@@ -297,4 +277,120 @@ func (lc *LeakChecker) Check() {
 func NewLeakChecker(logger Logger) *LeakChecker {
 	SetTrackingBufferPool(logger)
 	return &LeakChecker{logger: logger}
+}
+
+type timerFactory struct {
+	mu              sync.Mutex
+	allocatedTimers map[internal.Timer][]uintptr
+}
+
+func (tf *timerFactory) timeAfterFunc(d time.Duration, f func()) internal.Timer {
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
+	ch := make(chan internal.Timer, 1)
+	timer := time.AfterFunc(d, func() {
+		f()
+		tf.remove(<-ch)
+	})
+	ch <- timer
+	tf.allocatedTimers[timer] = currentStack(2)
+	return &trackingTimer{
+		Timer:  timer,
+		parent: tf,
+	}
+}
+
+func (tf *timerFactory) remove(timer internal.Timer) {
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
+	delete(tf.allocatedTimers, timer)
+}
+
+func (tf *timerFactory) pendingTimers() []string {
+	tf.mu.Lock()
+	defer tf.mu.Unlock()
+	leaked := []string{}
+	for _, stack := range tf.allocatedTimers {
+		leaked = append(leaked, fmt.Sprintf("Allocated timer never cancelled:\n%s", traceToString(stack)))
+	}
+	return leaked
+}
+
+type trackingTimer struct {
+	internal.Timer
+	parent *timerFactory
+}
+
+func (t *trackingTimer) Stop() bool {
+	t.parent.remove(t.Timer)
+	return t.Timer.Stop()
+}
+
+// TrackTimers replaces internal.TimerAfterFunc with one that tracks timer
+// creations, stoppages and expirations. CheckTimers should then be invoked at
+// the end of the test to validate that all timers created have either executed
+// or are cancelled.
+func TrackTimers() {
+	globalTimerTracker = &timerFactory{
+		allocatedTimers: make(map[internal.Timer][]uintptr),
+	}
+	internal.TimeAfterFunc = globalTimerTracker.timeAfterFunc
+}
+
+// CheckTimers undoes the effects of TrackTimers, and fails unit tests if not
+// all timers were cancelled or executed. It is invalid to invoke this function
+// without previously having invoked TrackTimers.
+func CheckTimers(ctx context.Context, logger Logger) {
+	tt := globalTimerTracker
+
+	// Loop, waiting for timers to be cancelled.
+	// Wait up to timeout, but finish as quickly as possible.
+	var leaked []string
+	for ctx.Err() == nil {
+		if leaked = tt.pendingTimers(); len(leaked) == 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	for _, g := range leaked {
+		logger.Errorf("Leaked timers: %v", g)
+	}
+
+	// Reset the internal function.
+	internal.TimeAfterFunc = func(d time.Duration, f func()) internal.Timer {
+		return time.AfterFunc(d, f)
+	}
+}
+
+func currentStack(skip int) []uintptr {
+	var stackBuf [16]uintptr
+	var stack []uintptr
+	skip++
+	for {
+		n := runtime.Callers(skip, stackBuf[:])
+		stack = append(stack, stackBuf[:n]...)
+		if n < len(stackBuf) {
+			break
+		}
+		skip += len(stackBuf)
+	}
+	return stack
+}
+
+func traceToString(stack []uintptr) string {
+	frames := runtime.CallersFrames(stack)
+	var trace strings.Builder
+	for {
+		f, ok := frames.Next()
+		if !ok {
+			break
+		}
+		trace.WriteString(f.Function)
+		trace.WriteString("\n\t")
+		trace.WriteString(f.File)
+		trace.WriteString(":")
+		trace.WriteString(strconv.Itoa(f.Line))
+		trace.WriteString("\n")
+	}
+	return trace.String()
 }
