@@ -105,7 +105,6 @@ func (s *InPayload) isRPCStats() {}
 // InHeader contains stats about header reception.
 //
 // - Server-side: The first stats event after the RPC request is received.
-// - Client-side: Occurs after the `OutPayload` event (after the request payload is sent).
 type InHeader struct {
 	// Client is true if this InHeader is from client side.
 	Client bool
@@ -174,6 +173,8 @@ func (s *OutPayload) IsClient() bool { return s.Client }
 func (s *OutPayload) isRPCStats() {}
 
 // OutHeader contains stats about header transmission.
+//
+// - Client-side: Only occurs after 'Begin', as headers are always the first thing sent on a stream.
 type OutHeader struct {
 	// Client is true if this OutHeader is from client side.
 	Client bool
