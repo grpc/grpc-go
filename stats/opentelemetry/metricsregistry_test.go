@@ -47,7 +47,8 @@ type metricsRecorderForTest interface {
 }
 
 func newClientStatsHandler(options MetricsOptions) metricsRecorderForTest {
-	return &clientStatsHandler{options: Options{MetricsOptions: options}}
+	rm := &registryMetrics{optionalLabels: options.OptionalLabels}
+	return &clientStatsHandler{MetricsRecorder: rm, options: Options{MetricsOptions: options}}
 }
 
 func newServerStatsHandler(options MetricsOptions) metricsRecorderForTest {

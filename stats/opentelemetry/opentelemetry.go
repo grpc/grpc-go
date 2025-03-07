@@ -118,34 +118,33 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func DialOption(o Options) grpc.DialOption {
-	csh := &clientStatsHandler{
-		MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
-		options:         o,
-		clientMetrics:   clientAttemptMetrics{},
-	}
-	csh.initializeMetrics()
-	var interceptors []grpc.DialOption
-
-	metricsHandler := &clientMetricsHandler{
-		options:       o,
-		clientMetrics: clientCallMetrics{},
-	}
-	metricsHandler.initializeMetrics()
-
-	tracingHandler := &clientTracingHandler{
-		options:        o,
-		tracerProvider: o.TraceOptions.TracerProvider,
-	}
-	tracingHandler.initializeTraces()
+	var do []grpc.DialOption
 
 	if o.isMetricsEnabled() {
-		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor))
+		metricsHandler := &clientStatsHandler{
+			MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+			options:         o,
+			clientMetrics:   clientMetrics{},
+		}
+		metricsHandler.initializeMetrics()
+		do = append(do,
+			grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor),
+			grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor),
+			grpc.WithStatsHandler(metricsHandler),
+		)
 	}
 	if o.isTracingEnabled() {
-		interceptors = append(interceptors, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor))
+		tracingHandler := &clientTracingHandler{
+			options: o,
+		}
+		tracingHandler.initializeTraces()
+		do = append(do,
+			grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor),
+			grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor),
+			grpc.WithStatsHandler(tracingHandler),
+		)
 	}
-	interceptors = append(interceptors, grpc.WithStatsHandler(csh))
-	return joinDialOptions(interceptors...)
+	return joinDialOptions(do...)
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -259,7 +258,7 @@ type attemptInfo struct {
 	previousRPCAttempts uint32
 }
 
-type clientAttemptMetrics struct {
+type clientMetrics struct {
 	// "grpc.client.attempt.started"
 	attemptStarted otelmetric.Int64Counter
 	// "grpc.client.attempt.duration"
@@ -268,9 +267,6 @@ type clientAttemptMetrics struct {
 	attemptSentTotalCompressedMessageSize otelmetric.Int64Histogram
 	// "grpc.client.attempt.rcvd_total_compressed_message_size"
 	attemptRcvdTotalCompressedMessageSize otelmetric.Int64Histogram
-}
-
-type clientCallMetrics struct {
 	// "grpc.client.call.duration"
 	callDuration otelmetric.Float64Histogram
 }
