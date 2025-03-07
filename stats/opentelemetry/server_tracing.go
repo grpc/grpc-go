@@ -32,15 +32,14 @@ import (
 // is set as parent of the new span otherwise new span remains the root span.
 // If TextMapPropagator is not provided in the trace options, it returns context
 // as is.
-func (h *serverStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := strings.Replace(ai.method, "/", ".", -1)
 	var span trace.Span
-	tracer := h.options.TraceOptions.TracerProvider.Tracer("grpc-open-telemetry")
 	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
-	ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
+	ctx, span = h.tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
 	ai.traceSpan = span
 	return ctx, ai
 }

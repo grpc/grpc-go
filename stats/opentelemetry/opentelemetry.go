@@ -162,30 +162,35 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
-	ssh := &serverStatsHandler{
-		options:         o,
-		MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
-		serverMetrics:   serverMetrics{},
-	}
-	ssh.initializeMetrics()
-
-	var interceptors []grpc.ServerOption
-
-	metricsHandler := &serverMetricsHandler{
-		options:       o,
-		serverMetrics: serverMetrics{},
-	}
-	metricsHandler.initializeMetrics()
+	var opts []grpc.ServerOption
 
 	if o.isMetricsEnabled() {
-		interceptors = append(interceptors, grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor))
+		metricsHandler := &serverStatsHandler{
+			MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
+			options:         o,
+			serverMetrics:   serverMetrics{},
+		}
+		metricsHandler.initializeMetrics()
+		opts = append(opts,
+			grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor),
+			grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor),
+			grpc.StatsHandler(metricsHandler),
+		)
 	}
+
 	if o.isTracingEnabled() {
-		tracingHandler := &serverTracingHandler{options: o}
-		interceptors = append(interceptors, grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor))
+		tracingHandler := &serverTracingHandler{
+			options: o,
+		}
+		tracingHandler.initializeTraces()
+		opts = append(opts,
+			grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor),
+			grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor),
+			grpc.StatsHandler(tracingHandler),
+		)
 	}
-	interceptors = append(interceptors, grpc.StatsHandler(ssh))
-	return joinServerOptions(interceptors...)
+
+	return joinServerOptions(opts...)
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
