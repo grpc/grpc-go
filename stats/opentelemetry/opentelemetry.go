@@ -162,7 +162,7 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 func ServerOption(o Options) grpc.ServerOption {
-	var opts []grpc.ServerOption
+	var so []grpc.ServerOption
 
 	if o.isMetricsEnabled() {
 		metricsHandler := &serverStatsHandler{
@@ -171,7 +171,7 @@ func ServerOption(o Options) grpc.ServerOption {
 			serverMetrics:   serverMetrics{},
 		}
 		metricsHandler.initializeMetrics()
-		opts = append(opts,
+		so = append(so,
 			grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor),
 			grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor),
 			grpc.StatsHandler(metricsHandler),
@@ -183,14 +183,14 @@ func ServerOption(o Options) grpc.ServerOption {
 			options: o,
 		}
 		tracingHandler.initializeTraces()
-		opts = append(opts,
+		so = append(so,
 			grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor),
 			grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor),
 			grpc.StatsHandler(tracingHandler),
 		)
 	}
 
-	return joinServerOptions(opts...)
+	return joinServerOptions(so...)
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
