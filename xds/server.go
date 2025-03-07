@@ -273,7 +273,7 @@ func routeAndProcess(ctx context.Context) error {
 	authority := md.Get(":authority")
 	vh := xdsresource.FindBestMatchingVirtualHostServer(authority[0], rc.VHS)
 	if vh == nil {
-		return annotateErrorWithNodeID(rc.NodeID, status.Error(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host"))
+		return rc.StatusErrWithNodeID(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host")
 	}
 
 	var rwi *xdsresource.RouteWithInterceptors
@@ -287,25 +287,21 @@ func routeAndProcess(ctx context.Context) error {
 			// server-side; a route with an inappropriate action causes RPCs
 			// matching that route to fail with UNAVAILABLE." - A36
 			if r.ActionType != xdsresource.RouteActionNonForwardingAction {
-				return annotateErrorWithNodeID(rc.NodeID, status.Error(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding"))
+				return rc.StatusErrWithNodeID(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding")
 			}
 			rwi = &r
 			break
 		}
 	}
 	if rwi == nil {
-		return annotateErrorWithNodeID(rc.NodeID, status.Error(codes.Unavailable, "the incoming RPC did not match a configured Route"))
+		return rc.StatusErrWithNodeID(codes.Unavailable, "the incoming RPC did not match a configured Route")
 	}
 	for _, interceptor := range rwi.Interceptors {
 		if err := interceptor.AllowRPC(ctx); err != nil {
-			return annotateErrorWithNodeID(rc.NodeID, status.Errorf(codes.PermissionDenied, "Incoming RPC is not allowed: %v", err))
+			return rc.StatusErrWithNodeID(codes.PermissionDenied, "Incoming RPC is not allowed: %v", err)
 		}
 	}
 	return nil
-}
-
-func annotateErrorWithNodeID(nodeID string, err error) error {
-	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
 }
 
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
