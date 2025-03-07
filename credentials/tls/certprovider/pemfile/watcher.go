@@ -209,7 +209,7 @@ func (w *watcher) updateRootDistributor() {
 func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
 	// If the map file is unset, just return an error, don't create log spam.
 	if w.opts.SPIFFEBundleMapFile == "" {
-		return errors.New("SPIFFEBundleMapFile doesn't exist")
+		return fmt.Errorf("SPIFFEBundleMapFile is unset in watcher options")
 	}
 	spiffeBundleMapContents, err := os.ReadFile(w.opts.SPIFFEBundleMapFile)
 	if err != nil {
@@ -222,7 +222,7 @@ func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
 	}
 	bundleMap, err := credinternal.SPIFFEBundleMapFromBytes(spiffeBundleMapContents)
 	if err != nil {
-		logger.Warning(("failed to parse spiffe bundle map"))
+		logger.Warning("failed to parse spiffe bundle map")
 		return err
 	}
 	w.spiffeBundleMapFileContents = spiffeBundleMapContents
