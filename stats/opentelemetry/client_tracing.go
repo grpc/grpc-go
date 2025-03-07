@@ -37,10 +37,8 @@ func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (
 	// delay was detected and the event hasn't been recorded yet. Ensures the
 	// event is logged only once using an atomic flag, even across retries.
 	callSpan := trace.SpanFromContext(ctx)
-	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded.Swap(true) {
-		if callSpan.SpanContext().IsValid() {
-			callSpan.AddEvent(delayedResolutionEventName)
-		}
+	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
+		callSpan.AddEvent(delayedResolutionEventName)
 	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
 	tracer := otel.Tracer("grpc-open-telemetry")
