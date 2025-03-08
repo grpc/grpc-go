@@ -19,6 +19,11 @@
 package health
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sync"
 	"testing"
 	"time"
@@ -79,5 +84,48 @@ func (s) TestShutdown(t *testing.T) {
 	status = s.statusMap[testService]
 	if status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_NOT_SERVING)
+	}
+}
+
+func (s) TestList(t *testing.T) {
+	s := NewServer()
+
+	// Remove the zero value
+	delete(s.statusMap, "")
+
+	// Fill out status map with service information, 101 elements will trigger an error.
+	for i := 1; i <= 101; i++ {
+		s.statusMap[fmt.Sprintf("%d", i)] = healthpb.HealthCheckResponse_SERVING
+	}
+
+	ctx := context.TODO()
+	var in healthpb.HealthListRequest
+
+	_, err := s.List(ctx, &in)
+
+	if err == nil {
+		t.Fatalf("List should have failed, got %s", err)
+	}
+	if !errors.Is(err, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")) {
+		t.Fatal("List should have failed with resource exhausted")
+	}
+
+	// Remove the 101 element to avoid the error.
+	delete(s.statusMap, "101")
+
+	// Retry getting the list, this time with a successful result.
+	out, err := s.List(ctx, &in)
+	if err != nil {
+		t.Fatalf("List should not have failed, got %s, len %d", err, len(s.statusMap))
+	}
+
+	if len(out.GetStatuses()) != len(s.statusMap) {
+		t.Fatal("List should have return the same number of elements as the inner status map")
+	}
+
+	for key := range out.GetStatuses() {
+		if _, ok := s.statusMap[key]; !ok {
+			t.Fatalf("List should have returned all resources, wanted %s, but it did not exist in the inner status map", key)
+		}
 	}
 }
