@@ -62,6 +62,27 @@ func (s *Server) Check(_ context.Context, in *healthpb.HealthCheckRequest) (*hea
 	return nil, status.Error(codes.NotFound, "unknown service")
 }
 
+// List implements `service Health`.
+func (s *Server) List(_ context.Context, _ *healthpb.HealthListRequest) (*healthpb.HealthListResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.statusMap) > 100 {
+		return nil, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")
+	}
+
+	list := make(map[string]*healthpb.HealthCheckResponse, len(s.statusMap))
+	for k, v := range s.statusMap {
+		list[k] = &healthpb.HealthCheckResponse{
+			Status: v,
+		}
+	}
+
+	return &healthpb.HealthListResponse{
+		Statuses: list,
+	}, nil
+}
+
 // Watch implements `service Health`.
 func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error {
 	service := in.Service
