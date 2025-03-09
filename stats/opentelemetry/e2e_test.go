@@ -1587,10 +1587,10 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
         "methodConfig": [{
             "name": [{"service": "grpc.testing.TestService"}],
             "retryPolicy": {
-                "maxAttempts": 3,
-                "initialBackoff": "0.1s",
-                "maxBackoff": "1s",
-                "backoffMultiplier": 2.0,
+            	"maxAttempts": 2,
+            	"InitialBackoff": ".01s",
+        		"MaxBackoff": ".01s",
+        		"BackoffMultiplier": 1.0,
                 "retryableStatusCodes": ["UNAVAILABLE"]
             }
         }]
@@ -1616,7 +1616,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	time.AfterFunc(100*time.Millisecond, func() {
+	time.AfterFunc(10*time.Millisecond, func() {
 		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 		t.Log("Resolver updated to return addresses.")
 	})
@@ -1723,7 +1723,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 			events: []trace.Event{
 				{
 					Name: "Delayed LB pick complete",
-					Time: time.Unix(0, 114899306),
 				},
 				{
 					Name: "Outbound compressed message",
@@ -1823,7 +1822,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 			events: []trace.Event{
 				{
 					Name: "Delayed LB pick complete",
-					Time: time.Unix(0, 114899306),
 				},
 			},
 		},
