@@ -120,41 +120,6 @@ func StringMatcherFromProto(matcherProto *v3matcherpb.StringMatcher) (StringMatc
 	return matcher, nil
 }
 
-// StringMatcherForTesting is a helper function to create a StringMatcher based
-// on the given arguments. Intended only for testing purposes.
-func StringMatcherForTesting(exact, prefix, suffix, contains *string, regex *regexp.Regexp, ignoreCase bool) StringMatcher {
-	sm := StringMatcher{
-		exactMatch:    exact,
-		prefixMatch:   prefix,
-		suffixMatch:   suffix,
-		regexMatch:    regex,
-		containsMatch: contains,
-		ignoreCase:    ignoreCase,
-	}
-	if ignoreCase {
-		switch {
-		case sm.exactMatch != nil:
-			*sm.exactMatch = strings.ToLower(*exact)
-		case sm.prefixMatch != nil:
-			*sm.prefixMatch = strings.ToLower(*prefix)
-		case sm.suffixMatch != nil:
-			*sm.suffixMatch = strings.ToLower(*suffix)
-		case sm.containsMatch != nil:
-			*sm.containsMatch = strings.ToLower(*contains)
-		}
-	}
-	return sm
-}
-
-// ExactMatch returns the value of the configured exact match or an empty string
-// if exact match criteria was not specified.
-func (sm StringMatcher) ExactMatch() string {
-	if sm.exactMatch != nil {
-		return *sm.exactMatch
-	}
-	return ""
-}
-
 // Equal returns true if other and sm are equivalent to each other.
 func (sm StringMatcher) Equal(other StringMatcher) bool {
 	if sm.ignoreCase != other.ignoreCase {

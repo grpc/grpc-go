@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
-	iresolver "google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/resolver"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -68,36 +67,6 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 
 func (builder) IsTerminal() bool {
 	return true
-}
-
-var (
-	_ httpfilter.ClientInterceptorBuilder = builder{}
-	_ httpfilter.ServerInterceptorBuilder = builder{}
-)
-
-func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
-	if _, ok := cfg.(config); !ok {
-		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
-	}
-	if override != nil {
-		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
-	}
-	// The router is implemented within the xds resolver's config
-	// selector, not as a separate plugin.  So we return a nil HTTPFilter,
-	// which will not be invoked.
-	return nil, nil
-}
-
-func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
-	if _, ok := cfg.(config); !ok {
-		return nil, fmt.Errorf("router: incorrect config type provided (%T): %v", cfg, cfg)
-	}
-	if override != nil {
-		return nil, fmt.Errorf("router: unexpected override configuration specified: %v", override)
-	}
-	// The router is currently unimplemented on the server side. So we
-	// return a nil HTTPFilter, which will not be invoked.
-	return nil, nil
 }
 
 // The router filter does not currently support any configuration.  Verify

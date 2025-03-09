@@ -24,9 +24,6 @@ import (
 	"net"
 	"sync/atomic"
 
-	"google.golang.org/grpc/internal/resolver"
-
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
 
@@ -39,18 +36,6 @@ const (
 	// Used as the map key for unspecified prefixes. The actual value of this
 	// key is immaterial.
 	unspecifiedPrefixMapKey = "unspecified"
-
-	// An unspecified destination or source prefix should be considered a less
-	// specific match than a wildcard prefix, `0.0.0.0/0` or `::/0`. Also, an
-	// unspecified prefix should match most v4 and v6 addresses compared to the
-	// wildcard prefixes which match only a specific network (v4 or v6).
-	//
-	// We use these constants when looking up the most specific prefix match. A
-	// wildcard prefix will match 0 bits, and to make sure that a wildcard
-	// prefix is considered a more specific match than an unspecified prefix, we
-	// use a value of -1 for the latter.
-	noPrefixMatch          = -2
-	unspecifiedPrefixMatch = -1
 )
 
 // FilterChain captures information from within a FilterChain message in a
@@ -74,81 +59,10 @@ type FilterChain struct {
 	UsableRouteConfiguration *atomic.Pointer[UsableRouteConfiguration]
 }
 
-// VirtualHostWithInterceptors captures information present in a VirtualHost
-// update, and also contains routes with instantiated HTTP Filters.
-type VirtualHostWithInterceptors struct {
-	// Domains are the domain names which map to this Virtual Host. On the
-	// server side, this will be dictated by the :authority header of the
-	// incoming RPC.
-	Domains []string
-	// Routes are the Routes for this Virtual Host.
-	Routes []RouteWithInterceptors
-}
-
-// RouteWithInterceptors captures information in a Route, and contains
-// a usable matcher and also instantiated HTTP Filters.
-type RouteWithInterceptors struct {
-	// M is the matcher used to match to this route.
-	M *CompositeMatcher
-	// ActionType is the type of routing action to initiate once matched to.
-	ActionType RouteActionType
-	// Interceptors are interceptors instantiated for this route. These will be
-	// constructed from a combination of the top level configuration and any
-	// HTTP Filter overrides present in Virtual Host or Route.
-	Interceptors []resolver.ServerInterceptor
-}
-
 // UsableRouteConfiguration contains a matchable route configuration, with
 // instantiated HTTP Filters per route.
 type UsableRouteConfiguration struct {
-	VHS []VirtualHostWithInterceptors
 	Err error
-}
-
-// ConstructUsableRouteConfiguration takes Route Configuration and converts it
-// into matchable route configuration, with instantiated HTTP Filters per route.
-func (fc *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) *UsableRouteConfiguration {
-	vhs := make([]VirtualHostWithInterceptors, 0, len(config.VirtualHosts))
-	for _, vh := range config.VirtualHosts {
-		vhwi, err := fc.convertVirtualHost(vh)
-		if err != nil {
-			// Non nil if (lds + rds) fails, shouldn't happen since validated by
-			// xDS Client, treat as L7 error but shouldn't happen.
-			return &UsableRouteConfiguration{Err: fmt.Errorf("virtual host construction: %v", err)}
-		}
-		vhs = append(vhs, vhwi)
-	}
-	return &UsableRouteConfiguration{VHS: vhs}
-}
-
-func (fc *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostWithInterceptors, error) {
-	rs := make([]RouteWithInterceptors, len(virtualHost.Routes))
-	for i, r := range virtualHost.Routes {
-		rs[i].ActionType = r.ActionType
-		rs[i].M = RouteToMatcher(r)
-		for _, filter := range fc.HTTPFilters {
-			// Route is highest priority on server side, as there is no concept
-			// of an upstream cluster on server side.
-			override := r.HTTPFilterConfigOverride[filter.Name]
-			if override == nil {
-				// Virtual Host is second priority.
-				override = virtualHost.HTTPFilterConfigOverride[filter.Name]
-			}
-			sb, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
-			if !ok {
-				// Should not happen if it passed xdsClient validation.
-				return VirtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")
-			}
-			si, err := sb.BuildServerInterceptor(filter.Config, override)
-			if err != nil {
-				return VirtualHostWithInterceptors{}, fmt.Errorf("filter construction: %v", err)
-			}
-			if si != nil {
-				rs[i].Interceptors = append(rs[i].Interceptors, si)
-			}
-		}
-	}
-	return VirtualHostWithInterceptors{Domains: virtualHost.Domains, Routes: rs}, nil
 }
 
 // SourceType specifies the connection source IP match type.
@@ -504,11 +418,6 @@ func (fcm *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 	return nil
 }
 
-// FilterChains returns the filter chains for this filter chain manager.
-func (fcm *FilterChainManager) FilterChains() []*FilterChain {
-	return fcm.fcs
-}
-
 // filterChainFromProto extracts the relevant information from the FilterChain
 // proto and stores it in our internal representation. It also persists any
 // RouteNames which need to be queried dynamically via RDS.
@@ -636,7 +545,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 			// "Any filters after HttpConnectionManager should be ignored during
 			// connection processing but still be considered for validity.
 			// HTTPConnectionManager must have valid http_filters." - A36
-			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
+			filters, err := processHTTPFilters(hcm.GetHttpFilters())
 			if err != nil {
 				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}: %v", filters, hcm.GetHttpFilters(), err)
 			}
@@ -692,202 +601,4 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
 	}
 	return filterChain, nil
-}
-
-// FilterChainLookupParams wraps parameters to be passed to Lookup.
-type FilterChainLookupParams struct {
-	// IsUnspecified indicates whether the server is listening on a wildcard
-	// address, "0.0.0.0" for IPv4 and "::" for IPv6. Only when this is set to
-	// true, do we consider the destination prefixes specified in the filter
-	// chain match criteria.
-	IsUnspecifiedListener bool
-	// DestAddr is the local address of an incoming connection.
-	DestAddr net.IP
-	// SourceAddr is the remote address of an incoming connection.
-	SourceAddr net.IP
-	// SourcePort is the remote port of an incoming connection.
-	SourcePort int
-}
-
-// Lookup returns the most specific matching filter chain to be used for an
-// incoming connection on the server side.
-//
-// Returns a non-nil error if no matching filter chain could be found or
-// multiple matching filter chains were found, and in both cases, the incoming
-// connection must be dropped.
-func (fcm *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterChain, error) {
-	dstPrefixes := filterByDestinationPrefixes(fcm.dstPrefixes, params.IsUnspecifiedListener, params.DestAddr)
-	if len(dstPrefixes) == 0 {
-		if fcm.def != nil {
-			return fcm.def, nil
-		}
-		return nil, fmt.Errorf("no matching filter chain based on destination prefix match for %+v", params)
-	}
-
-	srcType := SourceTypeExternal
-	if params.SourceAddr.Equal(params.DestAddr) || params.SourceAddr.IsLoopback() {
-		srcType = SourceTypeSameOrLoopback
-	}
-	srcPrefixes := filterBySourceType(dstPrefixes, srcType)
-	if len(srcPrefixes) == 0 {
-		if fcm.def != nil {
-			return fcm.def, nil
-		}
-		return nil, fmt.Errorf("no matching filter chain based on source type match for %+v", params)
-	}
-	srcPrefixEntry, err := filterBySourcePrefixes(srcPrefixes, params.SourceAddr)
-	if err != nil {
-		return nil, err
-	}
-	if fc := filterBySourcePorts(srcPrefixEntry, params.SourcePort); fc != nil {
-		return fc, nil
-	}
-	if fcm.def != nil {
-		return fcm.def, nil
-	}
-	return nil, fmt.Errorf("no matching filter chain after all match criteria for %+v", params)
-}
-
-// filterByDestinationPrefixes is the first stage of the filter chain
-// matching algorithm. It takes the complete set of configured filter chain
-// matchers and returns the most specific matchers based on the destination
-// prefix match criteria (the prefixes which match the most number of bits).
-func filterByDestinationPrefixes(dstPrefixes []*destPrefixEntry, isUnspecified bool, dstAddr net.IP) []*destPrefixEntry {
-	if !isUnspecified {
-		// Destination prefix matchers are considered only when the listener is
-		// bound to the wildcard address.
-		return dstPrefixes
-	}
-
-	var matchingDstPrefixes []*destPrefixEntry
-	maxSubnetMatch := noPrefixMatch
-	for _, prefix := range dstPrefixes {
-		if prefix.net != nil && !prefix.net.Contains(dstAddr) {
-			// Skip prefixes which don't match.
-			continue
-		}
-		// For unspecified prefixes, since we do not store a real net.IPNet
-		// inside prefix, we do not perform a match. Instead we simply set
-		// the matchSize to -1, which is less than the matchSize (0) for a
-		// wildcard prefix.
-		matchSize := unspecifiedPrefixMatch
-		if prefix.net != nil {
-			matchSize, _ = prefix.net.Mask.Size()
-		}
-		if matchSize < maxSubnetMatch {
-			continue
-		}
-		if matchSize > maxSubnetMatch {
-			maxSubnetMatch = matchSize
-			matchingDstPrefixes = make([]*destPrefixEntry, 0, 1)
-		}
-		matchingDstPrefixes = append(matchingDstPrefixes, prefix)
-	}
-	return matchingDstPrefixes
-}
-
-// filterBySourceType is the second stage of the matching algorithm. It
-// trims the filter chains based on the most specific source type match.
-func filterBySourceType(dstPrefixes []*destPrefixEntry, srcType SourceType) []*sourcePrefixes {
-	var (
-		srcPrefixes      []*sourcePrefixes
-		bestSrcTypeMatch int
-	)
-	for _, prefix := range dstPrefixes {
-		var (
-			srcPrefix *sourcePrefixes
-			match     int
-		)
-		switch srcType {
-		case SourceTypeExternal:
-			match = int(SourceTypeExternal)
-			srcPrefix = prefix.srcTypeArr[match]
-		case SourceTypeSameOrLoopback:
-			match = int(SourceTypeSameOrLoopback)
-			srcPrefix = prefix.srcTypeArr[match]
-		}
-		if srcPrefix == nil {
-			match = int(SourceTypeAny)
-			srcPrefix = prefix.srcTypeArr[match]
-		}
-		if match < bestSrcTypeMatch {
-			continue
-		}
-		if match > bestSrcTypeMatch {
-			bestSrcTypeMatch = match
-			srcPrefixes = make([]*sourcePrefixes, 0)
-		}
-		if srcPrefix != nil {
-			// The source type array always has 3 entries, but these could be
-			// nil if the appropriate source type match was not specified.
-			srcPrefixes = append(srcPrefixes, srcPrefix)
-		}
-	}
-	return srcPrefixes
-}
-
-// filterBySourcePrefixes is the third stage of the filter chain matching
-// algorithm. It trims the filter chains based on the source prefix. At most one
-// filter chain with the most specific match progress to the next stage.
-func filterBySourcePrefixes(srcPrefixes []*sourcePrefixes, srcAddr net.IP) (*sourcePrefixEntry, error) {
-	var matchingSrcPrefixes []*sourcePrefixEntry
-	maxSubnetMatch := noPrefixMatch
-	for _, sp := range srcPrefixes {
-		for _, prefix := range sp.srcPrefixes {
-			if prefix.net != nil && !prefix.net.Contains(srcAddr) {
-				// Skip prefixes which don't match.
-				continue
-			}
-			// For unspecified prefixes, since we do not store a real net.IPNet
-			// inside prefix, we do not perform a match. Instead we simply set
-			// the matchSize to -1, which is less than the matchSize (0) for a
-			// wildcard prefix.
-			matchSize := unspecifiedPrefixMatch
-			if prefix.net != nil {
-				matchSize, _ = prefix.net.Mask.Size()
-			}
-			if matchSize < maxSubnetMatch {
-				continue
-			}
-			if matchSize > maxSubnetMatch {
-				maxSubnetMatch = matchSize
-				matchingSrcPrefixes = make([]*sourcePrefixEntry, 0, 1)
-			}
-			matchingSrcPrefixes = append(matchingSrcPrefixes, prefix)
-		}
-	}
-	if len(matchingSrcPrefixes) == 0 {
-		// Finding no match is not an error condition. The caller will end up
-		// using the default filter chain if one was configured.
-		return nil, nil
-	}
-	// We expect at most a single matching source prefix entry at this point. If
-	// we have multiple entries here, and some of their source port matchers had
-	// wildcard entries, we could be left with more than one matching filter
-	// chain and hence would have been flagged as an invalid configuration at
-	// config validation time.
-	if len(matchingSrcPrefixes) != 1 {
-		return nil, errors.New("multiple matching filter chains")
-	}
-	return matchingSrcPrefixes[0], nil
-}
-
-// filterBySourcePorts is the last stage of the filter chain matching
-// algorithm. It trims the filter chains based on the source ports.
-func filterBySourcePorts(spe *sourcePrefixEntry, srcPort int) *FilterChain {
-	if spe == nil {
-		return nil
-	}
-	// A match could be a wildcard match (this happens when the match
-	// criteria does not specify source ports) or a specific port match (this
-	// happens when the match criteria specifies a set of ports and the source
-	// port of the incoming connection matches one of the specified ports). The
-	// latter is considered to be a more specific match.
-	if fc := spe.srcPortMap[srcPort]; fc != nil {
-		return fc
-	}
-	if fc := spe.srcPortMap[0]; fc != nil {
-		return fc
-	}
-	return nil
 }

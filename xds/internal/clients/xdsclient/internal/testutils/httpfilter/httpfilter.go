@@ -21,7 +21,6 @@
 package httpfilter
 
 import (
-	iresolver "google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/resolver"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -56,28 +55,6 @@ type Filter interface {
 	IsTerminal() bool
 }
 
-// ClientInterceptorBuilder constructs a Client Interceptor.  If this type is
-// implemented by a Filter, it is capable of working on a client.
-type ClientInterceptorBuilder interface {
-	// BuildClientInterceptor uses the FilterConfigs produced above to produce
-	// an HTTP filter interceptor for clients.  config will always be non-nil,
-	// but override may be nil if no override config exists for the filter.  It
-	// is valid for Build to return a nil Interceptor and a nil error.  In this
-	// case, the RPC will not be intercepted by this filter.
-	BuildClientInterceptor(config, override FilterConfig) (iresolver.ClientInterceptor, error)
-}
-
-// ServerInterceptorBuilder constructs a Server Interceptor.  If this type is
-// implemented by a Filter, it is capable of working on a server.
-type ServerInterceptorBuilder interface {
-	// BuildServerInterceptor uses the FilterConfigs produced above to produce
-	// an HTTP filter interceptor for servers.  config will always be non-nil,
-	// but override may be nil if no override config exists for the filter.  It
-	// is valid for Build to return a nil Interceptor and a nil error.  In this
-	// case, the RPC will not be intercepted by this filter.
-	BuildServerInterceptor(config, override FilterConfig) (iresolver.ServerInterceptor, error)
-}
-
 var (
 	// m is a map from scheme to filter.
 	m = make(map[string]Filter)
@@ -93,11 +70,6 @@ func Register(b Filter) {
 	for _, u := range b.TypeURLs() {
 		m[u] = b
 	}
-}
-
-// UnregisterForTesting unregisters the HTTP Filter for testing purposes.
-func UnregisterForTesting(typeURL string) {
-	delete(m, typeURL)
 }
 
 // Get returns the HTTPFilter registered with typeURL.

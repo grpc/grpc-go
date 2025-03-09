@@ -107,7 +107,7 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	update.MaxStreamDuration = apiLis.GetCommonHttpProtocolOptions().GetMaxStreamDuration().AsDuration()
 
 	var err error
-	if update.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters(), false); err != nil {
+	if update.HTTPFilters, err = processHTTPFilters(apiLis.GetHttpFilters()); err != nil {
 		return nil, err
 	}
 
@@ -187,7 +187,7 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 	return m, nil
 }
 
-func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilter, error) {
+func processHTTPFilters(filters []*v3httppb.HttpFilter) ([]HTTPFilter, error) {
 	ret := make([]HTTPFilter, 0, len(filters))
 	seenNames := make(map[string]bool, len(filters))
 	for _, filter := range filters {
@@ -207,19 +207,6 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		if httpFilter == nil {
 			// Optional configs are ignored.
 			continue
-		}
-		if server {
-			if _, ok := httpFilter.(httpfilter.ServerInterceptorBuilder); !ok {
-				if filter.GetIsOptional() {
-					continue
-				}
-				return nil, fmt.Errorf("HTTP filter %q not supported server-side", name)
-			}
-		} else if _, ok := httpFilter.(httpfilter.ClientInterceptorBuilder); !ok {
-			if filter.GetIsOptional() {
-				continue
-			}
-			return nil, fmt.Errorf("HTTP filter %q not supported client-side", name)
 		}
 
 		// Save name/config
