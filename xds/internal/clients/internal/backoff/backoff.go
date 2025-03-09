@@ -31,14 +31,6 @@ import (
 	clientsbackoff "google.golang.org/grpc/xds/internal/clients/backoff"
 )
 
-// Strategy defines the methodology for backing off after a grpc connection
-// failure.
-type Strategy interface {
-	// Backoff returns the amount of time to wait before the next retry given
-	// the number of consecutive failures.
-	Backoff(retries int) time.Duration
-}
-
 // DefaultExponential is an exponential backoff implementation using the
 // default values for all the configurable knobs defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
