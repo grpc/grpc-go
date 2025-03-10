@@ -34,11 +34,13 @@ fi
 for MOD_FILE in $(find . -name 'go.mod'); do
   MOD_DIR=$(dirname ${MOD_FILE})
   pushd ${MOD_DIR}
-  # - Check that generated proto files are up to date.
-  go generate ./... && git status --porcelain 2>&1 | fail_on_output || \
-  (git status; git --no-pager diff; exit 1)
+  go generate ./...
   popd
 done
+
+# - Check that generated proto files are up to date.
+git status --porcelain 2>&1 | fail_on_output || \
+  (git status; git --no-pager diff; exit 1)
 
 echo SUCCESS
 exit 0
