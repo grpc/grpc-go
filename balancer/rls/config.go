@@ -219,7 +219,8 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	}
 
 	// Validations performed here:
-	// - if `max_age` > 5m, it should be set to 5 minutes only if stale age is not set
+	// - if `max_age` > 5m, it should be set to 5 minutes
+	//   only if stale age is not set
 	// - if `stale_age` > `max_age`, ignore it
 	// - if `stale_age` is set, then `max_age` must also be set
 	maxAgeSet := false
