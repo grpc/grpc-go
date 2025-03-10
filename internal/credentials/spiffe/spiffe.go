@@ -60,7 +60,7 @@ func LoadSPIFFEBundleMap(filePath string) (map[string]*spiffebundle.Bundle, erro
 		}
 		bundle, err := spiffebundle.Parse(trustDomain, jsonBundle)
 		if err != nil {
-			return nil, fmt.Errorf("spiffe: failed to parse bundle in map file (%v): %v", filePath, err)
+			return nil, fmt.Errorf("spiffe: failed to parse bundle in map file (%v) for trust domain %v: %v", filePath, td, err)
 		}
 		bundleMap[td] = bundle
 	}
