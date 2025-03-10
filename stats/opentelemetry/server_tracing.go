@@ -55,16 +55,24 @@ func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 	return handler(srv, ss)
 }
 
-// TagRPC is called at the beginning of each RPC attempt. It starts a new
-// span for the attempt and injects the tracing context into metadata for
-// propagation. Requires a preceding handler to have set rpcInfo.
-func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+// getRPCInfoForTracing is a helper function to retrieve rpcInfo from the context
+func (h *serverTracingHandler) getRPCInfoForTracing(ctx context.Context) *rpcInfo {
 	// Fetch the rpcInfo set by a previously registered stats handler
 	// (like serverStatsHandler). Assumes this handler runs after one
 	// that sets the rpcInfo in the context.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into server side stats handler metrics event handling has no server attempt data present")
+		logger.Error("ctx passed into server side tracing stats handler has no server call data present")
+	}
+	return ri
+}
+
+// TagRPC is called at the beginning of each RPC attempt. It starts a new
+// span for the attempt and injects the tracing context into metadata for
+// propagation. Requires a preceding handler to have set rpcInfo.
+func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	ri := h.getRPCInfoForTracing(ctx)
+	if ri == nil {
 		return ctx
 	}
 	ctx, ai := h.traceTagRPC(ctx, ri.ai)
@@ -93,9 +101,8 @@ func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 // HandleRPC handles per-RPC attempt stats events for tracing. It populates
 // the trace span with data from the RPCStats.
 func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := h.getRPCInfoForTracing(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into server side tracing stats handler has no server call data present")
 		return
 	}
 	populateSpan(rs, ri.ai)

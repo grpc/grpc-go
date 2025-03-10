@@ -136,16 +136,25 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler for tracing.
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// TagRPC is called at the beginning of each RPC attempt. It starts a new
-// span for the attempt and injects the tracing context into metadata for
-// propagation. Requires a preceding handler to have set rpcInfo.
-func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+// getRPCInfoForTracing is a helper function to retrieve rpcInfo from the context
+
+func (h *clientTracingHandler) getRPCInfoForTracing(ctx context.Context) *rpcInfo {
 	// Fetch the rpcInfo set by a previously registered stats handler
 	// (like clientStatsHandler). Assumes this handler runs after one
 	// that sets the rpcInfo in the context.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
+		logger.Error("ctx passed into client side tracing stats handler has no client attempt data present")
+	}
+	return ri
+}
+
+// TagRPC is called at the beginning of each RPC attempt. It starts a new
+// span for the attempt and injects the tracing context into metadata for
+// propagation. Requires a preceding handler to have set rpcInfo.
+func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	ri := h.getRPCInfoForTracing(ctx)
+	if ri == nil {
 		return ctx
 	}
 	ctx, ai := h.traceTagRPC(ctx, ri.ai)
@@ -155,9 +164,8 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) 
 // HandleRPC handles per-RPC attempt stats events for tracing. It populates
 // the trace span with data from the RPCStats.
 func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
+	ri := h.getRPCInfoForTracing(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return
 	}
 	populateSpan(rs, ri.ai)
