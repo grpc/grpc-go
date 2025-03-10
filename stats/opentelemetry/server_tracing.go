@@ -33,7 +33,8 @@ type serverTracingHandler struct {
 	tracer  trace.Tracer
 }
 
-// initializeTraces initializes the tracer for server tracing handler.
+// initializeTraces initializes the tracer used for server-side OpenTelemetry
+// tracing.
 func (h *serverTracingHandler) initializeTraces() {
 	if h.options.TraceOptions.TracerProvider == nil {
 		log.Printf("TraceProvider is not provided in trace options")
@@ -42,19 +43,26 @@ func (h *serverTracingHandler) initializeTraces() {
 	h.tracer = h.options.TraceOptions.TracerProvider.Tracer("grpc-open-telemetry")
 }
 
-// unaryInterceptor implements the UnaryServerInterceptor for tracing.
+// unaryInterceptor is a UnaryServerInterceptor that instruments unary RPCs
+// with OpenTelemetry traces.
 func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return handler(ctx, req)
 }
 
-// streamInterceptor implements the StreamServerInterceptor for tracing.
+// streamInterceptor is a StreamServerInterceptor that instruments streaming RPCs
+// with OpenTelemetry traces.
 func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	return handler(srv, ss)
 }
 
-// TagRPC implements per RPC context management for tracing.
+// TagRPC is called at the beginning of each RPC attempt. It starts a new
+// span for the attempt and injects the tracing context into metadata for
+// propagation. Requires a preceding handler to have set rpcInfo.
 func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	ri := getRPCInfo(ctx)
+	// Fetch the rpcInfo set by a previously registered stats handler
+	// (like serverStatsHandler). Assumes this handler runs after one
+	// that sets the rpcInfo in the context.
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server attempt data present")
 		return ctx
@@ -82,7 +90,8 @@ func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 	return ctx, ai
 }
 
-// HandleRPC implements per RPC tracing and stats implementation for tracing.
+// HandleRPC handles per-RPC attempt stats events for tracing. It populates
+// the trace span with data from the RPCStats.
 func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {

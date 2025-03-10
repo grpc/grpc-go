@@ -36,7 +36,8 @@ type clientTracingHandler struct {
 	tracer  trace.Tracer
 }
 
-// initializeTraces initializes the tracer for client tracing handler.
+// initializeTraces initializes the tracer used for client-side OpenTelemetry
+// tracing.
 func (h *clientTracingHandler) initializeTraces() {
 	if h.options.TraceOptions.TracerProvider == nil {
 		log.Printf("TraceProvider is not provided in trace options")
@@ -45,8 +46,9 @@ func (h *clientTracingHandler) initializeTraces() {
 	h.tracer = h.options.TraceOptions.TracerProvider.Tracer("grpc-open-telemetry")
 }
 
-// unaryInterceptor implements the UnaryClientInterceptor to record traces
-// for unary calls.
+// unaryInterceptor is a UnaryClientInterceptor that instruments unary RPCs
+// with OpenTelemetry traces. It starts a span before the RPC and records
+// the result after it completes.
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := getCallInfo(ctx)
 	if ci == nil {
@@ -65,8 +67,9 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 	return err
 }
 
-// streamInterceptor implements the StreamClientInterceptor to record traces
-// for stream calls.
+// streamInterceptor is a StreamClientInterceptor that instruments streaming
+// RPCs with OpenTelemetry traces. It starts a span before the stream and
+// records the result after the stream finishes.
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
@@ -87,7 +90,8 @@ func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-// perCallTraces records per call trace spans for both unary and stream calls.
+// perCallTraces sets the span status based on the RPC result and ends the span.
+// It is used to finalize tracing for both unary and streaming calls.
 func (h *clientTracingHandler) perCallTraces(err error, ts trace.Span) {
 	s := status.Convert(err)
 	if s.Code() == grpccodes.OK {
@@ -111,8 +115,9 @@ func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 	return carrier.Context(), ai
 }
 
-// createCallTraceSpan creates a call span to put in the provided context using
-// provided TraceProvider. If TraceProvider is nil, it returns context as is.
+// createCallTraceSpan creates and starts a top-level span for a client-side
+// RPC. Returns the context with the span and the span itself. If no tracer
+// provider is configured, returns the original context.
 func (h *clientTracingHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
 	if h.options.TraceOptions.TracerProvider == nil {
 		logger.Error("TraceProvider is not provided in trace options")
@@ -131,11 +136,14 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler for tracing.
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// TagRPC implements per RPC attempt context management for tracing.
-// Fetches rpcInfo from context. This handler requires a preceding stats handler
-// in the interceptor chain to have already created and set the rpcInfo.
+// TagRPC is called at the beginning of each RPC attempt. It starts a new
+// span for the attempt and injects the tracing context into metadata for
+// propagation. Requires a preceding handler to have set rpcInfo.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	ri := getRPCInfo(ctx)
+	// Fetch the rpcInfo set by a previously registered stats handler
+	// (like clientStatsHandler). Assumes this handler runs after one
+	// that sets the rpcInfo in the context.
 	if ri == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return ctx
@@ -144,7 +152,8 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) 
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC implements per RPC attempt stats handling for tracing.
+// HandleRPC handles per-RPC attempt stats events for tracing. It populates
+// the trace span with data from the RPCStats.
 func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
