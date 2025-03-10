@@ -572,6 +572,7 @@ func (b *cdsBalancer) onClusterError(name string, err error) {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceNotFound(name string) {
+	b.logger.Warningf("CDS watch for resource %q reported resource-does-not-exist error", name)
 	err := b.annotateErrorWithNodeID(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cluster %q not found", name))
 	b.closeChildPolicyAndReportTF(err)
 }

@@ -460,9 +460,7 @@ func (lw *ldsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 		lw.logger.Warningf("Resource %q received resource-does-not-exist error after listener was closed", lw.name)
 		return
 	}
-	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q reported resource-does-not-exist error", lw.name)
-	}
+	lw.logger.Warningf("LDS watch for resource %q reported resource-does-not-exist error", lw.name)
 
 	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", lw.name)
 	lw.parent.onLDSResourceDoesNotExist(err)

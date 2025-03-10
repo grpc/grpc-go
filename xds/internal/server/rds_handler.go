@@ -187,9 +187,7 @@ func (rw *rdsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
 		return
 	}
 	rw.mu.Unlock()
-	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q reported resource-does-not-exist error", rw.routeName)
-	}
+	rw.logger.Warningf("RDS watch for resource %q reported resource-does-not-exist error", rw.routeName)
 	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", rw.routeName)
 	err = fmt.Errorf("[xDS node id: %v]: %w", rw.parent.xdsNodeID, err)
 	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
