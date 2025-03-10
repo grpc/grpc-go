@@ -59,10 +59,10 @@ func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 // span for the attempt and injects the tracing context into metadata for
 // propagation. Requires a preceding handler to have set rpcInfo.
 func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	ri := getRPCInfo(ctx)
 	// Fetch the rpcInfo set by a previously registered stats handler
 	// (like serverStatsHandler). Assumes this handler runs after one
 	// that sets the rpcInfo in the context.
+	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server attempt data present")
 		return ctx

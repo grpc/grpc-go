@@ -140,10 +140,10 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 // span for the attempt and injects the tracing context into metadata for
 // propagation. Requires a preceding handler to have set rpcInfo.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	ri := getRPCInfo(ctx)
 	// Fetch the rpcInfo set by a previously registered stats handler
 	// (like clientStatsHandler). Assumes this handler runs after one
 	// that sets the rpcInfo in the context.
+	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return ctx
