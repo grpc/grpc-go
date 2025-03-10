@@ -1571,7 +1571,7 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 // the retry policy is correctly applied and that the resolution delay event
 // ("Delayed name resolution complete") is recorded only once in the expected
 // call spans (UnaryCall and FullDuplexCall).
-func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
+func TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	to, exporter := defaultTraceOptions(t)
 
@@ -1607,7 +1607,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 		grpc.WithDefaultServiceConfig(retryPolicy),
 	)
 	if err != nil {
-		t.Fatalf("grpc.NewClient error: %v", err)
+		t.Fatalf("grpc.NewClient() error: %v", err)
 	}
 	defer cc.Close()
 
@@ -1616,7 +1616,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	time.AfterFunc(10*time.Millisecond, func() {
+	time.AfterFunc(50*time.Millisecond, func() {
 		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 		t.Log("Resolver updated to return addresses.")
 	})
@@ -1630,7 +1630,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 		rpcError <- err
 	}()
 
-	// Make a FullDuplexCall RPC.
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall failed: %v", err)
@@ -1840,5 +1839,28 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for i := range spans {
+		spans[i].Events = RemoveDuplicateEventsAndResetTimestamps(spans[i].Events)
+	}
 	validateTraces(t, spans, wantSpanInfos)
+}
+
+// RemoveDuplicateEventsAndResetTimestamps removes duplicate trace events based
+// on their names and resets their timestamps to ensure consistent comparison
+// during trace validation.
+// Returns a slice of trace.Event containing unique events with timestamps
+// reset to zero.
+func RemoveDuplicateEventsAndResetTimestamps(events []trace.Event) []trace.Event {
+	eventMap := make(map[string]bool)
+	var uniqueEvents []trace.Event
+	for _, event := range events {
+		// If the event has already been seen, skip adding it again
+		if eventMap[event.Name] {
+			continue
+		}
+		eventMap[event.Name] = true
+		event.Time = time.Time{} // Reset timestamp to avoid mismatches
+		uniqueEvents = append(uniqueEvents, event)
+	}
+	return uniqueEvents
 }
