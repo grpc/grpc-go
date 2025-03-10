@@ -31,7 +31,7 @@ import (
 	"errors"
 
 	"google.golang.org/grpc/internal"
-	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 func init() {
@@ -98,7 +98,7 @@ type KeyMaterial struct {
 	// SPIFFEBundleMap is an in-memory representation of a spiffe trust bundle
 	// map. If this value exists, it will be used to find the roots for a given
 	// trust domain rather than the Roots in this struct.
-	SPIFFEBundleMap credinternal.SPIFFEBundleMap
+	SPIFFEBundleMap spiffe.SPIFFEBundleMap
 }
 
 // BuildOptions contains parameters passed to a Provider at build time.

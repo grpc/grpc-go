@@ -38,7 +38,7 @@ import (
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
-	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
@@ -220,7 +220,7 @@ func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
 	if bytes.Equal(w.spiffeBundleMapFileContents, spiffeBundleMapContents) {
 		return nil
 	}
-	bundleMap, err := credinternal.SPIFFEBundleMapFromBytes(spiffeBundleMapContents)
+	bundleMap, err := spiffe.SPIFFEBundleMapFromBytes(spiffeBundleMapContents)
 	if err != nil {
 		logger.Warning("failed to parse spiffe bundle map")
 		return err
