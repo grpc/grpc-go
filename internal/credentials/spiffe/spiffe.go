@@ -69,8 +69,8 @@ func SPIFFEBundleMapFromBytes(bundleMapBytes []byte) (SPIFFEBundleMap, error) {
 		return nil, errors.New("no content in spiffe bundle map file")
 	}
 	bundleMap := map[string]*spiffebundle.Bundle{}
-	for trustDomainString, jsonBundle := range result.Bundles {
-		trustDomain, err := spiffeid.TrustDomainFromString(trustDomainString)
+	for td, jsonBundle := range result.Bundles {
+		trustDomain, err := spiffeid.TrustDomainFromString(td)
 		if err != nil {
 			return nil, fmt.Errorf("invalud trust domain found when parsing map: %v", err)
 		}
@@ -78,7 +78,7 @@ func SPIFFEBundleMapFromBytes(bundleMapBytes []byte) (SPIFFEBundleMap, error) {
 		if err != nil {
 			return nil, fmt.Errorf("spiffe: failed to parse bundle for trust domain %v: %v", td, err)
 		}
-		bundleMap[trustDomainString] = bundle
+		bundleMap[td] = bundle
 	}
 	return bundleMap, nil
 
