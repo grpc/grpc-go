@@ -31,9 +31,14 @@ elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
 fi
 
-# - Check that generated proto files are up to date.
-go generate ./... && git status --porcelain 2>&1 | fail_on_output || \
-(git status; git --no-pager diff; exit 1)
+for MOD_FILE in $(find . -name 'go.mod'); do
+  MOD_DIR=$(dirname ${MOD_FILE})
+  pushd ${MOD_DIR}
+  # - Check that generated proto files are up to date.
+  go generate ./... && git status --porcelain 2>&1 | fail_on_output || \
+  (git status; git --no-pager diff; exit 1)
+  popd
+done
 
 echo SUCCESS
 exit 0
