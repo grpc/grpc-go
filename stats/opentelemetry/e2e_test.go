@@ -1571,7 +1571,7 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 // the retry policy is correctly applied and that the resolution delay event
 // ("Delayed name resolution complete") is recorded only once in the expected
 // call spans (UnaryCall and FullDuplexCall).
-func TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
+func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	to, exporter := defaultTraceOptions(t)
 
@@ -1840,7 +1840,7 @@ func TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := range spans {
-		spans[i].Events = RemoveDuplicateEventsAndResetTimestamps(spans[i].Events)
+		spans[i].Events = removeDuplicateEventsAndResetTimestamps(spans[i].Events)
 	}
 	validateTraces(t, spans, wantSpanInfos)
 }
