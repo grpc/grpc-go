@@ -65,10 +65,6 @@ type Options struct {
 	TraceOptions experimental.TraceOptions
 }
 
-func (o *Options) isMetricsEnabled() bool {
-	return o.MetricsOptions.MeterProvider != nil
-}
-
 func (o *Options) isTracingEnabled() bool {
 	return o.TraceOptions.TracerProvider != nil
 }
