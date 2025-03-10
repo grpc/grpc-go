@@ -73,64 +73,57 @@ func loadX509Cert(t *testing.T, filePath string) *x509.Certificate {
 
 func TestLoadSPIFFEBundleMapFailures(t *testing.T) {
 	testCases := []struct {
-		filePath   string
-		wantError  bool
-		wantNoX509 bool
+		filePath string
 	}{
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_corrupted_cert.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_corrupted_cert.json"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_malformed.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_malformed.json"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_wrong_kid.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_wrong_kid.json"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_wrong_kty.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_wrong_kty.json"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_wrong_multi_certs.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_wrong_multi_certs.json"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_wrong_root.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_wrong_root.json"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_wrong_seq_type.json"),
-			wantError: true,
+			filePath: testdata.Path("spiffe/spiffebundle_wrong_seq_type.json"),
 		},
 		{
-			filePath:  testdata.Path("NOT_A_REAL_FILE"),
-			wantError: true,
+			filePath: testdata.Path("NOT_A_REAL_FILE"),
 		},
 		{
-			filePath:  testdata.Path("spiffe/spiffebundle_invalid_trustdomain.json"),
-			wantError: true,
-		},
-		{
-			// SPIFFE Bundles only support a use of x509-svid and jwt-svid. If a
-			// use other than this is specified, the parser does not fail, it
-			// just doesn't add an x509 authority or jwt authority to the bundle
-			filePath:   testdata.Path("spiffe/spiffebundle_wrong_use.json"),
-			wantNoX509: true,
+			filePath: testdata.Path("spiffe/spiffebundle_invalid_trustdomain.json"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.filePath, func(t *testing.T) {
-			bundle, err := LoadSPIFFEBundleMap(tc.filePath)
-			if tc.wantError && err == nil {
+			_, err := LoadSPIFFEBundleMap(tc.filePath)
+			if err == nil {
 				t.Fatalf("LoadSPIFFEBundleMap(%v) did not fail but should have.", tc.filePath)
 			}
-			if tc.wantNoX509 && len(bundle["example.com"].X509Authorities()) != 0 {
-				t.Fatalf("LoadSPIFFEBundleMap(%v) did not have empty bundle but should have.", tc.filePath)
-			}
 		})
+	}
+}
+
+func TestLoadSPIFFEBundleMapFailuresTODO(t *testing.T) {
+	// SPIFFE Bundles only support a use of x509-svid and jwt-svid. If a
+	// use other than this is specified, the parser does not fail, it
+	// just doesn't add an x509 authority or jwt authority to the bundle
+	filePath := testdata.Path("spiffe/spiffebundle_wrong_use.json")
+	bundle, err := LoadSPIFFEBundleMap(filePath)
+	if err != nil {
+		t.Fatalf("LoadSPIFFEBundleMap(%v) failed with error: %v", filePath, err)
+	}
+	if len(bundle["example.com"].X509Authorities()) != 0 {
+		t.Fatalf("LoadSPIFFEBundleMap(%v) did not have empty bundle but should have.", filePath)
 	}
 }
