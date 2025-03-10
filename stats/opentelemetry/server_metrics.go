@@ -18,13 +18,11 @@ package opentelemetry
 
 import (
 	"context"
-	"log"
 	"sync/atomic"
 	"time"
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/trace"
 
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -40,11 +38,7 @@ type serverStatsHandler struct {
 	serverMetrics serverMetrics
 }
 
-type serverTracingHandler struct {
-	options Options
-	tracer  trace.Tracer
-}
-
+// initializeMetrics initializes the metrics related to server side handling.
 func (h *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
@@ -73,14 +67,6 @@ func (h *serverStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-func (h *serverTracingHandler) initializeTraces() {
-	if h.options.TraceOptions.TracerProvider == nil {
-		log.Printf("TraceProvider is not provided in trace options")
-		return
-	}
-	h.tracer = h.options.TraceOptions.TracerProvider.Tracer("grpc-open-telemetry")
-}
-
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
 // underlying ServerTransportStream to attach metadataExchangeLabels.
 type attachLabelsTransportStream struct {
@@ -90,6 +76,7 @@ type attachLabelsTransportStream struct {
 	metadataExchangeLabels metadata.MD
 }
 
+// SetHeader intercepts the SetHeader call to attach metadataExchangeLabels.
 func (s *attachLabelsTransportStream) SetHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerTransportStream.SetHeader(s.metadataExchangeLabels)
@@ -97,6 +84,7 @@ func (s *attachLabelsTransportStream) SetHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SetHeader(md)
 }
 
+// SendHeader intercepts the SendHeader call to attach metadataExchangeLabels.
 func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerTransportStream.SetHeader(s.metadataExchangeLabels)
@@ -105,6 +93,8 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
+// unaryInterceptor implements the UnaryServerInterceptor to handle unary calls
+// for metrics.
 func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -143,6 +133,8 @@ type attachLabelsStream struct {
 	metadataExchangeLabels metadata.MD
 }
 
+// SetHeader intercepts the SetHeader call to attach metadataExchangeLabels
+// for stream.
 func (s *attachLabelsStream) SetHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerStream.SetHeader(s.metadataExchangeLabels)
@@ -151,6 +143,8 @@ func (s *attachLabelsStream) SetHeader(md metadata.MD) error {
 	return s.ServerStream.SetHeader(md)
 }
 
+// SendHeader intercepts the SendHeader call to attach metadataExchangeLabels
+// for stream.
 func (s *attachLabelsStream) SendHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerStream.SetHeader(s.metadataExchangeLabels)
@@ -159,6 +153,8 @@ func (s *attachLabelsStream) SendHeader(md metadata.MD) error {
 	return s.ServerStream.SendHeader(md)
 }
 
+// SendMsg intercepts the SendMsg call to attach metadataExchangeLabels
+// for stream.
 func (s *attachLabelsStream) SendMsg(m any) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerStream.SetHeader(s.metadataExchangeLabels)
@@ -166,6 +162,8 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
+// streamInterceptor implements the StreamServerInterceptor to handle stream
+// calls for metrics.
 func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -185,14 +183,6 @@ func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ 
 	return err
 }
 
-func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	return handler(ctx, req)
-}
-
-func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	return handler(srv, ss)
-}
-
 // TagConn exists to satisfy stats.Handler.
 func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
@@ -200,14 +190,6 @@ func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 
 // HandleConn exists to satisfy stats.Handler.
 func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
-
-// TagConn exists to satisfy stats.Handler for tracing.
-func (h *serverTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
-	return ctx
-}
-
-// HandleConn exists to satisfy stats.Handler for tracing.
-func (h *serverTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
@@ -237,18 +219,6 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	})
 }
 
-func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into server side stats handler metrics event handling has no server attempt data present")
-		return ctx
-	}
-	ai := ri.ai
-
-	ctx, _ = h.traceTagRPC(ctx, ai)
-	return ctx
-}
-
 // HandleRPC implements per RPC tracing and stats implementation for metrics.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
@@ -259,16 +229,7 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	h.processRPCData(ctx, rs, ri.ai)
 }
 
-// HandleRPC implements per RPC tracing and stats implementation for tracing.
-func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Error("ctx passed into server side tracing stats handler has no server call data present")
-		return
-	}
-	populateSpan(rs, ri.ai)
-}
-
+// processRPCData processes individual RPC stats events for metrics recording.
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
@@ -293,6 +254,7 @@ func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStat
 	}
 }
 
+// processRPCEnd processes RPC end stats event for metrics recording.
 func (h *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	latency := float64(time.Since(ai.startTime)) / float64(time.Second)
 	st := "OK"

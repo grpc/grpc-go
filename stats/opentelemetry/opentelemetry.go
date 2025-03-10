@@ -117,34 +117,20 @@ type MetricsOptions struct {
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
+//
+// For tracing, provide a TracerProvider in trace options.
+// If no TracerProvider is provided, tracing will be no-op.
 func DialOption(o Options) grpc.DialOption {
-	var do []grpc.DialOption
-
-	if o.isMetricsEnabled() {
-		metricsHandler := &clientStatsHandler{
-			MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
-			options:         o,
-			clientMetrics:   clientMetrics{},
-		}
-		metricsHandler.initializeMetrics()
-		do = append(do,
-			grpc.WithChainUnaryInterceptor(metricsHandler.unaryInterceptor),
-			grpc.WithChainStreamInterceptor(metricsHandler.streamInterceptor),
-			grpc.WithStatsHandler(metricsHandler),
-		)
-	}
+	csh := &clientStatsHandler{options: o}
+	csh.initializeMetrics()
+	do := joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 	if o.isTracingEnabled() {
-		tracingHandler := &clientTracingHandler{
-			options: o,
-		}
+		tracingHandler := &clientTracingHandler{options: o}
 		tracingHandler.initializeTraces()
-		do = append(do,
-			grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor),
-			grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor),
-			grpc.WithStatsHandler(tracingHandler),
-		)
+		tdo := joinDialOptions(grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.WithStatsHandler(tracingHandler))
+		do = joinDialOptions(do, tdo)
 	}
-	return joinDialOptions(do...)
+	return do
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -161,36 +147,20 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
+//
+// For tracing, provide a TracerProvider in trace options.
+// If no TracerProvider is provided, tracing will be no-op.
 func ServerOption(o Options) grpc.ServerOption {
-	var so []grpc.ServerOption
-
-	if o.isMetricsEnabled() {
-		metricsHandler := &serverStatsHandler{
-			MetricsRecorder: &registryMetrics{optionalLabels: o.MetricsOptions.OptionalLabels},
-			options:         o,
-			serverMetrics:   serverMetrics{},
-		}
-		metricsHandler.initializeMetrics()
-		so = append(so,
-			grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor),
-			grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor),
-			grpc.StatsHandler(metricsHandler),
-		)
-	}
-
+	ssh := &serverStatsHandler{options: o}
+	ssh.initializeMetrics()
+	so := joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 	if o.isTracingEnabled() {
-		tracingHandler := &serverTracingHandler{
-			options: o,
-		}
+		tracingHandler := &serverTracingHandler{options: o}
 		tracingHandler.initializeTraces()
-		so = append(so,
-			grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor),
-			grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor),
-			grpc.StatsHandler(tracingHandler),
-		)
+		tso := joinServerOptions(grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.StatsHandler(tracingHandler))
+		so = joinServerOptions(so, tso)
 	}
-
-	return joinServerOptions(so...)
+	return so
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
