@@ -16,9 +16,9 @@
  *
  */
 
-// Package clientssync implements additional synchronization primitives built upon
+// Package syncutil implements additional synchronization primitives built upon
 // the sync package.
-package clientssync
+package syncutil
 
 import (
 	"sync"

@@ -16,7 +16,7 @@
  *
  */
 
-package clientssync
+package syncutil
 
 import (
 	"context"

@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
+	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -49,11 +50,6 @@ const (
 	// should be gated at this verbosity level. Other per-RPC level logs which print
 	// terse output should be at `INFO` and verbosity 2.
 	perRPCVerbosityLevel = 9
-	// InvalidArgument indicates client specified an invalid argument.
-	// Note that this differs from FailedPrecondition. It indicates arguments
-	// that are problematic regardless of the state of the system
-	// (e.g., a malformed file name).
-	invalidArgumentErrCode = 3
 )
 
 // Response represents a response received on the ADS stream. It contains the
@@ -473,7 +469,7 @@ func (s *StreamImpl) sendMessageLocked(stream clients.Stream, names []string, ur
 
 	if nackErr != nil {
 		req.ErrorDetail = &statuspb.Status{
-			Code: int32(invalidArgumentErrCode), Message: nackErr.Error(),
+			Code: int32(cpb.Code_INVALID_ARGUMENT), Message: nackErr.Error(),
 		}
 	}
 

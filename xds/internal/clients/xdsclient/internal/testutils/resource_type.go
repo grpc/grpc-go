@@ -30,6 +30,5 @@ import (
 var ResourceTypeMapForTesting map[string]any
 
 func init() {
-	ResourceTypeMapForTesting = make(map[string]any)
-	ResourceTypeMapForTesting[xdsresource.V3ListenerURL] = listenerType
+	ResourceTypeMapForTesting = map[string]any{xdsresource.V3ListenerURL: listenerType}
 }
