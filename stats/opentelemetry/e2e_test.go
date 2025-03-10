@@ -1845,12 +1845,11 @@ func TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	validateTraces(t, spans, wantSpanInfos)
 }
 
-// RemoveDuplicateEventsAndResetTimestamps removes duplicate trace events based
+// removeDuplicateEventsAndResetTimestamps removes duplicate trace events based
 // on their names and resets their timestamps to ensure consistent comparison
 // during trace validation.
-// Returns a slice of trace.Event containing unique events with timestamps
-// reset to zero.
-func RemoveDuplicateEventsAndResetTimestamps(events []trace.Event) []trace.Event {
+// Returns a slice of unique trace.Event with timestamps cleared
+func removeDuplicateEventsAndResetTimestamps(events []trace.Event) []trace.Event {
 	eventMap := make(map[string]bool)
 	var uniqueEvents []trace.Event
 	for _, event := range events {
