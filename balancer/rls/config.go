@@ -222,30 +222,39 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	// - if `max_age` > 5m, it should be set to 5 minutes only if stale age is not set
 	// - if `stale_age` > `max_age`, ignore it
 	// - if `stale_age` is set, then `max_age` must also be set
+	maxAgeSet := false
 	maxAge, err := convertDuration(rlsProto.GetMaxAge())
 	if err != nil {
 		return nil, fmt.Errorf("rls: failed to parse max_age in route lookup config %+v: %v", rlsProto, err)
 	}
+	if maxAge == 0 {
+		maxAge = maxMaxAge
+	} else {
+		maxAgeSet = true
+	}
+
+	staleAgeSet := false
 	staleAge, err := convertDuration(rlsProto.GetStaleAge())
 	if err != nil {
 		return nil, fmt.Errorf("rls: failed to parse staleAge in route lookup config %+v: %v", rlsProto, err)
 	}
-	if maxAge == 0 {
-		if staleAge != 0 {
-			return nil, fmt.Errorf("rls: stale_age is set, but max_age is not in route lookup config %+v", rlsProto)
-		}
-		maxAge = maxMaxAge
+	if staleAge == 0 {
+		staleAge = maxMaxAge
+	} else {
+		staleAgeSet = true
 	}
-	if staleAge == 0 && maxAge > maxMaxAge {
-		logger.Infof("rls: max_age in route lookup config is %v, using %v", maxAge, maxMaxAge)
-		maxAge = maxMaxAge
-	}
-	if staleAge > maxAge {
-		logger.Infof("rls: stale_age %v is not less than max_age %v, ignoring it", staleAge, maxAge)
-		staleAge = maxAge
+
+	if staleAgeSet && !maxAgeSet {
+		return nil, fmt.Errorf("rls: stale_age is set, but max_age is not in route lookup config %+v", rlsProto)
 	}
 	if staleAge > maxMaxAge {
 		staleAge = maxMaxAge
+	}
+	if !staleAgeSet && maxAge > maxMaxAge {
+		maxAge = maxMaxAge
+	}
+	if staleAge > maxAge {
+		staleAge = maxAge
 	}
 
 	// `cache_size_bytes` field must have a value greater than 0, and if its

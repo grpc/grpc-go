@@ -60,8 +60,8 @@ func (s) TestParseConfig(t *testing.T) {
 			// - A top-level unknown field should not fail.
 			// - An unknown field in routeLookupConfig proto should not fail.
 			// - lookupServiceTimeout is set to its default value, since it is not specified in the input.
-			// - maxAge is set to maxMaxAge since the value is too large in the input.
-			// - staleAge is ignore because it is higher than maxAge in the input.
+			// - maxAge is clamped to maxMaxAge if staleAge is not set.
+			// - staleAge is ignored because it is higher than maxAge in the input.
 			// - cacheSizeBytes is greater than the hard upper limit of 5MB
 			desc: "with transformations 1",
 			input: []byte(`{
@@ -101,11 +101,9 @@ func (s) TestParseConfig(t *testing.T) {
 			},
 		},
 		{
-			desc: "with transformations 1",
+			desc: "maxAge not clamped when staleAge is set",
 			input: []byte(`{
-				"top-level-unknown-field": "unknown-value",
 				"routeLookupConfig": {
-					"unknown-field": "unknown-value",
 					"grpcKeybuilders": [{
 						"names": [{"service": "service", "method": "method"}],
 						"headers": [{"key": "k1", "names": ["v1"]}]
@@ -113,12 +111,9 @@ func (s) TestParseConfig(t *testing.T) {
 					"lookupService": ":///target",
 					"maxAge" : "500s",
 					"staleAge": "200s",
-					"cacheSizeBytes": 100000000,
-					"defaultTarget": "passthrough:///default"
+					"cacheSizeBytes": 100000000
 				},
 				"childPolicy": [
-					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
-					{"unknown-policy": {"unknown-field": "unknown-value"}},
 					{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}
 				],
 				"childPolicyConfigTargetFieldName": "serviceName"
@@ -129,7 +124,6 @@ func (s) TestParseConfig(t *testing.T) {
 				maxAge:                 500 * time.Second, // Max age is not clamped when stale age is set.
 				staleAge:               200 * time.Second, // This is stale age within maxMaxAge.
 				cacheSizeBytes:         maxCacheSize,
-				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
 				childPolicyTargetField: "serviceName",
 				childPolicyConfig: map[string]json.RawMessage{
@@ -139,23 +133,18 @@ func (s) TestParseConfig(t *testing.T) {
 			},
 		},
 		{
-			desc: "with transformations 1",
+			desc: "maxAge clamped when staleAge is not set",
 			input: []byte(`{
-				"top-level-unknown-field": "unknown-value",
 				"routeLookupConfig": {
-					"unknown-field": "unknown-value",
 					"grpcKeybuilders": [{
 						"names": [{"service": "service", "method": "method"}],
 						"headers": [{"key": "k1", "names": ["v1"]}]
 					}],
 					"lookupService": ":///target",
 					"maxAge" : "500s",
-					"cacheSizeBytes": 100000000,
-					"defaultTarget": "passthrough:///default"
+					"cacheSizeBytes": 100000000
 				},
 				"childPolicy": [
-					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
-					{"unknown-policy": {"unknown-field": "unknown-value"}},
 					{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}
 				],
 				"childPolicyConfigTargetFieldName": "serviceName"
@@ -164,8 +153,8 @@ func (s) TestParseConfig(t *testing.T) {
 				lookupService:          ":///target",
 				lookupServiceTimeout:   10 * time.Second,  // This is the default value.
 				maxAge:                 300 * time.Second, // Max age is clamped when stale age is not set.
+				staleAge:               300 * time.Second,
 				cacheSizeBytes:         maxCacheSize,
-				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
 				childPolicyTargetField: "serviceName",
 				childPolicyConfig: map[string]json.RawMessage{
