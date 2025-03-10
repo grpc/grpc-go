@@ -16,7 +16,7 @@
  *
  */
 
-// Package credentials defines APIs for parsing SPIFFE ID.
+// Package spiffe defines APIs for working with SPIFFE Bundle Maps.
 //
 // All APIs in this package are experimental.
 package spiffe
