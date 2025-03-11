@@ -48,28 +48,28 @@ var (
 	}
 )
 
-func listenerValidator(lis ListenerUpdate) error {
+func listenerValidator(lis listenerUpdate) error {
 	if lis.InboundListenerCfg == nil || lis.InboundListenerCfg.Address == "" {
 		return nil
 	}
 	return nil
 }
 
-func unmarshalListenerResource(r []byte) (string, ListenerUpdate, error) {
+func unmarshalListenerResource(r []byte) (string, listenerUpdate, error) {
 	lis := &v3listenerpb.Listener{}
 	if err := proto.Unmarshal(r, lis); err != nil {
-		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+		return "", listenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
 	lu, err := processListener(lis)
 	if err != nil {
-		return lis.GetName(), ListenerUpdate{}, err
+		return lis.GetName(), listenerUpdate{}, err
 	}
 	lu.Raw = r
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener) (*listenerUpdate, error) {
 	if lis.GetApiListener() != nil {
 		return processClientSideListener(lis)
 	}
@@ -78,8 +78,8 @@ func processListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
-	update := &ListenerUpdate{}
+func processClientSideListener(lis *v3listenerpb.Listener) (*listenerUpdate, error) {
+	update := &listenerUpdate{}
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
 	if !xdsresource.IsHTTPConnManagerResource(apiLisAny.GetTypeUrl()) {
@@ -127,7 +127,7 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return update, nil
 }
 
-func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+func processServerSideListener(lis *v3listenerpb.Listener) (*listenerUpdate, error) {
 	if n := len(lis.ListenerFilters); n != 0 {
 		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
 	}
@@ -142,8 +142,8 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	if sockAddr == nil {
 		return nil, fmt.Errorf("no socket_address field in LDS response: %+v", lis)
 	}
-	lu := &ListenerUpdate{
-		InboundListenerCfg: &InboundListenerConfig{
+	lu := &listenerUpdate{
+		InboundListenerCfg: &inboundListenerConfig{
 			Address: sockAddr.GetAddress(),
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
@@ -164,32 +164,30 @@ func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, 
 		return nil, err
 	case err != nil:
 		// Protobuf deserialization succeeded, but resource validation failed.
-		return &DecodeResult{Name: name, Resource: &ListenerResourceData{Resource: ListenerUpdate{}}}, err
+		return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listenerUpdate{}}}, err
 	}
 
 	// Perform extra validation here.
 	if err := listenerValidator(listener); err != nil {
-		return &DecodeResult{Name: name, Resource: &ListenerResourceData{Resource: ListenerUpdate{}}}, err
+		return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listenerUpdate{}}}, err
 	}
 
-	return &DecodeResult{Name: name, Resource: &ListenerResourceData{Resource: listener}}, nil
+	return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listener}}, nil
 
 }
 
-// ListenerResourceData wraps the configuration of a Listener resource as
+// listenerResourceData wraps the configuration of a Listener resource as
 // received from the management server.
 //
 // Implements the ResourceData interface.
-type ListenerResourceData struct {
+type listenerResourceData struct {
 	ResourceData
 
-	// TODO: We have always stored update structs by value. See if this can be
-	// switched to a pointer?
-	Resource ListenerUpdate
+	Resource listenerUpdate
 }
 
 // Equal returns true if other is equal to l.
-func (l *ListenerResourceData) Equal(other ResourceData) bool {
+func (l *listenerResourceData) Equal(other ResourceData) bool {
 	if l == nil && other == nil {
 		return true
 	}
@@ -200,24 +198,24 @@ func (l *ListenerResourceData) Equal(other ResourceData) bool {
 }
 
 // ToJSON returns a JSON string representation of the resource data.
-func (l *ListenerResourceData) ToJSON() string {
+func (l *listenerResourceData) ToJSON() string {
 	return pretty.ToJSON(l.Resource)
 }
 
 // Bytes returns the underlying raw protobuf form of the listener resource.
-func (l *ListenerResourceData) Bytes() []byte {
+func (l *listenerResourceData) Bytes() []byte {
 	return l.Resource.Raw
 }
 
 // ListenerUpdate contains information received in an LDS response, which is of
 // interest to the registered LDS watcher.
-type ListenerUpdate struct {
+type listenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
 	RouteConfigName string
 
 	// InboundListenerCfg contains inbound listener configuration.
-	InboundListenerCfg *InboundListenerConfig
+	InboundListenerCfg *inboundListenerConfig
 
 	// Raw is the resource from the xds response.
 	Raw []byte
@@ -225,7 +223,7 @@ type ListenerUpdate struct {
 
 // InboundListenerConfig contains information about the inbound listener, i.e
 // the server-side listener.
-type InboundListenerConfig struct {
+type inboundListenerConfig struct {
 	// Address is the local address on which the inbound listener is expected to
 	// accept incoming connections.
 	Address string

@@ -332,7 +332,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			},
 			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener1.GetValue(),
 					}},
@@ -356,7 +356,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			},
 			wantUpdates: map[string]dataAndErrTuple{
 				listenerName2: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
@@ -392,7 +392,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {Err: cmpopts.AnyError},
 				listenerName2: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
@@ -417,13 +417,13 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			},
 			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener1.GetValue(),
 					}},
 				},
 				listenerName2: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
@@ -444,13 +444,13 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			},
 			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener1.GetValue(),
 					}},
 				},
 				listenerName2: {
-					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+					Resource: &listenerResourceData{Resource: listenerUpdate{
 						RouteConfigName: routeName,
 						Raw:             listener2.GetValue(),
 					}},
@@ -598,8 +598,8 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 
 	wantUpdates := map[string]dataAndErrTuple{
 		listenerResourceName: {
-			Resource: &ListenerResourceData{
-				Resource: ListenerUpdate{
+			Resource: &listenerResourceData{
+				Resource: listenerUpdate{
 					RouteConfigName: routeConfigurationName,
 					Raw:             listenerResource.GetValue(),
 				},
