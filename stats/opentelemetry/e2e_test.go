@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,6 +53,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1724,9 +1726,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 					Name: "Delayed LB pick complete",
 				},
 				{
-					Name: "Delayed LB pick complete",
-				},
-				{
 					Name: "Outbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
@@ -1825,9 +1824,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 				{
 					Name: "Delayed LB pick complete",
 				},
-				{
-					Name: "Delayed LB pick complete",
-				},
 			},
 		},
 		{
@@ -1844,6 +1840,16 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if !envconfig.NewPickFirstEnabled {
+		for i := range wantSpanInfos {
+			if strings.HasPrefix(wantSpanInfos[i].name, "Attempt.grpc.testing.TestService.") {
+				wantSpanInfos[i].events = append([]trace.Event{
+					{Name: "Delayed LB pick complete"},
+				}, wantSpanInfos[i].events...)
+			}
+		}
 	}
 
 	validateTraces(t, spans, wantSpanInfos)
