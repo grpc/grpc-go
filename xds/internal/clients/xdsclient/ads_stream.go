@@ -16,9 +16,7 @@
  *
  */
 
-// Package ads provides the implementation of an ADS (Aggregated Discovery
-// Service) stream for the xDS client.
-package ads
+package xdsclient
 
 import (
 	"context"
@@ -33,7 +31,6 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/buffer"
 	iclientslog "google.golang.org/grpc/xds/internal/clients/internal/clientslog"
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
@@ -63,7 +60,7 @@ type Response struct {
 // DataAndErrTuple is a struct that holds a resource and an error. It is used to
 // return a resource and any associated error from a function.
 type DataAndErrTuple struct {
-	Resource xdsclient.ResourceData
+	Resource ResourceData
 	Err      error
 }
 
@@ -72,7 +69,7 @@ type DataAndErrTuple struct {
 // concurrently and implementations need to handle them in a thread-safe manner.
 type StreamEventHandler interface {
 	OnADSStreamError(error)                           // Called when the ADS stream breaks.
-	OnADSWatchExpiry(xdsclient.ResourceType, string)  // Called when the watch timer expires for a resource.
+	OnADSWatchExpiry(ResourceType, string)            // Called when the watch timer expires for a resource.
 	OnADSResponse(Response, func()) ([]string, error) // Called when a response is received on the ADS stream.
 }
 
@@ -135,9 +132,9 @@ type StreamImpl struct {
 
 	// Guards access to the below fields (and to the contents of the map).
 	mu                sync.Mutex
-	resourceTypeState map[xdsclient.ResourceType]*resourceTypeState // Map of resource types to their state.
-	fc                *adsFlowControl                               // Flow control for ADS stream.
-	firstRequest      bool                                          // False after the first request is sent out.
+	resourceTypeState map[ResourceType]*resourceTypeState // Map of resource types to their state.
+	fc                *adsFlowControl                     // Flow control for ADS stream.
+	firstRequest      bool                                // False after the first request is sent out.
 }
 
 // StreamOpts contains the options for creating a new ADS Stream.
@@ -164,7 +161,7 @@ func NewStreamImpl(opts StreamOpts) *StreamImpl {
 		streamCh:          make(chan clients.Stream, 1),
 		requestCh:         buffer.NewUnbounded(),
 		runnerDoneCh:      make(chan struct{}),
-		resourceTypeState: make(map[xdsclient.ResourceType]*resourceTypeState),
+		resourceTypeState: make(map[ResourceType]*resourceTypeState),
 	}
 
 	l := clientslog.Component("xds")
@@ -188,7 +185,7 @@ func (s *StreamImpl) Stop() {
 // subscriptions for the same resource is deduped at the caller. A discovery
 // request is sent out on the underlying stream for the resource type when there
 // is sufficient flow control quota.
-func (s *StreamImpl) Subscribe(typ xdsclient.ResourceType, name string) {
+func (s *StreamImpl) Subscribe(typ ResourceType, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Subscribing to resource %q of type %q", name, typ.TypeName)
 	}
@@ -220,7 +217,7 @@ func (s *StreamImpl) Subscribe(typ xdsclient.ResourceType, name string) {
 // the given resource does not exist. The watch expiry timer associated with the
 // resource is stopped if one is active. A discovery request is sent out on the
 // stream for the resource type when there is sufficient flow control quota.
-func (s *StreamImpl) Unsubscribe(typ xdsclient.ResourceType, name string) {
+func (s *StreamImpl) Unsubscribe(typ ResourceType, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Unsubscribing to resource %q of type %q", name, typ.TypeName)
 	}
@@ -317,7 +314,7 @@ func (s *StreamImpl) send(ctx context.Context) {
 			}
 			s.requestCh.Load()
 
-			typ := req.(xdsclient.ResourceType)
+			typ := req.(ResourceType)
 			if err := s.sendNew(stream, typ); err != nil {
 				stream = nil
 				continue
@@ -331,7 +328,7 @@ func (s *StreamImpl) send(ctx context.Context) {
 // and will be sent later. This method also starts the watch expiry timer for
 // resources that were sent in the request for the first time, i.e. their watch
 // state is `watchStateStarted`.
-func (s *StreamImpl) sendNew(stream clients.Stream, typ xdsclient.ResourceType) error {
+func (s *StreamImpl) sendNew(stream clients.Stream, typ ResourceType) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -422,7 +419,7 @@ func (s *StreamImpl) sendBuffered(stream clients.Stream) error {
 // watch timers are started for the resources in the request.
 //
 // Caller needs to hold c.mu.
-func (s *StreamImpl) sendMessageIfWritePendingLocked(stream clients.Stream, typ xdsclient.ResourceType, state *resourceTypeState) error {
+func (s *StreamImpl) sendMessageIfWritePendingLocked(stream clients.Stream, typ ResourceType, state *resourceTypeState) error {
 	if !state.pendingWrite {
 		if s.logger.V(2) {
 			s.logger.Infof("Skipping sending request for type %q, because all subscribed resources were already sent", typ.TypeURL)
@@ -586,7 +583,7 @@ func (s *StreamImpl) onRecv(stream clients.Stream, names []string, url, version,
 	defer s.mu.Unlock()
 
 	// Lookup the resource type specific state based on the type URL.
-	var typ xdsclient.ResourceType
+	var typ ResourceType
 	for t := range s.resourceTypeState {
 		if t.TypeURL == url {
 			typ = t
@@ -687,7 +684,7 @@ func (s *StreamImpl) onError(err error, msgReceived bool) {
 // watch state is set to "timeout" and the event handler callback is called.
 //
 // The caller must hold the s.mu lock.
-func (s *StreamImpl) startWatchTimersLocked(typ xdsclient.ResourceType, names []string) {
+func (s *StreamImpl) startWatchTimersLocked(typ ResourceType, names []string) {
 	typeState := s.resourceTypeState[typ]
 	for _, name := range names {
 		resourceState, ok := typeState.subscribedResources[name]
@@ -723,7 +720,7 @@ func resourceNames(m map[string]*ResourceWatchState) []string {
 // TriggerResourceNotFoundForTesting triggers a resource not found event for the
 // given resource type and name.  This is intended for testing purposes only, to
 // simulate a resource not found scenario.
-func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsclient.ResourceType, resourceName string) {
+func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ ResourceType, resourceName string) {
 	s.mu.Lock()
 
 	state, ok := s.resourceTypeState[typ]
@@ -752,7 +749,7 @@ func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ xdsclient.ResourceTyp
 // ResourceWatchStateForTesting returns the ResourceWatchState for the given
 // resource type and name.  This is intended for testing purposes only, to
 // inspect the internal state of the ADS stream.
-func (s *StreamImpl) ResourceWatchStateForTesting(typ xdsclient.ResourceType, resourceName string) (ResourceWatchState, error) {
+func (s *StreamImpl) ResourceWatchStateForTesting(typ ResourceType, resourceName string) (ResourceWatchState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
