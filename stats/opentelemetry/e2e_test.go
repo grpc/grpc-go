@@ -1724,6 +1724,9 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 					Name: "Delayed LB pick complete",
 				},
 				{
+					Name: "Delayed LB pick complete",
+				},
+				{
 					Name: "Outbound compressed message",
 					Attributes: []attribute.KeyValue{
 						{
@@ -1822,6 +1825,9 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 				{
 					Name: "Delayed LB pick complete",
 				},
+				{
+					Name: "Delayed LB pick complete",
+				},
 			},
 		},
 		{
@@ -1839,27 +1845,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := range spans {
-		spans[i].Events = removeDuplicateEventsAndResetTimestamps(spans[i].Events)
-	}
-	validateTraces(t, spans, wantSpanInfos)
-}
 
-// removeDuplicateEventsAndResetTimestamps removes duplicate trace events based
-// on their names and resets their timestamps to ensure consistent comparison
-// during trace validation.
-// Returns a slice of unique trace.Event with timestamps cleared
-func removeDuplicateEventsAndResetTimestamps(events []trace.Event) []trace.Event {
-	eventMap := make(map[string]bool)
-	var uniqueEvents []trace.Event
-	for _, event := range events {
-		// If the event has already been seen, skip adding it again
-		if eventMap[event.Name] {
-			continue
-		}
-		eventMap[event.Name] = true
-		event.Time = time.Time{} // Reset timestamp to avoid mismatches
-		uniqueEvents = append(uniqueEvents, event)
-	}
-	return uniqueEvents
+	validateTraces(t, spans, wantSpanInfos)
 }
