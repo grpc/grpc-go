@@ -29,13 +29,13 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	otlptraceexp "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	otlptracehttpexp "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
+	otelpropagation "go.opentelemetry.io/otel/propagation"
+	otelmetric "go.opentelemetry.io/otel/sdk/metric"
+	otelresource "go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
@@ -46,7 +46,7 @@ import (
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
-	otlpEndpoint       = flag.String("otlp_endpoint", ":4319", "the OTLP collector endpoint for traces")
+	otlpEndpoint       = flag.String("otlp_endpoint", ":4317", "the OTLP collector endpoint for traces")
 	serviceName        = "grpc-server"
 )
 
@@ -65,39 +65,35 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	exporter, err := prometheus.New()
+	metricExporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
-	provider := metric.NewMeterProvider(metric.WithReader(exporter))
+	// Initialize MeterProvider with Prometheus exporter.
+	provider := otelmetric.NewMeterProvider(otelmetric.WithReader(metricExporter))
 
-	otlpclient := otlptracehttp.NewClient(
-		otlptracehttp.WithEndpoint(*otlpEndpoint),
-		otlptracehttp.WithInsecure(),
-	)
-	traceExporter, err := otlptrace.New(ctx, otlpclient)
+	// Create OTLP exporter for traces.
+	otlpClient := otlptracehttpexp.NewClient(otlptracehttpexp.WithEndpoint(*otlpEndpoint), otlptracehttpexp.WithInsecure())
+	// Create a trace exporter instance.
+	traceExporter, err := otlptraceexp.New(ctx, otlpClient)
 	if err != nil {
 		log.Fatalf("Failed to create otlp trace exporter: %v", err)
 	}
 	// resource.New adds service metadata to telemetry, enabling context and
 	// filtering in the backend.
-	res, err := resource.New(ctx,
-		resource.WithTelemetrySDK(),
-		resource.WithAttributes(semconv.ServiceName(serviceName)),
-	)
+	res, err := otelresource.New(ctx, otelresource.WithTelemetrySDK(), otelresource.WithAttributes(semconv.ServiceName(serviceName)))
 	if err != nil {
 		log.Fatalf("Could not set resources: %v", err)
 	}
-	spanProcessor := trace.NewSimpleSpanProcessor(traceExporter)
-	tp := trace.NewTracerProvider(trace.WithSpanProcessor(spanProcessor), trace.WithResource(res))
+	// Create a simple span processor.
+	spanProcessor := sdktrace.NewSimpleSpanProcessor(traceExporter)
+	// Create a TracerProvider instance.
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanProcessor), sdktrace.WithResource(res))
 	otel.SetTracerProvider(tp)
+	textMapPropagator := otelpropagation.TraceContext{} // Using W3C Trace Context Propagator for interoperability.
 
-	textMapPropagator := propagation.TraceContext{}
-
-	traceOptions := oteltracing.TraceOptions{
-		TracerProvider:    tp,
-		TextMapPropagator: textMapPropagator,
-	}
+	// Configure TraceOptions for gRPC OpenTelemetry integration.
+	traceOptions := oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator}
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
