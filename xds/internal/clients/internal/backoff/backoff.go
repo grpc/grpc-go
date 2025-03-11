@@ -27,20 +27,43 @@ import (
 	"errors"
 	rand "math/rand/v2"
 	"time"
-
-	clientsbackoff "google.golang.org/grpc/xds/internal/clients/backoff"
 )
+
+// Config defines the configuration options for backoff.
+type Config struct {
+	// BaseDelay is the amount of time to backoff after the first failure.
+	BaseDelay time.Duration
+	// Multiplier is the factor with which to multiply backoffs after a
+	// failed retry. Should ideally be greater than 1.
+	Multiplier float64
+	// Jitter is the factor with which backoffs are randomized.
+	Jitter float64
+	// MaxDelay is the upper bound of backoff delay.
+	MaxDelay time.Duration
+}
+
+// DefaultConfig is a backoff configuration with the default values specified
+// at https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
+//
+// This should be useful for callers who want to configure backoff with
+// non-default values only for a subset of the options.
+var DefaultConfig = Config{
+	BaseDelay:  1.0 * time.Second,
+	Multiplier: 1.6,
+	Jitter:     0.2,
+	MaxDelay:   120 * time.Second,
+}
 
 // DefaultExponential is an exponential backoff implementation using the
 // default values for all the configurable knobs defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-var DefaultExponential = Exponential{Config: clientsbackoff.DefaultConfig}
+var DefaultExponential = Exponential{Config: DefaultConfig}
 
 // Exponential implements exponential backoff algorithm as defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 type Exponential struct {
 	// Config contains all options to configure the backoff algorithm.
-	Config clientsbackoff.Config
+	Config Config
 }
 
 // Backoff returns the amount of time to wait before the next retry given the
