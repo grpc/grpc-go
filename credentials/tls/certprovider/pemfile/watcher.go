@@ -198,11 +198,12 @@ func (w *watcher) updateRootDistributor() {
 		return
 	}
 
-	// Prefer SPIFFEBundleMap, if it works don't use the RootFile.
-	err := w.maybeUpdateSPIFFEBundleMap()
-	if err != nil {
-		// The preferred method (spiffe bundle map) failed, try updating the root file
-		_ = w.maybeUpdateRootFile()
+	// If SPIFFEBundleMap is set, use it and DON'T use the RootFile, even if it
+	// fails
+	if w.opts.SPIFFEBundleMapFile != "" {
+		w.maybeUpdateSPIFFEBundleMap()
+	} else {
+		w.maybeUpdateRootFile()
 	}
 }
 
