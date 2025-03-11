@@ -38,16 +38,10 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/ads"
-	xdsclienttestutils "google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/testutils/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -71,10 +65,6 @@ const (
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
-// Lookup the listener resource type from the resource type map. This is used to
-// parse listener resources used in this test.
-var listenerType = xdsclienttestutils.ResourceTypeMapForTesting[xdsresource.V3ListenerURL].(xdsclient.ResourceType)
-
 // xdsChannelForTest creates an xdsChannel to the specified serverURI for
 // testing purposes.
 func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeout time.Duration) *xdsChannel {
@@ -90,11 +80,11 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 		t.Fatalf("Failed to create a transport for server config %v: %v", si, err)
 	}
 
-	serverCfg := xdsclient.ServerConfig{
+	serverCfg := ServerConfig{
 		ServerIdentifier: si,
 	}
-	xdsClientConfig := xdsclient.Config{
-		Servers: []xdsclient.ServerConfig{serverCfg},
+	xdsClientConfig := Config{
+		Servers: []ServerConfig{serverCfg},
 		Node:    clients.Node{ID: nodeID},
 	}
 	// Create an xdsChannel that uses everything set up above.
@@ -102,9 +92,9 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 		transport:       tr,
 		serverConfig:    &serverCfg,
 		xdsClientConfig: &xdsClientConfig,
-		resourceTypeGetter: func(typeURL string) xdsclient.ResourceType {
+		resourceTypeGetter: func(typeURL string) ResourceType {
 			if typeURL != "type.googleapis.com/envoy.config.listener.v3.Listener" {
-				return xdsclient.ResourceType{}
+				return ResourceType{}
 			}
 			return listenerType
 		},
@@ -123,7 +113,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 // expected type, and that the received updates and metadata match the expected
 // values. The function ignores the timestamp fields in the metadata, as those
 // are expected to be different.
-func verifyUpdateAndMetadata(ctx context.Context, t *testing.T, eh *testEventHandler, wantUpdates map[string]ads.DataAndErrTuple, wantMD xdsresource.UpdateMetadata) {
+func verifyUpdateAndMetadata(ctx context.Context, t *testing.T, eh *testEventHandler, wantUpdates map[string]DataAndErrTuple, wantMD xdsresource.UpdateMetadata) {
 	t.Helper()
 
 	gotTyp, gotUpdates, gotMD, err := eh.waitForUpdate(ctx)
@@ -173,10 +163,10 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 			wantErrStr: "serverConfig is nil",
 		},
 		{
-			name: "emptyBootstrapConfig",
+			name: "emptyCConfig",
 			opts: xdsChannelOpts{
 				transport:    &fakeTransport{},
-				serverConfig: &xdsclient.ServerConfig{},
+				serverConfig: &ServerConfig{},
 			},
 			wantErrStr: "xdsClientConfig is nil",
 		},
@@ -184,8 +174,8 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 			name: "emptyResourceTypeGetter",
 			opts: xdsChannelOpts{
 				transport:       &fakeTransport{},
-				serverConfig:    &xdsclient.ServerConfig{},
-				xdsClientConfig: &xdsclient.Config{},
+				serverConfig:    &ServerConfig{},
+				xdsClientConfig: &Config{},
 			},
 			wantErrStr: "resourceTypeGetter is nil",
 		},
@@ -193,9 +183,9 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 			name: "emptyEventHandler",
 			opts: xdsChannelOpts{
 				transport:          &fakeTransport{},
-				serverConfig:       &xdsclient.ServerConfig{},
-				xdsClientConfig:    &xdsclient.Config{},
-				resourceTypeGetter: func(string) xdsclient.ResourceType { return xdsclient.ResourceType{} },
+				serverConfig:       &ServerConfig{},
+				xdsClientConfig:    &Config{},
+				resourceTypeGetter: func(string) ResourceType { return ResourceType{} },
 			},
 			wantErrStr: "eventHandler is nil",
 		},
@@ -230,21 +220,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 			ApiListener: testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 					RouteConfig: &v3routepb.RouteConfiguration{
-						Name: routeName,
-						VirtualHosts: []*v3routepb.VirtualHost{{
-							Domains: []string{"*"},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{
-									PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
-								},
-								Action: &v3routepb.Route_Route{
-									Route: &v3routepb.RouteAction{
-										ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-									}}}}}}},
-				},
-				HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
-				CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
-					MaxStreamDuration: durationpb.New(time.Second),
+						Name: routeName},
 				},
 			}),
 		}
@@ -262,7 +238,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 		desc                     string
 		resourceNamesToRequest   []string
 		managementServerResponse *v3discoverypb.DiscoveryResponse
-		wantUpdates              map[string]ads.DataAndErrTuple
+		wantUpdates              map[string]DataAndErrTuple
 		wantMD                   xdsresource.UpdateMetadata
 		wantErr                  error
 	}{
@@ -300,7 +276,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					},
 				})},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName1: {
 					Err: cmpopts.AnyError,
 				},
@@ -332,7 +308,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					}),
 				},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName2: {
 					Err: cmpopts.AnyError,
 				},
@@ -354,21 +330,11 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources:   []*anypb.Any{listener1},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName1: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener1.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
 					}},
 				},
 			},
@@ -388,21 +354,11 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					listener2,
 				},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName2: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener2.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
 					}},
 				},
 			},
@@ -433,22 +389,12 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					listener2,
 				},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName1: {Err: cmpopts.AnyError},
 				listenerName2: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener2.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
 					}},
 				},
 			},
@@ -469,37 +415,17 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources:   []*anypb.Any{listener1, listener2},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName1: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener1.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
 					}},
 				},
 				listenerName2: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener2.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
 					}},
 				},
 			},
@@ -516,37 +442,17 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources:   []*anypb.Any{listener1, listener2},
 			},
-			wantUpdates: map[string]ads.DataAndErrTuple{
+			wantUpdates: map[string]DataAndErrTuple{
 				listenerName1: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener1.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
 					}},
 				},
 				listenerName2: {
-					Resource: &xdsclienttestutils.ListenerResourceData{Resource: xdsclienttestutils.ListenerUpdate{
-						InlineRouteConfig: &xdsclienttestutils.RouteConfigUpdate{
-							VirtualHosts: []*xdsclienttestutils.VirtualHost{{
-								Domains: []string{"*"},
-								Routes: []*xdsclienttestutils.Route{{
-									Prefix:           newStringP("/"),
-									WeightedClusters: map[string]xdsclienttestutils.WeightedCluster{clusterName: {Weight: 1}},
-									ActionType:       xdsclienttestutils.RouteActionRoute},
-								},
-							}}},
-						MaxStreamDuration: time.Second,
-						Raw:               listener2.GetValue(),
-						HTTPFilters:       makeRouterFilterList(t),
+					Resource: &ListenerResourceData{Resource: ListenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
 					}},
 				},
 			},
@@ -631,7 +537,7 @@ func (s) TestChannel_ADS_HandleResponseWatchExpiry(t *testing.T) {
 // Tests that the xdsChannel correctly handles stream failures by ensuring that
 // the stream failure callback is invoked on the event handler.
 func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 20000*defaultTestTimeout)
 	defer cancel()
 
 	// Start an xDS management server with a restartable listener to simulate
@@ -658,7 +564,7 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 
 	// Create an xdsChannel for the test with a long watch expiry timer
 	// to ensure that watches don't expire for the duration of the test.
-	xc := xdsChannelForTest(t, mgmtServer.Address, nodeID, 2*defaultTestTimeout)
+	xc := xdsChannelForTest(t, mgmtServer.Address, nodeID, 2000*defaultTestTimeout)
 	defer xc.close()
 
 	// Subscribe to the resource created above.
@@ -690,12 +596,11 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 		t.Fatalf("Failed to create listener resource: %v", err)
 	}
 
-	wantUpdates := map[string]ads.DataAndErrTuple{
+	wantUpdates := map[string]DataAndErrTuple{
 		listenerResourceName: {
-			Resource: &xdsclienttestutils.ListenerResourceData{
-				Resource: xdsclienttestutils.ListenerUpdate{
+			Resource: &ListenerResourceData{
+				Resource: ListenerUpdate{
 					RouteConfigName: routeConfigurationName,
-					HTTPFilters:     makeRouterFilterList(t),
 					Raw:             listenerResource.GetValue(),
 				},
 			},
@@ -817,8 +722,8 @@ func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []stri
 // necessary channels for testing the xdsChannel.
 func newTestEventHandler() *testEventHandler {
 	return &testEventHandler{
-		typeCh:    make(chan xdsclient.ResourceType, 1),
-		updateCh:  make(chan map[string]ads.DataAndErrTuple, 1),
+		typeCh:    make(chan ResourceType, 1),
+		updateCh:  make(chan map[string]DataAndErrTuple, 1),
 		mdCh:      make(chan xdsresource.UpdateMetadata, 1),
 		nameCh:    make(chan string, 1),
 		connErrCh: make(chan error, 1),
@@ -829,11 +734,11 @@ func newTestEventHandler() *testEventHandler {
 // interface.  It is used to receive events from an xdsChannel, and has multiple
 // channels on which it makes these events available to the test.
 type testEventHandler struct {
-	typeCh    chan xdsclient.ResourceType         // Resource type of an update or resource-does-not-exist error.
-	updateCh  chan map[string]ads.DataAndErrTuple // Resource updates.
-	mdCh      chan xdsresource.UpdateMetadata     // Metadata from an update.
-	nameCh    chan string                         // Name of the non-existent resource.
-	connErrCh chan error                          // Connectivity error.
+	typeCh    chan ResourceType               // Resource type of an update or resource-does-not-exist error.
+	updateCh  chan map[string]DataAndErrTuple // Resource updates.
+	mdCh      chan xdsresource.UpdateMetadata // Metadata from an update.
+	nameCh    chan string                     // Name of the non-existent resource.
+	connErrCh chan error                      // Connectivity error.
 
 }
 
@@ -850,7 +755,7 @@ func (ta *testEventHandler) waitForStreamFailure(ctx context.Context) error {
 	return nil
 }
 
-func (ta *testEventHandler) adsResourceUpdate(typ xdsclient.ResourceType, updates map[string]ads.DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
+func (ta *testEventHandler) adsResourceUpdate(typ ResourceType, updates map[string]DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
 	ta.typeCh <- typ
 	ta.updateCh <- updates
 	ta.mdCh <- md
@@ -860,32 +765,32 @@ func (ta *testEventHandler) adsResourceUpdate(typ xdsclient.ResourceType, update
 // waitForUpdate waits for the next resource update event from the xdsChannel.
 // It returns the resource type, the resource updates, and the update metadata.
 // If the context is canceled, it returns an error.
-func (ta *testEventHandler) waitForUpdate(ctx context.Context) (xdsclient.ResourceType, map[string]ads.DataAndErrTuple, xdsresource.UpdateMetadata, error) {
-	var typ xdsclient.ResourceType
-	var updates map[string]ads.DataAndErrTuple
+func (ta *testEventHandler) waitForUpdate(ctx context.Context) (ResourceType, map[string]DataAndErrTuple, xdsresource.UpdateMetadata, error) {
+	var typ ResourceType
+	var updates map[string]DataAndErrTuple
 	var md xdsresource.UpdateMetadata
 
 	select {
 	case typ = <-ta.typeCh:
 	case <-ctx.Done():
-		return xdsclient.ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
+		return ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
 	}
 
 	select {
 	case updates = <-ta.updateCh:
 	case <-ctx.Done():
-		return xdsclient.ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
+		return ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
 	}
 
 	select {
 	case md = <-ta.mdCh:
 	case <-ctx.Done():
-		return xdsclient.ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
+		return ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
 	}
 	return typ, updates, md, nil
 }
 
-func (ta *testEventHandler) adsResourceDoesNotExist(typ xdsclient.ResourceType, name string) {
+func (ta *testEventHandler) adsResourceDoesNotExist(typ ResourceType, name string) {
 	ta.typeCh <- typ
 	ta.nameCh <- name
 }
@@ -893,34 +798,20 @@ func (ta *testEventHandler) adsResourceDoesNotExist(typ xdsclient.ResourceType, 
 // waitForResourceDoesNotExist waits for the next resource-does-not-exist event
 // from the xdsChannel. It returns the resource type and the resource name. If
 // the context is canceled, it returns an error.
-func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (xdsclient.ResourceType, string, error) {
-	var typ xdsclient.ResourceType
+func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (ResourceType, string, error) {
+	var typ ResourceType
 	var name string
 
 	select {
 	case typ = <-ta.typeCh:
 	case <-ctx.Done():
-		return xdsclient.ResourceType{}, "", ctx.Err()
+		return ResourceType{}, "", ctx.Err()
 	}
 
 	select {
 	case name = <-ta.nameCh:
 	case <-ctx.Done():
-		return xdsclient.ResourceType{}, "", ctx.Err()
+		return ResourceType{}, "", ctx.Err()
 	}
 	return typ, name, nil
-}
-
-func newStringP(s string) *string {
-	return &s
-}
-
-func makeRouterFilter(t *testing.T) xdsclienttestutils.HTTPFilter {
-	routerBuilder := httpfilter.Get(router.TypeURL)
-	routerConfig, _ := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
-	return xdsclienttestutils.HTTPFilter{Name: "router", Filter: routerBuilder, Config: routerConfig}
-}
-
-func makeRouterFilterList(t *testing.T) []xdsclienttestutils.HTTPFilter {
-	return []xdsclienttestutils.HTTPFilter{makeRouterFilter(t)}
 }

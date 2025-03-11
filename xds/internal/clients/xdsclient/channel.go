@@ -16,7 +16,6 @@
  *
  */
 
-// Package xdsclient contains implementation of the xDS client.
 package xdsclient
 
 import (
@@ -31,8 +30,6 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	iclientslog "google.golang.org/grpc/xds/internal/clients/internal/clientslog"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/ads"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 )
 
@@ -57,23 +54,23 @@ type xdsChannelEventHandler interface {
 	//   - a map of resources in the response, keyed by resource name
 	//   - the metadata associated with the response
 	//   - a callback to be invoked when the updated is processed
-	adsResourceUpdate(xdsclient.ResourceType, map[string]ads.DataAndErrTuple, xdsresource.UpdateMetadata, func())
+	adsResourceUpdate(ResourceType, map[string]DataAndErrTuple, xdsresource.UpdateMetadata, func())
 
 	// adsResourceDoesNotExist is called when the xdsChannel determines that a
 	// requested ADS resource does not exist.
-	adsResourceDoesNotExist(xdsclient.ResourceType, string)
+	adsResourceDoesNotExist(ResourceType, string)
 }
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
 type xdsChannelOpts struct {
-	transport          clients.Transport                   // Takes ownership of this transport.
-	serverConfig       *xdsclient.ServerConfig             // Configuration of the server to connect to.
-	xdsClientConfig    *xdsclient.Config                   // Complete xDS client configuration, used to decode resources.
-	resourceTypeGetter func(string) xdsclient.ResourceType // Function to retrieve resource parsing functionality, based on resource type.
-	eventHandler       xdsChannelEventHandler              // Callbacks for ADS stream events.
-	backoff            func(int) time.Duration             // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
-	watchExpiryTimeout time.Duration                       // Timeout for ADS resource watch expiry.
-	logPrefix          string                              // Prefix to use for logging.
+	transport          clients.Transport         // Takes ownership of this transport.
+	serverConfig       *ServerConfig             // Configuration of the server to connect to.
+	xdsClientConfig    *Config                   // Complete xDS client configuration, used to decode resources.
+	resourceTypeGetter func(string) ResourceType // Function to retrieve resource parsing functionality, based on resource type.
+	eventHandler       xdsChannelEventHandler    // Callbacks for ADS stream events.
+	backoff            func(int) time.Duration   // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
+	watchExpiryTimeout time.Duration             // Timeout for ADS resource watch expiry.
+	logPrefix          string                    // Prefix to use for logging.
 }
 
 // newXDSChannel creates a new xdsChannel instance with the provided options.
@@ -111,7 +108,7 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 	}
 	np := internal.NodeProto(opts.xdsClientConfig.Node)
 	np.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
-	xc.ads = ads.NewStreamImpl(ads.StreamOpts{
+	xc.ads = NewStreamImpl(StreamOpts{
 		Transport:          xc.transport,
 		EventHandler:       xc,
 		Backoff:            opts.backoff,
@@ -128,14 +125,14 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 type xdsChannel struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that, and hence need not be guarded by a mutex.
-	transport          clients.Transport                   // Takes ownership of this transport (used to make streaming calls).
-	ads                *ads.StreamImpl                     // An ADS stream to the management server.
-	serverConfig       *xdsclient.ServerConfig             // Configuration of the server to connect to.
-	xdsClientConfig    *xdsclient.Config                   // Complete xDS client configuration, used to decode resources.
-	resourceTypeGetter func(string) xdsclient.ResourceType // Function to retrieve resource parsing functionality, based on resource type.
-	eventHandler       xdsChannelEventHandler              // Callbacks for ADS stream events.
-	logger             *iclientslog.PrefixLogger           // Logger to use for logging.
-	closed             *syncutil.Event                     // Fired when the channel is closed.
+	transport          clients.Transport         // Takes ownership of this transport (used to make streaming calls).
+	ads                *StreamImpl               // An ADS stream to the management server.
+	serverConfig       *ServerConfig             // Configuration of the server to connect to.
+	xdsClientConfig    *Config                   // Complete xDS client configuration, used to decode resources.
+	resourceTypeGetter func(string) ResourceType // Function to retrieve resource parsing functionality, based on resource type.
+	eventHandler       xdsChannelEventHandler    // Callbacks for ADS stream events.
+	logger             *iclientslog.PrefixLogger // Logger to use for logging.
+	closed             *syncutil.Event           // Fired when the channel is closed.
 }
 
 func (xc *xdsChannel) close() {
@@ -147,7 +144,7 @@ func (xc *xdsChannel) close() {
 
 // subscribe adds a subscription for the given resource name of the given
 // resource type on the ADS stream.
-func (xc *xdsChannel) subscribe(typ xdsclient.ResourceType, name string) {
+func (xc *xdsChannel) subscribe(typ ResourceType, name string) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
 			xc.logger.Infof("Attempt to subscribe to an xDS resource of type %s and name %q on a closed channel", typ.TypeName, name)
@@ -159,7 +156,7 @@ func (xc *xdsChannel) subscribe(typ xdsclient.ResourceType, name string) {
 
 // unsubscribe removes the subscription for the given resource name of the given
 // resource type from the ADS stream.
-func (xc *xdsChannel) unsubscribe(typ xdsclient.ResourceType, name string) {
+func (xc *xdsChannel) unsubscribe(typ ResourceType, name string) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
 			xc.logger.Infof("Attempt to unsubscribe to an xDS resource of type %s and name %q on a closed channel", typ.TypeName, name)
@@ -169,7 +166,7 @@ func (xc *xdsChannel) unsubscribe(typ xdsclient.ResourceType, name string) {
 	xc.ads.Unsubscribe(typ, name)
 }
 
-// The following OnADSXxx() methods implement the ads.StreamEventHandler interface
+// The following OnADSXxx() methods implement the StreamEventHandler interface
 // and are invoked by the ADS stream implementation.
 
 // OnADSStreamError is invoked when an error occurs on the ADS stream. It
@@ -186,7 +183,7 @@ func (xc *xdsChannel) OnADSStreamError(err error) {
 
 // OnADSWatchExpiry is invoked when a watch for a resource expires. It
 // propagates the update to the xDS client.
-func (xc *xdsChannel) OnADSWatchExpiry(typ xdsclient.ResourceType, name string) {
+func (xc *xdsChannel) OnADSWatchExpiry(typ ResourceType, name string) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
 			xc.logger.Infof("Received ADS resource watch expiry for resource %q on a closed xdsChannel", name)
@@ -202,7 +199,7 @@ func (xc *xdsChannel) OnADSWatchExpiry(typ xdsclient.ResourceType, name string) 
 //
 // It returns the list of resource names in the response and any errors
 // encountered during decoding.
-func (xc *xdsChannel) OnADSResponse(resp ads.Response, onDone func()) ([]string, error) {
+func (xc *xdsChannel) OnADSResponse(resp Response, onDone func()) ([]string, error) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
 			xc.logger.Infof("Received an update from the ADS stream on closed ADS stream")
@@ -217,7 +214,7 @@ func (xc *xdsChannel) OnADSResponse(resp ads.Response, onDone func()) ([]string,
 	}
 
 	// Decode the resources and build the list of resource names to return.
-	opts := &xdsclient.DecodeOptions{
+	opts := &DecodeOptions{
 		Config:       xc.xdsClientConfig,
 		ServerConfig: xc.serverConfig,
 	}
@@ -245,7 +242,7 @@ func (xc *xdsChannel) OnADSResponse(resp ads.Response, onDone func()) ([]string,
 // If there are any errors decoding the resources, the metadata will indicate
 // that the update was NACKed, and the returned error will contain information
 // about all errors encountered by this function.
-func decodeResponse(opts *xdsclient.DecodeOptions, rType *xdsclient.ResourceType, resp ads.Response) (map[string]ads.DataAndErrTuple, xdsresource.UpdateMetadata, error) {
+func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp Response) (map[string]DataAndErrTuple, xdsresource.UpdateMetadata, error) {
 	timestamp := time.Now()
 	md := xdsresource.UpdateMetadata{
 		Version:   resp.Version,
@@ -254,7 +251,7 @@ func decodeResponse(opts *xdsclient.DecodeOptions, rType *xdsclient.ResourceType
 
 	topLevelErrors := make([]error, 0)          // Tracks deserialization errors, where we don't have a resource name.
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
-	ret := make(map[string]ads.DataAndErrTuple) // Return result, a map from resource name to either resource data or error.
+	ret := make(map[string]DataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
 	for _, r := range resp.Resources {
 		result, err := rType.Decoder.Decode(r.GetValue(), *opts)
 
@@ -265,7 +262,7 @@ func decodeResponse(opts *xdsclient.DecodeOptions, rType *xdsclient.ResourceType
 			name = xdsresource.ParseName(result.Name).String()
 		}
 		if err == nil {
-			ret[name] = ads.DataAndErrTuple{Resource: result.Resource}
+			ret[name] = DataAndErrTuple{Resource: result.Resource}
 			continue
 		}
 		if name == "" {
@@ -275,7 +272,7 @@ func decodeResponse(opts *xdsclient.DecodeOptions, rType *xdsclient.ResourceType
 		perResourceErrors[name] = err
 		// Add place holder in the map so we know this resource name was in
 		// the response.
-		ret[name] = ads.DataAndErrTuple{Err: xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error())}
+		ret[name] = DataAndErrTuple{Err: xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error())}
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {
