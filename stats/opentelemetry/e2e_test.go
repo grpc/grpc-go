@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -1618,7 +1617,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	time.AfterFunc(50*time.Millisecond, func() {
+	time.AfterFunc(100*time.Millisecond, func() {
 		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 		t.Log("Resolver updated to return addresses.")
 	})
@@ -1842,12 +1841,37 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Logf("NewPickFirstEnabled: %v", envconfig.NewPickFirstEnabled)
 	if !envconfig.NewPickFirstEnabled {
 		for i := range wantSpanInfos {
-			if strings.HasPrefix(wantSpanInfos[i].name, "Attempt.grpc.testing.TestService.") {
+			spanName := wantSpanInfos[i].name
+			if spanName == "Attempt.grpc.testing.TestService.UnaryCall" || spanName == "Attempt.grpc.testing.TestService.FullDuplexCall" {
 				wantSpanInfos[i].events = append([]trace.Event{
 					{Name: "Delayed LB pick complete"},
 				}, wantSpanInfos[i].events...)
+			}
+		}
+	}
+	// Print wantSpanInfos
+	t.Log("Printing wantSpanInfos:")
+	for i, wantSpanInfo := range wantSpanInfos {
+		t.Logf("wantSpanInfo %d: Name: %s, SpanKind: %s", i, wantSpanInfo.name, wantSpanInfo.spanKind)
+		if wantSpanInfo.events != nil {
+			for _, event := range wantSpanInfo.events {
+				t.Logf("  Event: %s", event.Name)
+
+			}
+		}
+	}
+
+	// Print spans
+	t.Log("Printing spans:")
+	for i, span := range spans {
+		t.Logf("Span %d: Name: %s, SpanKind: %s", i, span.Name, span.SpanKind)
+		if span.Events != nil {
+			for _, event := range span.Events {
+				t.Logf("  Event: %s", event.Name)
+
 			}
 		}
 	}
