@@ -3,7 +3,62 @@
 This example demonstrates how to configure OpenTelemetry Tracing on a gRPC client
 and server, showcasing the trace data it produces for RPC interactions.
 
-## Try it
+## See Traces
+
+This section shows how to configure OpenTelemetry Tracing and view trace data.
+
+### Try it
+
+1.  **Start Jaeger (Only for traces):**
+
+    * Install the Jaeger binary. Download from: [Jaeger Releases]
+    (https://github.com/jaegertracing/jaeger/releases).
+    * Run Jaeger with all-in-one:
+        ```bash
+        jaeger-all-in-one --collector.otlp.enabled=true
+        ```
+        Starts Jaeger with OTLP collection enabled.
+
+2.  **Run the gRPC Server:**
+
+    ```
+    go run server/main.go
+    ```
+
+    * Starts the gRPC server, sending trace data via OTLP.
+
+3.  **Run the gRPC Client:**
+
+    ```
+    go run client/main.go
+    ```
+
+    * Starts the gRPC client, continuously making RPC calls,
+    sending trace data via OTLP.
+
+4.  **View Traces in Jaeger UI:**
+
+    * Open browser to `http://localhost:16686`.
+    * View traces at `http://localhost:16686/`.
+    * **Find your traces:**
+        * In the "Service" dropdown, select the service name.
+          (e.g., "client" or "server", depending on how your applications are configured).
+        * Click "Find Traces".
+    * See trace info, spans, timings, and details.
+
+### Explanation (Traces)
+
+* **Continuous RPC Calls:** Client makes RPC calls, generating data.
+* **OTLP Export (Tracing):** Client and server export via OTLP.
+* **Jaeger OTLP Collector:** Jaeger receives trace data.
+* **Trace Visualization (Jaeger UI):** See RPC call flow and analyze
+    performance via visualized traces.
+
+## See Metrics
+
+This section shows how to view the metrics exposed by the gRPC client and server.
+
+### Try it
 
 1.  **Run the gRPC Server:**
 
@@ -11,8 +66,7 @@ and server, showcasing the trace data it produces for RPC interactions.
     go run server/main.go
     ```
 
-    * This starts the gRPC server, which is configured to send trace data via
-    OTLP.
+    * This starts the gRPC server, which exposes Prometheus metrics.
 
 2.  **Run the gRPC Client:**
 
@@ -20,42 +74,25 @@ and server, showcasing the trace data it produces for RPC interactions.
     go run client/main.go
     ```
 
-    * This starts the gRPC client, which continuously makes RPC calls to the
-    server and is configured to send trace data via OTLP.
+    * This starts the gRPC client, which exposes Prometheus metrics.
 
-3. **Start the OpenTelemetry Collector:**
+3.  **View Metrics:**
 
-    * **Local Collector:**
-        * Install the `otelcol-contrib` binary.
-        * NOTE: To see the builder manifests used for official binaries, check 
-        [OpenTelemetry Collector Releases]
-        (https://github.com/open-telemetry/opentelemetry-collector-releases).
-        * For the OpenTelemetry Collector Core distribution specifically, see 
-        [OpenTelemetry Collector Core Releases]
-        (https://github.com/open-telemetry/opentelemetry-collector-releases/tree/main/distributions/otelcol).
-        * The collector will use the `collector-config.yaml` file present in the same directory.
-        * **Execute the collector:**
-            ```bash
-            /path/to/otelcol-contrib --config=collector-config.yaml
-            ```
-            (Replace `/path/to/otelcol-contrib` with the actual path to your `otelcol-contrib` binary.)
+    ```
+    curl localhost:9464/metrics
+    curl localhost:9465/metrics
+    ```
 
-4.  **View Traces in the Collector Output:**
+### Explanation (Metrics)
 
-    * The OpenTelemetry Collector, using the `debug` exporter, will print trace
-    data to the console.
-    * Monitor the collector's console output to see the trace information.
 
-## Explanation
-
-* **Continuous RPC Calls:** The client continuously makes RPC calls to the 
+* **Continuous RPC Calls:** The client continuously makes RPC calls to the 
     server, generating telemetry data.
-* **OTLP Export (Tracing):** The client and server are configured to export
-    trace data via OTLP.
-* **OTLP Collector (Tracing):** The OpenTelemetry Collector receives the trace
-    data from the client and server.
-* **Debug Exporter (Tracing):** The Collector prints the trace data to the 
-    console, allowing you to view the trace information directly.
-* **Trace Visualization (Console):** By monitoring the collector's console 
-    output, you can see the flow of RPC calls and analyze the performance of
-    your gRPC services.
+* **Prometheus Exporter:** Both the client and server expose a Prometheus 
+    exporter to listen and provide metrics. This defaults to :9464 for the 
+    server and :9465 for the client.
+* **Metrics Export:** The OpenTelemetry configuration exports metrics to the
+    Prometheus exporter.
+* **Viewing Metrics:** By curling the exposed Prometheus ports, you can view 
+    the metrics recorded by the client and server. These metrics provide insights 
+    into the performance and behavior of the gRPC calls.
