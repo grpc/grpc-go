@@ -113,7 +113,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 // expected type, and that the received updates and metadata match the expected
 // values. The function ignores the timestamp fields in the metadata, as those
 // are expected to be different.
-func verifyUpdateAndMetadata(ctx context.Context, t *testing.T, eh *testEventHandler, wantUpdates map[string]DataAndErrTuple, wantMD xdsresource.UpdateMetadata) {
+func verifyUpdateAndMetadata(ctx context.Context, t *testing.T, eh *testEventHandler, wantUpdates map[string]dataAndErrTuple, wantMD xdsresource.UpdateMetadata) {
 	t.Helper()
 
 	gotTyp, gotUpdates, gotMD, err := eh.waitForUpdate(ctx)
@@ -238,7 +238,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 		desc                     string
 		resourceNamesToRequest   []string
 		managementServerResponse *v3discoverypb.DiscoveryResponse
-		wantUpdates              map[string]DataAndErrTuple
+		wantUpdates              map[string]dataAndErrTuple
 		wantMD                   xdsresource.UpdateMetadata
 		wantErr                  error
 	}{
@@ -276,7 +276,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					},
 				})},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
 					Err: cmpopts.AnyError,
 				},
@@ -308,7 +308,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					}),
 				},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName2: {
 					Err: cmpopts.AnyError,
 				},
@@ -330,7 +330,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources:   []*anypb.Any{listener1},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
 					Resource: &ListenerResourceData{Resource: ListenerUpdate{
 						RouteConfigName: routeName,
@@ -354,7 +354,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					listener2,
 				},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName2: {
 					Resource: &ListenerResourceData{Resource: ListenerUpdate{
 						RouteConfigName: routeName,
@@ -389,7 +389,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 					listener2,
 				},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {Err: cmpopts.AnyError},
 				listenerName2: {
 					Resource: &ListenerResourceData{Resource: ListenerUpdate{
@@ -415,7 +415,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources:   []*anypb.Any{listener1, listener2},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
 					Resource: &ListenerResourceData{Resource: ListenerUpdate{
 						RouteConfigName: routeName,
@@ -442,7 +442,7 @@ func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				Resources:   []*anypb.Any{listener1, listener2},
 			},
-			wantUpdates: map[string]DataAndErrTuple{
+			wantUpdates: map[string]dataAndErrTuple{
 				listenerName1: {
 					Resource: &ListenerResourceData{Resource: ListenerUpdate{
 						RouteConfigName: routeName,
@@ -596,7 +596,7 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 		t.Fatalf("Failed to create listener resource: %v", err)
 	}
 
-	wantUpdates := map[string]DataAndErrTuple{
+	wantUpdates := map[string]dataAndErrTuple{
 		listenerResourceName: {
 			Resource: &ListenerResourceData{
 				Resource: ListenerUpdate{
@@ -723,7 +723,7 @@ func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []stri
 func newTestEventHandler() *testEventHandler {
 	return &testEventHandler{
 		typeCh:    make(chan ResourceType, 1),
-		updateCh:  make(chan map[string]DataAndErrTuple, 1),
+		updateCh:  make(chan map[string]dataAndErrTuple, 1),
 		mdCh:      make(chan xdsresource.UpdateMetadata, 1),
 		nameCh:    make(chan string, 1),
 		connErrCh: make(chan error, 1),
@@ -735,7 +735,7 @@ func newTestEventHandler() *testEventHandler {
 // channels on which it makes these events available to the test.
 type testEventHandler struct {
 	typeCh    chan ResourceType               // Resource type of an update or resource-does-not-exist error.
-	updateCh  chan map[string]DataAndErrTuple // Resource updates.
+	updateCh  chan map[string]dataAndErrTuple // Resource updates.
 	mdCh      chan xdsresource.UpdateMetadata // Metadata from an update.
 	nameCh    chan string                     // Name of the non-existent resource.
 	connErrCh chan error                      // Connectivity error.
@@ -755,7 +755,7 @@ func (ta *testEventHandler) waitForStreamFailure(ctx context.Context) error {
 	return nil
 }
 
-func (ta *testEventHandler) adsResourceUpdate(typ ResourceType, updates map[string]DataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
+func (ta *testEventHandler) adsResourceUpdate(typ ResourceType, updates map[string]dataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
 	ta.typeCh <- typ
 	ta.updateCh <- updates
 	ta.mdCh <- md
@@ -765,9 +765,9 @@ func (ta *testEventHandler) adsResourceUpdate(typ ResourceType, updates map[stri
 // waitForUpdate waits for the next resource update event from the xdsChannel.
 // It returns the resource type, the resource updates, and the update metadata.
 // If the context is canceled, it returns an error.
-func (ta *testEventHandler) waitForUpdate(ctx context.Context) (ResourceType, map[string]DataAndErrTuple, xdsresource.UpdateMetadata, error) {
+func (ta *testEventHandler) waitForUpdate(ctx context.Context) (ResourceType, map[string]dataAndErrTuple, xdsresource.UpdateMetadata, error) {
 	var typ ResourceType
-	var updates map[string]DataAndErrTuple
+	var updates map[string]dataAndErrTuple
 	var md xdsresource.UpdateMetadata
 
 	select {

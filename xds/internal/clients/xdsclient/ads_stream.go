@@ -49,75 +49,75 @@ const (
 	perRPCVerbosityLevel = 9
 )
 
-// Response represents a response received on the ADS stream. It contains the
+// response represents a response received on the ADS stream. It contains the
 // type URL, version, and resources for the response.
-type Response struct {
-	TypeURL   string
-	Version   string
-	Resources []*anypb.Any
+type response struct {
+	typeURL   string
+	version   string
+	resources []*anypb.Any
 }
 
-// DataAndErrTuple is a struct that holds a resource and an error. It is used to
+// dataAndErrTuple is a struct that holds a resource and an error. It is used to
 // return a resource and any associated error from a function.
-type DataAndErrTuple struct {
+type dataAndErrTuple struct {
 	Resource ResourceData
 	Err      error
 }
 
-// StreamEventHandler is an interface that defines the callbacks for events that
+// streamEventHandler is an interface that defines the callbacks for events that
 // occur on the ADS stream. Methods on this interface may be invoked
 // concurrently and implementations need to handle them in a thread-safe manner.
-type StreamEventHandler interface {
-	OnADSStreamError(error)                           // Called when the ADS stream breaks.
-	OnADSWatchExpiry(ResourceType, string)            // Called when the watch timer expires for a resource.
-	OnADSResponse(Response, func()) ([]string, error) // Called when a response is received on the ADS stream.
+type streamEventHandler interface {
+	onADSStreamError(error)                           // Called when the ADS stream breaks.
+	onADSWatchExpiry(ResourceType, string)            // Called when the watch timer expires for a resource.
+	onADSResponse(response, func()) ([]string, error) // Called when a response is received on the ADS stream.
 }
 
-// WatchState is a enum that describes the watch state of a particular
+// watchState is a enum that describes the watch state of a particular
 // resource.
-type WatchState int
+type watchState int
 
 const (
-	// ResourceWatchStateStarted is the state where a watch for a resource was
+	// resourceWatchStateStarted is the state where a watch for a resource was
 	// started, but a request asking for that resource is yet to be sent to the
 	// management server.
-	ResourceWatchStateStarted WatchState = iota
-	// ResourceWatchStateRequested is the state when a request has been sent for
+	resourceWatchStateStarted watchState = iota
+	// resourceWatchStateRequested is the state when a request has been sent for
 	// the resource being watched.
-	ResourceWatchStateRequested
+	resourceWatchStateRequested
 	// ResourceWatchStateReceived is the state when a response has been received
 	// for the resource being watched.
-	ResourceWatchStateReceived
-	// ResourceWatchStateTimeout is the state when the watch timer associated
+	resourceWatchStateReceived
+	// resourceWatchStateTimeout is the state when the watch timer associated
 	// with the resource expired because no response was received.
-	ResourceWatchStateTimeout
+	resourceWatchStateTimeout
 )
 
-// ResourceWatchState is the state corresponding to a resource being watched.
-type ResourceWatchState struct {
-	State       WatchState  // Watch state of the resource.
+// resourceWatchState is the state corresponding to a resource being watched.
+type resourceWatchState struct {
+	State       watchState  // Watch state of the resource.
 	ExpiryTimer *time.Timer // Timer for the expiry of the watch.
 }
 
-// State corresponding to a resource type.
+// state corresponding to a resource type.
 type resourceTypeState struct {
 	version             string                         // Last acked version. Should not be reset when the stream breaks.
 	nonce               string                         // Last received nonce. Should be reset when the stream breaks.
 	bufferedRequests    chan struct{}                  // Channel to buffer requests when writing is blocked.
-	subscribedResources map[string]*ResourceWatchState // Map of subscribed resource names to their state.
+	subscribedResources map[string]*resourceWatchState // Map of subscribed resource names to their state.
 	pendingWrite        bool                           // True if there is a pending write for this resource type.
 }
 
-// StreamImpl provides the functionality associated with an ADS (Aggregated
+// streamImpl provides the functionality associated with an ADS (Aggregated
 // Discovery Service) stream on the client side. It manages the lifecycle of the
 // ADS stream, including creating the stream, sending requests, and handling
 // responses. It also handles flow control and retries for the stream.
-type StreamImpl struct {
+type streamImpl struct {
 	// The following fields are initialized from arguments passed to the
 	// constructor and are read-only afterwards, and hence can be accessed
 	// without a mutex.
 	transport          clients.Transport       // Transport to use for ADS stream.
-	eventHandler       StreamEventHandler      // Callbacks into the xdsChannel.
+	eventHandler       streamEventHandler      // Callbacks into the xdsChannel.
 	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto          *v3corepb.Node          // Identifies the gRPC application.
 	watchExpiryTimeout time.Duration           // Resource watch expiry timeout
@@ -137,21 +137,21 @@ type StreamImpl struct {
 	firstRequest      bool                                // False after the first request is sent out.
 }
 
-// StreamOpts contains the options for creating a new ADS Stream.
-type StreamOpts struct {
+// streamOpts contains the options for creating a new ADS Stream.
+type streamOpts struct {
 	Transport          clients.Transport       // xDS transport to create the stream on.
-	EventHandler       StreamEventHandler      // Callbacks for stream events.
+	EventHandler       streamEventHandler      // Callbacks for stream events.
 	Backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	NodeProto          *v3corepb.Node          // Node proto to identify the gRPC application.
 	WatchExpiryTimeout time.Duration           // Resource watch expiry timeout.
 	LogPrefix          string                  // Prefix to be used for log messages.
 }
 
-// NewStreamImpl initializes a new StreamImpl instance using the given
+// newStreamImpl initializes a new StreamImpl instance using the given
 // parameters.  It also launches goroutines responsible for managing reads and
 // writes for messages of the underlying stream.
-func NewStreamImpl(opts StreamOpts) *StreamImpl {
-	s := &StreamImpl{
+func newStreamImpl(opts streamOpts) *streamImpl {
+	s := &streamImpl{
 		transport:          opts.Transport,
 		eventHandler:       opts.EventHandler,
 		backoff:            opts.Backoff,
@@ -174,18 +174,18 @@ func NewStreamImpl(opts StreamOpts) *StreamImpl {
 }
 
 // Stop blocks until the stream is closed and all spawned goroutines exit.
-func (s *StreamImpl) Stop() {
+func (s *streamImpl) Stop() {
 	s.cancel()
 	s.requestCh.Close()
 	<-s.runnerDoneCh
 	s.logger.Infof("Stopping ADS stream")
 }
 
-// Subscribe subscribes to the given resource. It is assumed that multiple
+// subscribe subscribes to the given resource. It is assumed that multiple
 // subscriptions for the same resource is deduped at the caller. A discovery
 // request is sent out on the underlying stream for the resource type when there
 // is sufficient flow control quota.
-func (s *StreamImpl) Subscribe(typ ResourceType, name string) {
+func (s *streamImpl) subscribe(typ ResourceType, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Subscribing to resource %q of type %q", name, typ.TypeName)
 	}
@@ -198,7 +198,7 @@ func (s *StreamImpl) Subscribe(typ ResourceType, name string) {
 		// An entry in the type state map is created as part of the first
 		// subscription request for this type.
 		state = &resourceTypeState{
-			subscribedResources: make(map[string]*ResourceWatchState),
+			subscribedResources: make(map[string]*resourceWatchState),
 			bufferedRequests:    make(chan struct{}, 1),
 		}
 		s.resourceTypeState[typ] = state
@@ -206,7 +206,7 @@ func (s *StreamImpl) Subscribe(typ ResourceType, name string) {
 
 	// Create state for the newly subscribed resource. The watch timer will
 	// be started when a request for this resource is actually sent out.
-	state.subscribedResources[name] = &ResourceWatchState{State: ResourceWatchStateStarted}
+	state.subscribedResources[name] = &resourceWatchState{State: resourceWatchStateStarted}
 	state.pendingWrite = true
 
 	// Send a request for the resource type with updated subscriptions.
@@ -217,7 +217,7 @@ func (s *StreamImpl) Subscribe(typ ResourceType, name string) {
 // the given resource does not exist. The watch expiry timer associated with the
 // resource is stopped if one is active. A discovery request is sent out on the
 // stream for the resource type when there is sufficient flow control quota.
-func (s *StreamImpl) Unsubscribe(typ ResourceType, name string) {
+func (s *streamImpl) Unsubscribe(typ ResourceType, name string) {
 	if s.logger.V(2) {
 		s.logger.Infof("Unsubscribing to resource %q of type %q", name, typ.TypeName)
 	}
@@ -249,7 +249,7 @@ func (s *StreamImpl) Unsubscribe(typ ResourceType, name string) {
 // messages on the stream. Whenever an existing stream fails, it performs
 // exponential backoff (if no messages were received on that stream) before
 // creating a new stream.
-func (s *StreamImpl) runner(ctx context.Context) {
+func (s *streamImpl) runner(ctx context.Context) {
 	defer close(s.runnerDoneCh)
 
 	go s.send(ctx)
@@ -294,7 +294,7 @@ func (s *StreamImpl) runner(ctx context.Context) {
 // two scenarios:
 // - a new subscription or unsubscription request is received
 // - a new stream is created after the previous one failed
-func (s *StreamImpl) send(ctx context.Context) {
+func (s *streamImpl) send(ctx context.Context) {
 	// Stores the most recent stream instance received on streamCh.
 	var stream clients.Stream
 	for {
@@ -328,7 +328,7 @@ func (s *StreamImpl) send(ctx context.Context) {
 // and will be sent later. This method also starts the watch expiry timer for
 // resources that were sent in the request for the first time, i.e. their watch
 // state is `watchStateStarted`.
-func (s *StreamImpl) sendNew(stream clients.Stream, typ ResourceType) error {
+func (s *streamImpl) sendNew(stream clients.Stream, typ ResourceType) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -359,7 +359,7 @@ func (s *StreamImpl) sendNew(stream clients.Stream, typ ResourceType) error {
 // recovering from a broken stream.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *StreamImpl) sendExisting(stream clients.Stream) error {
+func (s *streamImpl) sendExisting(stream clients.Stream) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -394,7 +394,7 @@ func (s *StreamImpl) sendExisting(stream clients.Stream) error {
 // received response was not yet complete.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *StreamImpl) sendBuffered(stream clients.Stream) error {
+func (s *streamImpl) sendBuffered(stream clients.Stream) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -419,7 +419,7 @@ func (s *StreamImpl) sendBuffered(stream clients.Stream) error {
 // watch timers are started for the resources in the request.
 //
 // Caller needs to hold c.mu.
-func (s *StreamImpl) sendMessageIfWritePendingLocked(stream clients.Stream, typ ResourceType, state *resourceTypeState) error {
+func (s *streamImpl) sendMessageIfWritePendingLocked(stream clients.Stream, typ ResourceType, state *resourceTypeState) error {
 	if !state.pendingWrite {
 		if s.logger.V(2) {
 			s.logger.Infof("Skipping sending request for type %q, because all subscribed resources were already sent", typ.TypeURL)
@@ -449,7 +449,7 @@ func (s *StreamImpl) sendMessageIfWritePendingLocked(stream clients.Stream, typ 
 // error if the request could not be sent.
 //
 // Caller needs to hold c.mu.
-func (s *StreamImpl) sendMessageLocked(stream clients.Stream, names []string, url, version, nonce string, nackErr error) error {
+func (s *streamImpl) sendMessageLocked(stream clients.Stream, names []string, url, version, nonce string, nackErr error) error {
 	req := &v3discoverypb.DiscoveryRequest{
 		ResourceNames: names,
 		TypeUrl:       url,
@@ -502,7 +502,7 @@ func (s *StreamImpl) sendMessageLocked(stream clients.Stream, names []string, ur
 //
 // It returns a boolean indicating whether at least one message was received
 // from the server.
-func (s *StreamImpl) recv(ctx context.Context, stream clients.Stream) bool {
+func (s *streamImpl) recv(ctx context.Context, stream clients.Stream) bool {
 	msgReceived := false
 	for {
 		// Wait for ADS stream level flow control to be available, and send out
@@ -526,15 +526,15 @@ func (s *StreamImpl) recv(ctx context.Context, stream clients.Stream) bool {
 
 		// Invoke the onResponse event handler to parse the incoming message and
 		// decide whether to send an ACK or NACK.
-		resp := Response{
-			Resources: resources,
-			TypeURL:   url,
-			Version:   version,
+		resp := response{
+			resources: resources,
+			typeURL:   url,
+			version:   version,
 		}
 		var resourceNames []string
 		var nackErr error
 		s.fc.setPending()
-		resourceNames, nackErr = s.eventHandler.OnADSResponse(resp, s.fc.onDone)
+		resourceNames, nackErr = s.eventHandler.onADSResponse(resp, s.fc.onDone)
 		if xdsresource.ErrType(nackErr) == xdsresource.ErrorTypeResourceTypeUnsupported {
 			// Based on gRFC A27, a general guiding principle is that if the
 			// server sends something the client didn't actually subscribe to,
@@ -553,7 +553,7 @@ func (s *StreamImpl) recv(ctx context.Context, stream clients.Stream) bool {
 	}
 }
 
-func (s *StreamImpl) recvMessage(stream clients.Stream) (resources []*anypb.Any, url, version, nonce string, err error) {
+func (s *streamImpl) recvMessage(stream clients.Stream) (resources []*anypb.Any, url, version, nonce string, err error) {
 	r, err := stream.Recv()
 	if err != nil {
 		return nil, "", "", "", err
@@ -578,7 +578,7 @@ func (s *StreamImpl) recvMessage(stream clients.Stream) (resources []*anypb.Any,
 //   - updates resource type specific state
 //   - updates resource specific state for resources in the response
 //   - sends an ACK or NACK to the server based on the response
-func (s *StreamImpl) onRecv(stream clients.Stream, names []string, url, version, nonce string, nackErr error) {
+func (s *streamImpl) onRecv(stream clients.Stream, names []string, url, version, nonce string, nackErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -616,8 +616,8 @@ func (s *StreamImpl) onRecv(stream clients.Stream, names []string, url, version,
 			s.logger.Warningf("ADS stream received a response for resource %q, but no state exists for it", name)
 			continue
 		}
-		if ws := rs.State; ws == ResourceWatchStateStarted || ws == ResourceWatchStateRequested {
-			rs.State = ResourceWatchStateReceived
+		if ws := rs.State; ws == resourceWatchStateStarted || ws == resourceWatchStateRequested {
+			rs.State = resourceWatchStateReceived
 			if rs.ExpiryTimer != nil {
 				rs.ExpiryTimer.Stop()
 				rs.ExpiryTimer = nil
@@ -644,7 +644,7 @@ func (s *StreamImpl) onRecv(stream clients.Stream, names []string, url, version,
 // resources that were in the requested state. It also handles the case where
 // the ADS stream was closed after receiving a response, which is not
 // considered an error.
-func (s *StreamImpl) onError(err error, msgReceived bool) {
+func (s *streamImpl) onError(err error, msgReceived bool) {
 	// For resources that been requested but not yet responded to by the
 	// management server, stop the resource timers and reset the watch state to
 	// watchStateStarted. This is because we don't want the expiry timer to be
@@ -652,14 +652,14 @@ func (s *StreamImpl) onError(err error, msgReceived bool) {
 	s.mu.Lock()
 	for _, state := range s.resourceTypeState {
 		for _, rs := range state.subscribedResources {
-			if rs.State != ResourceWatchStateRequested {
+			if rs.State != resourceWatchStateRequested {
 				continue
 			}
 			if rs.ExpiryTimer != nil {
 				rs.ExpiryTimer.Stop()
 				rs.ExpiryTimer = nil
 			}
-			rs.State = ResourceWatchStateStarted
+			rs.State = resourceWatchStateStarted
 		}
 	}
 	s.mu.Unlock()
@@ -674,7 +674,7 @@ func (s *StreamImpl) onError(err error, msgReceived bool) {
 		err = xdsresource.NewError(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
 	}
 
-	s.eventHandler.OnADSStreamError(err)
+	s.eventHandler.onADSStreamError(err)
 }
 
 // startWatchTimersLocked starts the expiry timers for the given resource names
@@ -684,30 +684,30 @@ func (s *StreamImpl) onError(err error, msgReceived bool) {
 // watch state is set to "timeout" and the event handler callback is called.
 //
 // The caller must hold the s.mu lock.
-func (s *StreamImpl) startWatchTimersLocked(typ ResourceType, names []string) {
+func (s *streamImpl) startWatchTimersLocked(typ ResourceType, names []string) {
 	typeState := s.resourceTypeState[typ]
 	for _, name := range names {
 		resourceState, ok := typeState.subscribedResources[name]
 		if !ok {
 			continue
 		}
-		if resourceState.State != ResourceWatchStateStarted {
+		if resourceState.State != resourceWatchStateStarted {
 			continue
 		}
-		resourceState.State = ResourceWatchStateRequested
+		resourceState.State = resourceWatchStateRequested
 
 		rs := resourceState
 		resourceState.ExpiryTimer = time.AfterFunc(s.watchExpiryTimeout, func() {
 			s.mu.Lock()
-			rs.State = ResourceWatchStateTimeout
+			rs.State = resourceWatchStateTimeout
 			rs.ExpiryTimer = nil
 			s.mu.Unlock()
-			s.eventHandler.OnADSWatchExpiry(typ, name)
+			s.eventHandler.onADSWatchExpiry(typ, name)
 		})
 	}
 }
 
-func resourceNames(m map[string]*ResourceWatchState) []string {
+func resourceNames(m map[string]*resourceWatchState) []string {
 	ret := make([]string, len(m))
 	idx := 0
 	for name := range m {
@@ -717,49 +717,20 @@ func resourceNames(m map[string]*ResourceWatchState) []string {
 	return ret
 }
 
-// TriggerResourceNotFoundForTesting triggers a resource not found event for the
-// given resource type and name.  This is intended for testing purposes only, to
-// simulate a resource not found scenario.
-func (s *StreamImpl) TriggerResourceNotFoundForTesting(typ ResourceType, resourceName string) {
-	s.mu.Lock()
-
-	state, ok := s.resourceTypeState[typ]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-	resourceState, ok := state.subscribedResources[resourceName]
-	if !ok {
-		s.mu.Unlock()
-		return
-	}
-
-	if s.logger.V(2) {
-		s.logger.Infof("Triggering resource not found for type: %s, resource name: %s", typ.TypeName, resourceName)
-	}
-	resourceState.State = ResourceWatchStateTimeout
-	if resourceState.ExpiryTimer != nil {
-		resourceState.ExpiryTimer.Stop()
-		resourceState.ExpiryTimer = nil
-	}
-	s.mu.Unlock()
-	go s.eventHandler.OnADSWatchExpiry(typ, resourceName)
-}
-
 // ResourceWatchStateForTesting returns the ResourceWatchState for the given
 // resource type and name.  This is intended for testing purposes only, to
 // inspect the internal state of the ADS stream.
-func (s *StreamImpl) ResourceWatchStateForTesting(typ ResourceType, resourceName string) (ResourceWatchState, error) {
+func (s *streamImpl) ResourceWatchStateForTesting(typ ResourceType, resourceName string) (resourceWatchState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	state, ok := s.resourceTypeState[typ]
 	if !ok {
-		return ResourceWatchState{}, fmt.Errorf("unknown resource type: %v", typ)
+		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", typ)
 	}
 	resourceState, ok := state.subscribedResources[resourceName]
 	if !ok {
-		return ResourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
+		return resourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
 	}
 	return *resourceState, nil
 }
