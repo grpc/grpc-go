@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/grpclog"
+	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/clientslog"
 	"google.golang.org/grpc/xds/internal/clients/internal"
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
-	iclientslog "google.golang.org/grpc/xds/internal/clients/internal/clientslog"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 )
@@ -99,9 +99,9 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		closed:             syncutil.NewEvent(),
 	}
 
-	l := clientslog.Component("xds")
+	l := grpclog.Component("xds")
 	logPrefix := opts.logPrefix + fmt.Sprintf("[xds-channel %p] ", xc)
-	xc.logger = iclientslog.NewPrefixLogger(l, logPrefix)
+	xc.logger = igrpclog.NewPrefixLogger(l, logPrefix)
 
 	if opts.backoff == nil {
 		opts.backoff = backoff.DefaultExponential.Backoff
@@ -131,7 +131,7 @@ type xdsChannel struct {
 	xdsClientConfig    *Config                   // Complete xDS client configuration, used to decode resources.
 	resourceTypeGetter func(string) ResourceType // Function to retrieve resource parsing functionality, based on resource type.
 	eventHandler       xdsChannelEventHandler    // Callbacks for ADS stream events.
-	logger             *iclientslog.PrefixLogger // Logger to use for logging.
+	logger             *igrpclog.PrefixLogger    // Logger to use for logging.
 	closed             *syncutil.Event           // Fired when the channel is closed.
 }
 

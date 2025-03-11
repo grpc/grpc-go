@@ -25,11 +25,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc/grpclog"
+	igrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/clientslog"
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/buffer"
-	iclientslog "google.golang.org/grpc/xds/internal/clients/internal/clientslog"
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
@@ -121,7 +121,7 @@ type streamImpl struct {
 	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
 	nodeProto          *v3corepb.Node          // Identifies the gRPC application.
 	watchExpiryTimeout time.Duration           // Resource watch expiry timeout
-	logger             *iclientslog.PrefixLogger
+	logger             *igrpclog.PrefixLogger
 
 	// The following fields are initialized in the constructor and are not
 	// written to afterwards, and hence can be accessed without a mutex.
@@ -164,8 +164,8 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 		resourceTypeState: make(map[ResourceType]*resourceTypeState),
 	}
 
-	l := clientslog.Component("xds")
-	s.logger = iclientslog.NewPrefixLogger(l, opts.LogPrefix+fmt.Sprintf("[ads-stream %p] ", s))
+	l := grpclog.Component("xds")
+	s.logger = igrpclog.NewPrefixLogger(l, opts.LogPrefix+fmt.Sprintf("[ads-stream %p] ", s))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
@@ -741,7 +741,7 @@ func (s *streamImpl) ResourceWatchStateForTesting(typ ResourceType, resourceName
 //
 // The lifetime of the flow control is tied to the lifetime of the stream.
 type adsFlowControl struct {
-	logger *iclientslog.PrefixLogger
+	logger *igrpclog.PrefixLogger
 
 	// Whether the most recent update is pending consumption by all watchers.
 	pending atomic.Bool
@@ -751,7 +751,7 @@ type adsFlowControl struct {
 }
 
 // newADSFlowControl returns a new adsFlowControl.
-func newADSFlowControl(logger *iclientslog.PrefixLogger) *adsFlowControl {
+func newADSFlowControl(logger *igrpclog.PrefixLogger) *adsFlowControl {
 	return &adsFlowControl{
 		logger:  logger,
 		readyCh: make(chan struct{}, 1),
