@@ -36,7 +36,7 @@ const traceName = "grpc-go"
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(traceName, trace.WithInstrumentationVersion(grpc.Version))
-	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	ctx, span := tracer.Start(ctx, mn)
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
 	ai.traceSpan = span
