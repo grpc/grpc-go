@@ -23,7 +23,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"testing"
+	"time"
 
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -32,7 +35,18 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 const (
+	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
+	defaultTestTimeout            = 5 * time.Second
+	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 	// ListenerResourceTypeName represents the transport agnostic name for the
 	// listener resource.
 	ListenerResourceTypeName = "ListenerResource"

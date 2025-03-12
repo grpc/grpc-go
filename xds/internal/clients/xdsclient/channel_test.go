@@ -31,7 +31,6 @@ import (
 	"github.com/google/uuid"
 
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 
 	"google.golang.org/grpc/xds/internal/clients"
@@ -49,20 +48,6 @@ import (
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-)
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-const (
-	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
-	defaultTestTimeout            = 5 * time.Second
-	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 // xdsChannelForTest creates an xdsChannel to the specified serverURI for
