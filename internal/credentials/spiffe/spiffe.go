@@ -23,7 +23,6 @@ package spiffe
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -66,17 +65,17 @@ func BundleMapFromBytes(bundleMapBytes []byte) (BundleMap, error) {
 		return nil, err
 	}
 	if result.Bundles == nil {
-		return nil, errors.New("no content in spiffe bundle map file")
+		return nil, fmt.Errorf("spiffe: BundleMapFromBytes() no bundles parsed from spiffe bundle map bytes")
 	}
 	bundleMap := map[string]*spiffebundle.Bundle{}
 	for td, jsonBundle := range result.Bundles {
 		trustDomain, err := spiffeid.TrustDomainFromString(td)
 		if err != nil {
-			return nil, fmt.Errorf("spiffe: SPIFFEBundleMapFromBytes() invalid trust domain (%v) found when parsing SPIFFE Bundle Map: %v", td, err)
+			return nil, fmt.Errorf("spiffe: BundleMapFromBytes() invalid trust domain (%v) found when parsing SPIFFE Bundle Map: %v", td, err)
 		}
 		bundle, err := spiffebundle.Parse(trustDomain, jsonBundle)
 		if err != nil {
-			return nil, fmt.Errorf("spiffe: SPIFFEBundleMapFromBytes() failed to parse bundle for trust domain %v: %v", td, err)
+			return nil, fmt.Errorf("spiffe: BundleMapFromBytes() failed to parse bundle for trust domain %v: %v", td, err)
 		}
 		bundleMap[td] = bundle
 	}
