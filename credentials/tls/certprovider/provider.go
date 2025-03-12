@@ -98,7 +98,7 @@ type KeyMaterial struct {
 	// SPIFFEBundleMap is an in-memory representation of a spiffe trust bundle
 	// map. If this value exists, it will be used to find the roots for a given
 	// trust domain rather than the Roots in this struct.
-	SPIFFEBundleMap spiffe.SPIFFEBundleMap
+	SPIFFEBundleMap spiffe.BundleMap
 }
 
 // BuildOptions contains parameters passed to a Provider at build time.

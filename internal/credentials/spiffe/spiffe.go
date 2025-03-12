@@ -31,9 +31,9 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
-// SPIFFEBundleMap represents a SPIFFE Bundle Map per the spec
+// BundleMap represents a SPIFFE Bundle Map per the spec
 // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format.
-type SPIFFEBundleMap map[string]*spiffebundle.Bundle
+type BundleMap map[string]*spiffebundle.Bundle
 
 type partialParsedSPIFFEBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
@@ -45,21 +45,21 @@ type partialParsedSPIFFEBundleMap struct {
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
 // behavior occurs which causes the last processed entry to be the entry in the
 // parsed map.
-func LoadSPIFFEBundleMap(filePath string) (SPIFFEBundleMap, error) {
+func LoadSPIFFEBundleMap(filePath string) (BundleMap, error) {
 	bundleMapRaw, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
-	return SPIFFEBundleMapFromBytes(bundleMapRaw)
+	return BundleMapFromBytes(bundleMapRaw)
 }
 
-// SPIFFEBundleMapFromBytes parses bytes into a SPIFFE Bundle Map. See the
+// BundleMapFromBytes parses bytes into a SPIFFE Bundle Map. See the
 // SPIFFE Bundle Map spec for more detail -
 // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
 // behavior occurs which causes the last processed entry to be the entry in the
 // parsed map.
-func SPIFFEBundleMapFromBytes(bundleMapBytes []byte) (SPIFFEBundleMap, error) {
+func BundleMapFromBytes(bundleMapBytes []byte) (BundleMap, error) {
 	var result partialParsedSPIFFEBundleMap
 	err := json.Unmarshal(bundleMapBytes, &result)
 	if err != nil {

@@ -221,7 +221,7 @@ func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
 	if bytes.Equal(w.spiffeBundleMapFileContents, spiffeBundleMapContents) {
 		return nil
 	}
-	bundleMap, err := spiffe.SPIFFEBundleMapFromBytes(spiffeBundleMapContents)
+	bundleMap, err := spiffe.BundleMapFromBytes(spiffeBundleMapContents)
 	if err != nil {
 		logger.Warning("failed to parse spiffe bundle map")
 		return err
