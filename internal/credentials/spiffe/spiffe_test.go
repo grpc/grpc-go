@@ -72,49 +72,27 @@ func loadX509Cert(t *testing.T, filePath string) *x509.Certificate {
 }
 
 func TestLoadSPIFFEBundleMapFailures(t *testing.T) {
-	testCases := []struct {
-		filePath string
-	}{
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_corrupted_cert.json"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_malformed.json"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_wrong_kid.json"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_wrong_kty.json"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_wrong_multi_certs.json"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_wrong_root.json"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_wrong_seq_type.json"),
-		},
-		{
-			filePath: testdata.Path("NOT_A_REAL_FILE"),
-		},
-		{
-			filePath: testdata.Path("spiffe/spiffebundle_invalid_trustdomain.json"),
-		},
+	filePaths := []string{
+		testdata.Path("spiffe/spiffebundle_corrupted_cert.json"),
+		testdata.Path("spiffe/spiffebundle_malformed.json"),
+		testdata.Path("spiffe/spiffebundle_wrong_kid.json"),
+		testdata.Path("spiffe/spiffebundle_wrong_kty.json"),
+		testdata.Path("spiffe/spiffebundle_wrong_multi_certs.json"),
+		testdata.Path("spiffe/spiffebundle_wrong_root.json"),
+		testdata.Path("spiffe/spiffebundle_wrong_seq_type.json"),
+		testdata.Path("NOT_A_REAL_FILE"),
+		testdata.Path("spiffe/spiffebundle_invalid_trustdomain.json"),
 	}
-
-	for _, tc := range testCases {
-		t.Run(tc.filePath, func(t *testing.T) {
-			_, err := LoadSPIFFEBundleMap(tc.filePath)
-			if err == nil {
-				t.Fatalf("LoadSPIFFEBundleMap(%v) did not fail but should have.", tc.filePath)
+	for _, path := range filePaths {
+		t.Run(path, func(t *testing.T) {
+			if _, err := LoadSPIFFEBundleMap(path); err == nil {
+				t.Fatalf("LoadSPIFFEBundleMap(%v) did not fail but should have.", path)
 			}
 		})
 	}
 }
 
-func TestLoadSPIFFEBundleMapFailuresTODO(t *testing.T) {
+func TestLoadSPIFFEBundleMapX509Failures(t *testing.T) {
 	// SPIFFE Bundles only support a use of x509-svid and jwt-svid. If a
 	// use other than this is specified, the parser does not fail, it
 	// just doesn't add an x509 authority or jwt authority to the bundle
