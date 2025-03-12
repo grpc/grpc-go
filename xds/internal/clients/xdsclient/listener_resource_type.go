@@ -48,13 +48,6 @@ var (
 	}
 )
 
-func listenerValidator(lis listenerUpdate) error {
-	if lis.InboundListenerCfg == nil || lis.InboundListenerCfg.Address == "" {
-		return nil
-	}
-	return nil
-}
-
 func unmarshalListenerResource(r []byte) (string, listenerUpdate, error) {
 	lis := &v3listenerpb.Listener{}
 	if err := proto.Unmarshal(r, lis); err != nil {
@@ -164,11 +157,6 @@ func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, 
 		return nil, err
 	case err != nil:
 		// Protobuf deserialization succeeded, but resource validation failed.
-		return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listenerUpdate{}}}, err
-	}
-
-	// Perform extra validation here.
-	if err := listenerValidator(listener); err != nil {
 		return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listenerUpdate{}}}, err
 	}
 

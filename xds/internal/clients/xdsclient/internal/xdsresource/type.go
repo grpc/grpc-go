@@ -20,18 +20,8 @@ package xdsresource
 import (
 	"time"
 
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
-
-// UpdateValidatorFunc performs validations on update structs using
-// context/logic available at the xdsClient layer. Since these validation are
-// performed on internal update structs, they can be shared between different
-// API clients.
-type UpdateValidatorFunc func(any) error
 
 // UpdateMetadata contains the metadata for each update, including timestamp,
 // raw message, and so on.
@@ -52,46 +42,13 @@ type UpdateMetadata struct {
 // IsListenerResource returns true if the provider URL corresponds to an xDS
 // Listener resource.
 func IsListenerResource(url string) bool {
-	return url == version.V3ListenerURL
+	return url == V3ListenerURL
 }
 
 // IsHTTPConnManagerResource returns true if the provider URL corresponds to an xDS
 // HTTPConnManager resource.
 func IsHTTPConnManagerResource(url string) bool {
-	return url == version.V3HTTPConnManagerURL
-}
-
-// IsRouteConfigResource returns true if the provider URL corresponds to an xDS
-// RouteConfig resource.
-func IsRouteConfigResource(url string) bool {
-	return url == version.V3RouteConfigURL
-}
-
-// IsClusterResource returns true if the provider URL corresponds to an xDS
-// Cluster resource.
-func IsClusterResource(url string) bool {
-	return url == version.V3ClusterURL
-}
-
-// IsEndpointsResource returns true if the provider URL corresponds to an xDS
-// Endpoints resource.
-func IsEndpointsResource(url string) bool {
-	return url == version.V3EndpointsURL
-}
-
-// UnwrapResource unwraps and returns the inner resource if it's in a resource
-// wrapper. The original resource is returned if it's not wrapped.
-func UnwrapResource(r *anypb.Any) (*anypb.Any, error) {
-	url := r.GetTypeUrl()
-	if url != version.V3ResourceWrapperURL {
-		// Not wrapped.
-		return r, nil
-	}
-	inner := &v3discoverypb.Resource{}
-	if err := proto.Unmarshal(r.GetValue(), inner); err != nil {
-		return nil, err
-	}
-	return inner.Resource, nil
+	return url == V3HTTPConnManagerURL
 }
 
 // ServiceStatus is the status of the update.

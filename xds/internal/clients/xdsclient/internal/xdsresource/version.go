@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,17 +25,6 @@ package xdsresource
 const (
 	googleapiPrefix = "type.googleapis.com/"
 
-	V3ListenerType    = "envoy.config.listener.v3.Listener"
-	V3RouteConfigType = "envoy.config.route.v3.RouteConfiguration"
-	V3ClusterType     = "envoy.config.cluster.v3.Cluster"
-	V3EndpointsType   = "envoy.config.endpoint.v3.ClusterLoadAssignment"
-
-	V3ResourceWrapperURL      = googleapiPrefix + "envoy.service.discovery.v3.Resource"
-	V3ListenerURL             = googleapiPrefix + V3ListenerType
-	V3RouteConfigURL          = googleapiPrefix + V3RouteConfigType
-	V3ClusterURL              = googleapiPrefix + V3ClusterType
-	V3EndpointsURL            = googleapiPrefix + V3EndpointsType
-	V3HTTPConnManagerURL      = googleapiPrefix + "envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
-	V3UpstreamTLSContextURL   = googleapiPrefix + "envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
-	V3DownstreamTLSContextURL = googleapiPrefix + "envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext"
+	V3ListenerURL        = googleapiPrefix + "envoy.config.listener.v3.Listener"
+	V3HTTPConnManagerURL = googleapiPrefix + "envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
 )
