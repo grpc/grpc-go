@@ -30,7 +30,7 @@ import (
 func parseServiceConfig(t *testing.T, r *manual.Resolver, sc string) *serviceconfig.ParseResult {
 	t.Helper()
 
-	scpr := r.CC.ParseServiceConfig(sc)
+	scpr := r.CC().ParseServiceConfig(sc)
 	if scpr.Err != nil {
 		t.Fatalf("Failed to parse service config %q: %v", sc, scpr.Err)
 	}

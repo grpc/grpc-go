@@ -631,7 +631,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Report an error so non-WFR RPCs will give up early.
-	r.CC.ReportError(errors.New("fake resolver error"))
+	r.CC().ReportError(errors.New("fake resolver error"))
 
 	// Ensure the client is not connected to anything and fails non-WFR RPCs.
 	if res, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {

@@ -51,10 +51,10 @@ var (
 	// xDS server in the list of server configs will be used.
 	XDSFallbackSupport = boolFromEnv("GRPC_EXPERIMENTAL_XDS_FALLBACK", true)
 	// NewPickFirstEnabled is set if the new pickfirst leaf policy is to be used
-	// instead of the exiting pickfirst implementation. This can be enabled by
+	// instead of the exiting pickfirst implementation. This can be disabled by
 	// setting the environment variable "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
-	// to "true".
-	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", false)
+	// to "false".
+	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -35,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
@@ -180,19 +182,40 @@ func verifyNoUpdateFromResolver(ctx context.Context, t *testing.T, stateCh chan 
 	}
 }
 
-// verifyErrorFromResolver waits for the resolver to push an error and verifies
-// that it matches the expected error.
-func verifyErrorFromResolver(ctx context.Context, t *testing.T, errCh chan error, wantErr string) {
-	t.Helper()
-
+// waitForErrorFromResolver waits for the resolver to push an error and verifies
+// that it matches the expected error and contains the expected node ID.
+func waitForErrorFromResolver(ctx context.Context, errCh chan error, wantErr, wantNodeID string) error {
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for error to be propagated to the ClientConn")
+		return fmt.Errorf("timeout when waiting for error to be propagated to the ClientConn")
 	case gotErr := <-errCh:
-		if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
-			t.Fatalf("Received error from resolver %q, want %q", gotErr, wantErr)
+		if gotErr == nil {
+			return fmt.Errorf("got nil error from resolver, want %q", wantErr)
+		}
+		if !strings.Contains(gotErr.Error(), wantErr) {
+			return fmt.Errorf("got error from resolver %q, want %q", gotErr, wantErr)
+		}
+		if !strings.Contains(gotErr.Error(), wantNodeID) {
+			return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
 		}
 	}
+	return nil
+}
+
+func verifyResolverError(gotErr error, wantCode codes.Code, wantErr, wantNodeID string) error {
+	if gotErr == nil {
+		return fmt.Errorf("got nil error from resolver, want error with code %v", wantCode)
+	}
+	if !strings.Contains(gotErr.Error(), wantErr) {
+		return fmt.Errorf("got error from resolver %q, want %q", gotErr, wantErr)
+	}
+	if gotCode := status.Code(gotErr); gotCode != wantCode {
+		return fmt.Errorf("got error from resolver with code %v, want %v", gotCode, wantCode)
+	}
+	if !strings.Contains(gotErr.Error(), wantNodeID) {
+		return fmt.Errorf("got error from resolver %q, want nodeID %q", gotErr, wantNodeID)
+	}
+	return nil
 }
 
 // Spins up an xDS management server and sets up an xDS bootstrap configuration
@@ -204,7 +227,7 @@ func verifyErrorFromResolver(ctx context.Context, t *testing.T, errCh chan error
 //   - A channel to read requested RouteConfiguration resource names
 //   - Contents of the bootstrap configuration pointing to xDS management
 //     server
-func setupManagementServerForTest(ctx context.Context, t *testing.T, nodeID string) (*e2e.ManagementServer, chan []string, chan []string, []byte) {
+func setupManagementServerForTest(t *testing.T, nodeID string) (*e2e.ManagementServer, chan []string, chan []string, []byte) {
 	t.Helper()
 
 	listenerResourceNamesCh := make(chan []string, 1)

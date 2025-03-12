@@ -210,6 +210,9 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 }
 
 func (b *priorityBalancer) ResolverError(err error) {
+	if b.logger.V(2) {
+		b.logger.Infof("Received error from the resolver: %v", err)
+	}
 	b.bg.ResolverError(err)
 }
 

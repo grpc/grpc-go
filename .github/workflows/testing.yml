@@ -69,7 +69,7 @@ jobs:
           - type: tests
             goversion: '1.24'
             testflags: -race
-            grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=true'
+            grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=false'
 
     steps:
       # Setup the environment.
