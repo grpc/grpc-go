@@ -36,7 +36,7 @@ import (
 func (h *serverStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := strings.Replace(ai.method, "/", ".", -1)
 	var span trace.Span
-	tracer := h.options.TraceOptions.TracerProvider.Tracer("grpc-go", trace.WithInstrumentationVersion(grpc.Version))
+	tracer := h.options.TraceOptions.TracerProvider.Tracer(traceName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// span then the newly-created Span will be a child of that span,
