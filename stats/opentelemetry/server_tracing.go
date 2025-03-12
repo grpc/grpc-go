@@ -22,6 +22,8 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
@@ -35,7 +37,7 @@ import (
 func (h *serverStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := strings.Replace(ai.method, "/", ".", -1)
 	var span trace.Span
-	tracer := otel.Tracer("grpc-open-telemetry")
+	tracer := h.options.TraceOptions.TracerProvider.Tracer("grpc-go", oteltrace.WithInstrumentationVersion(grpc.Version))
 	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// span then the newly-created Span will be a child of that span,
