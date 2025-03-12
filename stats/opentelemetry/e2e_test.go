@@ -1568,9 +1568,9 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
-// TestSpan_WithRetriesAndNameResolutionDelay verifies that "Delayed name resolution complete"
-// event is recorded in the call trace span only once if any of the retry attempt encountered a
-// delay in name resolution
+// TestSpan_WithRetriesAndNameResolutionDelay verifies that
+// "Delayed name resolution complete" event is recorded in the call trace span
+// only once if any of the retry attempt encountered a delay in name resolution
 func (s) TestSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	to, exporter := defaultTraceOptions(t)
