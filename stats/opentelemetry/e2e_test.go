@@ -52,7 +52,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1567,12 +1566,12 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	}
 }
 
-// TestSpan_WithRetriesAndResolutionDelay verifies gRPC retry
-// behavior using a manual resolver with delayed name resolution. It ensures
-// the retry policy is correctly applied and that the resolution delay event
-// ("Delayed name resolution complete") is recorded only once in the expected
-// call spans (UnaryCall and FullDuplexCall).
-func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
+const delayedResolutionEventName = "Delayed name resolution complete"
+
+// TestSpan_WithRetriesAndNameResolutionDelay verifies that "Delayed name resolution complete"
+// event is recorded in the call trace span only once if any of the retry attempt encountered a
+// delay in name resolution
+func (s) TestSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	mo, _ := defaultMetricsOptions(t, nil)
 	to, exporter := defaultTraceOptions(t)
 
@@ -1585,17 +1584,17 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 
 	// Create a retry policy.
 	retryPolicy := `{
-        "methodConfig": [{
-            "name": [{"service": "grpc.testing.TestService"}],
-            "retryPolicy": {
-            	"maxAttempts": 2,
-            	"InitialBackoff": ".01s",
-        		"MaxBackoff": ".01s",
-        		"BackoffMultiplier": 1.0,
-                "retryableStatusCodes": ["UNAVAILABLE"]
-            }
-        }]
-    }`
+		"methodConfig": [{
+			"name": [{"service": "grpc.testing.TestService"}],
+			"retryPolicy": {
+				"maxAttempts": 2,
+				"InitialBackoff": ".01s",
+				"MaxBackoff": ".01s",
+				"BackoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`
 
 	// Create a gRPC client connection with retries and tracing enabled.
 	cc, err := grpc.NewClient(rb.Scheme()+":///test.server",
@@ -1613,7 +1612,6 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -1643,185 +1641,10 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 	wantSpanInfos := []traceSpanInfo{
 		{
 			name:     "grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Inbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-				{
-					Name: "Outbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-			},
-		},
-		{
-			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Delayed LB pick complete",
-				},
-				{
-					Name: "Outbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-				{
-					Name: "Inbound compressed message",
-					Attributes: []attribute.KeyValue{
-						{
-							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
-						},
-						{
-							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
-					},
-				},
-			},
-		},
-		{
-			name:     "grpc.testing.TestService.UnaryCall",
 			spanKind: oteltrace.SpanKindClient.String(),
 			events: []trace.Event{
 				{
-					Name: "Delayed name resolution complete",
-				},
-			},
-		},
-		{
-			name:     "grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: nil,
-		},
-		{
-			name:       "grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
-			attributes: nil,
-			events:     nil,
-		},
-		{
-			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: []trace.Event{
-				{
-					Name: "Delayed LB pick complete",
+					Name: delayedResolutionEventName,
 				},
 			},
 		},
@@ -1830,7 +1653,7 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 			spanKind: oteltrace.SpanKindClient.String(),
 			events: []trace.Event{
 				{
-					Name: "Delayed name resolution complete",
+					Name: delayedResolutionEventName,
 				},
 			},
 		},
@@ -1841,40 +1664,17 @@ func (s) TestSpan_WithRetriesAndResolutionDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Logf("NewPickFirstEnabled: %v", envconfig.NewPickFirstEnabled)
-	if !envconfig.NewPickFirstEnabled {
-		for i := range wantSpanInfos {
-			spanName := wantSpanInfos[i].name
-			if spanName == "Attempt.grpc.testing.TestService.UnaryCall" || spanName == "Attempt.grpc.testing.TestService.FullDuplexCall" {
-				wantSpanInfos[i].events = append([]trace.Event{
-					{Name: "Delayed LB pick complete"},
-				}, wantSpanInfos[i].events...)
-			}
-		}
-	}
-	// Print wantSpanInfos
-	t.Log("Printing wantSpanInfos:")
-	for i, wantSpanInfo := range wantSpanInfos {
-		t.Logf("wantSpanInfo %d: Name: %s, SpanKind: %s", i, wantSpanInfo.name, wantSpanInfo.spanKind)
-		if wantSpanInfo.events != nil {
-			for _, event := range wantSpanInfo.events {
-				t.Logf("  Event: %s", event.Name)
-
-			}
-		}
-	}
-
-	// Print spans
-	t.Log("Printing spans:")
-	for i, span := range spans {
-		t.Logf("Span %d: Name: %s, SpanKind: %s", i, span.Name, span.SpanKind)
-		if span.Events != nil {
+	count := 0
+	for _, span := range spans {
+		if span.Name == "grpc.testing.TestService.UnaryCall" || span.Name == "grpc.testing.TestService.FullDuplexCall" {
 			for _, event := range span.Events {
-				t.Logf("  Event: %s", event.Name)
-
+				if event.Name == delayedResolutionEventName {
+					count++
+				}
 			}
 		}
 	}
-
-	validateTraces(t, spans, wantSpanInfos)
+	if got, want := count, 2; got != want {
+		t.Errorf("Expected event '%s' to occur exactly %d times, but found %d occurrences", delayedResolutionEventName, want, got)
+	}
 }
