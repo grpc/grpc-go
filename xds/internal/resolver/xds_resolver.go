@@ -555,12 +555,9 @@ func (r *xdsResolver) onListenerResourceError(err error) {
 
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onListenerResourceNotFound() {
-	if r.logger.V(2) {
-		r.logger.Infof("Received resource-not-found-error for Listener resource %q", r.ldsResourceName)
-	}
+	r.logger.Warningf("Received resource-not-found-error for Listener resource %q", r.ldsResourceName)
 
 	r.listenerUpdateRecvd = false
-
 	if r.routeConfigWatcher != nil {
 		r.routeConfigWatcher.stop()
 	}
@@ -596,9 +593,7 @@ func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
 
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceNotFound(name string) {
-	if r.logger.V(2) {
-		r.logger.Infof("Received resource-not-found-error for RouteConfiguration resource %q", name)
-	}
+	r.logger.Warningf("Received resource-not-found-error for RouteConfiguration resource %q", name)
 
 	if r.rdsResourceName != name {
 		return

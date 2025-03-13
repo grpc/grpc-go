@@ -81,8 +81,7 @@ func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 	return ctx, ai
 }
 
-// HandleRPC handles per-RPC attempt stats events for tracing. It populates
-// the trace span with data from the RPCStats.
+// HandleRPC handles per-RPC attempt stats events for tracing. 
 func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	// Fetch the rpcInfo set by a previously registered stats handler
 	// (like serverStatsHandler). Assumes this handler runs after one
