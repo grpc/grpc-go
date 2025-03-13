@@ -69,15 +69,12 @@ func (h *clientStatsHandler) initializeMetrics() {
 
 // unaryInterceptor records metrics for unary RPC calls.
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ci := getCallInfo(ctx)
-	if ci == nil {
-		logger.Info("ctx passed into client metrics handler unary interceptor has no call info data present")
-		ci := &callInfo{
-			target: cc.CanonicalTarget(),
-			method: determineMethod(method, opts...),
-		}
-		ctx = setCallInfo(ctx, ci)
+	ci := &callInfo{
+		target: cc.CanonicalTarget(),
+		method: determineMethod(method, opts...),
 	}
+	ctx = setCallInfo(ctx, ci)
+
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
 		for k, vs := range md {
@@ -109,7 +106,7 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Info("ctx passed into client metrics handler stream interceptor has no call info data present")
+		logger.Info("callInfo not present in context in clientStatsHandler streamInterceptor")
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
