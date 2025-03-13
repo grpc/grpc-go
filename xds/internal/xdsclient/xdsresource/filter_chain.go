@@ -23,7 +23,9 @@ import (
 	"net"
 	"sync/atomic"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -99,8 +101,15 @@ type RouteWithInterceptors struct {
 // UsableRouteConfiguration contains a matchable route configuration, with
 // instantiated HTTP Filters per route.
 type UsableRouteConfiguration struct {
-	VHS []VirtualHostWithInterceptors
-	Err error
+	VHS    []VirtualHostWithInterceptors
+	Err    error
+	NodeID string // For logging purposes. Populated by the listener wrapper.
+}
+
+// StatusErrWithNodeID returns an error produced by the status package with the
+// specified code and message, and includes the xDS node ID.
+func (rc *UsableRouteConfiguration) StatusErrWithNodeID(c codes.Code, msg string, args ...any) error {
+	return status.Error(c, fmt.Sprintf("[xDS node id: %v]: %s", rc.NodeID, fmt.Sprintf(msg, args...)))
 }
 
 // ConstructUsableRouteConfiguration takes Route Configuration and converts it

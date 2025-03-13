@@ -768,7 +768,7 @@ func (s) TestAggregateCluster_BadEDS_GoodToBadDNS(t *testing.T) {
 
 	// Push an error from the DNS resolver as well.
 	dnsErr := fmt.Errorf("DNS error")
-	dnsR.ReportError(dnsErr)
+	dnsR.CC().ReportError(dnsErr)
 
 	// Ensure that RPCs continue to succeed for the next second.
 	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
@@ -902,7 +902,7 @@ func (s) TestAggregateCluster_BadDNS_GoodEDS(t *testing.T) {
 
 	// Produce a bad resolver update from the DNS resolver.
 	dnsErr := fmt.Errorf("DNS error")
-	dnsR.ReportError(dnsErr)
+	dnsR.CC().ReportError(dnsErr)
 
 	// RPCs should work, higher level DNS cluster errors so should fallback to
 	// EDS cluster.
@@ -974,7 +974,7 @@ func (s) TestAggregateCluster_BadEDS_BadDNS(t *testing.T) {
 	}
 
 	// Produce a bad resolver update from the DNS resolver.
-	dnsR.ReportError(fmt.Errorf("DNS error"))
+	dnsR.CC().ReportError(fmt.Errorf("DNS error"))
 
 	// Ensure that the error from the DNS Resolver leads to an empty address
 	// update for both priorities.

@@ -831,7 +831,7 @@ func (s) TestResolverError(t *testing.T) {
 	// assume that errors from the xDS client or from the xDS resolver contain
 	// the xDS node ID.
 	resolverErr := fmt.Errorf("[xds node id: %s]: resolver-error-not-a-resource-not-found-error", nodeID)
-	r.ReportError(resolverErr)
+	r.CC().ReportError(resolverErr)
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
@@ -878,7 +878,7 @@ func (s) TestResolverError(t *testing.T) {
 	}
 
 	// Again push a resolver error that is not a resource-not-found error.
-	r.ReportError(resolverErr)
+	r.CC().ReportError(resolverErr)
 
 	// And again verify that the watch for the cluster resource is not
 	// cancelled.
@@ -915,7 +915,7 @@ func (s) TestResolverError(t *testing.T) {
 	// channel. And pick_first will put the channel in TRANSIENT_FAILURE since
 	// it would have received an update with no addresses.
 	resolverErr = fmt.Errorf("[xds node id: %s]: %w", nodeID, xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "xds resource not found error"))
-	r.ReportError(resolverErr)
+	r.CC().ReportError(resolverErr)
 
 	// Wait for the CDS resource to be not requested anymore, or the connection
 	// to the management server to be closed (which happens as part of the last

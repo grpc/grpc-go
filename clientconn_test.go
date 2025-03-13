@@ -62,7 +62,7 @@ func init() {
 }
 
 func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
-	scpr := r.CC.ParseServiceConfig(s)
+	scpr := r.CC().ParseServiceConfig(s)
 	if scpr.Err != nil {
 		panic(fmt.Sprintf("Error parsing config %q: %v", s, scpr.Err))
 	}
@@ -666,7 +666,7 @@ func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	cc.Connect()
 	// SwitchBalancer before NewAddress. There was no balancer created, this
 	// makes sure we don't call close on nil balancerWrapper.
-	r.UpdateState(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbServiceConfig)}) // This should not panic.
+	r.UpdateState(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(grpclbServiceConfig)}) // This should not panic.
 
 	time.Sleep(time.Second) // Sleep to make sure the service config is handled by ClientConn.
 }
@@ -681,7 +681,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 		cc.Connect()
 		// Send a new service config while closing the ClientConn.
 		go cc.Close()
-		go r.UpdateState(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(rrServiceConfig)}) // This should not panic.
+		go r.UpdateState(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(rrServiceConfig)}) // This should not panic.
 	}
 }
 
@@ -775,7 +775,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 	}
 	defer cc.Close()
 	cc.Connect()
-	r.UpdateState(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(`{
+	r.UpdateState(resolver.State{ServiceConfig: r.CC().ParseServiceConfig(`{
     "methodConfig": [
         {
             "name": [
