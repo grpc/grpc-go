@@ -37,9 +37,6 @@ type clientStatsHandler struct {
 	clientMetrics clientMetrics
 }
 
-// initializeMetrics sets up the OpenTelemetry metrics for the client-side
-// handling of gRPC calls, including counters and histograms for call start,
-// duration, and message sizes.
 func (h *clientStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
@@ -70,8 +67,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-// unaryInterceptor records metrics for unary RPC calls. It updates the context
-// with call info, adds plugin metadata if configured, and tracks call duration.
+// unaryInterceptor records metrics for unary RPC calls.
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := &callInfo{
 		target: cc.CanonicalTarget(),
@@ -106,15 +102,17 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 	return "other"
 }
 
-// streamInterceptor records metrics for streaming RPC calls. It updates the
-// context with call info, adds plugin metadata if configured, and tracks call
-// duration using a completion callback.
+// streamInterceptor records metrics for streaming RPC calls.
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ci := &callInfo{
-		target: cc.CanonicalTarget(),
-		method: determineMethod(method, opts...),
+	ci := getCallInfo(ctx)
+	if ci == nil {
+		logger.Info("callInfo not present in context in clientStatsHandler streamInterceptor")
+		ci = &callInfo{
+			target: cc.CanonicalTarget(),
+			method: determineMethod(method, opts...),
+		}
+		ctx = setCallInfo(ctx, ci)
 	}
-	ctx = setCallInfo(ctx, ci)
 
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -181,8 +179,6 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 }
 
 // HandleRPC handles per-RPC attempt stats for client-side metrics collection.
-// It extracts the RPC attempt info from context and delegates processing to
-// processRPCEvent.
 func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
@@ -192,9 +188,6 @@ func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	h.processRPCEvent(ctx, rs, ri.ai)
 }
 
-// processRPCEvent processes a single RPCStats event for metrics recording.
-// It handles event types like Begin, InHeader, InTrailer, InPayload,
-// OutPayload, and End.
 func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.Begin:
@@ -223,9 +216,6 @@ func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCSta
 	}
 }
 
-// setLabelsFromPluginOption extracts custom labels from the metadata using
-// the plugin option (if available) and caches them in the attemptInfo.
-// This function ensures that labels are fetched only once per attempt.
 func (h *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
 	if ai.pluginOptionLabels == nil && h.options.MetricsOptions.pluginOption != nil {
 		labels := h.options.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
@@ -236,9 +226,6 @@ func (h *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incoming
 	}
 }
 
-// processRPCEnd handles the End event of an RPC attempt. It computes latency,
-// gathers relevant attributes from the attempt, and records metrics such as
-// latency and compressed message sizes.
 func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	ci := getCallInfo(ctx)
 	if ci == nil {

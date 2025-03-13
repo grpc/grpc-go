@@ -38,9 +38,6 @@ type serverStatsHandler struct {
 	serverMetrics serverMetrics
 }
 
-// initializeMetrics sets up the OpenTelemetry metrics for the server-side
-// handling of gRPC calls, including counters and histograms for call start,
-// duration, and message sizes.
 func (h *serverStatsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
@@ -69,8 +66,6 @@ func (h *serverStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-// attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
-// underlying ServerTransportStream to attach metadataExchangeLabels.
 type attachLabelsTransportStream struct {
 	grpc.ServerTransportStream
 
@@ -78,8 +73,6 @@ type attachLabelsTransportStream struct {
 	metadataExchangeLabels metadata.MD
 }
 
-// SetHeader attaches metadataExchangeLabels to the transport stream headers
-// before forwarding the SetHeader call.
 func (s *attachLabelsTransportStream) SetHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerTransportStream.SetHeader(s.metadataExchangeLabels)
@@ -87,8 +80,6 @@ func (s *attachLabelsTransportStream) SetHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SetHeader(md)
 }
 
-// SendHeader attaches metadataExchangeLabels to the transport stream headers
-// before forwarding the SendHeader call.
 func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerTransportStream.SetHeader(s.metadataExchangeLabels)
@@ -97,9 +88,7 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
-// unaryInterceptor is a UnaryServerInterceptor that attaches metadata exchange
-// labels to the gRPC context and ensures they're sent in headers or trailers
-// for unary calls.
+// unaryInterceptor records metrics for unary RPC calls.
 func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -128,9 +117,6 @@ func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *g
 	return res, err
 }
 
-// attachLabelsStream embeds a grpc.ServerStream, and intercepts the
-// SetHeader/SendHeader/SendMsg/SendTrailer call to attach metadata exchange
-// labels.
 type attachLabelsStream struct {
 	grpc.ServerStream
 
@@ -138,8 +124,6 @@ type attachLabelsStream struct {
 	metadataExchangeLabels metadata.MD
 }
 
-// SetHeader attaches metadataExchangeLabels to the stream headers before
-// forwarding the SetHeader call.
 func (s *attachLabelsStream) SetHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerStream.SetHeader(s.metadataExchangeLabels)
@@ -148,8 +132,6 @@ func (s *attachLabelsStream) SetHeader(md metadata.MD) error {
 	return s.ServerStream.SetHeader(md)
 }
 
-// SendHeader attaches metadataExchangeLabels to the stream headers before
-// forwarding the SendHeader call.
 func (s *attachLabelsStream) SendHeader(md metadata.MD) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerStream.SetHeader(s.metadataExchangeLabels)
@@ -158,8 +140,6 @@ func (s *attachLabelsStream) SendHeader(md metadata.MD) error {
 	return s.ServerStream.SendHeader(md)
 }
 
-// SendMsg attaches metadataExchangeLabels to the stream headers if they haven't
-// already been sent, and then forwards the SendMsg call.
 func (s *attachLabelsStream) SendMsg(m any) error {
 	if !s.attachedLabels.Swap(true) {
 		s.ServerStream.SetHeader(s.metadataExchangeLabels)
@@ -167,8 +147,7 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
-// streamInterceptor is a StreamServerInterceptor that attaches metadata exchange
-// labels to the stream and ensures they're included in headers or trailers.
+// streamInterceptor records metrics for streaming RPC calls.
 func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -196,8 +175,7 @@ func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 // HandleConn exists to satisfy stats.Handler.
 func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// TagRPC initializes per-RPC context metadata, including method name
-// normalization and plugin-specific label extraction.
+// TagRPC implements per RPC context management for metrics.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	method := info.FullMethodName
 	if h.options.MetricsOptions.MethodAttributeFilter != nil {
@@ -225,8 +203,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	})
 }
 
-// HandleRPC handles gRPC stats events for an individual RPC by updating the
-// appropriate metrics and storing intermediate state.
+// HandleRPC handles per-RPC attempt stats for server-side metrics collection.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
@@ -236,8 +213,6 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	h.processRPCData(ctx, rs, ri.ai)
 }
 
-// processRPCData processes and records server-side metrics for each received
-// gRPC stats event related to an RPC call.
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.InHeader:
@@ -262,8 +237,6 @@ func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStat
 	}
 }
 
-// processRPCEnd records final metrics for a completed RPC, including latency,
-// message sizes, status code, and any plugin-provided labels.
 func (h *serverStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	latency := float64(time.Since(ai.startTime)) / float64(time.Second)
 	st := "OK"

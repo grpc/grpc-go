@@ -120,13 +120,12 @@ func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
 	do := joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
-	if o.isTracingEnabled() {
-		tracingHandler := &clientTracingHandler{options: o}
-		tracingHandler.initializeTraces()
-		tdo := joinDialOptions(grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.WithStatsHandler(tracingHandler))
-		do = joinDialOptions(do, tdo)
+	if !o.isTracingEnabled() {
+		return do
 	}
-	return do
+	tracingHandler := &clientTracingHandler{options: o}
+	tracingHandler.initializeTraces()
+	return joinDialOptions(do, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.WithStatsHandler(tracingHandler))
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -150,13 +149,12 @@ func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
 	so := joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
-	if o.isTracingEnabled() {
-		tracingHandler := &serverTracingHandler{options: o}
-		tracingHandler.initializeTraces()
-		tso := joinServerOptions(grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.StatsHandler(tracingHandler))
-		so = joinServerOptions(so, tso)
+	if !o.isTracingEnabled() {
+		return so
 	}
-	return so
+	tracingHandler := &serverTracingHandler{options: o}
+	tracingHandler.initializeTraces()
+	return joinServerOptions(so, grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.StatsHandler(tracingHandler))
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.

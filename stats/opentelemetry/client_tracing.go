@@ -21,7 +21,6 @@ import (
 	"log"
 	"strings"
 
-	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -31,28 +30,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const tracerName = "grpc-go"
+
 type clientTracingHandler struct {
 	options Options
-	tracer  trace.Tracer
 }
 
-// initializeTraces initializes the tracer used for client-side OpenTelemetry
-// tracing.
 func (h *clientTracingHandler) initializeTraces() {
 	if h.options.TraceOptions.TracerProvider == nil {
-		log.Printf("TraceProvider is not provided in trace options")
+		log.Printf("TraceProvider is not provided in client trace options")
 		return
 	}
-	h.tracer = h.options.TraceOptions.TracerProvider.Tracer("grpc-open-telemetry")
+	h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 }
 
-// unaryInterceptor is a UnaryClientInterceptor that instruments unary RPCs
-// with OpenTelemetry traces. It starts a span before the RPC and records
-// the result after it completes.
+// unaryInterceptor records traces for unary RPC calls.
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Error("ctx passed into client tracing handler unary interceptor has no call info data present")
+		logger.Info("ctx passed into client tracing handler unary interceptor has no call info data present")
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -67,13 +63,11 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 	return err
 }
 
-// streamInterceptor is a StreamClientInterceptor that instruments streaming
-// RPCs with OpenTelemetry traces. It starts a span before the stream and
-// records the result after the stream finishes.
+// streamInterceptor records traces for streaming RPC calls.
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Error("ctx passed into client tracing handler stream interceptor has no call info data present")
+		logger.Info("ctx passed into client tracing handler stream interceptor has no call info data present")
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -108,23 +102,24 @@ func (h *clientTracingHandler) perCallTraces(err error, ts trace.Span) {
 // outgoing gRPC metadata using an internal carrier for cross-process propagation.
 func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
-	ctx, span := h.tracer.Start(ctx, mn)
+	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
+	ctx, span := tracer.Start(ctx, mn)
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	h.options.TraceOptions.TextMapPropagator.Inject(ctx, carrier)
 	ai.traceSpan = span
 	return carrier.Context(), ai
 }
 
-// createCallTraceSpan creates and starts a top-level span for a client-side
-// RPC. Returns the context with the span and the span itself. If no tracer
-// provider is configured, returns the original context.
+// createCallTraceSpan creates a call span to put in the provided context using
+// provided TraceProvider. If TraceProvider is nil, it returns context as is.
 func (h *clientTracingHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
 	if h.options.TraceOptions.TracerProvider == nil {
 		logger.Error("TraceProvider is not provided in trace options")
 		return ctx, nil
 	}
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
-	ctx, span := h.tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
+	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
+	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	return ctx, span
 }
 
@@ -136,36 +131,28 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler for tracing.
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// getRPCInfoForTracing is a helper function to retrieve rpcInfo from the context
-
-func (h *clientTracingHandler) getRPCInfoForTracing(ctx context.Context) *rpcInfo {
+// TagRPC implements per RPC attempt context management for traces.
+func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	// Fetch the rpcInfo set by a previously registered stats handler
 	// (like clientStatsHandler). Assumes this handler runs after one
 	// that sets the rpcInfo in the context.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into client side tracing stats handler has no client attempt data present")
-	}
-	return ri
-}
-
-// TagRPC is called at the beginning of each RPC attempt. It starts a new
-// span for the attempt and injects the tracing context into metadata for
-// propagation. Requires a preceding handler to have set rpcInfo.
-func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	ri := h.getRPCInfoForTracing(ctx)
-	if ri == nil {
+		logger.Info("ctx passed into client side tracing stats handler has no client attempt data present")
 		return ctx
 	}
 	ctx, ai := h.traceTagRPC(ctx, ri.ai)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC handles per-RPC attempt stats events for tracing. It populates
-// the trace span with data from the RPCStats.
+// HandleRPC handles per-RPC attempt stats events for tracing.
 func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	ri := h.getRPCInfoForTracing(ctx)
+	// Fetch the rpcInfo set by a previously registered stats handler
+	// (like clientStatsHandler). Assumes this handler runs after one
+	// that sets the rpcInfo in the context.
+	ri := getRPCInfo(ctx)
 	if ri == nil {
+		logger.Info("ctx passed into client side tracing stats handler has no client attempt data present")
 		return
 	}
 	populateSpan(rs, ri.ai)
