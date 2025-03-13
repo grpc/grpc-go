@@ -19,6 +19,11 @@
 package health
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sync"
 	"testing"
 	"time"
@@ -79,5 +84,70 @@ func (s) TestShutdown(t *testing.T) {
 	status = s.statusMap[testService]
 	if status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_NOT_SERVING)
+	}
+}
+
+// TestList verifies successful listing of all service health statuses.
+func (s) TestList(t *testing.T) {
+	// Setup
+	s := NewServer()
+	s.mu.Lock()
+	// Remove the zero value
+	delete(s.statusMap, "")
+	// Fill out status map with information
+	for i := 1; i <= 3; i++ {
+		s.statusMap[fmt.Sprintf("%d", i)] = healthpb.HealthCheckResponse_SERVING
+	}
+	s.mu.Unlock()
+
+	// Execution
+	ctx := context.TODO()
+	var in healthpb.HealthListRequest
+	out, err := s.List(ctx, &in)
+
+	// Assertions
+	if err != nil {
+		t.Fatalf("List should not have failed, got %s, len %d", err, len(s.statusMap))
+	}
+	if len(out.GetStatuses()) != len(s.statusMap) {
+		t.Fatal("List should have return the same number of elements as the inner status map")
+	}
+	for key := range out.GetStatuses() {
+		v, ok := s.statusMap[key]
+		if !ok {
+			t.Fatalf("List should have returned all resources, wanted %s, but it did not exist in the inner status map", key)
+		}
+		if v != healthpb.HealthCheckResponse_SERVING {
+			t.Fatalf("%s returned the wrong status, wanted %d, got %d", key, healthpb.HealthCheckResponse_SERVING, v)
+		}
+	}
+}
+
+// TestListResourceExhausted verifies that the service status list returns an error when it exceeds
+// maxServiceStatusListLength.
+func (s) TestListResourceExhausted(t *testing.T) {
+	// Setup
+	s := NewServer()
+	s.mu.Lock()
+	// Remove the zero value
+	delete(s.statusMap, "")
+
+	// Fill out status map with service information, 101 elements will trigger an error.
+	for i := 1; i <= 101; i++ {
+		s.statusMap[fmt.Sprintf("%d", i)] = healthpb.HealthCheckResponse_SERVING
+	}
+	s.mu.Unlock()
+
+	// Execution
+	ctx := context.TODO()
+	var in healthpb.HealthListRequest
+	_, err := s.List(ctx, &in)
+
+	// Assertions
+	if err == nil {
+		t.Fatalf("List should have failed, got %s", err)
+	}
+	if !errors.Is(err, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")) {
+		t.Fatal("List should have failed with resource exhausted")
 	}
 }
