@@ -153,6 +153,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		TelemetryLabels:       mechanism.TelemetryLabels,
 		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
+		LoadReportingServer:   mechanism.LoadReportingServer,
 	}, retEndpoints
 }
 

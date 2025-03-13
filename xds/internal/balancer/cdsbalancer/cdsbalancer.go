@@ -656,6 +656,7 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 			Cluster:               cluster.ClusterName,
 			DNSHostname:           cluster.DNSHostName,
 			MaxConcurrentRequests: cluster.MaxRequests,
+			LoadReportingServer:   cluster.LRSServerConfig,
 		}
 	}
 	odJSON := cluster.OutlierDetection
