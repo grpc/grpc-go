@@ -113,10 +113,6 @@ func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 // createCallTraceSpan creates a call span to put in the provided context using
 // provided TraceProvider. If TraceProvider is nil, it returns context as is.
 func (h *clientTracingHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
-	if h.options.TraceOptions.TracerProvider == nil {
-		logger.Error("TraceProvider is not provided in trace options")
-		return ctx, nil
-	}
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
