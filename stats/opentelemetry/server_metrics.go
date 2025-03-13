@@ -66,6 +66,8 @@ func (h *serverStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
+// attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
+// underlying ServerTransportStream to attach metadataExchangeLabels.
 type attachLabelsTransportStream struct {
 	grpc.ServerTransportStream
 
@@ -117,6 +119,9 @@ func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *g
 	return res, err
 }
 
+// attachLabelsStream embeds a grpc.ServerStream, and intercepts the
+// SetHeader/SendHeader/SendMsg/SendTrailer call to attach metadata exchange
+// labels.
 type attachLabelsStream struct {
 	grpc.ServerStream
 
