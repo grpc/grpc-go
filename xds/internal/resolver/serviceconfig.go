@@ -28,7 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -203,7 +203,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
-	lbCtx = ringhash.SetRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	lbCtx = ringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.

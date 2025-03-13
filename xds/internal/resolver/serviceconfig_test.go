@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/grpcutil"
