@@ -1664,17 +1664,40 @@ func (s) TestSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	count := 0
+	validateDelayedResolutionEventSpans(t, spans, wantSpanInfos)
+}
+
+// validateDelayedResolutionEventSpans filters spans containing a specific
+// event name and validates them. It checks if the span events match
+// the expected structure.
+func validateDelayedResolutionEventSpans(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []traceSpanInfo) {
+	wantSpanInfosMap := make(map[traceSpanInfoMapKey]traceSpanInfo)
+	for _, info := range wantSpanInfos {
+		key := traceSpanInfoMapKey{spanName: info.name, spanKind: info.spanKind}
+		wantSpanInfosMap[key] = info
+	}
+
+	filteredSpans := tracetest.SpanStubs{}
 	for _, span := range spans {
-		if span.Name == "grpc.testing.TestService.UnaryCall" || span.Name == "grpc.testing.TestService.FullDuplexCall" {
-			for _, event := range span.Events {
-				if event.Name == delayedResolutionEventName {
-					count++
-				}
+		for _, event := range span.Events {
+			if event.Name == delayedResolutionEventName {
+				filteredSpans = append(filteredSpans, span)
+				break
 			}
 		}
 	}
-	if got, want := count, 2; got != want {
-		t.Errorf("Expected event '%s' to occur exactly %d times, but found %d occurrences", delayedResolutionEventName, want, got)
+
+	for _, span := range filteredSpans {
+		key := traceSpanInfoMapKey{spanName: span.Name, spanKind: span.SpanKind.String()}
+		want, ok := wantSpanInfosMap[key]
+		if !ok {
+			t.Logf("Unexpected span: %s", span.Name)
+			continue
+		}
+
+		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
+		if diff := cmp.Diff(want.events, span.Events, eventsTimeIgnore); diff != "" {
+			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
+		}
 	}
 }
