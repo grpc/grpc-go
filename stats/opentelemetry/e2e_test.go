@@ -1664,9 +1664,9 @@ func (s) TestSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	validateDelayedResolutionEventSpans(t, spans, wantSpanInfos)
 }
 
-// validateDelayedResolutionEventSpans filters spans containing a specific
-// event name and validates them. It checks if the span events match
-// the expected structure.
+// validateDelayedResolutionEventSpans filters spans containing a specified
+// event name and validates their correctness. It ensures that the retrieved
+// spans contain the expected events.
 func validateDelayedResolutionEventSpans(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []traceSpanInfo) {
 	wantSpanInfosMap := make(map[traceSpanInfoMapKey]traceSpanInfo)
 	for _, info := range wantSpanInfos {
@@ -1691,7 +1691,6 @@ func validateDelayedResolutionEventSpans(t *testing.T, spans tracetest.SpanStubs
 			t.Logf("Unexpected span: %s", span.Name)
 			continue
 		}
-
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 		if diff := cmp.Diff(want.events, span.Events, eventsTimeIgnore); diff != "" {
 			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
