@@ -652,9 +652,10 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 		}
 	case xdsresource.ClusterTypeLogicalDNS:
 		dm = clusterresolver.DiscoveryMechanism{
-			Type:        clusterresolver.DiscoveryMechanismTypeLogicalDNS,
-			Cluster:     cluster.ClusterName,
-			DNSHostname: cluster.DNSHostName,
+			Type:                  clusterresolver.DiscoveryMechanismTypeLogicalDNS,
+			Cluster:               cluster.ClusterName,
+			DNSHostname:           cluster.DNSHostName,
+			MaxConcurrentRequests: cluster.MaxRequests,
 		}
 	}
 	odJSON := cluster.OutlierDetection
