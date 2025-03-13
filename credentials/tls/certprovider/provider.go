@@ -31,6 +31,7 @@ import (
 	"errors"
 
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 func init() {
@@ -94,6 +95,10 @@ type KeyMaterial struct {
 	Certs []tls.Certificate
 	// Roots contains the set of trusted roots to validate the peer's identity.
 	Roots *x509.CertPool
+	// SPIFFEBundleMap is an in-memory representation of a spiffe trust bundle
+	// map. If this value exists, it will be used to find the roots for a given
+	// trust domain rather than the Roots in this struct.
+	SPIFFEBundleMap spiffe.BundleMap
 }
 
 // BuildOptions contains parameters passed to a Provider at build time.

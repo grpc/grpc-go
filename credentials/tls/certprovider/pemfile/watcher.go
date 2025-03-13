@@ -38,6 +38,7 @@ import (
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
@@ -61,6 +62,11 @@ type Options struct {
 	// RootFile is the file that holds trusted root certificate(s).
 	// Optional.
 	RootFile string
+	// SPIFFEBundleMapFile is the file that holds the spiffe bundle map.
+	// If a given provider configures both the RootFile and the
+	// SPIFFEBundleMapFile, the SPIFFEBundleMapFile will be preferred.
+	// Optional.
+	SPIFFEBundleMapFile string
 	// RefreshDuration is the amount of time the plugin waits before checking
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
@@ -68,11 +74,11 @@ type Options struct {
 }
 
 func (o Options) canonical() []byte {
-	return []byte(fmt.Sprintf("%s:%s:%s:%s", o.CertFile, o.KeyFile, o.RootFile, o.RefreshDuration))
+	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s", o.CertFile, o.KeyFile, o.RootFile, o.SPIFFEBundleMapFile, o.RefreshDuration))
 }
 
 func (o Options) validate() error {
-	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" {
+	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {
 		return fmt.Errorf("pemfile: at least one credential file needs to be specified")
 	}
 	if keySpecified, certSpecified := o.KeyFile != "", o.CertFile != ""; keySpecified != certSpecified {
@@ -124,13 +130,14 @@ func newProvider(o Options) certprovider.Provider {
 // files and provides the most up-to-date key material for consumption by
 // credentials implementation.
 type watcher struct {
-	identityDistributor distributor
-	rootDistributor     distributor
-	opts                Options
-	certFileContents    []byte
-	keyFileContents     []byte
-	rootFileContents    []byte
-	cancel              context.CancelFunc
+	identityDistributor         distributor
+	rootDistributor             distributor
+	opts                        Options
+	certFileContents            []byte
+	keyFileContents             []byte
+	rootFileContents            []byte
+	spiffeBundleMapFileContents []byte
+	cancel                      context.CancelFunc
 }
 
 // distributor wraps the methods on certprovider.Distributor which are used by
@@ -191,23 +198,58 @@ func (w *watcher) updateRootDistributor() {
 		return
 	}
 
+	// If SPIFFEBundleMap is set, use it and DON'T use the RootFile, even if it
+	// fails
+	if w.opts.SPIFFEBundleMapFile != "" {
+		w.maybeUpdateSPIFFEBundleMap()
+	} else {
+		w.maybeUpdateRootFile()
+	}
+}
+
+func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
+	// If the map file is unset, just return an error, don't create log spam.
+	if w.opts.SPIFFEBundleMapFile == "" {
+		return fmt.Errorf("SPIFFEBundleMapFile is unset in watcher options")
+	}
+	spiffeBundleMapContents, err := os.ReadFile(w.opts.SPIFFEBundleMapFile)
+	if err != nil {
+		logger.Warningf("spiffeBundleMapFile (%s) read failed: %v", w.opts.SPIFFEBundleMapFile, err)
+		return err
+	}
+	// If the file contents have not changed, skip updating the distributor.
+	if bytes.Equal(w.spiffeBundleMapFileContents, spiffeBundleMapContents) {
+		return nil
+	}
+	bundleMap, err := spiffe.BundleMapFromBytes(spiffeBundleMapContents)
+	if err != nil {
+		logger.Warning("failed to parse spiffe bundle map")
+		return err
+	}
+	w.spiffeBundleMapFileContents = spiffeBundleMapContents
+	w.rootDistributor.Set(&certprovider.KeyMaterial{SPIFFEBundleMap: bundleMap}, nil)
+	return nil
+}
+
+func (w *watcher) maybeUpdateRootFile() error {
 	rootFileContents, err := os.ReadFile(w.opts.RootFile)
 	if err != nil {
 		logger.Warningf("rootFile (%s) read failed: %v", w.opts.RootFile, err)
-		return
+		return err
 	}
 	trustPool := x509.NewCertPool()
 	if !trustPool.AppendCertsFromPEM(rootFileContents) {
 		logger.Warning("failed to parse root certificate")
-		return
+		return err
 	}
 	// If the file contents have not changed, skip updating the distributor.
 	if bytes.Equal(w.rootFileContents, rootFileContents) {
-		return
+		return nil
 	}
 
 	w.rootFileContents = rootFileContents
 	w.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
+	return nil
 }
 
 // run is a long running goroutine which watches the configured files for
@@ -249,6 +291,7 @@ func (w *watcher) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, e
 		if err != nil {
 			return nil, err
 		}
+		km.SPIFFEBundleMap = rootKM.SPIFFEBundleMap
 		km.Roots = rootKM.Roots
 	}
 	return km, nil
