@@ -25,6 +25,7 @@ import (
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
+const delayedResolutionEventName = "Delayed name resolution complete"
 const tracerName = "grpc-go"
 
 // traceTagRPC populates provided context with a new span using the
@@ -33,6 +34,13 @@ const tracerName = "grpc-go"
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+	// Adds a "Delayed name resolution complete" event to the call span if a
+	// delay was detected and the event hasn't been recorded yet. Ensures the
+	// event is logged only once using an atomic flag, even across retries.
+	callSpan := trace.SpanFromContext(ctx)
+	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
+		callSpan.AddEvent(delayedResolutionEventName)
+	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn)

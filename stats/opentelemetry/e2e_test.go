@@ -60,6 +60,8 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
 )
@@ -1558,5 +1560,140 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	spans := exporter.GetSpans()
 	if got, want := spans[0].Status.Description, rpcErrorMsg; got != want {
 		t.Fatalf("got rpc error %s, want %s", spans[0].Status.Description, rpcErrorMsg)
+	}
+}
+
+const delayedResolutionEventName = "Delayed name resolution complete"
+
+// TestSpan_WithRetriesAndNameResolutionDelay verifies that
+// "Delayed name resolution complete" event is recorded in the call trace span
+// only once if any of the retry attempt encountered a delay in name resolution
+func (s) TestSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
+	to, exporter := defaultTraceOptions(t)
+
+	// Use a manual resolver to simulate delayed name resolution.
+	rb := manual.NewBuilderWithScheme("delayed")
+
+	// Start the stub server but do not provide its address immediately.
+	ss := setupStubServer(t, mo, to)
+	defer ss.Stop()
+
+	// Create a retry policy.
+	retryPolicy := `{
+		"methodConfig": [{
+			"name": [{"service": "grpc.testing.TestService"}],
+			"retryPolicy": {
+				"maxAttempts": 2,
+				"InitialBackoff": ".01s",
+				"MaxBackoff": ".01s",
+				"BackoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`
+
+	// Create a gRPC client connection with retries and tracing enabled.
+	cc, err := grpc.NewClient(rb.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(rb),
+		opentelemetry.DialOption(opentelemetry.Options{
+			MetricsOptions: *mo,
+			TraceOptions:   *to,
+		}),
+		grpc.WithDefaultServiceConfig(retryPolicy),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient() error: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	time.AfterFunc(100*time.Millisecond, func() {
+		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+		t.Log("Resolver updated to return addresses.")
+	})
+
+	rpcError := make(chan error, 1)
+	go func() {
+		t.Log("RPC waiting for resolved addresses")
+		_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
+			Body: make([]byte, 10000),
+		}})
+		rpcError <- err
+	}()
+
+	stream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall failed: %v", err)
+	}
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("stream.Recv received an unexpected error: %v, expected an EOF error", err)
+	}
+
+	wantSpanInfos := []traceSpanInfo{
+		{
+			name:     "grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindClient.String(),
+			events: []trace.Event{
+				{
+					Name: delayedResolutionEventName,
+				},
+			},
+		},
+		{
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindClient.String(),
+			events: []trace.Event{
+				{
+					Name: delayedResolutionEventName,
+				},
+			},
+		},
+	}
+
+	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validateDelayedResolutionEventSpans(t, spans, wantSpanInfos)
+}
+
+// validateDelayedResolutionEventSpans filters spans containing a specified
+// event name and validates their correctness. It ensures that the retrieved
+// spans contain the expected events.
+func validateDelayedResolutionEventSpans(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []traceSpanInfo) {
+	wantSpanInfosMap := make(map[traceSpanInfoMapKey]traceSpanInfo)
+	for _, info := range wantSpanInfos {
+		key := traceSpanInfoMapKey{spanName: info.name, spanKind: info.spanKind}
+		wantSpanInfosMap[key] = info
+	}
+
+	filteredSpans := tracetest.SpanStubs{}
+	for _, span := range spans {
+		for _, event := range span.Events {
+			if event.Name == delayedResolutionEventName {
+				filteredSpans = append(filteredSpans, span)
+				break
+			}
+		}
+	}
+
+	for _, span := range filteredSpans {
+		key := traceSpanInfoMapKey{spanName: span.Name, spanKind: span.SpanKind.String()}
+		want, ok := wantSpanInfosMap[key]
+		if !ok {
+			t.Logf("Unexpected span: %s", span.Name)
+			continue
+		}
+		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
+		if diff := cmp.Diff(want.events, span.Events, eventsTimeIgnore); diff != "" {
+			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
+		}
 	}
 }
