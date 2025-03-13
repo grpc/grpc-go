@@ -30,6 +30,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	// maxServiceListLength defines the maximum number of resources a List operation can return.
+	// An error is returned if the number of services exceeds this limit.
+	maxServiceStatusListLength = 100
+)
+
 // Server implements `service Health`.
 type Server struct {
 	healthgrpc.UnimplementedHealthServer
