@@ -208,7 +208,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	})
 }
 
-// HandleRPC handles per-RPC attempt stats for server-side metrics collection.
+// HandleRPC handles per RPC attempt stats for server-side metrics collection.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
