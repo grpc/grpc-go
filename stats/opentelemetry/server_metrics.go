@@ -21,15 +21,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type serverStatsHandler struct {
@@ -90,6 +90,7 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
+// unaryInterceptor records metrics for unary RPC calls.
 func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -151,6 +152,7 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
+// streamInterceptor records metrics for streaming RPC calls.
 func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -178,7 +180,7 @@ func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 // HandleConn exists to satisfy stats.Handler.
 func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// TagRPC implements per RPC context management.
+// TagRPC implements per RPC context management for metrics.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	method := info.FullMethodName
 	if h.options.MetricsOptions.MethodAttributeFilter != nil {
@@ -201,27 +203,19 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
 	}
-	if h.options.isTracingEnabled() {
-		ctx, ai = h.traceTagRPC(ctx, ai)
-	}
 	return setRPCInfo(ctx, &rpcInfo{
 		ai: ai,
 	})
 }
 
-// HandleRPC implements per RPC tracing and stats implementation.
+// HandleRPC handles per RPC attempt stats for server-side metrics collection.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	if h.options.isTracingEnabled() {
-		populateSpan(rs, ri.ai)
-	}
-	if h.options.isMetricsEnabled() {
-		h.processRPCData(ctx, rs, ri.ai)
-	}
+	h.processRPCData(ctx, rs, ri.ai)
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
