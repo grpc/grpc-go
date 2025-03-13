@@ -69,11 +69,15 @@ func (h *clientStatsHandler) initializeMetrics() {
 
 // unaryInterceptor records metrics for unary RPC calls.
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ci := &callInfo{
-		target: cc.CanonicalTarget(),
-		method: determineMethod(method, opts...),
+	ci := getCallInfo(ctx)
+	if ci == nil {
+		logger.Info("callInfo not present in context in clientStatsHandler unaryInterceptor")
+		ci = &callInfo{
+			target: cc.CanonicalTarget(),
+			method: determineMethod(method, opts...),
+		}
+		ctx = setCallInfo(ctx, ci)
 	}
-	ctx = setCallInfo(ctx, ci)
 
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
