@@ -212,7 +212,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Info("ctx passed into server side stats handler metrics event handling has no server call data present")
+		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
 	h.processRPCData(ctx, rs, ri.ai)

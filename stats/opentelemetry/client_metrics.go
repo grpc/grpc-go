@@ -186,7 +186,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Info("ctx passed into client side stats handler metrics event handling has no client attempt data present")
+		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
 		return
 	}
 	h.processRPCEvent(ctx, rs, ri.ai)
@@ -197,7 +197,7 @@ func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCSta
 	case *stats.Begin:
 		ci := getCallInfo(ctx)
 		if ci == nil {
-			logger.Info("ctx passed into client side stats handler metrics event handling has no metrics data present")
+			logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")
 			return
 		}
 

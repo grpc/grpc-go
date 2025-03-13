@@ -88,7 +88,7 @@ func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 	// that sets the rpcInfo in the context.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Info("ctx passed into server side tracing stats handler has no server call data present")
+		logger.Error("ctx passed into server side tracing stats handler has no server call data present")
 		return
 	}
 	populateSpan(rs, ri.ai)
