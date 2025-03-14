@@ -28,6 +28,7 @@ package gzip
 import (
 	"compress/gzip"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -41,13 +42,13 @@ const Name = "gzip"
 func init() {
 	c := &compressor{}
 	c.poolCompressor.New = func() any {
-		return &writer{Writer: gzip.NewWriter(io.Discard), pool: &c.poolCompressor}
+		return gzip.NewWriter(io.Discard)
 	}
 	encoding.RegisterCompressor(c)
 }
 
 type writer struct {
-	*gzip.Writer
+	gzw  *gzip.Writer
 	pool *sync.Pool
 }
 
@@ -66,47 +67,62 @@ func SetLevel(level int) error {
 		if err != nil {
 			panic(err)
 		}
-		return &writer{Writer: w, pool: &c.poolCompressor}
+		return w
 	}
 	return nil
 }
 
 func (c *compressor) Compress(w io.Writer) (io.WriteCloser, error) {
-	z := c.poolCompressor.Get().(*writer)
-	z.Writer.Reset(w)
-	return z, nil
+	z := c.poolCompressor.Get().(*gzip.Writer)
+	z.Reset(w)
+	return &writer{gzw: z, pool: &c.poolCompressor}, nil
+}
+
+func (z *writer) Write(p []byte) (int, error) {
+	if z.gzw == nil {
+		return 0, errors.New("writer is closed")
+	}
+	return z.gzw.Write(p)
 }
 
 func (z *writer) Close() error {
-	defer z.pool.Put(z)
-	return z.Writer.Close()
+	if z.gzw == nil {
+		return nil
+	}
+	err := z.gzw.Close()
+	z.pool.Put(z.gzw)
+	z.gzw = nil
+	return err
 }
 
 type reader struct {
-	*gzip.Reader
+	gzr  *gzip.Reader
 	pool *sync.Pool
 }
 
 func (c *compressor) Decompress(r io.Reader) (io.Reader, error) {
-	z, inPool := c.poolDecompressor.Get().(*reader)
+	z, inPool := c.poolDecompressor.Get().(*gzip.Reader)
 	if !inPool {
-		newZ, err := gzip.NewReader(r)
+		var err error
+		z, err = gzip.NewReader(r)
 		if err != nil {
 			return nil, err
 		}
-		return &reader{Reader: newZ, pool: &c.poolDecompressor}, nil
-	}
-	if err := z.Reset(r); err != nil {
+	} else if err := z.Reset(r); err != nil {
 		c.poolDecompressor.Put(z)
 		return nil, err
 	}
-	return z, nil
+	return &reader{gzr: z, pool: &c.poolDecompressor}, nil
 }
 
 func (z *reader) Read(p []byte) (n int, err error) {
-	n, err = z.Reader.Read(p)
+	if z.gzr == nil {
+		return 0, io.EOF
+	}
+	n, err = z.gzr.Read(p)
 	if err == io.EOF {
-		z.pool.Put(z)
+		z.pool.Put(z.gzr)
+		z.gzr = nil
 	}
 	return n, err
 }
