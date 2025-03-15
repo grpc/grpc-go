@@ -242,8 +242,6 @@ func newTest(t *testing.T, tc *testConfig, chs []stats.Handler, shs []stats.Hand
 
 // startServer starts a gRPC server listening. Callers should defer a
 // call to te.tearDown to clean up.
-//
-// Uses deprecated opts rpc.(RPCCompressor, RPCDecompressor, WithBlock, Dial)
 func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.testServer = ts
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -682,13 +680,13 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 		payloads = e.responses
 	}
 
-	wantPayload := payloads[*idx]
-	if !proto.Equal(st.Payload.(proto.Message), wantPayload) {
-		t.Fatalf("st.Payload = %v, want %v", st.Payload, wantPayload)
+	expectedPayload := payloads[*idx]
+	if !proto.Equal(st.Payload.(proto.Message), expectedPayload) {
+		t.Fatalf("st.Payload = %v, want %v", st.Payload, expectedPayload)
 	}
 	*idx++
-	if st.Length != proto.Size(wantPayload) {
-		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(wantPayload))
+	if st.Length != proto.Size(expectedPayload) {
+		t.Fatalf("st.Length = %v, want %v", st.Length, proto.Size(expectedPayload))
 	}
 
 	// Below are sanity checks that Length, CompressedLength and SentTime are populated.
@@ -744,8 +742,8 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 		t.Fatalf("expected st.Error to be a statusError, got %v (type %T)", st.Error, st.Error)
 	}
 
-	wantStatus, _ := status.FromError(e.err)
-	if actual.Code() != wantStatus.Code() || actual.Message() != wantStatus.Message() {
+	expectedStatus, _ := status.FromError(e.err)
+	if actual.Code() != expectedStatus.Code() || actual.Message() != expectedStatus.Message() {
 		t.Fatalf("st.Error = %v, want %v", st.Error, e.err)
 	}
 
@@ -911,7 +909,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	want := &expectedData{
+	expect := &expectedData{
 		serverAddr:     te.srvAddr,
 		compression:    tc.compress,
 		method:         method,
@@ -925,7 +923,7 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	h.mu.Lock()
 	checkConnStats(t, h.gotConn)
 	h.mu.Unlock()
-	checkServerStats(t, h.gotRPC, want, checkFuncs)
+	checkServerStats(t, h.gotRPC, expect, checkFuncs)
 }
 
 func (s) TestServerStatsUnaryRPC(t *testing.T) {
