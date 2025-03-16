@@ -66,20 +66,15 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 		ServerIdentifier: si,
 	}
 	clientConfig := Config{
-		Servers: []ServerConfig{serverCfg},
-		Node:    clients.Node{ID: nodeID},
+		Servers:       []ServerConfig{serverCfg},
+		Node:          clients.Node{ID: nodeID},
+		ResourceTypes: map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
 	}
 	// Create an xdsChannel that uses everything set up above.
 	xc, err := newXDSChannel(xdsChannelOpts{
-		transport:    tr,
-		serverConfig: &serverCfg,
-		clientConfig: &clientConfig,
-		resourceTypeGetter: func(typeURL string) ResourceType {
-			if typeURL != xdsresource.V3ListenerURL {
-				return ResourceType{}
-			}
-			return listenerType
-		},
+		transport:          tr,
+		serverConfig:       &serverCfg,
+		clientConfig:       &clientConfig,
 		eventHandler:       newTestEventHandler(),
 		watchExpiryTimeout: watchExpiryTimeout,
 	})
@@ -153,21 +148,11 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 			wantErrStr: "clientConfig is nil",
 		},
 		{
-			name: "emptyResourceTypeGetter",
+			name: "emptyEventHandler",
 			opts: xdsChannelOpts{
 				transport:    &fakeTransport{},
 				serverConfig: &ServerConfig{},
 				clientConfig: &Config{},
-			},
-			wantErrStr: "resourceTypeGetter is nil",
-		},
-		{
-			name: "emptyEventHandler",
-			opts: xdsChannelOpts{
-				transport:          &fakeTransport{},
-				serverConfig:       &ServerConfig{},
-				clientConfig:       &Config{},
-				resourceTypeGetter: func(string) ResourceType { return ResourceType{} },
 			},
 			wantErrStr: "eventHandler is nil",
 		},

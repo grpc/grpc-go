@@ -47,16 +47,16 @@ const (
 	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
-	// ListenerResourceTypeName represents the transport agnostic name for the
+	// listenerResourceTypeName represents the transport agnostic name for the
 	// listener resource.
-	ListenerResourceTypeName = "ListenerResource"
+	listenerResourceTypeName = "ListenerResource"
 )
 
 var (
 	// Singleton instantiation of the resource type implementation.
 	listenerType = ResourceType{
 		TypeURL:                    xdsresource.V3ListenerURL,
-		TypeName:                   ListenerResourceTypeName,
+		TypeName:                   listenerResourceTypeName,
 		AllResourcesRequiredInSotW: true,
 		Decoder:                    listenerDecoder{},
 	}

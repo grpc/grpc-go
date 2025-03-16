@@ -147,7 +147,7 @@ type adsStreamOpts struct {
 	logPrefix          string                  // Prefix to be used for log messages.
 }
 
-// newADSStreamImpl initializes a new StreamImpl instance using the given
+// newADSStreamImpl initializes a new adsStreamImpl instance using the given
 // parameters.  It also launches goroutines responsible for managing reads and
 // writes for messages of the underlying stream.
 func newADSStreamImpl(opts adsStreamOpts) *adsStreamImpl {

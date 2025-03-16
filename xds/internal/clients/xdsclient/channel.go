@@ -63,14 +63,13 @@ type xdsChannelEventHandler interface {
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
 type xdsChannelOpts struct {
-	transport          clients.Transport         // Takes ownership of this transport.
-	serverConfig       *ServerConfig             // Configuration of the server to connect to.
-	clientConfig       *Config                   // Complete xDS client configuration, used to decode resources.
-	resourceTypeGetter func(string) ResourceType // Function to retrieve resource parsing functionality, based on resource type.
-	eventHandler       xdsChannelEventHandler    // Callbacks for ADS stream events.
-	backoff            func(int) time.Duration   // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
-	watchExpiryTimeout time.Duration             // Timeout for ADS resource watch expiry.
-	logPrefix          string                    // Prefix to use for logging.
+	transport          clients.Transport       // Takes ownership of this transport.
+	serverConfig       *ServerConfig           // Configuration of the server to connect to.
+	clientConfig       *Config                 // Complete xDS client configuration, used to decode resources.
+	eventHandler       xdsChannelEventHandler  // Callbacks for ADS stream events.
+	backoff            func(int) time.Duration // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
+	watchExpiryTimeout time.Duration           // Timeout for ADS resource watch expiry.
+	logPrefix          string                  // Prefix to use for logging.
 }
 
 // newXDSChannel creates a new xdsChannel instance with the provided options.
@@ -84,19 +83,16 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		return nil, errors.New("xdsclient: serverConfig is nil")
 	case opts.clientConfig == nil:
 		return nil, errors.New("xdsclient: clientConfig is nil")
-	case opts.resourceTypeGetter == nil:
-		return nil, errors.New("xdsclient: resourceTypeGetter is nil")
 	case opts.eventHandler == nil:
 		return nil, errors.New("xdsclient: eventHandler is nil")
 	}
 
 	xc := &xdsChannel{
-		transport:          opts.transport,
-		serverConfig:       opts.serverConfig,
-		clientConfig:       opts.clientConfig,
-		resourceTypeGetter: opts.resourceTypeGetter,
-		eventHandler:       opts.eventHandler,
-		closed:             syncutil.NewEvent(),
+		transport:    opts.transport,
+		serverConfig: opts.serverConfig,
+		clientConfig: opts.clientConfig,
+		eventHandler: opts.eventHandler,
+		closed:       syncutil.NewEvent(),
 	}
 
 	l := grpclog.Component("xds")
@@ -128,14 +124,13 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 type xdsChannel struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that, and hence need not be guarded by a mutex.
-	transport          clients.Transport         // Takes ownership of this transport (used to make streaming calls).
-	ads                *adsStreamImpl            // An ADS stream to the management server.
-	serverConfig       *ServerConfig             // Configuration of the server to connect to.
-	clientConfig       *Config                   // Complete xDS client configuration, used to decode resources.
-	resourceTypeGetter func(string) ResourceType // Function to retrieve resource parsing functionality, based on resource type.
-	eventHandler       xdsChannelEventHandler    // Callbacks for ADS stream events.
-	logger             *igrpclog.PrefixLogger    // Logger to use for logging.
-	closed             *syncutil.Event           // Fired when the channel is closed.
+	transport    clients.Transport      // Takes ownership of this transport (used to make streaming calls).
+	ads          *adsStreamImpl         // An ADS stream to the management server.
+	serverConfig *ServerConfig          // Configuration of the server to connect to.
+	clientConfig *Config                // Complete xDS client configuration, used to decode resources.
+	eventHandler xdsChannelEventHandler // Callbacks for ADS stream events.
+	logger       *igrpclog.PrefixLogger // Logger to use for logging.
+	closed       *syncutil.Event        // Fired when the channel is closed.
 }
 
 func (xc *xdsChannel) close() {
@@ -211,8 +206,8 @@ func (xc *xdsChannel) onResponse(resp response, onDone func()) ([]string, error)
 	}
 
 	// Lookup the resource parser based on the resource type.
-	rType := xc.resourceTypeGetter(resp.typeURL)
-	if rType.Decoder == nil {
+	rType, ok := xc.clientConfig.ResourceTypes[resp.typeURL]
+	if !ok {
 		return nil, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceTypeUnsupported, "Resource type URL %q unknown in response from server", resp.typeURL)
 	}
 
