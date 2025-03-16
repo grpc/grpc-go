@@ -18,11 +18,11 @@
 package buffer
 
 import (
-	"reflect"
 	"sort"
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -80,7 +80,7 @@ func (s) TestSingleWriter(t *testing.T) {
 	}()
 
 	wg.Wait()
-	if !reflect.DeepEqual(reads, wantReads) {
+	if !cmp.Equal(reads, wantReads) {
 		t.Errorf("reads: %#v, wantReads: %#v", reads, wantReads)
 	}
 }
@@ -115,7 +115,7 @@ func (s) TestMultipleWriters(t *testing.T) {
 
 	wg.Wait()
 	sort.Ints(reads)
-	if !reflect.DeepEqual(reads, wantReads) {
+	if !cmp.Equal(reads, wantReads) {
 		t.Errorf("reads: %#v, wantReads: %#v", reads, wantReads)
 	}
 }

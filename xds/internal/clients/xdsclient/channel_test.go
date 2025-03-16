@@ -29,16 +29,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
-
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
-
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -68,17 +65,17 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	serverCfg := ServerConfig{
 		ServerIdentifier: si,
 	}
-	xdsClientConfig := Config{
+	clientConfig := Config{
 		Servers: []ServerConfig{serverCfg},
 		Node:    clients.Node{ID: nodeID},
 	}
 	// Create an xdsChannel that uses everything set up above.
 	xc, err := newXDSChannel(xdsChannelOpts{
-		transport:       tr,
-		serverConfig:    &serverCfg,
-		xdsClientConfig: &xdsClientConfig,
+		transport:    tr,
+		serverConfig: &serverCfg,
+		clientConfig: &clientConfig,
 		resourceTypeGetter: func(typeURL string) ResourceType {
-			if typeURL != "type.googleapis.com/envoy.config.listener.v3.Listener" {
+			if typeURL != xdsresource.V3ListenerURL {
 				return ResourceType{}
 			}
 			return listenerType
@@ -153,14 +150,14 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 				transport:    &fakeTransport{},
 				serverConfig: &ServerConfig{},
 			},
-			wantErrStr: "xdsClientConfig is nil",
+			wantErrStr: "clientConfig is nil",
 		},
 		{
 			name: "emptyResourceTypeGetter",
 			opts: xdsChannelOpts{
-				transport:       &fakeTransport{},
-				serverConfig:    &ServerConfig{},
-				xdsClientConfig: &Config{},
+				transport:    &fakeTransport{},
+				serverConfig: &ServerConfig{},
+				clientConfig: &Config{},
 			},
 			wantErrStr: "resourceTypeGetter is nil",
 		},
@@ -169,7 +166,7 @@ func (s) TestChannel_New_FailureCases(t *testing.T) {
 			opts: xdsChannelOpts{
 				transport:          &fakeTransport{},
 				serverConfig:       &ServerConfig{},
-				xdsClientConfig:    &Config{},
+				clientConfig:       &Config{},
 				resourceTypeGetter: func(string) ResourceType { return ResourceType{} },
 			},
 			wantErrStr: "eventHandler is nil",
@@ -656,19 +653,19 @@ func (s) TestChannel_ADS_ResourceUnsubscribe(t *testing.T) {
 	// sent for the same.
 	xc.subscribe(listenerType, listenerResourceName1)
 	xc.subscribe(listenerType, listenerResourceName2)
-	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerResourceName1, listenerResourceName2}); err != nil {
+	if err := waitForResourceNames(ctx, ldsResourcesCh, []string{listenerResourceName1, listenerResourceName2}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the above resources to be ACKed.
-	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerResourceName1, listenerResourceName2}); err != nil {
+	if err := waitForResourceNames(ctx, ldsResourcesCh, []string{listenerResourceName1, listenerResourceName2}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Unsubscribe to one of the resources created above, and ensure that the
 	// other resource is still being requested.
 	xc.unsubscribe(listenerType, listenerResourceName1)
-	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerResourceName2}); err != nil {
+	if err := waitForResourceNames(ctx, ldsResourcesCh, []string{listenerResourceName2}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -679,16 +676,14 @@ func (s) TestChannel_ADS_ResourceUnsubscribe(t *testing.T) {
 	// Unsubscribe to the remaining resource, and ensure that no more resources
 	// are being requested.
 	xc.unsubscribe(listenerType, listenerResourceName2)
-	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{}); err != nil {
+	if err := waitForResourceNames(ctx, ldsResourcesCh, []string{}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // waitForResourceNames waits for the wantNames to be received on namesCh.
 // Returns a non-nil error if the context expires before that.
-func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) error {
-	t.Helper()
-
+func waitForResourceNames(ctx context.Context, namesCh chan []string, wantNames []string) error {
 	var lastRequestedNames []string
 	for ; ; <-time.After(defaultTestShortTimeout) {
 		select {

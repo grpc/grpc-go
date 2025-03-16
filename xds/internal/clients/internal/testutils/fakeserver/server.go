@@ -96,8 +96,8 @@ type Server struct {
 	Address string
 
 	// The underlying fake implementation of xDS and LRS.
-	*xdsServerV3
-	*lrsServerV3
+	*xdsServer
+	*lrsServer
 }
 
 type wrappedListener struct {
@@ -156,17 +156,17 @@ func NewServer(addr string) *Server {
 		LRSStreamCloseChan: testutils.NewChannelWithSize(defaultChannelBufferSize),
 		Address:            addr,
 	}
-	s.xdsServerV3 = &xdsServerV3{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
-	s.lrsServerV3 = &lrsServerV3{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan, streamOpenChan: s.LRSStreamOpenChan, streamCloseChan: s.LRSStreamCloseChan}
+	s.xdsServer = &xdsServer{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
+	s.lrsServer = &lrsServer{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan, streamOpenChan: s.LRSStreamOpenChan, streamCloseChan: s.LRSStreamCloseChan}
 	return s
 }
 
-type xdsServerV3 struct {
+type xdsServer struct {
 	reqChan  *testutils.Channel
 	respChan chan *Response
 }
 
-func (xdsS *xdsServerV3) StreamAggregatedResources(s v3discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+func (xdsS *xdsServer) StreamAggregatedResources(s v3discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 	errCh := make(chan error, 2)
 	go func() {
 		for {
@@ -208,18 +208,18 @@ func (xdsS *xdsServerV3) StreamAggregatedResources(s v3discoverygrpc.AggregatedD
 	return nil
 }
 
-func (xdsS *xdsServerV3) DeltaAggregatedResources(v3discoverygrpc.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
+func (xdsS *xdsServer) DeltaAggregatedResources(v3discoverygrpc.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
 	return status.Error(codes.Unimplemented, "")
 }
 
-type lrsServerV3 struct {
+type lrsServer struct {
 	reqChan         *testutils.Channel
 	respChan        chan *Response
 	streamOpenChan  *testutils.Channel
 	streamCloseChan *testutils.Channel
 }
 
-func (lrsS *lrsServerV3) StreamLoadStats(s v3lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
+func (lrsS *lrsServer) StreamLoadStats(s v3lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
 	lrsS.streamOpenChan.Send(nil)
 	defer lrsS.streamCloseChan.Send(nil)
 

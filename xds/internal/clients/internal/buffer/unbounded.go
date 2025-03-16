@@ -49,7 +49,7 @@ func NewUnbounded() *Unbounded {
 	return &Unbounded{c: make(chan any, 1)}
 }
 
-var errBufferClosed = errors.New("Put called on closed buffer.Unbounded")
+var errBufferClosed = errors.New("Put() called on closed buffer.Unbounded")
 
 // Put adds t to the unbounded buffer.
 func (b *Unbounded) Put(t any) error {

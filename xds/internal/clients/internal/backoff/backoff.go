@@ -16,7 +16,7 @@
  *
  */
 
-// Package backoff implement the backoff strategy for clients.
+// Package backoff implements the backoff strategy for clients.
 //
 // This is kept in internal until the clients project decides whether or not to
 // allow alternative backoff strategies.
