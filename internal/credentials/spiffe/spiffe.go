@@ -29,10 +29,6 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
-// // BundleMap represents a SPIFFE Bundle Map per the spec
-// // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format.
-// type BundleMap map[string]*spiffebundle.Bundle
-
 type partialParsedSPIFFEBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
 }
