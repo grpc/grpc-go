@@ -58,6 +58,7 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 	caCert := testdata.Path("x509/server_ca_cert.pem")
 	clientCert := testdata.Path("x509/client1_cert.pem")
 	clientKey := testdata.Path("x509/client1_key.pem")
+	clientSpiffeBundle := testdata.Path("spiffe_end2end/client_spiffe.json")
 	tests := []struct {
 		name string
 		jd   string
@@ -96,6 +97,10 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 		{
 			name: "Refresh interval, CA chain, private key and certificate chain",
 			jd:   fmt.Sprintf(`{"refresh_interval": "1s","ca_certificate_file":"%s","certificate_file":"%s","private_key_file":"%s"}`, caCert, clientCert, clientKey),
+		},
+		{
+			name: "Refresh interval, CA chain, private key, certificate chain, spiffe bundle",
+			jd:   fmt.Sprintf(`{"refresh_interval": "1s","ca_certificate_file":"%s","certificate_file":"%s","private_key_file":"%s","spiffe_trust_bundle_map_file":"%s"}`, caCert, clientCert, clientKey, clientSpiffeBundle),
 		},
 		{
 			name: "Unknown field",
@@ -224,6 +229,87 @@ func (s) TestCaReloading(t *testing.T) {
 	}
 }
 
+func (s) TestSPIFFEReloading(t *testing.T) {
+	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	if err != nil {
+		t.Fatalf("Failed to read test CA cert: %s", err)
+	}
+
+	// Write CA certs to a temporary file so that we can modify it later.
+	spiffePath := t.TempDir() + "/client_spiffe.json"
+	if err = os.WriteFile(spiffePath, clientSPIFFEBundle, 0644); err != nil {
+		t.Fatalf("Failed to write test SPIFFE Bundle %v: %v", clientSPIFFEBundle, err)
+	}
+	cfg := fmt.Sprintf(`{
+		"spiffe_trust_bundle_map_file": "%s",
+		"refresh_interval": ".01s"
+	}`, spiffePath)
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+
+	serverCredentials := grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.NoClientCert))
+	server := stubserver.StartTestService(t, nil, serverCredentials)
+	defer server.Stop()
+
+	conn, err := grpc.NewClient(
+		server.Address,
+		grpc.WithCredentialsBundle(tlsBundle),
+		grpc.WithAuthority("x.test.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testgrpc.NewTestServiceClient(conn)
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("Error calling EmptyCall: %v", err)
+	}
+	// close the server and create a new one to force client to do a new
+	// handshake.
+	server.Stop()
+
+	wrongBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/server_spiffebundle.json"))
+	if err != nil {
+		t.Fatalf("Failed to read test spiffe bundle %v: %v", "spiffe_end2end/server_spiffebundle.json", err)
+	}
+	// unload root cert
+	err = os.WriteFile(spiffePath, wrongBundle, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test spiffe bundle %v: %v", "spiffe_end2end/server_spiffebundle.json", err)
+	}
+
+	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
+		ss := stubserver.StubServer{
+			Address:    server.Address,
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+		}
+		server = stubserver.StartTestService(t, &ss, serverCredentials)
+
+		// Client handshake should eventually fail because the client CA was
+		// reloaded, and thus the server cert is signed by an unknown CA.
+		t.Log(server)
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		const wantErr = "no bundle found for peer certificates trust domain"
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
+			// Certs have reloaded.
+			server.Stop()
+			break
+		}
+		t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
+		server.Stop()
+	}
+	if ctx.Err() != nil {
+		t.Errorf("Timed out waiting for CA certs reloading")
+	}
+}
+
 func (s) TestMTLS(t *testing.T) {
 	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentials(t, tls.RequireAndVerifyClientCert)))
 	defer s.Stop()
@@ -251,5 +337,99 @@ func (s) TestMTLS(t *testing.T) {
 	defer cancel()
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
+	}
+}
+
+func (s) TestMTLSSPIFFE(t *testing.T) {
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.RequireAndVerifyClientCert)))
+	defer s.Stop()
+
+	cfg := fmt.Sprintf(`{
+		"certificate_file": "%s",
+		"private_key_file": "%s",
+		"spiffe_trust_bundle_map_file": "%s"
+	}`,
+		testdata.Path("spiffe_end2end/client_spiffe.pem"),
+		testdata.Path("spiffe_end2end/client.key"),
+		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
+	}
+}
+
+func (s) TestMTLSSPIFFEWithServerChain(t *testing.T) {
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFEChain(t, tls.RequireAndVerifyClientCert)))
+	defer s.Stop()
+
+	cfg := fmt.Sprintf(`{
+		"certificate_file": "%s",
+		"private_key_file": "%s",
+		"spiffe_trust_bundle_map_file": "%s"
+	}`,
+		testdata.Path("spiffe_end2end/client_spiffe.pem"),
+		testdata.Path("spiffe_end2end/client.key"),
+		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
+	}
+}
+
+func (s) TestMTLSSPIFFEFailure(t *testing.T) {
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.RequireAndVerifyClientCert)))
+	defer s.Stop()
+
+	cfg := fmt.Sprintf(`{
+		"certificate_file": "%s",
+		"private_key_file": "%s",
+		"spiffe_trust_bundle_map_file": "%s"
+	}`,
+		testdata.Path("spiffe_end2end/client_spiffe.pem"),
+		testdata.Path("spiffe_end2end/client.key"),
+		testdata.Path("spiffe_end2end/server_spiffebundle.json"))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Errorf("EmptyCall(): got success. want failure")
+	}
+	wantErr := "spiffe: no bundle found for peer certificates"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("EmptyCall(): failed with wrong error. got %v. want contains: %v", err, wantErr)
 	}
 }
