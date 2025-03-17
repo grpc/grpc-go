@@ -25,8 +25,23 @@ import (
 	"os"
 	"testing"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/testdata"
 )
+
+// LoadSPIFFEBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
+// Bundle Map spec for more detail -
+// https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
+// If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
+// behavior occurs which causes the last processed entry to be the entry in the
+// parsed map.
+func LoadSPIFFEBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
+	bundleMapRaw, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return BundleMapFromBytes(bundleMapRaw)
+}
 
 func TestKnownSPIFFEBundle(t *testing.T) {
 	spiffeBundleFile := testdata.Path("spiffe/spiffebundle.json")
