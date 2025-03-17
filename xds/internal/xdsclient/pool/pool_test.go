@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ func (s) TestDefaultPool_LazyLoadBootstrapConfig(t *testing.T) {
 		},
 	})
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create bootstrap configuration: %v", err))
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 	testutils.CreateBootstrapFileForTesting(t, bs)
 
