@@ -574,7 +574,7 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 // distributor. Then the update succeeds, and the test verifies that the key
 // material is updated.
 func (s) TestProvider_UpdateFailureSPIFFE_MissingFile(t *testing.T) {
-	dir, prov, distCh, cancel := initializeProvider(t, "Delete file being read", true)
+	dir, prov, distCh, cancel := initializeProvider(t, "Delete spiffe file being read", true)
 	defer cancel()
 
 	// Make sure the provider is healthy and returns key material.
@@ -606,6 +606,39 @@ func (s) TestProvider_UpdateFailureSPIFFE_MissingFile(t *testing.T) {
 	}
 }
 
-func (s) TestProvider_UpdateFailures(t *testing.T) {
+// TestProvider_UpdateFailure_ThenSuccess tests the case where updating cert/key
+// files fail. Verifies that the failed update does not push anything on the
+// distributor. Then the update succeeds, and the test verifies that the key
+// material is updated.
+func (s) TestProvider_UpdateFailureRoot_MissingFile(t *testing.T) {
+	dir, prov, distCh, cancel := initializeProvider(t, "Delete root file being read", false)
+	defer cancel()
 
+	// Make sure the provider is healthy and returns key material.
+	ctx, cc := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cc()
+	km1, err := prov.KeyMaterial(ctx)
+	if err != nil {
+		t.Fatalf("provider.KeyMaterial() failed: %v", err)
+	}
+
+	// Remove the file that we are reading
+	removeTmpFile(t, path.Join(dir, rootFile))
+
+	// Since the last update left the files in an incompatible state, the update
+	// should not be picked up by our provider.
+	sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
+	defer sc()
+	if _, err := distCh.Receive(sCtx); err == nil {
+		t.Fatal("new key material pushed to distributor when underlying files did not change")
+	}
+
+	// The provider should return key material corresponding to the old state.
+	km2, err := prov.KeyMaterial(ctx)
+	if err != nil {
+		t.Fatalf("provider.KeyMaterial() failed: %v", err)
+	}
+	if err := compareKeyMaterial(km1, km2); err != nil {
+		t.Fatalf("expected provider to not update key material: %v", err)
+	}
 }
