@@ -207,49 +207,43 @@ func (w *watcher) updateRootDistributor() {
 	}
 }
 
-func (w *watcher) maybeUpdateSPIFFEBundleMap() error {
-	// If the map file is unset, just return an error, don't create log spam.
-	if w.opts.SPIFFEBundleMapFile == "" {
-		return fmt.Errorf("SPIFFEBundleMapFile is unset in watcher options")
-	}
+func (w *watcher) maybeUpdateSPIFFEBundleMap() {
 	spiffeBundleMapContents, err := os.ReadFile(w.opts.SPIFFEBundleMapFile)
 	if err != nil {
 		logger.Warningf("spiffeBundleMapFile (%s) read failed: %v", w.opts.SPIFFEBundleMapFile, err)
-		return err
+		return
 	}
 	// If the file contents have not changed, skip updating the distributor.
 	if bytes.Equal(w.spiffeBundleMapFileContents, spiffeBundleMapContents) {
-		return nil
+		return
 	}
 	bundleMap, err := spiffe.BundleMapFromBytes(spiffeBundleMapContents)
 	if err != nil {
-		logger.Warning("failed to parse spiffe bundle map")
-		return err
+		logger.Warning("Failed to parse spiffe bundle map")
+		return
 	}
 	w.spiffeBundleMapFileContents = spiffeBundleMapContents
 	w.rootDistributor.Set(&certprovider.KeyMaterial{SPIFFEBundleMap: bundleMap}, nil)
-	return nil
 }
 
-func (w *watcher) maybeUpdateRootFile() error {
+func (w *watcher) maybeUpdateRootFile() {
 	rootFileContents, err := os.ReadFile(w.opts.RootFile)
 	if err != nil {
 		logger.Warningf("rootFile (%s) read failed: %v", w.opts.RootFile, err)
-		return err
+		return
 	}
 	trustPool := x509.NewCertPool()
 	if !trustPool.AppendCertsFromPEM(rootFileContents) {
-		logger.Warning("failed to parse root certificate")
-		return err
+		logger.Warning("Failed to parse root certificate")
+		return
 	}
 	// If the file contents have not changed, skip updating the distributor.
 	if bytes.Equal(w.rootFileContents, rootFileContents) {
-		return nil
+		return
 	}
 
 	w.rootFileContents = rootFileContents
 	w.rootDistributor.Set(&certprovider.KeyMaterial{Roots: trustPool}, nil)
-	return nil
 }
 
 // run is a long running goroutine which watches the configured files for
