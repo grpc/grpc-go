@@ -19,8 +19,9 @@
 package resolver
 
 import (
-	"encoding/json"
+	"encoding/base64"
 	"sort"
+	"strings"
 )
 
 type addressMapEntry struct {
@@ -184,17 +185,19 @@ func NewEndpointMap() *EndpointMap {
 	}
 }
 
+// encodeEndpoint returns a string that uniquely identifies the unordered set of
+// addresses within an endpoint.
 func encodeEndpoint(e Endpoint) endpointMapKey {
 	addrs := make([]string, 0, len(e.Addresses))
+	// base64 encoding the address strings restricts the characters present
+	// within the strings. This allows us to use a delimiter without the need of
+	// escape characters.
 	for _, addr := range e.Addresses {
-		addrs = append(addrs, addr.String())
+		addrs = append(addrs, base64.StdEncoding.EncodeToString([]byte(addr.String())))
 	}
 	sort.Strings(addrs)
-	encoded, err := json.Marshal(addrs)
-	if err != nil {
-		panic("Failed to marshal []string to JSON: " + err.Error())
-	}
-	return endpointMapKey(encoded)
+	// " " should not appear in base64 encoded strings.
+	return endpointMapKey(strings.Join(addrs, " "))
 }
 
 // Get returns the value for the address in the map, if present.
