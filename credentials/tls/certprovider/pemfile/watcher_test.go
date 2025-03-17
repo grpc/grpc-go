@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -67,7 +67,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
 
-	if gotBundle, wantBundle := got.SPIFFEBundleMap, want.SPIFFEBundleMap; !reflect.DeepEqual(gotBundle, wantBundle) {
+	if gotBundle, wantBundle := got.SPIFFEBundleMap, want.SPIFFEBundleMap; !cmp.Equal(gotBundle, wantBundle) {
 		return fmt.Errorf("keyMaterial spiffe bundle map = %v, want %v", gotBundle, wantBundle)
 	}
 
@@ -221,22 +221,14 @@ func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (st
 
 	// Create a new provider to watch the files in tmpdir.
 	dir := createTmpDirWithFiles(t, testName+"*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/client_ca_cert.pem", "spiffe/spiffebundle.json")
-	var opts Options
+	opts := Options{
+		CertFile:        path.Join(dir, certFile),
+		KeyFile:         path.Join(dir, keyFile),
+		RootFile:        path.Join(dir, rootFile),
+		RefreshDuration: defaultTestRefreshDuration,
+	}
 	if useSPIFFEBundle {
-		opts = Options{
-			CertFile:            path.Join(dir, certFile),
-			KeyFile:             path.Join(dir, keyFile),
-			RootFile:            path.Join(dir, rootFile),
-			SPIFFEBundleMapFile: path.Join(dir, spiffeBundleFile),
-			RefreshDuration:     defaultTestRefreshDuration,
-		}
-	} else {
-		opts = Options{
-			CertFile:        path.Join(dir, certFile),
-			KeyFile:         path.Join(dir, keyFile),
-			RootFile:        path.Join(dir, rootFile),
-			RefreshDuration: defaultTestRefreshDuration,
-		}
+		opts.SPIFFEBundleMapFile = path.Join(dir, spiffeBundleFile)
 	}
 	prov, err := NewProvider(opts)
 	if err != nil {
@@ -251,7 +243,7 @@ func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (st
 		// Since we have root and identity certs, we need to make sure the
 		// update is pushed on both of them.
 		if _, err := distCh.Receive(ctx); err != nil {
-			t.Fatalf("timeout waiting for provider to read files and push key material to distributor: %v", err)
+			t.Fatalf("Timeout waiting for provider to read files and push key material to distributor: %v", err)
 		}
 	}
 
@@ -286,7 +278,7 @@ func (s) TestProvider_NoUpdate(t *testing.T) {
 			sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
 			defer sc()
 			if _, err := distCh.Receive(sCtx); err == nil {
-				t.Fatal("new key material pushed to distributor when underlying files did not change")
+				t.Fatal("New key material pushed to distributor when underlying files did not change")
 			}
 		})
 	}
@@ -321,7 +313,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 				createTmpFile(t, testdata.Path("x509/server_ca_cert.pem"), path.Join(dir, rootFile))
 			}
 			if _, err := distCh.Receive(ctx); err != nil {
-				t.Fatal("timeout waiting for new key material to be pushed to the distributor")
+				t.Fatal("Timeout waiting for new key material to be pushed to the distributor")
 			}
 
 			// Make sure update is picked up.
@@ -330,14 +322,14 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 				t.Fatalf("provider.KeyMaterial() failed: %v", err)
 			}
 			if err := compareKeyMaterial(km1, km2); err == nil {
-				t.Fatal("expected provider to return new key material after update to underlying file")
+				t.Fatal("Expected provider to return new key material after update to underlying file")
 			}
 
 			// Change only cert/key files.
 			createTmpFile(t, testdata.Path("x509/client2_cert.pem"), path.Join(dir, certFile))
 			createTmpFile(t, testdata.Path("x509/client2_key.pem"), path.Join(dir, keyFile))
 			if _, err := distCh.Receive(ctx); err != nil {
-				t.Fatal("timeout waiting for new key material to be pushed to the distributor")
+				t.Fatal("Timeout waiting for new key material to be pushed to the distributor")
 			}
 
 			// Make sure update is picked up.
@@ -346,7 +338,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 				t.Fatalf("provider.KeyMaterial() failed: %v", err)
 			}
 			if err := compareKeyMaterial(km2, km3); err == nil {
-				t.Fatal("expected provider to return new key material after update to underlying file")
+				t.Fatal("Expected provider to return new key material after update to underlying file")
 			}
 		})
 	}
@@ -383,26 +375,19 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 			}
 			symLinkName := path.Join(tmpdir, "test_symlink")
 			if err := os.Symlink(dir1, symLinkName); err != nil {
-				t.Fatalf("failed to create symlink to %q: %v", dir1, err)
+				t.Fatalf("Failed to create symlink to %q: %v", dir1, err)
 			}
 
 			// Create a provider which watches the files pointed to by the symlink.
-			var opts Options
+			opts := Options{
+				CertFile:            path.Join(symLinkName, certFile),
+				KeyFile:             path.Join(symLinkName, keyFile),
+				RootFile:            path.Join(symLinkName, rootFile),
+				SPIFFEBundleMapFile: path.Join(symLinkName, spiffeBundleFile),
+				RefreshDuration:     defaultTestRefreshDuration,
+			}
 			if useSPIFFEBundle {
-				opts = Options{
-					CertFile:            path.Join(symLinkName, certFile),
-					KeyFile:             path.Join(symLinkName, keyFile),
-					RootFile:            path.Join(symLinkName, rootFile),
-					SPIFFEBundleMapFile: path.Join(symLinkName, spiffeBundleFile),
-					RefreshDuration:     defaultTestRefreshDuration,
-				}
-			} else {
-				opts = Options{
-					CertFile:        path.Join(symLinkName, certFile),
-					KeyFile:         path.Join(symLinkName, keyFile),
-					RootFile:        path.Join(symLinkName, rootFile),
-					RefreshDuration: defaultTestRefreshDuration,
-				}
+				opts.SPIFFEBundleMapFile = path.Join(symLinkName, spiffeBundleFile)
 			}
 			prov, err := NewProvider(opts)
 			if err != nil {
@@ -418,7 +403,7 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 				// Since we have root and identity certs, we need to make sure the
 				// update is pushed on both of them.
 				if _, err := distCh.Receive(ctx); err != nil {
-					t.Fatalf("timeout waiting for provider to read files and push key material to distributor: %v", err)
+					t.Fatalf("Timeout waiting for provider to read files and push key material to distributor: %v", err)
 				}
 			}
 			km1, err := prov.KeyMaterial(ctx)
@@ -429,10 +414,10 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 			// Update the symlink to point to dir2.
 			symLinkTmpName := path.Join(tmpdir, "test_symlink.tmp")
 			if err := os.Symlink(dir2, symLinkTmpName); err != nil {
-				t.Fatalf("failed to create symlink to %q: %v", dir2, err)
+				t.Fatalf("Failed to create symlink to %q: %v", dir2, err)
 			}
 			if err := os.Rename(symLinkTmpName, symLinkName); err != nil {
-				t.Fatalf("failed to update symlink: %v", err)
+				t.Fatalf("Failed to update symlink: %v", err)
 			}
 
 			// Make sure the provider picks up the new files and pushes the key material
@@ -441,7 +426,7 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 				// Since we have root and identity certs, we need to make sure the
 				// update is pushed on both of them.
 				if _, err := distCh.Receive(ctx); err != nil {
-					t.Fatalf("timeout waiting for provider to read files and push key material to distributor: %v", err)
+					t.Fatalf("Timeout waiting for provider to read files and push key material to distributor: %v", err)
 				}
 			}
 			km2, err := prov.KeyMaterial(ctx)
@@ -450,7 +435,7 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 			}
 
 			if err := compareKeyMaterial(km1, km2); err == nil {
-				t.Fatal("expected provider to return new key material after symlink update")
+				t.Fatal("Expected provider to return new key material after symlink update")
 			}
 		})
 	}
@@ -483,7 +468,7 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 	sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
 	defer sc()
 	if _, err := distCh.Receive(sCtx); err == nil {
-		t.Fatal("new key material pushed to distributor when underlying files did not change")
+		t.Fatal("New key material pushed to distributor when underlying files did not change")
 	}
 
 	// The provider should return key material corresponding to the old state.
@@ -492,7 +477,7 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 		t.Fatalf("provider.KeyMaterial() failed: %v", err)
 	}
 	if err := compareKeyMaterial(km1, km2); err != nil {
-		t.Fatalf("expected provider to not update key material: %v", err)
+		t.Fatalf("Expected provider to not update key material: %v", err)
 	}
 
 	// Update the key file to match the cert file.
@@ -500,14 +485,14 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 
 	// Make sure update is picked up.
 	if _, err := distCh.Receive(ctx); err != nil {
-		t.Fatal("timeout waiting for new key material to be pushed to the distributor")
+		t.Fatal("Timeout waiting for new key material to be pushed to the distributor")
 	}
 	km3, err := prov.KeyMaterial(ctx)
 	if err != nil {
 		t.Fatalf("provider.KeyMaterial() failed: %v", err)
 	}
 	if err := compareKeyMaterial(km2, km3); err == nil {
-		t.Fatal("expected provider to return new key material after update to underlying file")
+		t.Fatal("Expected provider to return new key material after update to underlying file")
 	}
 }
 
@@ -554,7 +539,7 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 			sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
 			defer sc()
 			if _, err := distCh.Receive(sCtx); err == nil {
-				t.Fatal("new key material pushed to distributor when underlying files did not change")
+				t.Fatal("New key material pushed to distributor when underlying files did not change")
 			}
 
 			// The provider should return key material corresponding to the old state.
@@ -563,7 +548,7 @@ func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
 				t.Fatalf("provider.KeyMaterial() failed: %v", err)
 			}
 			if err := compareKeyMaterial(km1, km2); err != nil {
-				t.Fatalf("expected provider to not update key material: %v", err)
+				t.Fatalf("Expected provider to not update key material: %v", err)
 			}
 		})
 	}
