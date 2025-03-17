@@ -177,6 +177,14 @@ func createTmpFile(t *testing.T, src, dst string) {
 	t.Logf("%s", string(data))
 }
 
+func removeTmpFile(t *testing.T, filePath string) {
+	t.Helper()
+	if err := os.Remove(filePath); err != nil {
+		t.Fatalf("os.RemoveFIle(%q) failed: %v", filePath, err)
+	}
+	t.Logf("Removed file at: %s", filePath)
+}
+
 // createTempDirWithFiles creates a temporary directory under the system default
 // tempDir with the given dirSuffix. It also reads from certSrc, keySrc and
 // rootSrc files are creates appropriate files under the newly create tempDir.
@@ -501,4 +509,103 @@ func (s) TestProvider_UpdateFailure_ThenSuccess(t *testing.T) {
 	if err := compareKeyMaterial(km2, km3); err == nil {
 		t.Fatal("expected provider to return new key material after update to underlying file")
 	}
+}
+
+// TestProvider_UpdateFailure_ThenSuccess tests the case where updating cert/key
+// files fail. Verifies that the failed update does not push anything on the
+// distributor. Then the update succeeds, and the test verifies that the key
+// material is updated.
+func (s) TestProvider_UpdateFailureSPIFFE(t *testing.T) {
+	tests := []struct {
+		name    string
+		badFile string
+	}{
+		{
+			name:    "malformed spiffe",
+			badFile: "spiffe/spiffebundle_malformed.json",
+		},
+		{
+			name:    "invalid bundle",
+			badFile: "spiffe/spiffebundle_wrong_kty.json",
+		},
+		{
+			name:    "cert in the x5c field is invalid",
+			badFile: "spiffe/spiffebundle_corrupted_cert.json",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, prov, distCh, cancel := initializeProvider(t, tc.name, true)
+			defer cancel()
+
+			// Make sure the provider is healthy and returns key material.
+			ctx, cc := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cc()
+			km1, err := prov.KeyMaterial(ctx)
+			if err != nil {
+				t.Fatalf("provider.KeyMaterial() failed: %v", err)
+			}
+
+			// Update the file with a bad update
+			createTmpFile(t, testdata.Path(tc.badFile), path.Join(dir, spiffeBundleFile))
+
+			// Since the last update left the files in an incompatible state, the update
+			// should not be picked up by our provider.
+			sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
+			defer sc()
+			if _, err := distCh.Receive(sCtx); err == nil {
+				t.Fatal("new key material pushed to distributor when underlying files did not change")
+			}
+
+			// The provider should return key material corresponding to the old state.
+			km2, err := prov.KeyMaterial(ctx)
+			if err != nil {
+				t.Fatalf("provider.KeyMaterial() failed: %v", err)
+			}
+			if err := compareKeyMaterial(km1, km2); err != nil {
+				t.Fatalf("expected provider to not update key material: %v", err)
+			}
+		})
+	}
+}
+
+// TestProvider_UpdateFailure_ThenSuccess tests the case where updating cert/key
+// files fail. Verifies that the failed update does not push anything on the
+// distributor. Then the update succeeds, and the test verifies that the key
+// material is updated.
+func (s) TestProvider_UpdateFailureSPIFFE_MissingFile(t *testing.T) {
+	dir, prov, distCh, cancel := initializeProvider(t, "Delete file being read", true)
+	defer cancel()
+
+	// Make sure the provider is healthy and returns key material.
+	ctx, cc := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cc()
+	km1, err := prov.KeyMaterial(ctx)
+	if err != nil {
+		t.Fatalf("provider.KeyMaterial() failed: %v", err)
+	}
+
+	// Remove the file that we are reading
+	removeTmpFile(t, path.Join(dir, spiffeBundleFile))
+
+	// Since the last update left the files in an incompatible state, the update
+	// should not be picked up by our provider.
+	sCtx, sc := context.WithTimeout(context.Background(), 2*defaultTestRefreshDuration)
+	defer sc()
+	if _, err := distCh.Receive(sCtx); err == nil {
+		t.Fatal("new key material pushed to distributor when underlying files did not change")
+	}
+
+	// The provider should return key material corresponding to the old state.
+	km2, err := prov.KeyMaterial(ctx)
+	if err != nil {
+		t.Fatalf("provider.KeyMaterial() failed: %v", err)
+	}
+	if err := compareKeyMaterial(km1, km2); err != nil {
+		t.Fatalf("expected provider to not update key material: %v", err)
+	}
+}
+
+func (s) TestProvider_UpdateFailures(t *testing.T) {
+
 }
