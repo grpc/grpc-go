@@ -30,10 +30,6 @@ import (
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 )
 
-// BundleMap represents a SPIFFE Bundle Map per the spec
-// https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format.
-type BundleMap map[string]*spiffebundle.Bundle
-
 type partialParsedSPIFFEBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
 }
@@ -69,7 +65,7 @@ func BundleMapFromBytes(bundleMapBytes []byte) (map[string]*spiffebundle.Bundle,
 
 // GetRootsFromSPIFFEBundleMap returns the root trust certificates from the
 // SPIFFE bundle map for the given trust domain from the leaf certificate.
-func GetRootsFromSPIFFEBundleMap(bundleMap BundleMap, leafCert *x509.Certificate) (*x509.CertPool, error) {
+func GetRootsFromSPIFFEBundleMap(bundleMap map[string]*spiffebundle.Bundle, leafCert *x509.Certificate) (*x509.CertPool, error) {
 	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
 	//    leaf certificate.  In particular, it must have a single URI SAN containing
 	//    a well-formed SPIFFE ID ([SPIFFE ID format]).

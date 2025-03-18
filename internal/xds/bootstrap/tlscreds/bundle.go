@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
@@ -152,7 +153,7 @@ func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthIn
 	return nil, nil, errors.New("server handshake is not supported by xDS client TLS credentials")
 }
 
-func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.BundleMap) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+func buildSPIFFEVerifyFunc(spiffeBundleMap map[string]*spiffebundle.Bundle) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		rawCertList := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
