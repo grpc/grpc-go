@@ -28,7 +28,6 @@ import (
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -438,7 +437,7 @@ func (m *mockCompressor) Decompress(io.Reader) (io.Reader, error) {
 	return m, nil
 }
 
-func (m *mockCompressor) Read(p []byte) (int, error) {
+func (m *mockCompressor) Read([]byte) (int, error) {
 	m.ch <- struct{}{}
 	return 1, io.EOF
 }
@@ -469,7 +468,7 @@ func (s) TestDecompress_NoReadAfterEOF(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for call to compressor")
 	}
-	ctx, cancel = context.WithTimeout(ctx, 10*time.Millisecond)
+	ctx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer cancel()
 	select {
 	case <-ch:
