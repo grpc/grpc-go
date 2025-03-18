@@ -1740,13 +1740,6 @@ func TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	validateDelayedResolutionEventSpans(t, spans, wantSpanInfos)
-}
-
-// validateDelayedResolutionEventSpans filters spans containing a specified
-// event name and validates their correctness. It ensures that the retrieved
-// spans contain the expected events.
-func validateDelayedResolutionEventSpans(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []traceSpanInfo) {
 	for _, want := range wantSpanInfos {
 		found := false
 		for _, span := range spans {
