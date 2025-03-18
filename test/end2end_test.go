@@ -3658,7 +3658,6 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 	}
 
 	req := &testpb.StreamingInputCallRequest{Payload: payload}
-	//eshita break on eof , any other error t.Fatal
 	for {
 		if err = stream.Send(req); err == io.EOF {
 			break
