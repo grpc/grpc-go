@@ -101,6 +101,8 @@ func TestSPIFFEBundleMapFailures(t *testing.T) {
 		testdata.Path("spiffe/spiffebundle_wrong_seq_type.json"),
 		testdata.Path("NOT_A_REAL_FILE"),
 		testdata.Path("spiffe/spiffebundle_invalid_trustdomain.json"),
+		testdata.Path("spiffe/spiffebundle_empty_string_key.json"),
+		testdata.Path("spiffe/spiffebundle_empty_keys.json"),
 	}
 	for _, path := range filePaths {
 		t.Run(path, func(t *testing.T) {
@@ -180,6 +182,42 @@ func TestGetRootsFromSPIFFEBundleMapFailures(t *testing.T) {
 				t.Fatalf("GetRootsFromSPIFFEBundleMap() want err to contain %v. got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestGetRootsFromSPIFFEBundleMapNilCert(t *testing.T) {
+	wantErr := "input cert is nil"
+	bundleMapFile := testdata.Path("spiffe/spiffebundle.json")
+	bundle, err := loadSPIFFEBundleMap(bundleMapFile)
+	if err != nil {
+		t.Fatalf("loadSPIFFEBundleMap(%v) failed with error: %v", bundleMapFile, err)
+	}
+	_, err = GetRootsFromSPIFFEBundleMap(bundle, nil)
+	if err == nil {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() want err got none")
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() want err to contain %v. got %v", wantErr, err)
+	}
+}
+
+func TestGetRootsFromSPIFFEBundleMapMultipleURIs(t *testing.T) {
+	wantErr := "input cert has more than 1 URI"
+	bundleMapFile := testdata.Path("spiffe/spiffebundle.json")
+	leafCertFile := testdata.Path("spiffe/client_spiffe.pem")
+	bundle, err := loadSPIFFEBundleMap(bundleMapFile)
+	if err != nil {
+		t.Fatalf("loadSPIFFEBundleMap(%v) failed with error: %v", bundleMapFile, err)
+	}
+	cert := loadX509Cert(t, leafCertFile)
+	// Add a duplicate URI of the first
+	cert.URIs = append(cert.URIs, cert.URIs[0])
+	_, err = GetRootsFromSPIFFEBundleMap(bundle, cert)
+	if err == nil {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() want err got none")
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() want err to contain %v. got %v", wantErr, err)
 	}
 }
 

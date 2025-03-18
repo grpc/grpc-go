@@ -156,3 +156,25 @@ func (s) TestSPIFFEVerifyFuncBadInputBytes(t *testing.T) {
 		t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, wantErrContains)
 	}
 }
+
+func (s) TestSPIFFEVerifyFuncNoInputCerts(t *testing.T) {
+	wantErrContains := "no valid input certificates"
+	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	if err != nil {
+		t.Fatalf("Reading spiffebundle file failed: %v", err)
+	}
+	spiffeBundle, err := spiffe.BundleMapFromBytes(spiffeBundleBytes)
+	if err != nil {
+		t.Fatalf("spiffe.BundleMapFromBytes() failed: %v", err)
+	}
+	verifyFunc := buildSPIFFEVerifyFunc(spiffeBundle)
+	verifiedChains := [][]*x509.Certificate{}
+	rawCerts := [][]byte{}
+	err = verifyFunc(rawCerts, verifiedChains)
+	if err == nil {
+		t.Fatalf("buildSPIFFEVerifyFunc call succeeded. want failure")
+	}
+	if !strings.Contains(err.Error(), wantErrContains) {
+		t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, wantErrContains)
+	}
+}

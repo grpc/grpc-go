@@ -12,6 +12,9 @@
     It is just the `example.com` trust domain from spiffebundle.json.
 *   spiffebundle_corrupted_cert.json - manually modifies the `x5c` field and
     removes a character to create an invalid certificate
+*   spiffebundle_empty_keys.json - the `keys` field is an empty array
+*   spiffebundle_empty_string_keys.json - the `keys` field contains an entry
+*   with an empty string key
 *   spiffebundle_invalid_trustdomain - uses a `#` in the trust domain which is a
     disallowed character per the spec
 *   spiffebundle_malformed.json - a fully wrong json
