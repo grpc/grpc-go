@@ -21,6 +21,7 @@ package xdsclient
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -509,7 +510,7 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 
 	// Start an xDS management server with a restartable listener to simulate
 	// connection failures.
-	l, err := testutils.LocalTCPListener()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}

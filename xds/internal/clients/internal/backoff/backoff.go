@@ -29,52 +29,52 @@ import (
 	"time"
 )
 
-// Config defines the configuration options for backoff.
-type Config struct {
-	// BaseDelay is the amount of time to backoff after the first failure.
-	BaseDelay time.Duration
-	// Multiplier is the factor with which to multiply backoffs after a
+// config defines the configuration options for backoff.
+type config struct {
+	// baseDelay is the amount of time to backoff after the first failure.
+	baseDelay time.Duration
+	// multiplier is the factor with which to multiply backoffs after a
 	// failed retry. Should ideally be greater than 1.
-	Multiplier float64
-	// Jitter is the factor with which backoffs are randomized.
-	Jitter float64
-	// MaxDelay is the upper bound of backoff delay.
-	MaxDelay time.Duration
+	multiplier float64
+	// jitter is the factor with which backoffs are randomized.
+	jitter float64
+	// maxDelay is the upper bound of backoff delay.
+	maxDelay time.Duration
 }
 
-// DefaultConfig is a backoff configuration with the default values specified
+// defaultConfig is a backoff configuration with the default values specified
 // at https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
 //
 // This should be useful for callers who want to configure backoff with
 // non-default values only for a subset of the options.
-var DefaultConfig = Config{
-	BaseDelay:  1.0 * time.Second,
-	Multiplier: 1.6,
-	Jitter:     0.2,
-	MaxDelay:   120 * time.Second,
+var defaultConfig = config{
+	baseDelay:  1.0 * time.Second,
+	multiplier: 1.6,
+	jitter:     0.2,
+	maxDelay:   120 * time.Second,
 }
 
 // DefaultExponential is an exponential backoff implementation using the
 // default values for all the configurable knobs defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-var DefaultExponential = Exponential{Config: DefaultConfig}
+var DefaultExponential = exponential{config: defaultConfig}
 
-// Exponential implements exponential backoff algorithm as defined in
+// exponential implements exponential backoff algorithm as defined in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md.
-type Exponential struct {
+type exponential struct {
 	// Config contains all options to configure the backoff algorithm.
-	Config Config
+	config config
 }
 
 // Backoff returns the amount of time to wait before the next retry given the
 // number of retries.
-func (bc Exponential) Backoff(retries int) time.Duration {
+func (bc exponential) Backoff(retries int) time.Duration {
 	if retries == 0 {
-		return bc.Config.BaseDelay
+		return bc.config.baseDelay
 	}
-	backoff, max := float64(bc.Config.BaseDelay), float64(bc.Config.MaxDelay)
+	backoff, max := float64(bc.config.baseDelay), float64(bc.config.maxDelay)
 	for backoff < max && retries > 0 {
-		backoff *= bc.Config.Multiplier
+		backoff *= bc.config.multiplier
 		retries--
 	}
 	if backoff > max {
@@ -82,7 +82,7 @@ func (bc Exponential) Backoff(retries int) time.Duration {
 	}
 	// Randomize backoff delays so that if a cluster of requests start at
 	// the same time, they won't operate in lockstep.
-	backoff *= 1 + bc.Config.Jitter*(rand.Float64()*2-1)
+	backoff *= 1 + bc.config.jitter*(rand.Float64()*2-1)
 	if backoff < 0 {
 		return 0
 	}

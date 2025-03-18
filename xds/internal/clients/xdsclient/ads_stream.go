@@ -717,24 +717,6 @@ func resourceNames(m map[string]*resourceWatchState) []string {
 	return ret
 }
 
-// ResourceWatchStateForTesting returns the ResourceWatchState for the given
-// resource type and name.  This is intended for testing purposes only, to
-// inspect the internal state of the ADS stream.
-func (s *adsStreamImpl) ResourceWatchStateForTesting(typ ResourceType, resourceName string) (resourceWatchState, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state, ok := s.resourceTypeState[typ]
-	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", typ)
-	}
-	resourceState, ok := state.subscribedResources[resourceName]
-	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
-	}
-	return *resourceState, nil
-}
-
 // adsFlowControl implements ADS stream level flow control that enables the
 // transport to block the reading of the next message off of the stream until
 // the previous update is consumed by all watchers.

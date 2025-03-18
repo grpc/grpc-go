@@ -121,6 +121,8 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 // xdsChannel represents a client channel to a management server, and is
 // responsible for managing the lifecycle of the ADS and LRS streams. It invokes
 // callbacks on the registered event handler for various ADS stream events.
+//
+// It is safe for concurrent use.
 type xdsChannel struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that, and hence need not be guarded by a mutex.
