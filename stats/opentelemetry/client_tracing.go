@@ -20,11 +20,13 @@ import (
 	"context"
 	"log"
 	"strings"
+	"time"
 
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
+	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/stats"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 	"google.golang.org/grpc/status"
@@ -38,17 +40,15 @@ type clientTracingHandler struct {
 
 func (h *clientTracingHandler) initializeTraces() {
 	if h.options.TraceOptions.TracerProvider == nil {
-		log.Printf("TraceProvider is not provided in client trace options")
+		log.Printf("TracerProvider is not provided in client TraceOptions")
 		return
 	}
-	h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 }
 
-// unaryInterceptor records traces for unary RPC calls.
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Info("ctx passed into client tracing handler unary interceptor has no call info data present")
+		logger.Info("callInfo not present in context in clientTracingHandler unaryInterceptor")
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -63,11 +63,10 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 	return err
 }
 
-// streamInterceptor records traces for streaming RPC calls.
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Info("ctx passed into client tracing handler stream interceptor has no call info data present")
+		logger.Info("callInfo not present in context in clientTracingHandler streamInterceptor")
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -77,9 +76,7 @@ func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc
 
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
-	callback := func(err error) {
-		h.perCallTraces(err, span)
-	}
+	callback := func(err error) { h.perCallTraces(err, span) }
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 	return streamer(ctx, desc, cc, method, opts...)
 }
@@ -128,16 +125,29 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for traces.
-func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	// Fetch the rpcInfo set by a previously registered stats handler
-	// (like clientStatsHandler). Assumes this handler runs after one
-	// that sets the rpcInfo in the context.
+func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Info("ctx passed into client side tracing stats handler has no client attempt data present")
-		return ctx
+	var ai *attemptInfo
+	if ri != nil {
+		ai = ri.ai
+	} else {
+		labels := istats.GetLabels(ctx)
+		if labels == nil {
+			labels = &istats.Labels{
+				TelemetryLabels: map[string]string{
+					"grpc.lb.locality": "",
+				},
+			}
+			ctx = istats.SetLabels(ctx, labels)
+		}
+		ai = &attemptInfo{
+			startTime: time.Now(),
+			xdsLabels: labels.TelemetryLabels,
+			method:    removeLeadingSlash(info.FullMethodName),
+		}
 	}
-	ctx, ai := h.traceTagRPC(ctx, ri.ai)
+	ctx, ai = h.traceTagRPC(ctx, ai)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 

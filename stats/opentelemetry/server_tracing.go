@@ -20,9 +20,11 @@ import (
 	"context"
 	"log"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
@@ -33,10 +35,9 @@ type serverTracingHandler struct {
 
 func (h *serverTracingHandler) initializeTraces() {
 	if h.options.TraceOptions.TracerProvider == nil {
-		log.Printf("TraceProvider is not provided in server trace options")
+		log.Printf("TracerProvider is not provided in server TraceOptions")
 		return
 	}
-	h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 }
 
 func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -48,16 +49,36 @@ func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 }
 
 // TagRPC implements per RPC attempt context management for traces.
-func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	// Fetch the rpcInfo set by a previously registered stats handler
-	// (like serverStatsHandler). Assumes this handler runs after one
-	// that sets the rpcInfo in the context.
+func (h *serverTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
-	if ri == nil {
-		logger.Info("ctx passed into server side tracing stats handler has no server call data present")
-		return ctx
+	var ai *attemptInfo
+	if ri != nil {
+		ai = ri.ai
+	} else {
+		method := info.FullMethodName
+		if h.options.MetricsOptions.MethodAttributeFilter != nil {
+			if !h.options.MetricsOptions.MethodAttributeFilter(method) {
+				method = "other"
+			}
+		}
+		server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
+		if server == nil { // Shouldn't happen, defensive programming.
+			logger.Error("ctx passed into server side stats handler has no grpc server ref")
+			method = "other"
+		} else {
+			isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
+			if !isRegisteredMethod(server, method) {
+				method = "other"
+			}
+		}
+
+		ai = &attemptInfo{
+			startTime: time.Now(),
+			method:    removeLeadingSlash(method),
+		}
 	}
-	ctx, ai := h.traceTagRPC(ctx, ri.ai)
+	ctx, ai = h.traceTagRPC(ctx, ai)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
@@ -83,9 +104,7 @@ func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 
 // HandleRPC handles per-RPC attempt stats events for tracing.
 func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	// Fetch the rpcInfo set by a previously registered stats handler
-	// (like serverStatsHandler). Assumes this handler runs after one
-	// that sets the rpcInfo in the context.
+	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side tracing stats handler has no server call data present")

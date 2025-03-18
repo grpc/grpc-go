@@ -114,8 +114,8 @@ type MetricsOptions struct {
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 //
-// For tracing, provide a TracerProvider in trace options.
-// If no TracerProvider is provided, tracing will be no-op.
+// For the traces supported by this instrumentation code, provide an
+// implementation of a TextMapPropagator and OpenTelemetry TracerProvider.
 func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
@@ -143,8 +143,8 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
 //
-// For tracing, provide a TracerProvider in trace options.
-// If no TracerProvider is provided, tracing will be no-op.
+// For the traces supported by this instrumentation code, provide an
+// implementation of a TextMapPropagator and OpenTelemetry TracerProvider.
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()

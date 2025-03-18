@@ -67,7 +67,6 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-// unaryInterceptor records metrics for unary RPC calls.
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := getCallInfo(ctx)
 	if ci == nil {
@@ -106,7 +105,6 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 	return "other"
 }
 
-// streamInterceptor records metrics for streaming RPC calls.
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
@@ -233,7 +231,7 @@ func (h *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incoming
 func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Info("ctx passed into client side stats handler metrics event handling has no metrics data present")
+		logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")
 		return
 	}
 	latency := float64(time.Since(ai.startTime)) / float64(time.Second)

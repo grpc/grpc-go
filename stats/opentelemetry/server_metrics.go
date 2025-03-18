@@ -90,7 +90,6 @@ func (s *attachLabelsTransportStream) SendHeader(md metadata.MD) error {
 	return s.ServerTransportStream.SendHeader(md)
 }
 
-// unaryInterceptor records metrics for unary RPC calls.
 func (h *serverStatsHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
@@ -152,7 +151,6 @@ func (s *attachLabelsStream) SendMsg(m any) error {
 	return s.ServerStream.SendMsg(m)
 }
 
-// streamInterceptor records metrics for streaming RPC calls.
 func (h *serverStatsHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	var metadataExchangeLabels metadata.MD
 	if h.options.MetricsOptions.pluginOption != nil {
