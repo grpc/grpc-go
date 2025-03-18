@@ -163,7 +163,7 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap map[string]*spiffebundle.Bundle) func
 			}
 			rawCertList[i] = cert
 		}
-		if len(rawCertList == 0) {
+		if len(rawCertList) == 0 {
 			return fmt.Errorf("spiffe: verify function has no valid input certificates")
 		}
 		leafCert := rawCertList[0]
