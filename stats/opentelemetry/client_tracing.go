@@ -36,7 +36,7 @@ const tracerName = "grpc-go"
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
 	// Add a "Delayed name resolution complete" event to the call span
 	// if there was name resolution delay. In case of multiple retry attempts,
-	// ensure that event is added only once
+	// ensure that event is added only once.
 	callSpan := trace.SpanFromContext(ctx)
 	ci := getCallInfo(ctx)
 	if ai.nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {

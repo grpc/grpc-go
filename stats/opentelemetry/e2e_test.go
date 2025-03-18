@@ -1568,7 +1568,6 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
-// failingServer simulates request failures and succeeds after retries.
 type failingServer struct {
 	testgrpc.UnimplementedTestServiceServer
 	mu         sync.Mutex
@@ -1576,8 +1575,6 @@ type failingServer struct {
 	reqModulo  int
 }
 
-// maybeFailRequest increments a counter and fails requests with "UNAVAILABLE" status
-// until the request counter is a multiple of reqModulo.
 func (s *failingServer) maybeFailRequest() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1688,7 +1685,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	go func() {
 		stream, err := client.FullDuplexCall(ctx)
 		if err != nil {
-			t.Logf("FullDuplexCall error: %v", err)
 			rpcError <- err
 			return
 		}
