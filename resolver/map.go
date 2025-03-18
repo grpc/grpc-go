@@ -143,24 +143,6 @@ func (a *AddressMap) Values() []any {
 	return ret
 }
 
-type endpointNode struct {
-	addrs map[string]struct{}
-}
-
-// Equal returns whether the unordered set of addrs are the same between the
-// endpoint nodes.
-func (en *endpointNode) Equal(en2 *endpointNode) bool {
-	if len(en.addrs) != len(en2.addrs) {
-		return false
-	}
-	for addr := range en.addrs {
-		if _, ok := en2.addrs[addr]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
 type endpointMapKey string
 
 // EndpointMap is a map of endpoints to arbitrary values keyed on only the
@@ -193,7 +175,7 @@ func encodeEndpoint(e Endpoint) endpointMapKey {
 	// within the strings. This allows us to use a delimiter without the need of
 	// escape characters.
 	for _, addr := range e.Addresses {
-		addrs = append(addrs, base64.StdEncoding.EncodeToString([]byte(addr.String())))
+		addrs = append(addrs, base64.StdEncoding.EncodeToString([]byte(addr.Addr)))
 	}
 	sort.Strings(addrs)
 	// " " should not appear in base64 encoded strings.
@@ -202,12 +184,11 @@ func encodeEndpoint(e Endpoint) endpointMapKey {
 
 // Get returns the value for the address in the map, if present.
 func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
-	en := encodeEndpoint(e)
-	val, found := em.endpoints[en]
+	val, found := em.endpoints[encodeEndpoint(e)]
 	if found {
 		return val.value, true
 	}
-	return val, found
+	return nil, found
 }
 
 // Set updates or adds the value to the address in the map.
