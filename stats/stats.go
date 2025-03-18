@@ -38,8 +38,9 @@ type RPCStats interface {
 
 // Begin contains stats for the start of an RPC attempt.
 //
-// - Server-side: Triggered after `InHeader`, as headers are processed before the RPC lifecycle begins.
-// - Client-side: The first stats event recorded.
+//   - Server-side: Triggered after `InHeader`, as headers are processed
+//     before the RPC lifecycle begins.
+//   - Client-side: The first stats event recorded.
 //
 // FailFast is only valid if this Begin is from client side.
 type Begin struct {
@@ -174,7 +175,8 @@ func (s *OutPayload) isRPCStats() {}
 
 // OutHeader contains stats about header transmission.
 //
-// - Client-side: Only occurs after 'Begin', as headers are always the first thing sent on a stream.
+//   - Client-side: Only occurs after 'Begin', as headers are always the first
+//     thing sent on a stream.
 type OutHeader struct {
 	// Client is true if this OutHeader is from client side.
 	Client bool
