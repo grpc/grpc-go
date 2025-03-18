@@ -3586,10 +3586,9 @@ func testClientStreamingError(t *testing.T, e env) {
 	}
 }
 
-// Tests the scenario where a client-streaming server returns a status OK
-// before calling `SendAndClose()`, while the client invokes
-// `CloseAndReceive()`. An error is expected if no message is sent along with
-// the status OK.
+// Tests  to verify that client receive a cardinality violation error for
+// client-streaming RPCs if the server doesn't send a message before returning
+// status OK.
 func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClose(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
@@ -3614,16 +3613,16 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 
 	_, err = stream.CloseAndRecv()
 	if err == nil {
-		t.Fatalf("%v.CloseAndRecv() = %v, want an error", stream, err)
+		t.Fatalf("stream.CloseAndRecv() = %v, want an error", err)
 	}
 	if status.Code(err) != codes.Internal {
-		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
+		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.Internal)
 	}
 }
 
-// Tests the scenario where a client-streaming server calls `Recv()` after calling
-// `SendAndClose()`. And error is expected if `Recv()` is called after calling
-// SendAndClose()` i.e the RPC should be terminated.
+// Test to verify for client-streaming RPCs, when SendAndClose is called, the server
+// should reset stream after sending the response message successfully.
+// If server calls Recv after, those operations should fail.
 func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
@@ -3658,27 +3657,24 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 		t.Fatal(err)
 	}
 
-	req := &testpb.StreamingInputCallRequest{
-		Payload: payload,
-	}
-
+	req := &testpb.StreamingInputCallRequest{Payload: payload}
+	//eshita break on eof , any other error t.Fatal
 	for {
-		if err = stream.Send(req); err == nil {
-			continue
+		if err = stream.Send(req); err == io.EOF {
+			break
 		}
 		select {
 		case <-ctx.Done():
 			t.Fatal("timed out waiting for error from server")
 		default:
 		}
-		break
 	}
 	_, err = stream.CloseAndRecv()
 	if err == nil {
-		t.Fatalf("%v.CloseAndRecv() = %v, want error", stream, err)
+		t.Fatalf("stream.CloseAndRecv() = %v, want error", err)
 	}
 	if status.Code(err) != codes.Internal {
-		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
+		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.Internal)
 	}
 }
 
@@ -3723,22 +3719,17 @@ func (s) TestClientStreamingCardinalityViolation_IgnoreServerHandlerErrorAfterSe
 	}
 
 	for {
-		if err = stream.Send(req); err == nil {
-			continue
+		if err = stream.Send(req); err == io.EOF {
+			break
 		}
 		select {
 		case <-ctx.Done():
 			t.Fatal("timed out waiting for error from server")
 		default:
 		}
-		break
 	}
-	_, err = stream.CloseAndRecv()
-	if err == nil {
-		t.Fatalf("%v.CloseAndRecv() = %v, want error", stream, err)
-	}
-	if status.Code(err) != codes.Internal {
-		t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.Internal)
+	if _, err = stream.CloseAndRecv(); err != nil {
+		t.Fatalf("stream.CloseAndRecv() = %v, want nil", err)
 	}
 }
 
