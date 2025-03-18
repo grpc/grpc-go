@@ -869,15 +869,20 @@ func decompress(compressor encoding.Compressor, d mem.BufferSlice, dc Decompress
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the message: %v", err)
 		}
-		limitedReader := limitReader(dcReader, int64(maxReceiveMessageSize))
 
-		out, err := mem.ReadAll(limitedReader, pool)
+		// Read at most one byte more than the limit from the decompressor.
+		// Unless the limit is MaxInt64, in which case, that's impossible, so
+		// apply no limit.
+		if limit := int64(maxReceiveMessageSize); limit < math.MaxInt64 {
+			dcReader = io.LimitReader(dcReader, limit+1)
+		}
+		out, err := mem.ReadAll(dcReader, pool)
 		if err != nil {
 			out.Free()
 			return nil, status.Errorf(codes.Internal, "grpc: failed to read decompressed data: %v", err)
 		}
 
-		if limitedReader.exceeded() {
+		if out.Len() > maxReceiveMessageSize {
 			out.Free()
 			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max %d", maxReceiveMessageSize)
 		}
@@ -1028,41 +1033,6 @@ func setCallInfoCodec(c *callInfo) error {
 		return status.Errorf(codes.Internal, "no codec registered for content-subtype %s", c.contentSubtype)
 	}
 	return nil
-}
-
-type limitedReader struct {
-	r io.Reader // the underlying reader
-	n int64     // how many bytes remain before the limit
-}
-
-// limitReader returns a wrapper around r that may read at most one byte more
-// than limit to determine if r contains more data than the limit.
-func limitReader(r io.Reader, limit int64) *limitedReader {
-	return &limitedReader{r: r, n: limit}
-}
-
-func (l *limitedReader) Read(p []byte) (n int, err error) {
-	if l.n < int64(len(p)) {
-		// We have space in the input buffer to read past the limit remaining in
-		// l.n.  Truncate the input buffer, but read one extra byte to determine
-		// overflow.
-		p = p[0 : l.n+1]
-	}
-	n, err = l.r.Read(p)
-	l.n -= int64(n)
-	if l.n < 0 && err == nil {
-		// We read more bytes from r than the limit allowed.  Convert to io.EOF,
-		// and exceeded() will return true.
-		n--
-		err = io.EOF
-	}
-	return n, err
-}
-
-// exceeded returns true iff l's reader was read beyond the limit specified at
-// creation.
-func (l *limitedReader) exceeded() bool {
-	return l.n < 0
 }
 
 // The SupportPackageIsVersion variables are referenced from generated protocol
