@@ -149,6 +149,11 @@ type callInfo struct {
 	target string
 
 	method string
+	// nameResolutionEventAdded is an atomic flag that ensures the name
+	// resolution delay event is added to the call span only once. If a retry
+	// attempt detects a delay, this flag is set to true, preventing duplicate
+	// event additions across multiple retries.
+	nameResolutionEventAdded atomic.Bool
 }
 
 type callInfoKey struct{}
@@ -215,11 +220,6 @@ type attemptInfo struct {
 	// NameResolutionDelay indicates if there was a delay in the name resolution.
 	// This field is only valid on client side, it's always false on server side.
 	nameResolutionDelayed bool
-	// nameResolutionEventAdded is an atomic flag that ensures the name
-	// resolution delay event is added to the call span only once. If a retry
-	// attempt detects a delay, this flag is set to true, preventing duplicate
-	// event additions across multiple retries.
-	nameResolutionEventAdded atomic.Bool
 }
 
 type clientMetrics struct {

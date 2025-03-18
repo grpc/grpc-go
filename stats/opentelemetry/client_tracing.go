@@ -34,11 +34,12 @@ const tracerName = "grpc-go"
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
 func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
-	// Adds a "Delayed name resolution complete" event to the call span if a
-	// delay was detected and the event hasn't been recorded yet. Ensures the
-	// event is logged only once using an atomic flag, even across retries.
+	// Add a "Delayed name resolution complete" event to the call span
+	// if there was name resolution delay. In case of multiple retry attempts,
+	// ensure that event is added only once
 	callSpan := trace.SpanFromContext(ctx)
-	if ai.nameResolutionDelayed && !ai.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
+	ci := getCallInfo(ctx)
+	if ai.nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
 		callSpan.AddEvent(delayedResolutionEventName)
 	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
