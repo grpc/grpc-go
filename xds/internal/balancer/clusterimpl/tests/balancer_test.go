@@ -358,9 +358,9 @@ func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Serv
 	}
 }
 
+// Tests that circuit breaking limits RPCs E2E.
 func (s) TestCircuitBreaking(t *testing.T) {
-	const maxRequests = 3
-	// Create an xDS management server that serves ADS and LRS requests.
+	// Create an xDS management server that serves ADS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
 	// Create bootstrap configuration pointing to the above management server.
@@ -397,6 +397,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// Configure the xDS management server with default resources. Override the
 	// default cluster to include an LRS server config pointing to self.
 	const serviceName = "my-test-xds-service"
+	const maxRequests = 3
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
@@ -442,6 +443,8 @@ func (s) TestCircuitBreaking(t *testing.T) {
 			return
 		}
 		if err == nil {
+			// Terminate the stream (the server immediately exits upon a client
+			// CloseSend) to ensure we never go over the limit.
 			stream.CloseSend()
 			stream.Recv()
 		}
@@ -451,9 +454,9 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	t.Fatalf("RPCs unexpectedly allowed beyond circuit breaking maximum")
 }
 
+// Tests that circuit breaking limits RPCs in LOGICAL_DNS clusters E2E.
 func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
-	const maxRequests = 3
-	// Create an xDS management server that serves ADS and LRS requests.
+	// Create an xDS management server that serves ADS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
 	// Create bootstrap configuration pointing to the above management server.
@@ -489,8 +492,9 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 	host, port := hostAndPortFromAddress(t, server.Address)
 
 	// Configure the xDS management server with default resources. Override the
-	// default cluster to include an LRS server config pointing to self.
+	// default cluster to include a circuit breaking config.
 	const serviceName = "my-test-xds-service"
+	const maxRequests = 3
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
@@ -545,6 +549,8 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 			return
 		}
 		if err == nil {
+			// Terminate the stream (the server immediately exits upon a client
+			// CloseSend) to ensure we never go over the limit.
 			stream.CloseSend()
 			stream.Recv()
 		}
