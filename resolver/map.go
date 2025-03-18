@@ -188,7 +188,7 @@ func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
 	if found {
 		return val.value, true
 	}
-	return nil, found
+	return nil, false
 }
 
 // Set updates or adds the value to the address in the map.
