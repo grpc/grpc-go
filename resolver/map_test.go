@@ -287,3 +287,25 @@ func (s) TestEndpointMap_Values(t *testing.T) {
 		t.Fatalf("em.Values() returned unexpected elements (-want, +got):\n%v", diff)
 	}
 }
+
+// BenchmarkEndpointMap benchmarks map operations that are expected to run
+// faster than O(n). This test doesn't run O(n) operations including listing
+// keys and values.
+func BenchmarkEndpointMap(b *testing.B) {
+	em := NewEndpointMap()
+	for i := range b.N {
+		em.Set(Endpoint{
+			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},
+		}, i)
+	}
+	for i := range b.N {
+		em.Get(Endpoint{
+			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},
+		})
+	}
+	for i := range b.N {
+		em.Delete(Endpoint{
+			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},
+		})
+	}
+}
