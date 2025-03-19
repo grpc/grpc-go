@@ -361,7 +361,7 @@ func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Serv
 // Tests that circuit breaking limits RPCs E2E.
 func (s) TestCircuitBreaking(t *testing.T) {
 	// Create an xDS management server that serves ADS requests.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
@@ -394,8 +394,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	server := stubserver.StartTestService(t, f)
 	defer server.Stop()
 
-	// Configure the xDS management server with default resources. Override the
-	// default cluster to include an LRS server config pointing to self.
+	// Configure the xDS management server with default resources.
 	const serviceName = "my-test-xds-service"
 	const maxRequests = 3
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
@@ -457,7 +456,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 // Tests that circuit breaking limits RPCs in LOGICAL_DNS clusters E2E.
 func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 	// Create an xDS management server that serves ADS requests.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
