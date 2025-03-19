@@ -167,10 +167,11 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 	r.InitialState(state)
 
 	// Create a ClientConn with the specified transport credentials.
-	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
+	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 
 	// Start a test service backend with the specified transport credentials.
@@ -563,7 +564,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with initial resources: %v", err)
 	}
 
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
@@ -578,7 +579,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with valid resources: %v", err)
 	}
 
 	// Verify that a successful RPC can be made over a secure connection.

@@ -493,7 +493,11 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	t.Log("Turn down 0, 1 is used.")
-	sc0.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	testErr := errors.New("test error")
+	sc0.UpdateState(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   testErr,
+	})
 
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
@@ -508,10 +512,13 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	t.Log("Turn down 1, pick should error.")
-	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	sc1.UpdateState(balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   testErr,
+	})
 
 	// Test pick failure.
-	if err := cc.WaitForErrPicker(ctx); err != nil {
+	if err := cc.WaitForPickerWithErr(ctx, testErr); err != nil {
 		t.Fatal(err.Error())
 	}
 	<-cc.NewStateCh // Drain to match picker

@@ -319,7 +319,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	return grpc.Dial(address, opts...)
+	return grpc.NewClient(address, opts...)
 }
 
 func main() {

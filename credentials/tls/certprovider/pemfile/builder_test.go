@@ -94,7 +94,7 @@ func TestParseConfig(t *testing.T) {
 				"private_key_file":    "/a/b/key.pem",
 				"ca_certificate_file": "/a/b/ca.pem"
 			}`),
-			wantOutput: "file_watcher:/a/b/cert.pem:/a/b/key.pem:/a/b/ca.pem:10m0s",
+			wantOutput: "file_watcher:/a/b/cert.pem:/a/b/key.pem:/a/b/ca.pem::10m0s",
 		},
 		{
 			desc: "good config",
@@ -105,7 +105,7 @@ func TestParseConfig(t *testing.T) {
 				"ca_certificate_file": "/a/b/ca.pem",
 				"refresh_interval":   "200s"
 			}`),
-			wantOutput: "file_watcher:/a/b/cert.pem:/a/b/key.pem:/a/b/ca.pem:3m20s",
+			wantOutput: "file_watcher:/a/b/cert.pem:/a/b/key.pem:/a/b/ca.pem::3m20s",
 		},
 	}
 

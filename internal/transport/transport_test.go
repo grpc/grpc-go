@@ -834,7 +834,9 @@ func (s) TestGracefulClose(t *testing.T) {
 		server.lis.Close()
 		// Check for goroutine leaks (i.e. GracefulClose with an active stream
 		// doesn't eventually close the connection when that stream completes).
-		leakcheck.CheckGoroutines(t, 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		leakcheck.CheckGoroutines(ctx, t)
 		leakcheck.CheckTrackingBufferPool()
 		// Correctly clean up the server
 		server.stop()
@@ -895,6 +897,8 @@ func (s) TestGracefulClose(t *testing.T) {
 func (s) TestLargeMessageSuspension(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	defer server.stop()
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -906,12 +910,6 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
-	// Launch a goroutine similar to the stream monitoring goroutine in
-	// stream.go to keep track of context timeout and call CloseStream.
-	go func() {
-		<-ctx.Done()
-		s.Close(ContextErr(ctx.Err()))
-	}()
 	// Write should not be done successfully due to flow control.
 	msg := make([]byte, initialWindowSize*8)
 	s.Write(nil, newBufferSlice(msg), &WriteOptions{})
@@ -919,12 +917,14 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != errStreamDone {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
-	expectedErr := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
-	if _, err := s.readTo(make([]byte, 8)); err.Error() != expectedErr.Error() {
-		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
+	// The server will send an RST stream frame on observing the deadline
+	// expiration making the client stream fail with a DeadlineExceeded status.
+	if _, err := s.readTo(make([]byte, 8)); err != io.EOF {
+		t.Fatalf("Read got unexpected error: %v, want %v", err, io.EOF)
 	}
-	ct.Close(fmt.Errorf("closed manually by test"))
-	server.stop()
+	if got, want := s.Status().Code(), codes.DeadlineExceeded; got != want {
+		t.Fatalf("Read got status %v with code %v, want %v", s.Status(), got, want)
+	}
 }
 
 func (s) TestMaxStreams(t *testing.T) {
@@ -2971,5 +2971,92 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	}
 	if bytesRead != headerLen {
 		t.Errorf("bytesRead = %d, want = %d", bytesRead, headerLen)
+	}
+}
+
+// Tests a scenario when the client doesn't send an RST frame when the
+// configured deadline is reached. The test verifies that the server sends an
+// RST stream only after the deadline is reached.
+func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	defer server.stop()
+	// Create a client that can override server stream quota.
+	mconn, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Clent failed to dial:%v", err)
+	}
+	defer mconn.Close()
+	if err := mconn.SetWriteDeadline(time.Now().Add(time.Second * 10)); err != nil {
+		t.Fatalf("Failed to set write deadline: %v", err)
+	}
+	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+	}
+	// rstTimeChan chan indicates that reader received a RSTStream from server.
+	rstTimeChan := make(chan time.Time, 1)
+	var mu sync.Mutex
+	framer := http2.NewFramer(mconn, mconn)
+	if err := framer.WriteSettings(); err != nil {
+		t.Fatalf("Error while writing settings: %v", err)
+	}
+	go func() { // Launch a reader for this misbehaving client.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame := frame.(type) {
+			case *http2.PingFrame:
+				// Write ping ack back so that server's BDP estimation works right.
+				mu.Lock()
+				framer.WritePing(true, frame.Data)
+				mu.Unlock()
+			case *http2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeCancel {
+					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeCancel", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+				}
+				rstTimeChan <- time.Now()
+				return
+			default:
+				// Do nothing.
+			}
+		}
+	}()
+	// Create a stream.
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":authority", Value: "localhost"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: "10m"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	mu.Lock()
+	startTime := time.Now()
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		mu.Unlock()
+		t.Fatalf("Error while writing headers: %v", err)
+	}
+	mu.Unlock()
+
+	// Test server behavior for deadline expiration.
+	var rstTime time.Time
+	select {
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Test timed out.")
+	case rstTime = <-rstTimeChan:
+	}
+
+	if got, want := rstTime.Sub(startTime), 10*time.Millisecond; got < want {
+		t.Fatalf("RST frame received earlier than expected by duration: %v", want-got)
 	}
 }
