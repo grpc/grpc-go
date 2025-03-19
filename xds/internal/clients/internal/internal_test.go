@@ -20,6 +20,7 @@ package internal
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -41,17 +42,19 @@ func Test(t *testing.T) {
 
 type testServerIdentifierExtension struct{ x int }
 
-func (ts testServerIdentifierExtension) Equal(other any) bool {
-	ots, ok := other.(testServerIdentifierExtension)
+func (ts *testServerIdentifierExtension) Equal(other any) bool {
+	ots, ok := other.(*testServerIdentifierExtension)
 	if !ok {
 		return false
 	}
 	return ts.x == ots.x
 }
 
-func (ts testServerIdentifierExtension) String() string {
+func (ts *testServerIdentifierExtension) String() string {
 	return fmt.Sprintf("testServerIdentifierExtension-%d", ts.x)
 }
+
+type testServerIdentifierExtensionWithoutStringAndEqual struct{}
 
 func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct {
 	t.Helper()
@@ -83,17 +86,9 @@ func (s) TestServerIdentifierString(t *testing.T) {
 			name: "stringer_extension",
 			si: clients.ServerIdentifier{
 				ServerURI:  "foo",
-				Extensions: testServerIdentifierExtension{x: 1},
+				Extensions: &testServerIdentifierExtension{x: 1},
 			},
 			want: "foo-testServerIdentifierExtension-1",
-		},
-		{
-			name: "non_stringer_extension",
-			si: clients.ServerIdentifier{
-				ServerURI:  "foo",
-				Extensions: 1,
-			},
-			want: "foo",
 		},
 	}
 	for _, test := range tests {
@@ -105,7 +100,24 @@ func (s) TestServerIdentifierString(t *testing.T) {
 	}
 }
 
-func (s) TestServerIdentifier_Equal(t *testing.T) {
+func (s) TestServerIdentifierString_NonStringerExtension(t *testing.T) {
+	si := clients.ServerIdentifier{
+		ServerURI:  "foo",
+		Extensions: &testServerIdentifierExtensionWithoutStringAndEqual{},
+	}
+	got := ServerIdentifierString(si)
+	// Check if the output matches the expected pattern for non-stringer
+	// extensions i.e. si.ServerURI-0xxxx
+	matched, err := regexp.MatchString(`^foo-0x[0-9a-f]+$`, got)
+	if err != nil {
+		t.Fatalf("Error in regex matching: %v", err)
+	}
+	if !matched {
+		t.Errorf("ServerIdentifierString() = %v, want a string matching the pattern `^foo-0x[0-9a-f]+$`", got)
+	}
+}
+
+func TestServerIdentifier_Equal(t *testing.T) {
 	tests := []struct {
 		name   string
 		s1     clients.ServerIdentifier
@@ -159,27 +171,27 @@ func (s) TestServerIdentifier_Equal(t *testing.T) {
 		{
 			name: "different_Extensions_with_Equal_method",
 			s1: clients.ServerIdentifier{
-				Extensions: testServerIdentifierExtension{1},
+				Extensions: &testServerIdentifierExtension{1},
 			},
 			s2: clients.ServerIdentifier{
-				Extensions: testServerIdentifierExtension{2},
+				Extensions: &testServerIdentifierExtension{2},
 			},
 			wantEq: false,
 		},
 		{
 			name: "same_Extensions_same_with_Equal_method",
 			s1: clients.ServerIdentifier{
-				Extensions: testServerIdentifierExtension{1},
+				Extensions: &testServerIdentifierExtension{1},
 			},
 			s2: clients.ServerIdentifier{
-				Extensions: testServerIdentifierExtension{1},
+				Extensions: &testServerIdentifierExtension{1},
 			},
 			wantEq: true,
 		},
 		{
 			name: "first_config_Extensions_is_nil",
 			s1: clients.ServerIdentifier{
-				Extensions: testServerIdentifierExtension{1},
+				Extensions: &testServerIdentifierExtension{1},
 			},
 			s2: clients.ServerIdentifier{
 				Extensions: nil,
@@ -192,7 +204,7 @@ func (s) TestServerIdentifier_Equal(t *testing.T) {
 				Extensions: nil,
 			},
 			s2: clients.ServerIdentifier{
-				Extensions: testServerIdentifierExtension{2},
+				Extensions: &testServerIdentifierExtension{2},
 			},
 			wantEq: false,
 		},
@@ -200,11 +212,11 @@ func (s) TestServerIdentifier_Equal(t *testing.T) {
 			name: "all_fields_same",
 			s1: clients.ServerIdentifier{
 				ServerURI:  "foo",
-				Extensions: testServerIdentifierExtension{1},
+				Extensions: &testServerIdentifierExtension{1},
 			},
 			s2: clients.ServerIdentifier{
 				ServerURI:  "foo",
-				Extensions: testServerIdentifierExtension{1},
+				Extensions: &testServerIdentifierExtension{1},
 			},
 			wantEq: true,
 		},
