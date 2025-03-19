@@ -19,7 +19,11 @@
 package xdsclient
 
 import (
+	"fmt"
+	"strings"
+
 	"google.golang.org/grpc/xds/internal/clients"
+	clientsinternal "google.golang.org/grpc/xds/internal/clients/internal"
 )
 
 // Config is used to configure an xDS client. After one has been passed to the
@@ -82,4 +86,12 @@ type Authority struct {
 	//
 	// See Config.Servers for more details.
 	XDSServers []ServerConfig
+}
+
+func serverConfigString(sc *ServerConfig) string {
+	return strings.Join([]string{clientsinternal.ServerIdentifierString(sc.ServerIdentifier), fmt.Sprintf("%v", sc.IgnoreResourceDeletion)}, "-")
+}
+
+func isServerConfigEqual(a, b *ServerConfig) bool {
+	return clientsinternal.ServerIdentifierEqual(a.ServerIdentifier, b.ServerIdentifier) && a.IgnoreResourceDeletion == b.IgnoreResourceDeletion
 }
