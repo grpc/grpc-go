@@ -16,18 +16,20 @@
  *
  */
 
-package xdsclient
+package xdsclient_test
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
 
@@ -44,17 +46,27 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
-	defaultTestTimeout            = 5 * time.Second
+	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
+	defaultTestTimeout            = 10 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
-	// listenerResourceTypeName represents the transport agnostic name for the
+
+	// ListenerResourceTypeName represents the transport agnostic name for the
 	// listener resource.
 	listenerResourceTypeName = "ListenerResource"
+
+	ldsName         = "xdsclient-test-lds-resource"
+	rdsName         = "xdsclient-test-rds-resource"
+	cdsName         = "xdsclient-test-cds-resource"
+	edsName         = "xdsclient-test-eds-resource"
+	ldsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-lds-resource"
+	rdsNameNewStyle = "xdstp:///envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource"
+	cdsNameNewStyle = "xdstp:///envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource"
+	edsNameNewStyle = "xdstp:///envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource"
 )
 
 var (
 	// Singleton instantiation of the resource type implementation.
-	listenerType = ResourceType{
+	listenerType = xdsclient.ResourceType{
 		TypeURL:                    xdsresource.V3ListenerURL,
 		TypeName:                   listenerResourceTypeName,
 		AllResourcesRequiredInSotW: true,
@@ -163,7 +175,7 @@ type listenerDecoder struct{}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, error) {
+func (listenerDecoder) Decode(resource []byte, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	name, listener, err := unmarshalListenerResource(resource)
 	switch {
 	case name == "":
@@ -171,10 +183,10 @@ func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, 
 		return nil, err
 	case err != nil:
 		// Protobuf deserialization succeeded, but resource validation failed.
-		return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listenerUpdate{}}}, err
+		return &xdsclient.DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listenerUpdate{}}}, err
 	}
 
-	return &DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listener}}, nil
+	return &xdsclient.DecodeResult{Name: name, Resource: &listenerResourceData{Resource: listener}}, nil
 
 }
 
@@ -183,13 +195,13 @@ func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, 
 //
 // Implements the ResourceData interface.
 type listenerResourceData struct {
-	ResourceData
+	xdsclient.ResourceData
 
 	Resource listenerUpdate
 }
 
 // Equal returns true if other is equal to l.
-func (l *listenerResourceData) Equal(other ResourceData) bool {
+func (l *listenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	if l == nil && other == nil {
 		return true
 	}
@@ -232,4 +244,13 @@ type inboundListenerConfig struct {
 	// Port is the local port on which the inbound listener is expected to
 	// accept incoming connections.
 	Port string
+}
+
+func makeAuthorityName(name string) string {
+	segs := strings.Split(name, "/")
+	return strings.Join(segs, "")
+}
+
+func makeNewStyleLDSName(authority string) string {
+	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/xdsclient-test-lds-resource", authority)
 }

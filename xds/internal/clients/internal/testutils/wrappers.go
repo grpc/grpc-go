@@ -51,7 +51,7 @@ func (l *ListenerWrapper) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	closeCh := NewChannel()
+	closeCh := NewChannelWithSize(1)
 	conn := &ConnWrapper{Conn: c, CloseCh: closeCh}
 	l.NewConnCh.Replace(conn)
 	return conn, nil
@@ -61,7 +61,7 @@ func (l *ListenerWrapper) Accept() (net.Conn, error) {
 func NewListenerWrapper(t *testing.T, lis net.Listener) *ListenerWrapper {
 	if lis == nil {
 		var err error
-		lis, err = LocalTCPListener()
+		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,6 +69,6 @@ func NewListenerWrapper(t *testing.T, lis net.Listener) *ListenerWrapper {
 
 	return &ListenerWrapper{
 		Listener:  lis,
-		NewConnCh: NewChannel(),
+		NewConnCh: NewChannelWithSize(1),
 	}
 }
