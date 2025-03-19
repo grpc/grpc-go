@@ -123,10 +123,51 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 type testCredentials struct {
 	credentials.Bundle
 	transportCredentials credentials.TransportCredentials
+	perRPCCredentials    credentials.PerRPCCredentials
 }
 
 func (tc *testCredentials) TransportCredentials() credentials.TransportCredentials {
 	return tc.transportCredentials
+}
+func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
+	return tc.perRPCCredentials
+}
+
+type testTransportCredentials struct {
+	protocolVersion  string
+	securityProtocol string
+	serverName       string
+}
+
+func (*testTransportCredentials) ServerHandshake(_ net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, nil
+}
+func (*testTransportCredentials) ClientHandshake(_ context.Context, _ string, _ net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return nil, nil, nil
+}
+func (tc *testTransportCredentials) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{
+		ProtocolVersion:  tc.protocolVersion,
+		SecurityProtocol: tc.securityProtocol,
+		ServerName:       tc.serverName,
+	}
+}
+func (*testTransportCredentials) Clone() credentials.TransportCredentials {
+	return &testTransportCredentials{}
+}
+func (*testTransportCredentials) OverrideServerName(string) error {
+	return nil
+}
+
+type testPerRPCCredentials struct {
+	requireTransportKey bool
+}
+
+func (*testPerRPCCredentials) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return nil, nil
+}
+func (tpr *testPerRPCCredentials) RequireTransportSecurity() bool {
+	return tpr.requireTransportKey
 }
 
 // TestBuild_Success verifies that the Builder successfully creates a new
@@ -316,5 +357,262 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	}
 	if diff := cmp.Diff(ts.response, &gotRes, protocmp.Transform()); diff != "" {
 		t.Fatalf("proto.Unmarshal(res, &gotRes) returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestServerIdentifierExtension_String(t *testing.T) {
+	tests := []struct {
+		name string
+		sie  ServerIdentifierExtension
+		want string
+	}{
+		{
+			name: "empty",
+			sie:  ServerIdentifierExtension{},
+			want: "",
+		},
+		{
+			name: "transport_credentials_only",
+			sie: ServerIdentifierExtension{
+				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
+					protocolVersion:  "1.3",
+					securityProtocol: "tls",
+					serverName:       "test.server",
+				}},
+			},
+			want: "1.3-tls-test.server",
+		},
+		{
+			name: "per_rpc_credentials_only",
+			sie: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}},
+			},
+			want: "true",
+		},
+		{
+			name: "both_credentials",
+			sie: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: true,
+					}},
+			},
+			want: "1.3-tls-test.server-true",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.sie.String(); got != test.want {
+				t.Errorf("String() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
+	tests := []struct {
+		name   string
+		sie1   ServerIdentifierExtension
+		sie2   any
+		wantEq bool
+	}{
+		{
+			name:   "other_is_not_ServerIdentifierExtension",
+			sie1:   ServerIdentifierExtension{},
+			sie2:   testServer{},
+			wantEq: false,
+		},
+		{
+			name:   "both_empty",
+			sie1:   ServerIdentifierExtension{},
+			sie2:   ServerIdentifierExtension{},
+			wantEq: true,
+		},
+		{
+			name: "one_empty",
+			sie1: ServerIdentifierExtension{},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}}},
+			wantEq: false,
+		},
+		{
+			name: "other_empty",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}}},
+			sie2:   ServerIdentifierExtension{},
+			wantEq: false,
+		},
+		{
+			name: "different_transport_credentials",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
+					protocolVersion:  "1.3",
+					securityProtocol: "tls",
+					serverName:       "test.server1",
+				}},
+			},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
+					protocolVersion:  "1.3",
+					securityProtocol: "tls",
+					serverName:       "test.server2",
+				}},
+			},
+			wantEq: false,
+		},
+		{
+			name: "different_per_rpc_credentials",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}}},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: false,
+				}}},
+			wantEq: false,
+		},
+		{
+			name: "same_transport_credentials",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
+					protocolVersion:  "1.3",
+					securityProtocol: "tls",
+					serverName:       "test.server",
+				}},
+			},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
+					protocolVersion:  "1.3",
+					securityProtocol: "tls",
+					serverName:       "test.server",
+				}},
+			},
+			wantEq: true,
+		},
+		{
+			name: "same_per_rpc_credentials",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}}},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}}},
+			wantEq: true,
+		},
+		{
+			name: "both_credentials_same",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: true,
+					}},
+			},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: true,
+					}},
+			},
+			wantEq: true,
+		},
+		{
+			name: "both_credentials_different",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: true,
+					}},
+			},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: false,
+					}},
+			},
+			wantEq: false,
+		},
+		{
+			name: "one_has_transport_credentials",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: true,
+					}},
+			},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
+					requireTransportKey: true,
+				}},
+			},
+			wantEq: false,
+		},
+		{
+			name: "one_has_per_rpc_credentials",
+			sie1: ServerIdentifierExtension{
+				Credentials: &testCredentials{
+					transportCredentials: &testTransportCredentials{
+						protocolVersion:  "1.3",
+						securityProtocol: "tls",
+						serverName:       "test.server",
+					},
+					perRPCCredentials: &testPerRPCCredentials{
+						requireTransportKey: true,
+					}},
+			},
+			sie2: ServerIdentifierExtension{
+				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
+					protocolVersion:  "1.3",
+					securityProtocol: "tls",
+					serverName:       "test.server",
+				}},
+			},
+			wantEq: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if gotEq := test.sie1.Equal(test.sie2); gotEq != test.wantEq {
+				t.Errorf("Equal() = %v, want %v", gotEq, test.wantEq)
+			}
+		})
 	}
 }

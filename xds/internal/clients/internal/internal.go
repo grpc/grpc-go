@@ -46,11 +46,13 @@ func ServerIdentifierString(si clients.ServerIdentifier) string {
 
 // ServerIdentifierEqual returns true if si1 and si2 are considered equal.
 func ServerIdentifierEqual(si1, si2 clients.ServerIdentifier) bool {
-	if si1.ServerURI != si2.ServerURI {
+	switch {
+	case si1.ServerURI != si2.ServerURI:
 		return false
-	}
-	if si1.Extensions == nil && si2.Extensions == nil {
+	case si1.Extensions == nil && si2.Extensions == nil:
 		return true
+	case (si1.Extensions != nil) != (si2.Extensions != nil):
+		return false
 	}
 
 	ex1, ok1 := si1.Extensions.(interface{ Equal(any) bool })

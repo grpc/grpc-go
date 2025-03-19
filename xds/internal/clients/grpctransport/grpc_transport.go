@@ -23,6 +23,7 @@ package grpctransport
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -37,6 +38,64 @@ type ServerIdentifierExtension struct {
 	// Credentials will be used for all gRPC transports. If it is unset,
 	// transport creation will fail.
 	Credentials credentials.Bundle
+}
+
+// String returns a string representation of the ServerIdentifierExtension.
+func (sie ServerIdentifierExtension) String() string {
+	if sie.Credentials == nil {
+		return ""
+	}
+	var tcParts []string
+	if sie.Credentials.TransportCredentials() != nil {
+		tcInfo := sie.Credentials.TransportCredentials().Info()
+		for _, v := range []string{tcInfo.ProtocolVersion, tcInfo.SecurityProtocol, tcInfo.ServerName} {
+			if v != "" {
+				tcParts = append(tcParts, v)
+			}
+		}
+	}
+	if sie.Credentials.PerRPCCredentials() != nil {
+		tcParts = append(tcParts, fmt.Sprintf("%v", sie.Credentials.PerRPCCredentials().RequireTransportSecurity()))
+	}
+	return strings.Join(tcParts, "-")
+}
+
+// Equal returns true if sie and other are considered equal.
+func (sie ServerIdentifierExtension) Equal(other any) bool {
+	sie2, ok := other.(ServerIdentifierExtension)
+	if !ok {
+		return false
+	}
+
+	switch {
+	case sie.Credentials == nil && sie2.Credentials == nil:
+		return true
+	case (sie.Credentials != nil) != (sie2.Credentials != nil):
+		return false
+	case (sie.Credentials.TransportCredentials() != nil) != (sie2.Credentials.TransportCredentials() != nil):
+		return false
+	case (sie.Credentials.PerRPCCredentials() != nil) != (sie2.Credentials.PerRPCCredentials() != nil):
+		return false
+	}
+
+	if sie.Credentials.TransportCredentials() != nil {
+		switch {
+		case sie.Credentials.TransportCredentials().Info().ProtocolVersion != sie2.Credentials.TransportCredentials().Info().ProtocolVersion:
+			return false
+		case sie.Credentials.TransportCredentials().Info().SecurityProtocol != sie2.Credentials.TransportCredentials().Info().SecurityProtocol:
+			return false
+		case sie.Credentials.TransportCredentials().Info().ServerName != sie2.Credentials.TransportCredentials().Info().ServerName:
+			return false
+		}
+	}
+
+	if sie.Credentials.PerRPCCredentials() != nil {
+		if sie.Credentials.PerRPCCredentials().RequireTransportSecurity() != sie2.Credentials.PerRPCCredentials().RequireTransportSecurity() {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
