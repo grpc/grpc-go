@@ -56,7 +56,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	// Create a grpc transport to the above management server.
 	si := clients.ServerIdentifier{
 		ServerURI:  serverURI,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	tr, err := (&grpctransport.Builder{}).Build(si)
 	if err != nil {

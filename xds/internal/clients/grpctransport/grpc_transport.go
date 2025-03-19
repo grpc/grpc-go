@@ -41,7 +41,7 @@ type ServerIdentifierExtension struct {
 }
 
 // String returns a string representation of the ServerIdentifierExtension.
-func (sie ServerIdentifierExtension) String() string {
+func (sie *ServerIdentifierExtension) String() string {
 	if sie.Credentials == nil {
 		return ""
 	}
@@ -61,8 +61,8 @@ func (sie ServerIdentifierExtension) String() string {
 }
 
 // Equal returns true if sie and other are considered equal.
-func (sie ServerIdentifierExtension) Equal(other any) bool {
-	sie2, ok := other.(ServerIdentifierExtension)
+func (sie *ServerIdentifierExtension) Equal(other any) bool {
+	sie2, ok := other.(*ServerIdentifierExtension)
 	if !ok {
 		return false
 	}
@@ -112,7 +112,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if si.Extensions == nil {
 		return nil, fmt.Errorf("grpctransport: Extensions is not set in ServerIdentifier")
 	}
-	sce, ok := si.Extensions.(ServerIdentifierExtension)
+	sce, ok := si.Extensions.(*ServerIdentifierExtension)
 	if !ok {
 		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}

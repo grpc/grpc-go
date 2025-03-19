@@ -175,7 +175,7 @@ func (tpr *testPerRPCCredentials) RequireTransportSecurity() bool {
 func (s) TestBuild_Success(t *testing.T) {
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ServerIdentifierExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+		Extensions: &ServerIdentifierExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 
 	b := &Builder{}
@@ -210,7 +210,7 @@ func (s) TestBuild_Failure(t *testing.T) {
 			name: "ServerURI is empty",
 			serverCfg: clients.ServerIdentifier{
 				ServerURI:  "",
-				Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+				Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 			},
 		},
 		{
@@ -228,7 +228,7 @@ func (s) TestBuild_Failure(t *testing.T) {
 			name: "ServerIdentifierExtension Credentials is nil",
 			serverCfg: clients.ServerIdentifier{
 				ServerURI:  "server-address",
-				Extensions: ServerIdentifierExtension{},
+				Extensions: &ServerIdentifierExtension{},
 			},
 		},
 	}
@@ -253,7 +253,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)
@@ -274,7 +274,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 func (s) TestNewStream_Error(t *testing.T) {
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "invalid-server-uri",
-		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)
@@ -307,7 +307,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// Build a grpc-based transport to the above server.
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
 	builder := Builder{}
 	transport, err := builder.Build(serverCfg)
@@ -363,17 +363,17 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 func (s) TestServerIdentifierExtension_String(t *testing.T) {
 	tests := []struct {
 		name string
-		sie  ServerIdentifierExtension
+		sie  *ServerIdentifierExtension
 		want string
 	}{
 		{
 			name: "empty",
-			sie:  ServerIdentifierExtension{},
+			sie:  &ServerIdentifierExtension{},
 			want: "",
 		},
 		{
 			name: "transport_credentials_only",
-			sie: ServerIdentifierExtension{
+			sie: &ServerIdentifierExtension{
 				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
 					protocolVersion:  "1.3",
 					securityProtocol: "tls",
@@ -384,7 +384,7 @@ func (s) TestServerIdentifierExtension_String(t *testing.T) {
 		},
 		{
 			name: "per_rpc_credentials_only",
-			sie: ServerIdentifierExtension{
+			sie: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}},
@@ -393,7 +393,7 @@ func (s) TestServerIdentifierExtension_String(t *testing.T) {
 		},
 		{
 			name: "both_credentials",
-			sie: ServerIdentifierExtension{
+			sie: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -419,26 +419,26 @@ func (s) TestServerIdentifierExtension_String(t *testing.T) {
 func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 	tests := []struct {
 		name   string
-		sie1   ServerIdentifierExtension
+		sie1   *ServerIdentifierExtension
 		sie2   any
 		wantEq bool
 	}{
 		{
 			name:   "other_is_not_ServerIdentifierExtension",
-			sie1:   ServerIdentifierExtension{},
+			sie1:   &ServerIdentifierExtension{},
 			sie2:   testServer{},
 			wantEq: false,
 		},
 		{
 			name:   "both_empty",
-			sie1:   ServerIdentifierExtension{},
-			sie2:   ServerIdentifierExtension{},
+			sie1:   &ServerIdentifierExtension{},
+			sie2:   &ServerIdentifierExtension{},
 			wantEq: true,
 		},
 		{
 			name: "one_empty",
-			sie1: ServerIdentifierExtension{},
-			sie2: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{},
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}}},
@@ -446,23 +446,23 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "other_empty",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}}},
-			sie2:   ServerIdentifierExtension{},
+			sie2:   &ServerIdentifierExtension{},
 			wantEq: false,
 		},
 		{
 			name: "different_transport_credentials",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
 					protocolVersion:  "1.3",
 					securityProtocol: "tls",
 					serverName:       "test.server1",
 				}},
 			},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
 					protocolVersion:  "1.3",
 					securityProtocol: "tls",
@@ -473,11 +473,11 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "different_per_rpc_credentials",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}}},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: false,
 				}}},
@@ -485,14 +485,14 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "same_transport_credentials",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
 					protocolVersion:  "1.3",
 					securityProtocol: "tls",
 					serverName:       "test.server",
 				}},
 			},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
 					protocolVersion:  "1.3",
 					securityProtocol: "tls",
@@ -503,11 +503,11 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "same_per_rpc_credentials",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}}},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}}},
@@ -515,7 +515,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "both_credentials_same",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -526,7 +526,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 						requireTransportKey: true,
 					}},
 			},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -541,7 +541,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "both_credentials_different",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -552,7 +552,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 						requireTransportKey: true,
 					}},
 			},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -567,7 +567,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "one_has_transport_credentials",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -578,7 +578,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 						requireTransportKey: true,
 					}},
 			},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{perRPCCredentials: &testPerRPCCredentials{
 					requireTransportKey: true,
 				}},
@@ -587,7 +587,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 		},
 		{
 			name: "one_has_per_rpc_credentials",
-			sie1: ServerIdentifierExtension{
+			sie1: &ServerIdentifierExtension{
 				Credentials: &testCredentials{
 					transportCredentials: &testTransportCredentials{
 						protocolVersion:  "1.3",
@@ -598,7 +598,7 @@ func (s) TestServerIdentifierExtension_Equal(t *testing.T) {
 						requireTransportKey: true,
 					}},
 			},
-			sie2: ServerIdentifierExtension{
+			sie2: &ServerIdentifierExtension{
 				Credentials: &testCredentials{transportCredentials: &testTransportCredentials{
 					protocolVersion:  "1.3",
 					securityProtocol: "tls",

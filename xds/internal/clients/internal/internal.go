@@ -21,7 +21,6 @@ package internal
 
 import (
 	"fmt"
-	"strings"
 
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/proto"
@@ -33,15 +32,13 @@ import (
 // ServerIdentifierString returns a string representation of the
 // clients.ServerIdentifier si.
 func ServerIdentifierString(si clients.ServerIdentifier) string {
-	extStr := ""
-	stringer, ok := si.Extensions.(fmt.Stringer)
-	if ok {
-		extStr = stringer.String()
-	}
-	if extStr == "" {
+	if si.Extensions == nil {
 		return si.ServerURI
 	}
-	return strings.Join([]string{si.ServerURI, extStr}, "-")
+	if stringer, ok := si.Extensions.(fmt.Stringer); ok {
+		return fmt.Sprintf("%s-%s", si.ServerURI, stringer)
+	}
+	return fmt.Sprintf("%s-%p", si.ServerURI, si.Extensions)
 }
 
 // ServerIdentifierEqual returns true if si1 and si2 are considered equal.
