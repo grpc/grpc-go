@@ -1,5 +1,3 @@
-//revive:disable:unused-parameter
-
 /*
  *
  * Copyright 2025 gRPC authors.
@@ -32,15 +30,26 @@
 // server.
 package xdsclient
 
+import (
+	"time"
+
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+)
+
 // XDSClient is a client which queries a set of discovery APIs (collectively
 // termed as xDS) on a remote management server, to discover
 // various dynamic resources.
 type XDSClient struct {
+	client *clientImpl
 }
 
 // New returns a new xDS Client configured with the provided config.
 func New(config Config) (*XDSClient, error) {
-	panic("unimplemented")
+	clientImpl, err := newClientImpl(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, "xds-client")
+	if err != nil {
+		return nil, err
+	}
+	return &XDSClient{client: clientImpl}, nil
 }
 
 // WatchResource starts watching the specified resource.
@@ -52,16 +61,26 @@ func New(config Config) (*XDSClient, error) {
 // The returned function cancels the watch and prevents future calls to the
 // watcher.
 func (c *XDSClient) WatchResource(typeURL, name string, watcher ResourceWatcher) (cancel func()) {
-	panic("unimplemented")
+	return c.client.watchResource(typeURL, name, watcher)
 }
 
 // Close closes the xDS client.
 func (c *XDSClient) Close() error {
-	panic("unimplemented")
+	c.client.close()
+	return nil
 }
 
 // DumpResources returns the status and contents of all xDS resources being
 // watched by the xDS client.
-func (c *XDSClient) DumpResources() []byte {
-	panic("unimplemented")
+func (c *XDSClient) DumpResources() *v3statuspb.ClientStatusResponse {
+	resp := &v3statuspb.ClientStatusResponse{}
+	cfg := c.client.dumpResources()
+	resp.Config = append(resp.Config, cfg)
+	return resp
+}
+
+// SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
+// with provided timeout value.
+func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Duration) {
+	c.client.watchExpiryTimeout = watchExpiryTimeout
 }
