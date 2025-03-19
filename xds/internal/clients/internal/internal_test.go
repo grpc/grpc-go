@@ -19,13 +19,12 @@
 package internal
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients"
-
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -40,6 +39,20 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+type testServerIdentifierExtension struct{ x int }
+
+func (ts testServerIdentifierExtension) Equal(other any) bool {
+	ots, ok := other.(testServerIdentifierExtension)
+	if !ok {
+		return false
+	}
+	return ts.x == ots.x
+}
+
+func (ts testServerIdentifierExtension) String() string {
+	return fmt.Sprintf("testServerIdentifierExtension-%d", ts.x)
+}
+
 func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct {
 	t.Helper()
 
@@ -48,6 +61,162 @@ func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct 
 		t.Fatalf("Failed to create new struct proto from map %v: %v", input, err)
 	}
 	return ret
+}
+
+func (s) TestServerIdentifierString(t *testing.T) {
+	tests := []struct {
+		name string
+		si   clients.ServerIdentifier
+		want string
+	}{
+		{
+			name: "empty",
+			si:   clients.ServerIdentifier{},
+			want: "",
+		},
+		{
+			name: "server_uri_only",
+			si:   clients.ServerIdentifier{ServerURI: "foo"},
+			want: "foo",
+		},
+		{
+			name: "stringer_extension",
+			si: clients.ServerIdentifier{
+				ServerURI:  "foo",
+				Extensions: testServerIdentifierExtension{x: 1},
+			},
+			want: "foo-testServerIdentifierExtension-1",
+		},
+		{
+			name: "non_stringer_extension",
+			si: clients.ServerIdentifier{
+				ServerURI:  "foo",
+				Extensions: 1,
+			},
+			want: "foo",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ServerIdentifierString(test.si); got != test.want {
+				t.Errorf("ServerIdentifierString() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func (s) TestServerIdentifier_Equal(t *testing.T) {
+	tests := []struct {
+		name   string
+		s1     clients.ServerIdentifier
+		s2     clients.ServerIdentifier
+		wantEq bool
+	}{
+		{
+			name:   "both_empty",
+			s1:     clients.ServerIdentifier{},
+			s2:     clients.ServerIdentifier{},
+			wantEq: true,
+		},
+		{
+			name:   "one_empty",
+			s1:     clients.ServerIdentifier{},
+			s2:     clients.ServerIdentifier{ServerURI: "bar"},
+			wantEq: false,
+		},
+		{
+			name:   "other_empty",
+			s1:     clients.ServerIdentifier{ServerURI: "foo"},
+			s2:     clients.ServerIdentifier{},
+			wantEq: false,
+		},
+		{
+			name:   "different_ServerURI",
+			s1:     clients.ServerIdentifier{ServerURI: "foo"},
+			s2:     clients.ServerIdentifier{ServerURI: "bar"},
+			wantEq: false,
+		},
+		{
+			name: "different_Extensions_with_no_Equal_method",
+			s1: clients.ServerIdentifier{
+				Extensions: 1,
+			},
+			s2: clients.ServerIdentifier{
+				Extensions: 2,
+			},
+			wantEq: true,
+		},
+		{
+			name: "same_Extensions_with_no_Equal_method",
+			s1: clients.ServerIdentifier{
+				Extensions: 1,
+			},
+			s2: clients.ServerIdentifier{
+				Extensions: 1,
+			},
+			wantEq: true,
+		},
+		{
+			name: "different_Extensions_with_Equal_method",
+			s1: clients.ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
+			},
+			s2: clients.ServerIdentifier{
+				Extensions: testServerIdentifierExtension{2},
+			},
+			wantEq: false,
+		},
+		{
+			name: "same_Extensions_same_with_Equal_method",
+			s1: clients.ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
+			},
+			s2: clients.ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
+			},
+			wantEq: true,
+		},
+		{
+			name: "first_config_Extensions_is_nil",
+			s1: clients.ServerIdentifier{
+				Extensions: testServerIdentifierExtension{1},
+			},
+			s2: clients.ServerIdentifier{
+				Extensions: nil,
+			},
+			wantEq: false,
+		},
+		{
+			name: "other_config_Extensions_is_nil",
+			s1: clients.ServerIdentifier{
+				Extensions: nil,
+			},
+			s2: clients.ServerIdentifier{
+				Extensions: testServerIdentifierExtension{2},
+			},
+			wantEq: false,
+		},
+		{
+			name: "all_fields_same",
+			s1: clients.ServerIdentifier{
+				ServerURI:  "foo",
+				Extensions: testServerIdentifierExtension{1},
+			},
+			s2: clients.ServerIdentifier{
+				ServerURI:  "foo",
+				Extensions: testServerIdentifierExtension{1},
+			},
+			wantEq: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if gotEq := ServerIdentifierEqual(test.s1, test.s2); gotEq != test.wantEq {
+				t.Errorf("Equal() = %v, want %v", gotEq, test.wantEq)
+			}
+		})
+	}
 }
 
 func (s) TestIsLocalityEmpty(t *testing.T) {
