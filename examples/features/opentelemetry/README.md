@@ -1,7 +1,7 @@
 # OpenTelemetry
 
-This example demonstrates how to configure OpenTelemetry Tracing on a gRPC
-client and server, showcasing the trace data it produces for RPC interactions.
+This example shows how to configure OpenTelemetry on a client and server, and
+shows what type of telemetry data it can produce for certain RPC's.
 
 ## See Traces
 
@@ -13,11 +13,33 @@ This section shows how to configure OpenTelemetry Tracing and view trace data.
 
     * Install the Jaeger binary. Download from:
       [Jaeger Releases](https://github.com/jaegertracing/jaeger/releases).
-    * Run Jaeger with all-in-one:
-        ```bash
-        jaeger-all-in-one --collector.otlp.enabled=true
+    * For Server
         ```
-        Starts Jaeger with OTLP collection enabled.
+        JAEGER_QUERY_PORT=16687 \
+        JAEGER_ADMIN_HTTP_PORT=:14270 \
+        JAEGER_COLLECTOR_OTLP_ENABLED=true \
+        ./jaeger-all-in-one \
+          --query.http-server.host-port=:16687 \
+          --admin.http.host-port=:14270 \
+          --collector.otlp.http.host-port=:4320 \
+          --collector.grpc-server.host-port=:14252 \
+          --collector.http-server.host-port=:14272 &
+        ```
+        Starts Jaeger with OTLP collection enabled for the gRPC server.
+
+    * For Client
+        ```
+        JAEGER_QUERY_PORT=16686 \
+        JAEGER_ADMIN_HTTP_PORT=:14271 \
+        JAEGER_COLLECTOR_OTLP_ENABLED=true \
+        ./jaeger-all-in-one \
+          --query.http-server.host-port=:16686 \
+          --admin.http.host-port=:14271 \
+          --collector.otlp.grpc.host-port=:4321 \
+          --collector.otlp.http.host-port=:4319 \
+          --query.grpc-server.host-port=:16684 &
+        ```
+        Starts Jaeger with OTLP collection enabled for the gRPC client.
 
 2.  **Run the gRPC Server:**
 
@@ -36,19 +58,45 @@ This section shows how to configure OpenTelemetry Tracing and view trace data.
     * Starts the gRPC client, continuously making RPC calls,
     sending trace data via OTLP.
 
-4.  **View Traces in Jaeger UI:**
+4.  **View Server Traces via Jaeger UI:**
+
+    * Open browser to `http://localhost:16687`.
+    * View traces at `http://localhost:16687/`.
+    * **Find your traces:**
+        * In the "Service" dropdown, select "grpc-server".
+        * Click "Find Traces".
+    * See trace info, spans, timings, and details.
+
+5.  **View Server Traces via Curl:**
+
+    ```
+    curl -X GET "http://localhost:16687/api/traces?service=grpc-server"
+    ```
+
+6.  **View Client Traces via Jaeger UI:**
 
     * Open browser to `http://localhost:16686`.
     * View traces at `http://localhost:16686/`.
     * **Find your traces:**
-        * In the "Service" dropdown, select the service name.
-        (e.g., "client" or "server", depending on how your applications
-        are configured).
+        * In the "Service" dropdown, select "grpc-client".
         * Click "Find Traces".
     * See trace info, spans, timings, and details.
 
+7.  **View Client Traces via Curl:**
+
+    ```
+    curl -X GET "http://localhost:16686/api/traces?service=grpc-client"
+    ```
+
 ### Explanation (Traces)
 
+* **Separate Jaeger Instances:** We run two Jaeger all-in-one instances to
+    isolate client and server traces, each with distinct port configurations.
+* **OTLP Collection:** Both Jaeger instances are configured to receive OTLP
+    trace data.
+* **Service Name Filtering:** The curl commands and Jaeger UI instructions
+    use service names ("grpc-server" and "grpc-client") to filter and retrieve
+    specific traces.
 * **Continuous RPC Calls:** Client makes RPC calls, generating data.
 * **OTLP Export (Tracing):** Client and server export via OTLP.
 * **Jaeger OTLP Collector:** Jaeger receives trace data.
@@ -78,10 +126,15 @@ server.
 
     * This starts the gRPC client, which exposes Prometheus metrics.
 
-3.  **View Metrics:**
+3.  **View Server Metrics:**
 
     ```
     curl localhost:9464/metrics
+    ```
+
+4.  **View Client Metrics:**
+
+    ```
     curl localhost:9465/metrics
     ```
 

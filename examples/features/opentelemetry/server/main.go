@@ -28,7 +28,6 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel"
 	otlptraceexp "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	otlptracehttpexp "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -46,7 +45,7 @@ import (
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
-	otlpEndpoint       = flag.String("otlp_endpoint", ":4317", "the OTLP collector endpoint for traces")
+	otlpEndpoint       = flag.String("otlp_endpoint", ":4320", "the OTLP collector endpoint for traces")
 	serviceName        = "grpc-server"
 )
 
@@ -86,10 +85,9 @@ func main() {
 		log.Fatalf("Could not set resources: %v", err)
 	}
 	// Create a simple span processor.
-	spanProcessor := sdktrace.NewSimpleSpanProcessor(traceExporter)
+	spanProcessor := sdktrace.NewBatchSpanProcessor(traceExporter)
 	// Create a TracerProvider instance.
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanProcessor), sdktrace.WithResource(res))
-	otel.SetTracerProvider(tp)
 	textMapPropagator := otelpropagation.TraceContext{} // Using W3C Trace Context Propagator for interoperability.
 
 	// Configure TraceOptions for gRPC OpenTelemetry integration.
