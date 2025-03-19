@@ -104,7 +104,7 @@ func (s) TestFailingProvider(t *testing.T) {
 }
 
 func (s) TestSPIFFEVerifyFuncMismatchedCert(t *testing.T) {
-	wantErrContains := "spiffe: x509 certificate Verify failed"
+	const wantErrContains = "spiffe: x509 certificate Verify failed"
 	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Reading spiffebundle file failed: %v", err)
@@ -135,7 +135,7 @@ func (s) TestSPIFFEVerifyFuncMismatchedCert(t *testing.T) {
 }
 
 func (s) TestSPIFFEVerifyFuncBadInputBytes(t *testing.T) {
-	wantErrContains := "spiffe: verify function could not parse input certificate"
+	const wantErrContains = "spiffe: verify function could not parse input certificate"
 	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Reading spiffebundle file failed: %v", err)
@@ -158,7 +158,7 @@ func (s) TestSPIFFEVerifyFuncBadInputBytes(t *testing.T) {
 }
 
 func (s) TestSPIFFEVerifyFuncNoInputCerts(t *testing.T) {
-	wantErrContains := "no valid input certificates"
+	const wantErrContains = "no valid input certificates"
 	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Reading spiffebundle file failed: %v", err)

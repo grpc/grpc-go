@@ -18,6 +18,8 @@
 *   spiffebundle_invalid_trustdomain - uses a `#` in the trust domain which is a
     disallowed character per the spec
 *   spiffebundle_malformed.json - a fully wrong json
+*   spiffebundle_match_client_spiffe.json - a valid spiffe bundle with a trust
+    domain matching the SPIFFE ID in spiffe_cert.pem
 *   spiffebundle_wrong_kid.json - has the `kid` field instead of the `kty` field
 *   spiffebundle_wrong_kty.json - Uses `EC` instead of `RSA` in the `kty` field
 *   spiffebundle_wrong_multi_certs.json - place 2 certificates in the `x5c`

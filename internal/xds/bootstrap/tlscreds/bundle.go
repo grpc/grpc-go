@@ -181,9 +181,8 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap map[string]*spiffebundle.Bundle) func
 		for _, cert := range rawCertList[1:] {
 			opts.Intermediates.AddCert(cert)
 		}
-		// The verified chain is (surprisingly) unused
-		_, err = rawCertList[0].Verify(opts)
-		if err != nil {
+		// The verified chain is (surprisingly) unused.
+		if _, err = rawCertList[0].Verify(opts); err != nil {
 			return fmt.Errorf("spiffe: x509 certificate Verify failed: %v", err)
 		}
 		return nil

@@ -203,7 +203,6 @@ func (s) TestCaReloading(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to write test CA cert: %v", err)
 	}
-
 	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
 		ss := stubserver.StubServer{
 			Address:    server.Address,
@@ -232,7 +231,7 @@ func (s) TestCaReloading(t *testing.T) {
 func (s) TestSPIFFEReloading(t *testing.T) {
 	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
-		t.Fatalf("Failed to read test CA cert: %s", err)
+		t.Fatalf("Failed to read test SPIFFE bundle: %v", err)
 	}
 
 	// Write CA certs to a temporary file so that we can modify it later.
@@ -345,10 +344,10 @@ func (s) TestMTLSSPIFFE(t *testing.T) {
 	defer s.Stop()
 
 	cfg := fmt.Sprintf(`{
-		"certificate_file": "%s",
-		"private_key_file": "%s",
-		"spiffe_trust_bundle_map_file": "%s"
-	}`,
+	"certificate_file": "%s",
+	"private_key_file": "%s",
+	"spiffe_trust_bundle_map_file": "%s"
+}`,
 		testdata.Path("spiffe_end2end/client_spiffe.pem"),
 		testdata.Path("spiffe_end2end/client.key"),
 		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
@@ -375,10 +374,10 @@ func (s) TestMTLSSPIFFEWithServerChain(t *testing.T) {
 	defer s.Stop()
 
 	cfg := fmt.Sprintf(`{
-		"certificate_file": "%s",
-		"private_key_file": "%s",
-		"spiffe_trust_bundle_map_file": "%s"
-	}`,
+	"certificate_file": "%s",
+	"private_key_file": "%s",
+	"spiffe_trust_bundle_map_file": "%s"
+}`,
 		testdata.Path("spiffe_end2end/client_spiffe.pem"),
 		testdata.Path("spiffe_end2end/client.key"),
 		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
@@ -428,7 +427,10 @@ func (s) TestMTLSSPIFFEFailure(t *testing.T) {
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
 		t.Errorf("EmptyCall(): got success. want failure")
 	}
-	wantErr := "spiffe: no bundle found for peer certificates"
+	const wantErr = "spiffe: no bundle found for peer certificates"
+	if status.Code(err) != codes.Unavailable {
+		t.Errorf("EmptyCall(): failed with wrong error. got code %v. want code: %v", status.Code(err), codes.Unavailable)
+	}
 	if !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("EmptyCall(): failed with wrong error. got %v. want contains: %v", err, wantErr)
 	}
