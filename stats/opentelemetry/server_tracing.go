@@ -47,7 +47,7 @@ func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 }
 
 // TagRPC implements per RPC attempt context management for traces.
-func (h *serverTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	var ai *attemptInfo
 
 	// Fetch the rpcInfo set by a previously registered stats handler.
