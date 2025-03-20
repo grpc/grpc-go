@@ -70,7 +70,9 @@ func (h *clientStatsHandler) initializeMetrics() {
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Info("callInfo not present in context in clientStatsHandler unaryInterceptor")
+		if logger.V(2) {
+			logger.Info("Creating new CallInfo since its not present in context in clientStatsHandler unaryInterceptor")
+		}
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -108,7 +110,9 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		logger.Info("callInfo not present in context in clientStatsHandler streamInterceptor")
+		if logger.V(2) {
+			logger.Info("Creating new CallInfo since its not present in context in clientStatsHandler streamInterceptor")
+		}
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
@@ -154,30 +158,35 @@ func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	// Numerous stats handlers can be used for the same channel. The cluster
-	// impl balancer which writes to this will only write once, thus have this
-	// stats handler's per attempt scoped context point to the same optional
-	// labels map if set.
+	var ai *attemptInfo
 	var labels *istats.Labels
-	if labels = istats.GetLabels(ctx); labels == nil {
-		labels = &istats.Labels{
-			// The defaults for all the per call labels from a plugin that
-			// executes on the callpath that this OpenTelemetry component
-			// currently supports.
-			TelemetryLabels: map[string]string{
-				"grpc.lb.locality": "",
-			},
+	ri := getRPCInfo(ctx)
+
+	if ri == nil {
+		// Numerous stats handlers can be used for the same channel. The cluster
+		// impl balancer which writes to this will only write once, thus have this
+		// stats handler's per attempt scoped context point to the same optional
+		// labels map if set.
+		if labels = istats.GetLabels(ctx); labels == nil {
+			labels = &istats.Labels{
+				// The defaults for all the per call labels from a plugin that
+				// executes on the callpath that this OpenTelemetry component
+				// currently supports.
+				TelemetryLabels: map[string]string{
+					"grpc.lb.locality": "",
+				},
+			}
+			ctx = istats.SetLabels(ctx, labels)
 		}
-		ctx = istats.SetLabels(ctx, labels)
+		ai = &attemptInfo{
+			startTime: time.Now(),
+			xdsLabels: labels.TelemetryLabels,
+			method:    removeLeadingSlash(info.FullMethodName),
+		}
+	} else {
+		ai = ri.ai
 	}
-	ai := &attemptInfo{
-		startTime: time.Now(),
-		xdsLabels: labels.TelemetryLabels,
-		method:    removeLeadingSlash(info.FullMethodName),
-	}
-	return setRPCInfo(ctx, &rpcInfo{
-		ai: ai,
-	})
+	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
 // HandleRPC handles per-RPC attempt stats for client-side metrics collection.

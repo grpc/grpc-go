@@ -20,11 +20,9 @@ import (
 	"context"
 	"log"
 	"strings"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
@@ -50,33 +48,14 @@ func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *serverTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	var ai *attemptInfo
+
 	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
-	var ai *attemptInfo
-	if ri != nil {
-		ai = ri.ai
+	if ri == nil {
+		ai = &attemptInfo{}
 	} else {
-		method := info.FullMethodName
-		if h.options.MetricsOptions.MethodAttributeFilter != nil {
-			if !h.options.MetricsOptions.MethodAttributeFilter(method) {
-				method = "other"
-			}
-		}
-		server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
-		if server == nil { // Shouldn't happen, defensive programming.
-			logger.Error("ctx passed into server side stats handler has no grpc server ref")
-			method = "other"
-		} else {
-			isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
-			if !isRegisteredMethod(server, method) {
-				method = "other"
-			}
-		}
-
-		ai = &attemptInfo{
-			startTime: time.Now(),
-			method:    removeLeadingSlash(method),
-		}
+		ai = ri.ai
 	}
 	ctx, ai = h.traceTagRPC(ctx, ai)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
@@ -107,7 +86,7 @@ func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		logger.Error("ctx passed into server side tracing stats handler has no server call data present")
+		logger.Error("ctx passed into server side tracing handler trace event handling has no server call data present")
 		return
 	}
 	populateSpan(rs, ri.ai)
