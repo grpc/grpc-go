@@ -182,10 +182,9 @@ func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management for metrics.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	var ai *attemptInfo
 	method := info.FullMethodName
 	ri := getRPCInfo(ctx)
-	var ai *attemptInfo
-
 	if ri == nil {
 		if h.options.MetricsOptions.MethodAttributeFilter != nil {
 			if !h.options.MetricsOptions.MethodAttributeFilter(method) {
@@ -193,7 +192,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 			}
 		}
 		server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
-		if server == nil { // Defensive programming in case server is nil.
+		if server == nil { // Shouldn't happen, defensive programming.
 			logger.Error("ctx passed into server side stats handler has no grpc server ref")
 			method = methodName
 		} else {
@@ -209,11 +208,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 	} else {
 		ai = ri.ai
-		ai.startTime = time.Now()
-		ai.method = removeLeadingSlash(method)
-		ai.pluginOptionLabels = nil 
 	}
-
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
