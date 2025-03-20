@@ -122,7 +122,7 @@ func (pickfirstBuilder) Build(cc balancer.ClientConn, bo balancer.BuildOptions) 
 		target:          bo.Target.String(),
 		metricsRecorder: cc.MetricsRecorder(),
 
-		subConns:              resolver.NewAddressMap[*scData](),
+		subConns:              resolver.NewAddressMapV2[*scData](),
 		state:                 connectivity.Connecting,
 		cancelConnectionTimer: func() {},
 	}
@@ -220,7 +220,7 @@ type pickfirstBalancer struct {
 	// updates.
 	state connectivity.State
 	// scData for active subonns mapped by address.
-	subConns              *resolver.AddressMap[*scData]
+	subConns              *resolver.AddressMapV2[*scData]
 	addressList           addressList
 	firstPass             bool
 	numTF                 int
@@ -390,12 +390,12 @@ func (b *pickfirstBalancer) closeSubConnsLocked() {
 	for _, sd := range b.subConns.Values() {
 		sd.subConn.Shutdown()
 	}
-	b.subConns = resolver.NewAddressMap[*scData]()
+	b.subConns = resolver.NewAddressMapV2[*scData]()
 }
 
 // deDupAddresses ensures that each address appears only once in the slice.
 func deDupAddresses(addrs []resolver.Address) []resolver.Address {
-	seenAddrs := resolver.NewAddressMap[*scData]()
+	seenAddrs := resolver.NewAddressMapV2[*scData]()
 	retAddrs := []resolver.Address{}
 
 	for _, addr := range addrs {
@@ -481,7 +481,7 @@ func addressFamily(address string) ipAddrFamily {
 // This ensures that the subchannel map accurately reflects the current set of
 // addresses received from the name resolver.
 func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address) {
-	newAddrsMap := resolver.NewAddressMap[bool]()
+	newAddrsMap := resolver.NewAddressMapV2[bool]()
 	for _, addr := range newAddrs {
 		newAddrsMap.Set(addr, true)
 	}
@@ -505,7 +505,7 @@ func (b *pickfirstBalancer) shutdownRemainingLocked(selected *scData) {
 			sd.subConn.Shutdown()
 		}
 	}
-	b.subConns = resolver.NewAddressMap[*scData]()
+	b.subConns = resolver.NewAddressMapV2[*scData]()
 	b.subConns.Set(selected.addr, selected)
 }
 

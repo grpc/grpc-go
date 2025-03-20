@@ -29,11 +29,17 @@ type addressMapEntry[T any] struct {
 	value T
 }
 
-// AddressMap is a map of addresses to arbitrary values taking into account
+// AddressMap is an AddressMapV2[any].  It will be deleted in an upcoming
+// release of grpc-go.
+//
+// Deprecated: use the generic AddressMapV2 type instead.
+type AddressMap = AddressMapV2[any]
+
+// AddressMapV2 is a map of addresses to arbitrary values taking into account
 // Attributes.  BalancerAttributes are ignored, as are Metadata and Type.
 // Multiple accesses may not be performed concurrently.  Must be created via
 // NewAddressMap; do not construct directly.
-type AddressMap[T any] struct {
+type AddressMapV2[T any] struct {
 	// The underlying map is keyed by an Address with fields that we don't care
 	// about being set to their zero values. The only fields that we care about
 	// are `Addr`, `ServerName` and `Attributes`. Since we need to be able to
@@ -56,9 +62,16 @@ func toMapKey(addr *Address) Address {
 
 type addressMapEntryList[T any] []*addressMapEntry[T]
 
-// NewAddressMap creates a new AddressMap.
-func NewAddressMap[T any]() *AddressMap[T] {
-	return &AddressMap[T]{m: make(map[Address]addressMapEntryList[T])}
+// NewAddressMap creates a new AddressMapV2[any].
+//
+// Deprecated: use the generic NewAddressMapV2 constructor instead.
+func NewAddressMap() *AddressMap {
+	return NewAddressMapV2[any]()
+}
+
+// NewAddressMapV2 creates a new AddressMapV2.
+func NewAddressMapV2[T any]() *AddressMapV2[T] {
+	return &AddressMapV2[T]{m: make(map[Address]addressMapEntryList[T])}
 }
 
 // find returns the index of addr in the addressMapEntry slice, or -1 if not
@@ -75,7 +88,7 @@ func (l addressMapEntryList[T]) find(addr Address) int {
 }
 
 // Get returns the value for the address in the map, if present.
-func (a *AddressMap[T]) Get(addr Address) (value T, ok bool) {
+func (a *AddressMapV2[T]) Get(addr Address) (value T, ok bool) {
 	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	if entry := entryList.find(addr); entry != -1 {
@@ -85,7 +98,7 @@ func (a *AddressMap[T]) Get(addr Address) (value T, ok bool) {
 }
 
 // Set updates or adds the value to the address in the map.
-func (a *AddressMap[T]) Set(addr Address, value T) {
+func (a *AddressMapV2[T]) Set(addr Address, value T) {
 	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	if entry := entryList.find(addr); entry != -1 {
@@ -96,7 +109,7 @@ func (a *AddressMap[T]) Set(addr Address, value T) {
 }
 
 // Delete removes addr from the map.
-func (a *AddressMap[T]) Delete(addr Address) {
+func (a *AddressMapV2[T]) Delete(addr Address) {
 	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	entry := entryList.find(addr)
@@ -113,7 +126,7 @@ func (a *AddressMap[T]) Delete(addr Address) {
 }
 
 // Len returns the number of entries in the map.
-func (a *AddressMap[T]) Len() int {
+func (a *AddressMapV2[T]) Len() int {
 	ret := 0
 	for _, entryList := range a.m {
 		ret += len(entryList)
@@ -122,7 +135,7 @@ func (a *AddressMap[T]) Len() int {
 }
 
 // Keys returns a slice of all current map keys.
-func (a *AddressMap[T]) Keys() []Address {
+func (a *AddressMapV2[T]) Keys() []Address {
 	ret := make([]Address, 0, a.Len())
 	for _, entryList := range a.m {
 		for _, entry := range entryList {
@@ -133,7 +146,7 @@ func (a *AddressMap[T]) Keys() []Address {
 }
 
 // Values returns a slice of all current map values.
-func (a *AddressMap[T]) Values() []T {
+func (a *AddressMapV2[T]) Values() []T {
 	ret := make([]T, 0, a.Len())
 	for _, entryList := range a.m {
 		for _, entry := range entryList {

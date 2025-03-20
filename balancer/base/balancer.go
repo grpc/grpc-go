@@ -41,7 +41,7 @@ func (bb *baseBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) ba
 		cc:            cc,
 		pickerBuilder: bb.pickerBuilder,
 
-		subConns: resolver.NewAddressMap[balancer.SubConn](),
+		subConns: resolver.NewAddressMapV2[balancer.SubConn](),
 		scStates: make(map[balancer.SubConn]connectivity.State),
 		csEvltr:  &balancer.ConnectivityStateEvaluator{},
 		config:   bb.config,
@@ -65,7 +65,7 @@ type baseBalancer struct {
 	csEvltr *balancer.ConnectivityStateEvaluator
 	state   connectivity.State
 
-	subConns *resolver.AddressMap[balancer.SubConn]
+	subConns *resolver.AddressMapV2[balancer.SubConn]
 	scStates map[balancer.SubConn]connectivity.State
 	picker   balancer.Picker
 	config   Config
@@ -100,7 +100,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	// Successful resolution; clear resolver error and ensure we return nil.
 	b.resolverErr = nil
 	// addrsSet is the set converted from addrs, it's used for quick lookup of an address.
-	addrsSet := resolver.NewAddressMap[any]()
+	addrsSet := resolver.NewAddressMapV2[any]()
 	for _, a := range s.ResolverState.Addresses {
 		addrsSet.Set(a, nil)
 		if _, ok := b.subConns.Get(a); !ok {
