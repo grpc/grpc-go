@@ -149,9 +149,10 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
 	}
 	return pName, &clusterimpl.LBConfig{
-		Cluster:         mechanism.Cluster,
-		TelemetryLabels: mechanism.TelemetryLabels,
-		ChildPolicy:     &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		Cluster:               mechanism.Cluster,
+		TelemetryLabels:       mechanism.TelemetryLabels,
+		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 	}, retEndpoints
 }
 

@@ -21,6 +21,8 @@ package clusterimpl_test
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +42,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -353,4 +356,219 @@ func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Serv
 			}
 		}
 	}
+}
+
+// Tests that circuit breaking limits RPCs E2E.
+func (s) TestCircuitBreaking(t *testing.T) {
+	// Create an xDS management server that serves ADS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var resolverBuilder resolver.Builder
+	var err error
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
+
+	// Start a server backend exposing the test service.
+	f := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	server := stubserver.StartTestService(t, f)
+	defer server.Stop()
+
+	// Configure the xDS management server with default resources.
+	const serviceName = "my-test-xds-service"
+	const maxRequests = 3
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	resources.Clusters[0].CircuitBreakers = &v3clusterpb.CircuitBreakers{
+		Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
+			{
+				Priority:    v3corepb.RoutingPriority_DEFAULT,
+				MaxRequests: wrapperspb.UInt32(maxRequests),
+			},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Start maxRequests streams.
+	for range maxRequests {
+		if _, err := client.FullDuplexCall(ctx); err != nil {
+			t.Fatalf("rpc FullDuplexCall() failed: %v", err)
+		}
+	}
+
+	// Since we are at the max, new streams should fail.  It's possible some are
+	// allowed due to inherent raciness in the tracking, however.
+	for i := 0; i < 100; i++ {
+		stream, err := client.FullDuplexCall(ctx)
+		if status.Code(err) == codes.Unavailable {
+			return
+		}
+		if err == nil {
+			// Terminate the stream (the server immediately exits upon a client
+			// CloseSend) to ensure we never go over the limit.
+			stream.CloseSend()
+			stream.Recv()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("RPCs unexpectedly allowed beyond circuit breaking maximum")
+}
+
+// Tests that circuit breaking limits RPCs in LOGICAL_DNS clusters E2E.
+func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
+	// Create an xDS management server that serves ADS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var resolverBuilder resolver.Builder
+	var err error
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
+
+	// Start a server backend exposing the test service.
+	f := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	server := stubserver.StartTestService(t, f)
+	defer server.Stop()
+	host, port := hostAndPortFromAddress(t, server.Address)
+
+	// Configure the xDS management server with default resources. Override the
+	// default cluster to include a circuit breaking config.
+	const serviceName = "my-test-xds-service"
+	const maxRequests = 3
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	resources.Clusters = []*v3clusterpb.Cluster{
+		e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+			ClusterName: "cluster-" + serviceName,
+			Type:        e2e.ClusterTypeLogicalDNS,
+			DNSHostName: host,
+			DNSPort:     port,
+		}),
+	}
+	resources.Clusters[0].CircuitBreakers = &v3clusterpb.CircuitBreakers{
+		Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
+			{
+				Priority:    v3corepb.RoutingPriority_DEFAULT,
+				MaxRequests: wrapperspb.UInt32(maxRequests),
+			},
+		},
+	}
+	resources.Endpoints = nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	// Start maxRequests streams.
+	for range maxRequests {
+		if _, err := client.FullDuplexCall(ctx); err != nil {
+			t.Fatalf("rpc FullDuplexCall() failed: %v", err)
+		}
+	}
+
+	// Since we are at the max, new streams should fail.  It's possible some are
+	// allowed due to inherent raciness in the tracking, however.
+	for i := 0; i < 100; i++ {
+		stream, err := client.FullDuplexCall(ctx)
+		if status.Code(err) == codes.Unavailable {
+			return
+		}
+		if err == nil {
+			// Terminate the stream (the server immediately exits upon a client
+			// CloseSend) to ensure we never go over the limit.
+			stream.CloseSend()
+			stream.Recv()
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("RPCs unexpectedly allowed beyond circuit breaking maximum")
+}
+
+func hostAndPortFromAddress(t *testing.T, addr string) (string, uint32) {
+	t.Helper()
+
+	host, p, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("Invalid serving address: %v", addr)
+	}
+	port, err := strconv.ParseUint(p, 10, 32)
+	if err != nil {
+		t.Fatalf("Invalid serving port %q: %v", p, err)
+	}
+	return host, uint32(port)
 }
