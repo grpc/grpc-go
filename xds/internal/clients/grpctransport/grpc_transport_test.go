@@ -20,8 +20,10 @@ package grpctransport
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,6 +160,30 @@ func (*testTransportCredentials) Clone() credentials.TransportCredentials {
 func (*testTransportCredentials) OverrideServerName(string) error {
 	return nil
 }
+func (tc *testTransportCredentials) String() string {
+	var tcParts []string
+	for _, v := range []string{tc.protocolVersion, tc.securityProtocol, tc.serverName} {
+		if v != "" {
+			tcParts = append(tcParts, v)
+		}
+	}
+	return strings.Join(tcParts, "-")
+}
+func (tc *testTransportCredentials) Equal(other any) bool {
+	tc2, ok := other.(*testTransportCredentials)
+	if !ok {
+		return false
+	}
+	switch {
+	case tc.protocolVersion != tc2.protocolVersion:
+		return false
+	case tc.securityProtocol != tc2.securityProtocol:
+		return false
+	case tc.serverName != tc2.serverName:
+		return false
+	}
+	return true
+}
 
 type testPerRPCCredentials struct {
 	requireTransportKey bool
@@ -168,6 +194,16 @@ func (*testPerRPCCredentials) GetRequestMetadata(context.Context, ...string) (ma
 }
 func (tpr *testPerRPCCredentials) RequireTransportSecurity() bool {
 	return tpr.requireTransportKey
+}
+func (tpr *testPerRPCCredentials) String() string {
+	return fmt.Sprintf("%v", tpr.requireTransportKey)
+}
+func (tpr *testPerRPCCredentials) Equal(other any) bool {
+	tpr2, ok := other.(*testPerRPCCredentials)
+	if !ok {
+		return false
+	}
+	return tpr.requireTransportKey == tpr2.requireTransportKey
 }
 
 // TestBuild_Success verifies that the Builder successfully creates a new

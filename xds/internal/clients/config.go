@@ -59,6 +59,10 @@ type ServerIdentifier struct {
 	//
 	// For example, a custom TransportBuilder might use this field to
 	// configure a specific security credentials.
+	//
+	// If present, Extensions must implement the `Equal(other any) bool`
+	// method. Two ServerIdentifiers with Extensions will be considered unequal
+	// if either Extensions does not implement this method.
 	Extensions any
 }
 
