@@ -24,16 +24,16 @@ import (
 	"strings"
 )
 
-type addressMapEntry struct {
+type addressMapEntry[T any] struct {
 	addr  Address
-	value any
+	value T
 }
 
 // AddressMap is a map of addresses to arbitrary values taking into account
 // Attributes.  BalancerAttributes are ignored, as are Metadata and Type.
 // Multiple accesses may not be performed concurrently.  Must be created via
 // NewAddressMap; do not construct directly.
-type AddressMap struct {
+type AddressMap[T any] struct {
 	// The underlying map is keyed by an Address with fields that we don't care
 	// about being set to their zero values. The only fields that we care about
 	// are `Addr`, `ServerName` and `Attributes`. Since we need to be able to
@@ -47,23 +47,23 @@ type AddressMap struct {
 	// The value type of the map contains a slice of addresses which match the key
 	// in their `Addr` and `ServerName` fields and contain the corresponding value
 	// associated with them.
-	m map[Address]addressMapEntryList
+	m map[Address]addressMapEntryList[T]
 }
 
 func toMapKey(addr *Address) Address {
 	return Address{Addr: addr.Addr, ServerName: addr.ServerName}
 }
 
-type addressMapEntryList []*addressMapEntry
+type addressMapEntryList[T any] []*addressMapEntry[T]
 
 // NewAddressMap creates a new AddressMap.
-func NewAddressMap() *AddressMap {
-	return &AddressMap{m: make(map[Address]addressMapEntryList)}
+func NewAddressMap[T any]() *AddressMap[T] {
+	return &AddressMap[T]{m: make(map[Address]addressMapEntryList[T])}
 }
 
 // find returns the index of addr in the addressMapEntry slice, or -1 if not
 // present.
-func (l addressMapEntryList) find(addr Address) int {
+func (l addressMapEntryList[T]) find(addr Address) int {
 	for i, entry := range l {
 		// Attributes are the only thing to match on here, since `Addr` and
 		// `ServerName` are already equal.
@@ -75,28 +75,28 @@ func (l addressMapEntryList) find(addr Address) int {
 }
 
 // Get returns the value for the address in the map, if present.
-func (a *AddressMap) Get(addr Address) (value any, ok bool) {
+func (a *AddressMap[T]) Get(addr Address) (value T, ok bool) {
 	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	if entry := entryList.find(addr); entry != -1 {
 		return entryList[entry].value, true
 	}
-	return nil, false
+	return value, false
 }
 
 // Set updates or adds the value to the address in the map.
-func (a *AddressMap) Set(addr Address, value any) {
+func (a *AddressMap[T]) Set(addr Address, value T) {
 	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	if entry := entryList.find(addr); entry != -1 {
 		entryList[entry].value = value
 		return
 	}
-	a.m[addrKey] = append(entryList, &addressMapEntry{addr: addr, value: value})
+	a.m[addrKey] = append(entryList, &addressMapEntry[T]{addr: addr, value: value})
 }
 
 // Delete removes addr from the map.
-func (a *AddressMap) Delete(addr Address) {
+func (a *AddressMap[T]) Delete(addr Address) {
 	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	entry := entryList.find(addr)
@@ -113,7 +113,7 @@ func (a *AddressMap) Delete(addr Address) {
 }
 
 // Len returns the number of entries in the map.
-func (a *AddressMap) Len() int {
+func (a *AddressMap[T]) Len() int {
 	ret := 0
 	for _, entryList := range a.m {
 		ret += len(entryList)
@@ -122,7 +122,7 @@ func (a *AddressMap) Len() int {
 }
 
 // Keys returns a slice of all current map keys.
-func (a *AddressMap) Keys() []Address {
+func (a *AddressMap[T]) Keys() []Address {
 	ret := make([]Address, 0, a.Len())
 	for _, entryList := range a.m {
 		for _, entry := range entryList {
@@ -133,8 +133,8 @@ func (a *AddressMap) Keys() []Address {
 }
 
 // Values returns a slice of all current map values.
-func (a *AddressMap) Values() []any {
-	ret := make([]any, 0, a.Len())
+func (a *AddressMap[T]) Values() []T {
+	ret := make([]T, 0, a.Len())
 	for _, entryList := range a.m {
 		for _, entry := range entryList {
 			ret = append(ret, entry.value)
