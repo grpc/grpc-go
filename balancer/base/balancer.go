@@ -122,8 +122,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		}
 	}
 	for _, a := range b.subConns.Keys() {
-		sci, _ := b.subConns.Get(a)
-		sc := sci.(balancer.SubConn)
+		sc, _ := b.subConns.Get(a)
 		// a was removed by resolver.
 		if _, ok := addrsSet.Get(a); !ok {
 			sc.Shutdown()
