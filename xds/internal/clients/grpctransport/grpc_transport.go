@@ -28,35 +28,44 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
 )
+
+var logger = grpclog.Component("grpctransport")
 
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
 type ServerIdentifierExtension struct {
 	// Credentials will be used for all gRPC transports. If it is unset,
 	// transport creation will fail.
+	//
+	// It is recommended to implement `Equal(other any) bool` for
+	// TransportCredentials and PerRPCCredentials, if present. Two
+	// ServerIdentifierExtension will be considered unequal if either does not
+	// implement this method.
 	Credentials credentials.Bundle
 }
 
 // String returns a string representation of the ServerIdentifierExtension.
+//
+// This method is primarily intended for logging and testing purposes. The
+// output returned by this method is not guaranteed to be stable and may change
+// at any time. Do not rely on it for production use.
 func (sie *ServerIdentifierExtension) String() string {
 	if sie.Credentials == nil {
 		return ""
 	}
+
 	var tcParts []string
-	if sie.Credentials.TransportCredentials() != nil {
-		tcInfo := sie.Credentials.TransportCredentials().Info()
-		for _, v := range []string{tcInfo.ProtocolVersion, tcInfo.SecurityProtocol, tcInfo.ServerName} {
-			if v != "" {
-				tcParts = append(tcParts, v)
-			}
-		}
+	if stringer, ok := sie.Credentials.TransportCredentials().(fmt.Stringer); ok {
+		tcParts = append(tcParts, stringer.String())
 	}
-	if sie.Credentials.PerRPCCredentials() != nil {
-		tcParts = append(tcParts, fmt.Sprintf("%v", sie.Credentials.PerRPCCredentials().RequireTransportSecurity()))
+	if stringer, ok := sie.Credentials.PerRPCCredentials().(fmt.Stringer); ok {
+		tcParts = append(tcParts, stringer.String())
 	}
+
 	return strings.Join(tcParts, "-")
 }
 
@@ -78,24 +87,37 @@ func (sie *ServerIdentifierExtension) Equal(other any) bool {
 		return false
 	}
 
-	if sie.Credentials.TransportCredentials() != nil {
-		switch {
-		case sie.Credentials.TransportCredentials().Info().ProtocolVersion != sie2.Credentials.TransportCredentials().Info().ProtocolVersion:
+	tcEq := true
+	tc1, ok1 := sie.Credentials.TransportCredentials().(interface{ Equal(any) bool })
+	tc2, ok2 := sie2.Credentials.TransportCredentials().(interface{ Equal(any) bool })
+	if tc1 != nil || tc2 != nil {
+		if !ok1 || !ok2 {
+			logger.Warning("Either of Credentials does not implement `Equal(other any) bool` for TransportCredentials. Considering them unequal.")
 			return false
-		case sie.Credentials.TransportCredentials().Info().SecurityProtocol != sie2.Credentials.TransportCredentials().Info().SecurityProtocol:
-			return false
-		case sie.Credentials.TransportCredentials().Info().ServerName != sie2.Credentials.TransportCredentials().Info().ServerName:
-			return false
+		}
+		if tc1 != nil {
+			tcEq = tc1.Equal(tc2)
+		} else {
+			tcEq = false
 		}
 	}
 
-	if sie.Credentials.PerRPCCredentials() != nil {
-		if sie.Credentials.PerRPCCredentials().RequireTransportSecurity() != sie2.Credentials.PerRPCCredentials().RequireTransportSecurity() {
+	pcEq := true
+	pc1, ok1 := sie.Credentials.PerRPCCredentials().(interface{ Equal(any) bool })
+	pc2, ok2 := sie2.Credentials.PerRPCCredentials().(interface{ Equal(any) bool })
+	if pc1 != nil || pc2 != nil {
+		if !ok1 || !ok2 {
+			logger.Warning("Either of Credentials does not implement `Equal(other any) bool` for PerRPCCredentials. Considering them unequal.")
 			return false
+		}
+		if pc1 != nil {
+			pcEq = pc1.Equal(pc2)
+		} else {
+			pcEq = false
 		}
 	}
 
-	return true
+	return tcEq && pcEq
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers

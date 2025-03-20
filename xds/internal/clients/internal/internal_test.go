@@ -156,7 +156,7 @@ func TestServerIdentifier_Equal(t *testing.T) {
 			s2: clients.ServerIdentifier{
 				Extensions: 2,
 			},
-			wantEq: true,
+			wantEq: false,
 		},
 		{
 			name: "same_Extensions_with_no_Equal_method",
@@ -166,7 +166,7 @@ func TestServerIdentifier_Equal(t *testing.T) {
 			s2: clients.ServerIdentifier{
 				Extensions: 1,
 			},
-			wantEq: true,
+			wantEq: false,
 		},
 		{
 			name: "different_Extensions_with_Equal_method",
