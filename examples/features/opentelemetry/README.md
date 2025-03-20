@@ -25,6 +25,7 @@ Jaeger is an open-source, end-to-end distributed tracing system. For more detail
       --collector.http-server.host-port=:14272 &
     ```
 * **Client Jaeger Instance:**
+
     ```
     JAEGER_QUERY_PORT=16686 \
     JAEGER_ADMIN_HTTP_PORT=:14271 \
@@ -39,12 +40,14 @@ Jaeger is an open-source, end-to-end distributed tracing system. For more detail
 
 **2. Run the gRPC Applications:**
 
-**Run the gRPC Server:**
+* **Run the gRPC Server:**
+
     ```
     go run server/main.go
     ```
 
-**Run the gRPC Client:**
+* **Run the gRPC Client:**
+
     ```
     go run client/main.go
     ```
@@ -53,18 +56,34 @@ Jaeger is an open-source, end-to-end distributed tracing system. For more detail
 
 * **View Metrics:**
 
-    * `curl localhost:9464/metrics`
-    * `curl localhost:9465/metrics`
+    ```
+    curl localhost:9464/metrics
+    ```
+
+    ```
+    curl localhost:9465/metrics
+    ```
 
 * **View Traces:**
 
-    * `curl -X GET "http://localhost:16687/api/traces?service=grpc-server"`
-    * `curl -X GET "http://localhost:16686/api/traces?service=grpc-client"`
+
+    ```
+    curl -X GET "http://localhost:16687/api/traces?service=grpc-server"
+    ```
+
+    ```
+    curl -X GET "http://localhost:16686/api/traces?service=grpc-client"
+    ```
 
 * **View Traces (Jaeger UI):**
 
-    * `http://localhost:16687`
-    * `http://localhost:16686`
+    ```
+    http://localhost:16687
+    ```
+
+    ```
+    http://localhost:16686
+    ```
 
 ## Explanation
 
