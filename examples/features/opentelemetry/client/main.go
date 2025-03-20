@@ -91,7 +91,7 @@ func main() {
 
 	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
 	if err != nil {
-		log.Fatalf("Failed to create a client: %v", err)
+		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
