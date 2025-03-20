@@ -573,6 +573,7 @@ func hostAndPortFromAddress(t *testing.T, addr string) (string, uint32) {
 	return host, uint32(port)
 }
 
+// Tests that LRS works correctly in a LOGICAL_DNS cluster.
 func (s) TestLRSLogicalDNS(t *testing.T) {
 	// Create an xDS management server that serves ADS and LRS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
