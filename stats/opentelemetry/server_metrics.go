@@ -21,16 +21,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
 )
+
+const methodName = "other"
 
 type serverStatsHandler struct {
 	estats.MetricsRecorder
@@ -178,50 +180,46 @@ func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 // HandleConn exists to satisfy stats.Handler.
 func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// TagRPC implements per RPC context management.
+// TagRPC implements per RPC context management for metrics.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	var ai *attemptInfo
 	method := info.FullMethodName
-	if h.options.MetricsOptions.MethodAttributeFilter != nil {
-		if !h.options.MetricsOptions.MethodAttributeFilter(method) {
-			method = "other"
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		if h.options.MetricsOptions.MethodAttributeFilter != nil {
+			if !h.options.MetricsOptions.MethodAttributeFilter(method) {
+				method = methodName
+			}
 		}
-	}
-	server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
-	if server == nil { // Shouldn't happen, defensive programming.
-		logger.Error("ctx passed into server side stats handler has no grpc server ref")
-		method = "other"
-	} else {
-		isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
-		if !isRegisteredMethod(server, method) {
-			method = "other"
+		server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
+		if server == nil { // Shouldn't happen, defensive programming.
+			logger.Error("ctx passed into server side stats handler has no grpc server ref")
+			method = methodName
+		} else {
+			isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
+			if !isRegisteredMethod(server, method) {
+				method = methodName
+			}
 		}
-	}
 
-	ai := &attemptInfo{
-		startTime: time.Now(),
-		method:    removeLeadingSlash(method),
+		ai = &attemptInfo{
+			startTime: time.Now(),
+			method:    removeLeadingSlash(method),
+		}
+	} else {
+		ai = ri.ai
 	}
-	if h.options.isTracingEnabled() {
-		ctx, ai = h.traceTagRPC(ctx, ai)
-	}
-	return setRPCInfo(ctx, &rpcInfo{
-		ai: ai,
-	})
+	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC implements per RPC tracing and stats implementation.
+// HandleRPC handles per RPC attempt stats for server-side metrics collection.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	if h.options.isTracingEnabled() {
-		populateSpan(rs, ri.ai)
-	}
-	if h.options.isMetricsEnabled() {
-		h.processRPCData(ctx, rs, ri.ai)
-	}
+	h.processRPCData(ctx, rs, ri.ai)
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
