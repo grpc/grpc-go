@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/internal"
 )
 
 var logger = grpclog.Component("grpctransport")
@@ -122,7 +123,14 @@ func (sie *ServerIdentifierExtension) Equal(other any) bool {
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
 // that contain an Extension field of type ServerIdentifierExtension.
-type Builder struct{}
+type Builder struct {
+	serverIdentiferMap *internal.ServerIdentifierMap
+}
+
+// NewBuilder provides a builder for creating gRPC-based Transports.
+func NewBuilder() *Builder {
+	return &Builder{serverIdentiferMap: internal.NewServerIdentifierMap()}
+}
 
 // Build returns a gRPC-based clients.Transport.
 //
@@ -142,10 +150,9 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		return nil, fmt.Errorf("grptransport: Credentials field is not set in ServerIdentifierExtension")
 	}
 
-	// TODO: Incorporate reference count map for existing transports and
-	// deduplicate transports based on the provided ServerIdentifier so that
-	// transport channel to same server can be shared between xDS and LRS
-	// client.
+	if value, ok := b.serverIdentiferMap.Get(si); ok {
+		return value.(*grpcTransport), nil
+	}
 
 	// Create a new gRPC client/channel for the server with the provided
 	// credentials, server URI, and a byte codec to send and receive messages.
@@ -159,8 +166,11 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
 	}
+	tc := &grpcTransport{cc: cc}
+	// Add the newly created transport to the map to re-use the connection.
+	b.serverIdentiferMap.Set(si, tc)
 
-	return &grpcTransport{cc: cc}, nil
+	return tc, nil
 }
 
 type grpcTransport struct {

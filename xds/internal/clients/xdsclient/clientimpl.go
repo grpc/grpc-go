@@ -79,7 +79,7 @@ type clientImpl struct {
 	//
 	// Once all references to a channel are dropped, the channel is closed.
 	channelsMu        sync.Mutex
-	xdsActiveChannels map[string]*channelState // Map from server config to in-use xdsChannels.
+	xdsActiveChannels *serverConfigMap // Map from server config to in-use xdsChannels.
 }
 
 // newClientImpl returns a new xdsClient with the given config.
@@ -94,9 +94,9 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		backoff:            streamBackoff,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
-		transportBuilder:   &grpctransport.Builder{},
+		transportBuilder:   grpctransport.NewBuilder(),
 		resourceTypes:      newResourceTypeRegistry(config.ResourceTypes),
-		xdsActiveChannels:  make(map[string]*channelState),
+		xdsActiveChannels:  newServerConfigMap(),
 	}
 
 	for name, cfg := range config.Authorities {
@@ -146,8 +146,9 @@ func (c *clientImpl) close() {
 	// channels to be closed.
 	var channelsToClose []*xdsChannel
 	c.channelsMu.Lock()
-	for _, cs := range c.xdsActiveChannels {
-		channelsToClose = append(channelsToClose, cs.channel)
+	for _, cs := range c.xdsActiveChannels.values() {
+		channel := cs.(*channelState)
+		channelsToClose = append(channelsToClose, channel.channel)
 	}
 	c.xdsActiveChannels = nil
 	c.channelsMu.Unlock()
@@ -223,10 +224,11 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *ServerConfig, initLocked, 
 	}
 
 	// Use an existing channel, if one exists for this server config.
-	if state, ok := c.xdsActiveChannels[serverConfigString(serverConfig)]; ok {
+	if st, ok := c.xdsActiveChannels.get(*serverConfig); ok {
 		if c.logger.V(2) {
 			c.logger.Infof("Reusing an existing xdsChannel for server config %q", serverConfig)
 		}
+		state := st.(*channelState)
 		initLocked(state)
 		return state.channel, c.releaseChannel(serverConfig, state, deInitLocked), nil
 	}
@@ -259,7 +261,7 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *ServerConfig, initLocked, 
 		return nil, func() {}, fmt.Errorf("xds: failed to create xdsChannel for server config %s: %v", serverConfigString(serverConfig), err)
 	}
 	state.channel = channel
-	c.xdsActiveChannels[serverConfigString(serverConfig)] = state
+	c.xdsActiveChannels.set(*serverConfig, state)
 	initLocked(state)
 	return state.channel, c.releaseChannel(serverConfig, state, deInitLocked), nil
 }
@@ -293,7 +295,7 @@ func (c *clientImpl) releaseChannel(serverConfig *ServerConfig, state *channelSt
 			return
 		}
 
-		delete(c.xdsActiveChannels, serverConfigString(serverConfig))
+		c.xdsActiveChannels.delete(*serverConfig)
 		if c.logger.V(2) {
 			c.logger.Infof("Closing xdsChannel [%p] for server config %s", state.channel, serverConfig)
 		}
