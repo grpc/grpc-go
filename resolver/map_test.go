@@ -174,7 +174,7 @@ func (s) TestAddressMap_Values(t *testing.T) {
 }
 
 func (s) TestEndpointMap_Length(t *testing.T) {
-	em := NewEndpointMap()
+	em := NewEndpointMap[any]()
 	// Should be empty at creation time.
 	if got := em.Len(); got != 0 {
 		t.Fatalf("em.Len() = %v; want 0", got)
@@ -196,7 +196,7 @@ func (s) TestEndpointMap_Length(t *testing.T) {
 }
 
 func (s) TestEndpointMap_Get(t *testing.T) {
-	em := NewEndpointMap()
+	em := NewEndpointMap[any]()
 	em.Set(endpoint1, 1)
 	// The second endpoint endpoint21 should override.
 	em.Set(endpoint12, 1)
@@ -237,7 +237,7 @@ func (s) TestEndpointMap_Get(t *testing.T) {
 }
 
 func (s) TestEndpointMap_Delete(t *testing.T) {
-	em := NewEndpointMap()
+	em := NewEndpointMap[any]()
 	// Initial state of system: [1, 2, 3, 12]
 	em.Set(endpoint1, struct{}{})
 	em.Set(endpoint2, struct{}{})
@@ -267,7 +267,7 @@ func (s) TestEndpointMap_Delete(t *testing.T) {
 }
 
 func (s) TestEndpointMap_Values(t *testing.T) {
-	em := NewEndpointMap()
+	em := NewEndpointMap[any]()
 	em.Set(endpoint1, 1)
 	// The second endpoint endpoint21 should override.
 	em.Set(endpoint12, 1)
@@ -292,7 +292,7 @@ func (s) TestEndpointMap_Values(t *testing.T) {
 // faster than O(n). This test doesn't run O(n) operations including listing
 // keys and values.
 func BenchmarkEndpointMap(b *testing.B) {
-	em := NewEndpointMap()
+	em := NewEndpointMap[any]()
 	for i := range b.N {
 		em.Set(Endpoint{
 			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},

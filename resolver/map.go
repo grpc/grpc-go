@@ -162,21 +162,21 @@ type endpointMapKey string
 // unordered set of address strings within an endpoint. This map is not thread
 // safe, thus it is unsafe to access concurrently. Must be created via
 // NewEndpointMap; do not construct directly.
-type EndpointMap struct {
-	endpoints map[endpointMapKey]endpointData
+type EndpointMap[T any] struct {
+	endpoints map[endpointMapKey]endpointData[T]
 }
 
-type endpointData struct {
+type endpointData[T any] struct {
 	// decodedKey stores the original key to avoid decoding when iterating on
 	// EndpointMap keys.
 	decodedKey Endpoint
-	value      any
+	value      T
 }
 
 // NewEndpointMap creates a new EndpointMap.
-func NewEndpointMap() *EndpointMap {
-	return &EndpointMap{
-		endpoints: make(map[endpointMapKey]endpointData),
+func NewEndpointMap[T any]() *EndpointMap[T] {
+	return &EndpointMap[T]{
+		endpoints: make(map[endpointMapKey]endpointData[T]),
 	}
 }
 
@@ -196,25 +196,25 @@ func encodeEndpoint(e Endpoint) endpointMapKey {
 }
 
 // Get returns the value for the address in the map, if present.
-func (em *EndpointMap) Get(e Endpoint) (value any, ok bool) {
+func (em *EndpointMap[T]) Get(e Endpoint) (value T, ok bool) {
 	val, found := em.endpoints[encodeEndpoint(e)]
 	if found {
 		return val.value, true
 	}
-	return nil, false
+	return value, false
 }
 
 // Set updates or adds the value to the address in the map.
-func (em *EndpointMap) Set(e Endpoint, value any) {
+func (em *EndpointMap[T]) Set(e Endpoint, value T) {
 	en := encodeEndpoint(e)
-	em.endpoints[en] = endpointData{
+	em.endpoints[en] = endpointData[T]{
 		decodedKey: Endpoint{Addresses: e.Addresses},
 		value:      value,
 	}
 }
 
 // Len returns the number of entries in the map.
-func (em *EndpointMap) Len() int {
+func (em *EndpointMap[T]) Len() int {
 	return len(em.endpoints)
 }
 
@@ -223,7 +223,7 @@ func (em *EndpointMap) Len() int {
 // the unordered set of addresses. Thus, endpoint information returned is not
 // the full endpoint data (drops duplicated addresses and attributes) but can be
 // used for EndpointMap accesses.
-func (em *EndpointMap) Keys() []Endpoint {
+func (em *EndpointMap[T]) Keys() []Endpoint {
 	ret := make([]Endpoint, 0, len(em.endpoints))
 	for _, en := range em.endpoints {
 		ret = append(ret, en.decodedKey)
@@ -232,8 +232,8 @@ func (em *EndpointMap) Keys() []Endpoint {
 }
 
 // Values returns a slice of all current map values.
-func (em *EndpointMap) Values() []any {
-	ret := make([]any, 0, len(em.endpoints))
+func (em *EndpointMap[T]) Values() []T {
+	ret := make([]T, 0, len(em.endpoints))
 	for _, val := range em.endpoints {
 		ret = append(ret, val.value)
 	}
@@ -241,7 +241,7 @@ func (em *EndpointMap) Values() []any {
 }
 
 // Delete removes the specified endpoint from the map.
-func (em *EndpointMap) Delete(e Endpoint) {
+func (em *EndpointMap[T]) Delete(e Endpoint) {
 	en := encodeEndpoint(e)
 	delete(em.endpoints, en)
 }

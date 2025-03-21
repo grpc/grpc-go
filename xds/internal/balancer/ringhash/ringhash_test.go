@@ -656,7 +656,7 @@ func (s) TestAggregatedConnectivityState(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bal := &ringhashBalancer{endpointStates: resolver.NewEndpointMap()}
+			bal := &ringhashBalancer{endpointStates: resolver.NewEndpointMap[*endpointState]()}
 			for i, cs := range tt.endpointStates {
 				es := &endpointState{
 					state: balancer.State{ConnectivityState: cs},

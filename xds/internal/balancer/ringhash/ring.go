@@ -68,7 +68,7 @@ type ringEntry struct {
 // and first item with hash >= given hash will be returned.
 //
 // Must be called with a non-empty endpoints map.
-func newRing(endpoints *resolver.EndpointMap, minRingSize, maxRingSize uint64, logger *grpclog.PrefixLogger) *ring {
+func newRing(endpoints *resolver.EndpointMap[*endpointState], minRingSize, maxRingSize uint64, logger *grpclog.PrefixLogger) *ring {
 	if logger.V(2) {
 		logger.Infof("newRing: number of endpoints is %d, minRingSize is %d, maxRingSize is %d", endpoints.Len(), minRingSize, maxRingSize)
 	}
@@ -136,18 +136,17 @@ func newRing(endpoints *resolver.EndpointMap, minRingSize, maxRingSize uint64, l
 // The endpoints are sorted in ascending order to ensure consistent results.
 //
 // Must be called with a non-empty endpoints map.
-func normalizeWeights(endpoints *resolver.EndpointMap) ([]endpointInfo, float64) {
+func normalizeWeights(endpoints *resolver.EndpointMap[*endpointState]) ([]endpointInfo, float64) {
 	var weightSum uint32
 	// Since attributes are explicitly ignored in the EndpointMap key, we need
 	// to iterate over the values to get the weights.
 	endpointVals := endpoints.Values()
-	for _, a := range endpointVals {
-		weightSum += a.(*endpointState).weight
+	for _, epState := range endpointVals {
+		weightSum += epState.weight
 	}
 	ret := make([]endpointInfo, 0, endpoints.Len())
 	min := 1.0
-	for _, a := range endpointVals {
-		epState := a.(*endpointState)
+	for _, epState := range endpointVals {
 		// (*endpointState).weight is set to 1 if the weight attribute is not
 		// found on the endpoint. And since this function is guaranteed to be
 		// called with a non-empty endpoints map, weightSum is guaranteed to be
