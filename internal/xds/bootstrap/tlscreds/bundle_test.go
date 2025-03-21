@@ -103,19 +103,9 @@ func (s) TestFailingProvider(t *testing.T) {
 	}
 }
 
-func (s) TestSPIFFEVerifyFuncMismatchedCert(t *testing.T) {
-	const wantErrContains = "spiffe: x509 certificate Verify failed"
-	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
-	if err != nil {
-		t.Fatalf("Reading spiffebundle file failed: %v", err)
-	}
-	spiffeBundle, err := spiffe.BundleMapFromBytes(spiffeBundleBytes)
-	if err != nil {
-		t.Fatalf("spiffe.BundleMapFromBytes() failed: %v", err)
-	}
-	verifyFunc := buildSPIFFEVerifyFunc(spiffeBundle)
-	verifiedChains := [][]*x509.Certificate{}
-	rawCert, err := os.ReadFile(testdata.Path("spiffe/server1_spiffe.pem"))
+func rawCertsFromFile(t *testing.T, filePath string) [][]byte {
+	t.Helper()
+	rawCert, err := os.ReadFile(testdata.Path(filePath))
 	if err != nil {
 		t.Fatalf("Reading certificate file failed: %v", err)
 	}
@@ -123,42 +113,10 @@ func (s) TestSPIFFEVerifyFuncMismatchedCert(t *testing.T) {
 	if block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("pem.Decode() failed to decode certificate in file %q", "spiffe/server1_spiffe.pem")
 	}
-
-	rawCerts := [][]byte{block.Bytes}
-	err = verifyFunc(rawCerts, verifiedChains)
-	if err == nil {
-		t.Fatalf("buildSPIFFEVerifyFunc call succeeded. want failure")
-	}
-	if !strings.Contains(err.Error(), wantErrContains) {
-		t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, wantErrContains)
-	}
+	return [][]byte{block.Bytes}
 }
 
-func (s) TestSPIFFEVerifyFuncBadInputBytes(t *testing.T) {
-	const wantErrContains = "spiffe: verify function could not parse input certificate"
-	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
-	if err != nil {
-		t.Fatalf("Reading spiffebundle file failed: %v", err)
-	}
-	spiffeBundle, err := spiffe.BundleMapFromBytes(spiffeBundleBytes)
-	if err != nil {
-		t.Fatalf("spiffe.BundleMapFromBytes() failed: %v", err)
-	}
-	verifyFunc := buildSPIFFEVerifyFunc(spiffeBundle)
-
-	verifiedChains := [][]*x509.Certificate{}
-	rawCerts := [][]byte{[]byte("NOT_GOOD_DATA")}
-	err = verifyFunc(rawCerts, verifiedChains)
-	if err == nil {
-		t.Fatalf("buildSPIFFEVerifyFunc call succeeded. want failure")
-	}
-	if !strings.Contains(err.Error(), wantErrContains) {
-		t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, wantErrContains)
-	}
-}
-
-func (s) TestSPIFFEVerifyFuncNoInputCerts(t *testing.T) {
-	const wantErrContains = "no valid input certificates"
+func (s) TestSPIFFEVerifyFuncMismatchedCert(t *testing.T) {
 	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Reading spiffebundle file failed: %v", err)
@@ -169,12 +127,36 @@ func (s) TestSPIFFEVerifyFuncNoInputCerts(t *testing.T) {
 	}
 	verifyFunc := buildSPIFFEVerifyFunc(spiffeBundle)
 	verifiedChains := [][]*x509.Certificate{}
-	rawCerts := [][]byte{}
-	err = verifyFunc(rawCerts, verifiedChains)
-	if err == nil {
-		t.Fatalf("buildSPIFFEVerifyFunc call succeeded. want failure")
+	tests := []struct {
+		name            string
+		rawCerts        [][]byte
+		wantErrContains string
+	}{
+		{
+			name:            "mismathed cert",
+			rawCerts:        rawCertsFromFile(t, "spiffe/server1_spiffe.pem"),
+			wantErrContains: "spiffe: x509 certificate Verify failed",
+		},
+		{
+			name:            "bad input cert",
+			rawCerts:        [][]byte{[]byte("NOT_GOOD_DATA")},
+			wantErrContains: "spiffe: verify function could not parse input certificate",
+		},
+		{
+			name:            "no input bytes",
+			rawCerts:        nil,
+			wantErrContains: "no valid input certificates",
+		},
 	}
-	if !strings.Contains(err.Error(), wantErrContains) {
-		t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, wantErrContains)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err = verifyFunc(tc.rawCerts, verifiedChains)
+			if err == nil {
+				t.Fatalf("buildSPIFFEVerifyFunc call succeeded. want failure")
+			}
+			if !strings.Contains(err.Error(), tc.wantErrContains) {
+				t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, tc.wantErrContains)
+			}
+		})
 	}
 }
