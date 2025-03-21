@@ -214,7 +214,7 @@ func (s) TestBuild_Success(t *testing.T) {
 		Extensions: &ServerIdentifierExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 
-	b := &Builder{}
+	b := NewBuilder()
 	tr, err := b.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Build() failed: %v", err)
@@ -270,7 +270,7 @@ func (s) TestBuild_Failure(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := &Builder{}
+			b := NewBuilder()
 			tr, err := b.Build(test.serverCfg)
 			if err == nil {
 				t.Fatalf("Build() succeeded, want error")
@@ -291,7 +291,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 		ServerURI:  ts.address,
 		Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
-	builder := Builder{}
+	builder := NewBuilder()
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -312,7 +312,7 @@ func (s) TestNewStream_Error(t *testing.T) {
 		ServerURI:  "invalid-server-uri",
 		Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
-	builder := Builder{}
+	builder := NewBuilder()
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -345,7 +345,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 		ServerURI:  ts.address,
 		Extensions: &ServerIdentifierExtension{Credentials: insecure.NewBundle()},
 	}
-	builder := Builder{}
+	builder := NewBuilder()
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)

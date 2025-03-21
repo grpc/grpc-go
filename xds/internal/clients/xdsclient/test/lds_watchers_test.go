@@ -251,7 +251,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			xdsClientConfig := xdsclient.Config{
 				Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 				Node:             clients.Node{ID: nodeID},
-				TransportBuilder: &grpctransport.Builder{},
+				TransportBuilder: grpctransport.NewBuilder(),
 				ResourceTypes:    resourceTypes,
 				// Xdstp resource names used in this test do not specify an
 				// authority. These will end up looking up an entry with the
@@ -398,7 +398,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			xdsClientConfig := xdsclient.Config{
 				Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 				Node:             clients.Node{ID: nodeID},
-				TransportBuilder: &grpctransport.Builder{},
+				TransportBuilder: grpctransport.NewBuilder(),
 				ResourceTypes:    resourceTypes,
 				// Xdstp resource names used in this test do not specify an
 				// authority. These will end up looking up an entry with the
@@ -504,7 +504,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -612,7 +612,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -695,7 +695,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -746,7 +746,7 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -824,7 +824,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -954,7 +954,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -1041,7 +1041,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -1107,7 +1107,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -1200,7 +1200,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -1289,7 +1289,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &grpctransport.Builder{},
+		TransportBuilder: grpctransport.NewBuilder(),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
