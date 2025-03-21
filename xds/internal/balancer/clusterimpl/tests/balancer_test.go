@@ -383,7 +383,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				if _, err := stream.Recv(); err != nil {
 					return err
@@ -478,7 +478,7 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				if _, err := stream.Recv(); err != nil {
 					return err
