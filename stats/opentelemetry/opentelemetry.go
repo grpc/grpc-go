@@ -25,6 +25,7 @@ package opentelemetry
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
@@ -148,6 +149,11 @@ type callInfo struct {
 	target string
 
 	method string
+	// nameResolutionEventAdded is an atomic flag that ensures the name
+	// resolution delay event is added to the call span only once. If a retry
+	// attempt detects a delay, this flag is set to true, preventing duplicate
+	// event additions across multiple retries.
+	nameResolutionEventAdded atomic.Bool
 }
 
 type callInfoKey struct{}
@@ -211,6 +217,8 @@ type attemptInfo struct {
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRPCAttempts uint32
+	// name resolution delay event is added only once across retry attempts.
+	nameResolutionDelayed bool
 }
 
 type clientMetrics struct {
