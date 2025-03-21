@@ -22,12 +22,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/metadata"
 
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
@@ -71,7 +73,7 @@ func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]b
 		testSC := testSubConns[i]
 		items = append(items, &ringEntry{
 			idx:     i,
-			hash:    uint64((i + 1) * 10),
+			hash:    math.MaxUint64 / uint64(len(states)) * uint64(i),
 			hashKey: testSC.String(),
 		})
 		epState := balancer.State{
@@ -91,7 +93,6 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 	tests := []struct {
 		name               string
 		connectivityStates []connectivity.State
-		hash               uint64
 		wantSC             balancer.SubConn
 		wantErr            error
 		wantSCToConnect    balancer.SubConn
@@ -99,45 +100,38 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 		{
 			name:               "picked is Ready",
 			connectivityStates: []connectivity.State{connectivity.Ready, connectivity.Idle},
-			hash:               5,
 			wantSC:             testSubConns[0],
 		},
 		{
 			name:               "picked is connecting, queue",
 			connectivityStates: []connectivity.State{connectivity.Connecting, connectivity.Idle},
-			hash:               5,
 			wantErr:            balancer.ErrNoSubConnAvailable,
 		},
 		{
 			name:               "picked is Idle, connect and queue",
 			connectivityStates: []connectivity.State{connectivity.Idle, connectivity.Idle},
-			hash:               5,
 			wantErr:            balancer.ErrNoSubConnAvailable,
 			wantSCToConnect:    testSubConns[0],
 		},
 		{
 			name:               "picked is TransientFailure, next is ready, return",
 			connectivityStates: []connectivity.State{connectivity.TransientFailure, connectivity.Ready},
-			hash:               5,
 			wantSC:             testSubConns[1],
 		},
 		{
 			name:               "picked is TransientFailure, next is connecting, queue",
 			connectivityStates: []connectivity.State{connectivity.TransientFailure, connectivity.Connecting},
-			hash:               5,
 			wantErr:            balancer.ErrNoSubConnAvailable,
 		},
 		{
 			name:               "picked is TransientFailure, next is Idle, connect and queue",
 			connectivityStates: []connectivity.State{connectivity.TransientFailure, connectivity.Idle},
-			hash:               5,
 			wantErr:            balancer.ErrNoSubConnAvailable,
 			wantSCToConnect:    testSubConns[1],
 		},
 		{
 			name:               "all are in TransientFailure, return picked failure",
 			connectivityStates: []connectivity.State{connectivity.TransientFailure, connectivity.TransientFailure},
-			hash:               5,
 			wantErr:            errPicker,
 		},
 	}
@@ -152,7 +146,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 				endpointStates: epStates,
 			}
 			got, err := p.Pick(balancer.PickInfo{
-				Ctx: SetXDSRequestHash(ctx, tt.hash),
+				Ctx: SetXDSRequestHash(ctx, 0), // always pick the first endpoint on the ring.
 			})
 			if (err != nil || tt.wantErr != nil) && !errors.Is(err, tt.wantErr) {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
@@ -190,6 +184,67 @@ func (s) TestPickerNoRequestHash(t *testing.T) {
 	}
 }
 
+func (s) TestPickerRequestHashKey(t *testing.T) {
+	tests := []struct {
+		name         string
+		headerValues []string
+		expectedPick int
+	}{
+		{
+			name:         "header not set",
+			expectedPick: 0, // Random hash set to 0, which is within ]MaxUint64 / 3 * 2, 0]
+		},
+		{
+			name:         "header empty",
+			headerValues: []string{""},
+			expectedPick: 0, // xxhash.Sum64String("value1,value2") is within ]MaxUint64 / 3 * 2, 0]
+		},
+		{
+			name:         "header set to one value",
+			headerValues: []string{"some-value"},
+			expectedPick: 1, // xxhash.Sum64String("some-value") is within ]0, (MaxUint64 / 3]
+		},
+		{
+			name:         "header set to multiple values",
+			headerValues: []string{"value1", "value2"},
+			expectedPick: 2, // xxhash.Sum64String("value1,value2") is within ](MaxUint64 / 3), (MaxUint64 / 3 * 2)]
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			ring, epStates := testRingAndEndpointStates(
+				[]connectivity.State{
+					connectivity.Ready,
+					connectivity.Ready,
+					connectivity.Ready,
+				})
+			headerName := "some-header"
+			p := &picker{
+				ring:              ring,
+				logger:            internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
+				endpointStates:    epStates,
+				requestHashHeader: headerName,
+				randUint64:        func() uint64 { return 0 },
+			}
+			for _, v := range tt.headerValues {
+				ctx = metadata.AppendToOutgoingContext(ctx, headerName, v)
+			}
+			res, err := p.Pick(balancer.PickInfo{
+				Ctx: ctx,
+			})
+			if err != nil {
+				t.Errorf("Pick() failed: %v", err)
+			}
+			if res.SubConn != testSubConns[tt.expectedPick] {
+				t.Errorf("Pick() got = %v, want SubConn: %v", res.SubConn, testSubConns[tt.expectedPick])
+			}
+		})
+	}
+}
+
 func (s) TestPickerRandomHash(t *testing.T) {
 	tests := []struct {
 		name                         string
@@ -202,13 +257,11 @@ func (s) TestPickerRandomHash(t *testing.T) {
 	}{
 		{
 			name:               "header not set, picked is Ready",
-			hash:               5,
 			connectivityStates: []connectivity.State{connectivity.Ready, connectivity.Idle},
 			wantSC:             testSubConns[0],
 		},
 		{
 			name:               "header not set, picked is Idle, another is Ready. Connect and pick Ready",
-			hash:               5,
 			connectivityStates: []connectivity.State{connectivity.Idle, connectivity.Ready},
 			wantSC:             testSubConns[1],
 			wantSCToConnect:    testSubConns[0],
@@ -237,7 +290,7 @@ func (s) TestPickerRandomHash(t *testing.T) {
 				endpointStates:               epStates,
 				requestHashHeader:            "some-header",
 				hasEndpointInConnectingState: tt.hasEndpointInConnectingState,
-				randUint64:                   func() uint64 { return tt.hash },
+				randUint64:                   func() uint64 { return 0 }, // always return the first endpoint on the ring.
 			}
 			got, err := p.Pick(balancer.PickInfo{
 				Ctx: ctx,

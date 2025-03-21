@@ -73,7 +73,7 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 		cfg.RequestHashHeader = ""
 	}
 	if cfg.RequestHashHeader != "" {
-		// See rules in https://github.com/grpc/proposal/blob/b64e6d3953816ed3b16b88bde0b7c16d3b62654f/A76-ring-hash-improvements.md#explicitly-setting-the-request-hash-key
+		// See rules in https://github.com/grpc/proposal/blob/master/A76-ring-hash-improvements.md#explicitly-setting-the-request-hash-key
 		if err := metadata.ValidateKey(cfg.RequestHashHeader); err != nil {
 			return nil, fmt.Errorf("invalid request_metadata_key %q: %s", cfg.RequestHashHeader, err)
 		}
