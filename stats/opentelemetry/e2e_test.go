@@ -1586,6 +1586,9 @@ func (s *failingServer) maybeFailRequest() error {
 	return nil
 }
 
+// setupRetryStubServer creates a stub server with OpenTelemetry configured on
+// client and server sides, It simulates request failures for testing retry
+// mechanisms
 func setupRetryStubServer(t *testing.T, metricsOptions *opentelemetry.MetricsOptions, traceOptions *experimental.TraceOptions) *stubserver.StubServer {
 	fs := &failingServer{reqModulo: 2}
 	ss := &stubserver.StubServer{
@@ -1643,7 +1646,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		  "methodConfig": [{
 			  "name": [{"service": "grpc.testing.TestService"}],
 			  "retryPolicy": {
-				  "maxAttempts": 2,
+				  "maxAttempts": 3,
 				  "InitialBackoff": ".01s",
 				  "MaxBackoff": ".01s",
 				  "BackoffMultiplier": 1.0,
@@ -1671,29 +1674,33 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	rpcError := make(chan error, 2)
+	unaryError := make(chan error, 1)
+	streamError := make(chan error, 1)
 
 	go func() {
 		t.Log("RPC waiting for resolved addresses")
 		_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
 			Body: make([]byte, 10000),
 		}})
-
-		rpcError <- fmt.Errorf("UnaryCall failed: %w", err)
+		unaryError <- err
 	}()
 
 	go func() {
 		stream, err := client.FullDuplexCall(ctx)
 		if err != nil {
-			rpcError <- err
-			return
+			streamError <- err
 		}
 
-		rpcError <- nil
-		stream.CloseSend()
-		if _, err = stream.Recv(); err != io.EOF {
-			rpcError <- fmt.Errorf("stream.Recv received an unexpected error: %v, expected EOF", err)
+		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+			streamError <- err
 		}
+		stream.CloseSend()
+
+		if _, err := stream.Recv(); err != io.EOF {
+			streamError <- fmt.Errorf("stream.Recv received unexpected error: %v, expected EOF", err)
+		}
+
+		streamError <- nil // Success
 	}()
 
 	time.AfterFunc(100*time.Millisecond, func() {
@@ -1702,12 +1709,21 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	})
 
 	select {
-	case err := <-rpcError:
+	case err := <-unaryError:
 		if err != nil {
-			t.Fatalf("RPC failed: %v", err)
+			t.Errorf("UnaryCall failed: %v", err)
 		}
 	case <-ctx.Done():
-		t.Fatal("timed out waiting for RPC.")
+		t.Error("UnaryCall  timed out")
+	}
+
+	select {
+	case err := <-streamError:
+		if err != nil {
+			t.Errorf("FullDuplexCall failed: %v", err)
+		}
+	case <-ctx.Done():
+		t.Error("FullDuplexCall  timed out")
 	}
 
 	wantSpanInfos := []traceSpanInfo{
@@ -1737,10 +1753,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	}
 
 	for _, want := range wantSpanInfos {
-		found := false
+		match := false
 		for _, span := range spans {
 			if span.Name == want.name && span.SpanKind.String() == want.spanKind {
-				found = true
+				match = true
 				eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 				if diff := cmp.Diff(want.events, span.Events, eventsTimeIgnore); diff != "" {
 					t.Errorf("Events mismatch for span %s (kind: %s) (-want +got):\n%s", want.name, want.spanKind, diff)
@@ -1748,7 +1764,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				break
 			}
 		}
-		if !found {
+		if !match {
 			t.Errorf("Span not found: %s (kind: %s)", want.name, want.spanKind)
 		}
 	}

@@ -25,8 +25,10 @@ import (
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
-const delayedResolutionEventName = "Delayed name resolution complete"
-const tracerName = "grpc-go"
+const (
+	delayedResolutionEventName = "Delayed name resolution complete"
+	tracerName                 = "grpc-go"
+)
 
 // traceTagRPC populates provided context with a new span using the
 // TextMapPropagator supplied in trace options and internal itracing.carrier.
