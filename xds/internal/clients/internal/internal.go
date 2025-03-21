@@ -21,7 +21,6 @@ package internal
 
 import (
 	"fmt"
-	"strings"
 
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/proto"
@@ -33,11 +32,38 @@ import (
 // ServerIdentifierString returns a string representation of the
 // clients.ServerIdentifier si.
 //
-// WARNING: This method is primarily intended for logging and testing
-// purposes. The output returned by this method is not guaranteed to be stable
-// and may change at any time. Do not rely on it for production use.
+// This method is primarily intended for logging and testing purposes. The
+// output returned by this method is not guaranteed to be stable and may change
+// at any time. Do not rely on it for production use.
 func ServerIdentifierString(si clients.ServerIdentifier) string {
-	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
+	if si.Extensions == nil {
+		return si.ServerURI
+	}
+	if stringer, ok := si.Extensions.(fmt.Stringer); ok {
+		return fmt.Sprintf("%s-%s", si.ServerURI, stringer)
+	}
+	return fmt.Sprintf("%s-%p", si.ServerURI, si.Extensions)
+}
+
+// ServerIdentifierEqual returns true if si1 and si2 are considered equal. If
+// Extensions are non-nil in both si1 and si2, and any of them don't implement
+// the Equal method, then false is returned.
+func ServerIdentifierEqual(si1, si2 clients.ServerIdentifier) bool {
+	switch {
+	case si1.ServerURI != si2.ServerURI:
+		return false
+	case si1.Extensions == nil && si2.Extensions == nil:
+		return true
+	case (si1.Extensions != nil) != (si2.Extensions != nil):
+		return false
+	}
+
+	ex1, ok1 := si1.Extensions.(interface{ Equal(any) bool })
+	ex2, ok2 := si2.Extensions.(interface{ Equal(any) bool })
+	if !ok1 || !ok2 {
+		return false
+	}
+	return ex1.Equal(ex2)
 }
 
 // NodeProto returns a protobuf representation of clients.Node n.
