@@ -117,7 +117,7 @@ func (s) TestServerIdentifierString_NonStringerExtension(t *testing.T) {
 	}
 }
 
-func TestServerIdentifier_Equal(t *testing.T) {
+func (s) TestServerIdentifier_Equal(t *testing.T) {
 	tests := []struct {
 		name   string
 		s1     clients.ServerIdentifier

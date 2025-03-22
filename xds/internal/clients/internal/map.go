@@ -73,6 +73,9 @@ func (s *ServerIdentifierMap) Get(si clients.ServerIdentifier) (value any, ok bo
 
 // Set updates or adds the value to the server identifier in the map.
 func (s *ServerIdentifierMap) Set(si clients.ServerIdentifier, value any) {
+	if _, ok := si.Extensions.(interface{ Equal(any) bool }); si.Extensions != nil && !ok {
+		return
+	}
 	entryList := s.m[si.ServerURI]
 	if entry := entryList.find(si); entry != -1 {
 		entryList[entry].value = value
