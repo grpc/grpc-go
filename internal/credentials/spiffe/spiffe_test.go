@@ -25,12 +25,27 @@ import (
 	"os"
 	"testing"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/testdata"
 )
 
+// loadSPIFFEBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
+// Bundle Map spec for more detail -
+// https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
+// If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
+// behavior occurs which causes the last processed entry to be the entry in the
+// parsed map.
+func loadSPIFFEBundleMap(filePath string) (map[string]*spiffebundle.Bundle, error) {
+	bundleMapRaw, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return BundleMapFromBytes(bundleMapRaw)
+}
+
 func TestKnownSPIFFEBundle(t *testing.T) {
 	spiffeBundleFile := testdata.Path("spiffe/spiffebundle.json")
-	bundles, err := LoadSPIFFEBundleMap(spiffeBundleFile)
+	bundles, err := loadSPIFFEBundleMap(spiffeBundleFile)
 	if err != nil {
 		t.Fatalf("LoadSPIFFEBundleMap(%v) Error during parsing: %v", spiffeBundleFile, err)
 	}
@@ -85,7 +100,7 @@ func TestLoadSPIFFEBundleMapFailures(t *testing.T) {
 	}
 	for _, path := range filePaths {
 		t.Run(path, func(t *testing.T) {
-			if _, err := LoadSPIFFEBundleMap(path); err == nil {
+			if _, err := loadSPIFFEBundleMap(path); err == nil {
 				t.Fatalf("LoadSPIFFEBundleMap(%v) did not fail but should have.", path)
 			}
 		})
@@ -97,7 +112,7 @@ func TestLoadSPIFFEBundleMapX509Failures(t *testing.T) {
 	// use other than this is specified, the parser does not fail, it
 	// just doesn't add an x509 authority or jwt authority to the bundle
 	filePath := testdata.Path("spiffe/spiffebundle_wrong_use.json")
-	bundle, err := LoadSPIFFEBundleMap(filePath)
+	bundle, err := loadSPIFFEBundleMap(filePath)
 	if err != nil {
 		t.Fatalf("LoadSPIFFEBundleMap(%v) failed with error: %v", filePath, err)
 	}

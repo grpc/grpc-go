@@ -104,7 +104,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		ClientConn:       cc,
 		target:           bOpts.Target.String(),
 		metricsRecorder:  cc.MetricsRecorder(),
-		addressWeights:   resolver.NewAddressMap(),
+		addressWeights:   resolver.NewAddressMapV2[*endpointWeight](),
 		endpointToWeight: resolver.NewEndpointMap(),
 		scToWeight:       make(map[balancer.SubConn]*endpointWeight),
 	}
@@ -156,7 +156,7 @@ func (bb) Name() string {
 // Caller must hold b.mu.
 func (b *wrrBalancer) updateEndpointsLocked(endpoints []resolver.Endpoint) {
 	endpointSet := resolver.NewEndpointMap()
-	addressSet := resolver.NewAddressMap()
+	addressSet := resolver.NewAddressMapV2[*endpointWeight]()
 	for _, endpoint := range endpoints {
 		endpointSet.Set(endpoint, nil)
 		for _, addr := range endpoint.Addresses {
@@ -214,7 +214,7 @@ type wrrBalancer struct {
 	cfg              *lbConfig // active config
 	locality         string
 	stopPicker       *grpcsync.Event
-	addressWeights   *resolver.AddressMap  // addr -> endpointWeight
+	addressWeights   *resolver.AddressMapV2[*endpointWeight]
 	endpointToWeight *resolver.EndpointMap // endpoint -> endpointWeight
 	scToWeight       map[balancer.SubConn]*endpointWeight
 }
@@ -329,7 +329,7 @@ func (b *wrrBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 	if err != nil {
 		return nil, err
 	}
-	b.scToWeight[sc] = ewi.(*endpointWeight)
+	b.scToWeight[sc] = ewi
 	return sc, nil
 }
 

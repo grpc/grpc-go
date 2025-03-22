@@ -52,7 +52,7 @@ var (
 )
 
 func (s) TestAddressMap_Length(t *testing.T) {
-	addrMap := NewAddressMap()
+	addrMap := NewAddressMapV2[any]()
 	if got := addrMap.Len(); got != 0 {
 		t.Fatalf("addrMap.Len() = %v; want 0", got)
 	}
@@ -72,7 +72,7 @@ func (s) TestAddressMap_Length(t *testing.T) {
 }
 
 func (s) TestAddressMap_Get(t *testing.T) {
-	addrMap := NewAddressMap()
+	addrMap := NewAddressMapV2[any]()
 	addrMap.Set(addr1, 1)
 
 	if got, ok := addrMap.Get(addr2); ok || got != nil {
@@ -109,7 +109,7 @@ func (s) TestAddressMap_Get(t *testing.T) {
 }
 
 func (s) TestAddressMap_Delete(t *testing.T) {
-	addrMap := NewAddressMap()
+	addrMap := NewAddressMapV2[any]()
 	addrMap.Set(addr1, 1)
 	addrMap.Set(addr2, 2)
 	if got, want := addrMap.Len(), 2; got != want {
@@ -132,7 +132,7 @@ func (s) TestAddressMap_Delete(t *testing.T) {
 }
 
 func (s) TestAddressMap_Keys(t *testing.T) {
-	addrMap := NewAddressMap()
+	addrMap := NewAddressMapV2[any]()
 	addrMap.Set(addr1, 1)
 	addrMap.Set(addr2, 2)
 	addrMap.Set(addr3, 3)
@@ -153,7 +153,7 @@ func (s) TestAddressMap_Keys(t *testing.T) {
 }
 
 func (s) TestAddressMap_Values(t *testing.T) {
-	addrMap := NewAddressMap()
+	addrMap := NewAddressMapV2[any]()
 	addrMap.Set(addr1, 1)
 	addrMap.Set(addr2, 2)
 	addrMap.Set(addr3, 3)
@@ -285,5 +285,27 @@ func (s) TestEndpointMap_Values(t *testing.T) {
 	sort.Ints(got)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("em.Values() returned unexpected elements (-want, +got):\n%v", diff)
+	}
+}
+
+// BenchmarkEndpointMap benchmarks map operations that are expected to run
+// faster than O(n). This test doesn't run O(n) operations including listing
+// keys and values.
+func BenchmarkEndpointMap(b *testing.B) {
+	em := NewEndpointMap()
+	for i := range b.N {
+		em.Set(Endpoint{
+			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},
+		}, i)
+	}
+	for i := range b.N {
+		em.Get(Endpoint{
+			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},
+		})
+	}
+	for i := range b.N {
+		em.Delete(Endpoint{
+			Addresses: []Address{{Addr: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i)}},
+		})
 	}
 }
