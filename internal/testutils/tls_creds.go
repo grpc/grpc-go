@@ -74,3 +74,83 @@ func CreateServerTLSCredentials(t *testing.T, clientAuth tls.ClientAuthType) cre
 		ClientCAs:    ca,
 	})
 }
+
+// CreateServerTLSCredentialsCompatibleWithSPIFFE creates server-side TLS
+// transport credentials using certificate and key files from the
+// testdata/spiffe_end2end directory. These credentials are compatible with the
+// SPIFFE trust bundles used on the client side.
+func CreateServerTLSCredentialsCompatibleWithSPIFFE(t *testing.T, clientAuth tls.ClientAuthType) credentials.TransportCredentials {
+	t.Helper()
+
+	cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/server_spiffe.pem"), testdata.Path("spiffe_end2end/server.key"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(spiffe_end2end/server_spiffe.pem, spiffe_end2end/server.key) failed: %v", err)
+	}
+	b, err := os.ReadFile(testdata.Path("spiffe_end2end/ca.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(spiffe_end2end/ca.pem) failed: %v", err)
+	}
+	ca := x509.NewCertPool()
+	if !ca.AppendCertsFromPEM(b) {
+		t.Fatal("Failed to append certificates")
+	}
+	return credentials.NewTLS(&tls.Config{
+		ClientAuth:   clientAuth,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    ca,
+	})
+}
+
+// CreateServerTLSCredentialsCompatibleWithSPIFFEChain creates server-side TLS
+// transport credentials using a certificate chain and key files from the
+// testdata/spiffe_end2end directory. These credentials are compatible with the
+// SPIFFE trust bundles used on the client side.
+func CreateServerTLSCredentialsCompatibleWithSPIFFEChain(t *testing.T, clientAuth tls.ClientAuthType) credentials.TransportCredentials {
+	t.Helper()
+
+	certs, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/leaf_and_intermediate_chain.pem"), testdata.Path("spiffe_end2end/leaf_signed_by_intermediate.key"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(spiffe_end2end/leaf_and_intermediate_chain.pem, spiffe_end2end/leaf_signed_by_intermediate.key) failed: %v", err)
+	}
+	b, err := os.ReadFile(testdata.Path("spiffe_end2end/ca.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(spiffe_end2end/ca.pem) failed: %v", err)
+	}
+	ca := x509.NewCertPool()
+	if !ca.AppendCertsFromPEM(b) {
+		t.Fatal("Failed to append certificates")
+	}
+	return credentials.NewTLS(&tls.Config{
+		ClientAuth:   clientAuth,
+		Certificates: []tls.Certificate{certs},
+		ClientCAs:    ca,
+	})
+}
+
+// CreateServerTLSCredentialsValidSPIFFEButWrongCA creates server-side TLS
+// transport credentials using certificate and key files from the
+// testdata/spiffe directory rather than the testdata/spiffe_end2end directory.
+// These credentials have the expected trust domains and SPIFFE IDs that are
+// compatible with testdata/spiffe_end2end client files, but they are signed by
+// a different CA and will thus fail the connection.
+func CreateServerTLSCredentialsValidSPIFFEButWrongCA(t *testing.T, clientAuth tls.ClientAuthType) credentials.TransportCredentials {
+	t.Helper()
+
+	cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe/server1_spiffe.pem"), testdata.Path("server1.key"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(spiffe/server1_spiffe.pem, spiffe/server.key) failed: %v", err)
+	}
+	b, err := os.ReadFile(testdata.Path("spiffe_end2end/ca.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(spiffe_end2end/ca.pem) failed: %v", err)
+	}
+	ca := x509.NewCertPool()
+	if !ca.AppendCertsFromPEM(b) {
+		t.Fatal("Failed to append certificates")
+	}
+	return credentials.NewTLS(&tls.Config{
+		ClientAuth:   clientAuth,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    ca,
+	})
+}
