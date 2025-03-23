@@ -31,9 +31,11 @@
 package xdsclient
 
 import (
+	"errors"
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"google.golang.org/protobuf/proto"
 )
 
 // XDSClient is a client which queries a set of discovery APIs (collectively
@@ -45,6 +47,17 @@ type XDSClient struct {
 
 // New returns a new xDS Client configured with the provided config.
 func New(config Config) (*XDSClient, error) {
+	switch {
+	case config.Node.ID == "":
+		return nil, errors.New("xdsclient: node ID is empty")
+	case config.ResourceTypes == nil:
+		return nil, errors.New("xdsclient: resource types map is nil")
+	case config.TransportBuilder == nil:
+		return nil, errors.New("xdsclient: transport builder is nil")
+	case config.Authorities == nil && config.Servers == nil:
+		return nil, errors.New("xdsclient: no servers or authorities specified")
+	}
+
 	clientImpl, err := newClientImpl(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, "xds-client")
 	if err != nil {
 		return nil, err
@@ -72,11 +85,11 @@ func (c *XDSClient) Close() error {
 
 // DumpResources returns the status and contents of all xDS resources being
 // watched by the xDS client.
-func (c *XDSClient) DumpResources() *v3statuspb.ClientStatusResponse {
+func (c *XDSClient) DumpResources() ([]byte, error) {
 	resp := &v3statuspb.ClientStatusResponse{}
 	cfg := c.client.dumpResources()
 	resp.Config = append(resp.Config, cfg)
-	return resp
+	return proto.Marshal(resp)
 }
 
 // SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
