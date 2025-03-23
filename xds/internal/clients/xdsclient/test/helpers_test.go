@@ -254,3 +254,24 @@ func makeAuthorityName(name string) string {
 func makeNewStyleLDSName(authority string) string {
 	return fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/xdsclient-test-lds-resource", authority)
 }
+
+// buildResourceName returns the resource name in the format of an xdstp://
+// resource.
+func buildResourceName(typeName, auth, id string, ctxParams map[string]string) string {
+	var typS string
+	switch typeName {
+	case listenerResourceTypeName:
+		typS = "envoy.config.listener.v3.Listener"
+	default:
+		// If the name doesn't match any of the standard resources fallback
+		// to the type name.
+		typS = typeName
+	}
+	return (&xdsresource.Name{
+		Scheme:        "xdstp",
+		Authority:     auth,
+		Type:          typS,
+		ID:            id,
+		ContextParams: ctxParams,
+	}).String()
+}
