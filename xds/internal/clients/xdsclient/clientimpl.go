@@ -99,6 +99,7 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		xdsActiveChannels:  newServerConfigMap(),
 	}
 
+	var err error
 	for name, cfg := range config.Authorities {
 		// If server configs are specified in the authorities map, use that.
 		// Else, use the top-level server configs.
@@ -106,7 +107,7 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		if len(cfg.XDSServers) >= 1 {
 			serverCfg = cfg.XDSServers
 		}
-		c.authorities[name] = newAuthority(authorityBuildOptions{
+		c.authorities[name], err = newAuthority(authorityBuildOptions{
 			serverConfigs:    serverCfg,
 			name:             name,
 			serializer:       c.serializer,
@@ -114,8 +115,11 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 			logPrefix:        clientPrefix(c),
 			target:           target,
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
-	c.topLevelAuthority = newAuthority(authorityBuildOptions{
+	c.topLevelAuthority, err = newAuthority(authorityBuildOptions{
 		serverConfigs:    config.Servers,
 		name:             "",
 		serializer:       c.serializer,
@@ -123,6 +127,9 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		logPrefix:        clientPrefix(c),
 		target:           target,
 	})
+	if err != nil {
+		return nil, err
+	}
 	c.logger = prefixLogger(c)
 	return c, nil
 }
@@ -258,7 +265,7 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *ServerConfig, initLocked, 
 		logPrefix:          clientPrefix(c),
 	})
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("xds: failed to create xdsChannel for server config %s: %v", serverConfigString(serverConfig), err)
+		return nil, func() {}, fmt.Errorf("xds: failed to create a new channel for server config %s: %v", serverConfigString(serverConfig), err)
 	}
 	state.channel = channel
 	c.xdsActiveChannels.set(*serverConfig, state)
