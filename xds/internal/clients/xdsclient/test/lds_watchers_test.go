@@ -44,6 +44,18 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
+type noopListenerWatcher struct{}
+
+func (noopListenerWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
+	onDone()
+}
+func (noopListenerWatcher) ResourceError(err error, onDone func()) {
+	onDone()
+}
+func (noopListenerWatcher) AmbientError(err error, onDone func()) {
+	onDone()
+}
+
 type listenerUpdateErrTuple struct {
 	update listenerUpdate
 	err    error
