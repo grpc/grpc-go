@@ -87,8 +87,8 @@ Jaeger is an open-source, end-to-end distributed tracing system. For more detail
 
 ## Explanation
 
-The client continuously makes RPC's to a server. The client and server both expose a Prometheus exporter to listen and provide metrics. This defaults to :9464 for the server and :9465 for the client. OpenTelemetry is also configured to capture and export trace data for distributed tracing. This can be viewed on the Jaeger UI which defaults to :16687 for the server and :16686 for the client.
+The client continuously makes RPC's to a server. The client and server both expose a Prometheus exporter to listen and provide metrics. This defaults to :9464 for the server and :9465 for the client. The client and server also expose OTLP exporter to capture and export traces. The traces can be viewed on the Jaeger UI which defaults to :16687 for the server and :16686 for the client.
 
-OpenTelemetry is configured on both the client and the server, and exports metrics to the Prometheus exporter. The exporter exposes metrics on the Prometheus ports described above. OpenTelemetry also exports trace data using the OpenTelemetry Protocol (OTLP). This trace data can be visualized using a distributed tracing backend like Jaeger.
+OpenTelemetry is configured on both the client and the server, and exports metrics to the Prometheus exporter. The exporter exposes metrics on the Prometheus ports described above. OpenTelemetry also exports traces using the OpenTelemetry Protocol (OTLP). These traces can be visualized using a distributed tracing backend like Jaeger.
 
 Curling to the exposed Prometheus ports outputs the metrics recorded on the client and server, and opening the Jaeger UI on the exposed ports allows you to view the traces recorded on the client and server.
