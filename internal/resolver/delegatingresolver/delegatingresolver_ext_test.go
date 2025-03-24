@@ -19,6 +19,8 @@
 package delegatingresolver_test
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"testing"
@@ -547,4 +549,87 @@ func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
 		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
+}
+
+// Tests that delegatingresolver doesn't panic when the channel closes the
+// resolver while it's handling an update from it's child. The test closes the
+// delegating resolver, verifies the target resolver is closed and blocks the
+// proxy resolver from being closed. The test sends an update from the proxy
+// resolver and verifies that the target resolver's ResolveNow method is not
+// called after the channels returns an error.
+func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
+	const envProxyAddr = "proxytest.com"
+
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		return &url.URL{
+			Scheme: "https",
+			Host:   envProxyAddr,
+		}, nil
+	}
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
+	defer func() {
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
+	}()
+
+	// Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("test")
+	targetResolverCalled := make(chan struct{})
+	targetResolver.ResolveNowCallback = func(resolver.ResolveNowOptions) {
+		close(targetResolverCalled)
+	}
+	targetResolverCloseCalled := make(chan struct{})
+	targetResolver.CloseCallback = func() {
+		close(targetResolverCloseCalled)
+		t.Log("Target resolver is closed.")
+	}
+
+	target := targetResolver.Scheme() + ":///" + "ignored"
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
+
+	unblockProxyResolverClose := make(chan struct{})
+	proxyResolver.CloseCallback = func() {
+		<-unblockProxyResolverClose
+		t.Log("Proxy resolver is closed.")
+	}
+
+	tcc, _, _ := createTestResolverClientConn(t)
+	tcc.UpdateStateF = func(resolver.State) error {
+		return errors.New("test error")
+	}
+	dr, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false)
+	if err != nil {
+		t.Fatalf("Failed to create delegating resolver: %v", err)
+	}
+
+	targetResolver.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
+	})
+
+	// Closing the delegating resolver will block until while reading from
+	// unblockProxyResolverClose.
+	go dr.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-targetResolverCloseCalled:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for target resolver's Close method to be called.")
+	}
+
+	// Updating the channel will result in an error being returned. Since the
+	// target resolver's Close method is already called, the delegating resolver
+	// must not call "ResolveNow" on it.
+	proxyResolver.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
+	})
+
+	select {
+	case <-targetResolverCalled:
+		t.Fatalf("targetResolver.ResolveNow() called unexpectedly.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	unblockProxyResolverClose <- struct{}{}
 }
