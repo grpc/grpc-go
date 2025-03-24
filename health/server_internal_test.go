@@ -101,7 +101,8 @@ func (s) TestList(t *testing.T) {
 	s.mu.Unlock()
 
 	// Execution
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	var in healthpb.HealthListRequest
 	out, err := s.List(ctx, &in)
 
@@ -124,7 +125,7 @@ func (s) TestList(t *testing.T) {
 }
 
 // TestListResourceExhausted verifies that the service status list returns an error when it exceeds
-// maxServiceStatusListLength.
+// maxAllowedServices.
 func (s) TestListResourceExhausted(t *testing.T) {
 	// Setup
 	s := NewServer()
@@ -133,13 +134,14 @@ func (s) TestListResourceExhausted(t *testing.T) {
 	delete(s.statusMap, "")
 
 	// Fill out status map with service information, 101 elements will trigger an error.
-	for i := 1; i <= 101; i++ {
+	for i := 1; i <= maxAllowedServices+1; i++ {
 		s.statusMap[fmt.Sprintf("%d", i)] = healthpb.HealthCheckResponse_SERVING
 	}
 	s.mu.Unlock()
 
 	// Execution
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	var in healthpb.HealthListRequest
 	_, err := s.List(ctx, &in)
 

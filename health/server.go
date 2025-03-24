@@ -31,9 +31,9 @@ import (
 )
 
 const (
-	// maxServiceListLength defines the maximum number of resources a List operation can return.
+	// maxAllowedServices defines the maximum number of resources a List operation can return.
 	// An error is returned if the number of services exceeds this limit.
-	maxServiceStatusListLength = 100
+	maxAllowedServices = 100
 )
 
 // Server implements `service Health`.
@@ -73,20 +73,16 @@ func (s *Server) List(_ context.Context, _ *healthpb.HealthListRequest) (*health
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if len(s.statusMap) > 100 {
+	if len(s.statusMap) > maxAllowedServices {
 		return nil, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")
 	}
 
-	list := make(map[string]*healthpb.HealthCheckResponse, len(s.statusMap))
+	statusMap := make(map[string]*healthpb.HealthCheckResponse, len(s.statusMap))
 	for k, v := range s.statusMap {
-		list[k] = &healthpb.HealthCheckResponse{
-			Status: v,
-		}
+		statusMap[k] = &healthpb.HealthCheckResponse{Status: v}
 	}
 
-	return &healthpb.HealthListResponse{
-		Statuses: list,
-	}, nil
+	return &healthpb.HealthListResponse{Statuses: statusMap}, nil
 }
 
 // Watch implements `service Health`.
