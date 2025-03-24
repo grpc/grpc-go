@@ -111,7 +111,7 @@ func (s) TestList(t *testing.T) {
 		t.Fatalf("s.List(ctx, &in) returned err %v, want nil", err)
 	}
 	if len(out.GetStatuses()) != len(s.statusMap) {
-		t.Fatal("len(out.GetStatuses()) = %d, want %d, len(out.GetStatuses()), len(s.statusMap)")
+		t.Fatalf("len(out.GetStatuses()) = %d, want %d", len(out.GetStatuses()), len(s.statusMap))
 	}
 	for key := range out.GetStatuses() {
 		v, ok := s.statusMap[key]
