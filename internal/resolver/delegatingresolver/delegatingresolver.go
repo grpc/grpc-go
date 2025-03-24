@@ -53,6 +53,11 @@ type delegatingResolver struct {
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState *resolver.State    // state of the target resolver
 	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
+	// isClosed is set to "true" when the channel closes the resolver. Once the
+	// target and proxy resolvers are closed, this boolean is used to avoid
+	// calling "ResolveNow" on the target resolver when the proxy resolver
+	// reports an error or vice-versa.
+	isClosed bool
 }
 
 // nopResolver is a resolver that does nothing.
@@ -170,6 +175,10 @@ func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 }
 
 func (r *delegatingResolver) Close() {
+	r.mu.Lock()
+	r.isClosed = true
+	r.mu.Unlock()
+
 	r.targetResolver.Close()
 	r.targetResolver = nil
 
@@ -249,6 +258,9 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 func (r *delegatingResolver) updateProxyResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.isClosed {
+		return nil
+	}
 	if logger.V(2) {
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
@@ -267,7 +279,7 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 	err := r.updateClientConnStateLocked()
 	// Another possible approach was to block until updates are received from
 	// both resolvers. But this is not used because calling `New()` triggers
-	// `Build()`  for the first resolver, which calls `UpdateState()`. And the
+	// `Build()` for the first resolver, which calls `UpdateState()`. And the
 	// second resolver hasn't sent an update yet, so it would cause `New()` to
 	// block indefinitely.
 	if err != nil {
@@ -284,6 +296,9 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.isClosed {
+		return nil
+	}
 
 	if logger.V(2) {
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
