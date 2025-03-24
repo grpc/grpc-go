@@ -1433,7 +1433,7 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Each RPC generates 6 stats events on the client-side, times 2 StatsHandler
+	// Each RPC generates 7 stats events on the client-side, times 2 StatsHandler
 	if len(h.gotRPC) != 14 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 14)
 	}
