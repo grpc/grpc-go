@@ -607,8 +607,8 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 	})
 
-	// Closing the delegating resolver will block until while reading from
-	// unblockProxyResolverClose.
+	// Closing the delegating resolver will block until the test writes to the
+	// unblockProxyResolverClose channel.
 	go dr.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
