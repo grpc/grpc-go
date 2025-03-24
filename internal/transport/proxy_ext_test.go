@@ -71,11 +71,11 @@ func isIPAddr(addr string) bool {
 	return err == nil
 }
 
-// Tests the scenario where grpc.Dial is performed using a proxy with the
+// Tests the scenario where grpc.NewClient is performed using a proxy with the
 // default resolver in the target URI. The test verifies that the connection is
 // established to the proxy server, sends the unresolved target URI in the HTTP
 // CONNECT request and is successfully connected to the backend server.
-func (s) TestGRPCDialWithProxy(t *testing.T) {
+func (s) TestGRPCNewClientWithProxy(t *testing.T) {
 	backend := startBackendServer(t)
 	unresolvedTargetURI := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, backend.Address))
 	proxyCalled := false
@@ -112,9 +112,9 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	conn, err := grpc.Dial(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", unresolvedTargetURI, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v", unresolvedTargetURI, err)
 	}
 	defer conn.Close()
 
@@ -129,13 +129,13 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	}
 }
 
-// Tests the scenario where `grpc.Dial` is performed with a proxy and the "dns"
+// Tests the scenario where `grpc.NewClient` is performed with a proxy and the "dns"
 // scheme for the target. The test verifies that the proxy URI is correctly
 // resolved and that the target URI resolution on the client preserves the
-// original behavior of `grpc.Dial`. It also ensures that a connection is
+// original behavior of `grpc.NewClient`. It also ensures that a connection is
 // established to the proxy server, with the resolved target URI sent in the
 // HTTP CONNECT request, successfully connecting to the backend server.
-func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
+func (s) TestGRPCNewClientWithDNSAndProxy(t *testing.T) {
 	backend := startBackendServer(t)
 	unresolvedTargetURI := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, backend.Address))
 	proxyCalled := false
@@ -169,9 +169,9 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	conn, err := grpc.Dial("dns:///"+unresolvedTargetURI, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithLocalDNSResolution(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.Dial(%s) failed: %v", "dns:///"+unresolvedTargetURI, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v", unresolvedTargetURI, err)
 	}
 	defer conn.Close()
 

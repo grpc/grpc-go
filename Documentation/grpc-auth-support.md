@@ -5,7 +5,7 @@ As outlined in the [gRPC authentication guide](https://grpc.io/docs/guides/auth.
 # Enabling TLS on a gRPC client
 
 ```Go
-conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
+conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
 ```
 
 # Enabling TLS on a gRPC server
@@ -63,7 +63,7 @@ to prevent any insecure transmission of tokens.
 ## Google Compute Engine (GCE)
 
 ```Go
-conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")), grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
+conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")), grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
 ```
 
 ## JWT
@@ -73,6 +73,6 @@ jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthS
 if err != nil {
   log.Fatalf("Failed to create JWT credentials: %v", err)
 }
-conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")), grpc.WithPerRPCCredentials(jwtCreds))
+conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")), grpc.WithPerRPCCredentials(jwtCreds))
 ```
 
