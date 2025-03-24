@@ -108,15 +108,15 @@ func (s) TestList(t *testing.T) {
 
 	// Assertions
 	if err != nil {
-		t.Fatalf("List should not have failed, got %s, len %d", err, len(s.statusMap))
+		t.Fatalf("s.List(ctx, &in) returned err %v, want nil", err)
 	}
 	if len(out.GetStatuses()) != len(s.statusMap) {
-		t.Fatal("List should have return the same number of elements as the inner status map")
+		t.Fatal("len(out.GetStatuses()) = %d, want %d, len(out.GetStatuses()), len(s.statusMap)")
 	}
 	for key := range out.GetStatuses() {
 		v, ok := s.statusMap[key]
 		if !ok {
-			t.Fatalf("List should have returned all resources, wanted %s, but it did not exist in the inner status map", key)
+			t.Fatalf("key %s does not exist in s.statusMap", key)
 		}
 		if v != healthpb.HealthCheckResponse_SERVING {
 			t.Fatalf("%s returned the wrong status, wanted %d, got %d", key, healthpb.HealthCheckResponse_SERVING, v)
@@ -147,7 +147,7 @@ func (s) TestListResourceExhausted(t *testing.T) {
 
 	// Assertions
 	if err == nil {
-		t.Fatalf("List should have failed, got %s", err)
+		t.Fatalf("s.List(ctx, &in) return nil error, want non-nil")
 	}
 	if !errors.Is(err, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")) {
 		t.Fatal("List should have failed with resource exhausted")
