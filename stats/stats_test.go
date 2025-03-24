@@ -1102,7 +1102,7 @@ func checkClientStats(t *testing.T, got []*gotData, expect *expectedData, checkF
 			if checkFuncs[pickerUpdated].c <= 0 {
 				t.Fatalf("unexpected stats: %T", s.s)
 			}
-			checkPickerUpdated(t, s, expect)
+			checkFuncs[pickerUpdated].f(t, s, expect)
 			checkFuncs[pickerUpdated].c--
 		case *stats.OutHeader:
 			if checkFuncs[outHeader].c <= 0 {
