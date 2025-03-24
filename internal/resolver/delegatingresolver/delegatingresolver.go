@@ -44,20 +44,15 @@ var (
 //
 // It implements the [resolver.Resolver] interface.
 type delegatingResolver struct {
-	target         resolver.Target     // parsed target URI to be resolved
-	cc             resolver.ClientConn // gRPC ClientConn
-	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
-	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
-	proxyURL       *url.URL            // proxy URL, derived from proxy environment and target
+	target   resolver.Target     // parsed target URI to be resolved
+	cc       resolver.ClientConn // gRPC ClientConn
+	proxyURL *url.URL            // proxy URL, derived from proxy environment and target
 
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState *resolver.State    // state of the target resolver
 	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
-	// isClosed is set to "true" when the channel closes the resolver. Once the
-	// target and proxy resolvers are closed, this boolean is used to avoid
-	// calling "ResolveNow" on the target resolver when the proxy resolver
-	// reports an error or vice-versa.
-	isClosed bool
+	targetResolver      resolver.Resolver  // resolver for the target URI, based on its scheme
+	proxyResolver       resolver.Resolver  // resolver for the proxy URI; nil if no proxy is configured
 }
 
 // nopResolver is a resolver that does nothing.
@@ -98,6 +93,11 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	r := &delegatingResolver{
 		target: target,
 		cc:     cc,
+		// Child resolver may send a state update as soon as they're built.
+		// Initialize children with no-op resolvers. When both children are nil, the
+		// delegatingResolver is considered closed.
+		targetResolver: nopResolver{},
+		proxyResolver:  nopResolver{},
 	}
 
 	var err error
@@ -139,12 +139,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		return nil, fmt.Errorf("delegating_resolver: failed to build resolver for proxy URL %q: %v", r.proxyURL, err)
 	}
 
-	if r.targetResolver == nil {
-		r.targetResolver = nopResolver{}
-	}
-	if r.proxyResolver == nil {
-		r.proxyResolver = nopResolver{}
-	}
 	return r, nil
 }
 
@@ -170,14 +164,15 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 }
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.targetResolver.ResolveNow(o)
 	r.proxyResolver.ResolveNow(o)
 }
 
 func (r *delegatingResolver) Close() {
 	r.mu.Lock()
-	r.isClosed = true
-	r.mu.Unlock()
+	defer r.mu.Unlock()
 
 	r.targetResolver.Close()
 	r.targetResolver = nil
@@ -258,7 +253,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 func (r *delegatingResolver) updateProxyResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.isClosed {
+	if r.targetResolver == nil && r.proxyResolver == nil {
 		return nil
 	}
 	if logger.V(2) {
@@ -296,7 +291,7 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.isClosed {
+	if r.targetResolver == nil && r.proxyResolver == nil {
 		return nil
 	}
 

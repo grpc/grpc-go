@@ -621,15 +621,14 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 	// Updating the channel will result in an error being returned. Since the
 	// target resolver's Close method is already called, the delegating resolver
 	// must not call "ResolveNow" on it.
-	proxyResolver.UpdateState(resolver.State{
+	go proxyResolver.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 	})
+	unblockProxyResolverClose <- struct{}{}
 
 	select {
 	case <-targetResolverCalled:
 		t.Fatalf("targetResolver.ResolveNow() called unexpectedly.")
 	case <-time.After(defaultTestShortTimeout):
 	}
-
-	unblockProxyResolverClose <- struct{}{}
 }
