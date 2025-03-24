@@ -170,6 +170,9 @@ func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 }
 
 func (r *delegatingResolver) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
 	r.targetResolver.Close()
 	r.targetResolver = nil
 
