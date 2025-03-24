@@ -1588,7 +1588,7 @@ func (s *failingServer) maybeFailRequest() error {
 
 // setupRetryStubServer creates a stub server with OpenTelemetry configured on
 // client and server sides, It simulates request failures for testing retry
-// mechanisms
+// mechanisms.
 func setupRetryStubServer(t *testing.T, metricsOptions *opentelemetry.MetricsOptions, traceOptions *experimental.TraceOptions) *stubserver.StubServer {
 	fs := &failingServer{reqModulo: 2}
 	ss := &stubserver.StubServer{
@@ -1675,8 +1675,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	defer cancel()
 
 	unaryError := make(chan error, 1)
-	streamError := make(chan error, 1)
-
 	go func() {
 		t.Log("RPC waiting for resolved addresses")
 		_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{Payload: &testpb.Payload{
@@ -1685,22 +1683,24 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		unaryError <- err
 	}()
 
+	streamError := make(chan error, 1)
 	go func() {
+		defer close(streamError)
 		stream, err := client.FullDuplexCall(ctx)
 		if err != nil {
 			streamError <- err
+			return
 		}
-
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 			streamError <- err
+			return
 		}
-		stream.CloseSend()
-
-		if _, err := stream.Recv(); err != io.EOF {
-			streamError <- fmt.Errorf("stream.Recv received unexpected error: %v, expected EOF", err)
+		if err := stream.CloseSend(); err != nil {
+			streamError <- err
+			return
 		}
-
-		streamError <- nil // Success
+		_, err = stream.Recv()
+		streamError <- err
 	}()
 
 	time.AfterFunc(100*time.Millisecond, func() {
@@ -1719,7 +1719,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 
 	select {
 	case err := <-streamError:
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Errorf("FullDuplexCall failed: %v", err)
 		}
 	case <-ctx.Done():
