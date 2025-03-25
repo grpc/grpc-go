@@ -1699,7 +1699,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			streamError <- err
 			return
 		}
-		if _, err = stream.Recv(); err != nil {
+		if _, err = stream.Recv(); err != nil && err != io.EOF {
 			streamError <- err
 		}
 	}()
@@ -1720,7 +1720,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 
 	select {
 	case err := <-streamError:
-		if err != nil && err != io.EOF {
+		if err != nil {
 			t.Errorf("FullDuplexCall failed: %v", err)
 		}
 	case <-ctx.Done():
