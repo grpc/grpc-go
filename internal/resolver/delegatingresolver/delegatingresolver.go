@@ -164,17 +164,10 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 }
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
-	r.mu.Lock()
-	tr := r.targetResolver
-	pr := r.proxyResolver
-	r.mu.Unlock()
-	if tr == nil && pr == nil {
-		// This should never happen since resolver_wrapper doesn't call
-		// ResolveNow after Close.
-		return
-	}
-	tr.ResolveNow(o)
-	pr.ResolveNow(o)
+	// We don't need to lock the mutex here since resolver_wrapper doesn't call
+	// ResolveNow after Close, so the child resolvers should not be nil.
+	r.targetResolver.ResolveNow(o)
+	r.proxyResolver.ResolveNow(o)
 }
 
 func (r *delegatingResolver) Close() {
