@@ -94,8 +94,8 @@ func main() {
 	defer cc.Close()
 	c := echo.NewEchoClient(cc)
 
-	// Make an RPC every second. This should trigger traces in the otlptracer
-	// exporter to be emitted from the client.
+	// Make an RPC every second. This should trigger telemetry to be emitted from
+	// the client and the server.
 	for {
 		r, err := c.UnaryEcho(ctx, &echo.EchoRequest{Message: "this is examples/opentelemetry"})
 		if err != nil {
