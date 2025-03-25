@@ -1339,8 +1339,9 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) error {
 	case <-t.goAway: // t.goAway has been closed (i.e.,multiple GoAways).
 		// If there are multiple GoAways the first one should always have an ID greater than the following ones.
 		if id > t.prevGoAwayID {
+			prevGoAwayID := t.prevGoAwayID
 			t.mu.Unlock()
-			return connectionErrorf(true, nil, "received goaway with stream id: %v, which exceeds stream id of previous goaway: %v", id, t.prevGoAwayID)
+			return connectionErrorf(true, nil, "received goaway with stream id: %v, which exceeds stream id of previous goaway: %v", id, prevGoAwayID)
 		}
 	default:
 		t.setGoAwayReason(f)
