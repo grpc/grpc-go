@@ -572,6 +572,7 @@ func (b *cdsBalancer) onClusterError(name string, err error) {
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceNotFound(name string) {
+	b.logger.Warningf("CDS watch for resource %q reported resource-does-not-exist error", name)
 	err := b.annotateErrorWithNodeID(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cluster %q not found", name))
 	b.closeChildPolicyAndReportTF(err)
 }
@@ -651,9 +652,11 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 		}
 	case xdsresource.ClusterTypeLogicalDNS:
 		dm = clusterresolver.DiscoveryMechanism{
-			Type:        clusterresolver.DiscoveryMechanismTypeLogicalDNS,
-			Cluster:     cluster.ClusterName,
-			DNSHostname: cluster.DNSHostName,
+			Type:                  clusterresolver.DiscoveryMechanismTypeLogicalDNS,
+			Cluster:               cluster.ClusterName,
+			DNSHostname:           cluster.DNSHostName,
+			MaxConcurrentRequests: cluster.MaxRequests,
+			LoadReportingServer:   cluster.LRSServerConfig,
 		}
 	}
 	odJSON := cluster.OutlierDetection

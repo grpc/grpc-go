@@ -57,7 +57,7 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &ringhashBalancer{
 		ClientConn:     cc,
-		endpointStates: resolver.NewEndpointMap(),
+		endpointStates: resolver.NewEndpointMap[*endpointState](),
 	}
 	esOpts := endpointsharding.Options{DisableAutoReconnect: true}
 	b.child = endpointsharding.NewBalancer(b, opts, lazyPickFirstBuilder, esOpts)
@@ -88,7 +88,7 @@ type ringhashBalancer struct {
 	config               *LBConfig
 	inhibitChildUpdates  bool
 	shouldRegenerateRing bool
-	endpointStates       *resolver.EndpointMap // Map from endpoint -> *endpointState
+	endpointStates       *resolver.EndpointMap[*endpointState]
 
 	// ring is always in sync with endpoints. When endpoints change, a new ring
 	// is generated. Note that address weights updates also regenerates the
@@ -122,16 +122,15 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 	defer b.mu.Unlock()
 	childStates := endpointsharding.ChildStatesFromPicker(state.Picker)
 	// endpointsSet is the set converted from endpoints, used for quick lookup.
-	endpointsSet := resolver.NewEndpointMap()
+	endpointsSet := resolver.NewEndpointMap[bool]()
 
 	for _, childState := range childStates {
 		endpoint := childState.Endpoint
 		endpointsSet.Set(endpoint, true)
 		newWeight := getWeightAttribute(endpoint)
 		hk := hashKey(endpoint)
-		b.logger.Infof("endpoint from picker: %v (hashkey: %v)", endpoint.Addresses[0].Addr, hk)
-		if val, ok := b.endpointStates.Get(endpoint); !ok {
-			b.logger.Infof("this is a new endpoint")
+		es, ok := b.endpointStates.Get(endpoint)
+		if !ok {
 			es := &endpointState{
 				balancer: childState.Balancer,
 				hashKey:  hk,
@@ -145,7 +144,6 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			// object for it. If the weight or the hash key of the endpoint has
 			// changed, update the endpoint state map with the new weight or
 			// hash key. This will be used when a new ring is created.
-			es := val.(*endpointState)
 			b.logger.Infof("the endpoint existed before (es: %v)", es.hashKey)
 			if oldWeight := es.weight; oldWeight != newWeight {
 				b.shouldRegenerateRing = true
@@ -207,13 +205,13 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 	//    endpoints.  Updates triggered by the child after handling the
 	//    `UpdateClientConnState` call will not change the endpoint list.
 	// 2. Change in the `LoadBalancerConfig`: Ring config such as max/min ring
-	//    size or header hash key.
+	//    size.
 	// To avoid extra ring updates, a boolean is used to track the need for a
 	// ring update and the update is done only once at the end.
 	//
 	// If the ring configuration has changed, we need to regenerate the ring
 	// while sending a new picker.
-	if b.config == nil || b.config.MinRingSize != newConfig.MinRingSize || b.config.MaxRingSize != newConfig.MaxRingSize || b.config.RequestHashHeader != newConfig.RequestHashHeader {
+	if b.config == nil || b.config.MinRingSize != newConfig.MinRingSize || b.config.MaxRingSize != newConfig.MaxRingSize {
 		b.shouldRegenerateRing = true
 	}
 	b.config = newConfig
@@ -255,8 +253,8 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		// ensure `ExitIdle` is called on the same child, preventing unnecessary
 		// connections.
 		var endpointStates = make([]*endpointState, b.endpointStates.Len())
-		for i, val := range b.endpointStates.Values() {
-			endpointStates[i] = val.(*endpointState)
+		for i, s := range b.endpointStates.Values() {
+			endpointStates[i] = s
 		}
 		sort.Slice(endpointStates, func(i, j int) bool {
 			return endpointStates[i].hashKey < endpointStates[j].hashKey
@@ -316,8 +314,7 @@ func (b *ringhashBalancer) ExitIdle() {
 func (b *ringhashBalancer) newPickerLocked() *picker {
 	states := make(map[string]balancer.State)
 	hasEndpointConnecting := false
-	for _, val := range b.endpointStates.Values() {
-		epState := val.(*endpointState)
+	for _, epState := range b.endpointStates.Values() {
 		states[epState.hashKey] = epState.state
 		if epState.state.ConnectivityState == connectivity.Connecting {
 			hasEndpointConnecting = true
@@ -350,8 +347,7 @@ func (b *ringhashBalancer) newPickerLocked() *picker {
 // failure to failover to the lower priority.
 func (b *ringhashBalancer) aggregatedStateLocked() connectivity.State {
 	var nums [5]int
-	for _, val := range b.endpointStates.Values() {
-		es := val.(*endpointState)
+	for _, es := range b.endpointStates.Values() {
 		nums[es.state.ConnectivityState]++
 	}
 
