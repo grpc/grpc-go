@@ -97,9 +97,9 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	r := &delegatingResolver{
 		target: target,
 		cc:     cc,
-		// Child resolver may send a state update as soon as they're built.
-		// Initialize children with no-op resolvers. When both children are nil, the
-		// delegatingResolver is considered closed.
+		// Child resolvers may send a state update as soon as they're built.
+		// Initialize children with no-op resolvers. When both children are nil,
+		// the delegatingResolver is considered closed.
 		targetResolver: nopResolver{},
 		proxyResolver:  nopResolver{},
 	}
@@ -256,9 +256,6 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 func (r *delegatingResolver) updateProxyResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.targetResolver == nil && r.proxyResolver == nil {
-		return nil
-	}
 	if logger.V(2) {
 		logger.Infof("Addresses received from proxy resolver: %s", state.Addresses)
 	}
@@ -306,9 +303,6 @@ func (r *delegatingResolver) isClosedLocked() bool {
 func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.targetResolver == nil && r.proxyResolver == nil {
-		return nil
-	}
 
 	if logger.V(2) {
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
