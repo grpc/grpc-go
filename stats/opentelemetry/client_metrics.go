@@ -158,34 +158,34 @@ func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	var ai *attemptInfo
-	var labels *istats.Labels
 	ri := getRPCInfo(ctx)
-
+	var ai *attemptInfo
 	if ri == nil {
-		// Numerous stats handlers can be used for the same channel. The cluster
-		// impl balancer which writes to this will only write once, thus have this
-		// stats handler's per attempt scoped context point to the same optional
-		// labels map if set.
-		if labels = istats.GetLabels(ctx); labels == nil {
-			labels = &istats.Labels{
-				// The defaults for all the per call labels from a plugin that
-				// executes on the callpath that this OpenTelemetry component
-				// currently supports.
-				TelemetryLabels: map[string]string{
-					"grpc.lb.locality": "",
-				},
-			}
-			ctx = istats.SetLabels(ctx, labels)
-		}
-		ai = &attemptInfo{
-			startTime: time.Now(),
-			xdsLabels: labels.TelemetryLabels,
-			method:    removeLeadingSlash(info.FullMethodName),
-		}
+		ai = &attemptInfo{}
 	} else {
 		ai = ri.ai
 	}
+
+	// Numerous stats handlers can be used for the same channel. The cluster
+	// impl balancer which writes to this will only write once, thus have this
+	// stats handler's per attempt scoped context point to the same optional
+	// labels map if set.
+	var labels *istats.Labels
+	if labels = istats.GetLabels(ctx); labels == nil {
+		labels = &istats.Labels{
+			// The defaults for all the per call labels from a plugin that
+			// executes on the callpath that this OpenTelemetry component
+			// currently supports.
+			TelemetryLabels: map[string]string{
+				"grpc.lb.locality": "",
+			},
+		}
+		ctx = istats.SetLabels(ctx, labels)
+	}
+	ai.startTime = time.Now()
+	ai.xdsLabels = labels.TelemetryLabels
+	ai.method = removeLeadingSlash(info.FullMethodName)
+
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
