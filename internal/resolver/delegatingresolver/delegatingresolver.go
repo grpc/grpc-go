@@ -271,7 +271,8 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 	// second resolver hasn't sent an update yet, so it would cause `New()` to
 	// block indefinitely.
 	if err != nil {
-		r.targetResolver.ResolveNow(resolver.ResolveNowOptions{})
+		tr := r.targetResolver
+		go tr.ResolveNow(resolver.ResolveNowOptions{})
 	}
 	return err
 }
@@ -291,7 +292,8 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	r.targetResolverState = &state
 	err := r.updateClientConnStateLocked()
 	if err != nil {
-		r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
+		pr := r.proxyResolver
+		go pr.ResolveNow(resolver.ResolveNowOptions{})
 	}
 	return nil
 }
