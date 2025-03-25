@@ -47,10 +47,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
+	"google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
 
-	_ "google.golang.org/grpc/balancer/grpclb"      // Register the grpclb load balancing policy.
-	_ "google.golang.org/grpc/balancer/rls"         // Register the RLS load balancing policy.
-	_ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
+	_ "google.golang.org/grpc/balancer/grpclb" // Register the grpclb load balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"    // Register the RLS load balancing policy.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -82,6 +82,7 @@ var (
 	soakResponseSize                       = flag.Int("soak_response_size", 314159, "The response size in a soak RPC. The default value is set based on the interop large unary test case.")
 	soakNumThreads                         = flag.Int("soak_num_threads", 1, "The number of threads for concurrent execution of the soak tests (rpc_soak or channel_soak). The default value is set based on the interop large unary test case.")
 	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
+	universeDomain                         = flag.String("universe_domain", "", "The universe domain in which the process is running. If blank, the process is assumed to be running in the default universe.")
 	additionalMetadata                     = flag.String("additional_metadata", "", "Additional metadata to send in each request, as a semicolon-separated list of key:value pairs.")
 	testCase                               = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
@@ -201,6 +202,9 @@ func main() {
 	}
 
 	resolver.SetDefaultScheme("dns")
+	if *universeDomain != "" {
+		googledirectpath.SetUniverseDomain(*universeDomain)
+	}
 	serverAddr := *serverHost
 	if *serverPort != 0 {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
