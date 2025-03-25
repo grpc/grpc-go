@@ -132,7 +132,7 @@ type authorityBuildOptions struct {
 // Note that no channels to management servers are created at this time. Instead
 // a channel to the first server configuration is created when the first watch
 // is registered, and more channels are created as needed by the fallback logic.
-func newAuthority(args authorityBuildOptions) (*authority, error) {
+func newAuthority(args authorityBuildOptions) *authority {
 	ctx, cancel := context.WithCancel(context.Background())
 	l := grpclog.Component("xds")
 	logPrefix := args.logPrefix + fmt.Sprintf("[authority %q] ", args.name)
@@ -152,12 +152,9 @@ func newAuthority(args authorityBuildOptions) (*authority, error) {
 	// first watch is registered, and channels to other server configurations
 	// are created as needed to support fallback.
 	for _, sc := range args.serverConfigs {
-		if _, ok := sc.ServerIdentifier.Extensions.(interface{ Equal(any) bool }); sc.ServerIdentifier.Extensions != nil && !ok {
-			return nil, fmt.Errorf("xdsclient: authority %s has a server config %s with non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method", args.name, serverConfigString(&sc))
-		}
 		ret.xdsChannelConfigs = append(ret.xdsChannelConfigs, &xdsChannelWithConfig{serverConfig: &sc})
 	}
-	return ret, nil
+	return ret
 }
 
 // adsStreamFailure is called to notify the authority about an ADS stream

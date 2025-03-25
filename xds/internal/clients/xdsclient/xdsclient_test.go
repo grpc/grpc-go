@@ -19,6 +19,7 @@
 package xdsclient
 
 import (
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/xds/internal/clients"
@@ -35,14 +36,14 @@ func (s) TestXDSClient_New(t *testing.T) {
 		{
 			name:    "empty node ID",
 			config:  Config{},
-			wantErr: "xdsclient: node ID is empty",
+			wantErr: "node ID is empty",
 		},
 		{
 			name: "nil resource types",
 			config: Config{
 				Node: clients.Node{ID: "node-id"},
 			},
-			wantErr: "xdsclient: resource types map is nil",
+			wantErr: "resource types map is nil",
 		},
 		{
 			name: "nil transport builder",
@@ -50,7 +51,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 				Node:          clients.Node{ID: "node-id"},
 				ResourceTypes: map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
 			},
-			wantErr: "xdsclient: transport builder is nil",
+			wantErr: "transport builder is nil",
 		},
 		{
 			name: "no servers or authorities",
@@ -59,7 +60,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
 				TransportBuilder: grpctransport.NewBuilder(),
 			},
-			wantErr: "xdsclient: no servers or authorities specified",
+			wantErr: "no servers or authorities specified",
 		},
 		{
 			name: "success with servers",
@@ -77,9 +78,39 @@ func (s) TestXDSClient_New(t *testing.T) {
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
 				TransportBuilder: grpctransport.NewBuilder(),
-				Authorities:      map[string]Authority{"authority-name": {}},
+				Authorities:      map[string]Authority{"authority-name": {XDSServers: []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}}}},
 			},
 			wantErr: "",
+		},
+		{
+			name: "success with server identifier extensions with equal",
+			config: Config{
+				Node:             clients.Node{ID: "node-id"},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server", Extensions: &testServerIdentifierExtension{x: 1}}}},
+			},
+			wantErr: "",
+		},
+		{
+			name: "default servers with server identifier extensions without equal",
+			config: Config{
+				Node:             clients.Node{ID: "node-id"},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server", Extensions: &testServerIdentifierExtensionWithoutEqual{x: 1}}}},
+			},
+			wantErr: "non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method",
+		},
+		{
+			name: "authorities with server identifier extensions without equal",
+			config: Config{
+				Node:             clients.Node{ID: "node-id"},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(),
+				Authorities:      map[string]Authority{"authority-name": {XDSServers: []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server", Extensions: &testServerIdentifierExtensionWithoutEqual{x: 1}}}}}},
+			},
+			wantErr: "non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method",
 		},
 	}
 	for _, tt := range tests {
@@ -90,7 +121,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 					t.Fatalf("New(%+v) failed: %v", tt.config, err)
 				}
 			} else {
-				if err == nil || err.Error() != tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("New(%+v) returned error %v, want error %q", tt.config, err, tt.wantErr)
 				}
 			}
