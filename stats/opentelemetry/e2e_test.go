@@ -1691,16 +1691,17 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			streamError <- err
 			return
 		}
-		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil && err != io.EOF {
 			streamError <- err
 			return
 		}
-		if err := stream.CloseSend(); err != nil {
+		if err := stream.CloseSend(); err != nil && err != io.EOF {
 			streamError <- err
 			return
 		}
-		_, err = stream.Recv()
-		streamError <- err
+		if _, err = stream.Recv(); err != nil {
+			streamError <- err
+		}
 	}()
 
 	time.AfterFunc(100*time.Millisecond, func() {
