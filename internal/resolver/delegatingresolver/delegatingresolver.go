@@ -165,9 +165,16 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.targetResolver.ResolveNow(o)
-	r.proxyResolver.ResolveNow(o)
+	tr := r.targetResolver
+	pr := r.proxyResolver
+	r.mu.Unlock()
+	if tr == nil && pr == nil {
+		// This should never happen since resolver_wrapper doesn't call
+		// ResolveNow after Close.
+		return
+	}
+	tr.ResolveNow(o)
+	pr.ResolveNow(o)
 }
 
 func (r *delegatingResolver) Close() {
