@@ -77,17 +77,15 @@ func main() {
 		log.Fatalf("Could not set resources: %v", err)
 	}
 
-	// Create a simple span processor.
+	// Create a batch span processor.
 	spanProcessor := sdktrace.NewBatchSpanProcessor(traceExporter)
 	// Create a TracerProvider instance.
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanProcessor), sdktrace.WithResource(res))
-	textMapPropagator := otelpropagation.TraceContext{} // Using W3C Trace Context Propagator for interoperability.
+	textMapPropagator := otelpropagation.TraceContext{} // Using W3C Trace Context Propagator.
 
-	// Configure TraceOptions for gRPC OpenTelemetry integration.
-	traceOptions := oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator}
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: traceOptions})
+	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator}})
 
 	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
 	if err != nil {

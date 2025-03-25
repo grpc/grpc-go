@@ -6,10 +6,14 @@ This example shows how to configure OpenTelemetry on a client and server, and sh
 
 This section shows how to configure OpenTelemetry Metrics and Traces and visualize them.
 
-**1. Start Jaeger (for Traces):**
+**1. Install and Start Jaeger (for Traces):**
 
 Jaeger is an open-source, end-to-end distributed tracing system. For more detailed information, refer to the [Jaeger README]
 (https://github.com/jaegertracing/jaeger/blob/main/README.md).
+
+* **Install Jaeger Binary:**
+
+Download the appropriate Jaeger binary for your operating system from [Jaeger Releases](https://github.com/jaegertracing/jaeger/releases).
 
 * **Server Jaeger Instance:**
 
@@ -24,6 +28,7 @@ Jaeger is an open-source, end-to-end distributed tracing system. For more detail
       --collector.grpc-server.host-port=:14252 \
       --collector.http-server.host-port=:14272 &
     ```
+
 * **Client Jaeger Instance:**
 
     ```
@@ -65,7 +70,6 @@ Jaeger is an open-source, end-to-end distributed tracing system. For more detail
     ```
 
 * **View Traces:**
-
 
     ```
     curl -X GET "http://localhost:16687/api/traces?service=grpc-server"
