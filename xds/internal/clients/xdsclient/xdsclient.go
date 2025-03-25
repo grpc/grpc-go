@@ -32,6 +32,7 @@ package xdsclient
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -56,6 +57,24 @@ func New(config Config) (*XDSClient, error) {
 		return nil, errors.New("xdsclient: transport builder is nil")
 	case config.Authorities == nil && config.Servers == nil:
 		return nil, errors.New("xdsclient: no servers or authorities specified")
+	}
+
+	for name, cfg := range config.Authorities {
+		serverCfg := config.Servers
+		if len(cfg.XDSServers) >= 1 {
+			serverCfg = cfg.XDSServers
+		}
+		for _, sc := range serverCfg {
+			if _, ok := sc.ServerIdentifier.Extensions.(interface{ Equal(any) bool }); sc.ServerIdentifier.Extensions != nil && !ok {
+				return nil, fmt.Errorf("xdsclient: authority %s has a server config %s with non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method", name, serverConfigString(&sc))
+			}
+		}
+	}
+
+	for _, sc := range config.Servers {
+		if _, ok := sc.ServerIdentifier.Extensions.(interface{ Equal(any) bool }); sc.ServerIdentifier.Extensions != nil && !ok {
+			return nil, fmt.Errorf("xdsclient: one of the default servers has a server config %s with non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method", serverConfigString(&sc))
+		}
 	}
 
 	clientImpl, err := newClientImpl(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, "xds-client")

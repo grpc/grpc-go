@@ -99,7 +99,6 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		xdsActiveChannels:  newServerConfigMap(),
 	}
 
-	var err error
 	for name, cfg := range config.Authorities {
 		// If server configs are specified in the authorities map, use that.
 		// Else, use the top-level server configs.
@@ -107,7 +106,7 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		if len(cfg.XDSServers) >= 1 {
 			serverCfg = cfg.XDSServers
 		}
-		c.authorities[name], err = newAuthority(authorityBuildOptions{
+		c.authorities[name] = newAuthority(authorityBuildOptions{
 			serverConfigs:    serverCfg,
 			name:             name,
 			serializer:       c.serializer,
@@ -115,11 +114,8 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 			logPrefix:        clientPrefix(c),
 			target:           target,
 		})
-		if err != nil {
-			return nil, err
-		}
 	}
-	c.topLevelAuthority, err = newAuthority(authorityBuildOptions{
+	c.topLevelAuthority = newAuthority(authorityBuildOptions{
 		serverConfigs:    config.Servers,
 		name:             "",
 		serializer:       c.serializer,
@@ -127,9 +123,6 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 		logPrefix:        clientPrefix(c),
 		target:           target,
 	})
-	if err != nil {
-		return nil, err
-	}
 	c.logger = prefixLogger(c)
 	return c, nil
 }
