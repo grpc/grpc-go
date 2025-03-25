@@ -44,15 +44,19 @@ var (
 //
 // It implements the [resolver.Resolver] interface.
 type delegatingResolver struct {
-	target         resolver.Target     // parsed target URI to be resolved
-	cc             resolver.ClientConn // gRPC ClientConn
-	targetResolver resolver.Resolver   // resolver for the target URI, based on its scheme
-	proxyResolver  resolver.Resolver   // resolver for the proxy URI; nil if no proxy is configured
-	proxyURL       *url.URL            // proxy URL, derived from proxy environment and target
+	target   resolver.Target     // parsed target URI to be resolved
+	cc       resolver.ClientConn // gRPC ClientConn
+	proxyURL *url.URL            // proxy URL, derived from proxy environment and target
 
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState *resolver.State    // state of the target resolver
 	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
+
+	// childMu serializes calls into child resolvers. It also protects access to
+	// the following fields.
+	childMu        sync.Mutex
+	targetResolver resolver.Resolver // resolver for the target URI, based on its scheme
+	proxyResolver  resolver.Resolver // resolver for the proxy URI; nil if no proxy is configured
 }
 
 // nopResolver is a resolver that does nothing.
@@ -165,11 +169,15 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 }
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
+	r.childMu.Lock()
+	defer r.childMu.Unlock()
 	r.targetResolver.ResolveNow(o)
 	r.proxyResolver.ResolveNow(o)
 }
 
 func (r *delegatingResolver) Close() {
+	r.childMu.Lock()
+	defer r.childMu.Unlock()
 	r.targetResolver.Close()
 	r.targetResolver = nil
 
@@ -271,10 +279,21 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 	// second resolver hasn't sent an update yet, so it would cause `New()` to
 	// block indefinitely.
 	if err != nil {
-		tr := r.targetResolver
-		go tr.ResolveNow(resolver.ResolveNowOptions{})
+		go func() {
+			r.childMu.Lock()
+			defer r.childMu.Unlock()
+			if !r.isClosedLocked() {
+				r.targetResolver.ResolveNow(resolver.ResolveNowOptions{})
+			}
+		}()
 	}
 	return err
+}
+
+// isClosedLocked returns true if the resolver is closed. Callers must hold
+// childMu.
+func (r *delegatingResolver) isClosedLocked() bool {
+	return r.targetResolver == nil && r.proxyResolver == nil
 }
 
 // updateTargetResolverState updates the target resolver state by storing target
@@ -292,8 +311,13 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	r.targetResolverState = &state
 	err := r.updateClientConnStateLocked()
 	if err != nil {
-		pr := r.proxyResolver
-		go pr.ResolveNow(resolver.ResolveNowOptions{})
+		go func() {
+			r.childMu.Lock()
+			defer r.childMu.Unlock()
+			if !r.isClosedLocked() {
+				r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
+			}
+		}()
 	}
 	return nil
 }
