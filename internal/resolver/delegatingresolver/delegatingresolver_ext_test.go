@@ -659,7 +659,7 @@ func (s) TestDelegatingResolverUpdateStateFromResolveNow(t *testing.T) {
 	targetResolverCalled := make(chan struct{})
 	targetResolver.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		// Updating the resolver state should not deadlock.
-		targetResolver.CC().UpdateState(resolver.State{
+		targetResolver.CC.UpdateState(resolver.State{
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 		})
 		close(targetResolverCalled)
@@ -719,7 +719,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	targetResolverCalled := make(chan struct{})
 	targetResolver.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		// Updating the resolver state should not deadlock.
-		targetResolver.CC().UpdateState(resolver.State{
+		targetResolver.CC.UpdateState(resolver.State{
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 		})
 		close(targetResolverCalled)
@@ -731,7 +731,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	proxyResolverCalled := make(chan struct{})
 	proxyResolver.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		// Updating the resolver state should not deadlock.
-		proxyResolver.CC().UpdateState(resolver.State{
+		proxyResolver.CC.UpdateState(resolver.State{
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 		})
 		close(proxyResolverCalled)
