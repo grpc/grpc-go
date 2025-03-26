@@ -525,7 +525,7 @@ func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
 // if one exists, or puts the channel in TRANSIENT_FAILURE.
 //
 // Only executed in the context of a serializer callback.
-func (b *cdsBalancer) onClusterResourceChangedError(name string, err error) {
+func (b *cdsBalancer) onClusterResourceError(name string, err error) {
 	b.logger.Warningf("Cluster resource %q received error update: %v", name, err)
 
 	if b.childLB != nil {

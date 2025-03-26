@@ -147,7 +147,7 @@ type rdsWatcher struct {
 	canceled bool // eats callbacks if true
 }
 
-func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceData, onDone func()) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -155,21 +155,25 @@ func (rw *rdsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError,
 		return
 	}
 	rw.mu.Unlock()
-	if update.Err != nil {
-		if rw.logger.V(2) {
-			rw.logger.Infof("RDS watch for resource %q received error: %v", rw.routeName, update.Err)
-		}
-		rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: update.Err})
-		return
-	}
-	u := update.Data.(*xdsresource.RouteConfigResourceData)
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, u.Resource)
+		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &u.Resource})
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &update.Resource})
 }
 
-func (rw *rdsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) ResourceError(err error, onDone func()) {
+	defer onDone()
+	rw.mu.Lock()
+	if rw.canceled {
+		rw.mu.Unlock()
+		return
+	}
+	rw.mu.Unlock()
+	rw.logger.Warningf("RDS watch for resource %q reported resource error", rw.routeName)
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
+}
+
+func (rw *rdsWatcher) AmbientError(err error, onDone func()) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -178,7 +182,7 @@ func (rw *rdsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
 	}
 	rw.mu.Unlock()
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q reported error: %v", rw.routeName, err)
+		rw.logger.Infof("RDS watch for resource %q reported ambient error: %v", rw.routeName, err)
 	}
 	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
 }

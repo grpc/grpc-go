@@ -44,10 +44,13 @@ import (
 
 type noopClusterWatcher struct{}
 
-func (noopClusterWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+func (noopClusterWatcher) ResourceChanged(_ *xdsresource.ClusterResourceData, onDone func()) {
 	onDone()
 }
-func (noopClusterWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
+func (noopClusterWatcher) ResourceError(_ error, onDone func()) {
+	onDone()
+}
+func (noopClusterWatcher) AmbientError(_ error, onDone func()) {
 	onDone()
 }
 
@@ -64,22 +67,21 @@ func newClusterWatcher() *clusterWatcher {
 	return &clusterWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (cw *clusterWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
-	if update.Err != nil {
-		cw.updateCh.Replace(clusterUpdateErrTuple{err: update.Err})
-		onDone()
-		return
-	}
-	u := update.Data.(*xdsresource.ClusterResourceData)
-	cw.updateCh.Send(clusterUpdateErrTuple{update: u.Resource})
+func (cw *clusterWatcher) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
+	cw.updateCh.Send(clusterUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (cw *clusterWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
+	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
+	onDone()
+}
+
+func (cw *clusterWatcher) AmbientError(err error, onDone func()) {
 	cw.updateCh.Replace(clusterUpdateErrTuple{err: err})
 	onDone()
 }

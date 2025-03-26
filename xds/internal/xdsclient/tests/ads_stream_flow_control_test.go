@@ -45,43 +45,22 @@ import (
 // DoneNotifier passed to the callback available to the test, thereby enabling
 // the test to block this watcher for as long as required.
 type blockingListenerWatcher struct {
-	doneNotifierCh chan xdsresource.OnDoneFunc // DoneNotifier passed to the callback.
-	updateCh       chan struct{}               // Written to when an update is received.
-	errorCh        chan struct{}               // Written to when an error is received.
-	notFoundCh     chan struct{}               // Written to when the resource is not found.
+	doneNotifierCh chan func()   // DoneNotifier passed to the callback.
+	updateCh       chan struct{} // Written to when an update is received.
+	errorCh        chan struct{} // Written to when an error is received.
+	notFoundCh     chan struct{} // Written to when the resource is not found.
 }
 
 func newBLockingListenerWatcher() *blockingListenerWatcher {
 	return &blockingListenerWatcher{
-		doneNotifierCh: make(chan xdsresource.OnDoneFunc, 1),
+		doneNotifierCh: make(chan func(), 1),
 		updateCh:       make(chan struct{}, 1),
 		errorCh:        make(chan struct{}, 1),
 		notFoundCh:     make(chan struct{}, 1),
 	}
 }
 
-func (lw *blockingListenerWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, done xdsresource.OnDoneFunc) {
-	if update.Err != nil {
-		if xdsresource.ErrType(update.Err) == xdsresource.ErrorTypeResourceNotFound {
-			// Notify receipt of resource not found.
-			select {
-			case lw.notFoundCh <- struct{}{}:
-			default:
-			}
-		} else {
-			select {
-			case lw.errorCh <- struct{}{}:
-			default:
-			}
-		}
-
-		select {
-		case lw.doneNotifierCh <- done:
-		default:
-		}
-
-		return
-	}
+func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, done func()) {
 	// Notify receipt of the update.
 	select {
 	case lw.updateCh <- struct{}{}:
@@ -94,7 +73,20 @@ func (lw *blockingListenerWatcher) OnResourceChanged(update *xdsresource.Resourc
 	}
 }
 
-func (lw *blockingListenerWatcher) OnAmbientError(err error, done xdsresource.OnDoneFunc) {
+func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
+	// Notify receipt of an error.
+	select {
+	case lw.errorCh <- struct{}{}:
+	default:
+	}
+
+	select {
+	case lw.doneNotifierCh <- done:
+	default:
+	}
+}
+
+func (lw *blockingListenerWatcher) AmbientError(err error, done func()) {
 	// Notify receipt of an error.
 	select {
 	case lw.errorCh <- struct{}{}:
@@ -402,7 +394,7 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	// guaranteed. So, we select on both of them and unblock the first watcher
 	// whose callback is invoked.
 	var otherWatcherUpdateCh chan struct{}
-	var otherWatcherDoneCh chan xdsresource.OnDoneFunc
+	var otherWatcherDoneCh chan func()
 	select {
 	case <-watcher1.updateCh:
 		onDone := <-watcher1.doneNotifierCh

@@ -52,39 +52,30 @@ type Producer interface {
 	WatchResource(rType Type, resourceName string, watcher ResourceWatcher) (cancel func())
 }
 
-// OnDoneFunc is a function to be invoked by watcher implementations upon
-// completing the processing of a callback from the xDS client. Failure to
-// invoke this callback prevents the xDS client from reading further messages
-// from the xDS server.
-type OnDoneFunc func()
-
-// ResourceDataOrError contains either ResourceData or error. It is used to
-// represent the result of an xDS resource update. Exactly one of Data or Err
-// will be non-nil.
-type ResourceDataOrError struct {
-	Data ResourceData
-	Err  error
-}
-
-// ResourceWatcher wraps the callbacks to be invoked for different events
-// corresponding to the resource being watched. gRFC A88 contains an exhaustive
-// list of what method is invoked under what conditions.
+// ResourceWatcher is notified of the resource updates and errors that are
+// received by the xDS client from the management server.
+//
+// All methods contain a done parameter which should be called when processing
+// of the update has completed.  For example, if processing a resource requires
+// watching new resources, those watches should be completed before done is
+// called, which can happen after the ResourceWatcher method has returned.
+// Failure to call done will prevent the xDS client from providing future
+// ResourceWatcher notifications.
 type ResourceWatcher interface {
-	// OnResourceChanged is invoked to notify the watcher of a new version of
-	// the resource received from the xDS server or an error indicating the
-	// reason why the resource cannot be obtained.
-	//
-	// Upon receiving this, in case of an error, the watcher should
-	// stop using any previously seen resource. xDS client will remove the
-	// resource from its cache.
-	OnResourceChanged(ResourceDataOrError, OnDoneFunc)
+	// ResourceChanged indicates a new version of the resource is available.
+	ResourceChanged(resourceData ResourceData, done func())
 
-	// OnAmbientError is invoked if resource is already cached under different
-	// error conditions.
-	//
-	// Upon receiving this, the watcher should not stop using the previously
-	// seen resource. xDS client will not remove the resource from its cache.
-	OnAmbientError(error, OnDoneFunc)
+	// ResourceError indicates an error occurred while trying to fetch or
+	// decode the associated resource. The previous version of the resource
+	// should be considered invalid.
+	ResourceError(err error, done func())
+
+	// AmbientError indicates an error occurred after a resource has been
+	// received that should not modify the use of that resource but may provide
+	// useful information about the state of the XDSClient for debugging
+	// purposes. The previous version of the resource should still be
+	// considered valid.
+	AmbientError(err error, done func())
 }
 
 // TODO: Once the implementation is complete, rename this interface as

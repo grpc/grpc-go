@@ -397,7 +397,7 @@ func (l *listenerWrapper) switchModeLocked(newMode connectivity.ServingMode, err
 	}
 }
 
-func (l *listenerWrapper) onLDSResourceChangedError(err error) {
+func (l *listenerWrapper) onLDSResourceError(err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.switchModeLocked(connectivity.ServingModeNotServing, err)
@@ -414,38 +414,38 @@ type ldsWatcher struct {
 	name   string
 }
 
-func (lw *ldsWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
 	defer onDone()
 	if lw.parent.closed.HasFired() {
-		if update.Err != nil {
-			lw.logger.Warningf("Resource %q received err: %#v after listener was closed", lw.name, update.Err)
-		} else {
-			lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
-		}
-		return
-	}
-	if update.Err != nil {
-		if lw.logger.V(2) {
-			lw.logger.Infof("LDS watch for resource %q received error: %v", lw.name, update.Err)
-		}
-		lw.parent.onLDSResourceChangedError(update.Err)
-		return
-	}
-	u := update.Data.(*xdsresource.ListenerResourceData)
-	if update.Err != nil {
-		lw.logger.Infof("LDS watch for resource %q received update: %v", lw.name, u.Resource)
-	}
-	lw.parent.handleLDSUpdate(u.Resource)
-}
-
-func (lw *ldsWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
-	defer onDone()
-	if lw.parent.closed.HasFired() {
-		lw.logger.Warningf("Resource %q received error: %v after listener was closed", lw.name, err)
+		lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
 		return
 	}
 	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q reported error: %v", lw.name, err)
+		lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, update.Resource)
+	}
+	lw.parent.handleLDSUpdate(update.Resource)
+}
+
+func (lw *ldsWatcher) ResourceError(err error, onDone func()) {
+	defer onDone()
+	if lw.parent.closed.HasFired() {
+		lw.logger.Warningf("Resource %q received resource error: %v after listener was closed", lw.name, err)
+		return
+	}
+	if lw.logger.V(2) {
+		lw.logger.Infof("LDS watch for resource %q reported resource error: %v", lw.name, err)
+	}
+	lw.parent.onLDSResourceError(err)
+}
+
+func (lw *ldsWatcher) AmbientError(err error, onDone func()) {
+	defer onDone()
+	if lw.parent.closed.HasFired() {
+		lw.logger.Warningf("Resource %q received ambient error: %v after listener was closed", lw.name, err)
+		return
+	}
+	if lw.logger.V(2) {
+		lw.logger.Infof("LDS watch for resource %q reported ambient error: %v", lw.name, err)
 	}
 	// For errors which are anything other than "resource-not-found", we
 	// continue to use the old configuration.

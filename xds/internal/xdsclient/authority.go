@@ -193,9 +193,15 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 		for _, state := range rType {
 			for watcher := range state.watchers {
 				watcher := watcher
-				a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-					watcher.OnAmbientError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
-				})
+				if state.cache == nil {
+					a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
+						watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
+					})
+				} else {
+					a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
+						watcher.AmbientError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
+					})
+				}
 			}
 		}
 	}
@@ -363,7 +369,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 				watcher := watcher
 				err := uErr.Err
 				watcherCnt.Add(1)
-				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnAmbientError(err, done) })
+				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
 			}
 			continue
 		}
@@ -389,7 +395,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 				resource := uErr.Resource
 				watcherCnt.Add(1)
 				funcsToSchedule = append(funcsToSchedule, func(context.Context) {
-					watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Data: resource}, done)
+					watcher.ResourceChanged(resource, done)
 				})
 			}
 		}
@@ -466,7 +472,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 			watcher := watcher
 			watcherCnt.Add(1)
 			funcsToSchedule = append(funcsToSchedule, func(context.Context) {
-				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q has been removed", name, rType.TypeName())}, done)
+				watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q has been removed", name, rType.TypeName()), done)
 			})
 		}
 	}
@@ -510,7 +516,7 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 	for watcher := range state.watchers {
 		watcher := watcher
 		a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-			watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName())}, func() {})
+			watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName()), func() {})
 		})
 	}
 }
@@ -648,7 +654,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			// resource here for watchCallbackSerializer.
 			resource := state.cache
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Data: resource}, func() {})
+				watcher.ResourceChanged(resource, func() {})
 			})
 		}
 		// If last update was NACK'd, notify the new watcher of error
@@ -661,13 +667,17 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			// xdsClientSerializer callback. Hence making a copy of the error
 			// here for watchCallbackSerializer.
 			err := state.md.ErrState.Err
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnAmbientError(err, func() {}) })
+			if state.cache == nil {
+				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.ResourceError(err, func() {}) })
+			} else {
+				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.AmbientError(err, func() {}) })
+			}
 		}
 		// If the metadata field is updated to indicate that the management
 		// server does not have this resource, notify the new watcher.
 		if state.md.Status == xdsresource.ServiceStatusNotExist {
 			a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-				watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName())}, func() {})
+				watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName()), func() {})
 			})
 		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)

@@ -35,35 +35,30 @@ type TestResourceWatcher struct {
 	ResourceDoesNotExistCh chan struct{}
 }
 
-// OnResourceChanged is invoked by the xDS client to report the latest update
+// ResourceChanged is invoked by the xDS client to report the latest update
 // or an error on the resource being watched.
-func (w *TestResourceWatcher) OnResourceChanged(update xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+func (w *TestResourceWatcher) ResourceChanged(data xdsresource.ResourceData, onDone func()) {
 	defer onDone()
-	if update.Err != nil {
-		if xdsresource.ErrType(update.Err) == xdsresource.ErrorTypeResourceNotFound {
-			select {
-			case <-w.ResourceDoesNotExistCh:
-			default:
-			}
-			w.ResourceDoesNotExistCh <- struct{}{}
-			return
-		}
-		select {
-		case <-w.ErrorCh:
-		default:
-		}
-		w.ErrorCh <- update.Err
-		return
-	}
 	select {
 	case <-w.UpdateCh:
 	default:
 	}
-	w.UpdateCh <- &update.Data
+	w.UpdateCh <- &data
+
 }
 
-// OnAmbientError is invoked by the xDS client to report the latest error.
-func (w *TestResourceWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
+// ResourceError is invoked by the xDS client to report the latest error.
+func (w *TestResourceWatcher) ResourceError(_ error, onDone func()) {
+	defer onDone()
+	select {
+	case <-w.ResourceDoesNotExistCh:
+	default:
+	}
+	w.ResourceDoesNotExistCh <- struct{}{}
+}
+
+// AmbientError is invoked by the xDS client to report the latest error.
+func (w *TestResourceWatcher) AmbientError(err error, onDone func()) {
 	defer onDone()
 	select {
 	case <-w.ErrorCh:

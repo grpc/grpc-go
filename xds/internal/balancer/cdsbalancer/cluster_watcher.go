@@ -32,18 +32,17 @@ type clusterWatcher struct {
 	parent *cdsBalancer
 }
 
-func (cw *clusterWatcher) OnResourceChanged(u *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
-	if u.Err != nil {
-		handleError := func(context.Context) { cw.parent.onClusterResourceChangedError(cw.name, u.Err); onDone() }
-		cw.parent.serializer.ScheduleOr(handleError, onDone)
-		return
-	}
-	update := u.Data.(*xdsresource.ClusterResourceData)
-	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, update.Resource); onDone() }
+func (cw *clusterWatcher) ResourceChanged(u *xdsresource.ClusterResourceData, onDone func()) {
+	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, u.Resource); onDone() }
 	cw.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }
 
-func (cw *clusterWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcher) ResourceError(err error, onDone func()) {
+	handleResourceError := func(context.Context) { cw.parent.onClusterResourceError(cw.name, err); onDone() }
+	cw.parent.serializer.ScheduleOr(handleResourceError, onDone)
+}
+
+func (cw *clusterWatcher) AmbientError(err error, onDone func()) {
 	handleError := func(context.Context) { cw.parent.onClusterAmbientError(cw.name, err); onDone() }
 	cw.parent.serializer.ScheduleOr(handleError, onDone)
 }

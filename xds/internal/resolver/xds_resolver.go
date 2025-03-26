@@ -520,15 +520,15 @@ func (r *xdsResolver) onListenerResourceUpdate(update xdsresource.ListenerUpdate
 
 func (r *xdsResolver) onListenerResourceAmbientError(err error) {
 	if r.logger.V(2) {
-		r.logger.Infof("Received error for Listener resource %q: %v", r.ldsResourceName, err)
+		r.logger.Infof("Received ambient error for Listener resource %q: %v", r.ldsResourceName, err)
 	}
 	r.onError(err)
 }
 
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onListenerResourceChangedError(err error) {
+func (r *xdsResolver) onListenerResourceError(err error) {
 	if r.logger.V(2) {
-		r.logger.Infof("Received on-resource-changed error for Listener resource %q: %v", r.ldsResourceName, err)
+		r.logger.Infof("Received resource error for Listener resource %q: %v", r.ldsResourceName, err)
 	}
 
 	r.listenerUpdateRecvd = false
@@ -561,15 +561,15 @@ func (r *xdsResolver) onRouteConfigResourceUpdate(name string, update xdsresourc
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceAmbientError(name string, err error) {
 	if r.logger.V(2) {
-		r.logger.Infof("Received error for RouteConfiguration resource %q: %v", name, err)
+		r.logger.Infof("Received ambient error for RouteConfiguration resource %q: %v", name, err)
 	}
 	r.onError(err)
 }
 
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onRouteConfigResourceChangedError(name string, err error) {
+func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
 	if r.logger.V(2) {
-		r.logger.Infof("Received on-resource-changed error for RouteConfiguration resource %q: %v", name, err)
+		r.logger.Infof("Received resource error for RouteConfiguration resource %q: %v", name, err)
 	}
 
 	if r.rdsResourceName != name {

@@ -46,7 +46,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	if err := c.resourceTypes.maybeRegister(rType); err != nil {
 		logger.Warningf("Watch registered for name %q of type %q which is already registered", rType.TypeName(), resourceName)
 		c.serializer.TrySchedule(func(context.Context) {
-			watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: err}, func() {})
+			watcher.ResourceError(err, func() {})
 		})
 		return func() {}
 	}
@@ -56,7 +56,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	if a == nil {
 		logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName(), resourceName, n.Authority)
 		c.serializer.TrySchedule(func(context.Context) {
-			watcher.OnResourceChanged(xdsresource.ResourceDataOrError{Err: fmt.Errorf("authority %q not found in bootstrap config for resource %q", n.Authority, resourceName)}, func() {})
+			watcher.ResourceError(fmt.Errorf("authority %q not found in bootstrap config for resource %q", n.Authority, resourceName), func() {})
 		})
 		return func() {}
 	}

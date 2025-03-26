@@ -48,10 +48,13 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) OnResourceChanged(_ *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
 	onDone()
 }
-func (noopListenerWatcher) OnAmbientError(_ error, onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
+	onDone()
+}
+func (noopListenerWatcher) AmbientError(_ error, onDone func()) {
 	onDone()
 }
 
@@ -68,22 +71,21 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (lw *listenerWatcher) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
-	if update.Err != nil {
-		lw.updateCh.Replace(listenerUpdateErrTuple{err: update.Err})
-		onDone()
-		return
-	}
-	u := update.Data.(*xdsresource.ListenerResourceData)
-	lw.updateCh.Send(listenerUpdateErrTuple{update: u.Resource})
+func (lw *listenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
+	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (lw *listenerWatcher) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
+func (lw *listenerWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
+	lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+	onDone()
+}
+
+func (lw *listenerWatcher) AmbientError(err error, onDone func()) {
 	lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
 	onDone()
 }
@@ -98,18 +100,17 @@ func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
 
-func (lw *listenerWatcherMultiple) OnResourceChanged(update *xdsresource.ResourceDataOrError, onDone xdsresource.OnDoneFunc) {
-	if update.Err != nil {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: update.Err})
-		onDone()
-		return
-	}
-	u := update.Data.(*xdsresource.ListenerResourceData)
-	lw.updateCh.Send(listenerUpdateErrTuple{update: u.Resource})
+func (lw *listenerWatcherMultiple) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
+	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (lw *listenerWatcherMultiple) OnAmbientError(err error, onDone xdsresource.OnDoneFunc) {
+func (lw *listenerWatcherMultiple) ResourceError(err error, onDone func()) {
+	lw.updateCh.Send(listenerUpdateErrTuple{err: err})
+	onDone()
+}
+
+func (lw *listenerWatcherMultiple) AmbientError(err error, onDone func()) {
 	lw.updateCh.Send(listenerUpdateErrTuple{err: err})
 	onDone()
 }

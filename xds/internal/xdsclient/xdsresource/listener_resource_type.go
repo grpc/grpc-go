@@ -144,38 +144,36 @@ func (l *ListenerResourceData) Raw() *anypb.Any {
 // events corresponding to the listener resource being watched. gRFC A88
 // contains an exhaustive list of what method is invoked under what conditions.
 type ListenerWatcher interface {
-	// OnResourceChanged is invoked to notify the watcher of a new version of
-	// the resource received from the xDS server or an error indicating the
-	// reason why the resource cannot be obtained.
-	//
-	// Upon receiving this, in case of an error, the watcher should
-	// stop using any previously seen resource. xDS client will remove the
-	// resource from its cache.
-	OnResourceChanged(*ResourceDataOrError, OnDoneFunc)
+	// ResourceChanged indicates a new version of the resource is available.
+	ResourceChanged(resource *ListenerResourceData, done func())
 
-	// OnAmbientError is invoked if resource is already cached under different
-	// error conditions.
-	//
-	// Upon receiving this, the watcher should not stop using the previously
-	// seen resource. xDS client will not remove the resource from its cache.
-	OnAmbientError(error, OnDoneFunc)
+	// ResourceError indicates an error occurred while trying to fetch or
+	// decode the associated resource. The previous version of the resource
+	// should be considered invalid.
+	ResourceError(err error, done func())
+
+	// AmbientError indicates an error occurred after a resource has been
+	// received that should not modify the use of that resource but may provide
+	// useful information about the state of the XDSClient for debugging
+	// purposes. The previous version of the resource should still be
+	// considered valid.
+	AmbientError(err error, done func())
 }
 
 type delegatingListenerWatcher struct {
 	watcher ListenerWatcher
 }
 
-func (d *delegatingListenerWatcher) OnResourceChanged(update ResourceDataOrError, onDone OnDoneFunc) {
-	if update.Err != nil {
-		d.watcher.OnResourceChanged(&ResourceDataOrError{Err: update.Err}, onDone)
-		return
-	}
-	l := update.Data.(*ListenerResourceData)
-	d.watcher.OnResourceChanged(&ResourceDataOrError{Data: l}, onDone)
+func (d *delegatingListenerWatcher) ResourceChanged(data ResourceData, onDone func()) {
+	l := data.(*ListenerResourceData)
+	d.watcher.ResourceChanged(l, onDone)
+}
+func (d *delegatingListenerWatcher) ResourceError(err error, onDone func()) {
+	d.watcher.ResourceError(err, onDone)
 }
 
-func (d *delegatingListenerWatcher) OnAmbientError(err error, onDone OnDoneFunc) {
-	d.watcher.OnAmbientError(err, onDone)
+func (d *delegatingListenerWatcher) AmbientError(err error, onDone func()) {
+	d.watcher.AmbientError(err, onDone)
 }
 
 // WatchListener uses xDS to discover the configuration associated with the
