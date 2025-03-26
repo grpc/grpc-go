@@ -381,21 +381,23 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		h := &testStreamHandler{t: transport.(*http2Server)}
 		s.h = h
 		s.mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
 		switch ht {
 		case notifyCall:
-			go transport.HandleStreams(context.Background(), h.handleStreamAndNotify)
+			go transport.HandleStreams(ctx, h.handleStreamAndNotify)
 		case suspended:
-			go transport.HandleStreams(context.Background(), func(*ServerStream) {})
+			go transport.HandleStreams(ctx, func(*ServerStream) {})
 		case misbehaved:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamMisbehave(t, s)
 			})
 		case encodingRequiredStatus:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamEncodingRequiredStatus(s)
 			})
 		case invalidHeaderField:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamInvalidHeaderField(s)
 			})
 		case delayRead:
@@ -404,15 +406,15 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			s.mu.Lock()
 			close(s.ready)
 			s.mu.Unlock()
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamDelayRead(t, s)
 			})
 		case pingpong:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStreamPingPong(t, s)
 			})
 		default:
-			go transport.HandleStreams(context.Background(), func(s *ServerStream) {
+			go transport.HandleStreams(ctx, func(s *ServerStream) {
 				go h.handleStream(t, s)
 			})
 		}
@@ -464,13 +466,15 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	addr := resolver.Address{Addr: "localhost:" + server.port}
 	copts.ChannelzParent = channelzSubChannel(t)
 
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	ct, connErr := NewHTTP2Client(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	t.Cleanup(cancel)
+	connectCtx, cCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ct, connErr := NewHTTP2Client(connectCtx, ctx, addr, copts, func(GoAwayReason) {})
 	if connErr != nil {
-		cancel() // Do not cancel in success path.
+		cCancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
-	return server, ct.(*http2Client), cancel
+	return server, ct.(*http2Client), cCancel
 }
 
 func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.Conn) (*http2Client, func()) {
@@ -495,10 +499,12 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		}
 		connCh <- conn
 	}()
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	t.Cleanup(cancel)
+	connectCtx, cCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	tr, err := NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
-		cancel() // Do not cancel in success path.
+		cCancel() // Do not cancel in success path.
 		// Server clean-up.
 		lis.Close()
 		if conn, ok := <-connCh; ok {
@@ -506,7 +512,7 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 		}
 		t.Fatalf("Failed to dial: %v", err)
 	}
-	return tr.(*http2Client), cancel
+	return tr.(*http2Client), cCancel
 }
 
 // TestInflightStreamClosing ensures that closing in-flight stream
@@ -739,7 +745,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.Large",
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
@@ -828,12 +834,14 @@ func (s) TestGracefulClose(t *testing.T) {
 		server.lis.Close()
 		// Check for goroutine leaks (i.e. GracefulClose with an active stream
 		// doesn't eventually close the connection when that stream completes).
-		leakcheck.CheckGoroutines(t, 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		leakcheck.CheckGoroutines(ctx, t)
 		leakcheck.CheckTrackingBufferPool()
 		// Correctly clean up the server
 		server.stop()
 	}()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	// Create a stream that will exist for this whole test and confirm basic
@@ -889,6 +897,8 @@ func (s) TestGracefulClose(t *testing.T) {
 func (s) TestLargeMessageSuspension(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, suspended)
 	defer cancel()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	defer server.stop()
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
@@ -900,12 +910,6 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
-	// Launch a goroutine similar to the stream monitoring goroutine in
-	// stream.go to keep track of context timeout and call CloseStream.
-	go func() {
-		<-ctx.Done()
-		s.Close(ContextErr(ctx.Err()))
-	}()
 	// Write should not be done successfully due to flow control.
 	msg := make([]byte, initialWindowSize*8)
 	s.Write(nil, newBufferSlice(msg), &WriteOptions{})
@@ -913,12 +917,14 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if err != errStreamDone {
 		t.Fatalf("Write got %v, want io.EOF", err)
 	}
-	expectedErr := status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
-	if _, err := s.readTo(make([]byte, 8)); err.Error() != expectedErr.Error() {
-		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
+	// The server will send an RST stream frame on observing the deadline
+	// expiration making the client stream fail with a DeadlineExceeded status.
+	if _, err := s.readTo(make([]byte, 8)); err != io.EOF {
+		t.Fatalf("Read got unexpected error: %v, want %v", err, io.EOF)
 	}
-	ct.Close(fmt.Errorf("closed manually by test"))
-	server.stop()
+	if got, want := s.Status().Code(), codes.DeadlineExceeded; got != want {
+		t.Fatalf("Read got status %v with code %v, want %v", s.Status(), got, want)
+	}
 }
 
 func (s) TestMaxStreams(t *testing.T) {
@@ -969,7 +975,7 @@ func (s) TestMaxStreams(t *testing.T) {
 	// Try and create a new stream.
 	go func() {
 		defer close(done)
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 		if _, err := ct.NewStream(ctx, callHdr); err != nil {
 			t.Errorf("Failed to open stream: %v", err)
@@ -1182,7 +1188,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	if err := cstream1.Write(nil, newBufferSlice(make([]byte, defaultWindowSize)), &WriteOptions{Last: true}); err != nil {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
-	//Client should be able to create another stream and send data on it.
+	// Client should be able to create another stream and send data on it.
 	cstream2, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 2nd stream. Err: %v", err)
@@ -1353,7 +1359,9 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 
 	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	_, err = NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err = NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
 		t.Fatalf("NewHTTP2Client() returned successfully; wanted error")
 	}
@@ -1365,7 +1373,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	// Test context deadline.
 	connectCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, err = NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	_, err = NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err == nil {
 		t.Fatalf("NewHTTP2Client() returned successfully; wanted error")
 	}
@@ -1440,12 +1448,14 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 			}
 		}
 	}()
-	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	connectCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	parent := channelzSubChannel(t)
 	copts := ConnectOptions{ChannelzParent: parent}
-	ct, err := NewHTTP2Client(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ct, err := NewHTTP2Client(connectCtx, ctx, resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -1779,9 +1789,11 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 // If any error occurs on a call to Stream.Read, future calls
 // should continue to return that same error.
 func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
-		ctx:         context.Background(),
+		ctx:         ctx,
 		buf:         testRecvBuffer,
 		requestRead: func(int) {},
 	}
@@ -2450,7 +2462,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 		Addr:       "localhost:" + server.port,
 		Attributes: attributes.New(testAttrKey, testAttrVal),
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	creds := &attrTransportCreds{}
 
@@ -2485,7 +2497,7 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		Addr:       "localhost:" + server.port,
 		Attributes: attributes.New(testAttrKey, testAttrVal),
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	var attr *attributes.Attributes
@@ -2829,7 +2841,7 @@ func (s) TestClientCloseReturnsAfterReaderCompletes(t *testing.T) {
 
 	// Create a client transport with a custom dialer that hangs the Read()
 	// after Close().
-	ct, err := NewHTTP2Client(ctx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, err := NewHTTP2Client(ctx, ctx, addr, copts, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Failed to create transport: %v", err)
 	}
@@ -2915,14 +2927,14 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	}
 	copts := ConnectOptions{Dialer: dialer}
 	copts.ChannelzParent = channelzSubChannel(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Create client transport with custom dialer
-	ct, connErr := NewHTTP2Client(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {})
+	ct, connErr := NewHTTP2Client(connectCtx, ctx, addr, copts, func(GoAwayReason) {})
 	if connErr != nil {
 		t.Fatalf("failed to create transport: %v", connErr)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := ct.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
@@ -2959,5 +2971,92 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	}
 	if bytesRead != headerLen {
 		t.Errorf("bytesRead = %d, want = %d", bytesRead, headerLen)
+	}
+}
+
+// Tests a scenario when the client doesn't send an RST frame when the
+// configured deadline is reached. The test verifies that the server sends an
+// RST stream only after the deadline is reached.
+func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	defer server.stop()
+	// Create a client that can override server stream quota.
+	mconn, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Clent failed to dial:%v", err)
+	}
+	defer mconn.Close()
+	if err := mconn.SetWriteDeadline(time.Now().Add(time.Second * 10)); err != nil {
+		t.Fatalf("Failed to set write deadline: %v", err)
+	}
+	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+	}
+	// rstTimeChan chan indicates that reader received a RSTStream from server.
+	rstTimeChan := make(chan time.Time, 1)
+	var mu sync.Mutex
+	framer := http2.NewFramer(mconn, mconn)
+	if err := framer.WriteSettings(); err != nil {
+		t.Fatalf("Error while writing settings: %v", err)
+	}
+	go func() { // Launch a reader for this misbehaving client.
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame := frame.(type) {
+			case *http2.PingFrame:
+				// Write ping ack back so that server's BDP estimation works right.
+				mu.Lock()
+				framer.WritePing(true, frame.Data)
+				mu.Unlock()
+			case *http2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeCancel {
+					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeCancel", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+				}
+				rstTimeChan <- time.Now()
+				return
+			default:
+				// Do nothing.
+			}
+		}
+	}()
+	// Create a stream.
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "POST"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":authority", Value: "localhost"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "grpc-timeout", Value: "10m"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	mu.Lock()
+	startTime := time.Now()
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		mu.Unlock()
+		t.Fatalf("Error while writing headers: %v", err)
+	}
+	mu.Unlock()
+
+	// Test server behavior for deadline expiration.
+	var rstTime time.Time
+	select {
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Test timed out.")
+	case rstTime = <-rstTimeChan:
+	}
+
+	if got, want := rstTime.Sub(startTime), 10*time.Millisecond; got < want {
+		t.Fatalf("RST frame received earlier than expected by duration: %v", want-got)
 	}
 }

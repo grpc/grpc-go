@@ -1,20 +1,23 @@
 module google.golang.org/grpc/security/advancedtls
 
-go 1.22
+go 1.23
 
 require (
 	github.com/google/go-cmp v0.6.0
-	golang.org/x/crypto v0.31.0
-	google.golang.org/grpc v1.68.1
-	google.golang.org/grpc/examples v0.0.0-20201112215255-90f1b3ee835b
+	golang.org/x/crypto v0.33.0
+	google.golang.org/grpc v1.70.0
+	google.golang.org/grpc/examples v0.0.0-20230224211313-3775f633ce20
 )
 
 require (
-	golang.org/x/net v0.32.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a // indirect
-	google.golang.org/protobuf v1.35.2 // indirect
+	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
+	github.com/spiffe/go-spiffe/v2 v2.5.0 // indirect
+	github.com/zeebo/errs v1.4.0 // indirect
+	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
+	google.golang.org/protobuf v1.36.5 // indirect
 )
 
 replace google.golang.org/grpc => ../../

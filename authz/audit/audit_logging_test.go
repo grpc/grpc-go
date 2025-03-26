@@ -24,7 +24,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -240,23 +239,24 @@ func (s) TestAuditLogger(t *testing.T) {
 			wantStreamingCallCode: codes.PermissionDenied,
 		},
 	}
-	// Construct the credentials for the tests and the stub server
-	serverCreds := loadServerCreds(t)
-	clientCreds := loadClientCreds(t)
-	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			_, err := stream.Recv()
-			if err != io.EOF {
-				return err
-			}
-			return nil
-		},
-	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			// Construct the credentials for the tests and the stub server
+			serverCreds := loadServerCreds(t)
+			clientCreds := loadClientCreds(t)
+			ss := &stubserver.StubServer{
+				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					return &testpb.SimpleResponse{}, nil
+				},
+				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+					_, err := stream.Recv()
+					if err != io.EOF {
+						return err
+					}
+					return nil
+				},
+			}
 			// Setup test statAuditLogger, gRPC test server with authzPolicy, unary
 			// and stream interceptors.
 			lb := &loggerBuilder{
@@ -266,25 +266,18 @@ func (s) TestAuditLogger(t *testing.T) {
 			audit.RegisterLoggerBuilder(lb)
 			i, _ := authz.NewStatic(test.authzPolicy)
 
-			s := grpc.NewServer(
-				grpc.Creds(serverCreds),
-				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
-				grpc.ChainStreamInterceptor(i.StreamInterceptor))
+			s := grpc.NewServer(grpc.Creds(serverCreds), grpc.ChainUnaryInterceptor(i.UnaryInterceptor), grpc.ChainStreamInterceptor(i.StreamInterceptor))
 			defer s.Stop()
-			testgrpc.RegisterTestServiceServer(s, ss)
-			lis, err := net.Listen("tcp", "localhost:0")
-			if err != nil {
-				t.Fatalf("Error listening: %v", err)
-			}
-			go s.Serve(lis)
+			ss.S = s
+			stubserver.StartTestService(t, ss)
 
 			// Setup gRPC test client with certificates containing a SPIFFE Id.
-			clientConn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(clientCreds))
 			if err != nil {
-				t.Fatalf("grpc.NewClient(%v) failed: %v", lis.Addr().String(), err)
+				t.Fatalf("grpc.NewClient(%v) failed: %v", ss.Address, err)
 			}
-			defer clientConn.Close()
-			client := testgrpc.NewTestServiceClient(clientConn)
+			defer cc.Close()
+			client := testgrpc.NewTestServiceClient(cc)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -296,7 +289,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			}
 			stream, err := client.StreamingInputCall(ctx)
 			if err != nil {
-				t.Fatalf("StreamingInputCall failed:%v", err)
+				t.Fatalf("StreamingInputCall failed: %v", err)
 			}
 			req := &testpb.StreamingInputCallRequest{
 				Payload: &testpb.Payload{
@@ -304,7 +297,7 @@ func (s) TestAuditLogger(t *testing.T) {
 				},
 			}
 			if err := stream.Send(req); err != nil && err != io.EOF {
-				t.Fatalf("stream.Send failed:%v", err)
+				t.Fatalf("stream.Send failed: %v", err)
 			}
 			if _, err := stream.CloseAndRecv(); status.Code(err) != test.wantStreamingCallCode {
 				t.Errorf("Unexpected stream.CloseAndRecv fail: got %v want %v", err, test.wantStreamingCallCode)

@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -110,62 +109,54 @@ func (s) TestGracefulStop(t *testing.T) {
 		closeCalled:  make(chan struct{}),
 		allowCloseCh: make(chan struct{}),
 	}
-	d := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 
 	ss := &stubserver.StubServer{
+		Listener: dlis,
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			_, err := stream.Recv()
-			if err != nil {
+			if _, err := stream.Recv(); err != nil {
 				return err
 			}
 			return stream.Send(&testpb.StreamingOutputCallResponse{})
 		},
+		S: grpc.NewServer(),
 	}
-	s := grpc.NewServer()
-	testgrpc.RegisterTestServiceServer(s, ss)
+	// 1. Start Server and start serving by calling Serve().
+	stubserver.StartTestService(t, ss)
 
-	// 1. Start Server
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		s.Serve(dlis)
-		wg.Done()
-	}()
-
-	// 2. GracefulStop() Server after listener's Accept is called, but don't
-	//    allow Accept() to exit when Close() is called on it.
+	// 2. Call GracefulStop from a goroutine. It will trigger Close on the
+	// listener, but the listener will not actually close until a connection
+	// is accepted.
+	gracefulStopDone := make(chan struct{})
 	<-dlis.acceptCalled
-	wg.Add(1)
 	go func() {
-		s.GracefulStop()
-		wg.Done()
+		ss.S.GracefulStop()
+		close(gracefulStopDone)
 	}()
 
 	// 3. Create a new connection to the server after listener.Close() is called.
-	//    Server should close this connection immediately, before handshaking.
+	// Server should close this connection immediately, before handshaking.
 
 	<-dlis.closeCalled // Block until GracefulStop calls dlis.Close()
 
-	// Now dial.  The listener's Accept method will return a valid connection,
-	// even though GracefulStop has closed the listener.
-	ctx, dialCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer dialCancel()
-	cc, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(d))
+	dialer := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
+	cc, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
 	if err != nil {
-		t.Fatalf("grpc.DialContext(_, %q, _) = %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	client := testgrpc.NewTestServiceClient(cc)
 	defer cc.Close()
 
-	// 4. Send an RPC on the new connection.
+	// 4. Make an RPC.
 	// The server would send a GOAWAY first, but we are delaying the server's
 	// writes for now until the client writes more than the preface.
+	// This will cause a connection to be accepted. This will
+	// also unblock the Close method.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	if _, err = client.FullDuplexCall(ctx); err == nil || status.Code(err) != codes.Unavailable {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <status code Unavailable>", err)
 	}
 	cancel()
-	wg.Wait()
+	<-gracefulStopDone
 }
 
 // TestGracefulStopClosesConnAfterLastStream ensures that a server closes the

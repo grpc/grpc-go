@@ -117,14 +117,9 @@ func (s) TestParseConfig(t *testing.T) {
 	}
 }
 
-// setupBackends spins up three test backends, each listening on a port on
-// localhost. The three backends always reply with an empty response with no
-// error, and for streaming receive until hitting an EOF error.
-func setupBackends(t *testing.T) []string {
-	t.Helper()
-	const numBackends = 3
-	addresses := make([]string, numBackends)
-	// Construct and start three working backends.
+func startBackends(t *testing.T, numBackends int) []*stubserver.StubServer {
+	backends := make([]*stubserver.StubServer, 0, numBackends)
+	// Construct and start working backends.
 	for i := 0; i < numBackends; i++ {
 		backend := &stubserver.StubServer{
 			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -140,7 +135,21 @@ func setupBackends(t *testing.T) []string {
 		}
 		t.Logf("Started good TestService backend at: %q", backend.Address)
 		t.Cleanup(func() { backend.Stop() })
-		addresses[i] = backend.Address
+		backends = append(backends, backend)
+	}
+	return backends
+}
+
+// setupBackends spins up three test backends, each listening on a port on
+// localhost. The three backends always reply with an empty response with no
+// error, and for streaming receive until hitting an EOF error.
+func setupBackends(t *testing.T, numBackends int) []string {
+	t.Helper()
+	addresses := make([]string, numBackends)
+	backends := startBackends(t, numBackends)
+	// Construct and start working backends.
+	for i := 0; i < numBackends; i++ {
+		addresses[i] = backends[i].Address
 	}
 	return addresses
 }
@@ -205,7 +214,7 @@ func (s) TestLeastRequestE2E(t *testing.T) {
 		index++
 		return ret
 	}
-	addresses := setupBackends(t)
+	addresses := setupBackends(t, 3)
 
 	mr := manual.NewBuilderWithScheme("lr-e2e")
 	defer mr.Close()
@@ -321,7 +330,7 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 		index++
 		return ret
 	}
-	addresses := setupBackends(t)
+	addresses := setupBackends(t, 3)
 
 	mr := manual.NewBuilderWithScheme("lr-e2e")
 	defer mr.Close()
@@ -462,7 +471,7 @@ func (s) TestLeastRequestPersistsCounts(t *testing.T) {
 // and makes 100 RPCs asynchronously. This makes sure no race conditions happen
 // in this scenario.
 func (s) TestConcurrentRPCs(t *testing.T) {
-	addresses := setupBackends(t)
+	addresses := setupBackends(t, 3)
 
 	mr := manual.NewBuilderWithScheme("lr-e2e")
 	defer mr.Close()
@@ -508,5 +517,192 @@ func (s) TestConcurrentRPCs(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
 
+// Test tests that the least request balancer persists RPC counts once it gets
+// new picker updates and backends within an endpoint go down. It first updates
+// the balancer with two endpoints having two addresses each. It verifies the
+// requests are round robined across the first address of each endpoint. It then
+// stops the active backend in endpoint[0]. It verified that the balancer starts
+// using the second address in endpoint[0]. The test then creates a bunch of
+// streams on two endpoints. Then, it updates the balancer with three endpoints,
+// including the two previous. Any created streams should then be started on the
+// new endpoint. The test shuts down the active backed in endpoint[1] and
+// endpoint[2]. The test verifies that new RPCs are round robined across the
+// active backends in endpoint[1] and endpoint[2].
+func (s) TestLeastRequestEndpoints_MultipleAddresses(t *testing.T) {
+	defer func(u func() uint32) {
+		randuint32 = u
+	}(randuint32)
+	var index int
+	indexes := []uint32{
+		0, 0, 1, 1,
+	}
+	randuint32 = func() uint32 {
+		ret := indexes[index%len(indexes)]
+		index++
+		return ret
+	}
+	backends := startBackends(t, 6)
+	mr := manual.NewBuilderWithScheme("lr-e2e")
+	defer mr.Close()
+
+	// Configure least request as top level balancer of channel.
+	lrscJSON := `
+{
+  "loadBalancingConfig": [
+    {
+      "least_request_experimental": {
+        "choiceCount": 2
+      }
+    }
+  ]
+}`
+	endpoints := []resolver.Endpoint{
+		{Addresses: []resolver.Address{{Addr: backends[0].Address}, {Addr: backends[1].Address}}},
+		{Addresses: []resolver.Address{{Addr: backends[2].Address}, {Addr: backends[3].Address}}},
+		{Addresses: []resolver.Address{{Addr: backends[4].Address}, {Addr: backends[5].Address}}},
+	}
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lrscJSON)
+	firstTwoEndpoints := []resolver.Endpoint{endpoints[0], endpoints[1]}
+	mr.InitialState(resolver.State{
+		Endpoints:     firstTwoEndpoints,
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+
+	// Wait for the two backends to round robin across. The happens because a
+	// child pickfirst transitioning into READY causes a new picker update. Once
+	// the picker update with the two backends is present, this test can start
+	// to populate those backends with streams.
+	wantAddrs := []resolver.Address{
+		endpoints[0].Addresses[0],
+		endpoints[1].Addresses[0],
+	}
+	if err := checkRoundRobinRPCs(ctx, testServiceClient, wantAddrs); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// Shut down one of the addresses in endpoints[0], the child pickfirst
+	// should fallback to the next address in endpoints[0].
+	backends[0].Stop()
+	wantAddrs = []resolver.Address{
+		endpoints[0].Addresses[1],
+		endpoints[1].Addresses[0],
+	}
+	if err := checkRoundRobinRPCs(ctx, testServiceClient, wantAddrs); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// Start 50 streaming RPCs, and leave them unfinished for the duration of
+	// the test. This will populate the first two endpoints with many active
+	// RPCs.
+	for i := 0; i < 50; i++ {
+		_, err := testServiceClient.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
+		}
+	}
+
+	// Update the least request balancer to choice count 3. Also update the
+	// address list adding a third endpoint. Alongside the injected randomness,
+	// this should trigger the least request balancer to search all created
+	// endpoints. Thus, since endpoint 3 is the new endpoint and the first two
+	// endpoint are populated with RPCs, once the picker update of all 3 READY
+	// pickfirsts takes effect, all new streams should be started on endpoint 3.
+	index = 0
+	indexes = []uint32{
+		0, 1, 2, 3, 4, 5,
+	}
+	lrscJSON = `
+{
+  "loadBalancingConfig": [
+    {
+      "least_request_experimental": {
+        "choiceCount": 3
+      }
+    }
+  ]
+}`
+	sc = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(lrscJSON)
+	mr.UpdateState(resolver.State{
+		Endpoints:     endpoints,
+		ServiceConfig: sc,
+	})
+	newAddress := endpoints[2].Addresses[0]
+	// Poll for only endpoint 3 to show up. This requires a polling loop because
+	// picker update with all three endpoints doesn't take into effect
+	// immediately, needs the third pickfirst to become READY.
+	if err := checkRoundRobinRPCs(ctx, testServiceClient, []resolver.Address{newAddress}); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
+
+	// Start 25 rpcs, but don't finish them. They should all start on endpoint 3,
+	// since the first two endpoints both have 25 RPCs (and randomness
+	// injection/choiceCount causes all 3 to be compared every iteration).
+	for i := 0; i < 25; i++ {
+		stream, err := testServiceClient.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
+		}
+		p, ok := peer.FromContext(stream.Context())
+		if !ok {
+			t.Fatalf("testServiceClient.FullDuplexCall has no Peer")
+		}
+		if p.Addr.String() != newAddress.Addr {
+			t.Fatalf("testServiceClient.FullDuplexCall's Peer got: %v, want: %v", p.Addr.String(), newAddress)
+		}
+	}
+
+	// Now 25 RPC's are active on each endpoint, the next three RPC's should
+	// round robin, since choiceCount is three and the injected random indexes
+	// cause it to search all three endpoints for fewest outstanding requests on
+	// each iteration.
+	wantAddrCount := map[string]int{
+		endpoints[0].Addresses[1].Addr: 1,
+		endpoints[1].Addresses[0].Addr: 1,
+		endpoints[2].Addresses[0].Addr: 1,
+	}
+	gotAddrCount := make(map[string]int)
+	for i := 0; i < len(endpoints); i++ {
+		stream, err := testServiceClient.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("testServiceClient.FullDuplexCall failed: %v", err)
+		}
+		p, ok := peer.FromContext(stream.Context())
+		if !ok {
+			t.Fatalf("testServiceClient.FullDuplexCall has no Peer")
+		}
+		if p.Addr != nil {
+			gotAddrCount[p.Addr.String()]++
+		}
+	}
+	if diff := cmp.Diff(gotAddrCount, wantAddrCount); diff != "" {
+		t.Fatalf("addr count (-got:, +want): %v", diff)
+	}
+
+	// Shutdown the active address for endpoint[1] and endpoint[2]. This should
+	// result in their streams failing. Now the requests should roundrobin b/w
+	// endpoint[1] and endpoint[2].
+	backends[2].Stop()
+	backends[4].Stop()
+	index = 0
+	indexes = []uint32{
+		0, 1, 2, 2, 1, 0,
+	}
+	wantAddrs = []resolver.Address{
+		endpoints[1].Addresses[1],
+		endpoints[2].Addresses[1],
+	}
+	if err := checkRoundRobinRPCs(ctx, testServiceClient, wantAddrs); err != nil {
+		t.Fatalf("error in expected round robin: %v", err)
+	}
 }

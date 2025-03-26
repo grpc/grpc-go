@@ -191,7 +191,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerReady(t *testing.T) {
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -233,7 +233,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_FirstServerUnReady(t *testing.T)
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -278,7 +278,7 @@ func (s) TestPickFirstLeaf_SimpleResolverUpdate_DuplicateAddrs(t *testing.T) {
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -350,7 +350,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_DisjointLists(t *testing.T) {
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -412,7 +412,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_ActiveBackendInUpdatedList(t *testing
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -474,7 +474,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_InActiveBackendInUpdatedList(t *testi
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -535,7 +535,7 @@ func (s) TestPickFirstLeaf_ResolverUpdates_IdenticalLists(t *testing.T) {
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -608,7 +608,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerRestart(t *testing.T) 
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -677,7 +677,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerRestart(t *testing.T)
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -746,7 +746,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_SecondServerToFirst(t *testing.T)
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -813,7 +813,7 @@ func (s) TestPickFirstLeaf_StopConnectedServer_FirstServerToSecond(t *testing.T)
 		connectivity.Connecting,
 		connectivity.Ready,
 	}
-	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantConnStateTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -866,7 +866,7 @@ func (s) TestPickFirstLeaf_EmptyAddressList(t *testing.T) {
 		connectivity.Ready,
 	}
 
-	if diff := cmp.Diff(wantTransitions, stateSubscriber.transitions); diff != "" {
+	if diff := cmp.Diff(wantTransitions, stateSubscriber.transitions()); diff != "" {
 		t.Errorf("ClientConn states mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -1099,7 +1099,7 @@ func (s) TestPickFirstLeaf_InterleavingIPV4Preffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1145,7 +1145,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1189,7 +1189,7 @@ func (s) TestPickFirstLeaf_InterleavingUnknownPreffered(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc := testutils.NewBalancerClientConn(t)
-	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{MetricsRecorder: &stats.NoopMetricsRecorder{}})
+	bal := balancer.Get(pickfirstleaf.Name).Build(cc, balancer.BuildOptions{})
 	defer bal.Close()
 	ccState := balancer.ClientConnState{
 		ResolverState: resolver.State{
@@ -1606,11 +1606,23 @@ func (b *backendManager) holds(dialer *testutils.BlockingDialer) []*testutils.Ho
 }
 
 type ccStateSubscriber struct {
-	transitions []connectivity.State
+	mu     sync.Mutex
+	states []connectivity.State
+}
+
+// transitions returns all the states that ccStateSubscriber recorded.
+// Without this a race condition occurs when the test compares the states
+// and the subscriber at the same time receives a connectivity.Shutdown.
+func (c *ccStateSubscriber) transitions() []connectivity.State {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.states
 }
 
 func (c *ccStateSubscriber) OnMessage(msg any) {
-	c.transitions = append(c.transitions, msg.(connectivity.State))
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.states = append(c.states, msg.(connectivity.State))
 }
 
 // mockTimer returns a fake timeAfterFunc that will not trigger automatically.

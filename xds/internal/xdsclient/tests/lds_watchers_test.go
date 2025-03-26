@@ -135,10 +135,6 @@ func badListenerResource(t *testing.T, name string) *v3listenerpb.Listener {
 	}
 }
 
-// xdsClient is expected to produce an error containing this string when an
-// update is received containing a listener created using `badListenerResource`.
-const wantListenerNACKErr = "no RouteSpecifier"
-
 // verifyNoListenerUpdate verifies that no listener update is received on the
 // provided update channel, and returns an error if an update is received.
 //
@@ -180,7 +176,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	return nil
 }
 
-func verifyUnknownListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr string) error {
+func verifyListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr, wantNodeID string) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
@@ -188,6 +184,24 @@ func verifyUnknownListenerError(ctx context.Context, updateCh *testutils.Channel
 	gotErr := u.(listenerUpdateErrTuple).err
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
 		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
+	}
+	if !strings.Contains(gotErr.Error(), wantNodeID) {
+		return fmt.Errorf("update received with error: %v, want error with node ID: %q", gotErr, wantNodeID)
+	}
+	return nil
+}
+
+func verifyErrorType(ctx context.Context, updateCh *testutils.Channel, wantErrType xdsresource.ErrorType, wantNodeID string) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
+	}
+	gotErr := u.(listenerUpdateErrTuple).err
+	if got, want := xdsresource.ErrType(gotErr), wantErrType; got != want {
+		return fmt.Errorf("update received with error %v of type: %v, want %v", gotErr, got, want)
+	}
+	if !strings.Contains(gotErr.Error(), wantNodeID) {
+		return fmt.Errorf("update received with error: %v, want error with node ID: %q", gotErr, wantNodeID)
 	}
 	return nil
 }
@@ -263,12 +277,15 @@ func (s) TestLDSWatch(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap configuration: %v", err)
 			}
-			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     t.Name(),
-				Contents: bc,
+			config, err := bootstrap.NewConfigFromContents(bc)
+			if err != nil {
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+			}
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(),
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
@@ -413,12 +430,15 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap configuration: %v", err)
 			}
-			testutils.CreateBootstrapFileForTesting(t, bc)
 
 			// Create an xDS client with the above bootstrap contents.
-			client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-				Name:     t.Name(),
-				Contents: bc,
+			config, err := bootstrap.NewConfigFromContents(bc)
+			if err != nil {
+				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+			}
+			pool := xdsclient.NewPool(config)
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(),
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
@@ -517,12 +537,15 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -609,12 +632,15 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -683,12 +709,15 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
@@ -708,7 +737,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
+	wantErr := xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -723,12 +752,15 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client talking to the above management server.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:               t.Name(),
-		Contents:           bc,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
@@ -807,12 +839,15 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -876,7 +911,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not see an update.
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, listenerUpdateErrTuple{
-		err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
+		err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, ""),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -924,9 +959,13 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -974,7 +1013,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	}
 
 	// The existing watcher should receive a resource removed error.
-	updateError := listenerUpdateErrTuple{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}
+	updateError := listenerUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")}
 	if err := verifyListenerUpdate(ctx, lw1.updateCh, updateError); err != nil {
 		t.Fatal(err)
 	}
@@ -998,12 +1037,15 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1030,7 +1072,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyErrorType(ctx, lw.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1038,7 +1080,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1055,9 +1097,13 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1106,7 +1152,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1119,7 +1165,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw2.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1151,12 +1197,15 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -1194,7 +1243,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyUnknownListenerError(ctx, lw1.updateCh, wantListenerNACKErr); err != nil {
+	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1240,12 +1289,15 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
-	testutils.CreateBootstrapFileForTesting(t, bc)
 
 	// Create an xDS client with the above bootstrap contents.
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

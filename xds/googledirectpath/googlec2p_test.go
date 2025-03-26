@@ -19,6 +19,7 @@
 package googledirectpath
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -31,8 +32,13 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
+
+const defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -114,6 +120,11 @@ func (s) TestBuildWithBootstrapEnvSet(t *testing.T) {
 			*envP = "does not matter"
 			defer func() { *envP = oldEnv }()
 
+			// Override xDS client pool.
+			oldXdsClientPool := xdsClientPool
+			xdsClientPool = xdsclient.NewPool(nil)
+			defer func() { xdsClientPool = oldXdsClientPool }()
+
 			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
@@ -157,7 +168,7 @@ func bootstrapConfig(t *testing.T, opts bootstrap.ConfigOptionsForTesting) *boot
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap contents: %v", err)
 	}
-	cfg, err := bootstrap.NewConfigForTesting(contents)
+	cfg, err := bootstrap.NewConfigFromContents(contents)
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap config: %v", err)
 	}
@@ -286,6 +297,14 @@ func (s) TestBuildXDS(t *testing.T) {
 				defer func() { envconfig.C2PResolverTestOnlyTrafficDirectorURI = oldURI }()
 			}
 
+			// Override xDS client pool.
+			oldXdsClientPool := xdsClientPool
+			xdsClientPool = xdsclient.NewPool(nil)
+			defer func() { xdsClientPool = oldXdsClientPool }()
+
+			getIPv6Capable = func(time.Duration) bool { return tt.ipv6Capable }
+			defer func() { getIPv6Capable = oldGetIPv6Capability }()
+
 			// Build the google-c2p resolver.
 			r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 			if err != nil {
@@ -298,8 +317,8 @@ func (s) TestBuildXDS(t *testing.T) {
 				t.Fatalf("Build() returned %#v, want xds resolver", r)
 			}
 
-			gotConfig, err := bootstrap.GetConfiguration()
-			if err != nil {
+			gotConfig := xdsClientPool.BootstrapConfigForTesting()
+			if gotConfig == nil {
 				t.Fatalf("Failed to get bootstrap config: %v", err)
 			}
 			if diff := cmp.Diff(tt.wantBootstrapConfig, gotConfig); diff != "" {
@@ -315,15 +334,22 @@ func (s) TestBuildXDS(t *testing.T) {
 func (s) TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	useCleanUniverseDomain(t)
 	uri := "google-c2p://an-authority/resource"
-	cc, err := grpc.Dial(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to create a client for server: %v", err)
+	}
 	defer func() {
 		if cc != nil {
 			cc.Close()
 		}
 	}()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	wantErr := "google-c2p URI scheme does not support authorities"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.Dial(%s) returned error: %v, want: %v", uri, err, wantErr)
+		t.Fatalf("client.EmptyCall(%s) returned error: %v, want: %v", uri, err, wantErr)
 	}
 }
 
@@ -375,6 +401,11 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 		t.Fatalf("googlec2p.SetUniverseDomain(%s) failed: %v", testUniverseDomain, err)
 	}
 
+	// Override xDS client pool.
+	oldXdsClientPool := xdsClientPool
+	xdsClientPool = xdsclient.NewPool(nil)
+	defer func() { xdsClientPool = oldXdsClientPool }()
+
 	// Build the google-c2p resolver.
 	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 	if err != nil {
@@ -387,8 +418,8 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 		t.Fatalf("Build() returned %#v, want xds resolver", r)
 	}
 
-	gotConfig, err := bootstrap.GetConfiguration()
-	if err != nil {
+	gotConfig := xdsClientPool.BootstrapConfigForTesting()
+	if gotConfig == nil {
 		t.Fatalf("Failed to get bootstrap config: %v", err)
 	}
 
@@ -442,6 +473,11 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 	randInt = func() int { return 666 }
 	defer func() { randInt = origRandInd }()
 
+	// Override xDS client pool.
+	oldXdsClientPool := xdsClientPool
+	xdsClientPool = xdsclient.NewPool(nil)
+	defer func() { xdsClientPool = oldXdsClientPool }()
+
 	// Build the google-c2p resolver.
 	r, err := builder.Build(resolver.Target{}, nil, resolver.BuildOptions{})
 	if err != nil {
@@ -454,8 +490,8 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 		t.Fatalf("Build() returned %#v, want xds resolver", r)
 	}
 
-	gotConfig, err := bootstrap.GetConfiguration()
-	if err != nil {
+	gotConfig := xdsClientPool.BootstrapConfigForTesting()
+	if gotConfig == nil {
 		t.Fatalf("Failed to get bootstrap config: %v", err)
 	}
 

@@ -25,6 +25,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -51,6 +53,8 @@ const (
 	vhLevel  = "virtual host level"
 	rLevel   = "route level"
 )
+
+var defaultTestTimeout = 10 * time.Second
 
 func emptyValidNetworkFilters(t *testing.T) []*v3listenerpb.Filter {
 	return []*v3listenerpb.Filter{
@@ -307,9 +311,10 @@ func (s) TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 // security configuration in the filter chain is invalid.
 func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	tests := []struct {
-		desc    string
-		lis     *v3listenerpb.Listener
-		wantErr string
+		desc                      string
+		lis                       *v3listenerpb.Listener
+		wantErr                   string
+		enableSystemRootCertsFlag bool
 	}{
 		{
 			desc:    "no filter chains",
@@ -514,10 +519,76 @@ func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 			},
 			wantErr: "security configuration on the server-side does not contain identity certificate provider instance name",
 		},
+		{
+			desc:                      "system root certificate field set on server",
+			enableSystemRootCertsFlag: true,
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
+									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "identityPluginInstance",
+											CertificateName: "identityCertName",
+										},
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+											ValidationContext: &v3tlspb.CertificateValidationContext{
+												SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+											},
+										},
+									},
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters(t),
+					},
+				},
+			},
+			wantErr: "expected field ca_certificate_provider_instance is missing and unexpected field system_root_certs is set",
+		},
+		{
+			desc: "system root certificate field set on server, env var disabled",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
+									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "identityPluginInstance",
+											CertificateName: "identityCertName",
+										},
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+											ValidationContext: &v3tlspb.CertificateValidationContext{
+												SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+											},
+										},
+									},
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters(t),
+					},
+				},
+			},
+			wantErr: "expected field ca_certificate_provider_instance is missing",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
+			origFlag := envconfig.XDSSystemRootCertsEnabled
+			defer func() {
+				envconfig.XDSSystemRootCertsEnabled = origFlag
+			}()
+			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
 			_, err := NewFilterChainManager(test.lis)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
@@ -1290,9 +1361,10 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 // security configuration in the filter chain contains valid data.
 func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 	tests := []struct {
-		desc   string
-		lis    *v3listenerpb.Listener
-		wantFC *FilterChainManager
+		desc                      string
+		lis                       *v3listenerpb.Listener
+		wantFC                    *FilterChainManager
+		enableSystemRootCertsFlag bool
 	}{
 		{
 			desc: "empty transport socket",
@@ -1495,10 +1567,122 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc:                      "validation context with certificate provider and system root certs",
+			enableSystemRootCertsFlag: true,
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
+									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    "identityPluginInstance",
+											CertificateName: "identityCertName",
+										},
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+											ValidationContext: &v3tlspb.CertificateValidationContext{
+												CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+													InstanceName:    "rootPluginInstance",
+													CertificateName: "rootCertName",
+												},
+												// SystemRootCerts will be ignored
+												// when
+												// CaCertificateProviderInstance is
+												// set.
+												SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+											},
+										},
+									},
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters(t),
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Name: "default-filter-chain-1",
+					TransportSocket: &v3corepb.TransportSocket{
+						Name: "envoy.transport_sockets.tls",
+						ConfigType: &v3corepb.TransportSocket_TypedConfig{
+							TypedConfig: testutils.MarshalAny(t, &v3tlspb.DownstreamTlsContext{
+								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+										InstanceName:    "defaultIdentityPluginInstance",
+										CertificateName: "defaultIdentityCertName",
+									},
+									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+										ValidationContext: &v3tlspb.CertificateValidationContext{
+											CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName:    "defaultRootPluginInstance",
+												CertificateName: "defaultRootCertName",
+											},
+											// SystemRootCerts will be ignored
+											// when
+											// CaCertificateProviderInstance is
+											// set.
+											SystemRootCerts: &v3tlspb.CertificateValidationContext_SystemRootCerts{},
+										},
+									},
+								},
+							}),
+						},
+					},
+					Filters: emptyValidNetworkFilters(t),
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {
+												SecurityCfg: &SecurityConfig{
+													RootInstanceName:     "rootPluginInstance",
+													RootCertName:         "rootCertName",
+													IdentityInstanceName: "identityPluginInstance",
+													IdentityCertName:     "identityCertName",
+													RequireClientCert:    true,
+												},
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       makeRouterFilterList(t),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{
+					SecurityCfg: &SecurityConfig{
+						RootInstanceName:     "defaultRootPluginInstance",
+						RootCertName:         "defaultRootCertName",
+						IdentityInstanceName: "defaultIdentityPluginInstance",
+						IdentityCertName:     "defaultIdentityCertName",
+						RequireClientCert:    true,
+					},
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       makeRouterFilterList(t),
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
+			origFlag := envconfig.XDSSystemRootCertsEnabled
+			defer func() {
+				envconfig.XDSSystemRootCertsEnabled = origFlag
+			}()
+			envconfig.XDSSystemRootCertsEnabled = test.enableSystemRootCertsFlag
 			gotFC, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
@@ -2731,6 +2915,8 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			wantErrs: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
 		},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fc := FilterChain{
@@ -2746,7 +2932,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 			for _, vh := range urc.VHS {
 				for _, r := range vh.Routes {
 					for _, int := range r.Interceptors {
-						errs = append(errs, int.AllowRPC(context.Background()).Error())
+						errs = append(errs, int.AllowRPC(ctx).Error())
 					}
 				}
 			}

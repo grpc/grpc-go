@@ -87,8 +87,10 @@ func (s) TestClientSideFederation(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	resolver, err := resolverBuilder(bootstrapContents)
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -136,7 +138,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -181,8 +183,10 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
-	resolver, err := resolverBuilder(bootstrapContents)
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolver, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
@@ -230,7 +234,7 @@ func (s) TestClientSideFederationWithOnlyXDSTPStyleLDS(t *testing.T) {
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 
@@ -274,7 +278,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	target := fmt.Sprintf("xds:///%s", serviceName)
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("Dialing target %q: %v", target, err)
+		t.Fatalf("grpc.NewClient() failed %q: %v", target, err)
 	}
 	defer cc.Close()
 	t.Log("Created ClientConn to test service")
@@ -286,11 +290,17 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	t.Log("Successfully performed an EmptyCall RPC")
 
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
-	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
+	t.Logf("Creating a channel with unknown authority %q, expecting failure", target)
 	wantErr := fmt.Sprintf("authority \"unknown-authority\" specified in dial target %q is not found in the bootstrap file", target)
-	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	cc, err = grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("Unexpected error while creating ClientConn: %v", err)
+	}
+	defer cc.Close()
+	client = testgrpc.NewTestServiceClient(cc)
+	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
+		t.Fatalf("EmptyCall(_, _) = _, %v; want _, %q", err, wantErr)
 	}
 }
 
@@ -323,7 +333,7 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	target := fmt.Sprintf("xds:///%s", serviceName)
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("Dialing target %q: %v", target, err)
+		t.Fatalf("grpc.NewClient() failed %q: %v", target, err)
 	}
 	defer cc.Close()
 	t.Log("Created ClientConn to test service")

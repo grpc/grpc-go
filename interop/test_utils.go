@@ -24,7 +24,6 @@
 package interop
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -36,12 +35,10 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -681,100 +678,6 @@ func DoPickFirstUnary(ctx context.Context, tc testgrpc.TestServiceClient) {
 		if serverID != id {
 			logger.Fatalf("iteration %d, got different server ids: %q vs %q", i, serverID, id)
 		}
-	}
-}
-
-func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, soakRequestSize int, soakResponseSize int, dopts []grpc.DialOption, copts []grpc.CallOption) (latency time.Duration, err error) {
-	start := time.Now()
-	client := tc
-	if resetChannel {
-		var conn *grpc.ClientConn
-		conn, err = grpc.Dial(serverAddr, dopts...)
-		if err != nil {
-			return
-		}
-		defer conn.Close()
-		client = testgrpc.NewTestServiceClient(conn)
-	}
-	// per test spec, don't include channel shutdown in latency measurement
-	defer func() { latency = time.Since(start) }()
-	// do a large-unary RPC
-	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, soakRequestSize)
-	req := &testpb.SimpleRequest{
-		ResponseType: testpb.PayloadType_COMPRESSABLE,
-		ResponseSize: int32(soakResponseSize),
-		Payload:      pl,
-	}
-	var reply *testpb.SimpleResponse
-	reply, err = client.UnaryCall(ctx, req, copts...)
-	if err != nil {
-		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
-		return
-	}
-	t := reply.GetPayload().GetType()
-	s := len(reply.GetPayload().GetBody())
-	if t != testpb.PayloadType_COMPRESSABLE || s != soakResponseSize {
-		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, soakResponseSize)
-		return
-	}
-	return
-}
-
-// DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
-// If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
-// stub that is created with the provided server address and dial options.
-// TODO(mohanli-ml): Create SoakTestOptions as a parameter for this method.
-func DoSoakTest(ctx context.Context, tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, soakRequestSize int, soakResponseSize int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration) {
-	start := time.Now()
-	var elapsedTime float64
-	iterationsDone := 0
-	totalFailures := 0
-	hopts := stats.HistogramOptions{
-		NumBuckets:     20,
-		GrowthFactor:   1,
-		BaseBucketSize: 1,
-		MinValue:       0,
-	}
-	h := stats.NewHistogram(hopts)
-	for i := 0; i < soakIterations; i++ {
-		if ctx.Err() != nil {
-			elapsedTime = time.Since(start).Seconds()
-			break
-		}
-		earliestNextStart := time.After(minTimeBetweenRPCs)
-		iterationsDone++
-		var p peer.Peer
-		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, soakRequestSize, soakResponseSize, dopts, []grpc.CallOption{grpc.Peer(&p)})
-		latencyMs := int64(latency / time.Millisecond)
-		h.Add(latencyMs)
-		if err != nil {
-			totalFailures++
-			addrStr := "nil"
-			if p.Addr != nil {
-				addrStr = p.Addr.String()
-			}
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s failed: %s\n", i, latencyMs, addrStr, serverAddr, err)
-			<-earliestNextStart
-			continue
-		}
-		if latency > perIterationMaxAcceptableLatency {
-			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s exceeds max acceptable latency: %d\n", i, latencyMs, p.Addr.String(), serverAddr, perIterationMaxAcceptableLatency.Milliseconds())
-			<-earliestNextStart
-			continue
-		}
-		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s server_uri: %s succeeded\n", i, latencyMs, p.Addr.String(), serverAddr)
-		<-earliestNextStart
-	}
-	var b bytes.Buffer
-	h.Print(&b)
-	fmt.Fprintf(os.Stderr, "(server_uri: %s) histogram of per-iteration latencies in milliseconds: %s\n", serverAddr, b.String())
-	fmt.Fprintf(os.Stderr, "(server_uri: %s) soak test ran: %d / %d iterations. total failures: %d. max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", serverAddr, iterationsDone, soakIterations, totalFailures, maxFailures)
-	if iterationsDone < soakIterations {
-		logger.Fatalf("(server_uri: %s) soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations.", serverAddr, elapsedTime, iterationsDone, soakIterations)
-	}
-	if totalFailures > maxFailures {
-		logger.Fatalf("(server_uri: %s) soak test total failures: %d exceeds max failures threshold: %d.", serverAddr, totalFailures, maxFailures)
 	}
 }
 

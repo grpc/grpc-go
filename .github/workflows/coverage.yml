@@ -19,8 +19,8 @@ jobs:
       - name: Run coverage
         run: go test -coverprofile=coverage.out -coverpkg=./... ./...
 
-      - name: Run coverage with new pickfirst
-        run: GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=true go test -coverprofile=coverage_new_pickfirst.out -coverpkg=./... ./...
+      - name: Run coverage with old pickfirst
+        run: GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=false go test -coverprofile=coverage_old_pickfirst.out -coverpkg=./... ./...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

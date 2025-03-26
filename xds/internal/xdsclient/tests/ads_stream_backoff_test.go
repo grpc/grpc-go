@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -46,10 +46,14 @@ import (
 func createXDSClientWithBackoff(t *testing.T, bootstrapContents []byte, streamBackoff func(int) time.Duration) xdsclient.XDSClient {
 	t.Helper()
 
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name:                      t.Name(),
 		StreamBackoffAfterFailure: streamBackoff,
-		Contents:                  bootstrapContents,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -99,18 +103,19 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Override the backoff implementation to push on a channel that is read by
 	// the test goroutine.
+	backoffCtx, backoffCancel := context.WithCancel(ctx)
 	streamBackoff := func(v int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
-		case <-ctx.Done():
+		case <-backoffCtx.Done():
 		}
 		return 0
 	}
+	defer backoffCancel()
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
 	// Register a watch for a listener resource.
@@ -126,13 +131,8 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	}
 
 	// Verify that the received stream error is reported to the watcher.
-	u, err := lw.updateCh.Receive(ctx)
-	if err != nil {
-		t.Fatal("Timeout when waiting for an error callback on the listener watcher")
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if !strings.Contains(gotErr.Error(), streamErr.Error()) {
-		t.Fatalf("Received stream error: %v, wantErr: %v", gotErr, streamErr)
+	if err := verifyListenerError(ctx, lw.updateCh, streamErr.Error(), nodeID); err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that the stream is closed.
@@ -153,6 +153,12 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName}); err != nil {
 		t.Fatal(err)
 	}
+
+	// To prevent indefinite blocking during xDS client close, which is caused
+	// by a blocking backoff channel write, cancel the backoff context early
+	// given that the test is complete.
+	backoffCancel()
+
 }
 
 // Tests the case where a stream breaks because the server goes down. Verifies
@@ -221,7 +227,6 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
 	// Register a watch for a listener resource.
@@ -383,7 +388,6 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClientWithBackoff(t, bc, streamBackoff)
 
 	// Register a watch for a listener resource.

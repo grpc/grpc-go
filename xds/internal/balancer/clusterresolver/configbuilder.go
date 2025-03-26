@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"sort"
 
-	"google.golang.org/grpc/balancer/weightedroundrobin"
+	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
@@ -144,11 +144,16 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for i, e := range endpoints {
 		retEndpoints[i] = hierarchy.SetInEndpoint(e, []string{pName})
+		// Copy the nested address field as slice fields are shared by the
+		// iteration variable and the original slice.
+		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
 	}
 	return pName, &clusterimpl.LBConfig{
-		Cluster:         mechanism.Cluster,
-		TelemetryLabels: mechanism.TelemetryLabels,
-		ChildPolicy:     &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		Cluster:               mechanism.Cluster,
+		TelemetryLabels:       mechanism.TelemetryLabels,
+		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
+		LoadReportingServer:   mechanism.LoadReportingServer,
 	}, retEndpoints
 }
 
@@ -278,7 +283,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 			if endpoint.Weight != 0 {
 				ew = endpoint.Weight
 			}
-			resolverEndpoint = weightedroundrobin.SetAddrInfoInEndpoint(resolverEndpoint, weightedroundrobin.AddrInfo{Weight: lw * ew})
+			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}

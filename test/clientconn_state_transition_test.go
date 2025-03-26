@@ -164,7 +164,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := grpc.Dial("",
+	client, err := grpc.NewClient("passthrough:///",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithDialer(pl.Dialer()),
@@ -181,6 +181,9 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
 
+	// Wait for the test balancer to be built before capturing it's state
+	// notification channel.
+	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	for i := 0; i < len(want); i++ {
 		select {
@@ -236,7 +239,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		conn.Close()
 	}()
 
-	client, err := grpc.Dial(lis.Addr().String(),
+	client, err := grpc.NewClient(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
 	if err != nil {
@@ -247,7 +250,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
-
+	testutils.AwaitNotState(ctx, t, client, connectivity.Idle)
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
 	want := []connectivity.State{
@@ -324,7 +327,7 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := grpc.Dial("whatever:///this-gets-overwritten",
+	client, err := grpc.NewClient("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithConnectParams(grpc.ConnectParams{
@@ -339,7 +342,7 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer client.Close()
-
+	client.Connect()
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
 		connectivity.Connecting,
@@ -427,7 +430,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := grpc.Dial("whatever:///this-gets-overwritten",
+	client, err := grpc.NewClient("whatever:///this-gets-overwritten",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		grpc.WithResolvers(rb))
@@ -435,7 +438,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-
+	client.Connect()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	go testutils.StayConnected(ctx, client)
@@ -571,15 +574,15 @@ func (s) TestConnectivityStateSubscriber(t *testing.T) {
 	// Create the ClientConn.
 	const testResName = "any"
 	rb := manual.NewBuilderWithScheme(testResName)
-	cc, err := grpc.Dial(testResName+":///",
+	cc, err := grpc.NewClient(testResName+":///",
 		grpc.WithResolvers(rb),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalName)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		t.Fatalf("Unexpected error from grpc.Dial: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
-
+	cc.Connect()
 	// Subscribe to state updates.  Use a buffer size of 1 to allow the
 	// Shutdown state to go into the channel when Close()ing.
 	connCh := make(chan connectivity.State, 1)

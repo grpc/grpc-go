@@ -20,7 +20,6 @@ package xdsclient_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -85,7 +85,6 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClient(t, bc)
 
 	// Register a watch for a listener resource.
@@ -162,7 +161,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	}
 	gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
-	wantNackErr := errors.New("unexpected http connection manager resource type")
+	wantNackErr := xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +271,6 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
 	client := createXDSClient(t, bc)
 
 	// Register a watch for a listener resource.
@@ -310,7 +308,7 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 	gotResp := r.(*v3discoverypb.DiscoveryResponse)
 
 	// Verify that the error is propagated to the watcher.
-	var wantNackErr = errors.New("unexpected http connection manager resource type")
+	var wantNackErr = xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
 	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -380,10 +378,13 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	testutils.CreateBootstrapFileForTesting(t, bc)
-	client, close, err := xdsclient.NewForTesting(xdsclient.OptionsForTesting{
-		Name:     t.Name(),
-		Contents: bc,
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

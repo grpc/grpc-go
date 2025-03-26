@@ -30,8 +30,9 @@ import (
 // updates for later use and also determines whether all the rdsWatcher updates
 // needed have been received or not.
 type rdsHandler struct {
-	xdsC   XDSClient
-	logger *igrpclog.PrefixLogger
+	xdsC      XDSClient
+	xdsNodeID string
+	logger    *igrpclog.PrefixLogger
 
 	callback func(string, rdsWatcherUpdate)
 
@@ -50,13 +51,15 @@ type rdsHandler struct {
 // resources. listenerWrapper updates the list of route names to watch by
 // calling updateRouteNamesToWatch() upon receipt of new Listener configuration.
 func newRDSHandler(cb func(string, rdsWatcherUpdate), xdsC XDSClient, logger *igrpclog.PrefixLogger) *rdsHandler {
-	return &rdsHandler{
+	r := &rdsHandler{
 		xdsC:     xdsC,
 		logger:   logger,
 		callback: cb,
 		updates:  make(map[string]rdsWatcherUpdate),
 		cancels:  make(map[string]func()),
 	}
+	r.xdsNodeID = xdsC.BootstrapConfig().Node().GetId()
+	return r
 }
 
 // updateRouteNamesToWatch handles a list of route names to watch for a given
