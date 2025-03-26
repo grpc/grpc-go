@@ -97,11 +97,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	r := &delegatingResolver{
 		target: target,
 		cc:     cc,
-		// Child resolvers may send a state update as soon as they're built.
-		// Initialize children with no-op resolvers. When both children are nil,
-		// the delegatingResolver is considered closed.
-		targetResolver: nopResolver{},
-		proxyResolver:  nopResolver{},
 	}
 
 	var err error
@@ -120,6 +115,10 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		logger.Infof("Proxy URL detected : %s", r.proxyURL)
 	}
 
+	// Resolver updates from one child may trigger calls into the other. Block
+	// updates until the children are initialized.
+	r.childMu.Lock()
+	defer r.childMu.Unlock()
 	// When the scheme is 'dns' and target resolution on client is not enabled,
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
@@ -143,6 +142,12 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		return nil, fmt.Errorf("delegating_resolver: failed to build resolver for proxy URL %q: %v", r.proxyURL, err)
 	}
 
+	if r.targetResolver == nil {
+		r.targetResolver = nopResolver{}
+	}
+	if r.proxyResolver == nil {
+		r.proxyResolver = nopResolver{}
+	}
 	return r, nil
 }
 
@@ -281,18 +286,12 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 		go func() {
 			r.childMu.Lock()
 			defer r.childMu.Unlock()
-			if !r.isClosedLocked() {
+			if r.targetResolver != nil {
 				r.targetResolver.ResolveNow(resolver.ResolveNowOptions{})
 			}
 		}()
 	}
 	return err
-}
-
-// isClosedLocked returns true if the resolver is closed. Callers must hold
-// childMu.
-func (r *delegatingResolver) isClosedLocked() bool {
-	return r.targetResolver == nil && r.proxyResolver == nil
 }
 
 // updateTargetResolverState updates the target resolver state by storing target
@@ -313,7 +312,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		go func() {
 			r.childMu.Lock()
 			defer r.childMu.Unlock()
-			if !r.isClosedLocked() {
+			if r.proxyResolver != nil {
 				r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
 			}
 		}()
