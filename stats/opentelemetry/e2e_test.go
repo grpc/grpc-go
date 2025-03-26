@@ -1700,6 +1700,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		}
 		if _, err = stream.Recv(); err != nil && err != io.EOF {
 			streamError <- err
+			return
 		}
 		streamError <- nil
 	}()
