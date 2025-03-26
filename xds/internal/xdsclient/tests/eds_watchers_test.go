@@ -84,7 +84,7 @@ func (ew *endpointsWatcher) ResourceChanged(update *xdsresource.EndpointsResourc
 func (ew *endpointsWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// here and in ResourceError() simplifies tests which will have
 	// access to the most recently received error.
 	ew.updateCh.Replace(endpointsUpdateErrTuple{err: err})
 	onDone()

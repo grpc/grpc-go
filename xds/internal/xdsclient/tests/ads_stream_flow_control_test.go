@@ -76,7 +76,7 @@ func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerR
 func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
 	// Notify receipt of an error.
 	select {
-	case lw.errorCh <- struct{}{}:
+	case lw.notFoundCh <- struct{}{}:
 	default:
 	}
 
@@ -518,7 +518,7 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 }
 
 // Test ADS stream flow control with a single resource that is deleted from the
-// management server and therefore the watcher's OnResourceDoesNotExist()
+// management server and therefore the watcher's ResourceError()
 // callback is expected to be invoked. Verifies that no further reads are
 // attempted until the callback is completely handled by the watcher.
 func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {

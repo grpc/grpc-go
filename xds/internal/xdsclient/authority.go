@@ -460,7 +460,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 			// `ignore_resource_deletion` server feature is enabled through the
 			// bootstrap configuration. If the resource deletion is to be
 			// ignored, the resource is not removed from the cache and the
-			// corresponding OnResourceDoesNotExist() callback is not invoked on
+			// corresponding ResourceError() callback is not invoked on
 			// the watchers.
 			if !state.deletionIgnored {
 				state.deletionIgnored = true

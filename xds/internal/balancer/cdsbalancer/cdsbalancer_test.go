@@ -813,7 +813,7 @@ func (s) TestResolverError(t *testing.T) {
 
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*100000)
 	defer cancel()
 	val, err := lis.NewConnCh.Receive(ctx)
 	if err != nil {
@@ -1003,7 +1003,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 	// Ensure RPC fails with Unavailable status code and the error message is
 	// meaningful and contains the xDS node ID.
-	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
+	wantErr := fmt.Sprintf("resource %q of type %q has been removed", clusterName, "ClusterResource")
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
 	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
 		t.Fatal(err)

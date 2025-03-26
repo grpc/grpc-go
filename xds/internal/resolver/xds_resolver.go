@@ -593,7 +593,7 @@ func (r *xdsResolver) onRouteConfigResourceAmbientError(name string, err error) 
 
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
-	r.logger.Warningf("Received resource error for RouteConfiguration resource %q", name)
+	r.logger.Warningf("Received resource error for RouteConfiguration resource %q: %v", name, err)
 
 	if r.rdsResourceName != name {
 		return

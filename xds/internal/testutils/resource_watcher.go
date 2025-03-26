@@ -31,12 +31,11 @@ type TestResourceWatcher struct {
 	UpdateCh chan *xdsresource.ResourceData
 	// ErrorCh is the channel on which errors from the xDS client are delivered.
 	ErrorCh chan error
-	// ResourceDoesNotExistCh is the channel used to indicate calls to OnResourceDoesNotExist
+	// ResourceDoesNotExistCh is the channel used to indicate calls to ResourceError
 	ResourceDoesNotExistCh chan struct{}
 }
 
-// ResourceChanged is invoked by the xDS client to report the latest update
-// or an error on the resource being watched.
+// ResourceChanged is invoked by the xDS client to report the latest update.
 func (w *TestResourceWatcher) ResourceChanged(data xdsresource.ResourceData, onDone func()) {
 	defer onDone()
 	select {
@@ -47,17 +46,21 @@ func (w *TestResourceWatcher) ResourceChanged(data xdsresource.ResourceData, onD
 
 }
 
-// ResourceError is invoked by the xDS client to report the latest error.
-func (w *TestResourceWatcher) ResourceError(_ error, onDone func()) {
+// ResourceError is invoked by the xDS client to report the latest error to
+// stop watching the resource.
+func (w *TestResourceWatcher) ResourceError(err error, onDone func()) {
 	defer onDone()
 	select {
 	case <-w.ResourceDoesNotExistCh:
+	case <-w.ErrorCh:
 	default:
 	}
+	w.ErrorCh <- err
 	w.ResourceDoesNotExistCh <- struct{}{}
 }
 
-// AmbientError is invoked by the xDS client to report the latest error.
+// AmbientError is invoked by the xDS client to report the latest ambient
+// error.
 func (w *TestResourceWatcher) AmbientError(err error, onDone func()) {
 	defer onDone()
 	select {
