@@ -32,8 +32,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const methodName = "other"
-
 type serverStatsHandler struct {
 	estats.MetricsRecorder
 	options       Options
@@ -182,6 +180,22 @@ func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management for metrics.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	method := info.FullMethodName
+	if h.options.MetricsOptions.MethodAttributeFilter != nil {
+		if !h.options.MetricsOptions.MethodAttributeFilter(method) {
+			method = "other"
+		}
+	}
+	server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
+	if server == nil { // Shouldn't happen, defensive programming.
+		logger.Error("ctx passed into server side stats handler has no grpc server ref")
+		method = "other"
+	} else {
+		isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
+		if !isRegisteredMethod(server, method) {
+			method = "other"
+		}
+	}
 	ri := getRPCInfo(ctx)
 	var ai *attemptInfo
 	if ri == nil {
@@ -189,30 +203,13 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	} else {
 		ai = ri.ai
 	}
-	method := info.FullMethodName
-	if h.options.MetricsOptions.MethodAttributeFilter != nil {
-		if !h.options.MetricsOptions.MethodAttributeFilter(method) {
-			method = methodName
-		}
-	}
-	server := internal.ServerFromContext.(func(context.Context) *grpc.Server)(ctx)
-	if server == nil { // Shouldn't happen, defensive programming.
-		logger.Error("ctx passed into server side stats handler has no grpc server ref")
-		method = methodName
-	} else {
-		isRegisteredMethod := internal.IsRegisteredMethod.(func(*grpc.Server, string) bool)
-		if !isRegisteredMethod(server, method) {
-			method = methodName
-		}
-	}
-
 	ai.startTime = time.Now()
 	ai.method = removeLeadingSlash(method)
 
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC handles per RPC attempt stats for server-side metrics collection.
+// HandleRPC handles per RPC stats implementation.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {

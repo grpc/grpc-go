@@ -48,10 +48,8 @@ func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, 
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	var ai *attemptInfo
-
-	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
+	var ai *attemptInfo
 	if ri == nil {
 		ai = &attemptInfo{}
 	} else {
@@ -81,9 +79,8 @@ func (h *serverTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo)
 	return ctx, ai
 }
 
-// HandleRPC handles per-RPC attempt stats events for tracing.
+// HandleRPC handles per RPC tracing implementation.
 func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side tracing handler trace event handling has no server call data present")

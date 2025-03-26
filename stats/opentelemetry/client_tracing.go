@@ -128,10 +128,8 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	var ai *attemptInfo
-
-	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
+	var ai *attemptInfo
 	if ri == nil {
 		ai = &attemptInfo{}
 	} else {
@@ -141,9 +139,8 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) 
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC handles per-RPC attempt stats events for tracing.
+// HandleRPC handles per RPC tracing implementation.
 func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
-	// Fetch the rpcInfo set by a previously registered stats handler.
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side tracing handler trace event handling has no client attempt data present")

@@ -158,14 +158,6 @@ func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	ri := getRPCInfo(ctx)
-	var ai *attemptInfo
-	if ri == nil {
-		ai = &attemptInfo{}
-	} else {
-		ai = ri.ai
-	}
-
 	// Numerous stats handlers can be used for the same channel. The cluster
 	// impl balancer which writes to this will only write once, thus have this
 	// stats handler's per attempt scoped context point to the same optional
@@ -182,6 +174,13 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
+	ri := getRPCInfo(ctx)
+	var ai *attemptInfo
+	if ri == nil {
+		ai = &attemptInfo{}
+	} else {
+		ai = ri.ai
+	}
 	ai.startTime = time.Now()
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
@@ -189,7 +188,7 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC handles per-RPC attempt stats for client-side metrics collection.
+// HandleRPC handles per RPC stats implementation.
 func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
