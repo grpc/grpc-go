@@ -1685,7 +1685,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 
 	streamError := make(chan error, 1)
 	go func() {
-		defer close(streamError)
 		stream, err := client.FullDuplexCall(ctx)
 		if err != nil {
 			streamError <- err
@@ -1702,6 +1701,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		if _, err = stream.Recv(); err != nil && err != io.EOF {
 			streamError <- err
 		}
+		streamError <- nil
 	}()
 
 	time.AfterFunc(100*time.Millisecond, func() {
