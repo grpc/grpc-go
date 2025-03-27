@@ -28,14 +28,13 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	otlptraceexp "go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	otlptracehttpexp "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
+	otelstdouttrace "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	otelpropagation "go.opentelemetry.io/otel/propagation"
 	otelmetric "go.opentelemetry.io/otel/sdk/metric"
 	otelresource "go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
@@ -45,7 +44,6 @@ import (
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
-	otlpEndpoint       = flag.String("otlp_endpoint", ":4320", "the OTLP collector endpoint for traces")
 	serviceName        = "grpc-server"
 )
 
@@ -61,38 +59,28 @@ func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.Echo
 func main() {
 	flag.Parse()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	metricExporter, err := prometheus.New()
+	promExporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	// Initialize MeterProvider with Prometheus exporter.
-	provider := otelmetric.NewMeterProvider(otelmetric.WithReader(metricExporter))
+	meterProvider := otelmetric.NewMeterProvider(otelmetric.WithReader(promExporter))
 
-	// Create OTLP exporter for traces.
-	otlpClient := otlptracehttpexp.NewClient(otlptracehttpexp.WithEndpoint(*otlpEndpoint), otlptracehttpexp.WithInsecure())
-	// Create a trace exporter instance.
-	traceExporter, err := otlptraceexp.New(ctx, otlpClient)
+	// Initialize stdouttrace exporter for traces
+	traceExporter, err := otelstdouttrace.New(otelstdouttrace.WithPrettyPrint())
 	if err != nil {
-		log.Fatalf("Failed to create otlp trace exporter: %v", err)
+		log.Fatalf("Failed to create stdouttrace exporter: %v", err)
 	}
-	// resource.New adds service metadata to telemetry, enabling context and
-	// filtering in the backend.
-	res, err := otelresource.New(ctx, otelresource.WithTelemetrySDK(), otelresource.WithAttributes(semconv.ServiceName(serviceName)))
-	if err != nil {
-		log.Fatalf("Could not set resources: %v", err)
-	}
-	// Create a batch span processor.
-	spanProcessor := sdktrace.NewBatchSpanProcessor(traceExporter)
-	// Create a TracerProvider instance.
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanProcessor), sdktrace.WithResource(res))
+
+	// Configure the tracer provider
+	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(serviceName))))
 	textMapPropagator := otelpropagation.TraceContext{} // Using W3C Trace Context Propagator.
 
-	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
+	so := opentelemetry.ServerOption(opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: meterProvider},
+		TraceOptions:   oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator}})
 
-	so := opentelemetry.ServerOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}, TraceOptions: oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator}})
+	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
 	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
