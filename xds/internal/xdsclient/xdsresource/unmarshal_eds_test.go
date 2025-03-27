@@ -336,10 +336,6 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
-	oldConfig := envconfig.XDSEndpointHashKeyBackwardCompat
-	defer func() { envconfig.XDSEndpointHashKeyBackwardCompat = oldConfig }()
-	envconfig.XDSEndpointHashKeyBackwardCompat = false
-
 	baseCLA := &v3endpointpb.ClusterLoadAssignment{
 		Endpoints: []*v3endpointpb.LocalityLbEndpoints{
 			{
@@ -368,9 +364,10 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		metadata    *v3corepb.Metadata
-		wantHashKey string
+		name         string
+		metadata     *v3corepb.Metadata
+		wantHashKey  string
+		compatEnvVar bool
 	}{
 		{
 			name:        "no metadata",
@@ -430,10 +427,30 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 			},
 			wantHashKey: "test-hash-key",
 		},
+		{
+			name: "envoy.lb with hash key",
+			metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"envoy.lb": {
+						Fields: map[string]*structpb.Value{
+							"hash_key": {
+								Kind: &structpb.Value_StringValue{StringValue: "test-hash-key"},
+							},
+						},
+					},
+				},
+			},
+			wantHashKey:  "",
+			compatEnvVar: true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			oldConfig := envconfig.XDSEndpointHashKeyBackwardCompat
+			defer func() { envconfig.XDSEndpointHashKeyBackwardCompat = oldConfig }()
+			envconfig.XDSEndpointHashKeyBackwardCompat = test.compatEnvVar
+
 			cla := proto.Clone(baseCLA).(*v3endpointpb.ClusterLoadAssignment)
 			cla.Endpoints[0].LbEndpoints[0].Metadata = test.metadata
 			marshalledCLA := testutils.MarshalAny(t, cla)

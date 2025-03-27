@@ -285,7 +285,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				ew = endpoint.Weight
 			}
 			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
-			resolverEndpoint = ringhash.SetEndpointHashKey(resolverEndpoint, endpoint.HashKey)
+			resolverEndpoint = ringhash.SetHashKey(resolverEndpoint, endpoint.HashKey)
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}

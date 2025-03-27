@@ -24,9 +24,10 @@ import (
 
 type xdsHashKey struct{}
 
-// GetXDSRequestHash returns the request hash in the context, set from the
-// xDS config selector.
-func GetXDSRequestHash(ctx context.Context) (uint64, bool) {
+// XDSRequestHash returns the request hash in the context and true if it was set
+// from the xDS config selector. If the xDS config selector has not set the hash,
+// it returns 0 and false.
+func XDSRequestHash(ctx context.Context) (uint64, bool) {
 	requestHash := ctx.Value(xdsHashKey{})
 	if requestHash == nil {
 		return 0, false

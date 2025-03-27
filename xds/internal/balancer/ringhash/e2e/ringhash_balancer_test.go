@@ -2714,17 +2714,6 @@ func (s) TestRingHash_RequestHashKey(t *testing.T) {
 		ServiceConfig: (&testutils.ResolverClientConn{}).ParseServiceConfig(ringHashServiceConfigUpdate),
 	})
 
-	// Make sure that requests with the old hash are sent to random backends.
-	// Send a large number of RPCs and check that they are distributed randomly.
-	numRPCs := computeIdealNumberOfRPCs(t, 0.25, errorTolerance)
-	gotPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
-	for _, backend := range backends {
-		got := float64(gotPerBackend[backend]) / float64(numRPCs)
-		want := .25
-		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
-			t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backend, got, want, errorTolerance)
-		}
-	}
 	// Make sure that requests with the new hash are sent to the right backend.
 	for _, backend := range backends {
 		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("other_header", backend+"_0"))

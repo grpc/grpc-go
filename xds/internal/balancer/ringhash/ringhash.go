@@ -97,14 +97,14 @@ type ringhashBalancer struct {
 }
 
 // hashKey returns the hash key to use for an endpoint. Per gRFC A61, each entry
-// in the ring is an endpoint, positioned based on the hash of the endpoint's
-// first address, unless the endpoint has an explicit hash key as described in
-// gRFC A76.
+// in the ring is a hash of the endpoint's hash key concatenated with a
+// per-entry unique suffix.
 func hashKey(endpoint resolver.Endpoint) string {
-	hk := ringhash.GetEndpointHashKey(endpoint)
-	if hk != "" {
+	if hk := ringhash.HashKey(endpoint); hk != "" {
 		return hk
 	}
+	// If no hash key is set, use the endpoint's first address as the hash key.
+	// This is the default behavior when no hash key is set.
 	return endpoint.Addresses[0].Addr
 }
 
@@ -144,7 +144,6 @@ func (b *ringhashBalancer) UpdateState(state balancer.State) {
 			// object for it. If the weight or the hash key of the endpoint has
 			// changed, update the endpoint state map with the new weight or
 			// hash key. This will be used when a new ring is created.
-			b.logger.Infof("the endpoint existed before (es: %v)", es.hashKey)
 			if oldWeight := es.weight; oldWeight != newWeight {
 				b.shouldRegenerateRing = true
 				es.weight = newWeight
@@ -291,7 +290,6 @@ func (b *ringhashBalancer) updatePickerLocked() {
 	} else {
 		newPicker = b.newPickerLocked()
 	}
-	b.logger.Infof("Pushing new state %v and picker %p", state, newPicker)
 	b.ClientConn.UpdateState(balancer.State{
 		ConnectivityState: state,
 		Picker:            newPicker,

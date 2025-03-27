@@ -23,7 +23,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/cespare/xxhash/v2"
+	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 )

@@ -19,6 +19,7 @@
 package ringhash
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -28,79 +29,91 @@ import (
 func (s) TestParseConfig(t *testing.T) {
 	oldEnvConfig := envconfig.RingHashSetRequestHashKey
 	defer func() { envconfig.RingHashSetRequestHashKey = oldEnvConfig }()
-	envconfig.RingHashSetRequestHashKey = true
 
 	tests := []struct {
 		name         string
 		js           string
 		envConfigCap uint64
+		envVar       bool
 		want         *LBConfig
 		wantErr      bool
 	}{
 		{
-			name: "OK",
-			js:   `{"minRingSize": 1, "maxRingSize": 2}`,
-			want: &LBConfig{MinRingSize: 1, MaxRingSize: 2},
+			name:   "OK",
+			js:     `{"minRingSize": 1, "maxRingSize": 2}`,
+			envVar: true,
+			want:   &LBConfig{MinRingSize: 1, MaxRingSize: 2},
 		},
 		{
-			name: "OK with default min",
-			js:   `{"maxRingSize": 2000}`,
-			want: &LBConfig{MinRingSize: defaultMinSize, MaxRingSize: 2000},
+			name:   "OK with default min",
+			js:     `{"maxRingSize": 2000}`,
+			envVar: true,
+			want:   &LBConfig{MinRingSize: defaultMinSize, MaxRingSize: 2000},
 		},
 		{
-			name: "OK with default max",
-			js:   `{"minRingSize": 2000}`,
-			want: &LBConfig{MinRingSize: 2000, MaxRingSize: defaultMaxSize},
+			name:   "OK with default max",
+			js:     `{"minRingSize": 2000}`,
+			envVar: true,
+			want:   &LBConfig{MinRingSize: 2000, MaxRingSize: defaultMaxSize},
 		},
 		{
 			name:    "min greater than max",
 			js:      `{"minRingSize": 10, "maxRingSize": 2}`,
+			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
 			name:    "min greater than max greater than global limit",
 			js:      `{"minRingSize": 6000, "maxRingSize": 5000}`,
+			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name: "max greater than global limit",
-			js:   `{"minRingSize": 1, "maxRingSize": 6000}`,
-			want: &LBConfig{MinRingSize: 1, MaxRingSize: 4096},
+			name:   "max greater than global limit",
+			js:     `{"minRingSize": 1, "maxRingSize": 6000}`,
+			envVar: true,
+			want:   &LBConfig{MinRingSize: 1, MaxRingSize: 4096},
 		},
 		{
-			name: "min and max greater than global limit",
-			js:   `{"minRingSize": 5000, "maxRingSize": 6000}`,
-			want: &LBConfig{MinRingSize: 4096, MaxRingSize: 4096},
+			name:   "min and max greater than global limit",
+			js:     `{"minRingSize": 5000, "maxRingSize": 6000}`,
+			envVar: true,
+			want:   &LBConfig{MinRingSize: 4096, MaxRingSize: 4096},
 		},
 		{
 			name:         "min and max less than raised global limit",
 			js:           `{"minRingSize": 5000, "maxRingSize": 6000}`,
 			envConfigCap: 8000,
+			envVar:       true,
 			want:         &LBConfig{MinRingSize: 5000, MaxRingSize: 6000},
 		},
 		{
 			name:         "min and max greater than raised global limit",
 			js:           `{"minRingSize": 10000, "maxRingSize": 10000}`,
 			envConfigCap: 8000,
+			envVar:       true,
 			want:         &LBConfig{MinRingSize: 8000, MaxRingSize: 8000},
 		},
 		{
 			name:    "min greater than upper bound",
 			js:      `{"minRingSize": 8388610, "maxRingSize": 10}`,
+			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
 			name:    "max greater than upper bound",
 			js:      `{"minRingSize": 10, "maxRingSize": 8388610}`,
+			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name: "request metadata key set",
-			js:   `{"request_hash_header": "x-foo"}`,
+			name:   "request metadata key set",
+			js:     `{"request_hash_header": "x-foo"}`,
+			envVar: true,
 			want: &LBConfig{
 				MinRingSize:       defaultMinSize,
 				MaxRingSize:       defaultMaxSize,
@@ -110,14 +123,25 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name:    "invalid request hash header",
 			js:      `{"request_hash_header": "!invalid"}`,
+			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
 			name:    "binary request hash header",
 			js:      `{"request_hash_header": "header-with-bin"}`,
+			envVar:  true,
 			want:    nil,
 			wantErr: true,
+		},
+		{
+			name:   "request_hash_header cleared when RingHashSetRequestHashKey env var is false",
+			js:     `{"request_hash_header": "x-foo"}`,
+			envVar: false,
+			want: &LBConfig{
+				MinRingSize: defaultMinSize,
+				MaxRingSize: defaultMaxSize,
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -127,7 +151,8 @@ func (s) TestParseConfig(t *testing.T) {
 				defer func() { envconfig.RingHashCap = old }()
 				envconfig.RingHashCap = tt.envConfigCap
 			}
-			got, err := parseConfig([]byte(tt.js))
+			envconfig.RingHashSetRequestHashKey = tt.envVar
+			got, err := parseConfig(json.RawMessage(tt.js))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return

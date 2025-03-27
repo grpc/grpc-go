@@ -56,12 +56,12 @@ var (
 	// to "false".
 	NewPickFirstEnabled = boolFromEnv("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST", true)
 
-	// XDSEndpointHashKeyBackwardCompat disables parsing of the endpoint hash
-	// key from EDS LbEndpoint metadata. We can disable this behavior by setting
-	// the environment variable "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to
-	// "true". When the implementation of A76 is stable, we will flip the default
-	// value to false in a subsequent release. A final release will remove this
-	// environment variable, enabling the new behavior unconditionally.
+	// XDSEndpointHashKeyBackwardCompat controls the parsing of the endpoint hash
+	// key from EDS LbEndpoint metadata. Endpoint hash keys can be disabled by
+	// setting "GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT" to "true". When the
+	// implementation of A76 is stable, we will flip the default value to false
+	// in a subsequent release. A final release will remove this environment
+	// variable, enabling the new behavior unconditionally.
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", true)
 
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the

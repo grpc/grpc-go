@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cespare/xxhash/v2"
+	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpclog"
@@ -56,8 +56,8 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	var requestHash uint64
 	if p.requestHashHeader == "" {
 		var ok bool
-		if requestHash, ok = GetXDSRequestHash(info.Ctx); !ok {
-			return balancer.PickResult{}, fmt.Errorf("bug: expected xDS config selector to set the request hash")
+		if requestHash, ok = XDSRequestHash(info.Ctx); !ok {
+			return balancer.PickResult{}, fmt.Errorf("ringhash: expected xDS config selector to set the request hash")
 		}
 	} else {
 		md, ok := metadata.FromOutgoingContext(info.Ctx)
@@ -65,8 +65,8 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			requestHash = p.randUint64()
 			usingRandomHash = true
 		} else {
-			header := strings.Join(md.Get(p.requestHashHeader), ",")
-			requestHash = xxhash.Sum64String(header)
+			values := strings.Join(md.Get(p.requestHashHeader), ",")
+			requestHash = xxhash.Sum64String(values)
 		}
 	}
 

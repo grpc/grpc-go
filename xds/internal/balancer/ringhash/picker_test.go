@@ -80,7 +80,7 @@ func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]b
 			ConnectivityState: st,
 			Picker: &fakeChildPicker{
 				connectivityState: st,
-				tfError:           fmt.Errorf("%w: %d", errPicker, i),
+				tfError:           fmt.Errorf("%d: %w", i, errPicker),
 				subConn:           testSC,
 			},
 		}
@@ -176,10 +176,7 @@ func (s) TestPickerNoRequestHash(t *testing.T) {
 		logger:         internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
 		endpointStates: epStates,
 	}
-	_, err := p.Pick(balancer.PickInfo{
-		Ctx: ctx,
-	})
-	if err == nil {
+	if _, err := p.Pick(balancer.PickInfo{Ctx: ctx}); err == nil {
 		t.Errorf("Pick() should have failed with no request hash")
 	}
 }
@@ -232,13 +229,9 @@ func (s) TestPickerRequestHashKey(t *testing.T) {
 			for _, v := range tt.headerValues {
 				ctx = metadata.AppendToOutgoingContext(ctx, headerName, v)
 			}
-			res, err := p.Pick(balancer.PickInfo{
-				Ctx: ctx,
-			})
-			if err != nil {
+			if res, err := p.Pick(balancer.PickInfo{Ctx: ctx}); err != nil {
 				t.Errorf("Pick() failed: %v", err)
-			}
-			if res.SubConn != testSubConns[tt.expectedPick] {
+			} else if res.SubConn != testSubConns[tt.expectedPick] {
 				t.Errorf("Pick() got = %v, want SubConn: %v", res.SubConn, testSubConns[tt.expectedPick])
 			}
 		})
@@ -292,14 +285,10 @@ func (s) TestPickerRandomHash(t *testing.T) {
 				hasEndpointInConnectingState: tt.hasEndpointInConnectingState,
 				randUint64:                   func() uint64 { return 0 }, // always return the first endpoint on the ring.
 			}
-			got, err := p.Pick(balancer.PickInfo{
-				Ctx: ctx,
-			})
-			if err != tt.wantErr {
+			if got, err := p.Pick(balancer.PickInfo{Ctx: ctx}); err != tt.wantErr {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)
 				return
-			}
-			if got.SubConn != tt.wantSC {
+			} else if got.SubConn != tt.wantSC {
 				t.Errorf("Pick() got = %v, want picked SubConn: %v", got, tt.wantSC)
 			}
 			if sc := tt.wantSCToConnect; sc != nil {
