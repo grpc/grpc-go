@@ -196,6 +196,8 @@ func (a *authority) handleADSStreamFailure(serverConfig *bootstrap.ServerConfig,
 		return
 	}
 
+	xdsClientServerFailureMetric.Record(a.metricsRecorder, 1, a.target, serverConfig.ServerURI())
+
 	// Two conditions need to be met for fallback to be triggered:
 	// 1. There is a connectivity failure on the ADS stream, as described in
 	//    gRFC A57. For us, this means that the ADS stream was closed before the
