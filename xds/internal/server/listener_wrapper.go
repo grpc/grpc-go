@@ -450,6 +450,11 @@ func (lw *ldsWatcher) ResourceError(err error, onDone func()) {
 	if lw.logger.V(2) {
 		lw.logger.Infof("LDS watch for resource %q reported resource error: %v", lw.name, err)
 	}
+	if xdsresource.ErrType(err) != xdsresource.ErrorTypeResourceNotFound {
+		// For errors which are anything other than "resource-not-found", we
+		// continue to use the old configuration.
+		return
+	}
 	lw.parent.onLDSResourceError(err)
 }
 

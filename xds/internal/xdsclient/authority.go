@@ -616,7 +616,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 
 		xdsChannel, err := a.xdsChannelToUse()
 		if err != nil {
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.AmbientError(err, func() {}) })
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.ResourceError(err, func() {}) })
 			return
 		}
 
