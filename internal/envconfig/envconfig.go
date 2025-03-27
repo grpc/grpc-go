@@ -65,7 +65,7 @@ var (
 	XDSEndpointHashKeyBackwardCompat = boolFromEnv("GRPC_XDS_ENDPOINT_HASH_KEY_BACKWARD_COMPAT", true)
 
 	// RingHashSetRequestHashKey is set if the ring hash balancer can get the
-	// request hash header by setting the "request_hash_header" field, according
+	// request hash header by setting the "requestHashHeader" field, according
 	// to gRFC A76. It can be enabled by setting the environment variable
 	// "GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY" to "true".
 	RingHashSetRequestHashKey = boolFromEnv("GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY", false)

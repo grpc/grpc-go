@@ -2669,7 +2669,7 @@ func (s) TestRingHash_RequestHashKey(t *testing.T) {
 	// address of the test backend), and a default service config pointing to
 	// the use of the ring_hash_experimental LB policy with an explicit hash
 	// header.
-	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"request_hash_header":"address_hash"}}]}`
+	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"address_hash"}}]}`
 	r := manual.NewBuilderWithScheme("whatever")
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -2708,7 +2708,7 @@ func (s) TestRingHash_RequestHashKey(t *testing.T) {
 		}
 	}
 
-	const ringHashServiceConfigUpdate = `{"loadBalancingConfig": [{"ring_hash_experimental":{"request_hash_header":"other_header"}}]}`
+	const ringHashServiceConfigUpdate = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"other_header"}}]}`
 	r.UpdateState(resolver.State{
 		Endpoints:     endpoints,
 		ServiceConfig: (&testutils.ResolverClientConn{}).ParseServiceConfig(ringHashServiceConfigUpdate),
@@ -2736,7 +2736,7 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 	// address of the test backend), and a default service config pointing to
 	// the use of the ring_hash_experimental LB policy with an explicit hash
 	// header.
-	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"request_hash_header":"address_hash"}}]}`
+	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"address_hash"}}]}`
 	r := manual.NewBuilderWithScheme("whatever")
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),

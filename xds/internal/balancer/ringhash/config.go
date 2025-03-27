@@ -34,7 +34,7 @@ type LBConfig struct {
 
 	MinRingSize       uint64 `json:"minRingSize,omitempty"`
 	MaxRingSize       uint64 `json:"maxRingSize,omitempty"`
-	RequestHashHeader string `json:"request_hash_header,omitempty"`
+	RequestHashHeader string `json:"requestHashHeader,omitempty"`
 }
 
 const (
@@ -75,10 +75,10 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	if cfg.RequestHashHeader != "" {
 		// See rules in https://github.com/grpc/proposal/blob/master/A76-ring-hash-improvements.md#explicitly-setting-the-request-hash-key
 		if err := metadata.ValidateKey(cfg.RequestHashHeader); err != nil {
-			return nil, fmt.Errorf("invalid request_metadata_key %q: %s", cfg.RequestHashHeader, err)
+			return nil, fmt.Errorf("invalid requestHashHeader %q: %s", cfg.RequestHashHeader, err)
 		}
 		if strings.HasSuffix(cfg.RequestHashHeader, "-bin") {
-			return nil, fmt.Errorf("invalid request_metadata_key %q: key must not end with \"-bin\"", cfg.RequestHashHeader)
+			return nil, fmt.Errorf("invalid requestHashHeader %q: key must not end with \"-bin\"", cfg.RequestHashHeader)
 		}
 	}
 	return &cfg, nil

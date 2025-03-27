@@ -112,7 +112,7 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:   "request metadata key set",
-			js:     `{"request_hash_header": "x-foo"}`,
+			js:     `{"requestHashHeader": "x-foo"}`,
 			envVar: true,
 			want: &LBConfig{
 				MinRingSize:       defaultMinSize,
@@ -122,21 +122,21 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:    "invalid request hash header",
-			js:      `{"request_hash_header": "!invalid"}`,
+			js:      `{"requestHashHeader": "!invalid"}`,
 			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
 			name:    "binary request hash header",
-			js:      `{"request_hash_header": "header-with-bin"}`,
+			js:      `{"requestHashHeader": "header-with-bin"}`,
 			envVar:  true,
 			want:    nil,
 			wantErr: true,
 		},
 		{
-			name:   "request_hash_header cleared when RingHashSetRequestHashKey env var is false",
-			js:     `{"request_hash_header": "x-foo"}`,
+			name:   "request hash header cleared when RingHashSetRequestHashKey env var is false",
+			js:     `{"requestHashHeader": "x-foo"}`,
 			envVar: false,
 			want: &LBConfig{
 				MinRingSize: defaultMinSize,
