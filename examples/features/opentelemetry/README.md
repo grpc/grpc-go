@@ -4,17 +4,13 @@ This example shows how to configure OpenTelemetry on a client and server, and sh
 
 ## Try it
 
-This section shows how to configure OpenTelemetry Metrics and Traces and visualize them.
+This section shows how to configure OpenTelemetry Metrics and Traces.
 
 **1. Run the gRPC Applications:**
-
-* **Run the gRPC Server:**
 
     ```
     go run server/main.go
     ```
-
-* **Run the gRPC Client:**
 
     ```
     go run client/main.go
