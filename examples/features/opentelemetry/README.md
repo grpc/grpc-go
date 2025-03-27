@@ -36,4 +36,4 @@ The client continuously makes RPC's to a server. The client and server both expo
 
 OpenTelemetry is configured on both the client and the server, and exports metrics to the Prometheus exporter. The exporter exposes metrics on the Prometheus ports described above. OpenTelemetry also exports traces using the stdouttrace exporter. These traces are printed as structured data to the console output of both the client and the server.
 
-Curling to the exposed Prometheus ports outputs the metrics recorded on the client and server. Each RPC call will likely generate trace information printed to the console, detailing the execution flow and timing of operations.
+Curling to the exposed Prometheus ports outputs the metrics recorded on the client and server.
