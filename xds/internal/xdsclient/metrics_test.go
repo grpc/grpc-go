@@ -60,7 +60,6 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
@@ -233,8 +232,8 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
+	lis := testutils.NewRestartableListener(l)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lis})
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
 	nodeID := uuid.New().String()
@@ -267,9 +266,8 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	}
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
-		Name:               t.Name(),
-		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-		MetricsRecorder:    tmr,
+		Name:            t.Name(),
+		MetricsRecorder: tmr,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
@@ -295,12 +293,14 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 
 	// Close the listener and ensure that the ADS stream breaks. This should
 	// cause a server failure count to emit eventually.
-	l.Close()
+	lis.Stop()
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for ADS stream to close")
 	default:
 	}
+	// Restart to prevent the attempt to create a new ADS stream after back off.
+	lis.Restart()
 
 	mdWant = stats.MetricsData{
 		Handle:    xdsClientServerFailureMetric.Descriptor(),

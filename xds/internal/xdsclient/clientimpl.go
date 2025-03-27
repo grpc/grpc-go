@@ -424,7 +424,9 @@ func (cs *channelState) adsStreamFailure(err error) {
 		return
 	}
 
-	xdsClientServerFailureMetric.Record(cs.parent.metricsRecorder, 1, cs.parent.target, cs.serverConfig.ServerURI())
+	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv {
+		xdsClientServerFailureMetric.Record(cs.parent.metricsRecorder, 1, cs.parent.target, cs.serverConfig.ServerURI())
+	}
 
 	cs.parent.channelsMu.Lock()
 	defer cs.parent.channelsMu.Unlock()
