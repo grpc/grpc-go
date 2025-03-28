@@ -21,14 +21,18 @@ package tlscreds
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -63,11 +67,13 @@ func (s) TestFailingProvider(t *testing.T) {
 	cfg := fmt.Sprintf(`{
                "ca_certificate_file": "%s",
                "certificate_file": "%s",
-               "private_key_file": "%s"
+               "private_key_file": "%s",
+			   "spiffe_trust_bundle_map_file": "%s"
        }`,
 		testdata.Path("x509/server_ca_cert.pem"),
 		testdata.Path("x509/client1_cert.pem"),
-		testdata.Path("x509/client1_key.pem"))
+		testdata.Path("x509/client1_key.pem"),
+		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	tlsBundle, stop, err := NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)
@@ -94,5 +100,63 @@ func (s) TestFailingProvider(t *testing.T) {
 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
 	if wantErr := "test error"; err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("EmptyCall() got err: %s, want err to contain: %s", err, wantErr)
+	}
+}
+
+func rawCertsFromFile(t *testing.T, filePath string) [][]byte {
+	t.Helper()
+	rawCert, err := os.ReadFile(testdata.Path(filePath))
+	if err != nil {
+		t.Fatalf("Reading certificate file failed: %v", err)
+	}
+	block, _ := pem.Decode(rawCert)
+	if block == nil || block.Type != "CERTIFICATE" {
+		t.Fatalf("pem.Decode() failed to decode certificate in file %q", "spiffe/server1_spiffe.pem")
+	}
+	return [][]byte{block.Bytes}
+}
+
+func (s) TestSPIFFEVerifyFuncMismatchedCert(t *testing.T) {
+	spiffeBundleBytes, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	if err != nil {
+		t.Fatalf("Reading spiffebundle file failed: %v", err)
+	}
+	spiffeBundle, err := spiffe.BundleMapFromBytes(spiffeBundleBytes)
+	if err != nil {
+		t.Fatalf("spiffe.BundleMapFromBytes() failed: %v", err)
+	}
+	verifyFunc := buildSPIFFEVerifyFunc(spiffeBundle)
+	verifiedChains := [][]*x509.Certificate{}
+	tests := []struct {
+		name            string
+		rawCerts        [][]byte
+		wantErrContains string
+	}{
+		{
+			name:            "mismathed cert",
+			rawCerts:        rawCertsFromFile(t, "spiffe/server1_spiffe.pem"),
+			wantErrContains: "spiffe: x509 certificate Verify failed",
+		},
+		{
+			name:            "bad input cert",
+			rawCerts:        [][]byte{[]byte("NOT_GOOD_DATA")},
+			wantErrContains: "spiffe: verify function could not parse input certificate",
+		},
+		{
+			name:            "no input bytes",
+			rawCerts:        nil,
+			wantErrContains: "no valid input certificates",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err = verifyFunc(tc.rawCerts, verifiedChains)
+			if err == nil {
+				t.Fatalf("buildSPIFFEVerifyFunc call succeeded. want failure")
+			}
+			if !strings.Contains(err.Error(), tc.wantErrContains) {
+				t.Fatalf("buildSPIFFEVerifyFunc got err %v want err to contain %v", err, tc.wantErrContains)
+			}
+		})
 	}
 }
