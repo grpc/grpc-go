@@ -116,7 +116,7 @@ func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 // resolution flag is not set indicating there was no delay in name resolution.
 func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 	stub := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -163,7 +163,7 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 // resolution waiting for resolver to return addresses.
 func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 	stub := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
