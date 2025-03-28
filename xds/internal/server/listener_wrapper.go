@@ -412,10 +412,10 @@ func (l *listenerWrapper) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %w", l.xdsNodeID, err)
 }
 
-func (l *listenerWrapper) onLDSResourceDoesNotExist(err error) {
+func (l *listenerWrapper) onLDSResourceError(err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.switchModeLocked(connectivity.ServingModeNotServing, l.annotateErrorWithNodeID(err))
+	l.switchModeLocked(connectivity.ServingModeNotServing, err)
 	l.activeFilterChainManager = nil
 	l.pendingFilterChainManager = nil
 	l.rdsHandler.updateRouteNamesToWatch(make(map[string]bool))
@@ -429,7 +429,7 @@ type ldsWatcher struct {
 	name   string
 }
 
-func (lw *ldsWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
 	defer onDone()
 	if lw.parent.closed.HasFired() {
 		lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
@@ -441,27 +441,32 @@ func (lw *ldsWatcher) OnUpdate(update *xdsresource.ListenerResourceData, onDone 
 	lw.parent.handleLDSUpdate(update.Resource)
 }
 
-func (lw *ldsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (lw *ldsWatcher) ResourceError(err error, onDone func()) {
 	defer onDone()
 	if lw.parent.closed.HasFired() {
-		lw.logger.Warningf("Resource %q received error: %v after listener was closed", lw.name, err)
+		lw.logger.Warningf("Resource %q received resource error: %v after listener was closed", lw.name, err)
 		return
 	}
 	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q reported error: %v", lw.name, err)
+		lw.logger.Infof("LDS watch for resource %q reported resource error: %v", lw.name, err)
+	}
+	if xdsresource.ErrType(err) != xdsresource.ErrorTypeResourceNotFound {
+		// For errors which are anything other than "resource-not-found", we
+		// continue to use the old configuration.
+		return
+	}
+	lw.parent.onLDSResourceError(err)
+}
+
+func (lw *ldsWatcher) AmbientError(err error, onDone func()) {
+	defer onDone()
+	if lw.parent.closed.HasFired() {
+		lw.logger.Warningf("Resource %q received ambient error: %v after listener was closed", lw.name, err)
+		return
+	}
+	if lw.logger.V(2) {
+		lw.logger.Infof("LDS watch for resource %q reported ambient error: %v", lw.name, err)
 	}
 	// For errors which are anything other than "resource-not-found", we
 	// continue to use the old configuration.
-}
-
-func (lw *ldsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	defer onDone()
-	if lw.parent.closed.HasFired() {
-		lw.logger.Warningf("Resource %q received resource-does-not-exist error after listener was closed", lw.name)
-		return
-	}
-	lw.logger.Warningf("LDS watch for resource %q reported resource-does-not-exist error", lw.name)
-
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", lw.name)
-	lw.parent.onLDSResourceDoesNotExist(err)
 }

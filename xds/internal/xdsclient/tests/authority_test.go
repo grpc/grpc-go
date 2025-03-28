@@ -351,12 +351,12 @@ func newClusterWatcherV2() *clusterWatcherV2 {
 	}
 }
 
-func (cw *clusterWatcherV2) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcherV2) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
 	cw.updateCh.Send(update.Resource)
 	onDone()
 }
 
-func (cw *clusterWatcherV2) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcherV2) AmbientError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here simplifies tests that want access to the most recently received
@@ -365,11 +365,11 @@ func (cw *clusterWatcherV2) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	onDone()
 }
 
-func (cw *clusterWatcherV2) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcherV2) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here simplifies tests that want access to the most recently received
 	// error.
-	cw.resourceNotFoundCh.Replace(xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response"))
+	cw.resourceNotFoundCh.Replace(err)
 	onDone()
 }

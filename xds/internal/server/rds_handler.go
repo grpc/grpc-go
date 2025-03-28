@@ -19,7 +19,6 @@
 package server
 
 import (
-	"fmt"
 	"sync"
 
 	igrpclog "google.golang.org/grpc/internal/grpclog"
@@ -151,7 +150,7 @@ type rdsWatcher struct {
 	canceled bool // eats callbacks if true
 }
 
-func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceData, onDone func()) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -165,7 +164,19 @@ func (rw *rdsWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDo
 	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &update.Resource})
 }
 
-func (rw *rdsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (rw *rdsWatcher) ResourceError(err error, onDone func()) {
+	defer onDone()
+	rw.mu.Lock()
+	if rw.canceled {
+		rw.mu.Unlock()
+		return
+	}
+	rw.mu.Unlock()
+	rw.logger.Warningf("RDS watch for resource %q reported resource error", rw.routeName)
+	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
+}
+
+func (rw *rdsWatcher) AmbientError(err error, onDone func()) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -174,21 +185,7 @@ func (rw *rdsWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
 	}
 	rw.mu.Unlock()
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q reported error: %v", rw.routeName, err)
+		rw.logger.Infof("RDS watch for resource %q reported ambient error: %v", rw.routeName, err)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
-}
-
-func (rw *rdsWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	defer onDone()
-	rw.mu.Lock()
-	if rw.canceled {
-		rw.mu.Unlock()
-		return
-	}
-	rw.mu.Unlock()
-	rw.logger.Warningf("RDS watch for resource %q reported resource-does-not-exist error", rw.routeName)
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", rw.routeName)
-	err = fmt.Errorf("[xDS node id: %v]: %w", rw.parent.xdsNodeID, err)
 	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
 }
