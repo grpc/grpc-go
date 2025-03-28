@@ -149,10 +149,9 @@ type callInfo struct {
 	target string
 
 	method string
-	// nameResolutionEventAdded is an atomic flag that ensures the name
-	// resolution delay event is added to the call span only once. If a retry
-	// attempt detects a delay, this flag is set to true, preventing duplicate
-	// event additions across multiple retries.
+
+	// nameResolutionEventAdded is set when the resolver delay trace event
+	// is added. Prevents duplicate events, since it is reported per-attempt.
 	nameResolutionEventAdded atomic.Bool
 }
 
@@ -214,10 +213,9 @@ type attemptInfo struct {
 	// message counters for sent and received messages (used for
 	// generating message IDs), and the number of previous RPC attempts for the
 	// associated call.
-	countSentMsg          uint32
-	countRecvMsg          uint32
-	previousRPCAttempts   uint32
-	nameResolutionDelayed bool
+	countSentMsg        uint32
+	countRecvMsg        uint32
+	previousRPCAttempts uint32
 }
 
 type clientMetrics struct {

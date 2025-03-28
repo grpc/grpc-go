@@ -38,8 +38,14 @@ type RPCTagInfo struct {
 	// FailFast indicates if this RPC is failfast.
 	// This field is only valid on client side, it's always false on server side.
 	FailFast bool
-	// NameResolutionDelay indicates if there was a delay in the name resolution.
-	// This field is only valid on client side, it's always false on server side.
+	// NameResolutionDelay indicates if the RPC needed to wait for the
+	// initial name resolver update before it could begin. This should only
+	// happen if the channel is IDLE when the RPC is started.  Note that
+	// all retry or hedging attempts for an RPC that experienced a delay
+	// will have it set.
+	//
+	// This field is only valid on the client side; it is always false on
+	// the server side.
 	NameResolutionDelay bool
 }
 

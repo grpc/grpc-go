@@ -35,13 +35,13 @@ const (
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) (context.Context, *attemptInfo) {
 	// Add a "Delayed name resolution complete" event to the call span
 	// if there was name resolution delay. In case of multiple retry attempts,
 	// ensure that event is added only once.
 	callSpan := trace.SpanFromContext(ctx)
 	ci := getCallInfo(ctx)
-	if ai.nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
+	if nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
 		callSpan.AddEvent(delayedResolutionEventName)
 	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)

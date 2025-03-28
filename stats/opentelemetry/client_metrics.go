@@ -186,13 +186,12 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		ctx = istats.SetLabels(ctx, labels)
 	}
 	ai := &attemptInfo{
-		startTime:             time.Now(),
-		xdsLabels:             labels.TelemetryLabels,
-		method:                removeLeadingSlash(info.FullMethodName),
-		nameResolutionDelayed: info.NameResolutionDelay,
+		startTime: time.Now(),
+		xdsLabels: labels.TelemetryLabels,
+		method:    removeLeadingSlash(info.FullMethodName),
 	}
 	if h.options.isTracingEnabled() {
-		ctx, ai = h.traceTagRPC(ctx, ai)
+		ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	}
 	return setRPCInfo(ctx, &rpcInfo{
 		ai: ai,
