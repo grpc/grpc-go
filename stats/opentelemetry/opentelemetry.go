@@ -65,10 +65,6 @@ type Options struct {
 	TraceOptions experimental.TraceOptions
 }
 
-func (o *Options) isMetricsEnabled() bool {
-	return o.MetricsOptions.MeterProvider != nil
-}
-
 func (o *Options) isTracingEnabled() bool {
 	return o.TraceOptions.TracerProvider != nil
 }
@@ -117,10 +113,19 @@ type MetricsOptions struct {
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
+//
+// For the traces supported by this instrumentation code, provide an
+// implementation of a TextMapPropagator and OpenTelemetry TracerProvider.
 func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
+	do := joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
+	if !o.isTracingEnabled() {
+		return do
+	}
+	tracingHandler := &clientTracingHandler{options: o}
+	tracingHandler.initializeTraces()
+	return joinDialOptions(do, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.WithStatsHandler(tracingHandler))
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -137,10 +142,19 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // MeterProvider. If the passed in Meter Provider does not have the view
 // configured for an individual metric turned on, the API call in this component
 // will create a default view for that metric.
+//
+// For the traces supported by this instrumentation code, provide an
+// implementation of a TextMapPropagator and OpenTelemetry TracerProvider.
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
-	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
+	so := joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
+	if !o.isTracingEnabled() {
+		return so
+	}
+	tracingHandler := &serverTracingHandler{options: o}
+	tracingHandler.initializeTraces()
+	return joinServerOptions(so, grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.StatsHandler(tracingHandler))
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.

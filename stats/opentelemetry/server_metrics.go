@@ -21,15 +21,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	otelattribute "go.opentelemetry.io/otel/attribute"
+	otelmetric "go.opentelemetry.io/otel/metric"
+
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
-
-	otelattribute "go.opentelemetry.io/otel/attribute"
-	otelmetric "go.opentelemetry.io/otel/metric"
 )
 
 type serverStatsHandler struct {
@@ -178,7 +178,7 @@ func (h *serverStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) 
 // HandleConn exists to satisfy stats.Handler.
 func (h *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
-// TagRPC implements per RPC context management.
+// TagRPC implements per RPC context management for metrics.
 func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	method := info.FullMethodName
 	if h.options.MetricsOptions.MethodAttributeFilter != nil {
@@ -196,32 +196,27 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 			method = "other"
 		}
 	}
+	ri := getRPCInfo(ctx)
+	var ai *attemptInfo
+	if ri == nil {
+		ai = &attemptInfo{}
+	} else {
+		ai = ri.ai
+	}
+	ai.startTime = time.Now()
+	ai.method = removeLeadingSlash(method)
 
-	ai := &attemptInfo{
-		startTime: time.Now(),
-		method:    removeLeadingSlash(method),
-	}
-	if h.options.isTracingEnabled() {
-		ctx, ai = h.traceTagRPC(ctx, ai)
-	}
-	return setRPCInfo(ctx, &rpcInfo{
-		ai: ai,
-	})
+	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
-// HandleRPC implements per RPC tracing and stats implementation.
+// HandleRPC handles per RPC stats implementation.
 func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	if h.options.isTracingEnabled() {
-		populateSpan(rs, ri.ai)
-	}
-	if h.options.isMetricsEnabled() {
-		h.processRPCData(ctx, rs, ri.ai)
-	}
+	h.processRPCData(ctx, rs, ri.ai)
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
