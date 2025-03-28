@@ -37,6 +37,7 @@ import (
 	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/mem"
 )
 
 const (
@@ -308,6 +309,8 @@ func (h *altsHandshaker) accessHandshakerService(req *altspb.HandshakerReq) (*al
 // whatever received from the network and send it to the handshaker service.
 func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []byte) (*altspb.HandshakerResult, []byte, error) {
 	var lastWriteTime time.Time
+	buf := mem.DefaultBufferPool().Get(frameLimit)
+	defer mem.DefaultBufferPool().Put(buf)
 	for {
 		if len(resp.OutFrames) > 0 {
 			lastWriteTime = time.Now()
@@ -318,8 +321,7 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 		if resp.Result != nil {
 			return resp.Result, extra, nil
 		}
-		buf := make([]byte, frameLimit)
-		n, err := h.conn.Read(buf)
+		n, err := h.conn.Read(*buf)
 		if err != nil && err != io.EOF {
 			return nil, nil, err
 		}
@@ -333,7 +335,7 @@ func (h *altsHandshaker) processUntilDone(resp *altspb.HandshakerResp, extra []b
 		}
 		// Append extra bytes from the previous interaction with the
 		// handshaker service with the current buffer read from conn.
-		p := append(extra, buf[:n]...)
+		p := append(extra, (*buf)[:n]...)
 		// Compute the time elapsed since the last write to the peer.
 		timeElapsed := time.Since(lastWriteTime)
 		timeElapsedMs := uint32(timeElapsed.Milliseconds())

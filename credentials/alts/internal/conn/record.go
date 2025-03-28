@@ -23,10 +23,12 @@ package conn
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"net"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
+	"google.golang.org/grpc/mem"
 )
 
 // ALTSRecordCrypto is the interface for gRPC ALTS record protocol.
@@ -63,6 +65,8 @@ const (
 	// The maximum write buffer size. This *must* be multiple of
 	// altsRecordDefaultLength.
 	altsWriteBufferMaxSize = 512 * 1024 // 512KiB
+	// The initial buffer used to read from the network.
+	altsReadBufferInitialSize = 32 * 1024 // 32KiB
 )
 
 var (
@@ -84,11 +88,19 @@ type conn struct {
 	crypto ALTSRecordCrypto
 	// buf holds data that has been read from the connection and decrypted,
 	// but has not yet been returned by Read.
-	buf                []byte
+	buf []byte
+	// bufPointer holds the entire decrypted record, even bytes that have
+	// been returned by read. It is used to restore buf to it's initial
+	// capacity after each frame is decrypted. It is also used to return the
+	// buffer to the buffer pool.
+	bufPointer         *[]byte
 	payloadLengthLimit int
 	// protected holds data read from the network but have not yet been
 	// decrypted. This data might not compose a complete frame.
 	protected []byte
+	// protectedPointer holds a pointer to the protected buffer. It is used to
+	// return the protected buffer to the buffer pool.
+	protectedPointer *[]byte
 	// writeBuf is a buffer used to contain encrypted frames before being
 	// written to the network.
 	writeBuf []byte
@@ -96,6 +108,7 @@ type conn struct {
 	nextFrame []byte
 	// overhead is the calculated overhead of each frame.
 	overhead int
+	isClosed bool
 }
 
 // NewConn creates a new secure channel instance given the other party role and
@@ -111,32 +124,33 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
 	payloadLengthLimit := altsRecordDefaultLength - overhead
-	var protectedBuf []byte
-	if protected == nil {
-		// We pre-allocate protected to be of size
-		// 2*altsRecordDefaultLength-1 during initialization. We only
-		// read from the network into protected when protected does not
-		// contain a complete frame, which is at most
-		// altsRecordDefaultLength-1 (bytes). And we read at most
-		// altsRecordDefaultLength (bytes) data into protected at one
-		// time. Therefore, 2*altsRecordDefaultLength-1 is large enough
-		// to buffer data read from the network.
-		protectedBuf = make([]byte, 0, 2*altsRecordDefaultLength-1)
-	} else {
-		protectedBuf = make([]byte, len(protected))
-		copy(protectedBuf, protected)
-	}
+	// We pre-allocate protected to be of size 32KB during initialization.
+	// We increase the size of the buffer by the required amount if can't hold a
+	// complete encrypted record.
+	protectedPointer := mem.DefaultBufferPool().Get(max(altsReadBufferInitialSize, len(protected)))
+	protectedBuf := (*protectedPointer)[:copy(*protectedPointer, protected)]
 
 	altsConn := &conn{
 		Conn:               c,
 		crypto:             crypto,
 		payloadLengthLimit: payloadLengthLimit,
+		protectedPointer:   protectedPointer,
 		protected:          protectedBuf,
 		writeBuf:           make([]byte, altsWriteBufferInitialSize),
 		nextFrame:          protectedBuf,
 		overhead:           overhead,
+		bufPointer:         mem.DefaultBufferPool().Get(altsReadBufferInitialSize),
 	}
 	return altsConn, nil
+}
+
+func (p *conn) Close() error {
+	if !p.isClosed {
+		p.isClosed = true
+		mem.DefaultBufferPool().Put(p.protectedPointer)
+		mem.DefaultBufferPool().Put(p.bufPointer)
+	}
+	return p.Conn.Close()
 }
 
 // Read reads and decrypts a frame from the underlying connection, and copies the
@@ -144,6 +158,9 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 // Read retains the remaining bytes in an internal buffer, and subsequent calls
 // to Read will read from this buffer until it is exhausted.
 func (p *conn) Read(b []byte) (n int, err error) {
+	if p.isClosed {
+		return 0, io.EOF
+	}
 	if len(p.buf) == 0 {
 		var framedMsg []byte
 		framedMsg, p.nextFrame, err = ParseFramedMsg(p.nextFrame, altsRecordLengthLimit)
@@ -153,8 +170,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 		// Check whether the next frame to be decrypted has been
 		// completely received yet.
 		if len(framedMsg) == 0 {
-			copy(p.protected, p.nextFrame)
-			p.protected = p.protected[:len(p.nextFrame)]
+			p.protected = p.protected[:copy(p.protected, p.nextFrame)]
 			// Always copy next incomplete frame to the beginning of
 			// the protected buffer and reset nextFrame to it.
 			p.nextFrame = p.protected
@@ -162,11 +178,22 @@ func (p *conn) Read(b []byte) (n int, err error) {
 		// Check whether a complete frame has been received yet.
 		for len(framedMsg) == 0 {
 			if len(p.protected) == cap(p.protected) {
-				tmp := make([]byte, len(p.protected), cap(p.protected)+altsRecordDefaultLength)
-				copy(tmp, p.protected)
-				p.protected = tmp
+				// We can parse the length header to know exactly how large
+				// the buffer needs to be to hold the entire frame.
+				length, didParse := ParseMessageLength(p.protected)
+				if !didParse {
+					// The protected buffer is initialized with a capacity of
+					// larger than 4B. It should always hold the message length
+					// header.
+					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(p.protected), MsgLenFieldSize))
+				}
+				tmp := mem.DefaultBufferPool().Get(int(length))
+				copy(*tmp, p.protected)
+				p.protected = (*tmp)[:len(p.protected)]
+				mem.DefaultBufferPool().Put(p.protectedPointer)
+				p.protectedPointer = tmp
 			}
-			n, err = p.Conn.Read(p.protected[len(p.protected):min(cap(p.protected), len(p.protected)+altsRecordDefaultLength)])
+			n, err = p.Conn.Read(p.protected[len(p.protected):cap(p.protected)])
 			if err != nil {
 				return 0, err
 			}
@@ -185,17 +212,27 @@ func (p *conn) Read(b []byte) (n int, err error) {
 		}
 		ciphertext := msg[msgTypeFieldSize:]
 
-		// Decrypt requires that if the dst and ciphertext alias, they
-		// must alias exactly. Code here used to use msg[:0], but msg
-		// starts MsgLenFieldSize+msgTypeFieldSize bytes earlier than
-		// ciphertext, so they alias inexactly. Using ciphertext[:0]
-		// arranges the appropriate aliasing without needing to copy
-		// ciphertext or use a separate destination buffer. For more info
-		// check: https://golang.org/pkg/crypto/cipher/#AEAD.
-		p.buf, err = p.crypto.Decrypt(ciphertext[:0], ciphertext)
+		// Decrypt directly into the buffer, avoiding a copy to p.buf if
+		// possible.
+		if cap(b) >= len(msg) {
+			dec, err := p.crypto.Decrypt(b[:0], ciphertext)
+			if err != nil {
+				return 0, err
+			}
+			return len(dec), nil
+		}
+		// Resize the read buffer if needed to hold the entire decrypted
+		// frame.
+		if cap(*p.bufPointer) < len(ciphertext) {
+			mem.DefaultBufferPool().Put(p.bufPointer)
+			p.bufPointer = mem.DefaultBufferPool().Get(len(ciphertext))
+		}
+		p.buf = *p.bufPointer
+		dec, err := p.crypto.Decrypt(p.buf[:0], ciphertext)
 		if err != nil {
 			return 0, err
 		}
+		p.buf = p.buf[:len(dec)]
 	}
 
 	n = copy(b, p.buf)
