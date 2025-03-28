@@ -23,7 +23,7 @@ package grpctransport
 import (
 	"context"
 	"fmt"
-	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/internal"
 )
 
 var logger = grpclog.Component("grpctransport")
@@ -39,14 +38,11 @@ var logger = grpclog.Component("grpctransport")
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
 type ServerIdentifierExtension struct {
-	// Credentials will be used for all gRPC transports. If it is unset,
-	// transport creation will fail.
+	// Credentials is name of the credentials to use for this connection to the
+	// server.
 	//
-	// It is recommended to implement `Equal(other any) bool` for
-	// TransportCredentials and PerRPCCredentials, if present. Two
-	// ServerIdentifierExtension will be considered unequal if either does not
-	// implement this method.
-	Credentials credentials.Bundle
+	// It must be present in Builder.Credentials.
+	Credentials string
 }
 
 // String returns a string representation of the ServerIdentifierExtension.
@@ -55,81 +51,30 @@ type ServerIdentifierExtension struct {
 // output returned by this method is not guaranteed to be stable and may change
 // at any time. Do not rely on it for production use.
 func (sie *ServerIdentifierExtension) String() string {
-	if sie.Credentials == nil {
-		return ""
-	}
-
-	var tcParts []string
-	if stringer, ok := sie.Credentials.TransportCredentials().(fmt.Stringer); ok {
-		tcParts = append(tcParts, stringer.String())
-	}
-	if stringer, ok := sie.Credentials.PerRPCCredentials().(fmt.Stringer); ok {
-		tcParts = append(tcParts, stringer.String())
-	}
-
-	return strings.Join(tcParts, "-")
-}
-
-// Equal returns true if sie and other are considered equal.
-func (sie *ServerIdentifierExtension) Equal(other any) bool {
-	sie2, ok := other.(*ServerIdentifierExtension)
-	if !ok {
-		return false
-	}
-
-	switch {
-	case sie.Credentials == nil && sie2.Credentials == nil:
-		return true
-	case (sie.Credentials != nil) != (sie2.Credentials != nil):
-		return false
-	case (sie.Credentials.TransportCredentials() != nil) != (sie2.Credentials.TransportCredentials() != nil):
-		return false
-	case (sie.Credentials.PerRPCCredentials() != nil) != (sie2.Credentials.PerRPCCredentials() != nil):
-		return false
-	}
-
-	tcEq := true
-	tc1, ok1 := sie.Credentials.TransportCredentials().(interface{ Equal(any) bool })
-	tc2, ok2 := sie2.Credentials.TransportCredentials().(interface{ Equal(any) bool })
-	if tc1 != nil || tc2 != nil {
-		if !ok1 || !ok2 {
-			logger.Warning("Either of Credentials does not implement `Equal(other any) bool` for TransportCredentials. Considering them unequal.")
-			return false
-		}
-		if tc1 != nil {
-			tcEq = tc1.Equal(tc2)
-		} else {
-			tcEq = false
-		}
-	}
-
-	pcEq := true
-	pc1, ok1 := sie.Credentials.PerRPCCredentials().(interface{ Equal(any) bool })
-	pc2, ok2 := sie2.Credentials.PerRPCCredentials().(interface{ Equal(any) bool })
-	if pc1 != nil || pc2 != nil {
-		if !ok1 || !ok2 {
-			logger.Warning("Either of Credentials does not implement `Equal(other any) bool` for PerRPCCredentials. Considering them unequal.")
-			return false
-		}
-		if pc1 != nil {
-			pcEq = pc1.Equal(pc2)
-		} else {
-			pcEq = false
-		}
-	}
-
-	return tcEq && pcEq
+	return sie.Credentials
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
 // that contain an Extension field of type ServerIdentifierExtension.
 type Builder struct {
-	serverIdentiferMap *internal.ServerIdentifierMap
+	// Credentials is a map of credentials names to credentials.Bundle which
+	// can be used to connect to the server.
+	Credentials map[string]credentials.Bundle
+
+	mu sync.Mutex
+	// serverIdentifierMap is a map of clients.ServerIdentifiers in use by the
+	// Builder to connect to different servers.
+	serverIdentifierMap map[clients.ServerIdentifier]any
 }
 
-// NewBuilder provides a builder for creating gRPC-based Transports.
-func NewBuilder() *Builder {
-	return &Builder{serverIdentiferMap: internal.NewServerIdentifierMap()}
+// NewBuilder provides a builder for creating gRPC-based Transports using
+// the credentials from provided map of credentials names to
+// credentials.Bundle.
+func NewBuilder(credentials map[string]credentials.Bundle) *Builder {
+	return &Builder{
+		Credentials:         credentials,
+		serverIdentifierMap: make(map[clients.ServerIdentifier]any),
+	}
 }
 
 // Build returns a gRPC-based clients.Transport.
@@ -146,14 +91,25 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if !ok {
 		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}
-	if sce.Credentials == nil {
-		return nil, fmt.Errorf("grptransport: Credentials field is not set in ServerIdentifierExtension")
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	var credentialsToUse credentials.Bundle
+	if credentialsToUse, ok = b.Credentials[sce.Credentials]; !ok {
+		return nil, fmt.Errorf("grptransport: Credentials %s in ServerIdentifierExtension is not present in the Builder", sce.Credentials)
 	}
 
-	if value, ok := b.serverIdentiferMap.Get(si); ok {
+	if value, ok := b.serverIdentifierMap[si]; ok {
+		if logger.V(2) {
+			logger.Info("Reusing existing connection to the server for ServerIdentifier: %v", si)
+		}
 		return value.(*grpcTransport), nil
 	}
 
+	if logger.V(2) {
+		logger.Info("Creating a new connection to the server for ServerIdentifier: %v", si)
+	}
 	// Create a new gRPC client/channel for the server with the provided
 	// credentials, server URI, and a byte codec to send and receive messages.
 	// Also set a static keepalive configuration that is common across gRPC
@@ -162,13 +118,13 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(sce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(credentialsToUse), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
 	}
 	tc := &grpcTransport{cc: cc}
 	// Add the newly created transport to the map to re-use the connection.
-	b.serverIdentiferMap.Set(si, tc)
+	b.serverIdentifierMap[si] = tc
 
 	return tc, nil
 }

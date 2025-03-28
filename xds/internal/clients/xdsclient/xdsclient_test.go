@@ -22,12 +22,16 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 )
 
 func (s) TestXDSClient_New(t *testing.T) {
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+
 	tests := []struct {
 		name    string
 		config  Config
@@ -58,7 +62,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(),
+				TransportBuilder: grpctransport.NewBuilder(credentials),
 			},
 			wantErr: "no servers or authorities specified",
 		},
@@ -67,7 +71,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(),
+				TransportBuilder: grpctransport.NewBuilder(credentials),
 				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
 			},
 			wantErr: "",
@@ -77,40 +81,10 @@ func (s) TestXDSClient_New(t *testing.T) {
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(),
+				TransportBuilder: grpctransport.NewBuilder(credentials),
 				Authorities:      map[string]Authority{"authority-name": {XDSServers: []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}}}},
 			},
 			wantErr: "",
-		},
-		{
-			name: "success with server identifier extensions with equal",
-			config: Config{
-				Node:             clients.Node{ID: "node-id"},
-				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(),
-				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server", Extensions: &testServerIdentifierExtension{x: 1}}}},
-			},
-			wantErr: "",
-		},
-		{
-			name: "default servers with server identifier extensions without equal",
-			config: Config{
-				Node:             clients.Node{ID: "node-id"},
-				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(),
-				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server", Extensions: &testServerIdentifierExtensionWithoutEqual{x: 1}}}},
-			},
-			wantErr: "non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method",
-		},
-		{
-			name: "authorities with server identifier extensions without equal",
-			config: Config{
-				Node:             clients.Node{ID: "node-id"},
-				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(),
-				Authorities:      map[string]Authority{"authority-name": {XDSServers: []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server", Extensions: &testServerIdentifierExtensionWithoutEqual{x: 1}}}}}},
-			},
-			wantErr: "non-nil ServerIdentifier.Extensions without implementing the `func (any) Equal(any) bool` method",
 		},
 	}
 	for _, tt := range tests {
@@ -133,10 +107,11 @@ func (s) TestXDSClient_New(t *testing.T) {
 }
 
 func (s) TestXDSClient_Close(t *testing.T) {
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
 	config := Config{
 		Node:             clients.Node{ID: "node-id"},
 		ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-		TransportBuilder: grpctransport.NewBuilder(),
+		TransportBuilder: grpctransport.NewBuilder(credentials),
 		Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
 	}
 	c, err := New(config)

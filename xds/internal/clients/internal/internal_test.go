@@ -42,19 +42,11 @@ func Test(t *testing.T) {
 
 type testServerIdentifierExtension struct{ x int }
 
-func (ts *testServerIdentifierExtension) Equal(other any) bool {
-	ots, ok := other.(*testServerIdentifierExtension)
-	if !ok {
-		return false
-	}
-	return ts.x == ots.x
-}
-
 func (ts *testServerIdentifierExtension) String() string {
 	return fmt.Sprintf("testServerIdentifierExtension-%d", ts.x)
 }
 
-type testServerIdentifierExtensionWithoutStringAndEqual struct{}
+type testServerIdentifierExtensionWithoutString struct{}
 
 func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct {
 	t.Helper()
@@ -103,7 +95,7 @@ func (s) TestServerIdentifierString(t *testing.T) {
 func (s) TestServerIdentifierString_NonStringerExtension(t *testing.T) {
 	si := clients.ServerIdentifier{
 		ServerURI:  "foo",
-		Extensions: &testServerIdentifierExtensionWithoutStringAndEqual{},
+		Extensions: &testServerIdentifierExtensionWithoutString{},
 	}
 	got := ServerIdentifierString(si)
 	// Check if the output matches the expected pattern for non-stringer
@@ -114,120 +106,6 @@ func (s) TestServerIdentifierString_NonStringerExtension(t *testing.T) {
 	}
 	if !matched {
 		t.Errorf("ServerIdentifierString() = %v, want a string matching the pattern `^foo-0x[0-9a-f]+$`", got)
-	}
-}
-
-func (s) TestServerIdentifier_Equal(t *testing.T) {
-	tests := []struct {
-		name   string
-		s1     clients.ServerIdentifier
-		s2     clients.ServerIdentifier
-		wantEq bool
-	}{
-		{
-			name:   "both_empty",
-			s1:     clients.ServerIdentifier{},
-			s2:     clients.ServerIdentifier{},
-			wantEq: true,
-		},
-		{
-			name:   "one_empty",
-			s1:     clients.ServerIdentifier{},
-			s2:     clients.ServerIdentifier{ServerURI: "bar"},
-			wantEq: false,
-		},
-		{
-			name:   "other_empty",
-			s1:     clients.ServerIdentifier{ServerURI: "foo"},
-			s2:     clients.ServerIdentifier{},
-			wantEq: false,
-		},
-		{
-			name:   "different_ServerURI",
-			s1:     clients.ServerIdentifier{ServerURI: "foo"},
-			s2:     clients.ServerIdentifier{ServerURI: "bar"},
-			wantEq: false,
-		},
-		{
-			name: "different_Extensions_with_no_Equal_method",
-			s1: clients.ServerIdentifier{
-				Extensions: 1,
-			},
-			s2: clients.ServerIdentifier{
-				Extensions: 2,
-			},
-			wantEq: false,
-		},
-		{
-			name: "same_Extensions_with_no_Equal_method",
-			s1: clients.ServerIdentifier{
-				Extensions: 1,
-			},
-			s2: clients.ServerIdentifier{
-				Extensions: 1,
-			},
-			wantEq: false,
-		},
-		{
-			name: "different_Extensions_with_Equal_method",
-			s1: clients.ServerIdentifier{
-				Extensions: &testServerIdentifierExtension{1},
-			},
-			s2: clients.ServerIdentifier{
-				Extensions: &testServerIdentifierExtension{2},
-			},
-			wantEq: false,
-		},
-		{
-			name: "same_Extensions_same_with_Equal_method",
-			s1: clients.ServerIdentifier{
-				Extensions: &testServerIdentifierExtension{1},
-			},
-			s2: clients.ServerIdentifier{
-				Extensions: &testServerIdentifierExtension{1},
-			},
-			wantEq: true,
-		},
-		{
-			name: "first_config_Extensions_is_nil",
-			s1: clients.ServerIdentifier{
-				Extensions: &testServerIdentifierExtension{1},
-			},
-			s2: clients.ServerIdentifier{
-				Extensions: nil,
-			},
-			wantEq: false,
-		},
-		{
-			name: "other_config_Extensions_is_nil",
-			s1: clients.ServerIdentifier{
-				Extensions: nil,
-			},
-			s2: clients.ServerIdentifier{
-				Extensions: &testServerIdentifierExtension{2},
-			},
-			wantEq: false,
-		},
-		{
-			name: "all_fields_same",
-			s1: clients.ServerIdentifier{
-				ServerURI:  "foo",
-				Extensions: &testServerIdentifierExtension{1},
-			},
-			s2: clients.ServerIdentifier{
-				ServerURI:  "foo",
-				Extensions: &testServerIdentifierExtension{1},
-			},
-			wantEq: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if gotEq := ServerIdentifierEqual(test.s1, test.s2); gotEq != test.wantEq {
-				t.Errorf("Equal() = %v, want %v", gotEq, test.wantEq)
-			}
-		})
 	}
 }
 
