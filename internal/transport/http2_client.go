@@ -545,7 +545,7 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		Method:   callHdr.Method,
 		AuthInfo: t.authInfo,
 	}
-	ctxWithRequestInfo := icredentials.NewRequestInfoContext(ctx, ri)
+	ctxWithRequestInfo := credentials.NewRequestInfoContext(ctx, ri)
 	authData, err := t.getTrAuthData(ctxWithRequestInfo, aud)
 	if err != nil {
 		return nil, err

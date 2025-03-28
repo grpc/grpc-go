@@ -215,6 +215,21 @@ func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 	return ri, ok
 }
 
+// NewRequestInfoContext creates a new context with the given RequestInfo
+// attached to it.
+//
+// This RequestInfo will be accessible via RequestInfoFromContext.
+//
+// Intended to be used from tests for PerRPCCredentials implementations (that
+// often need to check connection's SecurityLevel). Should not be used from
+// non-test code: the gRPC client already prepares a context with the correct
+// RequestInfo attached when calling PerRPCCredentials.GetRequestMetadata.
+//
+// This API is experimental.
+func NewRequestInfoContext(ctx context.Context, ri RequestInfo) context.Context {
+	return icredentials.NewRequestInfoContext(ctx, ri)
+}
+
 // ClientHandshakeInfo holds data to be passed to ClientHandshake. This makes
 // it possible to pass arbitrary data to the handshaker from gRPC, resolver,
 // balancer etc. Individual credential implementations control the actual
