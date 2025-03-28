@@ -188,6 +188,27 @@ func (s) TestLargeMsg(t *testing.T) {
 	}
 }
 
+// BenchmarkLargeMessage measures the performance of ALTS conns for sending and
+// receiving a large message.
+func BenchmarkLargeMessage(b *testing.B) {
+	msgLen := 20 * 1024 * 1024 // 20 MiB
+	msg := make([]byte, msgLen)
+	rcvMsg := make([]byte, len(msg))
+	b.ResetTimer()
+	clientConn, serverConn := newConnPair(rekeyRecordProtocol, nil, nil)
+	for range b.N {
+		// Write 20 MiB 5 times to transfer a total of 100 MiB.
+		for range 5 {
+			if n, err := clientConn.Write(msg); n != len(msg) || err != nil {
+				b.Fatalf("Write() = %v, %v; want %v, <nil>", n, err, len(msg))
+			}
+			if n, err := io.ReadFull(serverConn, rcvMsg); n != len(rcvMsg) || err != nil {
+				b.Fatalf("Read() = %v, %v; want %v, <nil>", n, err, len(rcvMsg))
+			}
+		}
+	}
+}
+
 func testIncorrectMsgType(t *testing.T, rp string) {
 	// framedMsg is an empty ciphertext with correct framing but wrong
 	// message type.
