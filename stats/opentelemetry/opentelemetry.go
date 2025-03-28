@@ -25,6 +25,7 @@ package opentelemetry
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	otelattribute "go.opentelemetry.io/otel/attribute"
@@ -148,6 +149,10 @@ type callInfo struct {
 	target string
 
 	method string
+
+	// nameResolutionEventAdded is set when the resolver delay trace event
+	// is added. Prevents duplicate events, since it is reported per-attempt.
+	nameResolutionEventAdded atomic.Bool
 }
 
 type callInfoKey struct{}
