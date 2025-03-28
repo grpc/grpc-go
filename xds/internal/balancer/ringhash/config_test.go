@@ -22,14 +22,13 @@ import (
 	"encoding/json"
 	"testing"
 
+	"google.golang.org/grpc/internal/testutils"
+
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/envconfig"
 )
 
 func (s) TestParseConfig(t *testing.T) {
-	oldEnvConfig := envconfig.RingHashSetRequestHashKey
-	defer func() { envconfig.RingHashSetRequestHashKey = oldEnvConfig }()
-
 	tests := []struct {
 		name         string
 		js           string
@@ -147,11 +146,9 @@ func (s) TestParseConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.envConfigCap != 0 {
-				old := envconfig.RingHashCap
-				defer func() { envconfig.RingHashCap = old }()
-				envconfig.RingHashCap = tt.envConfigCap
+				testutils.SetEnvConfig(t, &envconfig.RingHashCap, tt.envConfigCap)
 			}
-			envconfig.RingHashSetRequestHashKey = tt.envVar
+			testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, tt.envVar)
 			got, err := parseConfig(json.RawMessage(tt.js))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)

@@ -447,9 +447,7 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldConfig := envconfig.XDSEndpointHashKeyBackwardCompat
-			defer func() { envconfig.XDSEndpointHashKeyBackwardCompat = oldConfig }()
-			envconfig.XDSEndpointHashKeyBackwardCompat = test.compatEnvVar
+			testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, test.compatEnvVar)
 
 			cla := proto.Clone(baseCLA).(*v3endpointpb.ClusterLoadAssignment)
 			cla.Endpoints[0].LbEndpoints[0].Metadata = test.metadata

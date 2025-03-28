@@ -2550,9 +2550,7 @@ func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
 // Tests that RPCs are routed according to endpoint hash key rather than
 // endpoint first address if it is set in EDS endpoint metadata.
 func (s) TestRingHash_EndpointHashKey(t *testing.T) {
-	oldConfig := envconfig.XDSEndpointHashKeyBackwardCompat
-	defer func() { envconfig.XDSEndpointHashKeyBackwardCompat = oldConfig }()
-	envconfig.XDSEndpointHashKeyBackwardCompat = false
+	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, false)
 
 	backends := backendAddrs(startTestServiceBackends(t, 4))
 
@@ -2659,9 +2657,7 @@ func (s) TestRingHash_EndpointHashKey(t *testing.T) {
 // Tests that when a request hash key is set in the balancer configuration via
 // service config, this header is used to route to a specific backend.
 func (s) TestRingHash_RequestHashKey(t *testing.T) {
-	oldEnvConfig := envconfig.RingHashSetRequestHashKey
-	defer func() { envconfig.RingHashSetRequestHashKey = oldEnvConfig }()
-	envconfig.RingHashSetRequestHashKey = true
+	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
 
 	backends := backendAddrs(startTestServiceBackends(t, 4))
 
@@ -2726,9 +2722,7 @@ func (s) TestRingHash_RequestHashKey(t *testing.T) {
 }
 
 func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
-	oldEnvConfig := envconfig.RingHashSetRequestHashKey
-	defer func() { envconfig.RingHashSetRequestHashKey = oldEnvConfig }()
-	envconfig.RingHashSetRequestHashKey = true
+	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
 
 	backends := backendAddrs(startTestServiceBackends(t, 4))
 
