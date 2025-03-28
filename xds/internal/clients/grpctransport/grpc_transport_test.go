@@ -28,7 +28,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -123,32 +122,70 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 type testCredentials struct {
 	credentials.Bundle
 	transportCredentials credentials.TransportCredentials
+	perRPCCredentials    credentials.PerRPCCredentials
 }
 
 func (tc *testCredentials) TransportCredentials() credentials.TransportCredentials {
 	return tc.transportCredentials
 }
+func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
+	return tc.perRPCCredentials
+}
 
-// TestBuild_Success verifies that the Builder successfully creates a new
-// Transport with a non-nil grpc.ClientConn.
+// TestBuild_Success_New verifies that the Builder successfully creates a new
+// Transport with a non-nil grpc.ClientConn if clients.ServerIdentifier
+// provided to Build() is not present in the Builder otherwise it returns the
+// existing transport for the clients.ServerIdentifier.
 func (s) TestBuild_Success(t *testing.T) {
-	serverCfg := clients.ServerIdentifier{
+	ext := &ServerIdentifierExtension{Credentials: "local"}
+
+	credentials := map[string]credentials.Bundle{
+		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	}
+	b := NewBuilder(credentials)
+
+	serverID1 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ServerIdentifierExtension{Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+		Extensions: ext,
 	}
-
-	b := &Builder{}
-	tr, err := b.Build(serverCfg)
+	// Build(serverID1) should create a new transport.
+	tr1, err := b.Build(serverID1)
 	if err != nil {
-		t.Fatalf("Build() failed: %v", err)
+		t.Fatalf("Build(serverID1) call failed: %v", err)
 	}
-	defer tr.Close()
+	defer tr1.Close()
 
-	if tr == nil {
-		t.Fatalf("Got nil transport from Build(), want non-nil")
+	if tr1 == nil {
+		t.Fatalf("Got nil `tr1` transport from Build(serverID1), want non-nil")
 	}
-	if tr.(*grpcTransport).cc == nil {
-		t.Fatalf("Got nil grpc.ClientConn in transport, want non-nil")
+	if tr1.(*grpcTransport).cc == nil {
+		t.Fatalf("Got nil grpc.ClientConn in transport `tr1`, want non-nil")
+	}
+	if len(b.serverIdentifierMap) != 1 {
+		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 1", len(b.serverIdentifierMap))
+	}
+	if b.serverIdentifierMap[serverID1] != tr1 {
+		t.Fatalf("Builder.serverIdentifierMap[serverID1] = %v, want %v", b.serverIdentifierMap[serverID1], tr1)
+	}
+
+	serverID2 := clients.ServerIdentifier{
+		ServerURI:  "server-address",
+		Extensions: ext,
+	}
+	// Build(serverID2) should return the same transport instead of creating a
+	// new one.
+	tr2, err := b.Build(serverID2)
+	if err != nil {
+		t.Fatalf("Build(serverID2) call failed: %v", err)
+	}
+	if tr2 != tr1 {
+		t.Fatalf("Build(serverID2) call returned different transport %v, want %v", tr2, tr1)
+	}
+	if len(b.serverIdentifierMap) != 1 {
+		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 1", len(b.serverIdentifierMap))
+	}
+	if b.serverIdentifierMap[serverID2] != tr1 {
+		t.Fatalf("Builder.serverIdentifierMap[serverID2] = %v, want %v", b.serverIdentifierMap[serverID2], tr1)
 	}
 }
 
@@ -162,39 +199,42 @@ func (s) TestBuild_Success(t *testing.T) {
 // - Credentials are nil.
 func (s) TestBuild_Failure(t *testing.T) {
 	tests := []struct {
-		name      string
-		serverCfg clients.ServerIdentifier
+		name     string
+		serverID clients.ServerIdentifier
 	}{
 		{
 			name: "ServerURI is empty",
-			serverCfg: clients.ServerIdentifier{
+			serverID: clients.ServerIdentifier{
 				ServerURI:  "",
-				Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+				Extensions: &ServerIdentifierExtension{Credentials: "local"},
 			},
 		},
 		{
-			name:      "Extensions is nil",
-			serverCfg: clients.ServerIdentifier{ServerURI: "server-address"},
+			name:     "Extensions is nil",
+			serverID: clients.ServerIdentifier{ServerURI: "server-address"},
 		},
 		{
 			name: "Extensions is not a ServerIdentifierExtension",
-			serverCfg: clients.ServerIdentifier{
+			serverID: clients.ServerIdentifier{
 				ServerURI:  "server-address",
 				Extensions: 1,
 			},
 		},
 		{
 			name: "ServerIdentifierExtension Credentials is nil",
-			serverCfg: clients.ServerIdentifier{
+			serverID: clients.ServerIdentifier{
 				ServerURI:  "server-address",
-				Extensions: ServerIdentifierExtension{},
+				Extensions: &ServerIdentifierExtension{},
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			b := &Builder{}
-			tr, err := b.Build(test.serverCfg)
+			credentials := map[string]credentials.Bundle{
+				"local": &testCredentials{transportCredentials: local.NewCredentials()},
+			}
+			b := NewBuilder(credentials)
+			tr, err := b.Build(test.serverID)
 			if err == nil {
 				t.Fatalf("Build() succeeded, want error")
 			}
@@ -212,9 +252,12 @@ func (s) TestNewStream_Success(t *testing.T) {
 
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &ServerIdentifierExtension{Credentials: "local"},
 	}
-	builder := Builder{}
+	credentials := map[string]credentials.Bundle{
+		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	}
+	builder := NewBuilder(credentials)
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -233,9 +276,12 @@ func (s) TestNewStream_Success(t *testing.T) {
 func (s) TestNewStream_Error(t *testing.T) {
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "invalid-server-uri",
-		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &ServerIdentifierExtension{Credentials: "local"},
 	}
-	builder := Builder{}
+	credentials := map[string]credentials.Bundle{
+		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	}
+	builder := NewBuilder(credentials)
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -266,9 +312,12 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// Build a grpc-based transport to the above server.
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: &ServerIdentifierExtension{Credentials: "local"},
 	}
-	builder := Builder{}
+	credentials := map[string]credentials.Bundle{
+		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	}
+	builder := NewBuilder(credentials)
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -316,5 +365,33 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	}
 	if diff := cmp.Diff(ts.response, &gotRes, protocmp.Transform()); diff != "" {
 		t.Fatalf("proto.Unmarshal(res, &gotRes) returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
+
+func (s) TestServerIdentifierExtension_String(t *testing.T) {
+	tests := []struct {
+		name string
+		sie  *ServerIdentifierExtension
+		want string
+	}{
+		{
+			name: "empty",
+			sie:  &ServerIdentifierExtension{},
+			want: "",
+		},
+		{
+			name: "non_empty",
+			sie: &ServerIdentifierExtension{
+				Credentials: "non_empty",
+			},
+			want: "non_empty",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.sie.String(); got != test.want {
+				t.Errorf("String() = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
