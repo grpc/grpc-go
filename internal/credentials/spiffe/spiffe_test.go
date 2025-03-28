@@ -22,12 +22,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/testdata"
 )
+
+const wantURI = "spiffe://foo.bar.com/client/workload/1"
 
 // loadSPIFFEBundleMap loads a SPIFFE Bundle Map from a file. See the SPIFFE
 // Bundle Map spec for more detail -
@@ -47,26 +51,26 @@ func TestKnownSPIFFEBundle(t *testing.T) {
 	spiffeBundleFile := testdata.Path("spiffe/spiffebundle.json")
 	bundles, err := loadSPIFFEBundleMap(spiffeBundleFile)
 	if err != nil {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) Error during parsing: %v", spiffeBundleFile, err)
+		t.Fatalf("loadSPIFFEBundleMap(%v) Error during parsing: %v", spiffeBundleFile, err)
 	}
 	wantBundleSize := 2
 	if len(bundles) != wantBundleSize {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) did not parse correct bundle length. got %v want %v", spiffeBundleFile, len(bundles), wantBundleSize)
+		t.Fatalf("loadSPIFFEBundleMap(%v) did not parse correct bundle length. got %v want %v", spiffeBundleFile, len(bundles), wantBundleSize)
 	}
 	if bundles["example.com"] == nil {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) got no bundle for example.com", spiffeBundleFile)
+		t.Fatalf("loadSPIFFEBundleMap(%v) got no bundle for example.com", spiffeBundleFile)
 	}
 	if bundles["test.example.com"] == nil {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) got no bundle for test.example.com", spiffeBundleFile)
+		t.Fatalf("loadSPIFFEBundleMap(%v) got no bundle for test.example.com", spiffeBundleFile)
 	}
 
 	expectedExampleComCert := loadX509Cert(t, testdata.Path("spiffe/spiffe_cert.pem"))
 	expectedTestExampleComCert := loadX509Cert(t, testdata.Path("spiffe/server1_spiffe.pem"))
 	if !bundles["example.com"].X509Authorities()[0].Equal(expectedExampleComCert) {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) parsed wrong cert for example.com.", spiffeBundleFile)
+		t.Fatalf("loadSPIFFEBundleMap(%v) parsed wrong cert for example.com.", spiffeBundleFile)
 	}
 	if !bundles["test.example.com"].X509Authorities()[0].Equal(expectedTestExampleComCert) {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) parsed wrong cert for test.example.com", spiffeBundleFile)
+		t.Fatalf("loadSPIFFEBundleMap(%v) parsed wrong cert for test.example.com", spiffeBundleFile)
 	}
 
 }
@@ -86,7 +90,7 @@ func loadX509Cert(t *testing.T, filePath string) *x509.Certificate {
 	return cert
 }
 
-func TestLoadSPIFFEBundleMapFailures(t *testing.T) {
+func TestSPIFFEBundleMapFailures(t *testing.T) {
 	filePaths := []string{
 		testdata.Path("spiffe/spiffebundle_corrupted_cert.json"),
 		testdata.Path("spiffe/spiffebundle_malformed.json"),
@@ -101,22 +105,187 @@ func TestLoadSPIFFEBundleMapFailures(t *testing.T) {
 	for _, path := range filePaths {
 		t.Run(path, func(t *testing.T) {
 			if _, err := loadSPIFFEBundleMap(path); err == nil {
-				t.Fatalf("LoadSPIFFEBundleMap(%v) did not fail but should have.", path)
+				t.Fatalf("loadSPIFFEBundleMap(%v) did not fail but should have.", path)
 			}
 		})
 	}
 }
 
-func TestLoadSPIFFEBundleMapX509Failures(t *testing.T) {
+func TestSPIFFEBundleMapX509Failures(t *testing.T) {
 	// SPIFFE Bundles only support a use of x509-svid and jwt-svid. If a
 	// use other than this is specified, the parser does not fail, it
 	// just doesn't add an x509 authority or jwt authority to the bundle
 	filePath := testdata.Path("spiffe/spiffebundle_wrong_use.json")
 	bundle, err := loadSPIFFEBundleMap(filePath)
 	if err != nil {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) failed with error: %v", filePath, err)
+		t.Fatalf("loadSPIFFEBundleMap(%v) failed with error: %v", filePath, err)
 	}
 	if len(bundle["example.com"].X509Authorities()) != 0 {
-		t.Fatalf("LoadSPIFFEBundleMap(%v) did not have empty bundle but should have.", filePath)
+		t.Fatalf("loadSPIFFEBundleMap(%v) did not have empty bundle but should have.", filePath)
+	}
+}
+
+func TestGetRootsFromSPIFFEBundleMapSuccess(t *testing.T) {
+	bundleMapFile := testdata.Path("spiffe/spiffebundle_match_client_spiffe.json")
+	bundle, err := loadSPIFFEBundleMap(bundleMapFile)
+	if err != nil {
+		t.Fatalf("loadSPIFFEBundleMap(%v) failed with error: %v", bundleMapFile, err)
+	}
+
+	cert := loadX509Cert(t, testdata.Path("spiffe/client_spiffe.pem"))
+	rootCerts, err := GetRootsFromSPIFFEBundleMap(bundle, cert)
+	if err != nil {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() failed with err %v", err)
+	}
+	wantRoot := loadX509Cert(t, testdata.Path("spiffe/spiffe_cert.pem"))
+	wantPool := x509.NewCertPool()
+	wantPool.AddCert(wantRoot)
+	if !rootCerts.Equal(wantPool) {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() got %v want %v", rootCerts, wantPool)
+	}
+}
+
+func TestGetRootsFromSPIFFEBundleMapFailures(t *testing.T) {
+	tests := []struct {
+		name          string
+		bundleMapFile string
+		leafCertFile  string
+		wantErr       string
+	}{
+		{
+			name:          "no bundle for peer cert spiffeID",
+			bundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+			leafCertFile:  testdata.Path("spiffe/client_spiffe.pem"),
+			wantErr:       "no bundle found for peer certificates",
+		},
+		{
+			name:          "cert has invalid SPIFFE id",
+			bundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+			leafCertFile:  testdata.Path("ca.pem"),
+			wantErr:       "could not get spiffe ID from peer leaf cert",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bundle, err := loadSPIFFEBundleMap(tc.bundleMapFile)
+			if err != nil {
+				t.Fatalf("loadSPIFFEBundleMap(%v) failed with error: %v", tc.bundleMapFile, err)
+			}
+			cert := loadX509Cert(t, tc.leafCertFile)
+			_, err = GetRootsFromSPIFFEBundleMap(bundle, cert)
+			if err == nil {
+				t.Fatalf("GetRootsFromSPIFFEBundleMap() want err got none")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("GetRootsFromSPIFFEBundleMap() want err to contain %v. got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestIDFromCert(t *testing.T) {
+	data, err := os.ReadFile(testdata.Path("x509/spiffe_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) failed: %v", "x509/spiffe_cert.pem", err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		t.Fatalf("Failed to parse the certificate: byte block is nil")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("x509.ParseCertificate(%b) failed: %v", block.Bytes, err)
+	}
+	uri, err := IDFromCert(cert)
+	if err != nil {
+		t.Fatalf("IDFromCert() failed with err: %v", err)
+	}
+	if uri != nil && uri.String() != wantURI {
+		t.Fatalf(" ID not expected, got %s, want %s", uri.String(), wantURI)
+	}
+}
+
+func TestIDFromCertFileFailures(t *testing.T) {
+	tests := []struct {
+		name     string
+		dataPath string
+	}{
+		{
+			name:     "certificate with multiple URIs",
+			dataPath: "x509/multiple_uri_cert.pem",
+		},
+		{
+			name:     "certificate without SPIFFE ID",
+			dataPath: "x509/client1_cert.pem",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := os.ReadFile(testdata.Path(tt.dataPath))
+			if err != nil {
+				t.Fatalf("os.ReadFile(%s) failed: %v", testdata.Path(tt.dataPath), err)
+			}
+			block, _ := pem.Decode(data)
+			if block == nil {
+				t.Fatalf("Failed to parse the certificate: byte block is nil")
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				t.Fatalf("x509.ParseCertificate(%b) failed: %v", block.Bytes, err)
+			}
+			_, err = IDFromCert(cert)
+			if err == nil {
+				t.Fatalf("IDFromCert() succeeded but want error")
+			}
+		})
+	}
+}
+
+func TestIDFromCertNoURIs(t *testing.T) {
+	data, err := os.ReadFile(testdata.Path("x509/spiffe_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) failed: %v", testdata.Path("x509/spiffe_cert.pem"), err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		t.Fatalf("Failed to parse the certificate: byte block is nil")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("x509.ParseCertificate(%b) failed: %v", block.Bytes, err)
+	}
+	// This cert has valid URIs. Set to nil for this test
+	cert.URIs = nil
+	_, err = IDFromCert(cert)
+	if err == nil {
+		t.Fatalf("IDFromCert() succeeded but want error")
+	}
+}
+
+func TestIDFromCertNonSPIFFEURI(t *testing.T) {
+	data, err := os.ReadFile(testdata.Path("x509/spiffe_cert.pem"))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) failed: %v", testdata.Path("x509/spiffe_cert.pem"), err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		t.Fatalf("Failed to parse the certificate: byte block is nil")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("x509.ParseCertificate(%b) failed: %v", block.Bytes, err)
+	}
+	// This cert has valid URIs. Set to nil for this test
+	cert.URIs = []*url.URL{{Path: "non-spiffe.bad"}}
+	_, err = IDFromCert(cert)
+	if err == nil {
+		t.Fatal("IDFromCert() succeeded but want error")
+	}
+}
+
+func TestIDFromCertNil(t *testing.T) {
+	_, err := IDFromCert(nil)
+	if err == nil {
+		t.Fatalf("IDFromCert() succeeded but want error")
 	}
 }
