@@ -3,7 +3,7 @@ module google.golang.org/grpc/security/advancedtls/examples
 go 1.23
 
 require (
-	google.golang.org/grpc v1.70.0
+	google.golang.org/grpc v1.71.0
 	google.golang.org/grpc/examples v0.0.0-20230224211313-3775f633ce20
 	google.golang.org/grpc/security/advancedtls v1.0.0
 )
