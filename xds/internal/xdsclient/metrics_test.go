@@ -60,7 +60,6 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
@@ -145,5 +144,172 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	// Valid should stay the same at 1.
 	if got, _ := tmr.Metric("grpc.xds_client.resource_updates_valid"); got != 1 {
 		t.Fatalf("Unexpected data for metric \"grpc.xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
+	}
+}
+
+// TestServerFailureMetrics_BeforeResponseRecv configures an xDS client, and a
+// management server. It then register a watcher and stops the management
+// server before sending a resource update, and verifies that the expected
+// metrics for server failure are emitted.
+func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tmr := stats.NewTestMetricsRecorder()
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
+	nodeID := uuid.New().String()
+
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			"authority": []byte("{}"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := NewPool(config)
+	client, close, err := pool.NewClientForTesting(OptionsForTesting{
+		Name:               t.Name(),
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+		MetricsRecorder:    tmr,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
+	}
+	defer close()
+
+	const listenerResourceName = "test-listener-resource"
+
+	// Watch for the listener on the above management server.
+	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
+
+	// Close the listener and ensure that the ADS stream breaks. This should
+	// cause a server failure count to emit eventually.
+	l.Close()
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for ADS stream to close")
+	default:
+	}
+
+	mdWant := stats.MetricsData{
+		Handle:    xdsClientServerFailureMetric.Descriptor(),
+		IntIncr:   1,
+		LabelKeys: []string{"grpc.target", "grpc.xds.server"},
+		LabelVals: []string{"Test/ServerFailureMetrics_BeforeResponseRecv", mgmtServer.Address},
+	}
+	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+}
+
+// TestServerFailureMetrics_AfterResponseRecv configures an xDS client, and a
+// management server to send a valid LDS updates, and verifies that the
+// server failure metric is not emitted. It then closes the management server
+// listener to close the ADS stream and verifies that the server failure metric
+// is still not emitted because the the ADS stream was closed after having
+// received a response on the stream.
+func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	tmr := stats.NewTestMetricsRecorder()
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("net.Listen() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lis})
+	const listenerResourceName = "test-listener-resource"
+	const routeConfigurationName = "test-route-configuration-resource"
+	nodeID := uuid.New().String()
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerResourceName, routeConfigurationName)},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		Authorities: map[string]json.RawMessage{
+			"authority": []byte("{}"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := NewPool(config)
+	client, close, err := pool.NewClientForTesting(OptionsForTesting{
+		Name:            t.Name(),
+		MetricsRecorder: tmr,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create an xDS client: %v", err)
+	}
+	defer close()
+
+	// Watch the valid listener configured on the management server. This should
+	// cause a resource updates valid count to emit eventually.
+	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
+	mdWant := stats.MetricsData{
+		Handle:    xdsClientResourceUpdatesValidMetric.Descriptor(),
+		IntIncr:   1,
+		LabelKeys: []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
+		LabelVals: []string{"Test/ServerFailureMetrics_AfterResponseRecv", mgmtServer.Address, "ListenerResource"},
+	}
+	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
+		t.Fatal(err.Error())
+	}
+	// Server failure should have no recording point.
+	if got, _ := tmr.Metric("grpc.xds_client.server_failure"); got != 0 {
+		t.Fatalf("Unexpected data for metric \"grpc.xds_client.server_failure\", got: %v, want: %v", got, 0)
+	}
+
+	// Close the listener and ensure that the ADS stream breaks. This should
+	// cause a server failure count to emit eventually.
+	lis.Stop()
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for ADS stream to close")
+	default:
+	}
+	// Restart to prevent the attempt to create a new ADS stream after back off.
+	lis.Restart()
+
+	mdWant = stats.MetricsData{
+		Handle:    xdsClientServerFailureMetric.Descriptor(),
+		IntIncr:   1,
+		LabelKeys: []string{"grpc.target", "grpc.xds.server"},
+		LabelVals: []string{"Test/ServerFailureMetrics_AfterResponseRecv", mgmtServer.Address},
+	}
+	// Server failure should still have no recording point.
+	if err := tmr.WaitForInt64Count(ctx, mdWant); err == nil {
+		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
 	}
 }
