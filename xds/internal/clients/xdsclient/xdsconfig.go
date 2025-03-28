@@ -93,5 +93,5 @@ func serverConfigString(sc *ServerConfig) string {
 }
 
 func isServerConfigEqual(a, b *ServerConfig) bool {
-	return clientsinternal.ServerIdentifierEqual(a.ServerIdentifier, b.ServerIdentifier) && a.IgnoreResourceDeletion == b.IgnoreResourceDeletion
+	return a.ServerIdentifier == b.ServerIdentifier && a.IgnoreResourceDeletion == b.IgnoreResourceDeletion
 }

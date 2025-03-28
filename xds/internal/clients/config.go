@@ -60,9 +60,10 @@ type ServerIdentifier struct {
 	// For example, a custom TransportBuilder might use this field to
 	// configure a specific security credentials.
 	//
-	// If present, Extensions must implement the `Equal(other any) bool`
-	// method. Two ServerIdentifiers with Extensions will be considered unequal
-	// if either Extensions does not implement this method.
+	// Extensions must be able to be used as a map key, or the client may
+	// panic. Any equivalent extensions in all ServerIdentifiers present in a
+	// single client's configuration should have the same value.  Not following
+	// this restriction may result in excess resource usage.
 	Extensions any
 }
 
