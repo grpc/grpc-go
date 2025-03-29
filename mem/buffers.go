@@ -207,6 +207,9 @@ func (b *buffer) String() string {
 
 // ReadUnsafe reads bytes from the given Buffer into the provided slice.
 // It does not perform safety checks.
+//
+// The returned Buffer MUST be used in place of the one passed in, as it may
+// have been modified or freed.
 func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 	return buf.read(dst)
 }
@@ -214,6 +217,9 @@ func ReadUnsafe(dst []byte, buf Buffer) (int, Buffer) {
 // SplitUnsafe modifies the receiver to point to the first n bytes while it
 // returns a new reference to the remaining bytes. The returned Buffer
 // functions just like a normal reference acquired using Ref().
+//
+// The returned Buffer values MUST be used in place of the one passed in, as it
+// may have been modified or freed.
 func SplitUnsafe(buf Buffer, n int) (left, right Buffer) {
 	return buf.split(n)
 }
