@@ -20,7 +20,6 @@ package xdsclient_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -29,22 +28,22 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -62,16 +61,26 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 	}
 }
 
-func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, pool *xdsclient.Pool) error {
+func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusResponse, client *xdsclient.XDSClient) error {
 	var cmpOpts = cmp.Options{
 		protocmp.Transform(),
 		protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
+		protocmp.IgnoreFields((*v3statuspb.ClientConfig)(nil), "client_scope"),
 		protocmp.IgnoreFields((*v3adminpb.UpdateFailureState)(nil), "last_update_attempt", "details"),
 	}
 
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		got := pool.DumpResources()
+		b, err := client.DumpResources()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		var got v3statuspb.ClientStatusResponse
+		if err := proto.Unmarshal(b, &got); err != nil {
+			lastErr = err
+			continue
+		}
 		// Sort the client configs based on the `client_scope` field.
 		slices.SortFunc(got.GetConfig(), func(a, b *v3statuspb.ClientConfig) int {
 			return strings.Compare(a.ClientScope, b.ClientScope)
@@ -85,11 +94,11 @@ func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusRespons
 				return strings.Compare(a.TypeUrl, b.TypeUrl)
 			})
 		}
-		diff := cmp.Diff(want, got, cmpOpts)
+		diff := cmp.Diff(want, &got, cmpOpts)
 		if diff == "" {
 			return nil
 		}
-		lastErr = fmt.Errorf("received unexpected resource dump, diff (-got, +want):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(got), pretty.ToJSON(want))
+		lastErr = fmt.Errorf("received unexpected resource dump, diff (-got, +want):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(&got), pretty.ToJSON(want))
 	}
 	return fmt.Errorf("timeout when waiting for resource dump to reach expected state: %v", lastErr)
 }
@@ -102,168 +111,128 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	// Initialize the xDS resources to be used in this test.
 	ldsTargets := []string{"lds.target.good:0000", "lds.target.good:1111"}
 	rdsTargets := []string{"route-config-0", "route-config-1"}
-	cdsTargets := []string{"cluster-0", "cluster-1"}
-	edsTargets := []string{"endpoints-0", "endpoints-1"}
 	listeners := make([]*v3listenerpb.Listener, len(ldsTargets))
 	listenerAnys := make([]*anypb.Any, len(ldsTargets))
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
 		listenerAnys[i] = testutils.MarshalAny(t, listeners[i])
 	}
-	routes := make([]*v3routepb.RouteConfiguration, len(rdsTargets))
-	routeAnys := make([]*anypb.Any, len(rdsTargets))
-	for i := range rdsTargets {
-		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
-		routeAnys[i] = testutils.MarshalAny(t, routes[i])
-	}
-	clusters := make([]*v3clusterpb.Cluster, len(cdsTargets))
-	clusterAnys := make([]*anypb.Any, len(cdsTargets))
-	for i := range cdsTargets {
-		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
-		clusterAnys[i] = testutils.MarshalAny(t, clusters[i])
-	}
-	endpoints := make([]*v3endpointpb.ClusterLoadAssignment, len(edsTargets))
-	endpointAnys := make([]*anypb.Any, len(edsTargets))
-	ips := []string{"0.0.0.0", "1.1.1.1"}
-	ports := []uint32{123, 456}
-	for i := range edsTargets {
-		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i:i+1])
-		endpointAnys[i] = testutils.MarshalAny(t, endpoints[i])
-	}
 
 	// Spin up an xDS management server on a local port.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigFromContents(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+
+	resourceTypes := map[string]xdsclient.ResourceType{}
+	listenerType := listenerType
+	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
-	pool := xdsclient.NewPool(config)
-	// Create two xDS clients with the above bootstrap contents.
-	client1Name := t.Name() + "-1"
-	client1, close1, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client1Name,
-	})
+
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: grpctransport.NewBuilder(credentials),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+	}
+
+	// Create two xDS clients with the above config.
+	client1, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close1()
-	client2Name := t.Name() + "-2"
-	client2, close2, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client2Name,
-	})
+	defer client1.Close()
+	client2, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close2()
+	defer client2.Close()
 
 	// Dump resources and expect empty configs.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantNode := &v3corepb.Node{
 		Id:                   nodeID,
-		UserAgentName:        "gRPC Go",
-		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+		UserAgentName:        "user-agent",
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 		ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 	}
 	wantResp := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node:        wantNode,
-				ClientScope: client1Name,
-			},
-			{
-				Node:        wantNode,
-				ClientScope: client2Name,
+				Node: wantNode,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Register watches, dump resources and expect configs in requested state.
-	for _, xdsC := range []xdsclient.XDSClient{client1, client2} {
+	for _, xdsC := range []*xdsclient.XDSClient{client1, client2} {
 		for _, target := range ldsTargets {
-			xdsresource.WatchListener(xdsC, target, noopListenerWatcher{})
-		}
-		for _, target := range rdsTargets {
-			xdsresource.WatchRouteConfig(xdsC, target, noopRouteConfigWatcher{})
-		}
-		for _, target := range cdsTargets {
-			xdsresource.WatchCluster(xdsC, target, noopClusterWatcher{})
-		}
-		for _, target := range edsTargets {
-			xdsresource.WatchEndpoints(xdsC, target, noopEndpointsWatcher{})
+			xdsC.WatchResource(xdsresource.V3ListenerURL, target, noopListenerWatcher{})
 		}
 	}
 	wantConfigs := []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              wantNode,
 				GenericXdsConfigs: wantConfigs,
-				ClientScope:       client1Name,
-			},
-			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs,
-				ClientScope:       client2Name,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Configure the resources on the management server.
 	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: listeners,
-		Routes:    routes,
-		Clusters:  clusters,
-		Endpoints: endpoints,
+		NodeID:         nodeID,
+		Listeners:      listeners,
+		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Dump resources and expect ACK configs.
 	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[0], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              wantNode,
 				GenericXdsConfigs: wantConfigs,
-				ClientScope:       client1Name,
-			},
-			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs,
-				ClientScope:       client2Name,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,45 +254,30 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 			}},
 		}
 	}()
-	routes[0].VirtualHosts = []*v3routepb.VirtualHost{{Routes: []*v3routepb.Route{{}}}}
-	clusters[0].ClusterDiscoveryType = &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC}
-	endpoints[0].Endpoints = []*v3endpointpb.LocalityLbEndpoints{{}}
 	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      listeners,
-		Routes:         routes,
-		Clusters:       clusters,
-		Endpoints:      endpoints,
 		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	wantConfigs = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, clusterAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, endpointAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, listenerAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_NACKED, routeAnys[0], &v3adminpb.UpdateFailureState{VersionInfo: "2"}),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "2", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              wantNode,
 				GenericXdsConfigs: wantConfigs,
-				ClientScope:       client1Name,
-			},
-			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs,
-				ClientScope:       client2Name,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -346,39 +300,11 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 		"route-config-0",
 		fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/route-config-1", authority),
 	}
-	cdsTargets := []string{
-		"cluster-0",
-		fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/cluster-1", authority),
-	}
-	edsTargets := []string{
-		"endpoints-0",
-		fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/endpoints-1", authority),
-	}
 	listeners := make([]*v3listenerpb.Listener, len(ldsTargets))
 	listenerAnys := make([]*anypb.Any, len(ldsTargets))
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
 		listenerAnys[i] = testutils.MarshalAny(t, listeners[i])
-	}
-	routes := make([]*v3routepb.RouteConfiguration, len(rdsTargets))
-	routeAnys := make([]*anypb.Any, len(rdsTargets))
-	for i := range rdsTargets {
-		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
-		routeAnys[i] = testutils.MarshalAny(t, routes[i])
-	}
-	clusters := make([]*v3clusterpb.Cluster, len(cdsTargets))
-	clusterAnys := make([]*anypb.Any, len(cdsTargets))
-	for i := range cdsTargets {
-		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
-		clusterAnys[i] = testutils.MarshalAny(t, clusters[i])
-	}
-	endpoints := make([]*v3endpointpb.ClusterLoadAssignment, len(edsTargets))
-	endpointAnys := make([]*anypb.Any, len(edsTargets))
-	ips := []string{"0.0.0.0", "1.1.1.1"}
-	ports := []uint32{123, 456}
-	for i := range edsTargets {
-		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i:i+1])
-		endpointAnys[i] = testutils.MarshalAny(t, endpoints[i])
 	}
 
 	// Start two management servers.
@@ -389,46 +315,45 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	// server in the bootstrap configuration, and the second will be the xDS
 	// server corresponding to the test authority.
 	nodeID := uuid.New().String()
-	bc, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer1.Address)),
-		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-		Authorities: map[string]json.RawMessage{
-			authority: []byte(fmt.Sprintf(`{
-				 "xds_servers": [{
-					"server_uri": %q,
-					"channel_creds": [{"type": "insecure"}]
-				}]}`, mgmtServer2.Address)),
-		},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
-	}
-	config, err := bootstrap.NewConfigFromContents(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
 
-	// Create two xDS clients with the above bootstrap contents.
-	client1Name := t.Name() + "-1"
-	client1, close1, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client1Name,
-	})
+	resourceTypes := map[string]xdsclient.ResourceType{}
+	listenerType := listenerType
+	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	si1 := clients.ServerIdentifier{
+		ServerURI:  mgmtServer1.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+	}
+	si2 := clients.ServerIdentifier{
+		ServerURI:  mgmtServer2.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+	}
+
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si1}},
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: grpctransport.NewBuilder(credentials),
+		ResourceTypes:    resourceTypes,
+		// Xdstp style resource names used in this test use a slash removed
+		// version of t.Name as their authority, and the empty config
+		// results in the top-level xds server configuration being used for
+		// this authority.
+		Authorities: map[string]xdsclient.Authority{
+			authority: {XDSServers: []xdsclient.ServerConfig{{ServerIdentifier: si2}}},
+		},
+	}
+
+	// Create two xDS clients with the above config.
+	client1, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close1()
-	client2Name := t.Name() + "-2"
-	client2, close2, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: client2Name,
-	})
+	defer client1.Close()
+	client2, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close2()
+	defer client2.Close()
 
 	// Check the resource dump before configuring resources on the management server.
 	// Dump resources and expect empty configs.
@@ -436,76 +361,65 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	defer cancel()
 	wantNode := &v3corepb.Node{
 		Id:                   nodeID,
-		UserAgentName:        "gRPC Go",
-		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+		UserAgentName:        "user-agent",
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 		ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 	}
 	wantResp := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node:        wantNode,
-				ClientScope: client1Name,
-			},
-			{
-				Node:        wantNode,
-				ClientScope: client2Name,
+				Node: wantNode,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Register watches, the first xDS client watches old style resource names,
 	// while the second xDS client watches new style resource names.
-	xdsresource.WatchListener(client1, ldsTargets[0], noopListenerWatcher{})
-	xdsresource.WatchRouteConfig(client1, rdsTargets[0], noopRouteConfigWatcher{})
-	xdsresource.WatchCluster(client1, cdsTargets[0], noopClusterWatcher{})
-	xdsresource.WatchEndpoints(client1, edsTargets[0], noopEndpointsWatcher{})
-	xdsresource.WatchListener(client2, ldsTargets[1], noopListenerWatcher{})
-	xdsresource.WatchRouteConfig(client2, rdsTargets[1], noopRouteConfigWatcher{})
-	xdsresource.WatchCluster(client2, cdsTargets[1], noopClusterWatcher{})
-	xdsresource.WatchEndpoints(client2, edsTargets[1], noopEndpointsWatcher{})
+	client1.WatchResource(xdsresource.V3ListenerURL, ldsTargets[0], noopListenerWatcher{})
+	client2.WatchResource(xdsresource.V3ListenerURL, ldsTargets[1], noopListenerWatcher{})
 
 	// Check the resource dump. Both clients should have all resources in
 	// REQUESTED state.
 	wantConfigs1 := []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 	}
 	wantConfigs2 := []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "", v3adminpb.ClientResourceStatus_REQUESTED, nil, nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              wantNode,
 				GenericXdsConfigs: wantConfigs1,
-				ClientScope:       client1Name,
-			},
-			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs2,
-				ClientScope:       client2Name,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	wantResp = &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node:              wantNode,
+				GenericXdsConfigs: wantConfigs2,
+			},
+		},
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Configure resources on the first management server.
 	if err := mgmtServer1.Update(ctx, e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: listeners[:1],
-		Routes:    routes[:1],
-		Clusters:  clusters[:1],
-		Endpoints: endpoints[:1],
+		NodeID:         nodeID,
+		Listeners:      listeners[:1],
+		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -513,36 +427,36 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	// Check the resource dump. One client should have resources in ACKED state,
 	// while the other should still have resources in REQUESTED state.
 	wantConfigs1 = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[0], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[0], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[0], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[0], nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              wantNode,
 				GenericXdsConfigs: wantConfigs1,
-				ClientScope:       client1Name,
-			},
-			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs2,
-				ClientScope:       client2Name,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	wantResp = &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node:              wantNode,
+				GenericXdsConfigs: wantConfigs2,
+			},
+		},
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Configure resources on the second management server.
 	if err := mgmtServer2.Update(ctx, e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: listeners[1:],
-		Routes:    routes[1:],
-		Clusters:  clusters[1:],
-		Endpoints: endpoints[1:],
+		NodeID:         nodeID,
+		Listeners:      listeners[1:],
+		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -550,26 +464,28 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	// Check the resource dump. Both clients should have appropriate resources
 	// in REQUESTED state.
 	wantConfigs2 = []*v3statuspb.ClientConfig_GenericXdsConfig{
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[1], nil),
 		makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[1], nil),
-		makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[1], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[1], nil),
 	}
 	wantResp = &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              wantNode,
 				GenericXdsConfigs: wantConfigs1,
-				ClientScope:       client1Name,
-			},
-			{
-				Node:              wantNode,
-				GenericXdsConfigs: wantConfigs2,
-				ClientScope:       client2Name,
 			},
 		},
 	}
-	if err := checkResourceDump(ctx, wantResp, pool); err != nil {
+	if err := checkResourceDump(ctx, wantResp, client1); err != nil {
+		t.Fatal(err)
+	}
+	wantResp = &v3statuspb.ClientStatusResponse{
+		Config: []*v3statuspb.ClientConfig{
+			{
+				Node:              wantNode,
+				GenericXdsConfigs: wantConfigs2,
+			},
+		},
+	}
+	if err := checkResourceDump(ctx, wantResp, client2); err != nil {
 		t.Fatal(err)
 	}
 }
