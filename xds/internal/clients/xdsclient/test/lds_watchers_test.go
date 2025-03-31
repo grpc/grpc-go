@@ -258,7 +258,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			resourceTypes[xdsresource.V3ListenerURL] = listenerType
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
-				Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+				Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 			}
 
 			credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -406,7 +406,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			resourceTypes[xdsresource.V3ListenerURL] = listenerType
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
-				Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+				Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 			}
 
 			credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -513,7 +513,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -622,7 +622,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -706,7 +706,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -758,7 +758,7 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -837,7 +837,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -968,7 +968,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -1056,7 +1056,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -1123,7 +1123,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -1217,7 +1217,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
@@ -1307,7 +1307,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}

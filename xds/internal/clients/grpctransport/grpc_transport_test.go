@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -137,16 +138,15 @@ func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
 // provided to Build() is not present in the Builder otherwise it returns the
 // existing transport for the clients.ServerIdentifier.
 func (s) TestBuild_Success(t *testing.T) {
-	ext := &ServerIdentifierExtension{Credentials: "local"}
-
 	credentials := map[string]credentials.Bundle{
-		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+		"local":    &testCredentials{transportCredentials: local.NewCredentials()},
+		"insecure": insecure.NewBundle(),
 	}
 	b := NewBuilder(credentials)
 
 	serverID1 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ext,
+		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
 	// Build(serverID1) should create a new transport.
 	tr1, err := b.Build(serverID1)
@@ -170,7 +170,7 @@ func (s) TestBuild_Success(t *testing.T) {
 
 	serverID2 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ext,
+		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
 	// Build(serverID2) should return the same transport instead of creating a
 	// new one.
@@ -186,6 +186,30 @@ func (s) TestBuild_Success(t *testing.T) {
 	}
 	if b.serverIdentifierMap[serverID2] != tr1 {
 		t.Fatalf("Builder.serverIdentifierMap[serverID2] = %v, want %v", b.serverIdentifierMap[serverID2], tr1)
+	}
+
+	serverID3 := clients.ServerIdentifier{
+		ServerURI:  "server-address",
+		Extensions: ServerIdentifierExtension{Credentials: "insecure"},
+	}
+	// Build(serverID3) should create a new transport.
+	tr3, err := b.Build(serverID3)
+	if err != nil {
+		t.Fatalf("Build(serverID3) call failed: %v", err)
+	}
+	defer tr3.Close()
+
+	if tr3 == nil {
+		t.Fatalf("Got nil `tr3` transport from Build(serverID3), want non-nil")
+	}
+	if tr3.(*grpcTransport).cc == nil {
+		t.Fatalf("Got nil grpc.ClientConn in transport `tr3`, want non-nil")
+	}
+	if len(b.serverIdentifierMap) != 2 {
+		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 2", len(b.serverIdentifierMap))
+	}
+	if b.serverIdentifierMap[serverID3] != tr3 {
+		t.Fatalf("Builder.serverIdentifierMap[serverID1] = %v, want %v", b.serverIdentifierMap[serverID3], tr3)
 	}
 }
 
@@ -206,7 +230,7 @@ func (s) TestBuild_Failure(t *testing.T) {
 			name: "ServerURI is empty",
 			serverID: clients.ServerIdentifier{
 				ServerURI:  "",
-				Extensions: &ServerIdentifierExtension{Credentials: "local"},
+				Extensions: ServerIdentifierExtension{Credentials: "local"},
 			},
 		},
 		{
@@ -224,7 +248,14 @@ func (s) TestBuild_Failure(t *testing.T) {
 			name: "ServerIdentifierExtension Credentials is nil",
 			serverID: clients.ServerIdentifier{
 				ServerURI:  "server-address",
-				Extensions: &ServerIdentifierExtension{},
+				Extensions: ServerIdentifierExtension{},
+			},
+		},
+		{
+			name: "ServerIdentifierExtension is added as pointer",
+			serverID: clients.ServerIdentifier{
+				ServerURI:  "server-address",
+				Extensions: &ServerIdentifierExtension{Credentials: "local"},
 			},
 		},
 	}
@@ -252,7 +283,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: &ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
 	credentials := map[string]credentials.Bundle{
 		"local": &testCredentials{transportCredentials: local.NewCredentials()},
@@ -276,7 +307,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 func (s) TestNewStream_Error(t *testing.T) {
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "invalid-server-uri",
-		Extensions: &ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
 	credentials := map[string]credentials.Bundle{
 		"local": &testCredentials{transportCredentials: local.NewCredentials()},
@@ -312,7 +343,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// Build a grpc-based transport to the above server.
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: &ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
 	credentials := map[string]credentials.Bundle{
 		"local": &testCredentials{transportCredentials: local.NewCredentials()},
@@ -365,33 +396,5 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	}
 	if diff := cmp.Diff(ts.response, &gotRes, protocmp.Transform()); diff != "" {
 		t.Fatalf("proto.Unmarshal(res, &gotRes) returned unexpected diff (-want +got):\n%s", diff)
-	}
-}
-
-func (s) TestServerIdentifierExtension_String(t *testing.T) {
-	tests := []struct {
-		name string
-		sie  *ServerIdentifierExtension
-		want string
-	}{
-		{
-			name: "empty",
-			sie:  &ServerIdentifierExtension{},
-			want: "",
-		},
-		{
-			name: "non_empty",
-			sie: &ServerIdentifierExtension{
-				Credentials: "non_empty",
-			},
-			want: "non_empty",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := test.sie.String(); got != test.want {
-				t.Errorf("String() = %v, want %v", got, test.want)
-			}
-		})
 	}
 }

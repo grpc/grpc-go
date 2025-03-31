@@ -37,21 +37,17 @@ var logger = grpclog.Component("grpctransport")
 
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
+//
+// It must be added as value to the clients.ServerIdentifier.Extensions field.
+//
+// Example:
+// clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"}}
 type ServerIdentifierExtension struct {
 	// Credentials is name of the credentials to use for this connection to the
 	// server.
 	//
 	// It must be present in Builder.Credentials.
 	Credentials string
-}
-
-// String returns a string representation of the ServerIdentifierExtension.
-//
-// This method is primarily intended for logging and testing purposes. The
-// output returned by this method is not guaranteed to be stable and may change
-// at any time. Do not rely on it for production use.
-func (sie *ServerIdentifierExtension) String() string {
-	return sie.Credentials
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
@@ -87,7 +83,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if si.Extensions == nil {
 		return nil, fmt.Errorf("grpctransport: Extensions is not set in ServerIdentifier")
 	}
-	sce, ok := si.Extensions.(*ServerIdentifierExtension)
+	sce, ok := si.Extensions.(ServerIdentifierExtension)
 	if !ok {
 		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}

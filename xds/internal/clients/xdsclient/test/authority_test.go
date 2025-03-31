@@ -84,7 +84,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	resourceTypes := map[string]xdsclient.ResourceType{}
 	listenerType := listenerType
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
-	ext := &grpctransport.ServerIdentifierExtension{Credentials: "insecure"}
+	ext := grpctransport.ServerIdentifierExtension{Credentials: "insecure"}
 	siDefault := clients.ServerIdentifier{
 		ServerURI:  defaultAuthorityServer.Address,
 		Extensions: ext,
@@ -247,11 +247,11 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	psi := clients.ServerIdentifier{
 		ServerURI:  primaryMgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 	ssi := clients.ServerIdentifier{
 		ServerURI:  secondaryMgmtServer.Address,
-		Extensions: &grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
 	// Create config with the above primary and fallback management servers,
