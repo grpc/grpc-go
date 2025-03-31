@@ -19,8 +19,6 @@
 package internal
 
 import (
-	"fmt"
-	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -40,14 +38,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type testServerIdentifierExtension struct{ x int }
-
-func (ts *testServerIdentifierExtension) String() string {
-	return fmt.Sprintf("testServerIdentifierExtension-%d", ts.x)
-}
-
-type testServerIdentifierExtensionWithoutString struct{}
-
 func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct {
 	t.Helper()
 
@@ -56,57 +46,6 @@ func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct 
 		t.Fatalf("Failed to create new struct proto from map %v: %v", input, err)
 	}
 	return ret
-}
-
-func (s) TestServerIdentifierString(t *testing.T) {
-	tests := []struct {
-		name string
-		si   clients.ServerIdentifier
-		want string
-	}{
-		{
-			name: "empty",
-			si:   clients.ServerIdentifier{},
-			want: "",
-		},
-		{
-			name: "server_uri_only",
-			si:   clients.ServerIdentifier{ServerURI: "foo"},
-			want: "foo",
-		},
-		{
-			name: "stringer_extension",
-			si: clients.ServerIdentifier{
-				ServerURI:  "foo",
-				Extensions: &testServerIdentifierExtension{x: 1},
-			},
-			want: "foo-testServerIdentifierExtension-1",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := ServerIdentifierString(test.si); got != test.want {
-				t.Errorf("ServerIdentifierString() = %v, want %v", got, test.want)
-			}
-		})
-	}
-}
-
-func (s) TestServerIdentifierString_NonStringerExtension(t *testing.T) {
-	si := clients.ServerIdentifier{
-		ServerURI:  "foo",
-		Extensions: &testServerIdentifierExtensionWithoutString{},
-	}
-	got := ServerIdentifierString(si)
-	// Check if the output matches the expected pattern for non-stringer
-	// extensions i.e. si.ServerURI-0xxxx
-	matched, err := regexp.MatchString(`^foo-0x[0-9a-f]+$`, got)
-	if err != nil {
-		t.Fatalf("Error in regex matching: %v", err)
-	}
-	if !matched {
-		t.Errorf("ServerIdentifierString() = %v, want a string matching the pattern `^foo-0x[0-9a-f]+$`", got)
-	}
 }
 
 func (s) TestIsLocalityEmpty(t *testing.T) {

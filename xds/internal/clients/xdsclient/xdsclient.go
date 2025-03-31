@@ -86,7 +86,7 @@ func New(config Config) (*XDSClient, error) {
 		return nil, errors.New("xdsclient: no servers or authorities specified")
 	}
 
-	client, err := newClient(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, "xds-client")
+	client, err := newClient(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, name)
 	if err != nil {
 		return nil, err
 	}

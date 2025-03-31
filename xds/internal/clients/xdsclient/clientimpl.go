@@ -40,6 +40,7 @@ const (
 	NameForServer = "#server"
 
 	defaultWatchExpiryTimeout = 15 * time.Second
+	name                      = "xds-client"
 )
 
 var (
@@ -206,7 +207,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 	// map of xdsChannels.
 	tr, err := c.transportBuilder.Build(serverConfig.ServerIdentifier)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("xds: failed to create transport for server config %s: %v", serverConfigString(serverConfig), err)
+		return nil, func() {}, fmt.Errorf("xds: failed to create transport for server config %v: %v", serverConfig, err)
 	}
 	state := &channelState{
 		parent:                c,
@@ -223,7 +224,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 		logPrefix:          clientPrefix(c),
 	})
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("xds: failed to create a new channel for server config %s: %v", serverConfigString(serverConfig), err)
+		return nil, func() {}, fmt.Errorf("xds: failed to create a new channel for server config %v: %v", serverConfig, err)
 	}
 	state.channel = channel
 	c.xdsActiveChannels[*serverConfig] = state
