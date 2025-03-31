@@ -27,8 +27,6 @@ import (
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/xds/internal/clients"
 	clientsinternal "google.golang.org/grpc/xds/internal/clients/internal"
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
@@ -51,40 +49,10 @@ var (
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
 
-// clientImpl is the real implementation of the xDS client. The exported Client
-// is a wrapper of this struct with a ref count.
-type clientImpl struct {
-	// The following fields are initialized at creation time and are read-only
-	// after that, and therefore can be accessed without a mutex.
-	done               *syncutil.Event              // Fired when the client is closed.
-	topLevelAuthority  *authority                   // The top-level authority, used only for old-style names without an authority.
-	authorities        map[string]*authority        // Map from authority names in config to authority struct.
-	config             *Config                      // Complete xDS client configuration.
-	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
-	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
-	transportBuilder   clients.TransportBuilder     // Builder to create transports to xDS server.
-	resourceTypes      *resourceTypeRegistry        // Registry of resource types, for parsing incoming ADS responses.
-	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
-	serializerClose    func()                       // Function to close the serializer.
-	logger             *grpclog.PrefixLogger        // Logger for this client.
-	target             string                       // The gRPC target for this client.
-
-	// The clientImpl owns a bunch of channels to individual xDS servers
-	// specified in the xDS client configuration. Authorities acquire references
-	// to these channels based on server configs within the authority config.
-	// The clientImpl maintains a list of interested authorities for each of
-	// these channels, and forwards updates from the channels to each of these
-	// authorities.
-	//
-	// Once all references to a channel are dropped, the channel is closed.
-	channelsMu        sync.Mutex
-	xdsActiveChannels map[ServerConfig]*channelState // Map from server config to in-use xdsChannels.
-}
-
-// newClientImpl returns a new xdsClient with the given config.
-func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, target string) (*clientImpl, error) {
+// newClient returns a new XDSClient with the given config.
+func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, target string) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &clientImpl{
+	c := &XDSClient{
 		target:             target,
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
@@ -127,7 +95,7 @@ func newClientImpl(config *Config, watchExpiryTimeout time.Duration, streamBacko
 }
 
 // close closes the xDS client and releases all resources.
-func (c *clientImpl) close() {
+func (c *XDSClient) close() {
 	if c.done.HasFired() {
 		return
 	}
@@ -140,7 +108,7 @@ func (c *clientImpl) close() {
 
 	// Channel close cannot be invoked with the lock held, because it can race
 	// with stream failure happening at the same time. The latter will callback
-	// into the clientImpl and will attempt to grab the lock. This will result
+	// into the XDSClient and will attempt to grab the lock. This will result
 	// in a deadlock. So instead, we release the lock and wait for all active
 	// channels to be closed.
 	var channelsToClose []*xdsChannel
@@ -171,7 +139,7 @@ func (c *clientImpl) close() {
 // no longer interested in this channel.
 //
 // A non-nil error is returned if an xdsChannel was not created.
-func (c *clientImpl) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
+func (c *XDSClient) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
 		return nil, nil, ErrClientClosed
 	}
@@ -213,7 +181,7 @@ func (c *clientImpl) getChannelForADS(serverConfig *ServerConfig, callingAuthori
 // Returns the xdsChannel and a cleanup function to be invoked when the channel
 // is no longer required. A non-nil error is returned if an xdsChannel was not
 // created.
-func (c *clientImpl) getOrCreateChannel(serverConfig *ServerConfig, initLocked, deInitLocked func(*channelState)) (*xdsChannel, func(), error) {
+func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, deInitLocked func(*channelState)) (*xdsChannel, func(), error) {
 	c.channelsMu.Lock()
 	defer c.channelsMu.Unlock()
 
@@ -274,7 +242,7 @@ func (c *clientImpl) getOrCreateChannel(serverConfig *ServerConfig, initLocked, 
 // The function returns another function that can be called to release the
 // reference to the xdsChannel. This returned function is idempotent, meaning
 // it can be called multiple times without any additional effect.
-func (c *clientImpl) releaseChannel(serverConfig *ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
+func (c *XDSClient) releaseChannel(serverConfig *ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
 	return sync.OnceFunc(func() {
 		c.channelsMu.Lock()
 
@@ -304,7 +272,7 @@ func (c *clientImpl) releaseChannel(serverConfig *ServerConfig, state *channelSt
 }
 
 // dumpResources returns the status and contents of all xDS resources.
-func (c *clientImpl) dumpResources() *v3statuspb.ClientConfig {
+func (c *XDSClient) dumpResources() *v3statuspb.ClientConfig {
 	retCfg := c.topLevelAuthority.dumpResources()
 	for _, a := range c.authorities {
 		retCfg = append(retCfg, a.dumpResources()...)
@@ -325,7 +293,7 @@ func (c *clientImpl) dumpResources() *v3statuspb.ClientConfig {
 // It receives callbacks for events on the underlying ADS stream and invokes
 // corresponding callbacks on interested authorities.
 type channelState struct {
-	parent       *clientImpl
+	parent       *XDSClient
 	serverConfig *ServerConfig
 
 	// Access to the following fields should be protected by the parent's

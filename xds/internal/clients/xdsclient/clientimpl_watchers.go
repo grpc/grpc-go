@@ -40,11 +40,11 @@ func (w *wrappingWatcher) AmbientError(err error, done func()) {
 // are are deserialized and validated, as received from the xDS management
 // server. Upon receipt of a response from the management server, an
 // appropriate callback on the watcher is invoked.
-func (c *clientImpl) watchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
+func (c *XDSClient) watchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	//
 	// The client returned from the top-level API is a ref-counted client which
-	// contains a pointer to `clientImpl`. When all references are released, the
+	// contains a pointer to `XDSClient`. When all references are released, the
 	// ref-counted client sets its pointer to `nil`. And if any watch APIs are
 	// made on such a closed client, we will get here with a `nil` receiver.
 
@@ -84,7 +84,7 @@ func (c *clientImpl) watchResource(typeURL, resourceName string, watcher Resourc
 //
 // See examples in this section of the gRFC:
 // https://github.com/grpc/proposal/blob/master/A47-xds-federation.md#bootstrap-config-changes
-func (c *clientImpl) getAuthorityForResource(name *xdsresource.Name) *authority {
+func (c *XDSClient) getAuthorityForResource(name *xdsresource.Name) *authority {
 	// For new-style resource names, always lookup the authorities map. If the
 	// name does not specify an authority, we will end up looking for an entry
 	// in the map with the empty string as the key.
