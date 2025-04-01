@@ -466,6 +466,7 @@ func (b *rlsBalancer) buildAndPushChildPolicyConfigs(target string, newCfg *lbCo
 	}
 
 	state := balancer.ClientConnState{ResolverState: ccs.ResolverState, BalancerConfig: parsedCfg}
+	b.logger.Infof("Pushing new state to child policy %q: %+v", target, state)
 	if err := b.bg.UpdateClientConnState(target, state); err != nil {
 		b.logger.Warningf("UpdateClientConnState(%q, %+v) failed : %v", target, ccs, err)
 	}

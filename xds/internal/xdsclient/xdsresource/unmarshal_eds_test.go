@@ -413,7 +413,7 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 			wantHashKey: "",
 		},
 		{
-			name: "envoy.lb with hash key",
+			name: "envoy.lb with hash key, compat mode off",
 			metadata: &v3corepb.Metadata{
 				FilterMetadata: map[string]*structpb.Struct{
 					"envoy.lb": {
@@ -428,7 +428,7 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 			wantHashKey: "test-hash-key",
 		},
 		{
-			name: "envoy.lb with hash key",
+			name: "envoy.lb with hash key, compat mode on",
 			metadata: &v3corepb.Metadata{
 				FilterMetadata: map[string]*structpb.Struct{
 					"envoy.lb": {

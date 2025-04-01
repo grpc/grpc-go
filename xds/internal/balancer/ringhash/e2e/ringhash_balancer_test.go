@@ -2788,7 +2788,7 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 // Tests that when a request hash key is set in the balancer configuration via
 // service config, and the header is not set in the outgoing request (random
 // behavior), then each RPC wakes up at most one connection, and, if there are
-// subchannels in Ready state, RPCs are routed to them.
+// SubChannels in Ready state, RPCs are routed to them.
 func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
 
@@ -2835,10 +2835,10 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 
 	// Send 1 RPC and make sure this triggers at most 1 connection attempt.
 	rpcCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
 	_, err = client.EmptyCall(rpcCtx, &testpb.Empty{})
-	cancel()
 	if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
-		t.Fatalf("Got rpc EmptyCall() result %v, want want %v", err, codes.DeadlineExceeded)
+		t.Fatalf("Got rpc EmptyCall() result %v, want %v", err, codes.DeadlineExceeded)
 	}
 
 	connecting := make(map[int]bool)
@@ -2855,9 +2855,9 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	// Connecting state, this should not trigger a connection attempt.
 	rpcCtx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	_, err = client.EmptyCall(rpcCtx, &testpb.Empty{})
-	cancel()
+	defer cancel()
 	if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
-		t.Fatalf("Got rpc EmptyCall() result %v, want want %v", err, codes.DeadlineExceeded)
+		t.Fatalf("Got rpc EmptyCall() result %v, want %v", err, codes.DeadlineExceeded)
 	}
 
 	for i, hold := range holds {
