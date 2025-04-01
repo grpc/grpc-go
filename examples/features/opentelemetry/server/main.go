@@ -57,13 +57,11 @@ func (s *echoServer) UnaryEcho(_ context.Context, req *pb.EchoRequest) (*pb.Echo
 }
 
 func main() {
-	flag.Parse()
-	promExporter, err := prometheus.New()
+	exporter, err := prometheus.New()
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
-	// Initialize MeterProvider with Prometheus exporter.
-	meterProvider := otelmetric.NewMeterProvider(otelmetric.WithReader(promExporter))
+	meterProvider := otelmetric.NewMeterProvider(otelmetric.WithReader(exporter))
 
 	// Initialize stdouttrace exporter for traces
 	traceExporter, err := otelstdouttrace.New(otelstdouttrace.WithPrettyPrint())
