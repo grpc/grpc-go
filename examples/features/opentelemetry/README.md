@@ -24,7 +24,7 @@ The client continuously makes RPC's to a server. The client and server both
 expose a prometheus exporter to listen and provide metrics. This defaults to
 :9464 for the server and :9465 for the client. The client and server are also
 configured to output traces directly to their standard output streams using
-`stdouttrace`.  
+`stdouttrace`.
 
 OpenTelemetry is configured on both the client and the server, and exports to
 the Prometheus exporter. The exporter exposes metrics on the Prometheus ports
