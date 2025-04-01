@@ -59,7 +59,7 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
 	err := invoker(ctx, method, req, reply, cc, opts...)
-	h.perCallTraces(err, span)
+	h.finishTrace(err, span)
 	return err
 }
 
@@ -78,14 +78,14 @@ func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc
 
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
-	callback := func(err error) { h.perCallTraces(err, span) }
+	callback := func(err error) { h.finishTrace(err, span) }
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 	return streamer(ctx, desc, cc, method, opts...)
 }
 
-// perCallTraces sets the span status based on the RPC result and ends the span.
+// finishTrace sets the span status based on the RPC result and ends the span.
 // It is used to finalize tracing for both unary and streaming calls.
-func (h *clientTracingHandler) perCallTraces(err error, ts trace.Span) {
+func (h *clientTracingHandler) finishTrace(err error, ts trace.Span) {
 	s := status.Convert(err)
 	if s.Code() == grpccodes.OK {
 		ts.SetStatus(otelcodes.Ok, s.Message())
@@ -130,7 +130,7 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	ri := getRPCInfo(ctx)
 	var ai *attemptInfo
-	if ri == nil {
+	if ri.ai == nil {
 		ai = &attemptInfo{}
 	} else {
 		ai = ri.ai

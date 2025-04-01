@@ -31,13 +31,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type clientStatsHandler struct {
+type clientMetricsHandler struct {
 	estats.MetricsRecorder
 	options       Options
 	clientMetrics clientMetrics
 }
 
-func (h *clientStatsHandler) initializeMetrics() {
+func (h *clientMetricsHandler) initializeMetrics() {
 	// Will set no metrics to record, logically making this stats handler a
 	// no-op.
 	if h.options.MetricsOptions.MeterProvider == nil {
@@ -67,7 +67,7 @@ func (h *clientStatsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func (h *clientMetricsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		if logger.V(2) {
@@ -107,7 +107,7 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 	return "other"
 }
 
-func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (h *clientMetricsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		if logger.V(2) {
@@ -138,7 +138,7 @@ func (h *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.S
 }
 
 // perCallMetrics records per call metrics for both unary and stream calls.
-func (h *clientStatsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
+func (h *clientMetricsHandler) perCallMetrics(ctx context.Context, err error, startTime time.Time, ci *callInfo) {
 	callLatency := float64(time.Since(startTime)) / float64(time.Second)
 	attrs := otelmetric.WithAttributeSet(otelattribute.NewSet(
 		otelattribute.String("grpc.method", ci.method),
@@ -149,15 +149,15 @@ func (h *clientStatsHandler) perCallMetrics(ctx context.Context, err error, star
 }
 
 // TagConn exists to satisfy stats.Handler.
-func (h *clientStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
 
 // HandleConn exists to satisfy stats.Handler.
-func (h *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
+func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for metrics.
-func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	// Numerous stats handlers can be used for the same channel. The cluster
 	// impl balancer which writes to this will only write once, thus have this
 	// stats handler's per attempt scoped context point to the same optional
@@ -175,21 +175,19 @@ func (h *clientStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 		ctx = istats.SetLabels(ctx, labels)
 	}
 	ri := getRPCInfo(ctx)
-	var ai *attemptInfo
 	if ri == nil {
-		ai = &attemptInfo{}
-	} else {
-		ai = ri.ai
+		ri = &rpcInfo{ai: &attemptInfo{}}
 	}
+	ai := ri.ai
 	ai.startTime = time.Now()
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
 
-	return setRPCInfo(ctx, &rpcInfo{ai: ai})
+	return setRPCInfo(ctx, ri)
 }
 
 // HandleRPC handles per RPC stats implementation.
-func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+func (h *clientMetricsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no client attempt data present")
@@ -198,7 +196,7 @@ func (h *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 	h.processRPCEvent(ctx, rs, ri.ai)
 }
 
-func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
+func (h *clientMetricsHandler) processRPCEvent(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {
 	switch st := s.(type) {
 	case *stats.Begin:
 		ci := getCallInfo(ctx)
@@ -226,7 +224,7 @@ func (h *clientStatsHandler) processRPCEvent(ctx context.Context, s stats.RPCSta
 	}
 }
 
-func (h *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
+func (h *clientMetricsHandler) setLabelsFromPluginOption(ai *attemptInfo, incomingMetadata metadata.MD) {
 	if ai.pluginOptionLabels == nil && h.options.MetricsOptions.pluginOption != nil {
 		labels := h.options.MetricsOptions.pluginOption.GetLabels(incomingMetadata)
 		if labels == nil {
@@ -236,7 +234,7 @@ func (h *clientStatsHandler) setLabelsFromPluginOption(ai *attemptInfo, incoming
 	}
 }
 
-func (h *clientStatsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
+func (h *clientMetricsHandler) processRPCEnd(ctx context.Context, ai *attemptInfo, e *stats.End) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		logger.Error("ctx passed into client side stats handler metrics event handling has no metrics data present")

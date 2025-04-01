@@ -38,19 +38,11 @@ func (h *serverTracingHandler) initializeTraces() {
 	}
 }
 
-func (h *serverTracingHandler) unaryInterceptor(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	return handler(ctx, req)
-}
-
-func (h *serverTracingHandler) streamInterceptor(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	return handler(srv, ss)
-}
-
 // TagRPC implements per RPC attempt context management for traces.
 func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	ri := getRPCInfo(ctx)
 	var ai *attemptInfo
-	if ri == nil {
+	if ri.ai == nil {
 		ai = &attemptInfo{}
 	} else {
 		ai = ri.ai

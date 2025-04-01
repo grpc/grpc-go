@@ -65,6 +65,10 @@ type Options struct {
 	TraceOptions experimental.TraceOptions
 }
 
+func (o *Options) isMetricsEnabled() bool {
+	return o.MetricsOptions.MeterProvider != nil
+}
+
 func (o *Options) isTracingEnabled() bool {
 	return o.TraceOptions.TracerProvider != nil
 }
@@ -117,15 +121,31 @@ type MetricsOptions struct {
 // For the traces supported by this instrumentation code, provide an
 // implementation of a TextMapPropagator and OpenTelemetry TracerProvider.
 func DialOption(o Options) grpc.DialOption {
-	csh := &clientStatsHandler{options: o}
-	csh.initializeMetrics()
-	do := joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
-	if !o.isTracingEnabled() {
-		return do
+	var unaryInterceptors []grpc.UnaryClientInterceptor
+	var streamInterceptors []grpc.StreamClientInterceptor
+	var do []grpc.DialOption
+
+	if o.isMetricsEnabled() {
+		metricsHandler := &clientMetricsHandler{options: o}
+		metricsHandler.initializeMetrics()
+		unaryInterceptors = append(unaryInterceptors, metricsHandler.unaryInterceptor)
+		streamInterceptors = append(streamInterceptors, metricsHandler.streamInterceptor)
+		do = append(do, grpc.WithStatsHandler(metricsHandler))
 	}
-	tracingHandler := &clientTracingHandler{options: o}
-	tracingHandler.initializeTraces()
-	return joinDialOptions(do, grpc.WithChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.WithChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.WithStatsHandler(tracingHandler))
+	if o.isTracingEnabled() {
+		tracingHandler := &clientTracingHandler{options: o}
+		tracingHandler.initializeTraces()
+		unaryInterceptors = append(unaryInterceptors, tracingHandler.unaryInterceptor)
+		streamInterceptors = append(streamInterceptors, tracingHandler.streamInterceptor)
+		do = append(do, grpc.WithStatsHandler(tracingHandler))
+	}
+	if len(unaryInterceptors) > 0 {
+		do = append(do, grpc.WithChainUnaryInterceptor(unaryInterceptors...))
+	}
+	if len(streamInterceptors) > 0 {
+		do = append(do, grpc.WithChainStreamInterceptor(streamInterceptors...))
+	}
+	return joinDialOptions(do...)
 }
 
 var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
@@ -146,15 +166,19 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 // For the traces supported by this instrumentation code, provide an
 // implementation of a TextMapPropagator and OpenTelemetry TracerProvider.
 func ServerOption(o Options) grpc.ServerOption {
-	ssh := &serverStatsHandler{options: o}
-	ssh.initializeMetrics()
-	so := joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
-	if !o.isTracingEnabled() {
-		return so
+	var so []grpc.ServerOption
+
+	if o.isMetricsEnabled() {
+		metricsHandler := &serverMetricsHandler{options: o}
+		metricsHandler.initializeMetrics()
+		so = append(so, grpc.ChainUnaryInterceptor(metricsHandler.unaryInterceptor), grpc.ChainStreamInterceptor(metricsHandler.streamInterceptor), grpc.StatsHandler(metricsHandler))
 	}
-	tracingHandler := &serverTracingHandler{options: o}
-	tracingHandler.initializeTraces()
-	return joinServerOptions(so, grpc.ChainUnaryInterceptor(tracingHandler.unaryInterceptor), grpc.ChainStreamInterceptor(tracingHandler.streamInterceptor), grpc.StatsHandler(tracingHandler))
+	if o.isTracingEnabled() {
+		tracingHandler := &serverTracingHandler{options: o}
+		tracingHandler.initializeTraces()
+		so = append(so, grpc.StatsHandler(tracingHandler))
+	}
+	return joinServerOptions(so...)
 }
 
 // callInfo is information pertaining to the lifespan of the RPC client side.
