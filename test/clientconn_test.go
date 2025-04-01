@@ -155,7 +155,7 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 	// verifying that RPC was not blocked on resolver indicating there was no
 	// delay in name resolution.
 	if statsHandler.nameResolutionDelayed {
-		t.Fatalf("statsHandler.nameResolutionDelayed to be false, but want %v", statsHandler.nameResolutionDelayed)
+		t.Fatalf("statsHandler.nameResolutionDelayed = %v; want false", statsHandler.nameResolutionDelayed)
 	}
 }
 
@@ -206,7 +206,8 @@ func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 	}
 
 	if !statsHandler.nameResolutionDelayed {
-		t.Fatalf("statsHandler.nameResolutionDelayed to be true, but want %v", statsHandler.nameResolutionDelayed)
+		t.Fatalf("statsHandler.nameResolutionDelayed = %v; want true", statsHandler.nameResolutionDelayed)
+
 	}
 }
 
