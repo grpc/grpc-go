@@ -29,7 +29,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -115,19 +117,19 @@ func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 // has already happened once before at the time of making RPC, the name
 // resolution flag is not set indicating there was no delay in name resolution.
 func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
-	stub := &stubserver.StubServer{
+	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := stub.Start(nil); err != nil {
+	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Failed to start StubServer: %v", err)
 	}
-	defer stub.Stop()
+	defer ss.Stop()
 
 	statsHandler := &testStatsHandler{}
 	rb := manual.NewBuilderWithScheme("instant")
-	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
+	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 	cc, err := grpc.NewClient(rb.Scheme()+":///test.server",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(rb),
@@ -140,7 +142,7 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 
 	cc.Connect()
 	if err := waitForReady(cc); err != nil {
-		t.Fatalf("Connection not ready: %v", err)
+		t.Fatalf("Error waiting for client to become READY: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -153,7 +155,7 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 	// verifying that RPC was not blocked on resolver indicating there was no
 	// delay in name resolution.
 	if statsHandler.nameResolutionDelayed {
-		t.Fatalf("Expected nameResolutionDelayed to be false, but got %v", statsHandler.nameResolutionDelayed)
+		t.Fatalf("statsHandler.nameResolutionDelayed to be false, but want %v", statsHandler.nameResolutionDelayed)
 	}
 }
 
@@ -162,15 +164,21 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 // nameResolutionDelayed flag is set indicating there was a delay in name
 // resolution waiting for resolver to return addresses.
 func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
-	stub := &stubserver.StubServer{
+	// Add grpcsync.Event to coordinate timing
+	resolutionWait := grpcsync.NewEvent()
+	prevHook := internal.NewStreamWaitingForResolver
+	internal.NewStreamWaitingForResolver = func() { _ = resolutionWait.Fire() }
+	defer func() { internal.NewStreamWaitingForResolver = prevHook }()
+
+	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := stub.Start(nil); err != nil {
+	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Failed to start StubServer: %v", err)
 	}
-	defer stub.Stop()
+	defer ss.Stop()
 
 	statsHandler := &testStatsHandler{}
 	rb := manual.NewBuilderWithScheme("delayed")
@@ -184,9 +192,10 @@ func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 	}
 	defer cc.Close()
 
-	time.AfterFunc(defaultTestShortTimeout, func() {
-		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: stub.Address}}})
-	})
+	go func() {
+		<-resolutionWait.Done()
+		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -197,7 +206,7 @@ func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 	}
 
 	if !statsHandler.nameResolutionDelayed {
-		t.Fatalf("Expected nameResolutionDelayed to be true, got false")
+		t.Fatalf("statsHandler.nameResolutionDelayed to be true, but want %v", statsHandler.nameResolutionDelayed)
 	}
 }
 

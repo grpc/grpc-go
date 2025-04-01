@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1569,185 +1568,143 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 
 const delayedResolutionEventName = "Delayed name resolution complete"
 
-// TestUnaryCallWithRetriesAndNameResolutionDelay_Tracing verifies that the
-// "Delayed name resolution complete" event is recorded only once in the call
-// trace span for a unary RPC if any retry attempt encounters a delay in name
-// resolution.
-func (s) TestUnaryCallWithRetriesAndNameResolutionDelay_Tracing(t *testing.T) {
-	mo, _ := defaultMetricsOptions(t, nil)
-	to, exporter := defaultTraceOptions(t)
-	rb := manual.NewBuilderWithScheme("delayed")
-	var attemptCounter int32
-	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			attempt := atomic.AddInt32(&attemptCounter, 1)
-			md, _ := metadata.FromIncomingContext(ctx)
-			headerAttempts := len(md["grpc-previous-rpc-attempts"])
-			if attempt >= 3 {
-				return &testpb.SimpleResponse{}, nil
-			}
-			return nil, status.Error(codes.Unavailable, fmt.Sprintf("retry (%d)", headerAttempts))
-		},
-	}
-	otelOptions := opentelemetry.Options{
-		MetricsOptions: *mo,
-		TraceOptions:   *to,
-	}
-	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)}); err != nil {
-		t.Fatal(err)
-	}
-
-	defer ss.Stop()
-
-	retryPolicy := `{
-		"methodConfig": [{
-			"name": [{"service": "grpc.testing.TestService"}],
-			"retryPolicy": {
-				"maxAttempts": 3,
-				"initialBackoff": "0.05s",
-				"maxBackoff": "0.2s",
-				"backoffMultiplier": 1.0,
-				"retryableStatusCodes": ["UNAVAILABLE"]
-			}
-		}]
-	}`
-
-	cc, err := grpc.NewClient(
-		rb.Scheme()+":///test.server",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(rb),
-		opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: *mo, TraceOptions: *to}),
-		grpc.WithDefaultServiceConfig(retryPolicy),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	time.AfterFunc(100*time.Millisecond, func() {
-		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
-	})
-
-	_, err = client.UnaryCall(ctx, &testpb.SimpleRequest{})
-	if err != nil {
-		t.Fatalf("UnaryCall failed: %v", err)
-	}
-
-	wantSpanInfo := traceSpanInfo{
-		name:     "grpc.testing.TestService.UnaryCall",
-		spanKind: oteltrace.SpanKindClient.String(),
-		events:   []trace.Event{{Name: delayedResolutionEventName}},
-	}
-	spans, err := waitForTraceSpans(ctx, exporter, []traceSpanInfo{wantSpanInfo})
-	if err != nil {
-		t.Fatal(err)
-	}
-	verifyTrace(t, spans, wantSpanInfo)
-}
-
-// TestStreamingCallWithRetriesAndNameResolutionDelay_Tracing verifies that the
-// "Delayed name resolution complete" event is recorded only once in the call
-// trace span for a stream RPC if any retry attempt encounters a delay in name
-// resolution.
-func (s) TestStreamingCallWithRetriesAndNameResolutionDelay_Tracing(t *testing.T) {
-	mo, _ := defaultMetricsOptions(t, nil)
-	to, exporter := defaultTraceOptions(t)
-	rb := manual.NewBuilderWithScheme("delayed")
-
-	var attemptCounter int32
-	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			attempt := atomic.AddInt32(&attemptCounter, 1)
-			md, _ := metadata.FromIncomingContext(stream.Context())
-			headerAttempts := len(md["grpc-previous-rpc-attempts"])
-
-			if attempt < 3 {
-				return status.Error(codes.Unavailable, fmt.Sprintf("retry (%d)", headerAttempts))
-			}
-
-			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
-					return nil
+// TestTraceSpan_WithRetriesAndNameResolutionDelay verifies that
+// "Delayed name resolution complete" event is recorded in the call trace span
+// only once if any of the retry attempt encountered a delay in name resolution
+func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupStub func() *stubserver.StubServer
+		doCall    func(context.Context, testgrpc.TestServiceClient) error
+		spanName  string
+	}{
+		{
+			name: "unary",
+			setupStub: func() *stubserver.StubServer {
+				return &stubserver.StubServer{
+					UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+						md, _ := metadata.FromIncomingContext(ctx)
+						headerAttempts := len(md["grpc-previous-rpc-attempts"])
+						if headerAttempts >= 1 {
+							return &testpb.SimpleResponse{}, nil
+						}
+						return nil, status.Error(codes.Unavailable, fmt.Sprintf("retry (%d)", headerAttempts))
+					},
 				}
+			},
+			doCall: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
+				return err
+			},
+			spanName: "grpc.testing.TestService.UnaryCall",
+		},
+		{
+			name: "streaming",
+			setupStub: func() *stubserver.StubServer {
+				return &stubserver.StubServer{
+					FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+						md, _ := metadata.FromIncomingContext(stream.Context())
+						headerAttempts := len(md["grpc-previous-rpc-attempts"])
+						if headerAttempts < 1 {
+							return status.Error(codes.Unavailable, fmt.Sprintf("retry (%d)", headerAttempts))
+						}
+						for {
+							_, err := stream.Recv()
+							if err == io.EOF {
+								return nil
+							}
+							if err != nil {
+								return err
+							}
+						}
+					},
+				}
+			},
+			doCall: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				stream, err := client.FullDuplexCall(ctx)
 				if err != nil {
 					return err
 				}
-			}
+				if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil && err != io.EOF {
+					return err
+				}
+				if err := stream.CloseSend(); err != nil && err != io.EOF {
+					return err
+				}
+				_, err = stream.Recv()
+				if err != nil && err != io.EOF {
+					return err
+				}
+				return nil
+			},
+			spanName: "grpc.testing.TestService.FullDuplexCall",
 		},
 	}
 
-	otelOptions := opentelemetry.Options{
-		MetricsOptions: *mo,
-		TraceOptions:   *to,
-	}
-	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(otelOptions)}); err != nil {
-		t.Fatal(err)
-	}
-	defer ss.Stop()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mo, _ := defaultMetricsOptions(t, nil)
+			to, exporter := defaultTraceOptions(t)
+			rb := manual.NewBuilderWithScheme("delayed")
 
-	retryPolicy := `{
-		"methodConfig": [{
-			"name": [{"service": "grpc.testing.TestService"}],
-			"retryPolicy": {
-				"maxAttempts": 3,
-				"initialBackoff": "0.05s",
-				"maxBackoff": "0.2s",
-				"backoffMultiplier": 1.0,
-				"retryableStatusCodes": ["UNAVAILABLE"]
+			ss := tt.setupStub()
+			opts := opentelemetry.Options{MetricsOptions: *mo, TraceOptions: *to}
+			if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opts)}); err != nil {
+				t.Fatal(err)
 			}
-		}]
-	}`
+			defer ss.Stop()
 
-	cc, err := grpc.NewClient(
-		rb.Scheme()+":///test.server",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(rb),
-		opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: *mo, TraceOptions: *to}),
-		grpc.WithDefaultServiceConfig(retryPolicy),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cc.Close()
+			retryPolicy := `{
+				"methodConfig": [{
+					"name": [{"service": "grpc.testing.TestService"}],
+					"retryPolicy": {
+						"maxAttempts": 3,
+						"initialBackoff": "0.05s",
+						"maxBackoff": "0.2s",
+						"backoffMultiplier": 1.0,
+						"retryableStatusCodes": ["UNAVAILABLE"]
+					}
+				}]
+			}`
 
-	client := testgrpc.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+			cc, err := grpc.NewClient(
+				rb.Scheme()+":///test.server",
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(rb),
+				opentelemetry.DialOption(opts),
+				grpc.WithDefaultServiceConfig(retryPolicy),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cc.Close()
 
-	time.AfterFunc(100*time.Millisecond, func() {
-		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
-	})
+			client := testgrpc.NewTestServiceClient(cc)
 
-	stream, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall failed: %v", err)
-	}
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil && err != io.EOF {
-		t.Fatalf("stream.Send() failed: %v", err)
-	}
-	if err := stream.CloseSend(); err != nil && err != io.EOF {
-		t.Fatalf("stream.CloseSend()() failed: %v", err)
-	}
-	if _, err = stream.Recv(); err != nil && err != io.EOF {
-		t.Fatalf("Expected EOF, got: %v", err)
-	}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 
-	wantSpanInfo := traceSpanInfo{
-		name:     "grpc.testing.TestService.FullDuplexCall",
-		spanKind: oteltrace.SpanKindClient.String(),
-		events:   []trace.Event{{Name: delayedResolutionEventName}},
-	}
-	spans, err := waitForTraceSpans(ctx, exporter, []traceSpanInfo{wantSpanInfo})
-	if err != nil {
-		t.Fatal(err)
-	}
+			time.AfterFunc(100*time.Millisecond, func() {
+				rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+			})
 
-	verifyTrace(t, spans, wantSpanInfo)
+			if err := tt.doCall(ctx, client); err != nil {
+				t.Fatalf("%s call failed: %v", tt.name, err)
+			}
+
+			wantSpanInfo := traceSpanInfo{
+				name:     tt.spanName,
+				spanKind: oteltrace.SpanKindClient.String(),
+				events:   []trace.Event{{Name: delayedResolutionEventName}},
+			}
+
+			spans, err := waitForTraceSpans(ctx, exporter, []traceSpanInfo{wantSpanInfo})
+			if err != nil {
+				t.Fatal(err)
+			}
+			verifyTrace(t, spans, wantSpanInfo)
+		})
+	}
 }
 
 func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
