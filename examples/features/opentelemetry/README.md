@@ -34,4 +34,4 @@ server. Each RPC call produces trace information that captures the execution
 flow and timing of operations.  
 
 Curling to the exposed Prometheus ports outputs the metrics recorded on the
-client and server. 
+client and server.
