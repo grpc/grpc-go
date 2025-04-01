@@ -31,7 +31,7 @@ the Prometheus exporter. The exporter exposes metrics on the Prometheus ports
 described above. OpenTelemetry exports traces using the `stdouttrace` exporter,
 which prints structured trace data to the console output of both the client and
 server. Each RPC call produces trace information that captures the execution
-flow and timing of operations.  
+flow and timing of operations.
 
 Curling to the exposed Prometheus ports outputs the metrics recorded on the
 client and server.
