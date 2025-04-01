@@ -3637,7 +3637,10 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 				AggregatedPayloadSize: int32(sum),
 			})
 			_, err := stream.Recv()
-			return err
+			if err == nil {
+				logger.Fatalf("stream.Recv() = %v, want an error", err)
+			}
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -3662,6 +3665,9 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 		if err = stream.Send(req); err == io.EOF {
 			break
 		}
+		if err != nil {
+			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
+		}
 		select {
 		case <-ctx.Done():
 			t.Fatal("timed out waiting for error from server")
@@ -3669,11 +3675,11 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 		}
 	}
 	_, err = stream.CloseAndRecv()
-	if err == nil {
+	if err != nil {
 		t.Fatalf("stream.CloseAndRecv() = %v, want error", err)
 	}
-	if status.Code(err) != codes.Internal {
-		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.Internal)
+	if status.Code(err) != codes.OK {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.OK)
 	}
 }
 
@@ -3720,6 +3726,9 @@ func (s) TestClientStreamingCardinalityViolation_IgnoreServerHandlerErrorAfterSe
 	for {
 		if err = stream.Send(req); err == io.EOF {
 			break
+		}
+		if err != nil {
+			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
 		}
 		select {
 		case <-ctx.Done():
