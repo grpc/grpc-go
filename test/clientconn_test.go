@@ -117,27 +117,20 @@ func (h *testStatsHandler) HandleConn(_ context.Context, _ stats.ConnStats) {}
 // has already happened once before at the time of making RPC, the name
 // resolution flag is not set indicating there was no delay in name resolution.
 func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
+	statsHandler := &testStatsHandler{}
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := ss.Start(nil); err != nil {
+	if err := ss.Start(nil, grpc.WithStatsHandler(statsHandler)); err != nil {
 		t.Fatalf("Failed to start StubServer: %v", err)
 	}
 	defer ss.Stop()
 
-	statsHandler := &testStatsHandler{}
 	rb := manual.NewBuilderWithScheme("instant")
 	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
-	cc, err := grpc.NewClient(rb.Scheme()+":///test.server",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithResolvers(rb),
-		grpc.WithStatsHandler(statsHandler),
-	)
-	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
-	}
+	cc := ss.CC
 	defer cc.Close()
 
 	cc.Connect()
