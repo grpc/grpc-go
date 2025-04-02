@@ -54,7 +54,7 @@ func SliceForAppend(in []byte, n int) (head, tail []byte) {
 func ParseFramedMsg(b []byte, maxLen uint32) ([]byte, []byte, error) {
 	// If the size field is not complete, return the provided buffer as
 	// remaining buffer.
-	length, sufficientBytes := ParseMessageLength(b)
+	length, sufficientBytes := parseMessageLength(b)
 	if !sufficientBytes {
 		return nil, b, nil
 	}
@@ -68,11 +68,10 @@ func ParseFramedMsg(b []byte, maxLen uint32) ([]byte, []byte, error) {
 	return b[:MsgLenFieldSize+length], b[MsgLenFieldSize+length:], nil
 }
 
-// ParseMessageLength returns the message length based on frame header. It also
-// returns a boolean that indicates if the buffer contains sufficient bytes to
-// parse the length header. If there are insufficient bytes, (0, false) is
-// returned.
-func ParseMessageLength(b []byte) (uint32, bool) {
+// parseMessageLength returns the message length based on frame header. It also
+// returns a boolean indicating if the buffer contains sufficient bytes to parse
+// the length header. If there are insufficient bytes, (0, false) is returned.
+func parseMessageLength(b []byte) (uint32, bool) {
 	if len(b) < MsgLenFieldSize {
 		return 0, false
 	}
