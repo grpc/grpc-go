@@ -198,9 +198,14 @@ func (h *serverMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	}
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		ri = &rpcInfo{ai: &attemptInfo{}}
+		ri = &rpcInfo{}
 	}
-	ai := ri.ai
+	var ai *attemptInfo
+	if ri.ai == nil {
+		ai = &attemptInfo{}
+	} else {
+		ai = ri.ai
+	}
 	ai.startTime = time.Now()
 	ai.method = removeLeadingSlash(method)
 

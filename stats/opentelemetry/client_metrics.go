@@ -176,14 +176,19 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	}
 	ri := getRPCInfo(ctx)
 	if ri == nil {
-		ri = &rpcInfo{ai: &attemptInfo{}}
+		ri = &rpcInfo{}
 	}
-	ai := ri.ai
+	var ai *attemptInfo
+	if ri.ai == nil {
+		ai = &attemptInfo{}
+	} else {
+		ai = ri.ai
+	}
 	ai.startTime = time.Now()
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)
 
-	return setRPCInfo(ctx, ri)
+	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
 // HandleRPC handles per RPC stats implementation.
