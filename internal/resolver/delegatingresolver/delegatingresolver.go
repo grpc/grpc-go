@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/proxyattributes"
+	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -184,11 +185,19 @@ func (r *delegatingResolver) Close() {
 // either resolver has not sent update even once and returns the error from
 // ClientConn update once both resolvers have sent update atleast once.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
-	if r.targetResolverState == nil || r.proxyAddrs == nil {
+	if r.targetResolverState == nil {
+		return nil
+	}
+	curState := *r.targetResolverState
+
+	// Avoid proxy if networktype is not tcp.
+	if networkType, _ := networktype.Get(curState.Addresses[0]); networkType != "tcp" {
+		return r.cc.UpdateState(curState)
+	}
+	if r.proxyAddrs == nil { // Wait to get both resolver updates.
 		return nil
 	}
 
-	curState := *r.targetResolverState
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
 	// resolution when creating the transport. Sending all resolved addresses
