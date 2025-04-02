@@ -35,11 +35,9 @@ import (
 	"sync"
 	"time"
 
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
-	"google.golang.org/protobuf/proto"
 )
 
 // XDSClient is a client which queries a set of discovery APIs (collectively
@@ -91,33 +89,6 @@ func New(config Config) (*XDSClient, error) {
 		return nil, err
 	}
 	return client, nil
-}
-
-// WatchResource starts watching the specified resource.
-//
-// typeURL specifies the resource type implementation to use. The watch fails
-// if there is no resource type implementation for the given typeURL. See the
-// ResourceTypes field in the Config struct used to create the XDSClient.
-//
-// The returned function cancels the watch and prevents future calls to the
-// watcher.
-func (c *XDSClient) WatchResource(typeURL, name string, watcher ResourceWatcher) (cancel func()) {
-	return c.watchResource(typeURL, name, watcher)
-}
-
-// Close closes the xDS client.
-func (c *XDSClient) Close() error {
-	c.close()
-	return nil
-}
-
-// DumpResources returns the status and contents of all xDS resources being
-// watched by the xDS client.
-func (c *XDSClient) DumpResources() ([]byte, error) {
-	resp := &v3statuspb.ClientStatusResponse{}
-	cfg := c.dumpResources()
-	resp.Config = append(resp.Config, cfg)
-	return proto.Marshal(resp)
 }
 
 // SetWatchExpiryTimeoutForTesting override the default watch expiry timeout

@@ -118,11 +118,7 @@ func (s) TestXDSClient_Close(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New(%+v) failed: %v", config, err)
 	}
-	if err := c.Close(); err != nil {
-		t.Fatalf("c.Close() failed: %v", err)
-	}
+	c.Close()
 	// Calling close again should not panic.
-	if err := c.Close(); err != nil {
-		t.Fatalf("c.Close() failed: %v", err)
-	}
+	c.Close()
 }

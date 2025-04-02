@@ -35,12 +35,15 @@ func (w *wrappingWatcher) AmbientError(err error, done func()) {
 	w.ResourceWatcher.AmbientError(fmt.Errorf("[xDS node id: %v]: %w", w.nodeID, err), done)
 }
 
-// WatchResource uses xDS to discover the resource associated with the provided
-// resource name. The resource type implementation determines how xDS responses
-// are are deserialized and validated, as received from the xDS management
-// server. Upon receipt of a response from the management server, an
-// appropriate callback on the watcher is invoked.
-func (c *XDSClient) watchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
+// WatchResource starts watching the specified resource.
+//
+// typeURL specifies the resource type implementation to use. The watch fails
+// if there is no resource type implementation for the given typeURL. See the
+// ResourceTypes field in the Config struct used to create the XDSClient.
+//
+// The returned function cancels the watch and prevents future calls to the
+// watcher.
+func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	//
 	// The client returned from the top-level API is a ref-counted client which

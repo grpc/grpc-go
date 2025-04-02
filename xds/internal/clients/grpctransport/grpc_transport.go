@@ -38,10 +38,8 @@ var logger = grpclog.Component("grpctransport")
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
 //
-// It must be added as value to the clients.ServerIdentifier.Extensions field.
-//
-// Example:
-// clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"}}
+// It must be set by value (not pointer) in the
+// clients.ServerIdentifier.Extensions field (See Example).
 type ServerIdentifierExtension struct {
 	// Credentials is name of the credentials to use for this connection to the
 	// server.
@@ -60,7 +58,7 @@ type Builder struct {
 	mu sync.Mutex
 	// serverIdentifierMap is a map of clients.ServerIdentifiers in use by the
 	// Builder to connect to different servers.
-	serverIdentifierMap map[clients.ServerIdentifier]any
+	serverIdentifierMap map[clients.ServerIdentifier]*grpcTransport
 }
 
 // NewBuilder provides a builder for creating gRPC-based Transports using
@@ -69,7 +67,7 @@ type Builder struct {
 func NewBuilder(credentials map[string]credentials.Bundle) *Builder {
 	return &Builder{
 		Credentials:         credentials,
-		serverIdentifierMap: make(map[clients.ServerIdentifier]any),
+		serverIdentifierMap: make(map[clients.ServerIdentifier]*grpcTransport),
 	}
 }
 
@@ -91,16 +89,16 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	var credentialsToUse credentials.Bundle
-	if credentialsToUse, ok = b.Credentials[sce.Credentials]; !ok {
-		return nil, fmt.Errorf("grptransport: Credentials %s in ServerIdentifierExtension is not present in the Builder", sce.Credentials)
-	}
-
 	if value, ok := b.serverIdentifierMap[si]; ok {
 		if logger.V(2) {
 			logger.Info("Reusing existing connection to the server for ServerIdentifier: %v", si)
 		}
-		return value.(*grpcTransport), nil
+		return value, nil
+	}
+
+	var creds credentials.Bundle
+	if creds, ok = b.Credentials[sce.Credentials]; !ok {
+		return nil, fmt.Errorf("grptransport: Credentials %s in ServerIdentifierExtension is not present in the Builder", sce.Credentials)
 	}
 
 	if logger.V(2) {
@@ -114,7 +112,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(credentialsToUse), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(creds), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
 	}

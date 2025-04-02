@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -95,8 +96,8 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 	return c, nil
 }
 
-// close closes the xDS client and releases all resources.
-func (c *XDSClient) close() {
+// Close closes the xDS client and releases all resources.
+func (c *XDSClient) Close() {
 	if c.done.HasFired() {
 		return
 	}
@@ -272,8 +273,9 @@ func (c *XDSClient) releaseChannel(serverConfig *ServerConfig, state *channelSta
 	})
 }
 
-// dumpResources returns the status and contents of all xDS resources.
-func (c *XDSClient) dumpResources() *v3statuspb.ClientConfig {
+// DumpResources returns the status and contents of all xDS resources being
+// watched by the xDS client.
+func (c *XDSClient) DumpResources() ([]byte, error) {
 	retCfg := c.topLevelAuthority.dumpResources()
 	for _, a := range c.authorities {
 		retCfg = append(retCfg, a.dumpResources()...)
@@ -281,10 +283,12 @@ func (c *XDSClient) dumpResources() *v3statuspb.ClientConfig {
 
 	nodeProto := clientsinternal.NodeProto(c.config.Node)
 	nodeProto.ClientFeatures = []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper}
-	return &v3statuspb.ClientConfig{
+	resp := &v3statuspb.ClientStatusResponse{}
+	resp.Config = append(resp.Config, &v3statuspb.ClientConfig{
 		Node:              nodeProto,
 		GenericXdsConfigs: retCfg,
-	}
+	})
+	return proto.Marshal(resp)
 }
 
 // channelState represents the state of an xDS channel. It tracks the number of
