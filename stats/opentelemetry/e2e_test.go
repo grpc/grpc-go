@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -52,6 +53,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1584,11 +1586,16 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				return &stubserver.StubServer{
 					UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 						md, _ := metadata.FromIncomingContext(ctx)
-						headerAttempts := len(md["grpc-previous-rpc-attempts"])
-						if headerAttempts >= 1 {
-							return &testpb.SimpleResponse{}, nil
+						headerAttempts := 0
+						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+							if val, err := strconv.Atoi(h[0]); err == nil {
+								headerAttempts = val
+							}
 						}
-						return nil, status.Error(codes.Unavailable, fmt.Sprintf("retry (%d)", headerAttempts))
+						if headerAttempts < 2 {
+							return nil, status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
+						}
+						return &testpb.SimpleResponse{}, nil
 					},
 				}
 			},
@@ -1604,9 +1611,14 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				return &stubserver.StubServer{
 					FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 						md, _ := metadata.FromIncomingContext(stream.Context())
-						headerAttempts := len(md["grpc-previous-rpc-attempts"])
-						if headerAttempts < 1 {
-							return status.Error(codes.Unavailable, fmt.Sprintf("retry (%d)", headerAttempts))
+						headerAttempts := 0
+						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+							if val, err := strconv.Atoi(h[0]); err == nil {
+								headerAttempts = val
+							}
+						}
+						if headerAttempts < 2 {
+							return status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
 						}
 						for {
 							_, err := stream.Recv()
@@ -1625,10 +1637,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil && err != io.EOF {
+				if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 					return err
 				}
-				if err := stream.CloseSend(); err != nil && err != io.EOF {
+				if err := stream.CloseSend(); err != nil {
 					return err
 				}
 				_, err = stream.Recv()
@@ -1643,10 +1655,14 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			resolutionWait := grpcsync.NewEvent()
+			prevHook := internal.NewStreamWaitingForResolver
+			internal.NewStreamWaitingForResolver = func() { resolutionWait.Fire() }
+			defer func() { internal.NewStreamWaitingForResolver = prevHook }()
+
 			mo, _ := defaultMetricsOptions(t, nil)
 			to, exporter := defaultTraceOptions(t)
 			rb := manual.NewBuilderWithScheme("delayed")
-
 			ss := tt.setupStub()
 			opts := opentelemetry.Options{MetricsOptions: *mo, TraceOptions: *to}
 			if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opts)}); err != nil {
@@ -1666,7 +1682,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					}
 				}]
 			}`
-
 			cc, err := grpc.NewClient(
 				rb.Scheme()+":///test.server",
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -1680,14 +1695,13 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			defer cc.Close()
 
 			client := testgrpc.NewTestServiceClient(cc)
-
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
-			time.AfterFunc(100*time.Millisecond, func() {
+			go func() {
+				<-resolutionWait.Done()
 				rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
-			})
-
+			}()
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
@@ -1697,7 +1711,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				spanKind: oteltrace.SpanKindClient.String(),
 				events:   []trace.Event{{Name: delayedResolutionEventName}},
 			}
-
 			spans, err := waitForTraceSpans(ctx, exporter, []traceSpanInfo{wantSpanInfo})
 			if err != nil {
 				t.Fatal(err)
@@ -1722,5 +1735,4 @@ func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
 	if !match {
 		t.Errorf("Expected span not found: %q (kind: %s)", want.name, want.spanKind)
 	}
-
 }

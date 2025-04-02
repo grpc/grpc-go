@@ -706,10 +706,7 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) (bool, error) {
 	if cc.firstResolveEvent.HasFired() {
 		return false, nil
 	}
-
-	if internal.NewStreamWaitingForResolver != nil {
-		internal.NewStreamWaitingForResolver()
-	}
+	internal.NewStreamWaitingForResolver()
 	select {
 	case <-cc.firstResolveEvent.Done():
 		return true, nil

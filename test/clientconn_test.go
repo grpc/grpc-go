@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
@@ -134,12 +135,9 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 	defer cc.Close()
 
 	cc.Connect()
-	if err := waitForReady(cc); err != nil {
-		t.Fatalf("Error waiting for client to become READY: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 	client := testgrpc.NewTestServiceClient(cc)
 	// Verify that the RPC succeeds.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -157,10 +155,9 @@ func (s) TestClientConnRPC_WithoutNameResolutionDelay(t *testing.T) {
 // nameResolutionDelayed flag is set indicating there was a delay in name
 // resolution waiting for resolver to return addresses.
 func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
-	// Add grpcsync.Event to coordinate timing
 	resolutionWait := grpcsync.NewEvent()
 	prevHook := internal.NewStreamWaitingForResolver
-	internal.NewStreamWaitingForResolver = func() { _ = resolutionWait.Fire() }
+	internal.NewStreamWaitingForResolver = func() { resolutionWait.Fire() }
 	defer func() { internal.NewStreamWaitingForResolver = prevHook }()
 
 	ss := &stubserver.StubServer{
@@ -184,37 +181,17 @@ func (s) TestClientConnRPC_WithNameResolutionDelay(t *testing.T) {
 		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
-
 	go func() {
 		<-resolutionWait.Done()
 		rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 	}()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall RPC failed: %v", err)
 	}
-
 	if !statsHandler.nameResolutionDelayed {
 		t.Fatalf("statsHandler.nameResolutionDelayed = %v; want true", statsHandler.nameResolutionDelayed)
-
-	}
-}
-
-func waitForReady(cc *grpc.ClientConn) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for {
-		s := cc.GetState()
-		if s == connectivity.Ready {
-			return nil
-		}
-		if !cc.WaitForStateChange(ctx, s) {
-			// ctx got timeout or canceled.
-			return ctx.Err()
-		}
 	}
 }

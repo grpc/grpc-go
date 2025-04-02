@@ -270,9 +270,9 @@ var (
 	// NewStreamWaitingForResolver is a test hook that is triggered when a
 	// new stream blocks while waiting for name resolution. This can be
 	// used in tests to synchronize resolver updates and avoid race conditions.
-	// When set, the function should be called before the stream enters
+	// When set, the function will be called before the stream enters
 	// the blocking state.
-	NewStreamWaitingForResolver func()
+	NewStreamWaitingForResolver = func() {}
 )
 
 // HealthChecker defines the signature of the client-side LB channel health
