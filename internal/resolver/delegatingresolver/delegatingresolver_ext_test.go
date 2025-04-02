@@ -579,12 +579,17 @@ func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
-
+	proxyResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: "test.proxy"}},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
 	select {
 	case <-stateCh:
 		t.Fatalf("Delegating resolver invoked UpdateState unexpectedly")
