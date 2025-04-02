@@ -30,8 +30,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
-
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
 var (
@@ -66,9 +64,17 @@ func (p *fakeChildPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	}
 }
 
-func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]balancer.State) {
+type fakeExitIdler struct {
+	sc *testutils.TestSubConn
+}
+
+func (ei *fakeExitIdler) ExitIdle() {
+	ei.sc.Connect()
+}
+
+func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]endpointState) {
 	var items []*ringEntry
-	epStates := map[string]balancer.State{}
+	epStates := map[string]endpointState{}
 	for i, st := range states {
 		testSC := testSubConns[i]
 		items = append(items, &ringEntry{
@@ -76,12 +82,17 @@ func testRingAndEndpointStates(states []connectivity.State) (*ring, map[string]b
 			hash:    math.MaxUint64 / uint64(len(states)) * uint64(i),
 			hashKey: testSC.String(),
 		})
-		epState := balancer.State{
-			ConnectivityState: st,
-			Picker: &fakeChildPicker{
-				connectivityState: st,
-				tfError:           fmt.Errorf("%d: %w", i, errPicker),
-				subConn:           testSC,
+		epState := endpointState{
+			state: balancer.State{
+				ConnectivityState: st,
+				Picker: &fakeChildPicker{
+					connectivityState: st,
+					tfError:           fmt.Errorf("%d: %w", i, errPicker),
+					subConn:           testSC,
+				},
+			},
+			balancer: &fakeExitIdler{
+				sc: testSC,
 			},
 		}
 		epStates[testSC.String()] = epState
@@ -142,7 +153,6 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 			ring, epStates := testRingAndEndpointStates(tt.connectivityStates)
 			p := &picker{
 				ring:           ring,
-				logger:         internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
 				endpointStates: epStates,
 			}
 			got, err := p.Pick(balancer.PickInfo{
@@ -173,7 +183,6 @@ func (s) TestPickerNoRequestHash(t *testing.T) {
 	ring, epStates := testRingAndEndpointStates([]connectivity.State{connectivity.Ready})
 	p := &picker{
 		ring:           ring,
-		logger:         internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
 		endpointStates: epStates,
 	}
 	if _, err := p.Pick(balancer.PickInfo{Ctx: ctx}); err == nil {
@@ -221,7 +230,6 @@ func (s) TestPickerRequestHashKey(t *testing.T) {
 			headerName := "some-header"
 			p := &picker{
 				ring:              ring,
-				logger:            internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
 				endpointStates:    epStates,
 				requestHashHeader: headerName,
 				randUint64:        func() uint64 { return 0 },
@@ -279,7 +287,6 @@ func (s) TestPickerRandomHash(t *testing.T) {
 			ring, epStates := testRingAndEndpointStates(tt.connectivityStates)
 			p := &picker{
 				ring:                         ring,
-				logger:                       internalgrpclog.NewPrefixLogger(logger, "test-ringhash-picker"),
 				endpointStates:               epStates,
 				requestHashHeader:            "some-header",
 				hasEndpointInConnectingState: tt.hasEndpointInConnectingState,

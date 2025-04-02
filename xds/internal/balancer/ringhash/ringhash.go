@@ -310,17 +310,18 @@ func (b *ringhashBalancer) ExitIdle() {
 // over to avoid locking the mutex at RPC time. The picker should be
 // re-generated every time an endpoint state is updated.
 func (b *ringhashBalancer) newPickerLocked() *picker {
-	states := make(map[string]balancer.State)
+	states := make(map[string]endpointState)
 	hasEndpointConnecting := false
 	for _, epState := range b.endpointStates.Values() {
-		states[epState.hashKey] = epState.state
+		// Copy the endpoint state to avoid races, since ring hash
+		// mutates the state, weight and hash key in place.
+		states[epState.hashKey] = *epState
 		if epState.state.ConnectivityState == connectivity.Connecting {
 			hasEndpointConnecting = true
 		}
 	}
 	return &picker{
 		ring:                         b.ring,
-		logger:                       b.logger,
 		endpointStates:               states,
 		requestHashHeader:            b.config.RequestHashHeader,
 		hasEndpointInConnectingState: hasEndpointConnecting,

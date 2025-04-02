@@ -23,11 +23,10 @@ import (
 	"net"
 	"strconv"
 
-	"google.golang.org/protobuf/types/known/structpb"
-
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"

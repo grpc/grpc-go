@@ -83,7 +83,7 @@ func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.Balancer
 		t.Errorf("Number of child balancers = %d, want = %d", got, want)
 	}
 	for firstAddr, bs := range ringHashPicker.endpointStates {
-		if got, want := bs.ConnectivityState, connectivity.Idle; got != want {
+		if got, want := bs.state.ConnectivityState, connectivity.Idle; got != want {
 			t.Errorf("Child balancer connectivity state for address %q = %v, want = %v", firstAddr, got, want)
 		}
 	}
@@ -506,12 +506,12 @@ func (s) TestAddrWeightChange(t *testing.T) {
 	for _, i := range p3.(*picker).ring.items {
 		if i.hashKey == testBackendAddrStrs[0] {
 			if i.weight != 1 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.weight, i.hash)
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.weight, i.hashKey)
 			}
 		}
 		if i.hashKey == testBackendAddrStrs[1] {
 			if i.weight != 2 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.weight, i.hash)
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.weight, i.hashKey)
 			}
 		}
 	}

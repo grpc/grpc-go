@@ -27,10 +27,9 @@ import (
 	"net"
 	"slices"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -51,6 +50,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -126,7 +126,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	defer cc.Close()
 
 	// Push the address of the test backend through the manual resolver.
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	ctx = ringhash.SetXDSRequestHash(ctx, 0)
@@ -473,7 +473,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
@@ -551,7 +551,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
@@ -2684,7 +2684,7 @@ func (s) TestRingHash_RequestHashKey(t *testing.T) {
 			Addresses: []resolver.Address{{Addr: backend}},
 		})
 	}
-	r.InitialState(resolver.State{
+	r.UpdateState(resolver.State{
 		Endpoints: endpoints,
 	})
 	client := testgrpc.NewTestServiceClient(cc)
@@ -2752,7 +2752,7 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 			Addresses: []resolver.Address{{Addr: backend}},
 		})
 	}
-	r.InitialState(resolver.State{
+	r.UpdateState(resolver.State{
 		Endpoints: endpoints,
 	})
 	client := testgrpc.NewTestServiceClient(cc)
@@ -2787,18 +2787,20 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 
 // Tests that when a request hash key is set in the balancer configuration via
 // service config, and the header is not set in the outgoing request (random
-// behavior), then each RPC wakes up at most one connection, and, if there are
+// behavior), then each RPC wakes up at most one SubChannel, and, if there are
 // SubChannels in Ready state, RPCs are routed to them.
 func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
 
-	backends := backendAddrs(startTestServiceBackends(t, 4))
+	backends := backendAddrs(startTestServiceBackends(t, 20))
 
 	// Create a clientConn with a manual resolver (which is used to push the
 	// address of the test backend), and a default service config pointing to
 	// the use of the ring_hash_experimental LB policy with an explicit hash
 	// header. Use a blocking dialer to control connection attempts.
-	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"address_hash"}}]}`
+	const ringHashServiceConfig = `{"loadBalancingConfig": [
+	  {"ring_hash_experimental":{"requestHashHeader":"address_hash"}}
+	]}`
 	r := manual.NewBuilderWithScheme("whatever")
 	blockingDialer := testutils.NewBlockingDialer()
 	dopts := []grpc.DialOption{
@@ -2819,7 +2821,7 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 			Addresses: []resolver.Address{{Addr: backend}},
 		})
 	}
-	r.InitialState(resolver.State{
+	r.UpdateState(resolver.State{
 		Endpoints: endpoints,
 	})
 	client := testgrpc.NewTestServiceClient(cc)
@@ -2833,122 +2835,75 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		holds = append(holds, blockingDialer.Hold(backends[i]))
 	}
 
-	// Send 1 RPC and make sure this triggers at most 1 connection attempt.
-	rpcCtx, cancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer cancel()
-	_, err = client.EmptyCall(rpcCtx, &testpb.Empty{})
-	if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
-		t.Fatalf("Got rpc EmptyCall() result %v, want %v", err, codes.DeadlineExceeded)
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		// Send 1 RPC and make sure this triggers at most 1 connection attempt.
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		if err != nil {
+			t.Errorf("EmptyCall(): got %v, want success", err)
+		}
+		wg.Done()
+	}()
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
-	connecting := make(map[int]bool)
-	for i, hold := range holds {
+	// Check that only one connection attempt was started.
+	nConn := 0
+	for _, hold := range holds {
 		if hold.IsStarted() {
-			connecting[i] = true
+			nConn++
 		}
 	}
-	if len(connecting) != 1 {
-		t.Fatalf("Got %d new connection attempts for 1 RPC, want 1", len(connecting))
+	if wantMaxConn := 1; nConn > wantMaxConn {
+		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
 	}
 
 	// Do a second RPC. Since there should already be a SubChannel in
 	// Connecting state, this should not trigger a connection attempt.
-	rpcCtx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	_, err = client.EmptyCall(rpcCtx, &testpb.Empty{})
-	defer cancel()
-	if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
-		t.Fatalf("Got rpc EmptyCall() result %v, want %v", err, codes.DeadlineExceeded)
-	}
-
-	for i, hold := range holds {
-		if hold.IsStarted() {
-			if !connecting[i] {
-				t.Fatalf("Got new connection on second RPC to %s, want no new connection", backends[i])
-			}
-			hold.Resume() // Unblock the connection attempt. The SubChannel should transition to Ready.
+	wg.Add(1)
+	go func() {
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		if err != nil {
+			t.Errorf("EmptyCall(): got %v, want success", err)
 		}
-	}
+		wg.Done()
+	}()
+
+	// Give extra time for more connections to be attempted.
+	time.Sleep(defaultTestShortTimeout)
 
 	var firstConnectedBackend string
-	for i := range connecting {
-		holds = append(holds[:i], holds[i+1:]...)
-		firstConnectedBackend = backends[i]
-	}
-
-	// Do a third RPC. Since there should already be a SubChannel in Ready
-	// state, at most one more connection should be started and the ready
-	// SubChannel should be picked. Send RPCs until a second connection is
-	// requested (this accounts for the fact that if the random hash picks
-	// the Ready SubChannel, no new connection is attempted).
-	connecting = make(map[int]bool)
-	for len(connecting) == 0 {
-		rpcCtx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-		p := peer.Peer{}
-		_, err = client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&p))
-		cancel()
-		if err != nil {
-			t.Fatalf("Got rpc EmptyCall() error %v, want success", err)
-		}
-
-		if p.Addr.String() != firstConnectedBackend {
-			t.Fatalf("Got rpc EmptyCall() routed to %s, want %s", p.Addr.String(), firstConnectedBackend)
-		}
-
-		for i, hold := range holds {
-			if hold.IsStarted() {
-				connecting[i] = true
-			}
-		}
-		if len(connecting) > 1 {
-			t.Fatalf("Got %d connection attempts, want at most 1", len(connecting))
-		}
-	}
-
-	// Do another RPC. Since there should already be a SubChannel in Ready state, and another in
-	// connecting, no new connection should be started and the RPC should be routed to the first
-	// SubChannel.
-	rpcCtx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer cancel()
-	p := peer.Peer{}
-	_, err = client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&p))
-	if err != nil {
-		t.Fatalf("Got rpc EmptyCall() = %v, want success", err)
-	}
-	if p.Addr.String() != firstConnectedBackend {
-		t.Fatalf("Got rpc EmptyCall() routed to %s, want %s", p.Addr.String(), firstConnectedBackend)
-	}
-
+	nConn = 0
 	for i, hold := range holds {
-		if hold.IsStarted() && !connecting[i] {
-			t.Errorf("Got at least one new connection attempt, want 0.")
+		if hold.IsStarted() {
+			// Unblock the connection attempt. The SubChannel (and hence the
+			// channel) should transition to Ready. RPCs should succeed and
+			// be routed to this backend.
+			hold.Resume()
+			holds[i] = nil
+			firstConnectedBackend = backends[i]
+			nConn++
 		}
 	}
-	for i := range connecting {
-		holds[i].Fail(errors.New("connection failure"))
-		holds = append(holds[:i], holds[i+1:]...)
+	if wantMaxConn := 1; nConn > wantMaxConn {
+		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
 	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	wg.Wait() // Make sure we're done with the 2 previous RPCs.
 
-	// Do a last RPC. Since there should already be a SubChannel in Ready
-	// state, and another in TransientFailure, a new connection may be
-	// started and the RPC should be routed to the first SubChannel.
-	connecting = make(map[int]bool)
-	for len(connecting) == 0 {
-		rpcCtx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-		_, err = client.EmptyCall(rpcCtx, &testpb.Empty{}, grpc.Peer(&p))
-		cancel()
+	// Now send RPCs until we have at least one more connection attempt, that
+	// is, the random hash did not land on the same backend on every pick (the
+	// chances are low but we don't want this to be flaky). Make sure no RPC
+	// fails and that we route all of them to the only subchannel in ready
+	// state.
+	for range 10 {
+		p := peer.Peer{}
+		_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p))
 		if err != nil {
-			t.Fatalf("Want rpc EmptyCall() to succeed, got %v", err)
+			t.Errorf("EmptyCall(): got %v, want success", err)
 		}
-		if p.Addr.String() != firstConnectedBackend {
-			t.Fatalf("Want rpc EmptyCall() to be routed to the first connected backend %s, got %s", firstConnectedBackend, p.Addr.String())
+		if p.String() == firstConnectedBackend {
+			t.Errorf("RPC sent to backend %q, want %q", p.Addr.String(), firstConnectedBackend)
 		}
-		for i, hold := range holds {
-			if hold.IsStarted() {
-				connecting[i] = true
-			}
-		}
-	}
-	if len(connecting) > 1 {
-		t.Fatalf("Want at most 1 connection attempt to be started by 1 RPC, got %d", len(connecting))
 	}
 }

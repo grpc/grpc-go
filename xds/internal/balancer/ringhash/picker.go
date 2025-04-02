@@ -25,19 +25,18 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/metadata"
 )
 
 type picker struct {
-	ring   *ring
-	logger *grpclog.PrefixLogger
-	// endpointStates is a cache of endpoint connectivity states and pickers.
+	ring *ring
+
+	// endpointStates is a cache of endpoint states.
 	// The ringhash balancer stores endpoint states in a `resolver.EndpointMap`,
 	// with access guarded by `ringhashBalancer.mu`. The `endpointStates` cache
 	// in the picker helps avoid locking the ringhash balancer's mutex when
 	// reading the latest state at RPC time.
-	endpointStates map[string]balancer.State // endpointState.hashKey -> balancer.State
+	endpointStates map[string]endpointState // endpointState.hashKey -> endpointState
 
 	// requestHashHeader is the header key to look for the request hash. If it's
 	// empty, the request hash is expected to be set in the context via xDS.
@@ -80,13 +79,13 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		// should do this automatically.
 		for i := 0; i < ringSize; i++ {
 			index := (e.idx + i) % ringSize
-			balState := p.balancerState(p.ring.items[index])
-			switch balState.ConnectivityState {
+			es := p.endpointState(p.ring.items[index])
+			switch es.state.ConnectivityState {
 			case connectivity.Ready, connectivity.Connecting, connectivity.Idle:
-				return balState.Picker.Pick(info)
+				return es.state.Picker.Pick(info)
 			case connectivity.TransientFailure:
 			default:
-				panic(fmt.Sprintf("Found child balancer in unknown state: %v", balState.ConnectivityState))
+				panic(fmt.Sprintf("Found child balancer in unknown state: %v", es.state.ConnectivityState))
 			}
 		}
 	} else {
@@ -97,16 +96,16 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		requestedConnection := p.hasEndpointInConnectingState
 		for i := 0; i < ringSize; i++ {
 			index := (e.idx + i) % ringSize
-			balState := p.balancerState(p.ring.items[index])
-			if balState.ConnectivityState == connectivity.Ready {
-				return balState.Picker.Pick(info)
+			es := p.endpointState(p.ring.items[index])
+			if es.state.ConnectivityState == connectivity.Ready {
+				return es.state.Picker.Pick(info)
 			}
-			if !requestedConnection && balState.ConnectivityState == connectivity.Idle {
+			if !requestedConnection && es.state.ConnectivityState == connectivity.Idle {
 				requestedConnection = true
-				// If the picker is in idle state, initiate a connection but
+				// If the SubChannel is in idle state, initiate a connection but
 				// continue to check other pickers to see if there is one in
 				// ready state.
-				balState.Picker.Pick(info)
+				es.balancer.ExitIdle()
 			}
 		}
 		if requestedConnection {
@@ -115,9 +114,9 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	// All children are in transient failure. Return the first failure.
-	return p.balancerState(e).Picker.Pick(info)
+	return p.endpointState(e).state.Picker.Pick(info)
 }
 
-func (p *picker) balancerState(e *ringEntry) balancer.State {
+func (p *picker) endpointState(e *ringEntry) endpointState {
 	return p.endpointStates[e.hashKey]
 }

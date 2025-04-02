@@ -22,10 +22,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"google.golang.org/grpc/internal/testutils"
-
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 func (s) TestParseConfig(t *testing.T) {

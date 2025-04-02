@@ -75,7 +75,7 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	if cfg.RequestHashHeader != "" {
 		// See rules in https://github.com/grpc/proposal/blob/master/A76-ring-hash-improvements.md#explicitly-setting-the-request-hash-key
 		if err := metadata.ValidateKey(cfg.RequestHashHeader); err != nil {
-			return nil, fmt.Errorf("invalid requestHashHeader %q: %s", cfg.RequestHashHeader, err)
+			return nil, fmt.Errorf("invalid requestHashHeader %q: %v", cfg.RequestHashHeader, err)
 		}
 		if strings.HasSuffix(cfg.RequestHashHeader, "-bin") {
 			return nil, fmt.Errorf("invalid requestHashHeader %q: key must not end with \"-bin\"", cfg.RequestHashHeader)
