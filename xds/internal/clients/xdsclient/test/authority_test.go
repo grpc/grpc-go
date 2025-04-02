@@ -352,9 +352,13 @@ func newListenerWatcherV2() *listenerWatcherV2 {
 func (lw *listenerWatcherV2) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
 	lisData, ok := update.(*listenerResourceData)
 	if !ok {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("unexpected resource type: %T", update)})
+		lw.errCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("unexpected resource type: %T", update)})
 		onDone()
 		return
+	}
+	select {
+	case <-lw.updateCh.C:
+	default:
 	}
 	lw.updateCh.Send(listenerUpdateErrTuple{update: lisData.Resource})
 	onDone()
@@ -370,6 +374,6 @@ func (lw *listenerWatcherV2) AmbientError(err error, onDone func()) {
 }
 
 func (lw *listenerWatcherV2) ResourceError(err error, onDone func()) {
-	lw.errCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	lw.errCh.Replace(listenerUpdateErrTuple{err: err})
 	onDone()
 }

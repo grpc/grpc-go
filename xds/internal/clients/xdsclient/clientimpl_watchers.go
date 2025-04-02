@@ -35,6 +35,10 @@ func (w *wrappingWatcher) AmbientError(err error, done func()) {
 	w.ResourceWatcher.AmbientError(fmt.Errorf("[xDS node id: %v]: %w", w.nodeID, err), done)
 }
 
+func (w *wrappingWatcher) ResourceError(err error, done func()) {
+	w.ResourceWatcher.ResourceError(fmt.Errorf("[xDS node id: %v]: %w", w.nodeID, err), done)
+}
+
 // WatchResource starts watching the specified resource.
 //
 // typeURL specifies the resource type implementation to use. The watch fails
@@ -51,6 +55,11 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 	// ref-counted client sets its pointer to `nil`. And if any watch APIs are
 	// made on such a closed client, we will get here with a `nil` receiver.
 
+	watcher = &wrappingWatcher{
+		ResourceWatcher: watcher,
+		nodeID:          c.config.Node.ID,
+	}
+
 	rType, ok := c.config.ResourceTypes[typeURL]
 	if !ok {
 		logger.Warningf("ResourceType implementation for resource type url %v is not found", rType.TypeURL)
@@ -61,11 +70,6 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 	if c == nil || c.done.HasFired() {
 		logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeName, resourceName)
 		return func() {}
-	}
-
-	watcher = &wrappingWatcher{
-		ResourceWatcher: watcher,
-		nodeID:          c.config.Node.ID,
 	}
 
 	n := xdsresource.ParseName(resourceName)
