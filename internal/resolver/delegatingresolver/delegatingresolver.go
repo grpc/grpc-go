@@ -192,12 +192,14 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 
 	// Avoid proxy if networktype is not tcp.
 	var networkType string
+	var ok bool
 	if len(curState.Endpoints) != 0 {
-		networkType, _ = networktype.Get(curState.Endpoints[0].Addresses[0])
+		networkType, ok = networktype.Get(curState.Endpoints[0].Addresses[0])
 	} else {
-		networkType, _ = networktype.Get(curState.Addresses[0])
+		networkType, ok = networktype.Get(curState.Addresses[0])
 	}
-	if networkType != "tcp" {
+	// If the networktype is empty , or not present, tcp is considered as default.
+	if ok && networkType != "tcp" {
 		return r.cc.UpdateState(curState)
 	}
 	if r.proxyAddrs == nil { // Wait to get both resolver updates.
