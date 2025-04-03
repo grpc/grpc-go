@@ -53,17 +53,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
+	// Configure meter provider for metrics
 	provider := otelmetric.NewMeterProvider(otelmetric.WithReader(exporter))
-
-	// Initialize stdouttrace exporter for traces
+	// Configure exporter for traces
 	traceExporter, err := otelstdouttrace.New(otelstdouttrace.WithPrettyPrint())
 	if err != nil {
 		log.Fatalf("Failed to create stdouttrace exporter: %v", err)
 	}
-
-	// Configure the tracer provider
 	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(serviceName))))
-	textMapPropagator := otelpropagation.TraceContext{} // Using W3C Trace Context Propagator.
+	// Configure W3C Trace Context Propagator for traces
+	textMapPropagator := otelpropagation.TraceContext{}
 	do := opentelemetry.DialOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
 		TraceOptions:   oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator},
