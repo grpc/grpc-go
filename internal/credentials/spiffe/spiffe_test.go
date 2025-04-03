@@ -45,7 +45,7 @@ func TestKnownSPIFFEBundle(t *testing.T) {
 	spiffeBundleBytes := loadFileBytes(t, spiffeBundleFile)
 	bundles, err := BundleMapFromBytes(spiffeBundleBytes)
 	if err != nil {
-		t.Fatalf("BundleMapFromBytes(%v) Error during parsing: %v", spiffeBundleFile, err)
+		t.Fatalf("BundleMapFromBytes(%v) error during parsing: %v", spiffeBundleFile, err)
 	}
 	const wantBundleSize = 2
 	if len(bundles) != wantBundleSize {
@@ -101,7 +101,7 @@ func TestSPIFFEBundleMapFailures(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			bundleBytes := loadFileBytes(t, path)
 			if _, err := BundleMapFromBytes(bundleBytes); err == nil {
-				t.Fatalf("BundleMapFromBytes(%v) did not fail but should have.", path)
+				t.Fatalf("BundleMapFromBytes(%v) did not fail but should have", path)
 			}
 		})
 	}
@@ -118,7 +118,7 @@ func TestSPIFFEBundleMapX509Failures(t *testing.T) {
 		t.Fatalf("BundleMapFromBytes(%v) failed with error: %v", filePath, err)
 	}
 	if len(bundle["example.com"].X509Authorities()) != 0 {
-		t.Fatalf("BundleMapFromBytes(%v) did not have empty bundle but should have.", filePath)
+		t.Fatalf("BundleMapFromBytes(%v) did not have empty bundle but should have", filePath)
 	}
 }
 
@@ -239,7 +239,7 @@ func TestIDFromCertFileFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := idFromCert(tt.cert); err == nil {
-				t.Fatalf("IDFromCert() succeeded but want error")
+				t.Fatalf("idFromCert() succeeded but want error")
 			}
 		})
 	}

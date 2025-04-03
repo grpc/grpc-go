@@ -228,7 +228,15 @@ func (s) TestCaReloading(t *testing.T) {
 	}
 }
 
-func (s) TestSPIFFEReloading(t *testing.T) {
+// Test_SPIFFE_Reloading sets up a client and server. The client is configured
+// to use a SPIFFE bundle map, and the server is configured to use TLS creds
+// compatible with this bundle. A handshake is performed and connection is
+// expected to be successful. Then we change the client's SPIFFE Bundle Map file
+// on disk to one that should fail with the server's credentials. This change
+// should be picked up by the client via our file reloading. Another handshake
+// is performed and checked for failure, ensuring that gRPC is correctly using
+// the changed-on-disk bundle map.
+func (s) Test_SPIFFE_Reloading(t *testing.T) {
 	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Failed to read test SPIFFE bundle: %v", err)
@@ -259,7 +267,7 @@ func (s) TestSPIFFEReloading(t *testing.T) {
 		grpc.WithAuthority("x.test.example.com"),
 	)
 	if err != nil {
-		t.Fatalf("Error dialing: %v", err)
+		t.Fatalf("grpc.NewClient(%q) failed: %v", server.Address, err)
 	}
 	defer conn.Close()
 
@@ -339,7 +347,10 @@ func (s) TestMTLS(t *testing.T) {
 	}
 }
 
-func (s) TestMTLSSPIFFE(t *testing.T) {
+// Test_MTLS_SPIFFE configures a client and server. The server has a certificate
+// chain that is compatible with the client's configured SPIFFE bundle map. An
+// MTLS connection is attempted between the two and checked for success.
+func (s) Test_MTLS_SPIFFE(t *testing.T) {
 	tests := []struct {
 		name         string
 		serverOption grpc.ServerOption
@@ -386,7 +397,7 @@ func (s) TestMTLSSPIFFE(t *testing.T) {
 	}
 }
 
-func (s) TestMTLSSPIFFEFailure(t *testing.T) {
+func (s) Test_MTLS_SPIFFE_Failure(t *testing.T) {
 	tests := []struct {
 		name             string
 		certFile         string
@@ -443,7 +454,7 @@ func (s) TestMTLSSPIFFEFailure(t *testing.T) {
 			defer stop()
 			conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 			if err != nil {
-				t.Fatalf("Error dialing: %v", err)
+				t.Fatalf("grpc.NewClient(%q) failed: %v", s.Address, err)
 			}
 			defer conn.Close()
 			client := testgrpc.NewTestServiceClient(conn)
