@@ -257,8 +257,20 @@ func (s) Test_SPIFFE_Reloading(t *testing.T) {
 	}
 	defer stop()
 
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+	defer lis.Close()
+	ss := stubserver.StubServer{
+		Listener:   lis,
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+
 	serverCredentials := grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.NoClientCert))
-	server := stubserver.StartTestService(t, nil, serverCredentials)
+	server := stubserver.StartTestService(t, &ss, serverCredentials)
+
 	defer server.Stop()
 
 	conn, err := grpc.NewClient(
@@ -278,27 +290,22 @@ func (s) Test_SPIFFE_Reloading(t *testing.T) {
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Errorf("Error calling EmptyCall: %v", err)
 	}
-	// close the server and create a new one to force client to do a new
-	// handshake.
-	server.Stop()
 
+	// Setup the wrong bundle to be reloaded
 	wrongBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/server_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Failed to read test spiffe bundle %v: %v", "spiffe_end2end/server_spiffebundle.json", err)
 	}
-	// unload root cert
+	// Write the bundle that will fail to the tmp file path to be reloaded
 	err = os.WriteFile(spiffePath, wrongBundle, 0644)
 	if err != nil {
 		t.Fatalf("Failed to write test spiffe bundle %v: %v", "spiffe_end2end/server_spiffebundle.json", err)
 	}
 
 	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
-		ss := stubserver.StubServer{
-			Address:    server.Address,
-			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-		}
-		server = stubserver.StartTestService(t, &ss, serverCredentials)
-
+		// Stop and restart the listener to force new handshakes
+		lis.Stop()
+		lis.Restart()
 		// Client handshake should eventually fail because the client CA was
 		// reloaded, and thus the server cert is signed by an unknown CA.
 		t.Log(server)
@@ -310,7 +317,6 @@ func (s) Test_SPIFFE_Reloading(t *testing.T) {
 			break
 		}
 		t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
-		server.Stop()
 	}
 	if ctx.Err() != nil {
 		t.Errorf("Timed out waiting for CA certs reloading")
