@@ -219,11 +219,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	// Close the listener and ensure that the ADS stream breaks. This should
 	// cause a server failure count to emit eventually.
 	lis.Stop()
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for ADS stream to close")
-	default:
-	}
+
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
@@ -315,10 +311,8 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Close the listener and ensure that the ADS stream breaks. This should
 	// cause a server failure count to emit eventually.
 	lis.Stop()
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for ADS stream to close")
-	default:
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for ADS stream to close")
 	}
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
