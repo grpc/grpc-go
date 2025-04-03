@@ -6,7 +6,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	golang.org/x/crypto v0.36.0
 	google.golang.org/grpc v1.71.1
-	google.golang.org/grpc/examples v0.0.0-20230224211313-3775f633ce20
+	google.golang.org/grpc/examples v0.0.0-20250403095317-51d6a43ec597
 )
 
 require (
