@@ -120,8 +120,8 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
 	payloadLengthLimit := altsRecordDefaultLength - overhead
 	// We pre-allocate protected to be of size 32KB during initialization.
-	// We increase the size of the buffer by the required amount if can't hold a
-	// complete encrypted record.
+	// We increase the size of the buffer by the required amount if it can't
+	// hold a complete encrypted record.
 	protectedPointer := mem.DefaultBufferPool().Get(max(altsReadBufferInitialSize, len(protected)))
 	// Copy additional data from hanshaker service.
 	copy(*protectedPointer, protected)
