@@ -2893,17 +2893,26 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 
 	// Now send RPCs until we have at least one more connection attempt, that
 	// is, the random hash did not land on the same backend on every pick (the
-	// chances are low but we don't want this to be flaky). Make sure no RPC
+	// chances are low, but we don't want this to be flaky). Make sure no RPC
 	// fails and that we route all of them to the only subchannel in ready
 	// state.
-	for range 10 {
+	nConn = 0
+	for nConn == 0 {
 		p := peer.Peer{}
 		_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p))
-		if err != nil {
-			t.Errorf("EmptyCall(): got %v, want success", err)
+		if status.Code(err) == codes.DeadlineExceeded {
+			t.Fatal("EmptyCall(): test timed out while waiting for more connection attempts")
 		}
-		if p.String() == firstConnectedBackend {
+		if err != nil {
+			t.Fatalf("EmptyCall(): got %v, want success", err)
+		}
+		if p.Addr.String() != firstConnectedBackend {
 			t.Errorf("RPC sent to backend %q, want %q", p.Addr.String(), firstConnectedBackend)
+		}
+		for _, hold := range holds {
+			if hold != nil && hold.IsStarted() {
+				nConn++
+			}
 		}
 	}
 }
