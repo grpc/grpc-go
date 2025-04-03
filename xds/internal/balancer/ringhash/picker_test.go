@@ -198,22 +198,22 @@ func (s) TestPickerRequestHashKey(t *testing.T) {
 	}{
 		{
 			name:         "header not set",
-			expectedPick: 0, // Random hash set to 0, which is within ]MaxUint64 / 3 * 2, 0]
+			expectedPick: 0, // Random hash set to 0, which is within (MaxUint64 / 3 * 2, 0]
 		},
 		{
 			name:         "header empty",
 			headerValues: []string{""},
-			expectedPick: 0, // xxhash.Sum64String("value1,value2") is within ]MaxUint64 / 3 * 2, 0]
+			expectedPick: 0, // xxhash.Sum64String("value1,value2") is within (MaxUint64 / 3 * 2, 0]
 		},
 		{
 			name:         "header set to one value",
 			headerValues: []string{"some-value"},
-			expectedPick: 1, // xxhash.Sum64String("some-value") is within ]0, (MaxUint64 / 3]
+			expectedPick: 1, // xxhash.Sum64String("some-value") is within (0, MaxUint64 / 3]
 		},
 		{
 			name:         "header set to multiple values",
 			headerValues: []string{"value1", "value2"},
-			expectedPick: 2, // xxhash.Sum64String("value1,value2") is within ](MaxUint64 / 3), (MaxUint64 / 3 * 2)]
+			expectedPick: 2, // xxhash.Sum64String("value1,value2") is within (MaxUint64 / 3, MaxUint64 / 3 * 2]
 		},
 	}
 	for _, tt := range tests {

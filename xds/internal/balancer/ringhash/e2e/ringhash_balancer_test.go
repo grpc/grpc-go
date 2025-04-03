@@ -2839,7 +2839,7 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		// Send 1 RPC and make sure this triggers at most 1 connection attempt.
-		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if err != nil {
 			t.Errorf("EmptyCall(): got %v, want success", err)
 		}
@@ -2862,7 +2862,7 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	// Connecting state, this should not trigger a connection attempt.
 	wg.Add(1)
 	go func() {
-		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if err != nil {
 			t.Errorf("EmptyCall(): got %v, want success", err)
 		}
