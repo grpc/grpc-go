@@ -23,12 +23,10 @@ package conn
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 	"net"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
-	"google.golang.org/grpc/mem"
 )
 
 // ALTSRecordCrypto is the interface for gRPC ALTS record protocol.
@@ -93,9 +91,6 @@ type conn struct {
 	// protected holds data read from the network but have not yet been
 	// decrypted. This data might not compose a complete frame.
 	protected []byte
-	// protectedPointer holds a pointer to the protected buffer. It is used to
-	// return the protected buffer to the buffer pool.
-	protectedPointer *[]byte
 	// writeBuf is a buffer used to contain encrypted frames before being
 	// written to the network.
 	writeBuf []byte
@@ -103,7 +98,6 @@ type conn struct {
 	nextFrame []byte
 	// overhead is the calculated overhead of each frame.
 	overhead int
-	isClosed bool
 }
 
 // NewConn creates a new secure channel instance given the other party role and
@@ -122,16 +116,15 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
-	protectedPointer := mem.DefaultBufferPool().Get(max(altsReadBufferInitialSize, len(protected)))
+	protectedBuf := make([]byte, max(altsReadBufferInitialSize, len(protected)))
 	// Copy additional data from hanshaker service.
-	copy(*protectedPointer, protected)
-	protectedBuf := (*protectedPointer)[:len(protected)]
+	copy(protectedBuf, protected)
+	protectedBuf = protectedBuf[:len(protected)]
 
 	altsConn := &conn{
 		Conn:               c,
 		crypto:             crypto,
 		payloadLengthLimit: payloadLengthLimit,
-		protectedPointer:   protectedPointer,
 		protected:          protectedBuf,
 		writeBuf:           make([]byte, altsWriteBufferInitialSize),
 		nextFrame:          protectedBuf,
@@ -140,23 +133,11 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 	return altsConn, nil
 }
 
-func (p *conn) Close() error {
-	if !p.isClosed {
-		p.isClosed = true
-		p.buf = nil
-		mem.DefaultBufferPool().Put(p.protectedPointer)
-	}
-	return p.Conn.Close()
-}
-
 // Read reads and decrypts a frame from the underlying connection, and copies the
 // decrypted payload into b. If the size of the payload is greater than len(b),
 // Read retains the remaining bytes in an internal buffer, and subsequent calls
 // to Read will read from this buffer until it is exhausted.
 func (p *conn) Read(b []byte) (n int, err error) {
-	if p.isClosed {
-		return 0, io.EOF
-	}
 	if len(p.buf) == 0 {
 		var framedMsg []byte
 		framedMsg, p.nextFrame, err = ParseFramedMsg(p.nextFrame, altsRecordLengthLimit)
@@ -184,11 +165,10 @@ func (p *conn) Read(b []byte) (n int, err error) {
 					// header.
 					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(p.protected), MsgLenFieldSize))
 				}
-				newProtectedBuf := mem.DefaultBufferPool().Get(int(length) + MsgLenFieldSize)
-				copy(*newProtectedBuf, p.protected)
-				p.protected = (*newProtectedBuf)[:len(p.protected)]
-				mem.DefaultBufferPool().Put(p.protectedPointer)
-				p.protectedPointer = newProtectedBuf
+				oldProtectedBuf := p.protected
+				p.protected = make([]byte, int(length)+MsgLenFieldSize)
+				copy(p.protected, oldProtectedBuf)
+				p.protected = p.protected[:len(oldProtectedBuf)]
 			}
 			n, err = p.Conn.Read(p.protected[len(p.protected):cap(p.protected)])
 			if err != nil {
