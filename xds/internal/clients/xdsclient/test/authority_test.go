@@ -142,7 +142,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 //     authority config as an existing watch should not result in a new transport
 //     being created.
 func (s) TestAuthority_XDSChannelSharing(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	lis, _, client := setupForAuthorityTests(ctx, t)
 	defer client.Close()

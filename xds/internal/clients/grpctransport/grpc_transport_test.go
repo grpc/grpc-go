@@ -40,7 +40,8 @@ import (
 )
 
 const (
-	defaultTestTimeout = 10 * time.Second
+	defaultTestTimeout      = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
 type s struct {
@@ -158,14 +159,15 @@ func (s) TestBuild_Success(t *testing.T) {
 	if tr1 == nil {
 		t.Fatalf("Got nil `tr1` transport from Build(serverID1), want non-nil")
 	}
-	if tr1.(*grpcTransport).cc == nil {
+	g1 := tr1.(*transportRef).grpcTransport
+	if g1.cc == nil {
 		t.Fatalf("Got nil grpc.ClientConn in transport `tr1`, want non-nil")
 	}
 	if len(b.serverIdentifierMap) != 1 {
 		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 1", len(b.serverIdentifierMap))
 	}
-	if b.serverIdentifierMap[serverID1] != tr1 {
-		t.Fatalf("Builder.serverIdentifierMap[serverID1] = %v, want %v", b.serverIdentifierMap[serverID1], tr1)
+	if b.serverIdentifierMap[serverID1] != g1 {
+		t.Fatalf("Builder.serverIdentifierMap[serverID1] = %v, want %v", b.serverIdentifierMap[serverID1], g1)
 	}
 
 	serverID2 := clients.ServerIdentifier{
@@ -178,14 +180,16 @@ func (s) TestBuild_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build(serverID2) call failed: %v", err)
 	}
-	if tr2 != tr1 {
-		t.Fatalf("Build(serverID2) call returned different transport %v, want %v", tr2, tr1)
+	defer tr2.Close()
+	g2 := tr2.(*transportRef).grpcTransport
+	if g1 != g2 {
+		t.Fatalf("Build(serverID2) call returned different transport %v, want %v", g2, g1)
 	}
 	if len(b.serverIdentifierMap) != 1 {
 		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 1", len(b.serverIdentifierMap))
 	}
-	if b.serverIdentifierMap[serverID2] != tr1 {
-		t.Fatalf("Builder.serverIdentifierMap[serverID2] = %v, want %v", b.serverIdentifierMap[serverID2], tr1)
+	if b.serverIdentifierMap[serverID2] != g1 {
+		t.Fatalf("Builder.serverIdentifierMap[serverID2] = %v, want %v", b.serverIdentifierMap[serverID2], g1)
 	}
 
 	serverID3 := clients.ServerIdentifier{
@@ -198,18 +202,18 @@ func (s) TestBuild_Success(t *testing.T) {
 		t.Fatalf("Build(serverID3) call failed: %v", err)
 	}
 	defer tr3.Close()
-
-	if tr3 == nil {
+	g3 := tr3.(*transportRef).grpcTransport
+	if g3 == nil {
 		t.Fatalf("Got nil `tr3` transport from Build(serverID3), want non-nil")
 	}
-	if tr3.(*grpcTransport).cc == nil {
+	if g3.cc == nil {
 		t.Fatalf("Got nil grpc.ClientConn in transport `tr3`, want non-nil")
 	}
 	if len(b.serverIdentifierMap) != 2 {
 		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 2", len(b.serverIdentifierMap))
 	}
-	if b.serverIdentifierMap[serverID3] != tr3 {
-		t.Fatalf("Builder.serverIdentifierMap[serverID1] = %v, want %v", b.serverIdentifierMap[serverID3], tr3)
+	if b.serverIdentifierMap[serverID3] != g3 {
+		t.Fatalf("Builder.serverIdentifierMap[serverID3] = %v, want %v", b.serverIdentifierMap[serverID3], g3)
 	}
 }
 
@@ -335,7 +339,7 @@ func (s) TestNewStream_Error(t *testing.T) {
 // testDiscoverResponse from the server and verifies that the received
 // discovery response is same as sent from the server.
 func (s) TestStream_SendAndRecv(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*2000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})

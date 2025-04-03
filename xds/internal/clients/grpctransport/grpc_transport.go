@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -33,7 +34,14 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
-var logger = grpclog.Component("grpctransport")
+var (
+	logger = grpclog.Component("grpctransport")
+
+	// The following functions are no-ops in the actual code, but can be
+	// overridden in tests to give them visibility into certain events.
+	grpcTransportCreateHook = func() {}
+	grpcTransportCloseHook  = func() {}
+)
 
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
@@ -89,11 +97,12 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if value, ok := b.serverIdentifierMap[si]; ok {
+	if tr, ok := b.serverIdentifierMap[si]; ok {
 		if logger.V(2) {
 			logger.Info("Reusing existing connection to the server for ServerIdentifier: %v", si)
 		}
-		return value, nil
+		tr.incrRef()
+		return &transportRef{grpcTransport: tr}, nil
 	}
 
 	var creds credentials.Bundle
@@ -116,15 +125,24 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
 	}
-	tc := &grpcTransport{cc: cc}
+	tr := &grpcTransport{
+		cc:       cc,
+		refCount: 1,
+		deleteFromServerIdentiferMap: func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			delete(b.serverIdentifierMap, si)
+		}}
 	// Add the newly created transport to the map to re-use the connection.
-	b.serverIdentifierMap[si] = tc
-
-	return tc, nil
+	b.serverIdentifierMap[si] = tr
+	grpcTransportCreateHook()
+	return &transportRef{grpcTransport: tr}, nil
 }
 
 type grpcTransport struct {
-	cc *grpc.ClientConn
+	cc                           *grpc.ClientConn
+	refCount                     int32  // accessed atomically
+	deleteFromServerIdentiferMap func() // called when refCount reaches 0
 }
 
 // NewStream creates a new gRPC stream to the server for the specified method.
@@ -138,7 +156,36 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 
 // Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() error {
+	if g.decrRef() != 0 {
+		return nil
+	}
+
+	g.deleteFromServerIdentiferMap()
+	grpcTransportCloseHook()
 	return g.cc.Close()
+}
+
+func (g *grpcTransport) incrRef() int32 {
+	return atomic.AddInt32(&g.refCount, 1)
+}
+
+func (g *grpcTransport) decrRef() int32 {
+	return atomic.AddInt32(&g.refCount, -1)
+}
+
+// transportRef is the reference to the underlying gRPC transport.
+type transportRef struct {
+	*grpcTransport
+
+	closed sync.Once
+}
+
+func (tr *transportRef) Close() error {
+	var err error
+	tr.closed.Do(func() {
+		err = tr.grpcTransport.Close()
+	})
+	return err
 }
 
 type stream struct {

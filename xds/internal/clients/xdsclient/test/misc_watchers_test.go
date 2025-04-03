@@ -258,7 +258,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	)
 
 	// Register a watch for the Listener resource.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	watcher := newListenerWatcherV2()
 	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, serviceName, watcher)
