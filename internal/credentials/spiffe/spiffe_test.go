@@ -61,10 +61,10 @@ func TestKnownSPIFFEBundle(t *testing.T) {
 	wantExampleComCert := loadX509Cert(t, testdata.Path("spiffe/spiffe_cert.pem"))
 	wantTestExampleComCert := loadX509Cert(t, testdata.Path("spiffe/server1_spiffe.pem"))
 	if !bundles["example.com"].X509Authorities()[0].Equal(wantExampleComCert) {
-		t.Fatalf("BundleMapFromBytes(%v) parsed wrong cert for example.com.", spiffeBundleFile)
+		t.Errorf("BundleMapFromBytes(%v) parsed wrong cert for example.com.", spiffeBundleFile)
 	}
 	if !bundles["test.example.com"].X509Authorities()[0].Equal(wantTestExampleComCert) {
-		t.Fatalf("BundleMapFromBytes(%v) parsed wrong cert for test.example.com", spiffeBundleFile)
+		t.Errorf("BundleMapFromBytes(%v) parsed wrong cert for test.example.com", spiffeBundleFile)
 	}
 
 }
