@@ -2,7 +2,6 @@ module google.golang.org/grpc/gcp/observability
 
 go 1.23.0
 
-toolchain go1.24.1
 
 require (
 	cloud.google.com/go/logging v1.13.0
