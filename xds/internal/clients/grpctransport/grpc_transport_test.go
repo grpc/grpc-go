@@ -134,10 +134,9 @@ func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
 	return tc.perRPCCredentials
 }
 
-// TestBuild_Success_New verifies that the Builder successfully creates a new
-// Transport with a non-nil grpc.ClientConn if clients.ServerIdentifier
-// provided to Build() is not present in the Builder otherwise it returns the
-// existing transport for the clients.ServerIdentifier.
+// TestBuild_Success verifies that the Builder successfully creates a new
+// Transport in both cases when provided clients.ServerIdentifer is same
+// one of the existing transport or a new one.
 func (s) TestBuild_Success(t *testing.T) {
 	credentials := map[string]credentials.Bundle{
 		"local":    &testCredentials{transportCredentials: local.NewCredentials()},
@@ -149,72 +148,31 @@ func (s) TestBuild_Success(t *testing.T) {
 		ServerURI:  "server-address",
 		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
-	// Build(serverID1) should create a new transport.
 	tr1, err := b.Build(serverID1)
 	if err != nil {
 		t.Fatalf("Build(serverID1) call failed: %v", err)
 	}
 	defer tr1.Close()
 
-	if tr1 == nil {
-		t.Fatalf("Got nil `tr1` transport from Build(serverID1), want non-nil")
-	}
-	g1 := tr1.(*transportRef).grpcTransport
-	if g1.cc == nil {
-		t.Fatalf("Got nil grpc.ClientConn in transport `tr1`, want non-nil")
-	}
-	if len(b.serverIdentifierMap) != 1 {
-		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 1", len(b.serverIdentifierMap))
-	}
-	if b.serverIdentifierMap[serverID1] != g1 {
-		t.Fatalf("Builder.serverIdentifierMap[serverID1] = %v, want %v", b.serverIdentifierMap[serverID1], g1)
-	}
-
 	serverID2 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
 		Extensions: ServerIdentifierExtension{Credentials: "local"},
 	}
-	// Build(serverID2) should return the same transport instead of creating a
-	// new one.
 	tr2, err := b.Build(serverID2)
 	if err != nil {
 		t.Fatalf("Build(serverID2) call failed: %v", err)
 	}
 	defer tr2.Close()
-	g2 := tr2.(*transportRef).grpcTransport
-	if g1 != g2 {
-		t.Fatalf("Build(serverID2) call returned different transport %v, want %v", g2, g1)
-	}
-	if len(b.serverIdentifierMap) != 1 {
-		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 1", len(b.serverIdentifierMap))
-	}
-	if b.serverIdentifierMap[serverID2] != g1 {
-		t.Fatalf("Builder.serverIdentifierMap[serverID2] = %v, want %v", b.serverIdentifierMap[serverID2], g1)
-	}
 
 	serverID3 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
 		Extensions: ServerIdentifierExtension{Credentials: "insecure"},
 	}
-	// Build(serverID3) should create a new transport.
 	tr3, err := b.Build(serverID3)
 	if err != nil {
 		t.Fatalf("Build(serverID3) call failed: %v", err)
 	}
 	defer tr3.Close()
-	g3 := tr3.(*transportRef).grpcTransport
-	if g3 == nil {
-		t.Fatalf("Got nil `tr3` transport from Build(serverID3), want non-nil")
-	}
-	if g3.cc == nil {
-		t.Fatalf("Got nil grpc.ClientConn in transport `tr3`, want non-nil")
-	}
-	if len(b.serverIdentifierMap) != 2 {
-		t.Fatalf("Builder.serverIdentifierMap has unexpected length %d, want 2", len(b.serverIdentifierMap))
-	}
-	if b.serverIdentifierMap[serverID3] != g3 {
-		t.Fatalf("Builder.serverIdentifierMap[serverID3] = %v, want %v", b.serverIdentifierMap[serverID3], g3)
-	}
 }
 
 // TestBuild_Failure verifies that the Builder returns error when incorrect

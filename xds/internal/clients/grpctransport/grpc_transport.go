@@ -49,7 +49,7 @@ var (
 // It must be set by value (not pointer) in the
 // clients.ServerIdentifier.Extensions field (See Example).
 type ServerIdentifierExtension struct {
-	// Credentials is name of the credentials to use for this connection to the
+	// Credentials is name of the credentials to use for this transport to the
 	// server.
 	//
 	// It must be present in Builder.Credentials.
@@ -59,14 +59,14 @@ type ServerIdentifierExtension struct {
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
 // that contain an Extension field of type ServerIdentifierExtension.
 type Builder struct {
-	// Credentials is a map of credentials names to credentials.Bundle which
+	// credentials is a map of credentials names to credentials.Bundle which
 	// can be used to connect to the server.
-	Credentials map[string]credentials.Bundle
+	credentials map[string]credentials.Bundle
 
 	mu sync.Mutex
-	// serverIdentifierMap is a map of clients.ServerIdentifiers in use by the
+	// transports is a map of clients.ServerIdentifiers in use by the
 	// Builder to connect to different servers.
-	serverIdentifierMap map[clients.ServerIdentifier]*grpcTransport
+	transports map[clients.ServerIdentifier]*grpcTransport
 }
 
 // NewBuilder provides a builder for creating gRPC-based Transports using
@@ -74,8 +74,8 @@ type Builder struct {
 // credentials.Bundle.
 func NewBuilder(credentials map[string]credentials.Bundle) *Builder {
 	return &Builder{
-		Credentials:         credentials,
-		serverIdentifierMap: make(map[clients.ServerIdentifier]*grpcTransport),
+		credentials: credentials,
+		transports:  make(map[clients.ServerIdentifier]*grpcTransport),
 	}
 }
 
@@ -97,22 +97,19 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if tr, ok := b.serverIdentifierMap[si]; ok {
+	if tr, ok := b.transports[si]; ok {
 		if logger.V(2) {
-			logger.Info("Reusing existing connection to the server for ServerIdentifier: %v", si)
+			logger.Info("Reusing existing transport to the server for ServerIdentifier: %v", si)
 		}
 		tr.incrRef()
 		return &transportRef{grpcTransport: tr}, nil
 	}
 
 	var creds credentials.Bundle
-	if creds, ok = b.Credentials[sce.Credentials]; !ok {
-		return nil, fmt.Errorf("grptransport: Credentials %s in ServerIdentifierExtension is not present in the Builder", sce.Credentials)
+	if creds, ok = b.credentials[sce.Credentials]; !ok {
+		return nil, fmt.Errorf("grpctransport: unknown credentials type %q specified in extensions", sce.Credentials)
 	}
 
-	if logger.V(2) {
-		logger.Info("Creating a new connection to the server for ServerIdentifier: %v", si)
-	}
 	// Create a new gRPC client/channel for the server with the provided
 	// credentials, server URI, and a byte codec to send and receive messages.
 	// Also set a static keepalive configuration that is common across gRPC
@@ -131,11 +128,14 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		deleteFromServerIdentiferMap: func() {
 			b.mu.Lock()
 			defer b.mu.Unlock()
-			delete(b.serverIdentifierMap, si)
+			delete(b.transports, si)
 		}}
-	// Add the newly created transport to the map to re-use the connection.
-	b.serverIdentifierMap[si] = tr
+	// Add the newly created transport to the map to re-use the transport.
+	b.transports[si] = tr
 	grpcTransportCreateHook()
+	if logger.V(2) {
+		logger.Info("Created a new transport to the server for ServerIdentifier: %v", si)
+	}
 	return &transportRef{grpcTransport: tr}, nil
 }
 

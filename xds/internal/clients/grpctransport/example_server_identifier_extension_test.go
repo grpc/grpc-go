@@ -27,5 +27,6 @@ import (
 
 func ExampleServerIdentifierExtension() {
 	si := clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"}}
-	fmt.Printf("%v", si)
+	fmt.Printf("%+v", si)
+	// Output: {ServerURI:localhost:5678 Extensions:{Credentials:local}}
 }
