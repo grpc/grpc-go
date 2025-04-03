@@ -184,7 +184,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 					// header.
 					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(p.protected), MsgLenFieldSize))
 				}
-				newProtectedBuf := mem.DefaultBufferPool().Get(int(length))
+				newProtectedBuf := mem.DefaultBufferPool().Get(int(length) + MsgLenFieldSize)
 				copy(*newProtectedBuf, p.protected)
 				p.protected = (*newProtectedBuf)[:len(p.protected)]
 				mem.DefaultBufferPool().Put(p.protectedPointer)
