@@ -160,7 +160,19 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
+	lis := testutils.NewRestartableListener(l)
+	streamOpened := make(chan struct{}, 1)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		Listener: lis,
+		OnStreamOpen: func(context.Context, int64, string) error {
+			select {
+			case streamOpened <- struct{}{}:
+			default:
+			}
+			return nil
+		},
+	})
+
 	nodeID := uuid.New().String()
 
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
@@ -196,15 +208,20 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 
 	// Watch for the listener on the above management server.
 	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
+	// Verify that an ADS stream is opened and an LDS request with the above
+	// resource name is sent.
+	select {
+	case <-streamOpened:
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for ADS stream to open")
+	}
 
 	// Close the listener and ensure that the ADS stream breaks. This should
 	// cause a server failure count to emit eventually.
-	l.Close()
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for ADS stream to close")
-	default:
-	}
+	lis.Stop()
+
+	// Restart to prevent the attempt to create a new ADS stream after back off.
+	lis.Restart()
 
 	mdWant := stats.MetricsData{
 		Handle:    xdsClientServerFailureMetric.Descriptor(),
@@ -294,10 +311,8 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Close the listener and ensure that the ADS stream breaks. This should
 	// cause a server failure count to emit eventually.
 	lis.Stop()
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for ADS stream to close")
-	default:
+	if ctx.Err() != nil {
+		t.Fatalf("Timeout when waiting for ADS stream to close")
 	}
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
