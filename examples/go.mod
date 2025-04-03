@@ -2,7 +2,6 @@ module google.golang.org/grpc/examples
 
 go 1.23.0
 
-
 require (
 	github.com/cncf/xds/go v0.0.0-20250326154945-ae57f3c0d45f
 	github.com/prometheus/client_golang v1.21.1

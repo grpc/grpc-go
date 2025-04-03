@@ -2,7 +2,6 @@ module google.golang.org/grpc
 
 go 1.23.0
 
-
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20250326154945-ae57f3c0d45f
