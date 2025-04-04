@@ -375,7 +375,11 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 				watcher := watcher
 				err := uErr.Err
 				watcherCnt.Add(1)
-				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+				if state.cache == nil {
+					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceError(err, done) })
+				} else {
+					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+				}
 			}
 			continue
 		}
@@ -614,12 +618,6 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.logger.Infof("New watch for type %q, resource name %q", rType.TypeName(), resourceName)
 		}
 
-		xdsChannel, err := a.xdsChannelToUse()
-		if err != nil {
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.ResourceError(err, func() {}) })
-			return
-		}
-
 		// Lookup the entry for the resource type in the top-level map. If there is
 		// no entry for this resource type, create one.
 		resources := a.resources[rType]
@@ -632,6 +630,15 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// is being registered for. If this is the first watch for this resource
 		// name, request it from the management server.
 		state := resources[resourceName]
+		xdsChannel, err := a.xdsChannelToUse()
+		if err != nil {
+			if state != nil && state.cache != nil {
+				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.AmbientError(err, func() {}) })
+			} else {
+				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.ResourceError(err, func() {}) })
+			}
+			return
+		}
 		if state == nil {
 			if a.logger.V(2) {
 				a.logger.Infof("First watch for type %q, resource name %q", rType.TypeName(), resourceName)
