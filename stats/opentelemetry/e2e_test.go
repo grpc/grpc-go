@@ -1588,9 +1588,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 						md, _ := metadata.FromIncomingContext(ctx)
 						headerAttempts := 0
 						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
-							if val, err := strconv.Atoi(h[0]); err == nil {
-								headerAttempts = val
-							}
+							headerAttempts, _ = strconv.Atoi(h[0])
 						}
 						if headerAttempts < 2 {
 							return nil, status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
@@ -1613,9 +1611,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 						md, _ := metadata.FromIncomingContext(stream.Context())
 						headerAttempts := 0
 						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
-							if val, err := strconv.Atoi(h[0]); err == nil {
-								headerAttempts = val
-							}
+							headerAttempts, _ = strconv.Atoi(h[0])
 						}
 						if headerAttempts < 2 {
 							return status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
