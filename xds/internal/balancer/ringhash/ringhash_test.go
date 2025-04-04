@@ -83,7 +83,7 @@ func setupTest(t *testing.T, endpoints []resolver.Endpoint) (*testutils.Balancer
 		t.Errorf("Number of child balancers = %d, want = %d", got, want)
 	}
 	for firstAddr, bs := range ringHashPicker.endpointStates {
-		if got, want := bs.ConnectivityState, connectivity.Idle; got != want {
+		if got, want := bs.state.ConnectivityState, connectivity.Idle; got != want {
 			t.Errorf("Child balancer connectivity state for address %q = %v, want = %v", firstAddr, got, want)
 		}
 	}
@@ -144,7 +144,7 @@ func (s) TestOneEndpoint(t *testing.T) {
 	// only Endpoint which has a single address.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	var sc0 *testutils.TestSubConn
@@ -172,7 +172,7 @@ func (s) TestOneEndpoint(t *testing.T) {
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -205,7 +205,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	// SubConn.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 
@@ -216,7 +216,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case subConns[1] = <-cc.NewSubConnCh:
 	}
-	if got, want := subConns[1].Addresses[0].Addr, ring.items[1].firstAddr; got != want {
+	if got, want := subConns[1].Addresses[0].Addr, ring.items[1].hashKey; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -224,7 +224,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
 	}
-	delete(remainingAddrs, ring.items[1].firstAddr)
+	delete(remainingAddrs, ring.items[1].hashKey)
 
 	// Turn down the subConn in use.
 	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -248,9 +248,9 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
 	}
-	if scAddr == ring.items[0].firstAddr {
+	if scAddr == ring.items[0].hashKey {
 		subConns[0] = sc
-	} else if scAddr == ring.items[2].firstAddr {
+	} else if scAddr == ring.items[2].hashKey {
 		subConns[2] = sc
 	}
 
@@ -273,9 +273,9 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
 	}
-	if scAddr == ring.items[0].firstAddr {
+	if scAddr == ring.items[0].hashKey {
 		subConns[0] = sc
-	} else if scAddr == ring.items[2].firstAddr {
+	} else if scAddr == ring.items[2].hashKey {
 		subConns[2] = sc
 	}
 	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -292,7 +292,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	}
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != subConns[0] {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[0])
 		}
@@ -305,7 +305,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != subConns[2] {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[2])
 		}
@@ -318,7 +318,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p3 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != subConns[1] {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[1])
 		}
@@ -346,7 +346,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	// SubConn.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	// The picked SubConn should be the second in the ring.
@@ -356,7 +356,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc0 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc0.Addresses[0].Addr, ring0.items[1].firstAddr; got != want {
+	if got, want := sc0.Addresses[0].Addr, ring0.items[1].hashKey; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -375,7 +375,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	// First hash should always pick sc0.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -384,7 +384,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	secondHash := ring0.items[1].hash
 	// secondHash+1 will pick the third SubConn from the ring.
 	testHash2 := secondHash + 1
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash2)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash2)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	var sc1 *testutils.TestSubConn
@@ -393,7 +393,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 		t.Fatalf("Timed out waiting for SubConn creation.")
 	case sc1 = <-cc.NewSubConnCh:
 	}
-	if got, want := sc1.Addresses[0].Addr, ring0.items[2].firstAddr; got != want {
+	if got, want := sc1.Addresses[0].Addr, ring0.items[2].hashKey; got != want {
 		t.Fatalf("SubConn.Address = %v, want = %v", got, want)
 	}
 	select {
@@ -407,14 +407,14 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	// With the new generated picker, hash2 always picks sc1.
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash2)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash2)})
 		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 	// But the first hash still picks sc0.
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, testHash)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -504,14 +504,14 @@ func (s) TestAddrWeightChange(t *testing.T) {
 		t.Fatalf("new picker after changing address weight has %d entries, want 3", len(p3.(*picker).ring.items))
 	}
 	for _, i := range p3.(*picker).ring.items {
-		if i.firstAddr == testBackendAddrStrs[0] {
+		if i.hashKey == testBackendAddrStrs[0] {
 			if i.weight != 1 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.weight, i.firstAddr)
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 1", i.weight, i.hashKey)
 			}
 		}
-		if i.firstAddr == testBackendAddrStrs[1] {
+		if i.hashKey == testBackendAddrStrs[1] {
 			if i.weight != 2 {
-				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.weight, i.firstAddr)
+				t.Fatalf("new picker after changing address weight has weight %d for %v, want 2", i.weight, i.hashKey)
 			}
 		}
 	}
@@ -532,6 +532,7 @@ func (s) TestAutoConnectEndpointOnTransientFailure(t *testing.T) {
 	// ringhash won't tell SCs to connect until there is an RPC, so simulate
 	// one now.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx = SetXDSRequestHash(ctx, 0)
 	defer cancel()
 	p0.Pick(balancer.PickInfo{Ctx: ctx})
 
@@ -690,7 +691,7 @@ func (s) TestAddrBalancerAttributesChange(t *testing.T) {
 	// only Endpoint which has a single address.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetRequestHash(ctx, firstHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, firstHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	select {

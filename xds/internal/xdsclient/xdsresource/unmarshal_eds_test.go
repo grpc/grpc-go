@@ -34,7 +34,9 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -328,6 +330,135 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 			}
 			if d := cmp.Diff(got, tt.want, cmpopts.EquateEmpty()); d != "" {
 				t.Errorf("parseEDSRespProto() got = %v, want %v, diff: %v", got, tt.want, d)
+			}
+		})
+	}
+}
+
+func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
+	baseCLA := &v3endpointpb.ClusterLoadAssignment{
+		Endpoints: []*v3endpointpb.LocalityLbEndpoints{
+			{
+				Locality: &v3corepb.Locality{Region: "r"},
+				LbEndpoints: []*v3endpointpb.LbEndpoint{
+					{
+						HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{
+							Endpoint: &v3endpointpb.Endpoint{
+								Address: &v3corepb.Address{
+									Address: &v3corepb.Address_SocketAddress{
+										SocketAddress: &v3corepb.SocketAddress{
+											Address: "test-address",
+											PortSpecifier: &v3corepb.SocketAddress_PortValue{
+												PortValue: 8080,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
+			},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		metadata     *v3corepb.Metadata
+		wantHashKey  string
+		compatEnvVar bool
+	}{
+		{
+			name:        "no metadata",
+			metadata:    nil,
+			wantHashKey: "",
+		},
+		{
+			name:        "empty metadata",
+			metadata:    &v3corepb.Metadata{},
+			wantHashKey: "",
+		},
+		{
+			name: "filter metadata without envoy.lb",
+			metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"test-filter": {},
+				},
+			},
+			wantHashKey: "",
+		},
+		{
+			name: "nil envoy.lb",
+			metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"envoy.lb": nil,
+				},
+			},
+			wantHashKey: "",
+		},
+		{
+			name: "envoy.lb without hash key",
+			metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"envoy.lb": {
+						Fields: map[string]*structpb.Value{
+							"hash_key": {
+								Kind: &structpb.Value_NumberValue{NumberValue: 123.0},
+							},
+						},
+					},
+				},
+			},
+			wantHashKey: "",
+		},
+		{
+			name: "envoy.lb with hash key, compat mode off",
+			metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"envoy.lb": {
+						Fields: map[string]*structpb.Value{
+							"hash_key": {
+								Kind: &structpb.Value_StringValue{StringValue: "test-hash-key"},
+							},
+						},
+					},
+				},
+			},
+			wantHashKey: "test-hash-key",
+		},
+		{
+			name: "envoy.lb with hash key, compat mode on",
+			metadata: &v3corepb.Metadata{
+				FilterMetadata: map[string]*structpb.Struct{
+					"envoy.lb": {
+						Fields: map[string]*structpb.Value{
+							"hash_key": {
+								Kind: &structpb.Value_StringValue{StringValue: "test-hash-key"},
+							},
+						},
+					},
+				},
+			},
+			wantHashKey:  "",
+			compatEnvVar: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, test.compatEnvVar)
+
+			cla := proto.Clone(baseCLA).(*v3endpointpb.ClusterLoadAssignment)
+			cla.Endpoints[0].LbEndpoints[0].Metadata = test.metadata
+			marshalledCLA := testutils.MarshalAny(t, cla)
+			_, update, err := unmarshalEndpointsResource(marshalledCLA)
+			if err != nil {
+				t.Fatalf("unmarshalEndpointsResource() got error = %v, want success", err)
+			}
+			got := update.Localities[0].Endpoints[0].HashKey
+			if got != test.wantHashKey {
+				t.Errorf("unmarshalEndpointResource() endpoint hash key: got %s, want %s", got, test.wantHashKey)
 			}
 		})
 	}
