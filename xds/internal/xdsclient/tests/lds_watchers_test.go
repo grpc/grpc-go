@@ -79,7 +79,7 @@ func (lw *listenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceD
 func (lw *listenerWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in ResourceError() simplifies tests which will have
+	// here and in AmbientError() simplifies tests which will have
 	// access to the most recently received error.
 	lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
 	onDone()

@@ -57,10 +57,10 @@ type Producer interface {
 //
 // All methods contain a done parameter which should be called when processing
 // of the update has completed.  For example, if processing a resource requires
-// watching new resources, those watches should be completed before done is
-// called, which can happen after the ResourceWatcher method has returned.
-// Failure to call done will prevent the xDS client from providing future
-// ResourceWatcher notifications.
+// watching new resources, registration of those new watchers should be
+// completed before done is called, which can happen after the ResourceWatcher
+// method has returned. Failure to call done will prevent the xDS client from
+// providing future ResourceWatcher notifications.
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
 	ResourceChanged(resourceData ResourceData, done func())

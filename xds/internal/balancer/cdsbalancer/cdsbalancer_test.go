@@ -813,7 +813,7 @@ func (s) TestResolverError(t *testing.T) {
 
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*100000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	val, err := lis.NewConnCh.Receive(ctx)
 	if err != nil {

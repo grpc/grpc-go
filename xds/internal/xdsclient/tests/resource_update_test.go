@@ -161,7 +161,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ListenerResource\" does not exist", resourceName1),
+			wantErr: fmt.Sprintf("xds: resource %q of type %q does not exist", resourceName1, "ListenerResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -177,7 +177,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ListenerResource\" does not exist", resourceName1),
+			wantErr: fmt.Sprintf("xds: resource %q of type %q does not exist", resourceName1, "ListenerResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",
@@ -194,7 +194,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(t, &v3routepb.RouteConfiguration{})},
 			},
-			wantErr: fmt.Sprintf("xds: resource \"%v\" of type \"ListenerResource\" does not exist", resourceName1),
+			wantErr: fmt.Sprintf("xds: resource %q of type %q does not exist", resourceName1, "ListenerResource"),
 			wantGenericXDSConfig: []*v3statuspb.ClientConfig_GenericXdsConfig{
 				{
 					TypeUrl:      "type.googleapis.com/envoy.config.listener.v3.Listener",

@@ -75,9 +75,9 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			 "server_uri": %q,
-			 "channel_creds": [{"type": "insecure"}]
-		 }]`, mgmtServer.Address)),
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			"authority": []byte("{}"),
