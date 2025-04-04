@@ -879,7 +879,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -896,7 +896,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					},
 				},
 				{
-					Name: "Message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -937,7 +937,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -954,7 +954,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					},
 				},
 				{
-					Name: "Message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1103,7 +1103,7 @@ func (s) TestSpan(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1120,7 +1120,7 @@ func (s) TestSpan(t *testing.T) {
 					},
 				},
 				{
-					Name: "Message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1161,7 +1161,7 @@ func (s) TestSpan(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1178,7 +1178,7 @@ func (s) TestSpan(t *testing.T) {
 					},
 				},
 				{
-					Name: "Message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1329,7 +1329,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1346,7 +1346,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					},
 				},
 				{
-					Name: "Message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1387,7 +1387,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1404,7 +1404,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					},
 				},
 				{
-					Name: "Message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
