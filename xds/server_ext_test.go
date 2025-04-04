@@ -169,7 +169,8 @@ func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.Clie
 			t.Fatalf("RPCs failed with most recent error: %v. Want status code %v, error: %s, node id: %s", err, wantCode, wantErr, wantNodeID)
 		case <-time.After(defaultTestShortTimeout):
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
-			if gotCode := status.Code(err); gotCode != wantCode {
+			gotCode := status.Code(err)
+			if gotCode != wantCode {
 				continue
 			}
 			if gotErr := err.Error(); !strings.Contains(gotErr, wantErr) {

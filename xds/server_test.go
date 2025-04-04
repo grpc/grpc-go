@@ -655,15 +655,13 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Also make sure that no serving mode updates are received. The serving
-	// mode does not change until the server comes to the conclusion that the
-	// requested resource is not present in the management server. This happens
-	// when the watch timer expires or when the resource is explicitly deleted
-	// by the management server.
+	// Also make sure that serving mode updates are received. The serving
+	// mode changes to NOT_SERVING. This happens because watcher received an
+	// invalid resource from the server which is not present in cache.
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if _, err := modeChangeCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("Serving mode changed received when none expected")
+	if _, err := modeChangeCh.Receive(sCtx); err == context.DeadlineExceeded {
+		t.Fatal("Serving mode did not change when expected to change")
 	}
 }
 
@@ -697,10 +695,23 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	// Generate bootstrap contents up front for all servers.
 	bootstrapContents := generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)
 
+	// Override the default ServingModeCallback with a noop function because the
+	// invalid listener resource will be immediately NACKed by the xDS client
+	// and since the listener resource is not cached, it will trigger multiple
+	// resource error notifications for the same listener resource in quick
+	// successions, leading to service mode change to "not serving" each time.
+	//
+	// Even if the the server is currently NOT_SERVING, in the case (where we
+	// are NOT_SERVING and the new mode is also NOT_SERVING), the update is not
+	// suppressed as:
+	//   1. the error may have change
+	//   2. it provides a timestamp of the last backoff attempt
+	noopModeChangeCallback := func(_ net.Addr, _ ServingModeChangeArgs) {}
+
 	wg := sync.WaitGroup{}
 	wg.Add(200)
 	for i := 0; i < 100; i++ {
-		server, err := NewGRPCServer(BootstrapContentsForTesting(bootstrapContents))
+		server, err := NewGRPCServer(BootstrapContentsForTesting(bootstrapContents), ServingModeCallback(noopModeChangeCallback))
 		if err != nil {
 			t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 		}

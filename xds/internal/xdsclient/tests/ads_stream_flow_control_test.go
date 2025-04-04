@@ -438,9 +438,10 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 }
 
 // Test ADS stream flow control with a single resource that is expected to be
-// NACKed by the xDS client and the watcher's OnError() callback is expected to
-// be invoked. Verifies that no further reads are attempted until the error is
-// completely processed by the watcher.
+// NACKed by the xDS client and the watcher's ResourceError() callback is
+// expected to be invoked because resource is not cached. Verifies that no
+// further reads are attempted until the error is completely processed by the
+// watcher.
 func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -490,9 +491,9 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 		t.Fatalf("Timed out waiting for ADS stream to be read from")
 	}
 
-	// Wait for the error to reach the watcher.
+	// Wait for the resource error to reach the watcher.
 	select {
-	case <-watcher.errorCh:
+	case <-watcher.notFoundCh:
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for error to reach watcher")
 	}

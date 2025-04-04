@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
@@ -128,7 +128,8 @@ func (s) TestServer_Security_NoCertProvidersInBootstrap_Success(t *testing.T) {
 // client is expected to NACK this resource because the certificate provider
 // instance name specified in the Listener resource will not be present in the
 // bootstrap file. The test verifies that server creation does not fail and that
-// the xDS-enabled gRPC server does not enter "serving" mode.
+// the xDS-enabled gRPC server does not enter "serving" mode but serving mode
+// changes to "not serving" because the listener resource is not cached.
 func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -214,25 +215,38 @@ func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testin
 		t.Fatal("Timeout when waiting for an NACK from the xDS client for the LDS response")
 	}
 
-	// Wait a short duration and ensure that the server does not enter "serving"
-	// mode.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-modeChangeHandler.modeCh:
-		t.Fatal("Server started serving RPCs before the route config was received")
+	// Since the listener resource from the management server is invalid and is
+	// not cached, it should cause the server to go to NOT_SERVING and the
+	// error message should contain the xDS node ID.
+	//
+	// Even though the server is currently NOT_SERVING, in the case (where we
+	// are NOT_SERVING and the new mode is also NOT_SERVING), the update is not
+	// suppressed as:
+	//   1. the error may have change
+	//   2. it provides a timestamp of the last backoff attempt
+	// The loop ensures that we drain all the mode change notifications but
+	// at the same time verify that the server is NOT_SERVING and the error
+	// message contains the xDS node ID.
+	exit := false
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for server to go NOT_SERVING")
+		case gotMode := <-modeChangeHandler.modeCh:
+			if gotMode != connectivity.ServingModeNotServing {
+				t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeNotServing)
+			}
+			gotErr := <-modeChangeHandler.errCh
+			if gotErr == nil || !strings.Contains(gotErr.Error(), nodeID) {
+				t.Fatalf("Unexpected error: %v, want xDS Node id: %s", gotErr, nodeID)
+			}
+		default:
+			exit = true
+		}
+		if exit {
+			break
+		}
 	}
-
-	// Create a client that uses insecure creds and verify that RPCs don't
-	// succeed.
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
-
-	waitForFailedRPCWithStatus(ctx, t, cc, codes.Unavailable, "", "")
 }
 
 // Tests the case where the bootstrap configuration contains one certificate
@@ -245,7 +259,8 @@ func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testin
 //     certificate provider instance
 //
 // The test verifies that an RPC to the first listener succeeds, while the
-// second listener never moves to "serving" mode and RPCs to it fail.
+// second listener never moves to "serving" mode and RPCs but serving mode
+// changes to "not serving" because the listener resource is not cached.
 func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -448,21 +463,37 @@ func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing
 		t.Fatal("Timeout when waiting for an NACK from the xDS client for the LDS response")
 	}
 
-	// Wait a short duration and ensure that the server does not enter "serving"
-	// mode.
-	select {
-	case <-time.After(2 * defaultTestShortTimeout):
-	case <-modeChangeHandler2.modeCh:
-		t.Fatal("Server changed to serving mode when not expected to")
+	// Since the listener resource from the management server is invalid and is
+	// not cached, it should cause the server to go to NOT_SERVING and the
+	// error message should contain the xDS node ID.
+	//
+	// Even though the server is currently NOT_SERVING, in the case (where we
+	// are NOT_SERVING and the new mode is also NOT_SERVING), the update is not
+	// suppressed as:
+	//   1. the error may have change
+	//   2. it provides a timestamp of the last backoff attempt
+	//
+	// The loop ensures that we drain all the mode change notifications but
+	// at the same time verify that the server is NOT_SERVING and the error
+	// message contains the xDS node ID.
+	exit := false
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for server to go NOT_SERVING")
+		case gotMode := <-modeChangeHandler2.modeCh:
+			if gotMode != connectivity.ServingModeNotServing {
+				t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeNotServing)
+			}
+			gotErr := <-modeChangeHandler2.errCh
+			if gotErr == nil || !strings.Contains(gotErr.Error(), nodeID) {
+				t.Fatalf("Unexpected error: %v, want xDS Node id: %s", gotErr, nodeID)
+			}
+		default:
+			exit = true
+		}
+		if exit {
+			break
+		}
 	}
-
-	// Create a client that uses insecure creds and verify that RPCs don't
-	// succeed to listener2.
-	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
-	}
-	defer cc2.Close()
-
-	waitForFailedRPCWithStatus(ctx, t, cc2, codes.Unavailable, "", "")
 }
