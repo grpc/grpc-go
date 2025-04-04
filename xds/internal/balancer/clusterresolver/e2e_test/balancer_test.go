@@ -279,7 +279,7 @@ func (s) TestErrorFromParentLB_ResourceNotFound(t *testing.T) {
 	}
 
 	// Ensure that RPCs start to fail with expected error.
-	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
+	wantErr := fmt.Sprintf("resource %q of type %q has been removed", clusterName, "ClusterResource")
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 		defer sCancel()
