@@ -30,7 +30,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const tracerName = "grpc-go"
+const (
+	delayedResolutionEventName = "Delayed name resolution complete"
+	tracerName                 = "grpc-go"
+)
 
 type clientTracingHandler struct {
 	options Options
@@ -95,11 +98,20 @@ func (h *clientTracingHandler) finishTrace(err error, ts trace.Span) {
 	ts.End()
 }
 
-// traceTagRPC starts a new span for an RPC attempt and propagates its context.
-// A new span is started using the configured Tracer. If a TextMapPropagator
-// is configured in TraceOptions, the span's context is injected into the
-// outgoing gRPC metadata using an internal carrier for cross-process propagation.
-func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+// traceTagRPC populates provided context with a new span using the
+// TextMapPropagator supplied in trace options and internal itracing.carrier.
+// It creates a new outgoing carrier which serializes information about this
+// span into gRPC Metadata, if TextMapPropagator is provided in the trace
+// options. if TextMapPropagator is not provided, it returns the context as is.
+func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) (context.Context, *attemptInfo) {
+	// Add a "Delayed name resolution complete" event to the call span
+	// if there was name resolution delay. In case of multiple retry attempts,
+	// ensure that event is added only once.
+	callSpan := trace.SpanFromContext(ctx)
+	ci := getCallInfo(ctx)
+	if nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
+		callSpan.AddEvent(delayedResolutionEventName)
+	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn)
