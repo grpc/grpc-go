@@ -254,7 +254,7 @@ func (c *XDSClient) releaseChannel(serverConfig *ServerConfig, state *channelSta
 		deInitLocked(state)
 
 		// The channel has active users. Do nothing and return.
-		if state.lrsRefs != 0 || len(state.interestedAuthorities) != 0 {
+		if len(state.interestedAuthorities) != 0 {
 			if c.logger.V(2) {
 				c.logger.Infof("xdsChannel %p has other active references", state.channel)
 			}
@@ -304,7 +304,6 @@ type channelState struct {
 	// Access to the following fields should be protected by the parent's
 	// channelsMu.
 	channel               *xdsChannel
-	lrsRefs               int
 	interestedAuthorities map[*authority]bool
 }
 

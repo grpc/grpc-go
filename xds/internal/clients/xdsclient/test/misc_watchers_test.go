@@ -65,7 +65,7 @@ func newTestLDSWatcher(client *xdsclient.XDSClient, name1, name2 string) *testLD
 func (lw *testLDSWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
 	lisData, ok := update.(*listenerResourceData)
 	if !ok {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("unexpected resource type: %T", update)})
+		lw.updateCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
 		onDone()
 		return
 	}
@@ -81,12 +81,12 @@ func (lw *testLDSWatcher) AmbientError(err error, onDone func()) {
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
-	lw.updateCh.Replace(listenerUpdateErrTuple{err: err})
+	lw.updateCh.Replace(listenerUpdateErrTuple{ambientErr: err})
 	onDone()
 }
 
 func (lw *testLDSWatcher) ResourceError(err error, onDone func()) {
-	lw.updateCh.Replace(listenerUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
+	lw.updateCh.Replace(listenerUpdateErrTuple{resourceErr: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 
@@ -443,7 +443,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 			if !ok {
 				t.Fatalf("got no update, wanted listener error from the management server")
 			}
-			gotErr := u.(listenerUpdateErrTuple).err
+			gotErr := u.(listenerUpdateErrTuple).resourceErr
 			if !strings.Contains(gotErr.Error(), nodeID) {
 				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 			}
@@ -462,7 +462,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 			if !ok {
 				t.Fatalf("got no update, wanted listener error from the management server")
 			}
-			gotErr := u.(listenerUpdateErrTuple).err
+			gotErr := u.(listenerUpdateErrTuple).resourceErr
 			if !strings.Contains(gotErr.Error(), nodeID) {
 				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 			}
@@ -530,7 +530,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 		if !ok {
 			t.Fatalf("got no update, wanted listener error from the management server")
 		}
-		gotErr := u.(listenerUpdateErrTuple).err
+		gotErr := u.(listenerUpdateErrTuple).resourceErr
 		if !strings.Contains(gotErr.Error(), nodeID) {
 			t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 		}
