@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+// OpenCensus's binary format for grpc-trace-bin:
+// https://github.com/census-instrumentation/opencensus-specs/blob/master/
+// encodings/BinaryEncoding.md
+
 package opentelemetry
 
 import (
@@ -58,14 +62,14 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// message id - "must be calculated as two different counters starting
 		// from one for sent messages and one for received messages."
 		ai.countRecvMsg++
-		span.AddEvent("Inbound compressed message", trace.WithAttributes(
+		span.AddEvent("Message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(ai.countRecvMsg)),
 			attribute.Int64("message-size", int64(rs.Length)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
 	case *stats.OutPayload:
 		ai.countSentMsg++
-		span.AddEvent("Outbound compressed message", trace.WithAttributes(
+		span.AddEvent("Message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(ai.countSentMsg)),
 			attribute.Int64("message-size", int64(rs.Length)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),

@@ -872,7 +872,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Inbound compressed message",
+					Name: "Message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -947,7 +947,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					},
 				},
 				{
-					Name: "Inbound compressed message",
+					Name: "Message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1096,7 +1096,7 @@ func (s) TestSpan(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Inbound compressed message",
+					Name: "Message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1171,7 +1171,7 @@ func (s) TestSpan(t *testing.T) {
 					},
 				},
 				{
-					Name: "Inbound compressed message",
+					Name: "Message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1322,7 +1322,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Inbound compressed message",
+					Name: "Message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
@@ -1397,7 +1397,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					},
 				},
 				{
-					Name: "Inbound compressed message",
+					Name: "Message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
