@@ -1,5 +1,3 @@
-//revive:disable:unused-parameter
-
 /*
  *
  * Copyright 2025 gRPC authors.
@@ -32,36 +30,69 @@
 // server.
 package xdsclient
 
+import (
+	"errors"
+	"sync"
+	"time"
+
+	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
+)
+
 // XDSClient is a client which queries a set of discovery APIs (collectively
 // termed as xDS) on a remote management server, to discover
 // various dynamic resources.
 type XDSClient struct {
+	// The following fields are initialized at creation time and are read-only
+	// after that, and therefore can be accessed without a mutex.
+	done               *syncutil.Event              // Fired when the client is closed.
+	topLevelAuthority  *authority                   // The top-level authority, used only for old-style names without an authority.
+	authorities        map[string]*authority        // Map from authority names in config to authority struct.
+	config             *Config                      // Complete xDS client configuration.
+	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
+	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
+	transportBuilder   clients.TransportBuilder     // Builder to create transports to xDS server.
+	resourceTypes      *resourceTypeRegistry        // Registry of resource types, for parsing incoming ADS responses.
+	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
+	serializerClose    func()                       // Function to close the serializer.
+	logger             *grpclog.PrefixLogger        // Logger for this client.
+	target             string                       // The gRPC target for this client.
+
+	// The XDSClient owns a bunch of channels to individual xDS servers
+	// specified in the xDS client configuration. Authorities acquire references
+	// to these channels based on server configs within the authority config.
+	// The XDSClient maintains a list of interested authorities for each of
+	// these channels, and forwards updates from the channels to each of these
+	// authorities.
+	//
+	// Once all references to a channel are dropped, the channel is closed.
+	channelsMu        sync.Mutex
+	xdsActiveChannels map[ServerConfig]*channelState // Map from server config to in-use xdsChannels.
 }
 
 // New returns a new xDS Client configured with the provided config.
 func New(config Config) (*XDSClient, error) {
-	panic("unimplemented")
+	switch {
+	case config.Node.ID == "":
+		return nil, errors.New("xdsclient: node ID is empty")
+	case config.ResourceTypes == nil:
+		return nil, errors.New("xdsclient: resource types map is nil")
+	case config.TransportBuilder == nil:
+		return nil, errors.New("xdsclient: transport builder is nil")
+	case config.Authorities == nil && config.Servers == nil:
+		return nil, errors.New("xdsclient: no servers or authorities specified")
+	}
+
+	client, err := newClient(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, name)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
-// WatchResource starts watching the specified resource.
-//
-// typeURL specifies the resource type implementation to use. The watch fails
-// if there is no resource type implementation for the given typeURL. See the
-// ResourceTypes field in the Config struct used to create the XDSClient.
-//
-// The returned function cancels the watch and prevents future calls to the
-// watcher.
-func (c *XDSClient) WatchResource(typeURL, name string, watcher ResourceWatcher) (cancel func()) {
-	panic("unimplemented")
-}
-
-// Close closes the xDS client.
-func (c *XDSClient) Close() error {
-	panic("unimplemented")
-}
-
-// DumpResources returns the status and contents of all xDS resources being
-// watched by the xDS client.
-func (c *XDSClient) DumpResources() []byte {
-	panic("unimplemented")
+// SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
+// with provided timeout value.
+func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Duration) {
+	c.watchExpiryTimeout = watchExpiryTimeout
 }

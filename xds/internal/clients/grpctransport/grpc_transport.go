@@ -23,25 +23,60 @@ package grpctransport
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
 )
 
+var (
+	logger = grpclog.Component("grpctransport")
+
+	// The following functions are no-ops in the actual code, but can be
+	// overridden in tests to give them visibility into certain events.
+	grpcTransportCreateHook = func() {}
+	grpcTransportCloseHook  = func() {}
+)
+
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
 // such as an xDS management or an LRS server.
+//
+// It must be set by value (not pointer) in the
+// clients.ServerIdentifier.Extensions field (See Example).
 type ServerIdentifierExtension struct {
-	// Credentials will be used for all gRPC transports. If it is unset,
-	// transport creation will fail.
-	Credentials credentials.Bundle
+	// Credentials is name of the credentials to use for this transport to the
+	// server.
+	//
+	// It must be present in Builder.Credentials.
+	Credentials string
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
 // that contain an Extension field of type ServerIdentifierExtension.
-type Builder struct{}
+type Builder struct {
+	// credentials is a map of credentials names to credentials.Bundle which
+	// can be used to connect to the server.
+	credentials map[string]credentials.Bundle
+
+	mu sync.Mutex
+	// transports is a map of clients.ServerIdentifiers in use by the
+	// Builder to connect to different servers.
+	transports map[clients.ServerIdentifier]*grpcTransport
+}
+
+// NewBuilder provides a builder for creating gRPC-based Transports using
+// the credentials from provided map of credentials names to
+// credentials.Bundle.
+func NewBuilder(credentials map[string]credentials.Bundle) *Builder {
+	return &Builder{
+		credentials: credentials,
+		transports:  make(map[clients.ServerIdentifier]*grpcTransport),
+	}
+}
 
 // Build returns a gRPC-based clients.Transport.
 //
@@ -57,14 +92,22 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if !ok {
 		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}
-	if sce.Credentials == nil {
-		return nil, fmt.Errorf("grptransport: Credentials field is not set in ServerIdentifierExtension")
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if tr, ok := b.transports[si]; ok {
+		if logger.V(2) {
+			logger.Info("Reusing existing transport to the server for ServerIdentifier: %v", si)
+		}
+		tr.incrRef()
+		return &transportRef{grpcTransport: tr}, nil
 	}
 
-	// TODO: Incorporate reference count map for existing transports and
-	// deduplicate transports based on the provided ServerIdentifier so that
-	// transport channel to same server can be shared between xDS and LRS
-	// client.
+	creds, ok := b.credentials[sce.Credentials]
+	if !ok {
+		return nil, fmt.Errorf("grpctransport: unknown credentials type %q specified in extensions", sce.Credentials)
+	}
 
 	// Create a new gRPC client/channel for the server with the provided
 	// credentials, server URI, and a byte codec to send and receive messages.
@@ -74,16 +117,34 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(sce.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(creds), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
 	}
+	tr := &grpcTransport{
+		cc:       cc,
+		refCount: 1,
+		deleteTransport: func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			delete(b.transports, si)
+		}}
+	// Add the newly created transport to the map to re-use the transport.
+	b.transports[si] = tr
 
-	return &grpcTransport{cc: cc}, nil
+	grpcTransportCreateHook()
+	if logger.V(2) {
+		logger.Info("Created a new transport to the server for ServerIdentifier: %v", si)
+	}
+	return &transportRef{grpcTransport: tr}, nil
 }
 
 type grpcTransport struct {
 	cc *grpc.ClientConn
+
+	mu              sync.Mutex
+	refCount        int32  // accessed atomically
+	deleteTransport func() // called when refCount reaches 0
 }
 
 // NewStream creates a new gRPC stream to the server for the specified method.
@@ -97,7 +158,39 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 
 // Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.refCount--
+	if g.refCount != 0 {
+		return nil
+	}
+
+	g.deleteTransport()
+	grpcTransportCloseHook()
 	return g.cc.Close()
+}
+
+func (g *grpcTransport) incrRef() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.refCount++
+}
+
+// transportRef is the reference to the underlying gRPC transport.
+type transportRef struct {
+	*grpcTransport
+
+	closed sync.Once
+}
+
+// Close releases the reference to the underlying gRPC transport.
+func (tr *transportRef) Close() error {
+	var err error
+	tr.closed.Do(func() {
+		err = tr.grpcTransport.Close()
+	})
+	return err
 }
 
 type stream struct {

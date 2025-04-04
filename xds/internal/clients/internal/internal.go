@@ -20,25 +20,12 @@
 package internal
 
 import (
-	"fmt"
-	"strings"
-
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
-
-// ServerIdentifierString returns a string representation of the
-// clients.ServerIdentifier si.
-//
-// WARNING: This method is primarily intended for logging and testing
-// purposes. The output returned by this method is not guaranteed to be stable
-// and may change at any time. Do not rely on it for production use.
-func ServerIdentifierString(si clients.ServerIdentifier) string {
-	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
-}
 
 // NodeProto returns a protobuf representation of clients.Node n.
 //
