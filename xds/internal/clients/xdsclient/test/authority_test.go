@@ -352,7 +352,7 @@ func newListenerWatcherV2() *listenerWatcherV2 {
 func (lw *listenerWatcherV2) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
 	lisData, ok := update.(*listenerResourceData)
 	if !ok {
-		lw.errCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("unexpected resource type: %T", update)})
+		lw.errCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
 		onDone()
 		return
 	}
@@ -369,11 +369,11 @@ func (lw *listenerWatcherV2) AmbientError(err error, onDone func()) {
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
-	lw.errCh.Replace(listenerUpdateErrTuple{err: err})
+	lw.errCh.Replace(listenerUpdateErrTuple{ambientErr: err})
 	onDone()
 }
 
 func (lw *listenerWatcherV2) ResourceError(err error, onDone func()) {
-	lw.errCh.Replace(listenerUpdateErrTuple{err: err})
+	lw.errCh.Replace(listenerUpdateErrTuple{resourceErr: err})
 	onDone()
 }

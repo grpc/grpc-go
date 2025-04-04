@@ -233,9 +233,15 @@ func (a *authority) propagateConnectivityErrorToAllWatchers(err error) {
 	for _, rType := range a.resources {
 		for _, state := range rType {
 			for watcher := range state.watchers {
-				a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-					watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
-				})
+				if state.cache == nil {
+					a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
+						watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
+					})
+				} else {
+					a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
+						watcher.AmbientError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
+					})
+				}
 			}
 		}
 	}
@@ -363,7 +369,11 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 				watcher := watcher
 				err := uErr.Err
 				watcherCnt.Add(1)
-				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+				if state.cache == nil {
+					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.ResourceError(err, done) })
+				} else {
+					funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.AmbientError(err, done) })
+				}
 			}
 			continue
 		}
@@ -655,7 +665,11 @@ func (a *authority) watchResource(rType ResourceType, resourceName string, watch
 			// xdsClientSerializer callback. Hence making a copy of the error
 			// here for watchCallbackSerializer.
 			err := state.md.ErrState.Err
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.AmbientError(err, func() {}) })
+			if state.cache == nil {
+				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.ResourceError(err, func() {}) })
+			} else {
+				a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.AmbientError(err, func() {}) })
+			}
 		}
 		// If the metadata field is updated to indicate that the management
 		// server does not have this resource, notify the new watcher.
