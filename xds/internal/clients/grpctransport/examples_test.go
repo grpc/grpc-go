@@ -25,8 +25,15 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 )
 
+// ExampleServerIdentifierExtension demonstrates how to create
+// clients.ServerIdentifier with grpctransport.ServerIdentifierExtension as
+// its extensions.
+//
+// This example is creating clients.ServerIdentifier to connect to server at
+// localhost:5678 using the credentials named "local". Note that "local" must
+// exist as an entry in the provided credentials to grpctransport.Builder.
 func ExampleServerIdentifierExtension() {
-	si := clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"}}
-	fmt.Printf("%+v", si)
+	// Note the Extensions field is set by value and not by pointer.
+	fmt.Printf("%+v", clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"}})
 	// Output: {ServerURI:localhost:5678 Extensions:{Credentials:local}}
 }

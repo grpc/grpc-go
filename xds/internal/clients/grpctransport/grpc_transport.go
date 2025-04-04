@@ -24,7 +24,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -105,8 +104,8 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		return &transportRef{grpcTransport: tr}, nil
 	}
 
-	var creds credentials.Bundle
-	if creds, ok = b.credentials[sce.Credentials]; !ok {
+	creds, ok := b.credentials[sce.Credentials]
+	if !ok {
 		return nil, fmt.Errorf("grpctransport: unknown credentials type %q specified in extensions", sce.Credentials)
 	}
 
@@ -125,13 +124,14 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	tr := &grpcTransport{
 		cc:       cc,
 		refCount: 1,
-		deleteFromServerIdentiferMap: func() {
+		deleteTransport: func() {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 			delete(b.transports, si)
 		}}
 	// Add the newly created transport to the map to re-use the transport.
 	b.transports[si] = tr
+
 	grpcTransportCreateHook()
 	if logger.V(2) {
 		logger.Info("Created a new transport to the server for ServerIdentifier: %v", si)
@@ -140,9 +140,11 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 }
 
 type grpcTransport struct {
-	cc                           *grpc.ClientConn
-	refCount                     int32  // accessed atomically
-	deleteFromServerIdentiferMap func() // called when refCount reaches 0
+	cc *grpc.ClientConn
+
+	mu              sync.Mutex
+	refCount        int32  // accessed atomically
+	deleteTransport func() // called when refCount reaches 0
 }
 
 // NewStream creates a new gRPC stream to the server for the specified method.
@@ -156,21 +158,23 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 
 // Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() error {
-	if g.decrRef() != 0 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.refCount--
+	if g.refCount != 0 {
 		return nil
 	}
 
-	g.deleteFromServerIdentiferMap()
+	g.deleteTransport()
 	grpcTransportCloseHook()
 	return g.cc.Close()
 }
 
-func (g *grpcTransport) incrRef() int32 {
-	return atomic.AddInt32(&g.refCount, 1)
-}
-
-func (g *grpcTransport) decrRef() int32 {
-	return atomic.AddInt32(&g.refCount, -1)
+func (g *grpcTransport) incrRef() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.refCount++
 }
 
 // transportRef is the reference to the underlying gRPC transport.
@@ -180,6 +184,7 @@ type transportRef struct {
 	closed sync.Once
 }
 
+// Close releases the reference to the underlying gRPC transport.
 func (tr *transportRef) Close() error {
 	var err error
 	tr.closed.Do(func() {
