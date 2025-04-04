@@ -103,7 +103,7 @@ func (h *clientTracingHandler) finishTrace(err error, ts trace.Span) {
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) (context.Context, *attemptInfo) {
+func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) (context.Context, *attemptInfo) {
 	// Add a "Delayed name resolution complete" event to the call span
 	// if there was name resolution delay. In case of multiple retry attempts,
 	// ensure that event is added only once.
@@ -139,7 +139,7 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for traces.
-func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ri := getRPCInfo(ctx)
 	if ri == nil {
 		ri = &rpcInfo{}
@@ -150,7 +150,7 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) 
 	} else {
 		ai = ri.ai
 	}
-	ctx, ai = h.traceTagRPC(ctx, ai)
+	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
