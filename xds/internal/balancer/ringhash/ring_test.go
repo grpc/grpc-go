@@ -30,7 +30,7 @@ import (
 )
 
 var testEndpoints []resolver.Endpoint
-var testEndpointStateMap *resolver.EndpointMap
+var testEndpointStateMap *resolver.EndpointMap[*endpointState]
 
 func init() {
 	testEndpoints = []resolver.Endpoint{
@@ -38,7 +38,7 @@ func init() {
 		testEndpoint("b", 3),
 		testEndpoint("c", 4),
 	}
-	testEndpointStateMap = resolver.NewEndpointMap()
+	testEndpointStateMap = resolver.NewEndpointMap[*endpointState]()
 	testEndpointStateMap.Set(testEndpoints[0], &endpointState{firstAddr: "a", weight: 3})
 	testEndpointStateMap.Set(testEndpoints[1], &endpointState{firstAddr: "b", weight: 3})
 	testEndpointStateMap.Set(testEndpoints[2], &endpointState{firstAddr: "c", weight: 4})
