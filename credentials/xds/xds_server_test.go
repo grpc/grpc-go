@@ -70,6 +70,40 @@ func makeClientTLSConfig(t *testing.T, mTLS bool) *tls.Config {
 	}
 }
 
+func makeClientTLSConfigSPIFFE(t *testing.T, mTLS bool) *tls.Config {
+	t.Helper()
+
+	pemData, err := os.ReadFile(testdata.Path("spiffe_end2end/ca.pem"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := x509.NewCertPool()
+	roots.AppendCertsFromPEM(pemData)
+
+	var certs []tls.Certificate
+	if mTLS {
+		cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/client_spiffe.pem"), testdata.Path("spiffe_end2end/client.key"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		certs = append(certs, cert)
+	}
+
+	return &tls.Config{
+		Certificates: certs,
+		RootCAs:      roots,
+		ServerName:   "*.test.example.com",
+		// Setting this to true completely turns off the certificate validation
+		// on the client side. So, the client side handshake always seems to
+		// succeed. But if we want to turn this ON, we will need to generate
+		// certificates which work with localhost, or supply a custom
+		// verification function. So, the server credentials tests will rely
+		// solely on the success/failure of the server-side handshake.
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"h2"},
+	}
+}
+
 // Helper function to create a real TLS server credentials which is used as
 // fallback credentials from multiple tests.
 func makeFallbackServerCreds(t *testing.T) credentials.TransportCredentials {
@@ -326,6 +360,68 @@ func (s) TestServerCredsHandshakeFailure(t *testing.T) {
 	}
 }
 
+// TestServerCredsHandshakeFailure verifies the case where the server-side
+// credentials uses a root certificate which does not match the certificate
+// presented by the client, and hence the handshake must fail.
+func (s) TestServerCredsHandshakeFailureSPIFFE(t *testing.T) {
+	opts := ServerOptions{FallbackCreds: &errorCreds{}}
+	creds, err := NewServerCredentials(opts)
+	if err != nil {
+		t.Fatalf("NewServerCredentials(%v) failed: %v", opts, err)
+	}
+
+	// Create a test server which uses the xDS server credentials created above
+	// to perform TLS handshake on incoming connections.
+	ts := newTestServerWithHandshakeFunc(func(rawConn net.Conn) handshakeResult {
+		// Create a HandshakeInfo which has a root provider which does not match
+		// the certificate sent by the client.
+		hi := xdsinternal.NewHandshakeInfo(makeSPIFFEBundleProvider(t, "spiffe_end2end/client_spiffebundle.json"), makeIdentityProvider(t, "spiffe_end2end/server_spiffe.pem", "spiffe_end2end/server.key"), nil, true)
+
+		// Create a wrapped conn which can return the HandshakeInfo and
+		// configured deadline to the xDS credentials' ServerHandshake()
+		// method.
+		conn := newWrappedConn(rawConn, hi, time.Now().Add(defaultTestTimeout))
+
+		// ServerHandshake() on the xDS credentials is expected to fail.
+		_, _, err := creds.ServerHandshake(conn)
+		if err == nil {
+			return handshakeResult{err: errors.New("ServerHandshake() succeeded when expected to fail")}
+		}
+		wantErrContains := "no bundle found for peer certificates trust domain"
+		if !strings.Contains(err.Error(), wantErrContains) {
+			t.Errorf("ServerHandshake() failed with wrong error. got: %v want: contains %v", err, wantErrContains)
+			return handshakeResult{err: fmt.Errorf("ServerHandshake() failed with wrong error. got: %v want: contains %v", err, wantErrContains)}
+		}
+		return handshakeResult{}
+	})
+	defer ts.stop()
+
+	// Dial the test server, and trigger the TLS handshake.
+	rawConn, err := net.Dial("tcp", ts.address)
+	if err != nil {
+		t.Fatalf("net.Dial(%s) failed: %v", ts.address, err)
+	}
+	defer rawConn.Close()
+	tlsConn := tls.Client(rawConn, makeClientTLSConfigSPIFFE(t, true))
+	tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read handshake result from the testServer which will return an error if
+	// the handshake succeeded.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ts.hsResult.Receive(ctx)
+	if err != nil {
+		t.Fatalf("testServer failed to return handshake result: %v", err)
+	}
+	hsr := val.(handshakeResult)
+	if hsr.err != nil {
+		t.Fatalf("testServer handshake failure: %v", hsr.err)
+	}
+}
+
 // TestServerCredsHandshakeSuccess verifies success handshake cases.
 func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 	tests := []struct {
@@ -334,6 +430,7 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 		rootProvider      certprovider.Provider
 		identityProvider  certprovider.Provider
 		requireClientCert bool
+		useSPIFFECreds    bool
 	}{
 		{
 			desc:          "fallback",
@@ -350,6 +447,14 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 			identityProvider:  makeIdentityProvider(t, "x509/server2_cert.pem", "x509/server2_key.pem"),
 			rootProvider:      makeRootProvider(t, "x509/client_ca_cert.pem"),
 			requireClientCert: true,
+		},
+		{
+			desc:              "mTLS SPIFFE",
+			fallbackCreds:     &errorCreds{},
+			identityProvider:  makeIdentityProvider(t, "spiffe_end2end/server_spiffe.pem", "spiffe_end2end/server.key"),
+			rootProvider:      makeSPIFFEBundleProvider(t, "spiffe_end2end/server_spiffebundle.json"),
+			requireClientCert: true,
+			useSPIFFECreds:    true,
 		},
 	}
 
@@ -397,7 +502,13 @@ func (s) TestServerCredsHandshakeSuccess(t *testing.T) {
 				t.Fatalf("net.Dial(%s) failed: %v", ts.address, err)
 			}
 			defer rawConn.Close()
-			tlsConn := tls.Client(rawConn, makeClientTLSConfig(t, test.requireClientCert))
+			var tlsConn *tls.Conn
+			if test.useSPIFFECreds {
+				tlsConn = tls.Client(rawConn, makeClientTLSConfigSPIFFE(t, test.requireClientCert))
+
+			} else {
+				tlsConn = tls.Client(rawConn, makeClientTLSConfig(t, test.requireClientCert))
+			}
 			tlsConn.SetDeadline(time.Now().Add(defaultTestTimeout))
 			if err := tlsConn.Handshake(); err != nil {
 				t.Fatal(err)
