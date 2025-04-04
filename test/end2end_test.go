@@ -136,6 +136,7 @@ var (
 
 var raceMode bool // set by race.go in race mode
 
+// Note : Do not use this for further tests.
 type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 
@@ -3581,6 +3582,161 @@ func testClientStreamingError(t *testing.T, e env) {
 			t.Fatalf("%v.CloseAndRecv() = %v, want error %s", stream, err, codes.NotFound)
 		}
 		break
+	}
+}
+
+// Tests  to verify that client receive a cardinality violation error for
+// client-streaming RPCs if the server doesn't send a message before returning
+// status OK.
+func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClose(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
+	t.Skip()
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(_ testgrpc.TestService_StreamingInputCallServer) error {
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+
+	_, err = stream.CloseAndRecv()
+	if err == nil {
+		t.Fatalf("stream.CloseAndRecv() = %v, want an error", err)
+	}
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.Internal)
+	}
+}
+
+// Test to verify for client-streaming RPCs, when SendAndClose is called, the server
+// should reset stream after sending the response message successfully.
+// If server calls Recv after, those operations should fail.
+func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
+	t.Skip()
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			sum := 0
+			in, _ := stream.Recv()
+			p := in.GetPayload().GetBody()
+			sum += len(p)
+			stream.SendAndClose(&testpb.StreamingInputCallResponse{
+				AggregatedPayloadSize: int32(sum),
+			})
+			_, err := stream.Recv()
+			if err == nil {
+				logger.Fatalf("stream.Recv() = %v, want an error", err)
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.StreamingInputCallRequest{Payload: payload}
+	for {
+		if err = stream.Send(req); err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for error from server")
+		default:
+		}
+	}
+	_, err = stream.CloseAndRecv()
+	if err != nil {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error", err)
+	}
+	if status.Code(err) != codes.OK {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.OK)
+	}
+}
+
+// Tests the scenario where a client-streaming server sends an error after calling
+// `SendAndClose()`. The error should be ignored by client because RPC should be
+// closed when `SendAndClose()` is called.
+func (s) TestClientStreamingCardinalityViolation_IgnoreServerHandlerErrorAfterSendAndClose(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
+	t.Skip()
+	ss := &stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			sum := 0
+			in, _ := stream.Recv()
+			p := in.GetPayload().GetBody()
+			sum += len(p)
+			stream.SendAndClose(&testpb.StreamingInputCallResponse{
+				AggregatedPayloadSize: int32(sum),
+			})
+			return status.Errorf(codes.Unimplemented, "error for testing")
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := &testpb.StreamingInputCallRequest{
+		Payload: payload,
+	}
+
+	for {
+		if err = stream.Send(req); err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for error from server")
+		default:
+		}
+	}
+	if _, err = stream.CloseAndRecv(); err != nil {
+		t.Fatalf("stream.CloseAndRecv() = %v, want nil", err)
 	}
 }
 
