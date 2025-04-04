@@ -5,7 +5,10 @@ go 1.23.0
 require (
 	github.com/cncf/xds/go v0.0.0-20250326154945-ae57f3c0d45f
 	github.com/prometheus/client_golang v1.21.1
+	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.57.0
+	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.35.0
+	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/sdk/metric v1.35.0
 	golang.org/x/oauth2 v0.28.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463
@@ -68,9 +71,7 @@ require (
 	go.opentelemetry.io/contrib/detectors/gcp v1.35.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
-	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
