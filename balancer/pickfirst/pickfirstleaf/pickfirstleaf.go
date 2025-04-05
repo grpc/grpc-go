@@ -118,11 +118,10 @@ type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, bo balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
-		cc:              cc,
-		target:          bo.Target.String(),
-		metricsRecorder: cc.MetricsRecorder(),
-
-		subConns:              resolver.NewAddressMapV2[*scData](),
+		cc:                    cc,
+		target:                bo.Target.String(),
+		metricsRecorder:       cc.MetricsRecorder(),
+		subConns:              newSubConnMap(),
 		state:                 connectivity.Connecting,
 		cancelConnectionTimer: func() {},
 	}
@@ -220,7 +219,7 @@ type pickfirstBalancer struct {
 	// updates.
 	state connectivity.State
 	// scData for active subonns mapped by address.
-	subConns              *resolver.AddressMapV2[*scData]
+	subConns              *subConnMap
 	addressList           addressList
 	firstPass             bool
 	numTF                 int
@@ -317,7 +316,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	newAddrs = interleaveAddresses(newAddrs)
 
 	prevAddr := b.addressList.currentAddress()
-	prevSCData, found := b.subConns.Get(prevAddr)
+	prevSCData, found := b.subConns.get(prevAddr)
 	prevAddrsCount := b.addressList.size()
 	isPrevRawConnectivityStateReady := found && prevSCData.rawConnectivityState == connectivity.Ready
 	b.addressList.updateAddrs(newAddrs)
@@ -380,17 +379,17 @@ func (b *pickfirstBalancer) startFirstPassLocked() {
 	b.firstPass = true
 	b.numTF = 0
 	// Reset the connection attempt record for existing SubConns.
-	for _, sd := range b.subConns.Values() {
+	for _, sd := range b.subConns.values() {
 		sd.connectionFailedInFirstPass = false
 	}
 	b.requestConnectionLocked()
 }
 
 func (b *pickfirstBalancer) closeSubConnsLocked() {
-	for _, sd := range b.subConns.Values() {
+	for _, sd := range b.subConns.values() {
 		sd.subConn.Shutdown()
 	}
-	b.subConns = resolver.NewAddressMapV2[*scData]()
+	b.subConns = newSubConnMap()
 }
 
 // deDupAddresses ensures that each address appears only once in the slice.
@@ -481,18 +480,18 @@ func addressFamily(address string) ipAddrFamily {
 // This ensures that the subchannel map accurately reflects the current set of
 // addresses received from the name resolver.
 func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address) {
-	newAddrsMap := resolver.NewAddressMapV2[bool]()
+	newAddrsMap := newSubConnMap()
 	for _, addr := range newAddrs {
-		newAddrsMap.Set(addr, true)
+		newAddrsMap.set(addr, nil)
 	}
 
-	for _, oldAddr := range b.subConns.Keys() {
-		if _, ok := newAddrsMap.Get(oldAddr); ok {
+	for _, oldAddr := range b.subConns.keys() {
+		if _, ok := newAddrsMap.get(oldAddr); ok {
 			continue
 		}
-		val, _ := b.subConns.Get(oldAddr)
+		val, _ := b.subConns.get(oldAddr)
 		val.subConn.Shutdown()
-		b.subConns.Delete(oldAddr)
+		b.subConns.deleteKey(oldAddr)
 	}
 }
 
@@ -500,13 +499,13 @@ func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address)
 // becomes ready, which means that all other subConn must be shutdown.
 func (b *pickfirstBalancer) shutdownRemainingLocked(selected *scData) {
 	b.cancelConnectionTimer()
-	for _, sd := range b.subConns.Values() {
+	for _, sd := range b.subConns.values() {
 		if sd.subConn != selected.subConn {
 			sd.subConn.Shutdown()
 		}
 	}
-	b.subConns = resolver.NewAddressMapV2[*scData]()
-	b.subConns.Set(selected.addr, selected)
+	b.subConns = newSubConnMap()
+	b.subConns.set(selected.addr, selected)
 }
 
 // requestConnectionLocked starts connecting on the subchannel corresponding to
@@ -520,7 +519,7 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 	var lastErr error
 	for valid := true; valid; valid = b.addressList.increment() {
 		curAddr := b.addressList.currentAddress()
-		sd, ok := b.subConns.Get(curAddr)
+		sd, ok := b.subConns.get(curAddr)
 		if !ok {
 			var err error
 			// We want to assign the new scData to sd from the outer scope,
@@ -535,7 +534,7 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 				// Do nothing, the LB policy will be closed soon.
 				return
 			}
-			b.subConns.Set(curAddr, sd)
+			b.subConns.set(curAddr, sd)
 		}
 
 		switch sd.rawConnectivityState {
@@ -725,9 +724,9 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// We have finished the first pass, keep re-connecting failing SubConns.
 	switch newState.ConnectivityState {
 	case connectivity.TransientFailure:
-		b.numTF = (b.numTF + 1) % b.subConns.Len()
+		b.numTF = (b.numTF + 1) % b.subConns.length()
 		sd.lastErr = newState.ConnectionError
-		if b.numTF%b.subConns.Len() == 0 {
+		if b.numTF%b.subConns.length() == 0 {
 			b.updateBalancerState(balancer.State{
 				ConnectivityState: connectivity.TransientFailure,
 				Picker:            &picker{err: newState.ConnectionError},
@@ -751,7 +750,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 	}
 	// Connect() has been called on all the SubConns. The first pass can be
 	// ended if all the SubConns have reported a failure.
-	for _, sd := range b.subConns.Values() {
+	for _, sd := range b.subConns.values() {
 		if !sd.connectionFailedInFirstPass {
 			return
 		}
@@ -762,7 +761,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 		Picker:            &picker{err: lastErr},
 	})
 	// Start re-connecting all the SubConns that are already in IDLE.
-	for _, sd := range b.subConns.Values() {
+	for _, sd := range b.subConns.values() {
 		if sd.rawConnectivityState == connectivity.Idle {
 			sd.subConn.Connect()
 		}
@@ -770,7 +769,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 }
 
 func (b *pickfirstBalancer) isActiveSCData(sd *scData) bool {
-	activeSD, found := b.subConns.Get(sd.addr)
+	activeSD, found := b.subConns.get(sd.addr)
 	return found && activeSD == sd
 }
 
