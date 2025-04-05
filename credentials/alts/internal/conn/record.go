@@ -191,7 +191,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 
 		// Decrypt directly into the buffer, avoiding a copy from p.buf if
 		// possible.
-		if cap(b) >= len(ciphertext) {
+		if len(b) >= len(ciphertext) {
 			dec, err := p.crypto.Decrypt(b[:0], ciphertext)
 			if err != nil {
 				return 0, err
