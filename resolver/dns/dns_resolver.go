@@ -58,3 +58,8 @@ func NewBuilder() resolver.Builder {
 func SetMinResolutionInterval(d time.Duration) {
 	dns.MinResolutionInterval = d
 }
+
+// SetRefreshInterval sets the default dns refresh interval. Interval must be greater MinResolutionInterval
+func SetRefreshInterval(d time.Duration) {
+	dns.RefreshInterval = max(d, dns.MinResolutionInterval)
+}

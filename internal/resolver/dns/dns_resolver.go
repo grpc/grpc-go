@@ -58,6 +58,10 @@ var (
 	// after initialization as it's not thread-safe for concurrent modification.
 	ResolvingTimeout = 30 * time.Second
 
+	// RefreshInterval is used as DNS refresh rate. Resolver refresh itself on a periodic interval.
+	// The value configured must be at least MinResolutionInterval. Default value is 0 as disabled.
+	RefreshInterval = time.Duration(0)
+
 	logger = grpclog.Component("dns")
 )
 
@@ -214,6 +218,10 @@ func (d *dnsResolver) watcher() {
 
 		var nextResolutionTime time.Time
 		if err == nil {
+			refreshCh := make(<-chan time.Time, 1)
+			if RefreshInterval > 0 && RefreshInterval >= MinResolutionInterval {
+				refreshCh = internal.TimeAfterFunc(RefreshInterval)
+			}
 			// Success resolving, wait for the next ResolveNow. However, also wait 30
 			// seconds at the very least to prevent constantly re-resolving.
 			backoffIndex = 1
@@ -222,6 +230,7 @@ func (d *dnsResolver) watcher() {
 			case <-d.ctx.Done():
 				return
 			case <-d.rn:
+			case <-refreshCh:
 			}
 		} else {
 			// Poll on an error found in DNS Resolver or an error received from
