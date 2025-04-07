@@ -200,21 +200,32 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	if r.targetResolverState == nil {
 		return nil
 	}
-	curState := *r.targetResolverState
 
-	// Avoid proxy if networktype is not tcp.
-	var networkType string
-	var ok bool
-	if len(curState.Endpoints) != 0 {
-		networkType, ok = networktype.Get(curState.Endpoints[0].Addresses[0])
-	} else {
-		networkType, ok = networktype.Get(curState.Addresses[0])
+	curState := *r.targetResolverState
+	isTcp := false
+
+	for _, addr := range curState.Addresses {
+		if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" {
+			isTcp = true
+			break
+		}
 	}
-	// If the networktype is empty , or not present, tcp is considered as default.
-	if ok && networkType != "tcp" {
+
+	for _, endpoint := range curState.Endpoints {
+		for _, addr := range endpoint.Addresses {
+			if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" || isTcp {
+				isTcp = true
+				break
+			}
+		}
+	}
+
+	// If no addresses returned by resolver have network type as tcp , do not wait for proxy update.
+	if !isTcp {
 		return r.cc.UpdateState(curState)
 	}
-	if r.proxyAddrs == nil { // Wait to get both resolver updates.
+
+	if r.proxyAddrs == nil {
 		return nil
 	}
 
@@ -235,10 +246,15 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	}
 	var addresses []resolver.Address
 	for _, targetAddr := range (*r.targetResolverState).Addresses {
-		addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
-			User:        r.proxyURL.User,
-			ConnectAddr: targetAddr.Addr,
-		}))
+		// Avoid proxy when network is not tcp.
+		if networkType, ok := networktype.Get(targetAddr); ok && networkType != "tcp" {
+			addresses = append(addresses, targetAddr)
+		} else {
+			addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
+				User:        r.proxyURL.User,
+				ConnectAddr: targetAddr.Addr,
+			}))
+		}
 	}
 
 	// Create a list of combined endpoints by pairing all proxy endpoints
@@ -251,12 +267,17 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	var endpoints []resolver.Endpoint
 	for _, endpt := range (*r.targetResolverState).Endpoints {
 		var addrs []resolver.Address
-		for _, proxyAddr := range r.proxyAddrs {
-			for _, targetAddr := range endpt.Addresses {
-				addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
-					User:        r.proxyURL.User,
-					ConnectAddr: targetAddr.Addr,
-				}))
+		for _, targetAddr := range endpt.Addresses {
+			// Avoid proxy when network is not tcp.
+			if networkType, ok := networktype.Get(targetAddr); ok && networkType != "tcp" {
+				addrs = append(addrs, targetAddr)
+			} else {
+				for _, proxyAddr := range r.proxyAddrs {
+					addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
+						User:        r.proxyURL.User,
+						ConnectAddr: targetAddr.Addr,
+					}))
+				}
 			}
 		}
 		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})

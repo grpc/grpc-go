@@ -442,16 +442,16 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 			{
 				Addresses: []resolver.Address{
 					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr1),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
 					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr1),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr2),
 					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr2),
 				},
 			},
 			{
 				Addresses: []resolver.Address{
 					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr3),
-					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr4),
 					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr3),
+					proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, resolvedTargetTestAddr4),
 					proxyAddressWithTargetAttribute(resolvedProxyTestAddr2, resolvedTargetTestAddr4),
 				},
 			},
@@ -763,13 +763,14 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 }
 
 // Tests the scenario where a proxy is configured, and the resolver returns a
-// network type other than tcp. The test verifies that the delegating resolver
-// avoids the proxy update and directly sends the update from target resolver to
-// clientconn.
+// network type other than tcp for all addresses. The test verifies that the
+// delegating resolver avoids the proxy update and directly sends the update
+// from target resolver to clientconn.
 func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
 	const (
 		targetTestAddr          = "test.target"
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
+		resolvedTargetTestAddr2 = "2.2.2.2:8080"
 		envProxyAddr            = "proxytest.com"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -798,20 +799,23 @@ func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
-	proxyResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: "test.proxy"}},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-	select {
-	case <-stateCh:
-		t.Fatalf("Delegating resolver invoked UpdateState unexpectedly")
-	case <-time.After(defaultTestShortTimeout):
-	}
 
 	// Set network to anything other than tcp.
-	addr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
+	nonTcpAddr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
 	targetResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{addr},
+		Addresses:     []resolver.Address{nonTcpAddr},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr}}},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	select {
+	case <-stateCh:
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("Delegating resolver did not call update state")
+	}
+
+	proxyResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: envProxyAddr}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -822,12 +826,88 @@ func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 	wantState := resolver.State{
-		Addresses:     []resolver.Address{addr},
+		Addresses:     []resolver.Address{nonTcpAddr},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
 	// Verify that the state clientconn receives is same as updated by target resolver,
 	// since we want to avoid proxy for any network type aprt from tcp.
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
+	}
+}
+
+// Tests the scenario where a proxy is configured, and the resolver returns addresses with varied
+// network type. The test verifies that the delegating resolver doesnt add
+// proxyatrribute to adresses with network type other than tcp , but adds the
+// proxyattribute to addresses with network type tcp.
+func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
+	const (
+		targetTestAddr          = "test.target"
+		resolvedTargetTestAddr1 = "1.1.1.1:8080"
+		resolvedTargetTestAddr2 = "2.2.2.2:8080"
+		envProxyAddr            = "proxytest.com"
+		resolvedProxyTestAddr1  = "11.11.11.11:7687"
+		resolvedProxyTestAddr2  = "22.22.22.22:7687"
+	)
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		if req.URL.Host == targetTestAddr {
+			return &url.URL{
+				Scheme: "https",
+				Host:   envProxyAddr,
+			}, nil
+		}
+		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, targetTestAddr)
+		return nil, nil
+	}
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
+	defer func() {
+		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
+	}()
+
+	// Manual resolver to control the target resolution.
+	targetResolver := manual.NewBuilderWithScheme("test")
+	target := targetResolver.Scheme() + ":///" + targetTestAddr
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver := setupDNS(t)
+
+	tcc, stateCh, _ := createTestResolverClientConn(t)
+	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
+		t.Fatalf("Failed to create delegating resolver: %v", err)
+	}
+	// Set network to anything other than tcp.
+	nonTcpAddr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
+	targetResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{nonTcpAddr, {Addr: resolvedTargetTestAddr2}},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr, {Addr: resolvedTargetTestAddr2}}}},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	select {
+	case <-stateCh:
+		t.Fatalf("Delegating resolver invoked UpdateState before both the proxy and target resolvers had updated their states.")
+	case <-time.After(defaultTestShortTimeout):
+	}
+
+	proxyResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: envProxyAddr}},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
+
+	var gotState resolver.State
+	select {
+	case gotState = <-stateCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
+	}
+	wantState := resolver.State{
+		Addresses:     []resolver.Address{nonTcpAddr, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)}}},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	}
+
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
 		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
