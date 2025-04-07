@@ -30,31 +30,31 @@ type hashKeyType string
 // a resolver.Endpoint attribute.
 const hashKeyKey = hashKeyType("grpc.resolver.ringhash.hash_key")
 
-// SetHashKey sets the hash key for this endpoint. Combined with the
-// ring_hash load balancing policy, it allows placing the endpoint on the ring
-// based on an arbitrary string instead of the IP address. If hashKey is empty,
-// the endpoint is returned unmodified.
+// SetHashKey sets the hash key for this endpoint. Combined with the ring_hash
+// load balancing policy, it allows placing the endpoint on the ring based on an
+// arbitrary string instead of the IP address. If hashKey is empty, the endpoint
+// is returned unmodified.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SetHashKey(ep resolver.Endpoint, hashKey string) resolver.Endpoint {
+func SetHashKey(endpoint resolver.Endpoint, hashKey string) resolver.Endpoint {
 	if hashKey == "" {
-		return ep
+		return endpoint
 	}
-	ep.Attributes = ep.Attributes.WithValue(hashKeyKey, hashKey)
-	return ep
+	endpoint.Attributes = endpoint.Attributes.WithValue(hashKeyKey, hashKey)
+	return endpoint
 }
 
-// HashKey returns the hash key attribute of addr. If this attribute is not
-// set, it returns the empty string.
+// HashKey returns the hash key attribute of endpoint. If this attribute is
+// not set, it returns the empty string.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func HashKey(ep resolver.Endpoint) string {
-	hashKey, _ := ep.Attributes.Value(hashKeyKey).(string)
+func HashKey(endpoint resolver.Endpoint) string {
+	hashKey, _ := endpoint.Attributes.Value(hashKeyKey).(string)
 	return hashKey
 }
