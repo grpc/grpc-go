@@ -766,7 +766,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 // network type other than tcp for all addresses. The test verifies that the
 // delegating resolver avoids the proxy update and directly sends the update
 // from target resolver to clientconn.
-func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
+func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	const (
 		targetTestAddr          = "test.target"
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
@@ -801,10 +801,10 @@ func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
 	}
 
 	// Set network to anything other than tcp.
-	nonTcpAddr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
+	nonTCPAddr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
 	targetResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{nonTcpAddr},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr}}},
+		Addresses:     []resolver.Address{nonTCPAddr},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTCPAddr}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -826,8 +826,8 @@ func (s) TestDelegatingResolverForNonTcpTarget(t *testing.T) {
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 	wantState := resolver.State{
-		Addresses:     []resolver.Address{nonTcpAddr},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr}}},
+		Addresses:     []resolver.Address{nonTCPAddr},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTCPAddr}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
@@ -878,10 +878,10 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 	// Set network to anything other than tcp.
-	nonTcpAddr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
+	nonTCPAddr := networktype.Set(resolver.Address{Addr: resolvedTargetTestAddr1}, "unix")
 	targetResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{nonTcpAddr, {Addr: resolvedTargetTestAddr2}},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr, {Addr: resolvedTargetTestAddr2}}}},
+		Addresses:     []resolver.Address{nonTCPAddr, {Addr: resolvedTargetTestAddr2}},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTCPAddr, {Addr: resolvedTargetTestAddr2}}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -903,8 +903,8 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 	wantState := resolver.State{
-		Addresses:     []resolver.Address{nonTcpAddr, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTcpAddr, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)}}},
+		Addresses:     []resolver.Address{nonTCPAddr, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTCPAddr, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
