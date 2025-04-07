@@ -3586,9 +3586,8 @@ func testClientStreamingError(t *testing.T, e env) {
 	}
 }
 
-// Tests  to verify that client receive a cardinality violation error for
-// client-streaming RPCs if the server doesn't send a message before returning
-// status OK.
+// Tests that a client receives a cardinality violation error for client-streaming
+// RPCs if the server doesn't send a message before returning status OK.
 func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClose(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
@@ -3638,7 +3637,7 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 			})
 			_, err := stream.Recv()
 			if err == nil {
-				logger.Fatalf("stream.Recv() = %v, want an error", err)
+				t.Errorf("stream.Recv() = nil, want an error")
 			}
 			return nil
 		},
@@ -3678,27 +3677,18 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 	if err != nil {
 		t.Fatalf("stream.CloseAndRecv() = %v, want error", err)
 	}
-	if status.Code(err) != codes.OK {
-		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, codes.OK)
-	}
 }
 
 // Tests the scenario where a client-streaming server sends an error after calling
-// `SendAndClose()`. The error should be ignored by client because RPC should be
-// closed when `SendAndClose()` is called.
+// `SendAndClose()`. The error should be ignored by the client because the RPC
+// should be closed when `SendAndClose()` is called.
 func (s) TestClientStreamingCardinalityViolation_IgnoreServerHandlerErrorAfterSendAndClose(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
 	t.Skip()
 	ss := &stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-			sum := 0
-			in, _ := stream.Recv()
-			p := in.GetPayload().GetBody()
-			sum += len(p)
-			stream.SendAndClose(&testpb.StreamingInputCallResponse{
-				AggregatedPayloadSize: int32(sum),
-			})
+			stream.SendAndClose(&testpb.StreamingInputCallResponse{})
 			return status.Errorf(codes.Unimplemented, "error for testing")
 		},
 	}
@@ -3714,26 +3704,14 @@ func (s) TestClientStreamingCardinalityViolation_IgnoreServerHandlerErrorAfterSe
 	if err != nil {
 		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	req := &testpb.StreamingInputCallRequest{
-		Payload: payload,
-	}
+	req := &testpb.StreamingInputCallRequest{}
 
-	for {
-		if err = stream.Send(req); err == io.EOF {
+	for ctx.Err() == nil {
+		if err := stream.Send(req); err == io.EOF {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("timed out waiting for error from server")
-		default:
 		}
 	}
 	if _, err = stream.CloseAndRecv(); err != nil {
