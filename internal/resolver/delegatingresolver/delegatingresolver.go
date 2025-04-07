@@ -202,26 +202,26 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	}
 
 	curState := *r.targetResolverState
-	isTcp := false
+	isTCP := false
 
 	for _, addr := range curState.Addresses {
 		if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" {
-			isTcp = true
+			isTCP = true
 			break
 		}
 	}
 
 	for _, endpoint := range curState.Endpoints {
 		for _, addr := range endpoint.Addresses {
-			if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" || isTcp {
-				isTcp = true
+			if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" || isTCP {
+				isTCP = true
 				break
 			}
 		}
 	}
 
 	// If no addresses returned by resolver have network type as tcp , do not wait for proxy update.
-	if !isTcp {
+	if !isTCP {
 		return r.cc.UpdateState(curState)
 	}
 
