@@ -101,7 +101,7 @@ func createTestContext(ctx context.Context, s credentials.SecurityLevel) context
 		Method:   "testInfo",
 		AuthInfo: auth,
 	}
-	return credentials.NewRequestInfoContext(ctx, ri)
+	return credentials.NewContextWithRequestInfo(ctx, ri)
 }
 
 // errReader implements the io.Reader interface and returns an error from the

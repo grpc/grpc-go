@@ -207,15 +207,19 @@ type RequestInfo struct {
 	AuthInfo AuthInfo
 }
 
+// requestInfoKey is a struct to be used as the key to store RequestInfo in a
+// context.
+type requestInfoKey struct{}
+
 // RequestInfoFromContext extracts the RequestInfo from the context if it exists.
 //
 // This API is experimental.
 func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
-	ri, ok = icredentials.RequestInfoFromContext(ctx).(RequestInfo)
+	ri, ok = ctx.Value(requestInfoKey{}).(RequestInfo)
 	return ri, ok
 }
 
-// NewRequestInfoContext creates a new context with the given RequestInfo
+// NewContextWithRequestInfo creates a new context with the given RequestInfo
 // attached to it.
 //
 // This RequestInfo will be accessible via RequestInfoFromContext.
@@ -226,8 +230,8 @@ func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 // RequestInfo attached when calling PerRPCCredentials.GetRequestMetadata.
 //
 // This API is experimental.
-func NewRequestInfoContext(ctx context.Context, ri RequestInfo) context.Context {
-	return icredentials.NewRequestInfoContext(ctx, ri)
+func NewContextWithRequestInfo(ctx context.Context, ri RequestInfo) context.Context {
+	return context.WithValue(ctx, requestInfoKey{}, ri)
 }
 
 // ClientHandshakeInfo holds data to be passed to ClientHandshake. This makes
