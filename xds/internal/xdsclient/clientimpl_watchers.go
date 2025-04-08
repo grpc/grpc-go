@@ -64,7 +64,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	}
 
 	if err := c.resourceTypes.maybeRegister(rType); err != nil {
-		logger.Warningf("Watch registered for name %q of type %q which is already registered", rType.TypeName(), resourceName)
+		logger.Warningf("Watch registered for type %q, which is already registered", rType.TypeName())
 		c.serializer.TrySchedule(func(context.Context) { watcher.ResourceError(err, func() {}) })
 		return func() {}
 	}

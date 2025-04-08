@@ -108,21 +108,6 @@ func (rh *rdsHandler) determineRouteConfigurationReady() bool {
 	return len(rh.updates) == len(rh.cancels)
 }
 
-// Must be called from an xDS Client Callback.
-func (rh *rdsHandler) handleRouteUpdate(routeName string, update rdsWatcherUpdate) {
-	rwu := rh.updates[routeName]
-
-	// Accept the new update if any of the following are true:
-	// 1. we had no valid update data.
-	// 2. the update is valid.
-	// 3. the update error is ResourceNotFound.
-	if rwu.data == nil || update.err == nil || xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
-		rwu = update
-	}
-	rh.updates[routeName] = rwu
-	rh.callback(routeName, rwu)
-}
-
 // close() is meant to be called by wrapped listener when the wrapped listener
 // is closed, and it cleans up resources by canceling all the active RDS
 // watches.
@@ -161,7 +146,11 @@ func (rw *rdsWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceDat
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{data: &update.Resource})
+
+	routeName := rw.routeName
+	rwu := rdsWatcherUpdate{data: &update.Resource}
+	rw.parent.updates[routeName] = rwu
+	rw.parent.callback(routeName, rwu)
 }
 
 func (rw *rdsWatcher) ResourceError(err error, onDone func()) {
@@ -172,8 +161,14 @@ func (rw *rdsWatcher) ResourceError(err error, onDone func()) {
 		return
 	}
 	rw.mu.Unlock()
-	rw.logger.Warningf("RDS watch for resource %q reported resource error", rw.routeName)
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
+	if rw.logger.V(2) {
+		rw.logger.Infof("RDS watch for resource %q reported resource error", rw.routeName)
+	}
+
+	routeName := rw.routeName
+	rwu := rdsWatcherUpdate{err: err}
+	rw.parent.updates[routeName] = rwu
+	rw.parent.callback(routeName, rwu)
 }
 
 func (rw *rdsWatcher) AmbientError(err error, onDone func()) {
@@ -187,5 +182,8 @@ func (rw *rdsWatcher) AmbientError(err error, onDone func()) {
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q reported ambient error: %v", rw.routeName, err)
 	}
-	rw.parent.handleRouteUpdate(rw.routeName, rdsWatcherUpdate{err: err})
+	routeName := rw.routeName
+	rwu := rw.parent.updates[routeName]
+	rw.parent.updates[routeName] = rwu
+	rw.parent.callback(routeName, rwu)
 }

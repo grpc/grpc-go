@@ -29,10 +29,10 @@ import "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 type TestResourceWatcher struct {
 	// UpdateCh is the channel on which xDS client updates are delivered.
 	UpdateCh chan *xdsresource.ResourceData
-	// ErrorCh is the channel on which errors from the xDS client are delivered.
-	ErrorCh chan error
-	// ResourceDoesNotExistCh is the channel used to indicate calls to ResourceError
-	ResourceDoesNotExistCh chan struct{}
+	// AmbientErrorCh is the channel on which errors from the xDS client are delivered.
+	AmbientErrorCh chan error
+	// ResourceErrorCh is the channel used to indicate calls to ResourceError.
+	ResourceErrorCh chan struct{}
 }
 
 // ResourceChanged is invoked by the xDS client to report the latest update.
@@ -51,12 +51,12 @@ func (w *TestResourceWatcher) ResourceChanged(data xdsresource.ResourceData, onD
 func (w *TestResourceWatcher) ResourceError(err error, onDone func()) {
 	defer onDone()
 	select {
-	case <-w.ResourceDoesNotExistCh:
-	case <-w.ErrorCh:
+	case <-w.ResourceErrorCh:
+	case <-w.AmbientErrorCh:
 	default:
 	}
-	w.ErrorCh <- err
-	w.ResourceDoesNotExistCh <- struct{}{}
+	w.AmbientErrorCh <- err
+	w.ResourceErrorCh <- struct{}{}
 }
 
 // AmbientError is invoked by the xDS client to report the latest ambient
@@ -64,18 +64,18 @@ func (w *TestResourceWatcher) ResourceError(err error, onDone func()) {
 func (w *TestResourceWatcher) AmbientError(err error, onDone func()) {
 	defer onDone()
 	select {
-	case <-w.ErrorCh:
+	case <-w.AmbientErrorCh:
 	default:
 	}
-	w.ErrorCh <- err
+	w.AmbientErrorCh <- err
 }
 
 // NewTestResourceWatcher returns a TestResourceWatcher to watch for resources
 // via the xDS client.
 func NewTestResourceWatcher() *TestResourceWatcher {
 	return &TestResourceWatcher{
-		UpdateCh:               make(chan *xdsresource.ResourceData, 1),
-		ErrorCh:                make(chan error, 1),
-		ResourceDoesNotExistCh: make(chan struct{}, 1),
+		UpdateCh:        make(chan *xdsresource.ResourceData, 1),
+		AmbientErrorCh:  make(chan error, 1),
+		ResourceErrorCh: make(chan struct{}, 1),
 	}
 }

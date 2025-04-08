@@ -656,8 +656,8 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	}
 
 	// Also make sure that serving mode updates are received. The serving
-	// mode changes to NOT_SERVING. This happens because watcher received an
-	// invalid resource from the server which is not present in cache.
+	// mode changes to NOT_SERVING. This happens because watcher received a
+	// resource error for the invalid resource from the server.
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := modeChangeCh.Receive(sCtx); err == context.DeadlineExceeded {
@@ -696,10 +696,10 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	bootstrapContents := generateBootstrapContents(t, uuid.NewString(), nonExistentManagementServer)
 
 	// Override the default ServingModeCallback with a noop function because the
-	// invalid listener resource will be immediately NACKed by the xDS client
-	// and since the listener resource is not cached, it will trigger multiple
-	// resource error notifications for the same listener resource in quick
-	// successions, leading to service mode change to "not serving" each time.
+	// serverURI is invalid which will result in xDS channel creation failure
+	// while registering the watch for listener resource. This will trigger
+	// resource error notifications for the invalid listener resource leading
+	// to service mode change to "not serving" each time.
 	//
 	// Even if the the server is currently NOT_SERVING, in the case (where we
 	// are NOT_SERVING and the new mode is also NOT_SERVING), the update is not

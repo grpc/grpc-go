@@ -290,7 +290,9 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 
 // Tests the case where a resource, not present in cache, returned by the
 // management server is NACKed by the xDS client, which then returns an update
-// containing a resource error to the resolver.
+// containing a resource error to the resolver. It tests the case where the
+// resolver gets an error update without any previous good update. The test
+// also verifies that these are propagated to the ClientConn.
 func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -319,7 +321,7 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	// Build the resolver and expect an error update from it. Since the
 	// resource is not cached, it should be received as resource error.
 	_, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
-	if err := waitForErrorFromResolver(ctx, errCh, "no valid clusters", nodeID); err != nil {
+	if err := waitForErrorFromResolver(ctx, errCh, "no RouteSpecifier", nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -330,7 +332,8 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 // update is propagated to the ClientConn by the resolver. It tests the
 // case where the resolver gets a good update first, and an error
 // after the good update. The test also verifies that these are propagated to
-// the ClientConn.
+// the ClientConn and that RPC succeeds as expected after receiving good update
+// as well as ambient error.
 func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	// Spin up an xDS management server for the test.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -347,7 +350,13 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
 	// Expect a good update from the resolver.
-	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+
+	// "Make an RPC" by invoking the config selector.
+	_, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
+	}
 
 	// Configure a listener resource that is expected to be NACKed because it
 	// does not contain the `RouteSpecifier` field in the HTTPConnectionManager.
@@ -371,6 +380,13 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
 	if err := waitForErrorFromResolver(ctx, errCh, "no RouteSpecifier", nodeID); err != nil {
 		t.Fatal(err)
+	}
+
+	// "Make an RPC" by invoking the config selector which should succeed by
+	// continuing to use the previously cached resource.
+	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
+	if err != nil {
+		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 }
 
@@ -571,7 +587,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// return an erroring config selector which will fail new RPCs.
 	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
 	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
+	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -678,7 +694,7 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 
 	// "Make another RPC" by invoking the config selector.
 	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
-	if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
+	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -702,7 +718,7 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("Timeout waiting for an error from the resolver: %v", ctx.Err())
 	case err := <-errCh:
-		if err := verifyResolverError(err, codes.Unavailable, "no valid clusters", nodeID); err != nil {
+		if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
 			t.Fatal(err)
 		}
 	}

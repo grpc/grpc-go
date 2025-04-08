@@ -84,8 +84,11 @@ type servingModeChangeHandler struct {
 	logger interface {
 		Logf(format string, args ...any)
 	}
-	modeCh chan connectivity.ServingMode
-	errCh  chan error
+	currentMode connectivity.ServingMode
+	currentErr  error
+	mu          sync.Mutex
+	modeCh      chan connectivity.ServingMode
+	errCh       chan error
 }
 
 func newServingModeChangeHandler(t *testing.T) *servingModeChangeHandler {
@@ -97,10 +100,22 @@ func newServingModeChangeHandler(t *testing.T) *servingModeChangeHandler {
 }
 
 func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.ServingModeChangeArgs) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Suppress pushing duplicate mode change and error if the mode is staying
+	// in NOT_SERVING and the error is the same.
+	if m.currentMode == args.Mode && m.currentMode == connectivity.ServingModeNotServing && m.currentErr.Error() == args.Err.Error() {
+		return
+	}
 	m.logger.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 	m.modeCh <- args.Mode
+	if args.Mode == connectivity.ServingModeServing {
+		m.currentErr = nil
+	}
+	m.currentMode = args.Mode
 	if args.Err != nil {
 		m.errCh <- args.Err
+		m.currentErr = args.Err
 	}
 }
 
@@ -169,8 +184,7 @@ func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.Clie
 			t.Fatalf("RPCs failed with most recent error: %v. Want status code %v, error: %s, node id: %s", err, wantCode, wantErr, wantNodeID)
 		case <-time.After(defaultTestShortTimeout):
 			_, err = client.EmptyCall(ctx, &testpb.Empty{})
-			gotCode := status.Code(err)
-			if gotCode != wantCode {
+			if gotCode := status.Code(err); gotCode != wantCode {
 				continue
 			}
 			if gotErr := err.Error(); !strings.Contains(gotErr, wantErr) {

@@ -357,7 +357,11 @@ func (b *cdsBalancer) ResolverError(err error) {
 		if b.lbCfg != nil {
 			root = b.lbCfg.ClusterName
 		}
-		b.onClusterAmbientError(root, err)
+		if b.childLB != nil {
+			b.onClusterAmbientError(root, err)
+			return
+		}
+		b.onClusterResourceError(root, err)
 	})
 }
 
@@ -474,7 +478,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 			// If the security config is invalid, for example, if the provider
 			// instance is not found in the bootstrap config, we need to put the
 			// channel in transient failure.
-			b.onClusterAmbientError(name, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
+			b.onClusterResourceError(name, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
 			return
 		}
 	}
@@ -482,12 +486,20 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	clustersSeen := make(map[string]bool)
 	dms, ok, err := b.generateDMsForCluster(b.lbCfg.ClusterName, 0, nil, clustersSeen)
 	if err != nil {
-		b.onClusterAmbientError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
+		if b.childLB != nil {
+			b.onClusterAmbientError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
+		} else {
+			b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
+		}
 		return
 	}
 	if ok {
 		if len(dms) == 0 {
-			b.onClusterAmbientError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
+			if b.childLB != nil {
+				b.onClusterAmbientError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
+			} else {
+				b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
+			}
 			return
 		}
 		// Child policy is built the first time we resolve the cluster graph.
@@ -542,33 +554,23 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	}
 }
 
-// Handles an error Cluster update from the xDS client to not stop using the
-// previously seen resource. Propagates the error down to the child policy
-// if one exists, or puts the channel in TRANSIENT_FAILURE.
+// Handles an ambient error Cluster update from the xDS client to not stop
+// using the previously seen resource.
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterAmbientError(name string, err error) {
-	b.logger.Warningf("Cluster resource %q received error update: %v", name, err)
+	b.logger.Warningf("Cluster resource %q received ambient error update: %v", name, err)
 
-	if b.childLB != nil {
-		if xdsresource.ErrType(err) != xdsresource.ErrorTypeConnection {
-			// Connection errors will be sent to the child balancers directly.
-			// There's no need to forward them.
-			b.childLB.ResolverError(err)
-		}
-	} else {
-		// If child balancer was never created, fail the RPCs with
-		// errors.
-		b.ccw.UpdateState(balancer.State{
-			ConnectivityState: connectivity.TransientFailure,
-			Picker:            base.NewErrPicker(fmt.Errorf("%q: %v", name, err)),
-		})
+	if xdsresource.ErrType(err) != xdsresource.ErrorTypeConnection && b.childLB != nil {
+		// Connection errors will be sent to the child balancers directly.
+		// There's no need to forward them.
+		b.childLB.ResolverError(err)
 	}
 }
 
 // Handles an error Cluster update from the xDS client to stop using the
 // previously seen resource. Propagates the error down to the child policy
-// if one exists, or puts the channel in TRANSIENT_FAILURE.
+// if one exists, and puts the channel in TRANSIENT_FAILURE.
 //
 // Only executed in the context of a serializer callback.
 func (b *cdsBalancer) onClusterResourceError(name string, err error) {

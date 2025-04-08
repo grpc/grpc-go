@@ -322,7 +322,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for the connection error to be propagated to the watcher")
-	case <-watcher.ErrorCh:
+	case <-watcher.AmbientErrorCh:
 	}
 
 	// Restart the management server.
@@ -427,9 +427,9 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		case <-sCtx.Done():
 		case <-watcher.UpdateCh:
 			t.Fatal("Unexpected resource update")
-		case <-watcher.ErrorCh:
+		case <-watcher.AmbientErrorCh:
 			t.Fatal("Unexpected resource error")
-		case <-watcher.ResourceDoesNotExistCh:
+		case <-watcher.ResourceErrorCh:
 			t.Fatal("Unexpected resource does not exist")
 		}
 
@@ -437,7 +437,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for error callback to be invoked")
-		case err := <-watcher.ErrorCh:
+		case err := <-watcher.AmbientErrorCh:
 			if err == nil || !strings.Contains(err.Error(), nodeID) {
 				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 			}
@@ -452,7 +452,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for error callback to be invoked")
-		case err := <-watcher.ErrorCh:
+		case err := <-watcher.AmbientErrorCh:
 			if err == nil || !strings.Contains(err.Error(), nodeID) {
 				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 			}
@@ -500,7 +500,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for error callback to be invoked")
-	case err := <-watcher.ErrorCh:
+	case err := <-watcher.AmbientErrorCh:
 		if err == nil || !strings.Contains(err.Error(), nodeID) {
 			t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 		}

@@ -47,16 +47,16 @@ import (
 type blockingListenerWatcher struct {
 	doneNotifierCh chan func()   // DoneNotifier passed to the callback.
 	updateCh       chan struct{} // Written to when an update is received.
-	errorCh        chan struct{} // Written to when an error is received.
-	notFoundCh     chan struct{} // Written to when the resource is not found.
+	ambientErrCh   chan struct{} // Written to when an ambient error is received.
+	resourceErrCh  chan struct{} // Written to when a resource error is received.
 }
 
 func newBLockingListenerWatcher() *blockingListenerWatcher {
 	return &blockingListenerWatcher{
 		doneNotifierCh: make(chan func(), 1),
 		updateCh:       make(chan struct{}, 1),
-		errorCh:        make(chan struct{}, 1),
-		notFoundCh:     make(chan struct{}, 1),
+		ambientErrCh:   make(chan struct{}, 1),
+		resourceErrCh:  make(chan struct{}, 1),
 	}
 }
 
@@ -76,7 +76,7 @@ func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerR
 func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
 	// Notify receipt of an error.
 	select {
-	case lw.notFoundCh <- struct{}{}:
+	case lw.resourceErrCh <- struct{}{}:
 	default:
 	}
 
@@ -89,7 +89,7 @@ func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
 func (lw *blockingListenerWatcher) AmbientError(err error, done func()) {
 	// Notify receipt of an error.
 	select {
-	case lw.errorCh <- struct{}{}:
+	case lw.ambientErrCh <- struct{}{}:
 	default:
 	}
 
@@ -493,7 +493,7 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 
 	// Wait for the resource error to reach the watcher.
 	select {
-	case <-watcher.notFoundCh:
+	case <-watcher.resourceErrCh:
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for error to reach watcher")
 	}
@@ -599,7 +599,7 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 
 	// Wait for the resource not found callback to be invoked.
 	select {
-	case <-watcher.notFoundCh:
+	case <-watcher.resourceErrCh:
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for resource not found callback to be invoked on the watcher")
 	}

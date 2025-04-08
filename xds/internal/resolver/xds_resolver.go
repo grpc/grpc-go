@@ -482,7 +482,7 @@ func (r *xdsResolver) onError(err error) {
 // are removed.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onResourceNotFound() {
+func (r *xdsResolver) onResourceError(err error) {
 	// We cannot remove clusters from the service config that have ongoing RPCs.
 	// Instead, what we can do is to send an erroring config selector
 	// along with normal service config. This will ensure that new RPCs will
@@ -491,7 +491,7 @@ func (r *xdsResolver) onResourceNotFound() {
 	// service config with no addresses. This results in the pick-first
 	// LB policy being configured on the channel, and since there are no
 	// address, pick-first will put the channel in TRANSIENT_FAILURE.
-	cs := newErroringConfigSelector(r.xdsClient.BootstrapConfig().Node().GetId())
+	cs := newErroringConfigSelector(err, r.xdsClient.BootstrapConfig().Node().GetId())
 	r.sendNewServiceConfig(cs)
 
 	// Stop and dereference the active config selector, if one exists.
@@ -555,7 +555,9 @@ func (r *xdsResolver) onListenerResourceAmbientError(err error) {
 
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onListenerResourceError(err error) {
-	r.logger.Warningf("Received resource error for Listener resource %q: %v", r.ldsResourceName, err)
+	if r.logger.V(2) {
+		r.logger.Infof("Received resource error for Listener resource %q: %v", r.ldsResourceName, err)
+	}
 
 	r.listenerUpdateRecvd = false
 	if r.routeConfigWatcher != nil {
@@ -566,7 +568,7 @@ func (r *xdsResolver) onListenerResourceError(err error) {
 	r.routeConfigUpdateRecvd = false
 	r.routeConfigWatcher = nil
 
-	r.onResourceNotFound()
+	r.onResourceError(err)
 }
 
 // Only executed in the context of a serializer callback.
@@ -593,12 +595,14 @@ func (r *xdsResolver) onRouteConfigResourceAmbientError(name string, err error) 
 
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
-	r.logger.Warningf("Received resource error for RouteConfiguration resource %q: %v", name, err)
+	if r.logger.V(2) {
+		r.logger.Infof("Received resource error for RouteConfiguration resource %q: %v", name, err)
+	}
 
 	if r.rdsResourceName != name {
 		return
 	}
-	r.onResourceNotFound()
+	r.onResourceError(err)
 }
 
 // Only executed in the context of a serializer callback.

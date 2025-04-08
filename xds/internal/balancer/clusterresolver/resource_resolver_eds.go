@@ -95,7 +95,9 @@ func (er *edsDiscoveryMechanism) ResourceError(err error, onDone func()) {
 		return
 	}
 
-	er.logger.Warningf("EDS discovery mechanism for resource %q reported resource error: %v", er.nameToWatch, err)
+	if er.logger.V(2) {
+		er.logger.Infof("EDS discovery mechanism for resource %q reported resource error: %v", er.nameToWatch, err)
+	}
 
 	// Report an empty update that would result in no priority child being
 	// created for this discovery mechanism. This would result in the priority
@@ -119,24 +121,4 @@ func (er *edsDiscoveryMechanism) AmbientError(err error, onDone func()) {
 	if er.logger.V(2) {
 		er.logger.Infof("EDS discovery mechanism for resource %q reported ambient error: %v", er.nameToWatch, err)
 	}
-
-	er.mu.Lock()
-	if er.update != nil {
-		// Continue using a previously received good configuration if one
-		// exists.
-		er.mu.Unlock()
-		onDone()
-		return
-	}
-
-	// Else report an empty update that would result in no priority child being
-	// created for this discovery mechanism. This would result in the priority
-	// LB policy reporting TRANSIENT_FAILURE (as there would be no priorities or
-	// localities) if this was the only discovery mechanism, or would result in
-	// the priority LB policy using a lower priority discovery mechanism when
-	// that becomes available.
-	er.update = &xdsresource.EndpointsUpdate{}
-	er.mu.Unlock()
-
-	er.topLevelResolver.onUpdate(onDone)
 }
