@@ -3,17 +3,17 @@ and `client_spiffebundle.json` are generated with the `generate.sh` and
 `generate_intermediate.sh` script in this directory.
 
 These comprise a root trust certificate authority (CA) that signs two
-certificates - `client_spiffe.pem` and `server_spiffe.pem`. These are valid SPIFFE
-certificates (via the configuration in `spiffe-openssl.cnf`), and the
+certificates - `client_spiffe.pem` and `server_spiffe.pem`. These are valid
+SPIFFE certificates (via the configuration in `spiffe-openssl.cnf`), and the
 `*_spiffebundle.json` files are SPIFFE Bundle Maps for the client and server
 respectively.
 
-The SPIFFE trust bundle map files (`*_spiffebundle.json`) are manually created for
-end to end testing. The `server_spiffebundle.json` contains the `foo.bar.com`
-trust domain (only this entry is used in e2e tests) matching URI SAN of
-`client_spiffe.pem`, and the CA certificate is `ca.pem`. The client
-`spiffebundle.json` file contains `example.com` trust domain matching the URI SAN
-of `server_spiffe.pem`, and the CA certificate there is also `ca.pem`.
+The SPIFFE trust bundle map files (`*_spiffebundle.json`) are manually created
+for end to end testing. The `server_spiffebundle.json` contains the
+`foo.bar.com` trust domain (only this entry is used in e2e tests) matching URI
+SAN of `client_spiffe.pem`, and the CA certificate is `ca.pem`. The client
+`spiffebundle.json` file contains `example.com` trust domain matching the URI
+SAN of `server_spiffe.pem`, and the CA certificate there is also `ca.pem`.
 
 `leaf_and_intermediate_chain.pem` is a certificate chain whose leaf is a valid
 SPIFFE cert that is signed by an intermediate CA (`intermediate_ca.pem`). The
