@@ -26,7 +26,6 @@ import (
 	"math"
 	"net"
 	"reflect"
-	"strings"
 	"testing"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
@@ -186,48 +185,6 @@ func testLargeMsg(t *testing.T, rp string) {
 func (s) TestLargeMsg(t *testing.T) {
 	for _, rp := range recordProtocols {
 		testLargeMsg(t, rp)
-	}
-}
-
-// TestLargeRecord writes a very large ALTS record and verifies that the server
-// receives it correctly. The large ALTS record should cause the reader to
-// expand it's read buffer to hold the entire record and store the decrypted
-// message until the receiver reads all of the bytes.
-func (s) TestLargeRecord(t *testing.T) {
-	clientConn, serverConn := newConnPair(rekeyRecordProtocol, nil, nil)
-	msg := []byte(strings.Repeat("a", 2*altsReadBufferInitialSize))
-	// Increase the size of ALTS records written by the client.
-	clientConn.payloadLengthLimit = math.MaxInt32
-	if n, err := clientConn.Write(msg); n != len(msg) || err != nil {
-		t.Fatalf("Write() = %v, %v; want %v, <nil>", n, err, len(msg))
-	}
-	rcvMsg := make([]byte, len(msg))
-	if n, err := io.ReadFull(serverConn, rcvMsg); n != len(rcvMsg) || err != nil {
-		t.Fatalf("Read() = %v, %v; want %v, <nil>", n, err, len(rcvMsg))
-	}
-	if !reflect.DeepEqual(msg, rcvMsg) {
-		t.Fatalf("Write()/Server Read() = %v, want %v", rcvMsg, msg)
-	}
-}
-
-// BenchmarkLargeMessage measures the performance of ALTS conns for sending and
-// receiving a large message.
-func BenchmarkLargeMessage(b *testing.B) {
-	msgLen := 20 * 1024 * 1024 // 20 MiB
-	msg := make([]byte, msgLen)
-	rcvMsg := make([]byte, len(msg))
-	b.ResetTimer()
-	clientConn, serverConn := newConnPair(rekeyRecordProtocol, nil, nil)
-	for range b.N {
-		// Write 20 MiB 5 times to transfer a total of 100 MiB.
-		for range 5 {
-			if n, err := clientConn.Write(msg); n != len(msg) || err != nil {
-				b.Fatalf("Write() = %v, %v; want %v, <nil>", n, err, len(msg))
-			}
-			if n, err := io.ReadFull(serverConn, rcvMsg); n != len(rcvMsg) || err != nil {
-				b.Fatalf("Read() = %v, %v; want %v, <nil>", n, err, len(rcvMsg))
-			}
-		}
 	}
 }
 
