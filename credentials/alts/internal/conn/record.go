@@ -166,7 +166,12 @@ func (p *conn) Read(b []byte) (n int, err error) {
 					panic(fmt.Sprintf("protected buffer length shorter than expected: %d vs %d", len(p.protected), MsgLenFieldSize))
 				}
 				oldProtectedBuf := p.protected
-				p.protected = make([]byte, int(length)+MsgLenFieldSize)
+				// The new buffer must be able to hold the message length header
+				// and the entire message.
+				requiredCapacity := int(length) + MsgLenFieldSize
+				p.protected = make([]byte, requiredCapacity)
+				// Copy the contents of the old buffer and set the length of the
+				// new buffer to the number of bytes already read.
 				copy(p.protected, oldProtectedBuf)
 				p.protected = p.protected[:len(oldProtectedBuf)]
 			}
