@@ -64,13 +64,53 @@ func Test(t *testing.T) {
 
 // Helper function to create a real TLS client credentials which is used as
 // fallback credentials from multiple tests.
-func makeFallbackClientCreds(t *testing.T, useSPIFFECreds bool) credentials.TransportCredentials {
+func makeFallbackClientCreds(t *testing.T, useSPIFFECreds bool, isMTLS bool) credentials.TransportCredentials {
 	var creds credentials.TransportCredentials
 	var err error
 	if useSPIFFECreds {
-		creds, err = credentials.NewClientTLSFromFile(testdata.Path("spiffe_end2end/ca.pem"), "x.test.example.com")
+		if isMTLS {
+			b, err := os.ReadFile(testdata.Path("spiffe_end2end/ca.pem"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cp := x509.NewCertPool()
+			if !cp.AppendCertsFromPEM(b) {
+				t.Fatalf("failed to append certificates")
+			}
+			cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/client_spiffe.pem"), testdata.Path("spiffe_end2end/client.key"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			creds = credentials.NewTLS(&tls.Config{
+				ServerName:   "x.test.example.com",
+				RootCAs:      cp,
+				Certificates: []tls.Certificate{cert},
+			})
+		} else {
+			creds, err = credentials.NewClientTLSFromFile(testdata.Path("spiffe_end2end/ca.pem"), "x.test.example.com")
+		}
 	} else {
-		creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+		if isMTLS {
+			b, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cp := x509.NewCertPool()
+			if !cp.AppendCertsFromPEM(b) {
+				t.Fatalf("failed to append certificates")
+			}
+			cert, err := tls.LoadX509KeyPair(testdata.Path("x509/client1_cert.pem"), testdata.Path("x509/client1_key.pem"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			creds = credentials.NewTLS(&tls.Config{
+				ServerName:   "x.test.example.com",
+				RootCAs:      cp,
+				Certificates: []tls.Certificate{cert},
+			})
+		} else {
+			creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+		}
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +211,7 @@ func testServerTLSHandshake(rawConn net.Conn) handshakeResult {
 // authentication (server does not request for client certificate during the
 // handshake here).
 func testServerTLSHandshakeSPIFFE(rawConn net.Conn) handshakeResult {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/client_spiffe.pem"), testdata.Path("spiffe_end2end/client.key"))
+	cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/server_spiffe.pem"), testdata.Path("spiffe_end2end/server.key"))
 	if err != nil {
 		return handshakeResult{err: err}
 	}
@@ -202,6 +242,7 @@ func testServerMutualTLSHandshake(rawConn net.Conn) handshakeResult {
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    roots,
+		ClientAuth:   tls.RequireAnyClientCert,
 	}
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
@@ -213,7 +254,7 @@ func testServerMutualTLSHandshake(rawConn net.Conn) handshakeResult {
 // A handshake function which simulates a successful handshake with mutual
 // authentication.
 func testServerMutualTLSHandshakeSPIFFE(rawConn net.Conn) handshakeResult {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/client_spiffe.pem"), testdata.Path("spiffe_end2end/client.key"))
+	cert, err := tls.LoadX509KeyPair(testdata.Path("spiffe_end2end/server_spiffe.pem"), testdata.Path("spiffe_end2end/server.key"))
 	if err != nil {
 		return handshakeResult{err: err}
 	}
@@ -226,6 +267,7 @@ func testServerMutualTLSHandshakeSPIFFE(rawConn net.Conn) handshakeResult {
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    roots,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
 	}
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
@@ -359,7 +401,7 @@ func (s) TestClientCredsWithoutFallback(t *testing.T) {
 // HandshakeInfo is invalid because it does not contain the expected certificate
 // providers.
 func (s) TestClientCredsInvalidHandshakeInfo(t *testing.T) {
-	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false)}
+	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false, false)}
 	creds, err := NewClientCredentials(opts)
 	if err != nil {
 		t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
@@ -376,7 +418,7 @@ func (s) TestClientCredsInvalidHandshakeInfo(t *testing.T) {
 // TestClientCredsProviderFailure verifies the cases where an expected
 // certificate provider is missing in the HandshakeInfo value in the context.
 func (s) TestClientCredsProviderFailure(t *testing.T) {
-	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false)}
+	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false, false)}
 	creds, err := NewClientCredentials(opts)
 	if err != nil {
 		t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
@@ -419,6 +461,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 		handshakeFunc    testHandshakeFunc
 		handshakeInfoCtx func(ctx context.Context) context.Context
 		useSPIFFECreds   bool
+		isMTLS           bool
 	}{
 		{
 			desc:          "fallback",
@@ -442,6 +485,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
 				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), defaultTestCertSAN)
 			},
+			isMTLS: true,
 		},
 		{
 			desc:          "mTLS with no acceptedSANs specified",
@@ -449,6 +493,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
 				return newTestContextWithHandshakeInfo(ctx, makeRootProvider(t, "x509/server_ca_cert.pem"), makeIdentityProvider(t, "x509/server1_cert.pem", "x509/server1_key.pem"), "")
 			},
+			isMTLS: true,
 		},
 		{
 			desc:          "SPIFFE TLS",
@@ -465,6 +510,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 				return newTestContextWithHandshakeInfo(ctx, makeSPIFFEBundleProvider(t, "spiffe_end2end/server_spiffebundle.json"), makeIdentityProvider(t, "spiffe_end2end/server_spiffe.pem", "spiffe_end2end/server.key"), defaultTestCertSANSPIFFE)
 			},
 			useSPIFFECreds: true,
+			isMTLS:         true,
 		},
 	}
 
@@ -472,7 +518,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 		t.Run(test.desc, func(t *testing.T) {
 			ts := newTestServerWithHandshakeFunc(test.handshakeFunc)
 			defer ts.stop()
-			opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, test.useSPIFFECreds)}
+			opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, test.useSPIFFECreds, test.isMTLS)}
 			creds, err := NewClientCredentials(opts)
 			if err != nil {
 				t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
@@ -509,7 +555,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 	})
 	defer ts.stop()
 
-	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false)}
+	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false, false)}
 	creds, err := NewClientCredentials(opts)
 	if err != nil {
 		t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
@@ -583,7 +629,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			ts := newTestServerWithHandshakeFunc(test.handshakeFunc)
 			defer ts.stop()
 
-			opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false)}
+			opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false, false)}
 			creds, err := NewClientCredentials(opts)
 			if err != nil {
 				t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
@@ -621,7 +667,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	ts := newTestServerWithHandshakeFunc(testServerTLSHandshake)
 	defer ts.stop()
 
-	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false)}
+	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false, false)}
 	creds, err := NewClientCredentials(opts)
 	if err != nil {
 		t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
@@ -679,7 +725,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 
 // TestClientClone verifies the Clone() method on client credentials.
 func (s) TestClientClone(t *testing.T) {
-	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false)}
+	opts := ClientOptions{FallbackCreds: makeFallbackClientCreds(t, false, false)}
 	orig, err := NewClientCredentials(opts)
 	if err != nil {
 		t.Fatalf("NewClientCredentials(%v) failed: %v", opts, err)
