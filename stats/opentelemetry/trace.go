@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-// OpenCensus's binary format for grpc-trace-bin:
-// https://github.com/census-instrumentation/opencensus-specs/blob/master/
-// encodings/BinaryEncoding.md
-
 package opentelemetry
 
 import (
