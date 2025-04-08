@@ -3622,24 +3622,18 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 // Test to verify for client-streaming RPCs, when SendAndClose is called, the server
 // should reset stream after sending the response message successfully.
 // If server calls Recv after, those operations should fail.
-func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
+func TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
-	t.Skip()
+	// t.Skip()
 	ss := &stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-			sum := 0
-			in, _ := stream.Recv()
-			p := in.GetPayload().GetBody()
-			sum += len(p)
-			stream.SendAndClose(&testpb.StreamingInputCallResponse{
-				AggregatedPayloadSize: int32(sum),
-			})
+			stream.SendAndClose(&testpb.StreamingInputCallResponse{})
 			_, err := stream.Recv()
 			if err == nil {
 				t.Errorf("stream.Recv() = nil, want an error")
 			}
-			return nil
+			return err
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -3677,6 +3671,14 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndCl
 	if err != nil {
 		t.Fatalf("stream.CloseAndRecv() = %v, want error", err)
 	}
+
+	te := newTest(t, tcpClearEnv)
+	te.startServer(ss)
+	defer te.tearDown()
+	te.withServerTester(func(st *serverTester) {
+		st.wantRSTStream(http2.ErrCodeNo) // Expect RST_STREAM with code NO_ERROR (success)
+	})
+
 }
 
 // Tests the scenario where a client-streaming server sends an error after calling
