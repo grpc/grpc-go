@@ -57,7 +57,6 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting
 		// from one for sent messages and one for received messages."
-		ai.countRecvMsg++
 		span.AddEvent("Inbound message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(ai.countRecvMsg)),
 			attribute.Int64("message-size", int64(rs.Length)),
@@ -65,7 +64,6 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		))
 		ai.countRecvMsg++
 	case *stats.OutPayload:
-		ai.countSentMsg++
 		span.AddEvent("Outbound message", trace.WithAttributes(
 			attribute.Int64("sequence-number", int64(ai.countSentMsg)),
 			attribute.Int64("message-size", int64(rs.Length)),
