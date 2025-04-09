@@ -39,9 +39,9 @@ func init() {
 		testEndpoint("c", 4),
 	}
 	testEndpointStateMap = resolver.NewEndpointMap[*endpointState]()
-	testEndpointStateMap.Set(testEndpoints[0], &endpointState{firstAddr: "a", weight: 3})
-	testEndpointStateMap.Set(testEndpoints[1], &endpointState{firstAddr: "b", weight: 3})
-	testEndpointStateMap.Set(testEndpoints[2], &endpointState{firstAddr: "c", weight: 4})
+	testEndpointStateMap.Set(testEndpoints[0], &endpointState{hashKey: "a", weight: 3})
+	testEndpointStateMap.Set(testEndpoints[1], &endpointState{hashKey: "b", weight: 3})
+	testEndpointStateMap.Set(testEndpoints[2], &endpointState{hashKey: "c", weight: 4})
 }
 
 func testEndpoint(addr string, endpointWeight uint32) resolver.Endpoint {
@@ -62,7 +62,7 @@ func (s) TestRingNew(t *testing.T) {
 				for _, e := range testEndpoints {
 					var count int
 					for _, ii := range r.items {
-						if ii.firstAddr == e.Addresses[0].Addr {
+						if ii.hashKey == hashKey(e) {
 							count++
 						}
 					}

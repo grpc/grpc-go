@@ -63,6 +63,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("message-size", int64(rs.Length)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
+		ai.countRecvMsg++
 	case *stats.OutPayload:
 		ai.countSentMsg++
 		span.AddEvent("Outbound message", trace.WithAttributes(
@@ -70,6 +71,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("message-size", int64(rs.Length)),
 			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
 		))
+		ai.countSentMsg++
 	case *stats.End:
 		if rs.Error != nil {
 			s := status.Convert(rs.Error)

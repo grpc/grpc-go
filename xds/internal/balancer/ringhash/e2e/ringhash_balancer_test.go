@@ -26,6 +26,8 @@ import (
 	rand "math/rand/v2"
 	"net"
 	"slices"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,6 +50,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -123,9 +126,10 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	defer cc.Close()
 
 	// Push the address of the test backend through the manual resolver.
-	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx = ringhash.SetXDSRequestHash(ctx, 0)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -469,7 +473,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
@@ -547,7 +551,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 	}
 
 	dnsR := replaceDNSResolver(t)
-	dnsR.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
+	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0]}}})
 
 	if err := xdsServer.Update(ctx, updateOpts); err != nil {
 		t.Fatalf("Failed to update xDS resources: %v", err)
@@ -2541,4 +2545,374 @@ func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
 
 	// Wait for channel to become READY without any pending RPC.
 	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
+}
+
+// Tests that RPCs are routed according to endpoint hash key rather than
+// endpoint first address if it is set in EDS endpoint metadata.
+func (s) TestRingHash_EndpointHashKey(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSEndpointHashKeyBackwardCompat, false)
+
+	backends := backendAddrs(startTestServiceBackends(t, 4))
+
+	const clusterName = "cluster"
+	var backendOpts []e2e.BackendOptions
+	for i, addr := range backends {
+		var ports []uint32
+		ports = append(ports, testutils.ParsePort(t, addr))
+		backendOpts = append(backendOpts, e2e.BackendOptions{
+			Ports:    ports,
+			Metadata: map[string]any{"hash_key": strconv.Itoa(i)},
+		})
+	}
+	endpoints := e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+		ClusterName: clusterName,
+		Host:        "localhost",
+		Localities: []e2e.LocalityOptions{{
+			Backends: backendOpts,
+			Weight:   1,
+		}},
+	})
+	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: clusterName,
+		ServiceName: clusterName,
+		Policy:      e2e.LoadBalancingPolicyRingHash,
+	})
+	route := headerHashRoute("new_route", virtualHostName, clusterName, "address_hash")
+	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	xdsServer, nodeID, xdsResolver := setupManagementServerAndResolver(t)
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	opts := []grpc.DialOption{
+		grpc.WithResolvers(xdsResolver),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	conn, err := grpc.NewClient("xds:///test.server", opts...)
+	if err != nil {
+		t.Fatalf("Failed to create client: %s", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+
+	// Make sure RPCs are routed to backends according to the endpoint metadata
+	// rather than their address. Note each type of RPC contains a header value
+	// that will always be hashed to a specific backend as the header value
+	// matches the endpoint metadata hash key.
+	for i, backend := range backends {
+		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", strconv.Itoa(i)+"_0"))
+		numRPCs := 10
+		reqPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
+		if reqPerBackend[backend] != numRPCs {
+			t.Errorf("Got RPC routed to addresses %v, want all RPCs routed to %v", reqPerBackend, backend)
+		}
+	}
+
+	// Update the endpoints to swap the metadata hash key.
+	for i := range backendOpts {
+		backendOpts[i].Metadata = map[string]any{"hash_key": strconv.Itoa(len(backends) - i - 1)}
+	}
+	endpoints = e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+		ClusterName: clusterName,
+		Host:        "localhost",
+		Localities: []e2e.LocalityOptions{{
+			Backends: backendOpts,
+			Weight:   1,
+		}},
+	})
+	if err := xdsServer.Update(ctx, xdsUpdateOpts(nodeID, endpoints, cluster, route, listener)); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	// Wait for the resolver update to make it to the balancer. This RPC should
+	// be routed to backend 3 with the reverse numbering of the hash_key
+	// attribute delivered above.
+	for {
+		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", "0_0"))
+		var remote peer.Peer
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+			t.Fatalf("Unexpected RPC error waiting for EDS update propagation: %s", err)
+		}
+		if remote.Addr.String() == backends[3] {
+			break
+		}
+	}
+
+	// Now that the balancer has the new endpoint attributes, make sure RPCs are
+	// routed to backends according to the new endpoint metadata.
+	for i, backend := range backends {
+		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", strconv.Itoa(len(backends)-i-1)+"_0"))
+		numRPCs := 10
+		reqPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
+		if reqPerBackend[backend] != numRPCs {
+			t.Errorf("Got RPC routed to addresses %v, want all RPCs routed to %v", reqPerBackend, backend)
+		}
+	}
+}
+
+// Tests that when a request hash key is set in the balancer configuration via
+// service config, this header is used to route to a specific backend.
+func (s) TestRingHash_RequestHashKey(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
+
+	backends := backendAddrs(startTestServiceBackends(t, 4))
+
+	// Create a clientConn with a manual resolver (which is used to push the
+	// address of the test backend), and a default service config pointing to
+	// the use of the ring_hash_experimental LB policy with an explicit hash
+	// header.
+	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"address_hash"}}]}`
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(ringHashServiceConfig),
+		grpc.WithConnectParams(fastConnectParams),
+	}
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	var endpoints []resolver.Endpoint
+	for _, backend := range backends {
+		endpoints = append(endpoints, resolver.Endpoint{
+			Addresses: []resolver.Address{{Addr: backend}},
+		})
+	}
+	r.UpdateState(resolver.State{
+		Endpoints: endpoints,
+	})
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Note each type of RPC contains a header value that will always be hashed
+	// to a specific backend as the header value matches the value used to
+	// create the entry in the ring.
+	for _, backend := range backends {
+		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("address_hash", backend+"_0"))
+		numRPCs := 10
+		reqPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
+		if reqPerBackend[backend] != numRPCs {
+			t.Errorf("Got RPC routed to addresses %v, want all RPCs routed to %v", reqPerBackend, backend)
+		}
+	}
+
+	const ringHashServiceConfigUpdate = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"other_header"}}]}`
+	r.UpdateState(resolver.State{
+		Endpoints:     endpoints,
+		ServiceConfig: (&testutils.ResolverClientConn{}).ParseServiceConfig(ringHashServiceConfigUpdate),
+	})
+
+	// Make sure that requests with the new hash are sent to the right backend.
+	for _, backend := range backends {
+		ctx := metadata.NewOutgoingContext(ctx, metadata.Pairs("other_header", backend+"_0"))
+		numRPCs := 10
+		reqPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
+		if reqPerBackend[backend] != numRPCs {
+			t.Errorf("Got RPC routed to addresses %v, want all RPCs routed to %v", reqPerBackend, backend)
+		}
+	}
+}
+
+// Tests that when a request hash key is set in the balancer configuration via
+// service config, and the header is not set in the outgoing request, then it
+// is sent to a random backend.
+func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
+
+	backends := backendAddrs(startTestServiceBackends(t, 4))
+
+	// Create a clientConn with a manual resolver (which is used to push the
+	// address of the test backend), and a default service config pointing to
+	// the use of the ring_hash_experimental LB policy with an explicit hash
+	// header.
+	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"address_hash"}}]}`
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(ringHashServiceConfig),
+		grpc.WithConnectParams(fastConnectParams),
+	}
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	var endpoints []resolver.Endpoint
+	for _, backend := range backends {
+		endpoints = append(endpoints, resolver.Endpoint{
+			Addresses: []resolver.Address{{Addr: backend}},
+		})
+	}
+	r.UpdateState(resolver.State{
+		Endpoints: endpoints,
+	})
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Due to the way that ring hash lazily establishes connections when using a
+	// random hash, request distribution is skewed towards the order in which we
+	// connected. The test send RPCs until we are connected to all backends, so
+	// we can later assert that the distribution is uniform.
+	seen := make(map[string]bool)
+	for len(seen) != 4 {
+		var remote peer.Peer
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&remote)); err != nil {
+			t.Fatalf("rpc EmptyCall() failed: %v", err)
+		}
+		seen[remote.String()] = true
+	}
+
+	// Make sure that requests with the old hash are sent to random backends.
+	numRPCs := computeIdealNumberOfRPCs(t, .25, errorTolerance)
+	gotPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
+	for _, backend := range backends {
+		got := float64(gotPerBackend[backend]) / float64(numRPCs)
+		want := .25
+		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
+			t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backend, got, want, errorTolerance)
+		}
+	}
+}
+
+// Tests that when a request hash key is set in the balancer configuration via
+// service config, and the header is not set in the outgoing request (random
+// behavior), then each RPC wakes up at most one SubChannel, and, if there are
+// SubChannels in Ready state, RPCs are routed to them.
+func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.RingHashSetRequestHashKey, true)
+
+	backends := backendAddrs(startTestServiceBackends(t, 20))
+
+	// Create a clientConn with a manual resolver (which is used to push the
+	// address of the test backend), and a default service config pointing to
+	// the use of the ring_hash_experimental LB policy with an explicit hash
+	// header. Use a blocking dialer to control connection attempts.
+	const ringHashServiceConfig = `{"loadBalancingConfig": [
+	  {"ring_hash_experimental":{"requestHashHeader":"address_hash"}}
+	]}`
+	r := manual.NewBuilderWithScheme("whatever")
+	blockingDialer := testutils.NewBlockingDialer()
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(ringHashServiceConfig),
+		grpc.WithConnectParams(fastConnectParams),
+		grpc.WithContextDialer(blockingDialer.DialContext),
+	}
+	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("Failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	var endpoints []resolver.Endpoint
+	for _, backend := range backends {
+		endpoints = append(endpoints, resolver.Endpoint{
+			Addresses: []resolver.Address{{Addr: backend}},
+		})
+	}
+	r.UpdateState(resolver.State{
+		Endpoints: endpoints,
+	})
+	client := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Intercept all connection attempts to the backends.
+	var holds []*testutils.Hold
+	for i := 0; i < len(backends); i++ {
+		holds = append(holds, blockingDialer.Hold(backends[i]))
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		// Send 1 RPC and make sure this triggers at most 1 connection attempt.
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		if err != nil {
+			t.Errorf("EmptyCall(): got %v, want success", err)
+		}
+		wg.Done()
+	}()
+	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
+
+	// Check that only one connection attempt was started.
+	nConn := 0
+	for _, hold := range holds {
+		if hold.IsStarted() {
+			nConn++
+		}
+	}
+	if wantMaxConn := 1; nConn > wantMaxConn {
+		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
+	}
+
+	// Do a second RPC. Since there should already be a SubChannel in
+	// Connecting state, this should not trigger a connection attempt.
+	wg.Add(1)
+	go func() {
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		if err != nil {
+			t.Errorf("EmptyCall(): got %v, want success", err)
+		}
+		wg.Done()
+	}()
+
+	// Give extra time for more connections to be attempted.
+	time.Sleep(defaultTestShortTimeout)
+
+	var firstConnectedBackend string
+	nConn = 0
+	for i, hold := range holds {
+		if hold.IsStarted() {
+			// Unblock the connection attempt. The SubChannel (and hence the
+			// channel) should transition to Ready. RPCs should succeed and
+			// be routed to this backend.
+			hold.Resume()
+			holds[i] = nil
+			firstConnectedBackend = backends[i]
+			nConn++
+		}
+	}
+	if wantMaxConn := 1; nConn > wantMaxConn {
+		t.Fatalf("Got %d connection attempts, want at most %d", nConn, wantMaxConn)
+	}
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+	wg.Wait() // Make sure we're done with the 2 previous RPCs.
+
+	// Now send RPCs until we have at least one more connection attempt, that
+	// is, the random hash did not land on the same backend on every pick (the
+	// chances are low, but we don't want this to be flaky). Make sure no RPC
+	// fails and that we route all of them to the only subchannel in ready
+	// state.
+	nConn = 0
+	for nConn == 0 {
+		p := peer.Peer{}
+		_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&p))
+		if status.Code(err) == codes.DeadlineExceeded {
+			t.Fatal("EmptyCall(): test timed out while waiting for more connection attempts")
+		}
+		if err != nil {
+			t.Fatalf("EmptyCall(): got %v, want success", err)
+		}
+		if p.Addr.String() != firstConnectedBackend {
+			t.Errorf("RPC sent to backend %q, want %q", p.Addr.String(), firstConnectedBackend)
+		}
+		for _, hold := range holds {
+			if hold != nil && hold.IsStarted() {
+				nConn++
+			}
+		}
+	}
 }
