@@ -242,7 +242,7 @@ func (lrs *StreamImpl) recvFirstLoadStatsResponse(stream transport.StreamingCall
 	}
 
 	internal := resp.GetLoadReportingInterval()
-	if internal.CheckValid() != nil {
+	if err:= internal.CheckValid(); err != nil {
 		return nil, 0, fmt.Errorf("lrs: invalid load_reporting_interval: %v", err)
 	}
 	loadReportingInterval := internal.AsDuration()
