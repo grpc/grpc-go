@@ -1113,10 +1113,6 @@ func (s) TestSpan(t *testing.T) {
 							Key:   "message-size",
 							Value: attribute.IntValue(10006),
 						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
 					},
 				},
 				{
@@ -1128,10 +1124,6 @@ func (s) TestSpan(t *testing.T) {
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1171,10 +1163,6 @@ func (s) TestSpan(t *testing.T) {
 							Key:   "message-size",
 							Value: attribute.IntValue(10006),
 						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
 					},
 				},
 				{
@@ -1186,10 +1174,6 @@ func (s) TestSpan(t *testing.T) {
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1339,10 +1323,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 							Key:   "message-size",
 							Value: attribute.IntValue(10006),
 						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
 					},
 				},
 				{
@@ -1354,10 +1334,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1397,10 +1373,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 							Key:   "message-size",
 							Value: attribute.IntValue(10006),
 						},
-						{
-							Key:   "message-size-compressed",
-							Value: attribute.IntValue(10006),
-						},
 					},
 				},
 				{
@@ -1412,10 +1384,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
