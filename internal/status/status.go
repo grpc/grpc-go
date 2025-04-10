@@ -129,6 +129,18 @@ func (s *Status) Err() error {
 	return &Error{s: s}
 }
 
+// ErrWrapping returns an error wrapping the provided err, so that its return value satisfies
+// [errors.Is].
+func (s *Status) ErrWrapping(err error) error {
+	if s.Code() == codes.OK {
+		return nil
+	}
+	return &Error{
+		s: s,
+		e: err,
+	}
+}
+
 // WithDetails returns a new status with the provided details messages appended to the status.
 // If any errors are encountered, it returns nil and the first error encountered.
 func (s *Status) WithDetails(details ...protoadapt.MessageV1) (*Status, error) {
@@ -206,6 +218,7 @@ func (s *Status) String() string {
 // and a nil *Error should never be returned by this package.
 type Error struct {
 	s *Status
+	e error
 }
 
 func (e *Error) Error() string {
@@ -215,6 +228,10 @@ func (e *Error) Error() string {
 // GRPCStatus returns the Status represented by se.
 func (e *Error) GRPCStatus() *Status {
 	return e.s
+}
+
+func (e *Error) Unwrap() error {
+	return e.e
 }
 
 // Is implements future error.Is functionality.

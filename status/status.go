@@ -59,6 +59,12 @@ func Error(c codes.Code, msg string) error {
 	return New(c, msg).Err()
 }
 
+// WrappedError returns an error representing c and err. If c is OK, returns nil, regardless of err.
+// The returned error x satisfies [errors.Is](err, x).
+func WrappedError(c codes.Code, err error) error {
+	return New(c, err.Error()).ErrWrapping(err)
+}
+
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
 func Errorf(c codes.Code, format string, a ...any) error {
 	return Error(c, fmt.Sprintf(format, a...))
