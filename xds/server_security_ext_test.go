@@ -29,6 +29,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
@@ -128,7 +129,8 @@ func (s) TestServer_Security_NoCertProvidersInBootstrap_Success(t *testing.T) {
 // client is expected to NACK this resource because the certificate provider
 // instance name specified in the Listener resource will not be present in the
 // bootstrap file. The test verifies that server creation does not fail and that
-// the xDS-enabled gRPC server does not enter "serving" mode.
+// if the xDS-enabled gRPC server receives resource error causing mode change,
+// it does not enter "serving" mode.
 func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -214,14 +216,16 @@ func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testin
 		t.Fatal("Timeout when waiting for an NACK from the xDS client for the LDS response")
 	}
 
-	// Wait a short duration and ensure that the server does not enter "serving"
-	// mode.
+	// Wait a short duration and ensure that if the server receive mode change
+	// it does not enter "serving" mode.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
 	case <-sCtx.Done():
-	case <-modeChangeHandler.modeCh:
-		t.Fatal("Server started serving RPCs before the route config was received")
+	case stateCh := <-modeChangeHandler.modeCh:
+		if stateCh == connectivity.ServingModeServing {
+			t.Fatal("Server entered serving mode before the route config was received")
+		}
 	}
 
 	// Create a client that uses insecure creds and verify that RPCs don't
@@ -245,7 +249,8 @@ func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testin
 //     certificate provider instance
 //
 // The test verifies that an RPC to the first listener succeeds, while the
-// second listener never moves to "serving" mode and RPCs to it fail.
+// second listener receive a resource error which cause the server mode change
+// but never moves to "serving" mode.
 func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -448,12 +453,14 @@ func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing
 		t.Fatal("Timeout when waiting for an NACK from the xDS client for the LDS response")
 	}
 
-	// Wait a short duration and ensure that the server does not enter "serving"
-	// mode.
+	// Wait a short duration and ensure that if the server receives mode change
+	// it does not enter "serving" mode.
 	select {
 	case <-time.After(2 * defaultTestShortTimeout):
 	case <-modeChangeHandler2.modeCh:
-		t.Fatal("Server changed to serving mode when not expected to")
+		if modeChangeHandler2.currentMode == connectivity.ServingModeServing {
+			t.Fatal("Server changed to serving mode when not expected to")
+		}
 	}
 
 	// Create a client that uses insecure creds and verify that RPCs don't

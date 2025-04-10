@@ -36,15 +36,15 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) OnUpdate(_ *xdsresource.ListenerResourceData, onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
 	onDone()
 }
 
-func (noopListenerWatcher) OnError(_ error, onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
 	onDone()
 }
 
-func (noopListenerWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (noopListenerWatcher) AmbientError(_ error, onDone func()) {
 	onDone()
 }
 

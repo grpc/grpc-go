@@ -141,8 +141,8 @@ type erroringConfigSelector struct {
 	err error
 }
 
-func newErroringConfigSelector(xdsNodeID string) *erroringConfigSelector {
-	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Errorf(codes.Unavailable, "no valid clusters"), xdsNodeID)}
+func newErroringConfigSelector(err error, xdsNodeID string) *erroringConfigSelector {
+	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Errorf(codes.Unavailable, err.Error()), xdsNodeID)}
 }
 
 func (cs *erroringConfigSelector) SelectConfig(iresolver.RPCInfo) (*iresolver.RPCConfig, error) {

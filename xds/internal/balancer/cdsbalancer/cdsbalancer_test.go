@@ -1003,7 +1003,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 	// Ensure RPC fails with Unavailable status code and the error message is
 	// meaningful and contains the xDS node ID.
-	wantErr := fmt.Sprintf("cluster %q not found", clusterName)
+	wantErr := fmt.Sprintf("resource %q of type %q has been removed", clusterName, "ClusterResource")
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
 	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
 		t.Fatal(err)

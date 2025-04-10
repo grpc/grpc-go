@@ -307,7 +307,7 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	// Ensure that the connectivity error callback is not called.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if v, err := watcher.errCh.Receive(sCtx); err != context.DeadlineExceeded {
+	if v, err := watcher.ambientErrCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("Error callback on the watcher with error:  %v", v.(error))
 	}
 
@@ -330,7 +330,7 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	secondaryLis.Close()
 
 	// Ensure that the connectivity error callback is called.
-	if _, err := watcher.errCh.Receive(ctx); err != nil {
+	if _, err := watcher.ambientErrCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for error callback on the watcher")
 	}
 }
@@ -338,38 +338,38 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 // TODO: Get rid of the clusterWatcher type in cds_watchers_test.go and use this
 // one instead. Also, rename this to clusterWatcher as part of that refactor.
 type clusterWatcherV2 struct {
-	updateCh           *testutils.Channel // Messages of type xdsresource.ClusterUpdate
-	errCh              *testutils.Channel // Messages of type error
-	resourceNotFoundCh *testutils.Channel // Messages of type error
+	updateCh      *testutils.Channel // Messages of type xdsresource.ClusterUpdate
+	ambientErrCh  *testutils.Channel // Messages of type ambient error
+	resourceErrCh *testutils.Channel // Messages of type resource error
 }
 
 func newClusterWatcherV2() *clusterWatcherV2 {
 	return &clusterWatcherV2{
-		updateCh:           testutils.NewChannel(),
-		errCh:              testutils.NewChannel(),
-		resourceNotFoundCh: testutils.NewChannel(),
+		updateCh:      testutils.NewChannel(),
+		ambientErrCh:  testutils.NewChannel(),
+		resourceErrCh: testutils.NewChannel(),
 	}
 }
 
-func (cw *clusterWatcherV2) OnUpdate(update *xdsresource.ClusterResourceData, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcherV2) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
 	cw.updateCh.Send(update.Resource)
 	onDone()
 }
 
-func (cw *clusterWatcherV2) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcherV2) AmbientError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here simplifies tests that want access to the most recently received
 	// error.
-	cw.errCh.Replace(err)
+	cw.ambientErrCh.Replace(err)
 	onDone()
 }
 
-func (cw *clusterWatcherV2) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (cw *clusterWatcherV2) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here simplifies tests that want access to the most recently received
 	// error.
-	cw.resourceNotFoundCh.Replace(xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "Cluster not found in received response"))
+	cw.resourceErrCh.Replace(err)
 	onDone()
 }
