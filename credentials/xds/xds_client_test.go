@@ -218,6 +218,7 @@ func testServerTLSHandshakeSPIFFE(rawConn net.Conn) handshakeResult {
 	cfg := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		NextProtos:   []string{"h2"},
+		ClientAuth:   tls.NoClientCert,
 	}
 	conn := tls.Server(rawConn, cfg)
 	if err := conn.Handshake(); err != nil {
