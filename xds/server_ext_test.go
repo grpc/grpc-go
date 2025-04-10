@@ -104,19 +104,20 @@ func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.Se
 	defer m.mu.Unlock()
 	// Suppress pushing duplicate mode change and error if the mode is staying
 	// in NOT_SERVING and the error is the same.
+	//
+	// TODO: Should we move this check to listener wrapper? This shouldn't
+	// happen in practice a lot. But we never know what kind of management
+	// servers users run.
 	if m.currentMode == args.Mode && m.currentMode == connectivity.ServingModeNotServing && m.currentErr.Error() == args.Err.Error() {
 		return
 	}
 	m.logger.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 	m.modeCh <- args.Mode
-	if args.Mode == connectivity.ServingModeServing {
-		m.currentErr = nil
-	}
 	m.currentMode = args.Mode
 	if args.Err != nil {
 		m.errCh <- args.Err
-		m.currentErr = args.Err
 	}
+	m.currentErr = args.Err
 }
 
 // createStubServer creates a new xDS-enabled gRPC server and returns a

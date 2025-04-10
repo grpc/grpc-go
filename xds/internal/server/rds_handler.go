@@ -184,6 +184,5 @@ func (rw *rdsWatcher) AmbientError(err error, onDone func()) {
 	}
 	routeName := rw.routeName
 	rwu := rw.parent.updates[routeName]
-	rw.parent.updates[routeName] = rwu
 	rw.parent.callback(routeName, rwu)
 }

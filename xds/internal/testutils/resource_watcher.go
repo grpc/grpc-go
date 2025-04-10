@@ -29,9 +29,11 @@ import "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 type TestResourceWatcher struct {
 	// UpdateCh is the channel on which xDS client updates are delivered.
 	UpdateCh chan *xdsresource.ResourceData
-	// AmbientErrorCh is the channel on which errors from the xDS client are delivered.
+	// AmbientErrorCh is the channel on which ambient errors from the xDS
+	// client are delivered.
 	AmbientErrorCh chan error
-	// ResourceErrorCh is the channel used to indicate calls to ResourceError.
+	// ResourceErrorCh is the channel on which resource errors from the xDS
+	// client are delivered.
 	ResourceErrorCh chan struct{}
 }
 

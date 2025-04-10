@@ -410,6 +410,8 @@ func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, 
 	// the server into a "not serving" mode. This is not ideal, but this is
 	// what we have decided to do.
 	if ilc.Address != l.addr || ilc.Port != l.port {
+		// TODO: Are there any other cases where this can be treated as an
+		// ambient error?
 		l.mu.Lock()
 		err := fmt.Errorf("[xDS node id: %v]: %w", l.xdsNodeID, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
 		l.switchModeLocked(connectivity.ServingModeNotServing, err)

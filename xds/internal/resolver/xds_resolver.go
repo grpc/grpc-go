@@ -459,7 +459,10 @@ func (r *xdsResolver) onResolutionComplete() {
 func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
 	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
 	if matchVh == nil {
-		r.onError(fmt.Errorf("no matching virtual host found for %q", r.dataplaneAuthority))
+		// TODO: Should this be a resource or ambient error? Note that its
+		// being called only from resource update methods when we have finished
+		// removing the previous update.
+		r.onAmbientError(fmt.Errorf("no matching virtual host found for %q", r.dataplaneAuthority))
 		return
 	}
 	r.currentRouteConfig = update
@@ -469,12 +472,12 @@ func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdat
 	r.onResolutionComplete()
 }
 
-// onError propagates the error up to the channel. And since this is invoked
-// only for non resource-not-found errors, we don't have to update resolver
+// onAmbientError propagates the error up to the channel. And since this is
+// invoked only for non resource errors, we don't have to update resolver
 // state and we can keep using the old config.
 //
 // Only executed in the context of a serializer callback.
-func (r *xdsResolver) onError(err error) {
+func (r *xdsResolver) onAmbientError(err error) {
 	r.cc.ReportError(err)
 }
 
@@ -550,7 +553,7 @@ func (r *xdsResolver) onListenerResourceAmbientError(err error) {
 	if r.logger.V(2) {
 		r.logger.Infof("Received ambient error for Listener resource %q: %v", r.ldsResourceName, err)
 	}
-	r.onError(err)
+	r.onAmbientError(err)
 }
 
 // Only executed in the context of a serializer callback.
@@ -590,7 +593,7 @@ func (r *xdsResolver) onRouteConfigResourceAmbientError(name string, err error) 
 	if r.logger.V(2) {
 		r.logger.Infof("Received ambient error for RouteConfiguration resource %q: %v", name, err)
 	}
-	r.onError(err)
+	r.onAmbientError(err)
 }
 
 // Only executed in the context of a serializer callback.
