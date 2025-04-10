@@ -61,7 +61,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("sequence-number", int64(ai.countRecvMsg)),
 			attribute.Int64("message-size", int64(rs.Length)),
 		}
-		if rs.CompressedLength > 0 && rs.CompressedLength != rs.Length {
+		if rs.CompressedLength != rs.Length {
 			attrs = append(attrs, attribute.Int64("message-size-compressed", int64(rs.CompressedLength)))
 		}
 		span.AddEvent("Inbound message", trace.WithAttributes(attrs...))
@@ -71,7 +71,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("sequence-number", int64(ai.countSentMsg)),
 			attribute.Int64("message-size", int64(rs.Length)),
 		}
-		if rs.CompressedLength > 0 && rs.CompressedLength != rs.Length {
+		if rs.CompressedLength != rs.Length {
 			attrs = append(attrs, attribute.Int64("message-size-compressed", int64(rs.CompressedLength)))
 		}
 		span.AddEvent("Outbound message", trace.WithAttributes(attrs...))
