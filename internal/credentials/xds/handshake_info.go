@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 	"unsafe"
 
 	"google.golang.org/grpc/attributes"
@@ -146,7 +145,7 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 		return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
 	}
 	cfg.RootCAs = km.Roots
-	cfg.VerifyPeerCertificate = hi.buildClientVerifyFunc(km)
+	cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, true)
 
 	if idProv != nil {
 		km, err := idProv.KeyMaterial(ctx)
@@ -158,7 +157,7 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 	return cfg, nil
 }
 
-func (hi *HandshakeInfo) buildClientVerifyFunc(km *certprovider.KeyMaterial) func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient bool) func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		// Parse all raw certificates presented by the peer.
 		var certs []*x509.Certificate
@@ -170,15 +169,18 @@ func (hi *HandshakeInfo) buildClientVerifyFunc(km *certprovider.KeyMaterial) fun
 			certs = append(certs, cert)
 		}
 
-		// Build the intermediates list and verify that the leaf certificate
-		// is signed by one of the root certificates.
-
+		// Build the intermediates list and verify that the leaf certificate is
+		// signed by one of the root certificates. If a SPIFFE Bundle Map is
+		// configured, it is used to get the root certs. Otherwise, the
+		// configured roots in the root provider are used.
 		intermediates := x509.NewCertPool()
 		for _, cert := range certs[1:] {
 			intermediates.AddCert(cert)
 		}
 		roots := km.Roots
 		var err error
+		// If a SPIFFE Bundle Map is configured, find the roots for the trust
+		// domain of the leaf certificate.
 		if km.SPIFFEBundleMap != nil {
 			roots, err = spiffe.GetRootsFromSPIFFEBundleMap(km.SPIFFEBundleMap, certs[0])
 			if err != nil {
@@ -186,10 +188,14 @@ func (hi *HandshakeInfo) buildClientVerifyFunc(km *certprovider.KeyMaterial) fun
 			}
 		}
 		opts := x509.VerifyOptions{
-			CurrentTime:   time.Now(),
 			Roots:         roots,
 			Intermediates: intermediates,
 			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}
+		if isClient {
+			opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		} else {
+			opts.KeyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 		}
 		if _, err := certs[0].Verify(opts); err != nil {
 			return err
@@ -244,59 +250,12 @@ func (hi *HandshakeInfo) ServerSideTLSConfig(ctx context.Context) (*tls.Config, 
 			if cfg.ClientAuth >= tls.VerifyClientCertIfGiven {
 				cfg.ClientAuth = tls.RequireAnyClientCert
 			}
-			cfg.VerifyPeerCertificate = hi.buildServerVerifyFunc(km)
+			cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, false)
 		} else {
 			cfg.ClientCAs = km.Roots
 		}
 	}
 	return cfg, nil
-}
-
-func (hi *HandshakeInfo) buildServerVerifyFunc(km *certprovider.KeyMaterial) func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-		// Parse all raw certificates presented by the peer.
-		var certs []*x509.Certificate
-		for _, rc := range rawCerts {
-			cert, err := x509.ParseCertificate(rc)
-			if err != nil {
-				return err
-			}
-			certs = append(certs, cert)
-		}
-
-		// Build the intermediates list and verify that the leaf certificate
-		// is signed by one of the root certificates.
-
-		intermediates := x509.NewCertPool()
-		for _, cert := range certs[1:] {
-			intermediates.AddCert(cert)
-		}
-		roots := km.Roots
-		var err error
-		if km.SPIFFEBundleMap != nil {
-			roots, err = spiffe.GetRootsFromSPIFFEBundleMap(km.SPIFFEBundleMap, certs[0])
-			if err != nil {
-				return err
-			}
-		}
-		opts := x509.VerifyOptions{
-			CurrentTime:   time.Now(),
-			Roots:         roots,
-			Intermediates: intermediates,
-			KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		}
-		if _, err := certs[0].Verify(opts); err != nil {
-			return err
-		}
-		// The SANs sent by the MeshCA are encoded as SPIFFE IDs. We need to
-		// only look at the SANs on the leaf cert.
-		if cert := certs[0]; !hi.MatchingSANExists(cert) {
-			// TODO: Print the complete certificate once the x509 package
-			// supports a String() method on the Certificate type.
-			return fmt.Errorf("xds: received SANs {DNSNames: %v, EmailAddresses: %v, IPAddresses: %v, URIs: %v} do not match any of the accepted SANs", cert.DNSNames, cert.EmailAddresses, cert.IPAddresses, cert.URIs)
-		}
-		return nil
-	}
 }
 
 // MatchingSANExists returns true if the SANs contained in cert match the

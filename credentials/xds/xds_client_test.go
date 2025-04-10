@@ -49,7 +49,7 @@ import (
 const (
 	authority                = "authority"
 	defaultTestCertSAN       = "abc.test.example.com"
-	defaultTestCertSANSPIFFE = "spiffe://foo.bar.com/9eebccd2-12bf-40a6-b262-65fe0487d453"
+	defaultTestCertSANSPIFFE = "*.test.google.fr"
 	defaultTestShortTimeout  = 10 * time.Millisecond
 	defaultTestTimeout       = 1 * time.Second
 )
@@ -499,7 +499,7 @@ func (s) TestClientCredsSuccess(t *testing.T) {
 			desc:          "SPIFFE TLS",
 			handshakeFunc: testServerTLSHandshakeSPIFFE,
 			handshakeInfoCtx: func(ctx context.Context) context.Context {
-				return newTestContextWithHandshakeInfo(ctx, makeSPIFFEBundleProvider(t, "spiffe_end2end/server_spiffebundle.json"), nil, defaultTestCertSANSPIFFE)
+				return newTestContextWithHandshakeInfo(ctx, makeSPIFFEBundleProvider(t, "spiffe_end2end/client_spiffebundle.json"), nil, defaultTestCertSANSPIFFE)
 			},
 			useSPIFFECreds: true,
 		},
@@ -617,7 +617,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 		{
 			desc:           "SPIFFE Bundle validation failure",
 			handshakeFunc:  testServerTLSHandshakeSPIFFE,
-			rootProvider:   makeSPIFFEBundleProvider(t, "spiffe_end2end/client_spiffebundle.json"),
+			rootProvider:   makeSPIFFEBundleProvider(t, "spiffe_end2end/server_spiffebundle.json"),
 			san:            defaultTestCertSANSPIFFE,
 			useSPIFFECreds: true,
 			wantErr:        "no bundle found for peer certificates",
