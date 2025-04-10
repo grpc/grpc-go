@@ -974,8 +974,8 @@ func Errorf(c codes.Code, format string, a ...any) error {
 	return status.Errorf(c, format, a...)
 }
 
-var errContextCanceled = status.Error(codes.Canceled, context.Canceled.Error())
-var errContextDeadline = status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())
+var errContextCanceled = status.WrappedError(codes.Canceled, context.Canceled)
+var errContextDeadline = status.WrappedError(codes.DeadlineExceeded, context.DeadlineExceeded)
 
 // toRPCErr converts an error into an error from the status package.
 func toRPCErr(err error) error {
