@@ -24,10 +24,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/proxyattributes"
+	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -189,6 +191,58 @@ func (r *delegatingResolver) Close() {
 	r.proxyResolver = nil
 }
 
+// parseDialTarget returns the network and address to pass to dialer.
+func parseDialTarget(target string) (string, string) {
+	net := "tcp"
+	m1 := strings.Index(target, ":")
+	m2 := strings.Index(target, ":/")
+	// handle unix:addr which will fail with url.Parse
+	if m1 >= 0 && m2 < 0 {
+		if n := target[0:m1]; n == "unix" {
+			return n, target[m1+1:]
+		}
+	}
+	if m2 >= 0 {
+		t, err := url.Parse(target)
+		if err != nil {
+			return net, target
+		}
+		scheme := t.Scheme
+		addr := t.Path
+		if scheme == "unix" {
+			if addr == "" {
+				addr = t.Host
+			}
+			return scheme, addr
+		}
+	}
+	return net, target
+}
+
+func networkTypeFromAddr(addr resolver.Address) (string, resolver.Address) {
+	networkType, ok := networktype.Get(addr)
+	if !ok {
+		networkType, addr.Addr = parseDialTarget(addr.Addr)
+	}
+	return networkType, addr
+}
+
+func tcpAddressPresent(state *resolver.State) bool {
+	for _, addr := range state.Addresses {
+		if networkType, _ := networkTypeFromAddr(addr); networkType == "tcp" {
+			return true
+		}
+	}
+	for _, endpoint := range state.Endpoints {
+		for _, addr := range endpoint.Addresses {
+			if networktype, _ := networkTypeFromAddr(addr); networktype == "tcp" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // updateClientConnStateLocked creates a list of combined addresses by
 // pairing each proxy address with every target address. For each pair, it
 // generates a new [resolver.Address] using the proxy address, and adding the
@@ -196,11 +250,21 @@ func (r *delegatingResolver) Close() {
 // either resolver has not sent update even once and returns the error from
 // ClientConn update once both resolvers have sent update atleast once.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
-	if r.targetResolverState == nil || r.proxyAddrs == nil {
+	if r.targetResolverState == nil {
 		return nil
 	}
 
 	curState := *r.targetResolverState
+
+	// If no addresses returned by resolver have network type as tcp , do not wait for proxy update.
+	if !tcpAddressPresent(r.targetResolverState) {
+		return r.cc.UpdateState(curState)
+	}
+
+	if r.proxyAddrs == nil {
+		return nil
+	}
+
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
 	// resolution when creating the transport. Sending all resolved addresses
@@ -218,6 +282,11 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	}
 	var addresses []resolver.Address
 	for _, targetAddr := range (*r.targetResolverState).Addresses {
+		// Avoid proxy when network is not tcp.
+		if networkType, targetAddr := networkTypeFromAddr(targetAddr); networkType != "tcp" {
+			addresses = append(addresses, targetAddr)
+			continue
+		}
 		addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 			User:        r.proxyURL.User,
 			ConnectAddr: targetAddr.Addr,
@@ -234,8 +303,13 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	var endpoints []resolver.Endpoint
 	for _, endpt := range (*r.targetResolverState).Endpoints {
 		var addrs []resolver.Address
-		for _, proxyAddr := range r.proxyAddrs {
-			for _, targetAddr := range endpt.Addresses {
+		for _, targetAddr := range endpt.Addresses {
+			// Avoid proxy when network is not tcp.
+			if networkType, targetAddr := networkTypeFromAddr(targetAddr); networkType != "tcp" {
+				addrs = append(addrs, targetAddr)
+				continue
+			}
+			for _, proxyAddr := range r.proxyAddrs {
 				addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
 					User:        r.proxyURL.User,
 					ConnectAddr: targetAddr.Addr,
