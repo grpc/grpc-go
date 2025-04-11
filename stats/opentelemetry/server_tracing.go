@@ -33,7 +33,7 @@ import (
 // If TextMapPropagator is not provided in the trace options, it returns context
 // as is.
 func (h *serverStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
-	mn := strings.Replace(ai.method, "/", ".", -1)
+	mn := "Recv." + strings.Replace(ai.method, "/", ".", -1)
 	var span trace.Span
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx = h.options.TraceOptions.TextMapPropagator.Extract(ctx, otelinternaltracing.NewIncomingCarrier(ctx))
