@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
@@ -190,6 +191,58 @@ func (r *delegatingResolver) Close() {
 	r.proxyResolver = nil
 }
 
+// parseDialTarget returns the network and address to pass to dialer.
+func parseDialTarget(target string) (string, string) {
+	net := "tcp"
+	m1 := strings.Index(target, ":")
+	m2 := strings.Index(target, ":/")
+	// handle unix:addr which will fail with url.Parse
+	if m1 >= 0 && m2 < 0 {
+		if n := target[0:m1]; n == "unix" {
+			return n, target[m1+1:]
+		}
+	}
+	if m2 >= 0 {
+		t, err := url.Parse(target)
+		if err != nil {
+			return net, target
+		}
+		scheme := t.Scheme
+		addr := t.Path
+		if scheme == "unix" {
+			if addr == "" {
+				addr = t.Host
+			}
+			return scheme, addr
+		}
+	}
+	return net, target
+}
+
+func networkTypeFromAddr(addr resolver.Address) (string, resolver.Address) {
+	networkType, ok := networktype.Get(addr)
+	if !ok {
+		networkType, addr.Addr = parseDialTarget(addr.Addr)
+	}
+	return networkType, addr
+}
+
+func tcpAddressPresent(state *resolver.State) bool {
+	for _, addr := range state.Addresses {
+		if networkType, _ := networkTypeFromAddr(addr); networkType == "tcp" {
+			return true
+		}
+	}
+	for _, endpoint := range state.Endpoints {
+		for _, addr := range endpoint.Addresses {
+			if networktype, _ := networkTypeFromAddr(addr); networktype == "tcp" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // updateClientConnStateLocked creates a list of combined addresses by
 // pairing each proxy address with every target address. For each pair, it
 // generates a new [resolver.Address] using the proxy address, and adding the
@@ -202,26 +255,9 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	}
 
 	curState := *r.targetResolverState
-	isTCP := false
-
-	for _, addr := range curState.Addresses {
-		if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" {
-			isTCP = true
-			break
-		}
-	}
-
-	for _, endpoint := range curState.Endpoints {
-		for _, addr := range endpoint.Addresses {
-			if networkType, ok := networktype.Get(addr); !ok || networkType == "tcp" || isTCP {
-				isTCP = true
-				break
-			}
-		}
-	}
 
 	// If no addresses returned by resolver have network type as tcp , do not wait for proxy update.
-	if !isTCP {
+	if !tcpAddressPresent(r.targetResolverState) {
 		return r.cc.UpdateState(curState)
 	}
 
@@ -247,14 +283,14 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	var addresses []resolver.Address
 	for _, targetAddr := range (*r.targetResolverState).Addresses {
 		// Avoid proxy when network is not tcp.
-		if networkType, ok := networktype.Get(targetAddr); ok && networkType != "tcp" {
+		if networkType, targetAddr := networkTypeFromAddr(targetAddr); networkType != "tcp" {
 			addresses = append(addresses, targetAddr)
-		} else {
-			addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
-				User:        r.proxyURL.User,
-				ConnectAddr: targetAddr.Addr,
-			}))
+			continue
 		}
+		addresses = append(addresses, proxyattributes.Set(proxyAddr, proxyattributes.Options{
+			User:        r.proxyURL.User,
+			ConnectAddr: targetAddr.Addr,
+		}))
 	}
 
 	// Create a list of combined endpoints by pairing all proxy endpoints
@@ -269,15 +305,15 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		var addrs []resolver.Address
 		for _, targetAddr := range endpt.Addresses {
 			// Avoid proxy when network is not tcp.
-			if networkType, ok := networktype.Get(targetAddr); ok && networkType != "tcp" {
+			if networkType, targetAddr := networkTypeFromAddr(targetAddr); networkType != "tcp" {
 				addrs = append(addrs, targetAddr)
-			} else {
-				for _, proxyAddr := range r.proxyAddrs {
-					addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
-						User:        r.proxyURL.User,
-						ConnectAddr: targetAddr.Addr,
-					}))
-				}
+				continue
+			}
+			for _, proxyAddr := range r.proxyAddrs {
+				addrs = append(addrs, proxyattributes.Set(proxyAddr, proxyattributes.Options{
+					User:        r.proxyURL.User,
+					ConnectAddr: targetAddr.Addr,
+				}))
 			}
 		}
 		endpoints = append(endpoints, resolver.Endpoint{Addresses: addrs})
