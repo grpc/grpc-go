@@ -459,9 +459,9 @@ func (r *xdsResolver) onResolutionComplete() {
 func (r *xdsResolver) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
 	matchVh := xdsresource.FindBestMatchingVirtualHost(r.dataplaneAuthority, update.VirtualHosts)
 	if matchVh == nil {
-		// TODO: Should this be a resource or ambient error? Note that its
-		// being called only from resource update methods when we have finished
-		// removing the previous update.
+		// TODO(purnesh42h): Should this be a resource or ambient error? Note
+		// that its being called only from resource update methods when we have
+		// finished removing the previous update.
 		r.onAmbientError(fmt.Errorf("no matching virtual host found for %q", r.dataplaneAuthority))
 		return
 	}

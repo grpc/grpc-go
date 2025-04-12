@@ -105,9 +105,9 @@ func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.Se
 	// Suppress pushing duplicate mode change and error if the mode is staying
 	// in NOT_SERVING and the error is the same.
 	//
-	// TODO: Should we move this check to listener wrapper? This shouldn't
-	// happen in practice a lot. But we never know what kind of management
-	// servers users run.
+	// TODO(purnesh42h): Should we move this check to listener wrapper? This
+	// shouldn't happen in practice a lot. But we never know what kind of
+	// management servers users run.
 	if m.currentMode == args.Mode && m.currentMode == connectivity.ServingModeNotServing && m.currentErr.Error() == args.Err.Error() {
 		return
 	}

@@ -357,11 +357,7 @@ func (b *cdsBalancer) ResolverError(err error) {
 		if b.lbCfg != nil {
 			root = b.lbCfg.ClusterName
 		}
-		if b.childLB != nil {
-			b.onClusterAmbientError(root, err)
-			return
-		}
-		b.onClusterResourceError(root, err)
+		b.onClusterError(root, err)
 	})
 }
 
@@ -478,11 +474,7 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 			// If the security config is invalid, for example, if the provider
 			// instance is not found in the bootstrap config, we need to put the
 			// channel in transient failure.
-			if b.childLB != nil {
-				b.onClusterAmbientError(name, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
-			} else {
-				b.onClusterResourceError(name, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
-			}
+			b.onClusterError(name, b.annotateErrorWithNodeID(fmt.Errorf("received Cluster resource contains invalid security config: %v", err)))
 			return
 		}
 	}
@@ -490,20 +482,12 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	clustersSeen := make(map[string]bool)
 	dms, ok, err := b.generateDMsForCluster(b.lbCfg.ClusterName, 0, nil, clustersSeen)
 	if err != nil {
-		if b.childLB != nil {
-			b.onClusterAmbientError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
-		} else {
-			b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
-		}
+		b.onClusterError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("failed to generate discovery mechanisms: %v", err)))
 		return
 	}
 	if ok {
 		if len(dms) == 0 {
-			if b.childLB != nil {
-				b.onClusterAmbientError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
-			} else {
-				b.onClusterResourceError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
-			}
+			b.onClusterError(b.lbCfg.ClusterName, b.annotateErrorWithNodeID(fmt.Errorf("aggregate cluster graph has no leaf clusters")))
 			return
 		}
 		// Child policy is built the first time we resolve the cluster graph.
@@ -680,6 +664,14 @@ func (b *cdsBalancer) generateDMsForCluster(name string, depth int, dms []cluste
 	dm.TelemetryLabels = cluster.TelemetryLabels
 
 	return append(dms, dm), true, nil
+}
+
+func (b *cdsBalancer) onClusterError(name string, err error) {
+	if b.childLB != nil {
+		b.onClusterAmbientError(name, err)
+	} else {
+		b.onClusterResourceError(name, err)
+	}
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
