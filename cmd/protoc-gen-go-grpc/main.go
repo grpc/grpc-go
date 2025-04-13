@@ -36,6 +36,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -59,6 +60,9 @@ func main() {
 	requireUnimplemented = flags.Bool("require_unimplemented_servers", true, "set to false to match legacy behavior")
 	useGenericStreams = flags.Bool("use_generic_streams_experimental", true, "set to true to use generic types for streaming client and server objects; this flag is EXPERIMENTAL and may be changed or removed in a future release")
 
+	var grpcMapping mappingFlag
+	flags.Var(&grpcMapping, "grpc_mapping", "change proto file go_package option, should be like xxx.proto=go_package. Multiple OK")
+
 	protogen.Options{
 		ParamFunc: flags.Set,
 	}.Run(func(gen *protogen.Plugin) error {
@@ -69,8 +73,29 @@ func main() {
 			if !f.Generate {
 				continue
 			}
-			generateFile(gen, f)
+			generateFile(gen, grpcMapping, f)
 		}
 		return nil
 	})
+}
+
+type mappingFlag map[string]string
+
+func (a *mappingFlag) String() string {
+	return fmt.Sprintf("%v", *a)
+}
+
+func (a *mappingFlag) Set(value string) error {
+	k, v, ok := strings.Cut(value, "=")
+	if !ok {
+		return fmt.Errorf("invalid grpc_mapping: %v", value)
+	}
+	if k == "" || v == "" {
+		return fmt.Errorf("invalid grpc_mapping: %v", value)
+	}
+	if *a == nil {
+		*a = make(mappingFlag)
+	}
+	(*a)[k] = v
+	return nil
 }
