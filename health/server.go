@@ -74,7 +74,7 @@ func (s *Server) List(_ context.Context, _ *healthpb.HealthListRequest) (*health
 	defer s.mu.RUnlock()
 
 	if len(s.statusMap) > maxAllowedServices {
-		return nil, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")
+		return nil, status.Errorf(codes.ResourceExhausted, "server health list exceeds maximum capacity: %d", maxAllowedServices)
 	}
 
 	statusMap := make(map[string]*healthpb.HealthCheckResponse, len(s.statusMap))

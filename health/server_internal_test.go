@@ -87,9 +87,9 @@ func (s) TestShutdown(t *testing.T) {
 	}
 }
 
-// TestList verifies successful listing of all service health statuses.
+// TestList verifies that List() returns the health status of all the services if no. of services are within
+// maxAllowedLimits
 func (s) TestList(t *testing.T) {
-	// Setup
 	s := NewServer()
 	s.mu.Lock()
 	// Remove the zero value
@@ -100,13 +100,11 @@ func (s) TestList(t *testing.T) {
 	}
 	s.mu.Unlock()
 
-	// Execution
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var in healthpb.HealthListRequest
 	out, err := s.List(ctx, &in)
 
-	// Assertions
 	if err != nil {
 		t.Fatalf("s.List(ctx, &in) returned err %v, want nil", err)
 	}
@@ -119,15 +117,14 @@ func (s) TestList(t *testing.T) {
 			t.Fatalf("key %s does not exist in s.statusMap", key)
 		}
 		if v != healthpb.HealthCheckResponse_SERVING {
-			t.Fatalf("%s returned the wrong status, wanted %d, got %d", key, healthpb.HealthCheckResponse_SERVING, v)
+			t.Fatalf("%s returned status %d, want %d", key, healthpb.HealthCheckResponse_SERVING, v)
 		}
 	}
 }
 
-// TestListResourceExhausted verifies that the service status list returns an error when it exceeds
+// TestListResourceExhausted verifies that List() returns a ResourceExhausted error if no. of services are more than
 // maxAllowedServices.
 func (s) TestListResourceExhausted(t *testing.T) {
-	// Setup
 	s := NewServer()
 	s.mu.Lock()
 	// Remove the zero value
@@ -139,17 +136,15 @@ func (s) TestListResourceExhausted(t *testing.T) {
 	}
 	s.mu.Unlock()
 
-	// Execution
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var in healthpb.HealthListRequest
 	_, err := s.List(ctx, &in)
 
-	// Assertions
 	if err == nil {
 		t.Fatalf("s.List(ctx, &in) return nil error, want non-nil")
 	}
-	if !errors.Is(err, status.Error(codes.ResourceExhausted, "server health list exceeds maximum capacity (100)")) {
+	if !errors.Is(err, status.Errorf(codes.ResourceExhausted, "server health list exceeds maximum capacity: %d", maxAllowedServices)) {
 		t.Fatal("List should have failed with resource exhausted")
 	}
 }
