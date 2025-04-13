@@ -56,21 +56,18 @@ type HealthClient interface {
 	//
 	// Clients should set a deadline when calling Check, and can declare the
 	// server unhealthy if they do not receive a timely response.
-	//
-	// Check implementations should be idempotent and side effect free.
 	Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
-	// List provides a non-atomic snapshot of the health of all the available services.
+	// List provides a non-atomic snapshot of the health of all the available
+	// services.
 	//
-	// The maximum number of services to return is 100; responses exceeding this limit will result in a RESOURCE_EXHAUSTED
-	// error.
+	// The server may respond with a RESOURCE_EXHAUSTED error if too many services
+	// exist.
 	//
-	// Clients should set a deadline when calling List, and can declare the
-	// server unhealthy if they do not receive a timely response.
+	// Clients should set a deadline when calling List, and can declare the server
+	// unhealthy if they do not receive a timely response.
 	//
-	// Clients should keep in mind that the list of health services exposed by an application
-	// can change over the lifetime of the process.
-	//
-	// List implementations should be idempotent and side effect free.
+	// Clients should keep in mind that the list of health services exposed by an
+	// application can change over the lifetime of the process.
 	List(ctx context.Context, in *HealthListRequest, opts ...grpc.CallOption) (*HealthListResponse, error)
 	// Performs a watch for the serving status of the requested service.
 	// The server will immediately send back a message indicating the current
@@ -152,21 +149,18 @@ type HealthServer interface {
 	//
 	// Clients should set a deadline when calling Check, and can declare the
 	// server unhealthy if they do not receive a timely response.
-	//
-	// Check implementations should be idempotent and side effect free.
 	Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
-	// List provides a non-atomic snapshot of the health of all the available services.
+	// List provides a non-atomic snapshot of the health of all the available
+	// services.
 	//
-	// The maximum number of services to return is 100; responses exceeding this limit will result in a RESOURCE_EXHAUSTED
-	// error.
+	// The server may respond with a RESOURCE_EXHAUSTED error if too many services
+	// exist.
 	//
-	// Clients should set a deadline when calling List, and can declare the
-	// server unhealthy if they do not receive a timely response.
+	// Clients should set a deadline when calling List, and can declare the server
+	// unhealthy if they do not receive a timely response.
 	//
-	// Clients should keep in mind that the list of health services exposed by an application
-	// can change over the lifetime of the process.
-	//
-	// List implementations should be idempotent and side effect free.
+	// Clients should keep in mind that the list of health services exposed by an
+	// application can change over the lifetime of the process.
 	List(context.Context, *HealthListRequest) (*HealthListResponse, error)
 	// Performs a watch for the serving status of the requested service.
 	// The server will immediately send back a message indicating the current

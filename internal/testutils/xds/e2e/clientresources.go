@@ -26,6 +26,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -138,72 +139,6 @@ func marshalAny(m proto.Message) *anypb.Any {
 		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", m, err))
 	}
 	return a
-}
-
-// filterChainWontMatch returns a filter chain that won't match if running the
-// test locally.
-func filterChainWontMatch(routeName string, addressPrefix string, srcPorts []uint32) *v3listenerpb.FilterChain {
-	hcm := &v3httppb.HttpConnectionManager{
-		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-			Rds: &v3httppb.Rds{
-				ConfigSource: &v3corepb.ConfigSource{
-					ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-				},
-				RouteConfigName: routeName,
-			},
-		},
-		HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
-	}
-	return &v3listenerpb.FilterChain{
-		Name: routeName + "-wont-match",
-		FilterChainMatch: &v3listenerpb.FilterChainMatch{
-			PrefixRanges: []*v3corepb.CidrRange{
-				{
-					AddressPrefix: addressPrefix,
-					PrefixLen: &wrapperspb.UInt32Value{
-						Value: uint32(0),
-					},
-				},
-			},
-			SourceType:  v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-			SourcePorts: srcPorts,
-			SourcePrefixRanges: []*v3corepb.CidrRange{
-				{
-					AddressPrefix: addressPrefix,
-					PrefixLen: &wrapperspb.UInt32Value{
-						Value: uint32(0),
-					},
-				},
-			},
-		},
-		Filters: []*v3listenerpb.Filter{
-			{
-				Name:       "filter-1",
-				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: marshalAny(hcm)},
-			},
-		},
-	}
-}
-
-// ListenerResourceThreeRouteResources returns a listener resource that points
-// to three route configurations. Only the filter chain that points to the first
-// route config can be matched to.
-func ListenerResourceThreeRouteResources(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
-	lis := defaultServerListenerCommon(host, port, secLevel, routeName, false)
-	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName2", "1.1.1.1", []uint32{1}))
-	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName3", "2.2.2.2", []uint32{2}))
-	return lis
-}
-
-// ListenerResourceFallbackToDefault returns a listener resource that contains a
-// filter chain that will never get chosen to process traffic and a default
-// filter chain. The default filter chain points to routeName2.
-func ListenerResourceFallbackToDefault(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
-	lis := defaultServerListenerCommon(host, port, secLevel, "", false)
-	lis.FilterChains = nil
-	lis.FilterChains = append(lis.FilterChains, filterChainWontMatch("routeName", "1.1.1.1", []uint32{1}))
-	lis.DefaultFilterChain = filterChainWontMatch("routeName2", "2.2.2.2", []uint32{2})
-	return lis
 }
 
 // DefaultServerListener returns a basic xds Listener resource to be used on the
@@ -715,6 +650,9 @@ type BackendOptions struct {
 	HealthStatus v3corepb.HealthStatus
 	// Weight sets the backend weight. Defaults to 1.
 	Weight uint32
+	// Metadata sets the LB endpoint metadata (envoy.lb FilterMetadata field).
+	// See https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/core/v3/base.proto#envoy-v3-api-msg-config-core-v3-metadata
+	Metadata map[string]any
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -774,6 +712,10 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 					},
 				}
 			}
+			metadata, err := structpb.NewStruct(b.Metadata)
+			if err != nil {
+				panic(err)
+			}
 			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
@@ -787,6 +729,11 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 				}},
 				HealthStatus:        b.HealthStatus,
 				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: b.Weight},
+				Metadata: &v3corepb.Metadata{
+					FilterMetadata: map[string]*structpb.Struct{
+						"envoy.lb": metadata,
+					},
+				},
 			})
 		}
 

@@ -21,10 +21,12 @@ package grpc
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"io"
 	"math"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -420,4 +422,58 @@ func (s) TestDecompress(t *testing.T) {
 			}
 		})
 	}
+}
+
+type mockCompressor struct {
+	// Written to by the io.Reader on every call to Read.
+	ch chan<- struct{}
+}
+
+func (m *mockCompressor) Compress(io.Writer) (io.WriteCloser, error) {
+	panic("unimplemented")
+}
+
+func (m *mockCompressor) Decompress(io.Reader) (io.Reader, error) {
+	return m, nil
+}
+
+func (m *mockCompressor) Read([]byte) (int, error) {
+	m.ch <- struct{}{}
+	return 1, io.EOF
+}
+
+func (m *mockCompressor) Name() string { return "" }
+
+// Tests that the decompressor's Read method is not called after it returns EOF.
+func (s) TestDecompress_NoReadAfterEOF(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ch := make(chan struct{}, 10)
+	mc := &mockCompressor{ch: ch}
+	in := mem.BufferSlice{mem.NewBuffer(&[]byte{1, 2, 3}, nil)}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		out, err := decompress(mc, in, nil, 1, mem.DefaultBufferPool())
+		if err != nil {
+			t.Errorf("Unexpected error from decompress: %v", err)
+			return
+		}
+		out.Free()
+	}()
+	select {
+	case <-ch:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for call to compressor")
+	}
+	ctx, cancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch:
+		t.Fatalf("Unexpected second compressor.Read call detected")
+	case <-ctx.Done():
+	}
+	wg.Wait()
 }

@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
@@ -149,9 +150,11 @@ func buildClusterImplConfigForDNS(g *nameGenerator, endpoints []resolver.Endpoin
 		retEndpoints[i].Addresses = append([]resolver.Address{}, e.Addresses...)
 	}
 	return pName, &clusterimpl.LBConfig{
-		Cluster:         mechanism.Cluster,
-		TelemetryLabels: mechanism.TelemetryLabels,
-		ChildPolicy:     &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		Cluster:               mechanism.Cluster,
+		TelemetryLabels:       mechanism.TelemetryLabels,
+		ChildPolicy:           &internalserviceconfig.BalancerConfig{Name: childPolicy},
+		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
+		LoadReportingServer:   mechanism.LoadReportingServer,
 	}, retEndpoints
 }
 
@@ -282,6 +285,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 				ew = endpoint.Weight
 			}
 			resolverEndpoint = weight.Set(resolverEndpoint, weight.EndpointInfo{Weight: lw * ew})
+			resolverEndpoint = ringhash.SetHashKey(resolverEndpoint, endpoint.HashKey)
 			retEndpoints = append(retEndpoints, resolverEndpoint)
 		}
 	}

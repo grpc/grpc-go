@@ -20,9 +20,14 @@ import (
 	"context"
 	"strings"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
 	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
+)
+
+const (
+	delayedResolutionEventName = "Delayed name resolution complete"
+	tracerName                 = "grpc-go"
 )
 
 // traceTagRPC populates provided context with a new span using the
@@ -30,12 +35,20 @@ import (
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo) (context.Context, *attemptInfo) {
+func (h *clientStatsHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) (context.Context, *attemptInfo) {
+	// Add a "Delayed name resolution complete" event to the call span
+	// if there was name resolution delay. In case of multiple retry attempts,
+	// ensure that event is added only once.
+	callSpan := trace.SpanFromContext(ctx)
+	ci := getCallInfo(ctx)
+	if nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
+		callSpan.AddEvent(delayedResolutionEventName)
+	}
 	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
-	tracer := otel.Tracer("grpc-open-telemetry")
+	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn)
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
-	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	h.options.TraceOptions.TextMapPropagator.Inject(ctx, carrier)
 	ai.traceSpan = span
 	return carrier.Context(), ai
 }
@@ -48,7 +61,7 @@ func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method str
 		return ctx, nil
 	}
 	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
-	tracer := otel.Tracer("grpc-open-telemetry")
+	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	return ctx, span
 }
