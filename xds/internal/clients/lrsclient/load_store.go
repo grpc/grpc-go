@@ -203,13 +203,9 @@ func (p *PerClusterReporter) CallDropped(category string) {
 // rpc counts.
 //
 // It returns nil if the store doesn't contain any (new) data.
-func (ls *PerClusterReporter) stats() *loadData {
-	if ls == nil {
-		return nil
-	}
-
-	sd := newLoadData(ls.cluster, ls.service)
-	ls.drops.Range(func(key, val any) bool {
+func (p *PerClusterReporter) stats() *loadData {
+	sd := newLoadData(p.cluster, p.service)
+	p.drops.Range(func(key, val any) bool {
 		d := atomic.SwapUint64(val.(*uint64), 0)
 		if d == 0 {
 			return true
@@ -223,7 +219,7 @@ func (ls *PerClusterReporter) stats() *loadData {
 		}
 		return true
 	})
-	ls.localityRPCCount.Range(func(key, val any) bool {
+	p.localityRPCCount.Range(func(key, val any) bool {
 		countData := val.(*rpcCountData)
 		succeeded := countData.loadAndClearSucceeded()
 		inProgress := countData.loadInProgress()
@@ -257,10 +253,10 @@ func (ls *PerClusterReporter) stats() *loadData {
 		return true
 	})
 
-	ls.mu.Lock()
-	sd.reportInterval = time.Since(ls.lastLoadReportAt)
-	ls.lastLoadReportAt = time.Now()
-	ls.mu.Unlock()
+	p.mu.Lock()
+	sd.reportInterval = time.Since(p.lastLoadReportAt)
+	p.lastLoadReportAt = time.Now()
+	p.mu.Unlock()
 
 	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
 		return nil
