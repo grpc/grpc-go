@@ -234,7 +234,7 @@ func (ls *PerClusterReporter) stats() *loadData {
 		}
 
 		ld := localityData{
-			RequestStats: requestData{
+			requestStats: requestData{
 				succeeded:  succeeded,
 				errored:    errored,
 				inProgress: inProgress,
@@ -258,7 +258,7 @@ func (ls *PerClusterReporter) stats() *loadData {
 	})
 
 	ls.mu.Lock()
-	sd.ReportInterval = time.Since(ls.lastLoadReportAt)
+	sd.reportInterval = time.Since(ls.lastLoadReportAt)
 	ls.lastLoadReportAt = time.Now()
 	ls.mu.Unlock()
 
@@ -283,13 +283,13 @@ type loadData struct {
 	localityStats map[string]localityData
 	// reportInternal is the duration since last time load was reported (stats()
 	// was called).
-	ReportInterval time.Duration
+	reportInterval time.Duration
 }
 
 // localityData contains load data for a single locality.
 type localityData struct {
-	// RequestStats contains counts of requests made to the locality.
-	RequestStats requestData
+	// requestStats contains counts of requests made to the locality.
+	requestStats requestData
 	// loadStats contains server load data for requests made to the locality,
 	// indexed by the load type.
 	loadStats map[string]serverLoadData

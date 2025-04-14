@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package load
+package lrsclient
 
 import (
 	"fmt"
@@ -49,16 +49,16 @@ func TestDrops(t *testing.T) {
 			dropCategories[1]: 40,
 			"":                10,
 		}
-		wantStoreData = &Data{
-			TotalDrops: 80,
-			Drops: map[string]uint64{
+		wantStoreData = &loadData{
+			totalDrops: 80,
+			drops: map[string]uint64{
 				dropCategories[0]: 30,
 				dropCategories[1]: 40,
 			},
 		}
 	)
 
-	ls := perClusterStore{}
+	ls := PerClusterReporter{}
 	var wg sync.WaitGroup
 	for category, count := range drops {
 		for i := 0; i < count; i++ {
@@ -72,7 +72,7 @@ func TestDrops(t *testing.T) {
 	wg.Wait()
 
 	gotStoreData := ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
@@ -82,7 +82,7 @@ func TestDrops(t *testing.T) {
 // Store and makes sure they are as expected.
 func TestLocalityStats(t *testing.T) {
 	var (
-		localityData = map[string]rpcData{
+		ld = map[string]rpcData{
 			localities[0]: {
 				start:      40,
 				success:    20,
@@ -96,43 +96,43 @@ func TestLocalityStats(t *testing.T) {
 				serverData: map[string]float64{"net": 1, "disk": 2, "cpu": 3, "mem": 4},
 			},
 		}
-		wantStoreData = &Data{
-			LocalityStats: map[string]LocalityData{
+		wantStoreData = &loadData{
+			localityStats: map[string]localityData{
 				localities[0]: {
-					RequestStats: RequestData{
-						Succeeded:  20,
-						Errored:    10,
-						InProgress: 10,
-						Issued:     40,
+					requestStats: requestData{
+						succeeded:  20,
+						errored:    10,
+						inProgress: 10,
+						issued:     40,
 					},
-					LoadStats: map[string]ServerLoadData{
-						"net":  {Count: 20, Sum: 20},
-						"disk": {Count: 20, Sum: 40},
-						"cpu":  {Count: 20, Sum: 60},
-						"mem":  {Count: 20, Sum: 80},
+					loadStats: map[string]serverLoadData{
+						"net":  {count: 20, sum: 20},
+						"disk": {count: 20, sum: 40},
+						"cpu":  {count: 20, sum: 60},
+						"mem":  {count: 20, sum: 80},
 					},
 				},
 				localities[1]: {
-					RequestStats: RequestData{
-						Succeeded:  40,
-						Errored:    20,
-						InProgress: 20,
-						Issued:     80,
+					requestStats: requestData{
+						succeeded:  40,
+						errored:    20,
+						inProgress: 20,
+						issued:     80,
 					},
-					LoadStats: map[string]ServerLoadData{
-						"net":  {Count: 40, Sum: 40},
-						"disk": {Count: 40, Sum: 80},
-						"cpu":  {Count: 40, Sum: 120},
-						"mem":  {Count: 40, Sum: 160},
+					loadStats: map[string]serverLoadData{
+						"net":  {count: 40, sum: 40},
+						"disk": {count: 40, sum: 80},
+						"cpu":  {count: 40, sum: 120},
+						"mem":  {count: 40, sum: 160},
 					},
 				},
 			},
 		}
 	)
 
-	ls := perClusterStore{}
+	ls := PerClusterReporter{}
 	var wg sync.WaitGroup
-	for locality, data := range localityData {
+	for locality, data := range ld {
 		wg.Add(data.start)
 		for i := 0; i < data.start; i++ {
 			go func(l string) {
@@ -165,7 +165,7 @@ func TestLocalityStats(t *testing.T) {
 	}
 
 	gotStoreData := ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
@@ -180,7 +180,7 @@ func TestResetAfterStats(t *testing.T) {
 			dropCategories[0]: 30,
 			dropCategories[1]: 40,
 		}
-		localityData = map[string]rpcData{
+		ld = map[string]rpcData{
 			localities[0]: {
 				start:      40,
 				success:    20,
@@ -194,54 +194,54 @@ func TestResetAfterStats(t *testing.T) {
 				serverData: map[string]float64{"net": 1, "disk": 2, "cpu": 3, "mem": 4},
 			},
 		}
-		wantStoreData = &Data{
-			TotalDrops: 70,
-			Drops: map[string]uint64{
+		wantStoreData = &loadData{
+			totalDrops: 70,
+			drops: map[string]uint64{
 				dropCategories[0]: 30,
 				dropCategories[1]: 40,
 			},
-			LocalityStats: map[string]LocalityData{
+			localityStats: map[string]localityData{
 				localities[0]: {
-					RequestStats: RequestData{
-						Succeeded:  20,
-						Errored:    10,
-						InProgress: 10,
-						Issued:     40,
+					requestStats: requestData{
+						succeeded:  20,
+						errored:    10,
+						inProgress: 10,
+						issued:     40,
 					},
 
-					LoadStats: map[string]ServerLoadData{
-						"net":  {Count: 20, Sum: 20},
-						"disk": {Count: 20, Sum: 40},
-						"cpu":  {Count: 20, Sum: 60},
-						"mem":  {Count: 20, Sum: 80},
+					loadStats: map[string]serverLoadData{
+						"net":  {count: 20, sum: 20},
+						"disk": {count: 20, sum: 40},
+						"cpu":  {count: 20, sum: 60},
+						"mem":  {count: 20, sum: 80},
 					},
 				},
 				localities[1]: {
-					RequestStats: RequestData{
-						Succeeded:  40,
-						Errored:    20,
-						InProgress: 20,
-						Issued:     80,
+					requestStats: requestData{
+						succeeded:  40,
+						errored:    20,
+						inProgress: 20,
+						issued:     80,
 					},
 
-					LoadStats: map[string]ServerLoadData{
-						"net":  {Count: 40, Sum: 40},
-						"disk": {Count: 40, Sum: 80},
-						"cpu":  {Count: 40, Sum: 120},
-						"mem":  {Count: 40, Sum: 160},
+					loadStats: map[string]serverLoadData{
+						"net":  {count: 40, sum: 40},
+						"disk": {count: 40, sum: 80},
+						"cpu":  {count: 40, sum: 120},
+						"mem":  {count: 40, sum: 160},
 					},
 				},
 			},
 		}
 	)
 
-	reportLoad := func(ls *perClusterStore) {
+	reportLoad := func(ls *PerClusterReporter) {
 		for category, count := range drops {
 			for i := 0; i < count; i++ {
 				ls.CallDropped(category)
 			}
 		}
-		for locality, data := range localityData {
+		for locality, data := range ld {
 			for i := 0; i < data.start; i++ {
 				ls.CallStarted(locality)
 			}
@@ -257,10 +257,10 @@ func TestResetAfterStats(t *testing.T) {
 		}
 	}
 
-	ls := perClusterStore{}
+	ls := PerClusterReporter{}
 	reportLoad(&ls)
 	gotStoreData := ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 
@@ -268,26 +268,26 @@ func TestResetAfterStats(t *testing.T) {
 	// inProgress rpc count. We are now going to push the same load data into
 	// the store. So, we should expect to see twice the count for inProgress.
 	for _, l := range localities {
-		ls := wantStoreData.LocalityStats[l]
-		ls.RequestStats.InProgress *= 2
-		wantStoreData.LocalityStats[l] = ls
+		ls := wantStoreData.localityStats[l]
+		ls.requestStats.inProgress *= 2
+		wantStoreData.localityStats[l] = ls
 	}
 	reportLoad(&ls)
 	gotStoreData = ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval")); diff != "" {
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
-var sortDataSlice = cmp.Transformer("SortDataSlice", func(in []*Data) []*Data {
-	out := append([]*Data(nil), in...) // Copy input to avoid mutating it
+var sortDataSlice = cmp.Transformer("SortDataSlice", func(in []*loadData) []*loadData {
+	out := append([]*loadData(nil), in...) // Copy input to avoid mutating it
 	sort.Slice(out,
 		func(i, j int) bool {
-			if out[i].Cluster < out[j].Cluster {
+			if out[i].cluster < out[j].cluster {
 				return true
 			}
-			if out[i].Cluster == out[j].Cluster {
-				return out[i].Service < out[j].Service
+			if out[i].cluster == out[j].cluster {
+				return out[i].service < out[j].service
 			}
 			return false
 		},
@@ -304,91 +304,91 @@ func TestStoreStats(t *testing.T) {
 		testLocality = "test-locality"
 	)
 
-	store := NewStore()
+	store := newLoadStore()
 	for _, c := range testClusters {
 		for _, s := range testServices {
-			store.PerCluster(c, s).CallStarted(testLocality)
-			store.PerCluster(c, s).CallServerLoad(testLocality, "abc", 123)
-			store.PerCluster(c, s).CallDropped("dropped")
-			store.PerCluster(c, s).CallFinished(testLocality, nil)
+			store.ReporterForCluster(c, s).CallStarted(testLocality)
+			store.ReporterForCluster(c, s).CallServerLoad(testLocality, "abc", 123)
+			store.ReporterForCluster(c, s).CallDropped("dropped")
+			store.ReporterForCluster(c, s).CallFinished(testLocality, nil)
 		}
 	}
 
-	wantC0 := []*Data{
+	wantC0 := []*loadData{
 		{
-			Cluster: "c0", Service: "s0",
-			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
-			LocalityStats: map[string]LocalityData{
+			cluster: "c0", service: "s0",
+			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
+			localityStats: map[string]localityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1, Issued: 1},
-					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+					requestStats: requestData{succeeded: 1, issued: 1},
+					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
 			},
 		},
 		{
-			Cluster: "c0", Service: "s1",
-			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
-			LocalityStats: map[string]LocalityData{
+			cluster: "c0", service: "s1",
+			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
+			localityStats: map[string]localityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1, Issued: 1},
-					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+					requestStats: requestData{succeeded: 1, issued: 1},
+					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
 			},
 		},
 	}
 	// Call Stats with just "c0", this should return data for "c0", and not
 	// touch data for other clusters.
-	gotC0 := store.Stats([]string{"c0"})
-	if diff := cmp.Diff(wantC0, gotC0, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+	gotC0 := store.stats([]string{"c0"})
+	if diff := cmp.Diff(wantC0, gotC0, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 
-	wantOther := []*Data{
+	wantOther := []*loadData{
 		{
-			Cluster: "c1", Service: "s0",
-			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
-			LocalityStats: map[string]LocalityData{
+			cluster: "c1", service: "s0",
+			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
+			localityStats: map[string]localityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1, Issued: 1},
-					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+					requestStats: requestData{succeeded: 1, issued: 1},
+					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
 			},
 		},
 		{
-			Cluster: "c1", Service: "s1",
-			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
-			LocalityStats: map[string]LocalityData{
+			cluster: "c1", service: "s1",
+			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
+			localityStats: map[string]localityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1, Issued: 1},
-					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+					requestStats: requestData{succeeded: 1, issued: 1},
+					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
 			},
 		},
 		{
-			Cluster: "c2", Service: "s0",
-			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
-			LocalityStats: map[string]LocalityData{
+			cluster: "c2", service: "s0",
+			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
+			localityStats: map[string]localityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1, Issued: 1},
-					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+					requestStats: requestData{succeeded: 1, issued: 1},
+					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
 			},
 		},
 		{
-			Cluster: "c2", Service: "s1",
-			TotalDrops: 1, Drops: map[string]uint64{"dropped": 1},
-			LocalityStats: map[string]LocalityData{
+			cluster: "c2", service: "s1",
+			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
+			localityStats: map[string]localityData{
 				"test-locality": {
-					RequestStats: RequestData{Succeeded: 1, Issued: 1},
-					LoadStats:    map[string]ServerLoadData{"abc": {Count: 1, Sum: 123}},
+					requestStats: requestData{succeeded: 1, issued: 1},
+					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
 			},
 		},
 	}
 	// Call Stats with empty slice, this should return data for all the
 	// remaining clusters, and not include c0 (because c0 data was cleared).
-	gotOther := store.Stats(nil)
-	if diff := cmp.Diff(wantOther, gotOther, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+	gotOther := store.stats(nil)
+	if diff := cmp.Diff(wantOther, gotOther, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
@@ -401,68 +401,68 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 		testLocality = "test-locality"
 	)
 
-	store := NewStore()
+	store := newLoadStore()
 	// "c0"'s RPCs all finish with success.
 	for _, s := range testServices {
-		store.PerCluster("c0", s).CallStarted(testLocality)
-		store.PerCluster("c0", s).CallFinished(testLocality, nil)
+		store.ReporterForCluster("c0", s).CallStarted(testLocality)
+		store.ReporterForCluster("c0", s).CallFinished(testLocality, nil)
 	}
 	// "c1"'s RPCs never finish (always inprocess).
 	for _, s := range testServices {
-		store.PerCluster("c1", s).CallStarted(testLocality)
+		store.ReporterForCluster("c1", s).CallStarted(testLocality)
 	}
 
-	want0 := []*Data{
+	want0 := []*loadData{
 		{
-			Cluster: "c0", Service: "s0",
-			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{Succeeded: 1, Issued: 1}},
+			cluster: "c0", service: "s0",
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{succeeded: 1, issued: 1}},
 			},
 		},
 		{
-			Cluster: "c0", Service: "s1",
-			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{Succeeded: 1, Issued: 1}},
+			cluster: "c0", service: "s1",
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{succeeded: 1, issued: 1}},
 			},
 		},
 		{
-			Cluster: "c1", Service: "s0",
-			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{InProgress: 1, Issued: 1}},
+			cluster: "c1", service: "s0",
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1, issued: 1}},
 			},
 		},
 		{
-			Cluster: "c1", Service: "s1",
-			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{InProgress: 1, Issued: 1}},
+			cluster: "c1", service: "s1",
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1, issued: 1}},
 			},
 		},
 	}
 	// Call Stats with empty slice, this should return data for all the
 	// clusters.
-	got0 := store.Stats(nil)
-	if diff := cmp.Diff(want0, got0, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+	got0 := store.stats(nil)
+	if diff := cmp.Diff(want0, got0, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 
-	want1 := []*Data{
+	want1 := []*loadData{
 		{
-			Cluster: "c1", Service: "s0",
-			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+			cluster: "c1", service: "s0",
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1}},
 			},
 		},
 		{
-			Cluster: "c1", Service: "s1",
-			LocalityStats: map[string]LocalityData{
-				"test-locality": {RequestStats: RequestData{InProgress: 1}},
+			cluster: "c1", service: "s1",
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1}},
 			},
 		},
 	}
 	// Call Stats with empty slice again, this should return data only for "c1",
 	// because "c0" data was cleared, but "c1" has in-progress RPCs.
-	got1 := store.Stats(nil)
-	if diff := cmp.Diff(want1, got1, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
+	got1 := store.stats(nil)
+	if diff := cmp.Diff(want1, got1, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
