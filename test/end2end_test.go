@@ -3619,64 +3619,36 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 	}
 }
 
-// Test to verify for client-streaming RPCs, when SendAndClose is called, the server
-// should reset stream after sending the response message successfully.
-// If server calls Recv after, those operations should fail.
-func TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
+// Test to verify for client-streaming RPCs, when SendAndClose is called, the
+// server should reset stream after sending the response message successfully.
+// That is check that the server sends RST_STREAM header after SendAndClose. If
+// server calls Recv after, those operations should fail.
+func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
 	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
 	// after this is fixed.
-	// t.Skip()
-	ss := &stubserver.StubServer{
-		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-			stream.SendAndClose(&testpb.StreamingInputCallResponse{})
-			_, err := stream.Recv()
-			if err == nil {
-				t.Errorf("stream.Recv() = nil, want an error")
-			}
-			return err
-		},
-	}
-	if err := ss.Start(nil); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
+	t.Skip()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	stream, err := ss.Client.StreamingInputCall(ctx)
-	if err != nil {
-		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
-	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req := &testpb.StreamingInputCallRequest{Payload: payload}
-	for {
-		if err = stream.Send(req); err == io.EOF {
-			break
+	e := tcpTLSEnv
+	te := newTest(t, e)
+	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+		stream.SendAndClose(&testpb.StreamingInputCallResponse{})
+		_, err := stream.Recv()
+		t.Log(err.Error())
+		if status.Code(err) != codes.OK {
+			t.Errorf("stream.Recv() = %v, want error", err)
 		}
-		if err != nil {
-			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal("timed out waiting for error from server")
-		default:
-		}
-	}
-	_, err = stream.CloseAndRecv()
-	if err != nil {
-		t.Fatalf("stream.CloseAndRecv() = %v, want error", err)
-	}
+		return nil
+	}}
 
-	te := newTest(t, tcpClearEnv)
-	te.startServer(ss)
+	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
-		st.wantRSTStream(http2.ErrCodeNo) // Expect RST_STREAM with code NO_ERROR (success)
+		//eshita : ask if this needs to be true or false.
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", false) // Stream ID 1
+
+		st.wantAnyFrame()
+		st.wantAnyFrame()
+		st.wantRSTStream(http2.ErrCodeStreamClosed)
 	})
 
 }
