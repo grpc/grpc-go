@@ -169,9 +169,9 @@ func (s) TestGRPCNewClientWithDNSAndProxy(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	conn, err := grpc.NewClient(unresolvedTargetURI, grpc.WithLocalDNSResolution(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("dns:///"+unresolvedTargetURI, grpc.WithLocalDNSResolution(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%s) failed: %v", unresolvedTargetURI, err)
+		t.Fatalf("grpc.NewClient(%s) failed: %v", "dns:///"+unresolvedTargetURI, err)
 	}
 	defer conn.Close()
 
