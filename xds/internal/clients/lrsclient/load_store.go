@@ -1,5 +1,8 @@
+//revive:disable:unused-parameter
+
 /*
- * Copyright 2020 gRPC authors.
+ *
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,12 +15,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-// Package load provides functionality to record and maintain load data.
-package load
+package lrsclient
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,96 +29,69 @@ import (
 
 const negativeOneUInt64 = ^uint64(0)
 
-// Store keeps the loads for multiple clusters and services to be reported via
-// LRS. It contains loads to reported to one LRS server. Create multiple stores
+// A LoadStore aggregates loads for multiple clusters and services that are
+// intended to be reported via LRS.
+//
+// LoadStore stores loads reported to a single LRS server. Use multiple stores
 // for multiple servers.
 //
 // It is safe for concurrent use.
-type Store struct {
-	// mu only protects the map (2 layers). The read/write to *perClusterStore
-	// doesn't need to hold the mu.
+type LoadStore struct {
+	// mu only protects the map (2 layers). The read/write to
+	// *PerClusterReporter doesn't need to hold the mu.
 	mu sync.Mutex
-	// clusters is a map with cluster name as the key. The second layer is a map
-	// with service name as the key. Each value (perClusterStore) contains data
-	// for a (cluster, service) pair.
+	// clusters is a map with cluster name as the key. The second layer is a
+	// map with service name as the key. Each value (PerClusterReporter)
+	// contains data for a (cluster, service) pair.
 	//
 	// Note that new entries are added to this map, but never removed. This is
 	// potentially a memory leak. But the memory is allocated for each new
 	// (cluster,service) pair, and the memory allocated is just pointers and
 	// maps. So this shouldn't get too bad.
-	clusters map[string]map[string]*perClusterStore
+	clusters map[string]map[string]*PerClusterReporter
 }
 
-// NewStore creates a Store.
-func NewStore() *Store {
-	return &Store{
-		clusters: make(map[string]map[string]*perClusterStore),
+// newStore creates a LoadStore.
+func newLoadStore() *LoadStore {
+	return &LoadStore{
+		clusters: make(map[string]map[string]*PerClusterReporter),
 	}
 }
 
-// Stats returns the load data for the given cluster names. Data is returned in
-// a slice with no specific order.
+// Stop stops the LRS stream associated with this LoadStore.
 //
-// If no clusterName is given (an empty slice), all data for all known clusters
-// is returned.
+// If this LoadStore is the only one using the underlying LRS stream, the
+// stream will be closed. If other LoadStores are also using the same stream,
+// the reference count to the stream is decremented, and the stream remains
+// open until all LoadStores have called Stop().
 //
-// If a cluster's Data is empty (no load to report), it's not appended to the
-// returned slice.
-func (s *Store) Stats(clusterNames []string) []*Data {
-	var ret []*Data
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if len(clusterNames) == 0 {
-		for _, c := range s.clusters {
-			ret = appendClusterStats(ret, c)
-		}
-		return ret
-	}
-
-	for _, n := range clusterNames {
-		if c, ok := s.clusters[n]; ok {
-			ret = appendClusterStats(ret, c)
-		}
-	}
-	return ret
+// If this is the last LoadStore for the stream, this method makes a last
+// attempt to flush any unreported load data to the LRS server. It will either
+// wait for this attempt to complete, or for the provided context to be done
+// before canceling the LRS stream.
+func (ls *LoadStore) Stop(ctx context.Context) error {
+	panic("unimplemented")
 }
 
-// appendClusterStats gets Data for the given cluster, append to ret, and return
-// the new slice.
-//
-// Data is only appended to ret if it's not empty.
-func appendClusterStats(ret []*Data, cluster map[string]*perClusterStore) []*Data {
-	for _, d := range cluster {
-		data := d.stats()
-		if data == nil {
-			// Skip this data if it doesn't contain any information.
-			continue
-		}
-		ret = append(ret, data)
-	}
-	return ret
-}
-
-// PerCluster returns the perClusterStore for the given clusterName +
-// serviceName.
-func (s *Store) PerCluster(clusterName, serviceName string) PerClusterReporter {
-	if s == nil {
+// ReporterForCluster returns the PerClusterReporter for the given cluster and
+// service.
+func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClusterReporter {
+	if ls == nil {
 		return nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	c, ok := s.clusters[clusterName]
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	c, ok := ls.clusters[clusterName]
 	if !ok {
-		c = make(map[string]*perClusterStore)
-		s.clusters[clusterName] = c
+		c = make(map[string]*PerClusterReporter)
+		ls.clusters[clusterName] = c
 	}
 
 	if p, ok := c[serviceName]; ok {
 		return p
 	}
-	p := &perClusterStore{
+	p := &PerClusterReporter{
 		cluster: clusterName,
 		service: serviceName,
 	}
@@ -122,21 +99,50 @@ func (s *Store) PerCluster(clusterName, serviceName string) PerClusterReporter {
 	return p
 }
 
-// perClusterStore is a repository for LB policy implementations to report store
-// load data. It contains load for a (cluster, edsService) pair.
+// stats returns the load data for the given cluster names. Data is returned in
+// a slice with no specific order.
+//
+// If no clusterName is given (an empty slice), all data for all known clusters
+// is returned.
+//
+// If a cluster's loadData is empty (no load to report), it's not appended to
+// the returned slice.
+func (ls *LoadStore) stats(clusterNames []string) []*loadData {
+	var ret []*loadData
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	if len(clusterNames) == 0 {
+		for _, c := range ls.clusters {
+			ret = appendClusterStats(ret, c)
+		}
+		return ret
+	}
+
+	for _, n := range clusterNames {
+		if c, ok := ls.clusters[n]; ok {
+			ret = appendClusterStats(ret, c)
+		}
+	}
+	return ret
+}
+
+// PerClusterReporter records load data pertaining to a single cluster. It
+// provides methods to record call starts, finishes, server-reported loads,
+// and dropped calls.
 //
 // It is safe for concurrent use.
 //
-// TODO(easwars): Use regular maps with mutexes instead of sync.Map here. The
-// latter is optimized for two common use cases: (1) when the entry for a given
-// key is only ever written once but read many times, as in caches that only
-// grow, or (2) when multiple goroutines read, write, and overwrite entries for
-// disjoint sets of keys. In these two cases, use of a Map may significantly
-// reduce lock contention compared to a Go map paired with a separate Mutex or
-// RWMutex.
+// TODO(purnesh42h): Use regular maps with mutexes instead of sync.Map here.
+// The latter is optimized for two common use cases: (1) when the entry for a
+// given key is only ever written once but read many times, as in caches that
+// only grow, or (2) when multiple goroutines read, write, and overwrite
+// entries for disjoint sets of keys. In these two cases, use of a Map may
+// significantly reduce lock contention compared to a Go map paired with a
+// separate Mutex or RWMutex.
 // Neither of these conditions are met here, and we should transition to a
 // regular map with a mutex for better type safety.
-type perClusterStore struct {
+type PerClusterReporter struct {
 	cluster, service string
 	drops            sync.Map // map[string]*uint64
 	localityRPCCount sync.Map // map[string]*rpcCountData
@@ -145,152 +151,75 @@ type perClusterStore struct {
 	lastLoadReportAt time.Time
 }
 
-// Update functions are called by picker for each RPC. To avoid contention, all
-// updates are done atomically.
-
-// CallDropped adds one drop record with the given category to store.
-func (ls *perClusterStore) CallDropped(category string) {
-	if ls == nil {
-		return
-	}
-
-	p, ok := ls.drops.Load(category)
-	if !ok {
-		tp := new(uint64)
-		p, _ = ls.drops.LoadOrStore(category, tp)
-	}
-	atomic.AddUint64(p.(*uint64), 1)
-}
-
-// CallStarted adds one call started record for the given locality.
-func (ls *perClusterStore) CallStarted(locality string) {
-	if ls == nil {
-		return
-	}
-
-	p, ok := ls.localityRPCCount.Load(locality)
+// CallStarted records a call started in the LoadStore.
+func (p *PerClusterReporter) CallStarted(locality string) {
+	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		tp := newRPCCountData()
-		p, _ = ls.localityRPCCount.LoadOrStore(locality, tp)
+		s, _ = p.localityRPCCount.LoadOrStore(locality, tp)
 	}
-	p.(*rpcCountData).incrInProgress()
-	p.(*rpcCountData).incrIssued()
+	s.(*rpcCountData).incrInProgress()
+	s.(*rpcCountData).incrIssued()
 }
 
-// CallFinished adds one call finished record for the given locality.
-// For successful calls, err needs to be nil.
-func (ls *perClusterStore) CallFinished(locality string, err error) {
-	if ls == nil {
-		return
-	}
-
-	p, ok := ls.localityRPCCount.Load(locality)
+// CallFinished records a call finished in the LoadStore.
+func (p *PerClusterReporter) CallFinished(locality string, err error) {
+	f, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
 		// case where entry for call-finish is not found should never happen.
 		return
 	}
-	p.(*rpcCountData).decrInProgress()
+	f.(*rpcCountData).decrInProgress()
 	if err == nil {
-		p.(*rpcCountData).incrSucceeded()
+		f.(*rpcCountData).incrSucceeded()
 	} else {
-		p.(*rpcCountData).incrErrored()
+		f.(*rpcCountData).incrErrored()
 	}
 }
 
-// CallServerLoad adds one server load record for the given locality. The
-// load type is specified by desc, and its value by val.
-func (ls *perClusterStore) CallServerLoad(locality, name string, d float64) {
-	if ls == nil {
-		return
-	}
-
-	p, ok := ls.localityRPCCount.Load(locality)
+// CallServerLoad records the server load in the LoadStore.
+func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) {
+	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
 		// case where entry for callServerLoad is not found should never happen.
 		return
 	}
-	p.(*rpcCountData).addServerLoad(name, d)
+	s.(*rpcCountData).addServerLoad(name, val)
 }
 
-// Data contains all load data reported to the Store since the most recent call
-// to stats().
-type Data struct {
-	// Cluster is the name of the cluster this data is for.
-	Cluster string
-	// Service is the name of the EDS service this data is for.
-	Service string
-	// TotalDrops is the total number of dropped requests.
-	TotalDrops uint64
-	// Drops is the number of dropped requests per category.
-	Drops map[string]uint64
-	// LocalityStats contains load reports per locality.
-	LocalityStats map[string]LocalityData
-	// ReportInternal is the duration since last time load was reported (stats()
-	// was called).
-	ReportInterval time.Duration
-}
-
-// LocalityData contains load data for a single locality.
-type LocalityData struct {
-	// RequestStats contains counts of requests made to the locality.
-	RequestStats RequestData
-	// LoadStats contains server load data for requests made to the locality,
-	// indexed by the load type.
-	LoadStats map[string]ServerLoadData
-}
-
-// RequestData contains request counts.
-type RequestData struct {
-	// Succeeded is the number of succeeded requests.
-	Succeeded uint64
-	// Errored is the number of requests which ran into errors.
-	Errored uint64
-	// InProgress is the number of requests in flight.
-	InProgress uint64
-	// Issued is the total number requests that were sent.
-	Issued uint64
-}
-
-// ServerLoadData contains server load data.
-type ServerLoadData struct {
-	// Count is the number of load reports.
-	Count uint64
-	// Sum is the total value of all load reports.
-	Sum float64
-}
-
-func newData(cluster, service string) *Data {
-	return &Data{
-		Cluster:       cluster,
-		Service:       service,
-		Drops:         make(map[string]uint64),
-		LocalityStats: make(map[string]LocalityData),
+// CallDropped records a call dropped in the LoadStore.
+func (p *PerClusterReporter) CallDropped(category string) {
+	d, ok := p.drops.Load(category)
+	if !ok {
+		tp := new(uint64)
+		d, _ = p.drops.LoadOrStore(category, tp)
 	}
+	atomic.AddUint64(d.(*uint64), 1)
 }
 
 // stats returns and resets all loads reported to the store, except inProgress
 // rpc counts.
 //
 // It returns nil if the store doesn't contain any (new) data.
-func (ls *perClusterStore) stats() *Data {
+func (ls *PerClusterReporter) stats() *loadData {
 	if ls == nil {
 		return nil
 	}
 
-	sd := newData(ls.cluster, ls.service)
+	sd := newLoadData(ls.cluster, ls.service)
 	ls.drops.Range(func(key, val any) bool {
 		d := atomic.SwapUint64(val.(*uint64), 0)
 		if d == 0 {
 			return true
 		}
-		sd.TotalDrops += d
+		sd.totalDrops += d
 		keyStr := key.(string)
 		if keyStr != "" {
 			// Skip drops without category. They are counted in total_drops, but
 			// not in per category. One example is drops by circuit breaking.
-			sd.Drops[keyStr] = d
+			sd.drops[keyStr] = d
 		}
 		return true
 	})
@@ -304,27 +233,27 @@ func (ls *perClusterStore) stats() *Data {
 			return true
 		}
 
-		ld := LocalityData{
-			RequestStats: RequestData{
-				Succeeded:  succeeded,
-				Errored:    errored,
-				InProgress: inProgress,
-				Issued:     issued,
+		ld := localityData{
+			RequestStats: requestData{
+				succeeded:  succeeded,
+				errored:    errored,
+				inProgress: inProgress,
+				issued:     issued,
 			},
-			LoadStats: make(map[string]ServerLoadData),
+			loadStats: make(map[string]serverLoadData),
 		}
 		countData.serverLoads.Range(func(key, val any) bool {
 			sum, count := val.(*rpcLoadData).loadAndClear()
 			if count == 0 {
 				return true
 			}
-			ld.LoadStats[key.(string)] = ServerLoadData{
-				Count: count,
-				Sum:   sum,
+			ld.loadStats[key.(string)] = serverLoadData{
+				count: count,
+				sum:   sum,
 			}
 			return true
 		})
-		sd.LocalityStats[key.(string)] = ld
+		sd.localityStats[key.(string)] = ld
 		return true
 	})
 
@@ -333,10 +262,82 @@ func (ls *perClusterStore) stats() *Data {
 	ls.lastLoadReportAt = time.Now()
 	ls.mu.Unlock()
 
-	if sd.TotalDrops == 0 && len(sd.Drops) == 0 && len(sd.LocalityStats) == 0 {
+	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
 		return nil
 	}
 	return sd
+}
+
+// loadData contains all load data reported to the LoadStore since the most recent
+// call to stats().
+type loadData struct {
+	// cluster is the name of the cluster this data is for.
+	cluster string
+	// service is the name of the EDS service this data is for.
+	service string
+	// totalDrops is the total number of dropped requests.
+	totalDrops uint64
+	// drops is the number of dropped requests per category.
+	drops map[string]uint64
+	// localityStats contains load reports per locality.
+	localityStats map[string]localityData
+	// reportInternal is the duration since last time load was reported (stats()
+	// was called).
+	ReportInterval time.Duration
+}
+
+// localityData contains load data for a single locality.
+type localityData struct {
+	// RequestStats contains counts of requests made to the locality.
+	RequestStats requestData
+	// loadStats contains server load data for requests made to the locality,
+	// indexed by the load type.
+	loadStats map[string]serverLoadData
+}
+
+// requestData contains request counts.
+type requestData struct {
+	// succeeded is the number of succeeded requests.
+	succeeded uint64
+	// errored is the number of requests which ran into errors.
+	errored uint64
+	// inProgress is the number of requests in flight.
+	inProgress uint64
+	// issued is the total number requests that were sent.
+	issued uint64
+}
+
+// serverLoadData contains server load data.
+type serverLoadData struct {
+	// count is the number of load reports.
+	count uint64
+	// sum is the total value of all load reports.
+	sum float64
+}
+
+// appendClusterStats gets Data for the given cluster, append to ret, and return
+// the new slice.
+//
+// Data is only appended to ret if it's not empty.
+func appendClusterStats(ret []*loadData, cluster map[string]*PerClusterReporter) []*loadData {
+	for _, d := range cluster {
+		data := d.stats()
+		if data == nil {
+			// Skip this data if it doesn't contain any information.
+			continue
+		}
+		ret = append(ret, data)
+	}
+	return ret
+}
+
+func newLoadData(cluster, service string) *loadData {
+	return &loadData{
+		cluster:       cluster,
+		service:       service,
+		drops:         make(map[string]uint64),
+		localityStats: make(map[string]localityData),
+	}
 }
 
 type rpcCountData struct {
@@ -408,8 +409,8 @@ func (rcd *rpcCountData) addServerLoad(name string, d float64) {
 	loads.(*rpcLoadData).add(d)
 }
 
-// Data for server loads (from trailers or oob). Fields in this struct must be
-// updated consistently.
+// rpcLoadData is data for server loads (from trailers or oob). Fields in this
+// struct must be updated consistently.
 //
 // The current solution is to hold a lock, which could cause contention. To fix,
 // shard serverLoads map in rpcCountData.
