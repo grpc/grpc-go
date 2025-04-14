@@ -119,6 +119,16 @@ func (s) TestParseConfig(t *testing.T) {
 			},
 		},
 		{
+			name:                "request metadata key set with uppercase letters",
+			js:                  `{"requestHashHeader": "x-FOO"}`,
+			requestHeaderEnvVar: true,
+			want: &LBConfig{
+				MinRingSize:       defaultMinSize,
+				MaxRingSize:       defaultMaxSize,
+				RequestHashHeader: "x-foo",
+			},
+		},
+		{
 			name:                "invalid request hash header",
 			js:                  `{"requestHashHeader": "!invalid"}`,
 			requestHeaderEnvVar: true,
