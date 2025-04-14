@@ -19,7 +19,6 @@
 package grpctransport
 
 import (
-	"context"
 	"sync"
 	"testing"
 
@@ -27,7 +26,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
@@ -47,32 +45,11 @@ func (s) TestBuild_Single(t *testing.T) {
 		"local": &testCredentials{transportCredentials: local.NewCredentials()},
 	}
 
-	// Override the gRPC transport creation hook to get notified.
-	origGRPCTransportCreateHook := grpcTransportCreateHook
-	grpcTransportCreateCh := testutils.NewChannelWithSize(1)
-	grpcTransportCreateHook = func() {
-		grpcTransportCreateCh.Replace(struct{}{})
-	}
-	defer func() { grpcTransportCreateHook = origGRPCTransportCreateHook }()
-
-	// Override the gRPC transport close hook to get notified.
-	origGRPCTransportCloseHook := grpcTransportCloseHook
-	grpcTransportCloseCh := testutils.NewChannelWithSize(1)
-	grpcTransportCloseHook = func() {
-		grpcTransportCloseCh.Replace(struct{}{})
-	}
-	defer func() { grpcTransportCloseHook = origGRPCTransportCloseHook }()
-
+	// Calling Build() first time should create new gRPC transport.
 	builder := NewBuilder(credentials)
 	tr, err := builder.Build(serverID)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := grpcTransportCreateCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for gRPC transport to be created: %v", err)
 	}
 
 	// Calling Build() again should not create new gRPC transport.
@@ -85,47 +62,38 @@ func (s) TestBuild_Single(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to build transport: %v", err)
 			}
-
-			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-			defer sCancel()
-			if _, err := grpcTransportCreateCh.Receive(sCtx); err == nil {
-				t.Fatalf("%d-th call to New() created a new gRPC transportå", i)
+			if (tr.(*transportRef)).grpcTransport != (transports[i].(*transportRef)).grpcTransport {
+				t.Fatalf("Wanted underlying gRPC transport to be reused, but got different transport: %v", (transports[i].(*transportRef)).grpcTransport)
 			}
 		}()
 	}
 
 	// Call Close() multiple times on each of the transport received in the
 	// above for loop. Close() calls are idempotent. The underlying gRPC
-	// transport implementation will not be closed until we release the first
-	// reference we acquired above, via the first call to Build().
+	// transport is removed after the Close() call but calling close second
+	// time should not panic.
 	for i := 0; i < count; i++ {
 		func() {
 			transports[i].Close()
 			transports[i].Close()
-
-			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-			defer sCancel()
-			if _, err := grpcTransportCloseCh.Receive(sCtx); err == nil {
-				t.Fatal("gRPC transport closed before all references are released")
-			}
 		}()
 	}
 
-	// Call the last Close(). The underlying gRPC transport should be closed.
+	// Call the last Close(). The underlying gRPC transport should be closed
+	// because calls in the above for loop have released all references.
+	//
+	// If not closed, it will be caught by the goroutine leak check.
 	tr.Close()
-	if _, err := grpcTransportCloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout waiting for gRPC transport to be closed: %v", err)
-	}
 
 	// Calling Build() again, after the previous transport was actually closed,
 	// should create a new one.
-	tr, err = builder.Build(serverID)
+	tr2, err := builder.Build(serverID)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer tr.Close()
-	if _, err := grpcTransportCreateCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for gRPC transport to be created: %v", err)
+	defer tr2.Close()
+	if (tr.(*transportRef)).grpcTransport == (tr2.(*transportRef)).grpcTransport {
+		t.Fatalf("Wanted new underlying gRPC transport, but got same transport: %v", (tr.(*transportRef)).grpcTransport)
 	}
 }
 
@@ -149,40 +117,18 @@ func (s) TestBuild_Multiple(t *testing.T) {
 		"insecure": insecure.NewBundle(),
 	}
 
-	// Override the gRPC transport creation hook to get notified.
-	origGRPCTransportCreateHook := grpcTransportCreateHook
-	grpcTransportCreateCh := testutils.NewChannelWithSize(1)
-	grpcTransportCreateHook = func() {
-		grpcTransportCreateCh.Replace(struct{}{})
-	}
-	defer func() { grpcTransportCreateHook = origGRPCTransportCreateHook }()
-
-	// Override the gRPC transport close hook to get notified.
-	origGRPCTransportCloseHook := grpcTransportCloseHook
-	grpcTransportCloseCh := testutils.NewChannelWithSize(1)
-	grpcTransportCloseHook = func() {
-		grpcTransportCloseCh.Replace(struct{}{})
-	}
-	defer func() { grpcTransportCloseHook = origGRPCTransportCloseHook }()
-
 	// Create two gRPC transports.
 	builder := NewBuilder(credentials)
 	tr1, err := builder.Build(serverID1)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := grpcTransportCreateCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for gRPC transport to be created: %v", err)
-	}
-
 	tr2, err := builder.Build(serverID2)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
 	}
-	if _, err := grpcTransportCreateCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when waiting for gRPC transport to be created: %v", err)
+	if tr1.(*transportRef).grpcTransport == tr2.(*transportRef).grpcTransport {
+		t.Fatalf("Wanted different underlying gRPC transports, but got same transport: %v", tr1.(*transportRef).grpcTransport)
 	}
 
 	// Create N more references to each of the two transports.
@@ -199,6 +145,9 @@ func (s) TestBuild_Multiple(t *testing.T) {
 			if err != nil {
 				t.Errorf("%d-th call to Build() failed with error: %v", i, err)
 			}
+			if tr1.(*transportRef).grpcTransport != transports1[i].(*transportRef).grpcTransport {
+				t.Errorf("Wanted underlying gRPC transport to be reused, but got different transport: %v", transports1[i].(*transportRef).grpcTransport)
+			}
 		}
 	}()
 	go func() {
@@ -209,6 +158,9 @@ func (s) TestBuild_Multiple(t *testing.T) {
 			if err != nil {
 				t.Errorf("%d-th call to Build() failed with error: %v", i, err)
 			}
+			if tr2.(*transportRef).grpcTransport != transports2[i].(*transportRef).grpcTransport {
+				t.Errorf("Wanted underlying gRPC transport to be reused, but got different transport: %v", transports2[i].(*transportRef).grpcTransport)
+			}
 		}
 	}()
 	wg.Wait()
@@ -216,53 +168,33 @@ func (s) TestBuild_Multiple(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Ensure that none of the create hooks are called.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := grpcTransportCreateCh.Receive(sCtx); err == nil {
-		t.Fatalf("gRPC transport created when expected to reuse an existing one")
-	}
-
-	// The close on transport is idempotent and calling it multiple times
-	// should not decrement the reference count multiple times.
+	// Call Close() multiple times on each of the transport received in the
+	// above for loop. Close() calls are idempotent. The underlying gRPC
+	// transport is removed after the Close() call but calling close second
+	// time should not panic.
 	for i := 0; i < count; i++ {
 		transports1[i].Close()
 		transports1[i].Close()
 	}
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := grpcTransportCloseCh.Receive(sCtx); err == nil {
-		t.Fatal("gRPC transport closed before all references are released")
-	}
 
-	// Call the last Close(). The underlying gRPC transport should be closed.
+	// Call the last Close(). The underlying gRPC transport should be closed
+	// because calls in the above for loop have released all references.
+	//
+	// If not closed, it will be caught by the goroutine leak check.
 	tr1.Close()
-	if _, err := grpcTransportCloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout waiting for gRPC transport to be closed: %v", err)
-	}
 
-	// Ensure that the close hook is not called for the second transport.
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := grpcTransportCloseCh.Receive(sCtx); err == nil {
-		t.Fatal("gRPC transport closed before all references are released")
-	}
-
-	// The close on transport is idempotent and calling it multiple times
-	// should not decrement the reference count multiple times.
+	// Call Close() multiple times on each of the transport received in the
+	// above for loop. Close() calls are idempotent. The underlying gRPC
+	// transport is removed after the Close() call but calling close second
+	// time should not panic.
 	for i := 0; i < count; i++ {
 		transports2[i].Close()
-		transports1[i].Close()
-	}
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := grpcTransportCloseCh.Receive(sCtx); err == nil {
-		t.Fatal("gRPC transport closed before all references are released")
+		transports2[i].Close()
 	}
 
-	// Call the last Close(). The underlying gRPC transport should be closed.
+	// Call the last Close(). The underlying gRPC transport should be closed
+	// because calls in the above for loop have released all references.
+	//
+	// If not closed, it will be caught by the goroutine leak check.
 	tr2.Close()
-	if _, err := grpcTransportCloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout waiting for gRPC transport to be closed: %v", err)
-	}
 }

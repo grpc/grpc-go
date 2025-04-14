@@ -35,11 +35,6 @@ import (
 
 var (
 	logger = grpclog.Component("grpctransport")
-
-	// The following functions are no-ops in the actual code, but can be
-	// overridden in tests to give them visibility into certain events.
-	grpcTransportCreateHook = func() {}
-	grpcTransportCloseHook  = func() {}
 )
 
 // ServerIdentifierExtension holds settings for connecting to a gRPC server,
@@ -132,7 +127,6 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	// Add the newly created transport to the map to re-use the transport.
 	b.transports[si] = tr
 
-	grpcTransportCreateHook()
 	if logger.V(2) {
 		logger.Info("Created a new transport to the server for ServerIdentifier: %v", si)
 	}
@@ -157,18 +151,17 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 }
 
 // Close closes the gRPC channel to the server.
-func (g *grpcTransport) Close() error {
+func (g *grpcTransport) Close() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	g.refCount--
 	if g.refCount != 0 {
-		return nil
+		return
 	}
 
 	g.deleteTransport()
-	grpcTransportCloseHook()
-	return g.cc.Close()
+	g.cc.Close()
 }
 
 func (g *grpcTransport) incrRef() {
@@ -185,12 +178,11 @@ type transportRef struct {
 }
 
 // Close releases the reference to the underlying gRPC transport.
-func (tr *transportRef) Close() error {
-	var err error
+func (tr *transportRef) Close() {
 	tr.closed.Do(func() {
-		err = tr.grpcTransport.Close()
+		tr.grpcTransport.Close()
+		tr.grpcTransport = nil
 	})
-	return err
 }
 
 type stream struct {
