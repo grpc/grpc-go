@@ -107,7 +107,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "not-supported-lb-policy",
+			name: "unsupported-lb-policy",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
