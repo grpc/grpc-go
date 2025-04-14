@@ -377,7 +377,7 @@ func CallAuthority(authority string) CallOption {
 	return AuthorityOverrideCallOption{Authority: authority}
 }
 
-// ßAuthorityOverrideCallOption is a CallOption that indicates the HTTP/2
+// AuthorityOverrideCallOption is a CallOption that indicates the HTTP/2
 // :authority header value to use for the call.
 //
 // # Experimental
