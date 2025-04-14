@@ -51,7 +51,8 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
-// ValidateAuthority validates the authority by checking it against the peer certificates.
+// ValidateAuthority validates the authßority by checking it against the peer
+// certificates.
 func (t TLSInfo) ValidateAuthority(authority string) error {
 	var err error
 	var errs []error

@@ -4960,7 +4960,6 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 		maxSendSize []int
 		compressor  []string
 		subtype     []string
-		authority   []string
 	}
 	var observedOpts observedOptions
 	populateOpts := func(opts []grpc.CallOption) {
@@ -4984,8 +4983,6 @@ func (s) TestInterceptorCanAccessCallOptions(t *testing.T) {
 				observedOpts.compressor = append(observedOpts.compressor, o.CompressorType)
 			case grpc.ContentSubtypeCallOption:
 				observedOpts.subtype = append(observedOpts.subtype, o.ContentSubtype)
-			case grpc.AuthorityOverrideCallOption:
-				observedOpts.authority = append(observedOpts.authority, o.Authority)
 			}
 		}
 	}
