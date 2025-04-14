@@ -26,11 +26,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 )
 
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {

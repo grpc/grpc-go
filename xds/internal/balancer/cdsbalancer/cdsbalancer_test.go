@@ -58,7 +58,7 @@ import (
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer/ringhash" // Register the ring_hash LB policy
+	_ "google.golang.org/grpc/balancer/ringhash" // Register the ring_hash LB policy
 )
 
 const (

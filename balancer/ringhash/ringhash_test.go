@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
 )
 
 const (
@@ -672,16 +671,34 @@ func (s) TestAggregatedConnectivityState(t *testing.T) {
 	}
 }
 
+type testKeyType string
+
+const testKey testKeyType = "grpc.lb.ringhash.testKey"
+
+type testAttribute struct {
+	content string
+}
+
+func setTestAttrAddr(addr resolver.Address, content string) resolver.Address {
+	addr.BalancerAttributes = addr.BalancerAttributes.WithValue(testKey, testAttribute{content})
+	return addr
+}
+
+func setTestAttrEndpoint(endpoint resolver.Endpoint, content string) resolver.Endpoint {
+	endpoint.Attributes = endpoint.Attributes.WithValue(testKey, testAttribute{content})
+	return endpoint
+}
+
 // TestAddrBalancerAttributesChange tests the case where the ringhash balancer
 // receives a ClientConnUpdate with the same config and addresses as received in
 // the previous update. Although the `BalancerAttributes` and endpoint
 // attributes contents are the same, the pointers are different. This test
 // verifies that subConns are not recreated in this scenario.
 func (s) TestAddrBalancerAttributesChange(t *testing.T) {
-	locality := internal.LocalityID{Region: "americas"}
-	addrs1 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, locality)}
+	content := "test"
+	addrs1 := []resolver.Address{setTestAttrAddr(resolver.Address{Addr: testBackendAddrStrs[0]}, content)}
 	wantEndpoints1 := []resolver.Endpoint{
-		internal.SetLocalityIDInEndpoint(resolver.Endpoint{Addresses: addrs1}, locality),
+		setTestAttrEndpoint(resolver.Endpoint{Addresses: addrs1}, "content"),
 	}
 	cc, b, p0 := setupTest(t, wantEndpoints1)
 	ring0 := p0.(*picker).ring
@@ -700,10 +717,8 @@ func (s) TestAddrBalancerAttributesChange(t *testing.T) {
 	case <-cc.NewSubConnCh:
 	}
 
-	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, locality)}
-	wantEndpoints2 := []resolver.Endpoint{
-		internal.SetLocalityIDInEndpoint(resolver.Endpoint{Addresses: addrs2}, locality),
-	}
+	addrs2 := []resolver.Address{setTestAttrAddr(resolver.Address{Addr: testBackendAddrStrs[0]}, content)}
+	wantEndpoints2 := []resolver.Endpoint{setTestAttrEndpoint(resolver.Endpoint{Addresses: addrs2}, content)}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Endpoints: wantEndpoints2},
 		BalancerConfig: testConfig,

@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/hierarchy"
@@ -39,7 +40,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )

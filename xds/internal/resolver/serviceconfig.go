@@ -29,6 +29,7 @@ import (
 	"time"
 
 	xxhash "github.com/cespare/xxhash/v2"
+	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -37,7 +38,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
