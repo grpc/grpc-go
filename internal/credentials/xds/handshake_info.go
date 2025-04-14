@@ -242,13 +242,11 @@ func (hi *HandshakeInfo) ServerSideTLSConfig(ctx context.Context) (*tls.Config, 
 		if err != nil {
 			return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
 		}
-		if km.SPIFFEBundleMap != nil {
+		if km.SPIFFEBundleMap != nil && hi.requireClientCert {
 			// ClientAuth, if set greater than tls.RequireAnyClientCert, must be
 			// dropped to tls.RequireAnyClientCert so that custom verification
 			// to use SPIFFE Bundles is done.
-			if cfg.ClientAuth >= tls.VerifyClientCertIfGiven {
-				cfg.ClientAuth = tls.RequireAnyClientCert
-			}
+			cfg.ClientAuth = tls.RequireAnyClientCert
 			cfg.VerifyPeerCertificate = hi.buildVerifyFunc(km, false)
 		} else {
 			cfg.ClientCAs = km.Roots
