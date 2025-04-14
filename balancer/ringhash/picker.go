@@ -23,9 +23,10 @@ import (
 	"strings"
 
 	xxhash "github.com/cespare/xxhash/v2"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/xds"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -56,7 +57,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	var requestHash uint64
 	if p.requestHashHeader == "" {
 		var ok bool
-		if requestHash, ok = xds.GetXDSRequestHash(info.Ctx); !ok {
+		if requestHash, ok = iringhash.XDSRequestHash(info.Ctx); !ok {
 			return balancer.PickResult{}, fmt.Errorf("ringhash: expected xDS config selector to set the request hash")
 		}
 	} else {

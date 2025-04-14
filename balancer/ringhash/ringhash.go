@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/ringhash"
 	"google.golang.org/grpc/serviceconfig"
@@ -85,7 +86,7 @@ type ringhashBalancer struct {
 	child  balancer.Balancer
 
 	mu                   sync.Mutex
-	config               *LBConfig
+	config               *iringhash.LBConfig
 	inhibitChildUpdates  bool
 	shouldRegenerateRing bool
 	endpointStates       *resolver.EndpointMap[*endpointState]
@@ -173,7 +174,7 @@ func (b *ringhashBalancer) UpdateClientConnState(ccs balancer.ClientConnState) e
 		b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(ccs.BalancerConfig))
 	}
 
-	newConfig, ok := ccs.BalancerConfig.(*LBConfig)
+	newConfig, ok := ccs.BalancerConfig.(*iringhash.LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", ccs.BalancerConfig)
 	}
