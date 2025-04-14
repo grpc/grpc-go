@@ -770,7 +770,6 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	const (
 		targetTestAddr          = "test.target"
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
-		resolvedTargetTestAddr2 = "2.2.2.2:8080"
 		envProxyAddr            = "proxytest.com"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
@@ -808,10 +807,11 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
+	var gotState resolver.State
 	select {
-	case <-stateCh:
-	case <-time.After(defaultTestShortTimeout):
-		t.Fatalf("Delegating resolver did not call update state")
+	case gotState = <-stateCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 
 	proxyResolver.UpdateState(resolver.State{
@@ -819,20 +819,15 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
-	var gotState resolver.State
-	select {
-	case gotState = <-stateCh:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
-	}
 	wantState := resolver.State{
 		Addresses:     []resolver.Address{nonTCPAddr},
 		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{nonTCPAddr}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
-	// Verify that the state clientconn receives is same as updated by target resolver,
-	// since we want to avoid proxy for any network type aprt from tcp.
+	// Verify that the state clientconn receives is same as updated by target
+	// resolver, since we want to avoid proxy for any network type apart from
+	// tcp.
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
 		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
@@ -848,8 +843,6 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
 		resolvedTargetTestAddr2 = "2.2.2.2:8080"
 		envProxyAddr            = "proxytest.com"
-		resolvedProxyTestAddr1  = "11.11.11.11:7687"
-		resolvedProxyTestAddr2  = "22.22.22.22:7687"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		if req.URL.Host == targetTestAddr {
