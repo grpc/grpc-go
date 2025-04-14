@@ -366,25 +366,24 @@ func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
 }
 func (o MaxRecvMsgSizeCallOption) after(*callInfo, *csAttempt) {}
 
-// CallAuthority returns a CallOption which sets the authority to override the
-// `:authority` pseudoheader in a RPC. If this is set, the RPC will use only
-// this authority.
+// CallAuthority creates a CallOption that sets the HTTP/2 :authority header of
+// an RPC to the specified value.
 //
 // # Experimental
 //
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
-func CallAuthority(auth string) CallOption {
-	return AuthorityOverrideCallOption{Authority: auth}
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
+func CallAuthority(authority string) CallOption {
+	return AuthorityOverrideCallOption{Authority: authority}
 }
 
-// AuthorityOverrideCallOption is a CallOption which sets the authority that the
-// RPC will use in the `:authority` pseudo header.
+// ßAuthorityOverrideCallOption is a CallOption that indicates the HTTP/2
+// :authority header value to use for the call.
 //
 // # Experimental
 //
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a later
+// release.
 type AuthorityOverrideCallOption struct {
 	Authority string
 }

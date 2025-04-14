@@ -71,7 +71,7 @@ func (info) AuthType() string {
 	return "insecure"
 }
 
-func (info) ValidateAuthority(_ string) error {
+func (info) ValidateAuthority(string) error {
 	return nil
 }
 

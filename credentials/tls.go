@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -53,12 +54,14 @@ func (t TLSInfo) AuthType() string {
 // ValidateAuthority validates the authority by checking it against the peer certificates.
 func (t TLSInfo) ValidateAuthority(authority string) error {
 	var err error
+	var errs []error
 	for _, cert := range t.State.PeerCertificates {
 		if err = cert.VerifyHostname(authority); err == nil {
 			return nil
 		}
+		errs = append(errs, err)
 	}
-	return fmt.Errorf("credentials: failed to verify authority %s", err)
+	return fmt.Errorf("credentials: invalid authority %q: %w", authority, errors.Join(errs...))
 }
 
 // cipherSuiteLookup returns the string version of a TLS cipher suite ID.

@@ -541,7 +541,9 @@ type CallHdr struct {
 
 	DoneFunc func() // called when the stream is finished
 
-	// Authority is used to override the `:authority` header.
+	// Authority is used to explicitly override the `:authority` header. If set,
+	// this value takes precedence over the Host field and will be used as the
+	// value for the `:authority` header.
 	Authority string
 }
 
