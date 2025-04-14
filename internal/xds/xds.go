@@ -19,6 +19,8 @@
 package xds
 
 import (
+	"context"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
@@ -39,4 +41,25 @@ func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	v := attr.Value(handshakeClusterNameKey{})
 	name, ok := v.(string)
 	return name, ok
+}
+
+// xdsHashKey is the type used as the key to store request hash in the context
+// used when combining the Ring Hash load balancing policy with xDS.
+type xdsHashKey struct{}
+
+// GetXDSRequestHash returns the request hash in the context and true if it was set
+// from the xDS config selector. If the xDS config selector has not set the hash,
+// it returns 0 and false.
+func GetXDSRequestHash(ctx context.Context) (uint64, bool) {
+	requestHash := ctx.Value(xdsHashKey{})
+	if requestHash == nil {
+		return 0, false
+	}
+	return requestHash.(uint64), true
+}
+
+// SetXDSRequestHash adds the request hash to the context for use in Ring Hash
+// Load Balancing using xDS route hash_policy.
+func SetXDSRequestHash(ctx context.Context, requestHash uint64) context.Context {
+	return context.WithValue(ctx, xdsHashKey{}, requestHash)
 }

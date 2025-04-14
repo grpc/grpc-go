@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -156,7 +157,7 @@ func (s) TestPickerPickFirstTwo(t *testing.T) {
 				endpointStates: epStates,
 			}
 			got, err := p.Pick(balancer.PickInfo{
-				Ctx: SetXDSRequestHash(ctx, 0), // always pick the first endpoint on the ring.
+				Ctx: xds.SetXDSRequestHash(ctx, 0), // always pick the first endpoint on the ring.
 			})
 			if (err != nil || tt.wantErr != nil) && !errors.Is(err, tt.wantErr) {
 				t.Errorf("Pick() error = %v, wantErr %v", err, tt.wantErr)

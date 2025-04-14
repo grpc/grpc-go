@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -143,7 +144,7 @@ func (s) TestOneEndpoint(t *testing.T) {
 	// only Endpoint which has a single address.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	var sc0 *testutils.TestSubConn
@@ -171,7 +172,7 @@ func (s) TestOneEndpoint(t *testing.T) {
 	// Test pick with one backend.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -204,7 +205,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	// SubConn.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 
@@ -291,7 +292,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	}
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != subConns[0] {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[0])
 		}
@@ -304,7 +305,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	subConns[2].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != subConns[2] {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[2])
 		}
@@ -317,7 +318,7 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	subConns[1].UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	p3 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != subConns[1] {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, subConns[1])
 		}
@@ -345,7 +346,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	// SubConn.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	// The picked SubConn should be the second in the ring.
@@ -374,7 +375,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	// First hash should always pick sc0.
 	p1 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
+		gotSCSt, _ := p1.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -383,7 +384,7 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	secondHash := ring0.items[1].hash
 	// secondHash+1 will pick the third SubConn from the ring.
 	testHash2 := secondHash + 1
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash2)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash2)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	var sc1 *testutils.TestSubConn
@@ -406,14 +407,14 @@ func (s) TestThreeBackendsAffinityMultiple(t *testing.T) {
 	// With the new generated picker, hash2 always picks sc1.
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash2)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash2)})
 		if gotSCSt.SubConn != sc1 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
 	// But the first hash still picks sc0.
 	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, testHash)})
+		gotSCSt, _ := p2.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, testHash)})
 		if gotSCSt.SubConn != sc0 {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
 		}
@@ -531,7 +532,7 @@ func (s) TestAutoConnectEndpointOnTransientFailure(t *testing.T) {
 	// ringhash won't tell SCs to connect until there is an RPC, so simulate
 	// one now.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	ctx = SetXDSRequestHash(ctx, 0)
+	ctx = xds.SetXDSRequestHash(ctx, 0)
 	defer cancel()
 	p0.Pick(balancer.PickInfo{Ctx: ctx})
 
@@ -708,7 +709,7 @@ func (s) TestAddrBalancerAttributesChange(t *testing.T) {
 	// only Endpoint which has a single address.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := p0.Pick(balancer.PickInfo{Ctx: SetXDSRequestHash(ctx, firstHash)}); err != balancer.ErrNoSubConnAvailable {
+	if _, err := p0.Pick(balancer.PickInfo{Ctx: xds.SetXDSRequestHash(ctx, firstHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 	select {

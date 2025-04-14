@@ -17,26 +17,3 @@
  */
 
 package ringhash
-
-import (
-	"context"
-)
-
-type xdsHashKey struct{}
-
-// XDSRequestHash returns the request hash in the context and true if it was set
-// from the xDS config selector. If the xDS config selector has not set the hash,
-// it returns 0 and false.
-func XDSRequestHash(ctx context.Context) (uint64, bool) {
-	requestHash := ctx.Value(xdsHashKey{})
-	if requestHash == nil {
-		return 0, false
-	}
-	return requestHash.(uint64), true
-}
-
-// SetXDSRequestHash adds the request hash to the context for use in Ring Hash
-// Load Balancing using xDS route hash_policy.
-func SetXDSRequestHash(ctx context.Context, requestHash uint64) context.Context {
-	return context.WithValue(ctx, xdsHashKey{}, requestHash)
-}
