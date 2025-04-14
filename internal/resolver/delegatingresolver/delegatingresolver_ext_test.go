@@ -838,10 +838,10 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	}
 }
 
-// Tests the scenario where a proxy is configured, and the resolver returns addresses with varied
-// network type. The test verifies that the delegating resolver doesnt add
-// proxyatrribute to adresses with network type other than tcp , but adds the
-// proxyattribute to addresses with network type tcp.
+// Tests the scenario where a proxy is configured, and the resolver returns
+// addresses with varied network type. The test verifies that the delegating
+// resolver doesnt add proxyatrribute to adresses with network type other than
+// tcp , but adds the proxyattribute to addresses with network type tcp.
 func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	const (
 		targetTestAddr          = "test.target"

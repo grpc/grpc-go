@@ -243,12 +243,12 @@ func tcpAddressPresent(state *resolver.State) bool {
 	return false
 }
 
-// updateClientConnStateLocked creates a list of combined addresses by
-// pairing each proxy address with every target address. For each pair, it
-// generates a new [resolver.Address] using the proxy address, and adding the
-// target address as the attribute along with user info. It returns nil if
-// either resolver has not sent update even once and returns the error from
-// ClientConn update once both resolvers have sent update atleast once.
+// updateClientConnStateLocked creates a list of combined addresses by pairing
+// each proxy address with every target address. For each pair, it generates a
+// new [resolver.Address] using the proxy address, and adding the target address
+// as the attribute along with user info. It returns nil if either resolver has
+// not sent update even once and returns the error from ClientConn update once
+// both resolvers have sent update atleast once.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
 	if r.targetResolverState == nil {
 		return nil
@@ -371,8 +371,8 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 // updateTargetResolverState updates the target resolver state by storing target
 // addresses, endpoints, and service config, marking the resolver as ready, and
 // triggering a state update if both resolvers are ready. If the ClientConn
-// returns a non-nil error, it calls `ResolveNow()` on the proxy resolver. It
-// is a StateListener function of wrappingClientConn passed to the target resolver.
+// returns a non-nil error, it calls `ResolveNow()` on the proxy resolver. It is
+// a StateListener function of wrappingClientConn passed to the target resolver.
 func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -409,7 +409,8 @@ func (wcc *wrappingClientConn) UpdateState(state resolver.State) error {
 	return wcc.stateListener(state)
 }
 
-// ReportError intercepts errors from the child resolvers and passes them to ClientConn.
+// ReportError intercepts errors from the child resolvers and passes them to
+// ClientConn.
 func (wcc *wrappingClientConn) ReportError(err error) {
 	wcc.parent.cc.ReportError(err)
 }
