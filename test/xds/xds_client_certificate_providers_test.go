@@ -369,7 +369,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	bc := e2e.SPIFFEBootstrapContents(t, nodeID, mgmtServer.Address)
 
 	// Create an xDS resolver with the above bootstrap configuration.
 	var xdsResolver resolver.Builder
