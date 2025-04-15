@@ -1,5 +1,3 @@
-//revive:disable:unused-parameter
-
 /*
  *
  * Copyright 2025 gRPC authors.
@@ -37,6 +35,9 @@ const negativeOneUInt64 = ^uint64(0)
 //
 // It is safe for concurrent use.
 type LoadStore struct {
+	lrsStream *streamImpl
+	closed    sync.Once
+
 	// mu only protects the map (2 layers). The read/write to
 	// *PerClusterReporter doesn't need to hold the mu.
 	mu sync.Mutex
@@ -52,9 +53,10 @@ type LoadStore struct {
 }
 
 // newStore creates a LoadStore.
-func newLoadStore() *LoadStore {
+func newLoadStore(lrsStream *streamImpl) *LoadStore {
 	return &LoadStore{
-		clusters: make(map[string]map[string]*PerClusterReporter),
+		clusters:  make(map[string]map[string]*PerClusterReporter),
+		lrsStream: lrsStream,
 	}
 }
 
@@ -69,8 +71,10 @@ func newLoadStore() *LoadStore {
 // attempt to flush any unreported load data to the LRS server. It will either
 // wait for this attempt to complete, or for the provided context to be done
 // before canceling the LRS stream.
-func (ls *LoadStore) Stop(ctx context.Context) error {
-	panic("unimplemented")
+func (ls *LoadStore) Stop(context.Context) {
+	ls.closed.Do(func() {
+		ls.lrsStream.stop()
+	})
 }
 
 // ReporterForCluster returns the PerClusterReporter for the given cluster and

@@ -304,7 +304,7 @@ func TestStoreStats(t *testing.T) {
 		testLocality = "test-locality"
 	)
 
-	store := newLoadStore()
+	store := newLoadStore(nil)
 	for _, c := range testClusters {
 		for _, s := range testServices {
 			store.ReporterForCluster(c, s).CallStarted(testLocality)
@@ -401,7 +401,7 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 		testLocality = "test-locality"
 	)
 
-	store := newLoadStore()
+	store := newLoadStore(nil)
 	// "c0"'s RPCs all finish with success.
 	for _, s := range testServices {
 		store.ReporterForCluster("c0", s).CallStarted(testLocality)
