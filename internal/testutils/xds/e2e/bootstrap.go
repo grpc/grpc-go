@@ -70,7 +70,7 @@ func SPIFFEBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	}
 
 	// Create a directory to hold certs and key files used on the client side.
-	clientDir, err := createTmpDirWithCerts("testClientSideXDSSPIFFE*", "spiffe_end2end/client_spiffe.pem", "spiffe_end2end/client.key", "spiffe_end2end/ca.pem", "spiffe_end2end/client_spiffe.json")
+	clientDir, err := createTmpDirWithCerts("testClientSideXDSSPIFFE*", "spiffe_end2end/client_spiffe.pem", "spiffe_end2end/client.key", "spiffe_end2end/ca.pem", "spiffe_end2end/client_spiffebundle.json")
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
@@ -78,8 +78,8 @@ func SPIFFEBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	// Create certificate providers section of the bootstrap config with entries
 	// for both the client and server sides.
 	cpc := map[string]json.RawMessage{
-		ServerSideCertProviderInstance: SPIFFEFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
-		ClientSideCertProviderInstance: SPIFFEFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile)),
+		ServerSideCertProviderInstance: SPIFFEFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile), path.Join(serverDir, spiffeBundleMapFile)),
+		ClientSideCertProviderInstance: SPIFFEFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile), path.Join(clientDir, spiffeBundleMapFile)),
 	}
 
 	// Create the bootstrap configuration.
