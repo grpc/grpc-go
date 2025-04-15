@@ -118,10 +118,11 @@ type pickfirstBuilder struct{}
 
 func (pickfirstBuilder) Build(cc balancer.ClientConn, bo balancer.BuildOptions) balancer.Balancer {
 	b := &pickfirstBalancer{
-		cc:                    cc,
-		target:                bo.Target.String(),
-		metricsRecorder:       cc.MetricsRecorder(),
-		subConns:              newSubConnMap(),
+		cc:              cc,
+		target:          bo.Target.String(),
+		metricsRecorder: cc.MetricsRecorder(),
+
+		subConns:              resolver.NewAddressMapV2[*scData](),
 		state:                 connectivity.Connecting,
 		cancelConnectionTimer: func() {},
 	}
@@ -219,7 +220,7 @@ type pickfirstBalancer struct {
 	// updates.
 	state connectivity.State
 	// scData for active subonns mapped by address.
-	subConns              *subConnMap
+	subConns              *resolver.AddressMapV2[*scData]
 	addressList           addressList
 	firstPass             bool
 	numTF                 int
@@ -316,7 +317,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 	newAddrs = interleaveAddresses(newAddrs)
 
 	prevAddr := b.addressList.currentAddress()
-	prevSCData, found := b.subConns.get(prevAddr)
+	prevSCData, found := b.subConns.Get(prevAddr)
 	prevAddrsCount := b.addressList.size()
 	isPrevRawConnectivityStateReady := found && prevSCData.rawConnectivityState == connectivity.Ready
 	b.addressList.updateAddrs(newAddrs)
@@ -379,17 +380,17 @@ func (b *pickfirstBalancer) startFirstPassLocked() {
 	b.firstPass = true
 	b.numTF = 0
 	// Reset the connection attempt record for existing SubConns.
-	for _, sd := range b.subConns.values() {
+	for _, sd := range b.subConns.Values() {
 		sd.connectionFailedInFirstPass = false
 	}
 	b.requestConnectionLocked()
 }
 
 func (b *pickfirstBalancer) closeSubConnsLocked() {
-	for _, sd := range b.subConns.values() {
+	for _, sd := range b.subConns.Values() {
 		sd.subConn.Shutdown()
 	}
-	b.subConns = newSubConnMap()
+	b.subConns = resolver.NewAddressMapV2[*scData]()
 }
 
 // deDupAddresses ensures that each address appears only once in the slice.
@@ -480,18 +481,18 @@ func addressFamily(address string) ipAddrFamily {
 // This ensures that the subchannel map accurately reflects the current set of
 // addresses received from the name resolver.
 func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address) {
-	newAddrsMap := newSubConnMap()
+	newAddrsMap := resolver.NewAddressMapV2[bool]()
 	for _, addr := range newAddrs {
-		newAddrsMap.set(addr, nil)
+		newAddrsMap.Set(addr, true)
 	}
 
-	for _, oldAddr := range b.subConns.keys() {
-		if _, ok := newAddrsMap.get(oldAddr); ok {
+	for _, oldAddr := range b.subConns.Keys() {
+		if _, ok := newAddrsMap.Get(oldAddr); ok {
 			continue
 		}
-		val, _ := b.subConns.get(oldAddr)
+		val, _ := b.subConns.Get(oldAddr)
 		val.subConn.Shutdown()
-		b.subConns.deleteKey(oldAddr)
+		b.subConns.Delete(oldAddr)
 	}
 }
 
@@ -499,13 +500,13 @@ func (b *pickfirstBalancer) reconcileSubConnsLocked(newAddrs []resolver.Address)
 // becomes ready, which means that all other subConn must be shutdown.
 func (b *pickfirstBalancer) shutdownRemainingLocked(selected *scData) {
 	b.cancelConnectionTimer()
-	for _, sd := range b.subConns.values() {
+	for _, sd := range b.subConns.Values() {
 		if sd.subConn != selected.subConn {
 			sd.subConn.Shutdown()
 		}
 	}
-	b.subConns = newSubConnMap()
-	b.subConns.set(selected.addr, selected)
+	b.subConns = resolver.NewAddressMapV2[*scData]()
+	b.subConns.Set(selected.addr, selected)
 }
 
 // requestConnectionLocked starts connecting on the subchannel corresponding to
@@ -519,7 +520,7 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 	var lastErr error
 	for valid := true; valid; valid = b.addressList.increment() {
 		curAddr := b.addressList.currentAddress()
-		sd, ok := b.subConns.get(curAddr)
+		sd, ok := b.subConns.Get(curAddr)
 		if !ok {
 			var err error
 			// We want to assign the new scData to sd from the outer scope,
@@ -534,7 +535,7 @@ func (b *pickfirstBalancer) requestConnectionLocked() {
 				// Do nothing, the LB policy will be closed soon.
 				return
 			}
-			b.subConns.set(curAddr, sd)
+			b.subConns.Set(curAddr, sd)
 		}
 
 		switch sd.rawConnectivityState {
@@ -724,9 +725,9 @@ func (b *pickfirstBalancer) updateSubConnState(sd *scData, newState balancer.Sub
 	// We have finished the first pass, keep re-connecting failing SubConns.
 	switch newState.ConnectivityState {
 	case connectivity.TransientFailure:
-		b.numTF = (b.numTF + 1) % b.subConns.length()
+		b.numTF = (b.numTF + 1) % b.subConns.Len()
 		sd.lastErr = newState.ConnectionError
-		if b.numTF%b.subConns.length() == 0 {
+		if b.numTF%b.subConns.Len() == 0 {
 			b.updateBalancerState(balancer.State{
 				ConnectivityState: connectivity.TransientFailure,
 				Picker:            &picker{err: newState.ConnectionError},
@@ -750,7 +751,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 	}
 	// Connect() has been called on all the SubConns. The first pass can be
 	// ended if all the SubConns have reported a failure.
-	for _, sd := range b.subConns.values() {
+	for _, sd := range b.subConns.Values() {
 		if !sd.connectionFailedInFirstPass {
 			return
 		}
@@ -761,7 +762,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 		Picker:            &picker{err: lastErr},
 	})
 	// Start re-connecting all the SubConns that are already in IDLE.
-	for _, sd := range b.subConns.values() {
+	for _, sd := range b.subConns.Values() {
 		if sd.rawConnectivityState == connectivity.Idle {
 			sd.subConn.Connect()
 		}
@@ -769,7 +770,7 @@ func (b *pickfirstBalancer) endFirstPassIfPossibleLocked(lastErr error) {
 }
 
 func (b *pickfirstBalancer) isActiveSCData(sd *scData) bool {
-	activeSD, found := b.subConns.get(sd.addr)
+	activeSD, found := b.subConns.Get(sd.addr)
 	return found && activeSD == sd
 }
 
@@ -922,6 +923,5 @@ func (al *addressList) hasNext() bool {
 // fields that are meaningful to the SubConn.
 func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
-		a.Attributes.Equal(b.Attributes) &&
-		a.Metadata == b.Metadata
+		a.Attributes.Equal(b.Attributes)
 }

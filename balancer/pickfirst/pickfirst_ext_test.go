@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/pickfirst"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -962,89 +961,5 @@ func (s) TestPickFirst_ResolverError_ZeroAddresses_WithPreviousUpdate(t *testing
 	}
 	if ctx.Err() != nil {
 		t.Fatal("Timeout when waiting for RPCs to fail with error returned by the name resolver")
-	}
-}
-
-// TestPickFirst_AddressUpdateWithMetadata tests the case where an address
-// update received by the pick_first LB policy differs in metadata. Addresses
-// which differ in metadata are considered different from the perspective of
-// subconn creation and connection establishment and the test verifies that new
-// connections are created when metadata change.
-func (s) TestPickFirst_AddressUpdateWithMetadata(t *testing.T) {
-	cc, r, backends, listeners := setupPickFirstWithListenerWrapper(t, 2)
-
-	// Add a set of metadata to the addresses before pushing them to the
-	// pick_first LB policy through the manual resolver.
-	addrs := stubBackendsToResolverAddrs(backends)
-	for i := range addrs {
-		addrs[i].Metadata = &metadata.MD{
-			"test-metadata-1": []string{fmt.Sprintf("%d", i)},
-		}
-	}
-	r.UpdateState(resolver.State{Addresses: addrs})
-
-	// Ensure that RPCs succeed to the first backend in the list.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
-		t.Fatal(err)
-	}
-
-	// Grab the wrapped connection from the listener wrapper. This will be used
-	// to verify the connection is closed.
-	val, err := listeners[0].NewConnCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
-	}
-	conn := val.(*testutils.ConnWrapper)
-
-	// Add another set of metadata to the addresses, and push them to the
-	// pick_first LB policy through the manual resolver. Leave the order of the
-	// addresses unchanged.
-	for i := range addrs {
-		addrs[i].Metadata = &metadata.MD{
-			"test-metadata-2": []string{fmt.Sprintf("%d", i)},
-		}
-	}
-	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
-		t.Fatal(err)
-	}
-
-	// A change in the address metadata results in the new address being
-	// considered different to the current address. This will result in the old
-	// connection being closed and a new connection to the same backend (since
-	// address order is not modified).
-	if _, err := conn.CloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when expecting existing connection to be closed: %v", err)
-	}
-	val, err = listeners[0].NewConnCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
-	}
-	conn = val.(*testutils.ConnWrapper)
-
-	// Add another set of metadata to the addresses, and push them to the
-	// pick_first LB policy through the manual resolver.  Reverse of the order
-	// of addresses.
-	for i := range addrs {
-		addrs[i].Metadata = &metadata.MD{
-			"test-metadata-3": []string{fmt.Sprintf("%d", i)},
-		}
-	}
-	addrs[0], addrs[1] = addrs[1], addrs[0]
-	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
-		t.Fatal(err)
-	}
-
-	// Ensure that the old connection is closed and a new connection is
-	// established to the first address in the new list.
-	if _, err := conn.CloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Timeout when expecting existing connection to be closed: %v", err)
-	}
-	_, err = listeners[1].NewConnCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
 	}
 }
