@@ -216,7 +216,7 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 		return nil, time.Duration(0), fmt.Errorf("lrs: unexpected message type %T", r)
 	}
 	if lrs.logger.V(perRPCVerbosityLevel) {
-		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(resp))
+		lrs.logger.Infof("Received first LoadStatsResponse: %s", pretty.ToJSON(&resp))
 	}
 
 	internal := resp.GetLoadReportingInterval()
