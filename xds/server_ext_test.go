@@ -485,13 +485,13 @@ func (s) TestServer_MultipleServers_DifferentBootstrapConfigurations(t *testing.
 	// Create two gRPC clients, one for each server.
 	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to create client for test server 1: %s, %v", lis1.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis1.Addr().String(), err)
 	}
 	defer cc1.Close()
 
 	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to create client for test server 2: %s, %v", lis2.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis2.Addr().String(), err)
 	}
 	defer cc2.Close()
 

@@ -84,7 +84,7 @@ func (s) TestFailingProvider(t *testing.T) {
 
 	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
-		t.Fatalf("Error dialing: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", s.Address, err)
 	}
 	defer conn.Close()
 

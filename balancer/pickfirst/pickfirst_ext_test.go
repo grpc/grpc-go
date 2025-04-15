@@ -378,7 +378,7 @@ func (s) TestPickFirst_StickyTransientFailure(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(lis.Addr().String(), dopts...)
 	if err != nil {
-		t.Fatalf("Failed to create new client: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	t.Cleanup(func() { cc.Close() })
 	cc.Connect()

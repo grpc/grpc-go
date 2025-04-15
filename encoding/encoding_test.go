@@ -125,7 +125,7 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 	// Create a channel to the above server.
 	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", backend.Address, err)
 	}
 	defer cc.Close()
 
@@ -162,7 +162,7 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 	// here, the proto codec will get automatically used.
 	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", backend.Address, err)
 	}
 	defer cc.Close()
 
@@ -199,7 +199,7 @@ func (s) TestEncodeDoesntPanicOnClient(t *testing.T) {
 	// Create a channel to the above server.
 	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", backend.Address, err)
 	}
 	defer cc.Close()
 
@@ -235,7 +235,7 @@ func (s) TestDecodeDoesntPanicOnClient(t *testing.T) {
 	// Create a channel to the above server.
 	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", backend.Address, err)
 	}
 	defer cc.Close()
 
@@ -291,7 +291,7 @@ func (s) TestForceServerCodec(t *testing.T) {
 	// Create a channel to the above server.
 	cc, err := grpc.NewClient(backend.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial test backend at %q: %v", backend.Address, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", backend.Address, err)
 	}
 	defer cc.Close()
 

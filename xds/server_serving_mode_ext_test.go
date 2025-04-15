@@ -93,7 +93,7 @@ func (s) TestServer_ServingModeChanges_SingleServer(t *testing.T) {
 	// route configuration, and therefore RPCs must fail at this time.
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	waitForFailedRPCWithStatus(ctx, t, cc, codes.Unavailable, "", "")

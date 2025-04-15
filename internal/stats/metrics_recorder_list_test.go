@@ -154,7 +154,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(mr2))
 	if err != nil {
-		log.Fatalf("Failed to dial: %v", err)
+		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 

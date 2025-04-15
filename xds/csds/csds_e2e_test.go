@@ -192,7 +192,7 @@ func startCSDSServer(t *testing.T) string {
 func startCSDSClientStream(ctx context.Context, t *testing.T, serverAddr string) v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient {
 	conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial CSDS server %q: %v", serverAddr, err)
+		t.Fatalf("grpc.NewClient(%q) = %v", serverAddr, err)
 	}
 
 	client := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)

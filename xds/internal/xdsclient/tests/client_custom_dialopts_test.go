@@ -154,7 +154,7 @@ func (s) TestClientCustomDialOptsFromCredentialsBundle(t *testing.T) {
 	// data plane communication with the test backend.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("Failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 
 	client := testgrpc.NewTestServiceClient(cc)
