@@ -58,7 +58,7 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 	caCert := testdata.Path("x509/server_ca_cert.pem")
 	clientCert := testdata.Path("x509/client1_cert.pem")
 	clientKey := testdata.Path("x509/client1_key.pem")
-	clientSpiffeBundle := testdata.Path("spiffe_end2end/client_spiffe.json")
+	clientSpiffeBundle := testdata.Path("spiffe_end2end/client_spiffebundle.json")
 	tests := []struct {
 		name string
 		jd   string
