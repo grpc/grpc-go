@@ -1431,7 +1431,11 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 // update only changes the metadata.
 func (s) TestPickFirstLeaf_AddressUpdateWithMetadata(t *testing.T) {
 	dialer := testutils.NewBlockingDialer()
-	cc, r, backends := setupPickFirstLeaf(t, 2, grpc.WithContextDialer(dialer.DialContext))
+	dopts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, pickfirstleaf.Name)),
+		grpc.WithContextDialer(dialer.DialContext),
+	}
+	cc, r, backends := setupPickFirstLeaf(t, 2, dopts...)
 
 	// Add a metadata to the addresses before pushing them to the pick_first LB
 	// policy through the manual resolver.
