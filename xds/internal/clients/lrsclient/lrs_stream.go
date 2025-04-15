@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-// Package lrs provides the implementation of an LRS (Load Reporting Service)
-// stream for the xDS client.
 package lrsclient
 
 import (
