@@ -107,7 +107,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "non-round-robin-or-ring-hash-lb-policy",
+			name: "not-supported-lb-policy",
 			cluster: &v3clusterpb.Cluster{
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -117,7 +117,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 						},
 					},
 				},
-				LbPolicy: v3clusterpb.Cluster_LEAST_REQUEST,
+				LbPolicy: v3clusterpb.Cluster_MAGLEV,
 			},
 			wantErr: true,
 		},
