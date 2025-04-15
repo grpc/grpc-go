@@ -36,7 +36,6 @@ const negativeOneUInt64 = ^uint64(0)
 // It is safe for concurrent use.
 type LoadStore struct {
 	lrsStream *streamImpl
-	closed    sync.Once
 
 	// mu only protects the map (2 layers). The read/write to
 	// *PerClusterReporter doesn't need to hold the mu.
@@ -71,10 +70,12 @@ func newLoadStore(lrsStream *streamImpl) *LoadStore {
 // attempt to flush any unreported load data to the LRS server. It will either
 // wait for this attempt to complete, or for the provided context to be done
 // before canceling the LRS stream.
-func (ls *LoadStore) Stop(context.Context) {
-	ls.closed.Do(func() {
-		ls.lrsStream.stop()
-	})
+func (ls *LoadStore) Stop(ctx context.Context) {
+	// Wait for the provided context to be done (timeout or cancellation).
+	if ctx != nil {
+		<-ctx.Done()
+	}
+	ls.lrsStream.stop()
 }
 
 // ReporterForCluster returns the PerClusterReporter for the given cluster and
@@ -157,6 +158,10 @@ type PerClusterReporter struct {
 
 // CallStarted records a call started in the LoadStore.
 func (p *PerClusterReporter) CallStarted(locality string) {
+	if p == nil {
+		return
+	}
+
 	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		tp := newRPCCountData()
@@ -168,6 +173,10 @@ func (p *PerClusterReporter) CallStarted(locality string) {
 
 // CallFinished records a call finished in the LoadStore.
 func (p *PerClusterReporter) CallFinished(locality string, err error) {
+	if p == nil {
+		return
+	}
+
 	f, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -184,6 +193,10 @@ func (p *PerClusterReporter) CallFinished(locality string, err error) {
 
 // CallServerLoad records the server load in the LoadStore.
 func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) {
+	if p == nil {
+		return
+	}
+
 	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -195,6 +208,10 @@ func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) 
 
 // CallDropped records a call dropped in the LoadStore.
 func (p *PerClusterReporter) CallDropped(category string) {
+	if p == nil {
+		return
+	}
+
 	d, ok := p.drops.Load(category)
 	if !ok {
 		tp := new(uint64)
@@ -208,6 +225,10 @@ func (p *PerClusterReporter) CallDropped(category string) {
 //
 // It returns nil if the store doesn't contain any (new) data.
 func (p *PerClusterReporter) stats() *loadData {
+	if p == nil {
+		return nil
+	}
+
 	sd := newLoadData(p.cluster, p.service)
 	p.drops.Range(func(key, val any) bool {
 		d := atomic.SwapUint64(val.(*uint64), 0)

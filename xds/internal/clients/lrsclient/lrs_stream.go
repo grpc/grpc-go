@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-// Package lrs provides the implementation of an LRS (Load Reporting Service)
-// stream for the xDS client.
 package lrsclient
 
 import (
@@ -64,7 +62,8 @@ type streamImpl struct {
 	mu           sync.Mutex
 	cancelStream context.CancelFunc // Cancel the stream. If nil, the stream is not active.
 	refCount     int                // Number of interested parties.
-	cleanup      func()
+	loadStore    *LoadStore         // LoadStore returned to user for pushing loads.
+	cleanup      func()             // Function to call after the stream is stopped.
 }
 
 // streamOpts holds the options for creating an lrsStream.
@@ -95,24 +94,25 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 // Stop function that should be called when the load reporting is no longer
 // needed.
 //
-// The first call to reportLoad sets the reference count to one, and starts the
-// LRS streaming call. Subsequent calls increment the reference count.
+// The first call to reportLoad creates a new LoadStore, sets the reference
+// count to one, and starts the LRS streaming call. Subsequent calls increment
+// the reference count and returns the same LoadStore.
 func (lrs *streamImpl) reportLoad() *LoadStore {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
 
 	if lrs.refCount != 0 {
 		lrs.refCount++
-		return newLoadStore(lrs)
+		return lrs.loadStore
 	}
 
 	lrs.refCount++
 	ctx, cancel := context.WithCancel(context.Background())
 	lrs.cancelStream = cancel
 	lrs.doneCh = make(chan struct{})
-	ls := newLoadStore(lrs)
-	go lrs.runner(ctx, ls)
-	return ls
+	lrs.loadStore = newLoadStore(lrs)
+	go lrs.runner(ctx)
+	return lrs.loadStore
 }
 
 // runner is responsible for managing the lifetime of an LRS streaming call. It
@@ -120,7 +120,7 @@ func (lrs *streamImpl) reportLoad() *LoadStore {
 // LoadStatsResponse, and then starts a goroutine to periodically send
 // LoadStatsRequests. The runner will restart the stream if it encounters any
 // errors.
-func (lrs *streamImpl) runner(ctx context.Context, ls *LoadStore) {
+func (lrs *streamImpl) runner(ctx context.Context) {
 	defer close(lrs.doneCh)
 
 	// This feature indicates that the client supports the
@@ -157,7 +157,7 @@ func (lrs *streamImpl) runner(ctx context.Context, ls *LoadStore) {
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
-		lrs.sendLoads(streamCtx, stream, clusters, interval, ls)
+		lrs.sendLoads(streamCtx, stream, clusters, interval)
 		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, lrs.backoff)
@@ -166,7 +166,7 @@ func (lrs *streamImpl) runner(ctx context.Context, ls *LoadStore) {
 // sendLoads is responsible for periodically sending load reports to the LRS
 // server at the specified interval for the specified clusters, until the passed
 // in context is canceled.
-func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration, ls *LoadStore) {
+func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -175,7 +175,7 @@ func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clu
 		case <-ctx.Done():
 			return
 		}
-		if err := lrs.sendLoadStatsRequest(stream, ls.stats(clusterNames)); err != nil {
+		if err := lrs.sendLoadStatsRequest(stream, lrs.loadStore.stats(clusterNames)); err != nil {
 			lrs.logger.Warningf("Writing to LRS stream failed: %v", err)
 			return
 		}
