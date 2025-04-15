@@ -75,6 +75,9 @@ func (s) TestBuild_Single(t *testing.T) {
 	for i := 0; i < count; i++ {
 		func() {
 			transports[i].Close()
+			if (transports[i].(*transportRef)).grpcTransport != nil {
+				t.Fatalf("Wanted underlying gRPC transport to be nil, but got non-nil transport: %v", (transports[i].(*transportRef)).grpcTransport)
+			}
 			transports[i].Close()
 		}()
 	}
@@ -174,6 +177,9 @@ func (s) TestBuild_Multiple(t *testing.T) {
 	// time should not panic.
 	for i := 0; i < count; i++ {
 		transports1[i].Close()
+		if (transports1[i].(*transportRef)).grpcTransport != nil {
+			t.Fatalf("Wanted underlying gRPC transport to be nil, but got non-nil transport: %v", (transports1[i].(*transportRef)).grpcTransport)
+		}
 		transports1[i].Close()
 	}
 
@@ -189,6 +195,9 @@ func (s) TestBuild_Multiple(t *testing.T) {
 	// time should not panic.
 	for i := 0; i < count; i++ {
 		transports2[i].Close()
+		if (transports2[i].(*transportRef)).grpcTransport != nil {
+			t.Fatalf("Wanted underlying gRPC transport to be nil, but got non-nil transport: %v", (transports2[i].(*transportRef)).grpcTransport)
+		}
 		transports2[i].Close()
 	}
 

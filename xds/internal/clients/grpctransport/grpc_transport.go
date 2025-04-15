@@ -95,7 +95,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		if logger.V(2) {
 			logger.Info("Reusing existing transport to the server for ServerIdentifier: %v", si)
 		}
-		tr.incrRef()
+		tr.refCount++
 		return &transportRef{grpcTransport: tr}, nil
 	}
 
@@ -119,11 +119,23 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	tr := &grpcTransport{
 		cc:       cc,
 		refCount: 1,
-		deleteTransport: func() {
-			b.mu.Lock()
-			defer b.mu.Unlock()
-			delete(b.transports, si)
-		}}
+	}
+	// Register a cleanup function that decrements the refCount to the gRPC
+	// transport each time Close() is called or close it and remove from
+	// transports map if last reference is being released.
+	tr.cleanup = func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+
+		tr.refCount--
+		if tr.refCount != 0 {
+			return
+		}
+
+		tr.cc.Close()
+		delete(b.transports, si)
+	}
+
 	// Add the newly created transport to the map to re-use the transport.
 	b.transports[si] = tr
 
@@ -136,9 +148,12 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 type grpcTransport struct {
 	cc *grpc.ClientConn
 
-	mu              sync.Mutex
-	refCount        int32  // accessed atomically
-	deleteTransport func() // called when refCount reaches 0
+	// refCount is accessed atomically to update the count of references to
+	// the gRPC transport.
+	refCount int32
+	// cleanup is the function to be invoked for releasing the references to
+	// the gRPC transport each time Close() is called.
+	cleanup func()
 }
 
 // NewStream creates a new gRPC stream to the server for the specified method.
@@ -152,22 +167,7 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 
 // Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	g.refCount--
-	if g.refCount != 0 {
-		return
-	}
-
-	g.deleteTransport()
-	g.cc.Close()
-}
-
-func (g *grpcTransport) incrRef() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.refCount++
+	g.cleanup()
 }
 
 // transportRef is the reference to the underlying gRPC transport.
