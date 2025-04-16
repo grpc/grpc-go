@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -478,7 +477,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 		Endpoints:      endpoints,
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
