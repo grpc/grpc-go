@@ -411,7 +411,7 @@ func TestEqual(t *testing.T) {
 	}
 }
 
-func (p *testCertProviderWithKeyMaterial) KeyMaterial(ctx context.Context) (*certprovider.KeyMaterial, error) {
+func (p *testCertProviderWithKeyMaterial) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
 	km := &certprovider.KeyMaterial{}
 	spiffeBundleMapContents, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
