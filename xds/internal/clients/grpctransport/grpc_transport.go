@@ -121,7 +121,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		refCount: 1,
 	}
 	// Register a cleanup function that decrements the refCount to the gRPC
-	// transport each time Close() is called or close it and remove from
+	// transport each time Close() is called to close it and remove from
 	// transports map if last reference is being released.
 	tr.cleanup = func() {
 		b.mu.Lock()
@@ -148,8 +148,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 type grpcTransport struct {
 	cc *grpc.ClientConn
 
-	// refCount is accessed atomically to update the count of references to
-	// the gRPC transport.
+	// refCount is guarded by the parent Builder.mu.
 	refCount int32
 	// cleanup is the function to be invoked for releasing the references to
 	// the gRPC transport each time Close() is called.
