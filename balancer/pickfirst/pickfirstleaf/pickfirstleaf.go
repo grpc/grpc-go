@@ -923,6 +923,5 @@ func (al *addressList) hasNext() bool {
 // fields that are meaningful to the SubConn.
 func equalAddressIgnoringBalAttributes(a, b *resolver.Address) bool {
 	return a.Addr == b.Addr && a.ServerName == b.ServerName &&
-		a.Attributes.Equal(b.Attributes) &&
-		a.Metadata == b.Metadata
+		a.Attributes.Equal(b.Attributes)
 }
