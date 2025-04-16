@@ -701,7 +701,7 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	// resource error notifications for the invalid listener resource leading
 	// to service mode change to "not serving" each time.
 	//
-	// Even if the the server is currently NOT_SERVING, in the case (where we
+	// Even if the server is currently NOT_SERVING, in the case (where we
 	// are NOT_SERVING and the new mode is also NOT_SERVING), the update is not
 	// suppressed as:
 	//   1. the error may have change
