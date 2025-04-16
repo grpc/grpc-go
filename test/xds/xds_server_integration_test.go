@@ -422,8 +422,9 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	}
 }
 
-// TestServerSideXDS_FileWatcherCerts is an e2e test which verifies xDS
-// credentials with file watcher certificate provider.
+// TestServerSideXDS_FileWatcherCertsSPIFFE is an e2e test which verifies xDS
+// credentials with file watcher certificate provider that is configured with a
+// SPIFFE Bundle Map for it's roots.
 //
 // The following sequence of events happen as part of this test:
 //   - An xDS-enabled gRPC server is created and xDS credentials are configured.
