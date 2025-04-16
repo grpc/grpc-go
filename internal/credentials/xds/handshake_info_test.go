@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/testdata"
 
@@ -469,7 +470,9 @@ func TestBuildVerifyFuncFailures(t *testing.T) {
 	}
 	testProvider := testCertProviderWithKeyMaterial{}
 	hi := NewHandshakeInfo(&testProvider, &testProvider, nil, true)
-	cfg, err := hi.ClientSideTLSConfig(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	cfg, err := hi.ClientSideTLSConfig(ctx)
 	if err != nil {
 		t.Fatalf("hi.ClientSideTLSConfig() failed with err %v", err)
 	}
