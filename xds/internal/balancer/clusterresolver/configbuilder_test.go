@@ -648,7 +648,7 @@ func testEndpointWithAttrs(addrStrs []string, localityWeight, endpointWeight uin
 	}
 	path := []string{priority}
 	if lID != nil {
-		path = append(path, assertString(lID.ToString))
+		path = append(path, lID.ToString())
 		endpoint = internal.SetLocalityIDInEndpoint(endpoint, *lID)
 	}
 	endpoint = hierarchy.SetInEndpoint(endpoint, path)

@@ -185,7 +185,7 @@ func (s) TestDropByCategory(t *testing.T) {
 		TotalDrops: dropCount,
 		Drops:      map[string]uint64{dropReason: dropCount},
 		LocalityStats: map[string]load.LocalityData{
-			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
+			xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
 				Succeeded: (rpcCount - dropCount) * 3 / 4,
 				Errored:   (rpcCount - dropCount) / 4,
 				Issued:    rpcCount - dropCount,
@@ -251,7 +251,7 @@ func (s) TestDropByCategory(t *testing.T) {
 		TotalDrops: dropCount2,
 		Drops:      map[string]uint64{dropReason2: dropCount2},
 		LocalityStats: map[string]load.LocalityData{
-			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
+			xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
 				Succeeded: rpcCount - dropCount2,
 				Issued:    rpcCount - dropCount2,
 			}},
@@ -373,7 +373,7 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 		Service:    testServiceName,
 		TotalDrops: uint64(maxRequest),
 		LocalityStats: map[string]load.LocalityData{
-			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{
+			xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
 				Succeeded: uint64(rpcCount - maxRequest),
 				Errored:   50,
 				Issued:    uint64(rpcCount - maxRequest + 50),
@@ -708,8 +708,8 @@ func (s) TestLoadReporting(t *testing.T) {
 	if sd.Cluster != testClusterName || sd.Service != testServiceName {
 		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
 	}
-	testLocalityJSON, _ := testLocality.ToString()
-	localityData, ok := sd.LocalityStats[testLocalityJSON]
+	testLocalityStr := testLocality.ToString()
+	localityData, ok := sd.LocalityStats[testLocalityStr]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)
 	}
