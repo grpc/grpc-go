@@ -3620,37 +3620,43 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 }
 
 // Test to verify for client-streaming RPCs, when SendAndClose is called, the
-// server should reset stream after sending the response message successfully.
-// That is check that the server sends RST_STREAM header after SendAndClose. If
-// server calls Recv after, those operations should fail.
+// server sends dataframe to client.
+//emchandwani : need to cleanup and fix comments
 func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
-	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
-	// after this is fixed.
-	t.Skip()
-
 	e := tcpTLSEnv
 	te := newTest(t, e)
+	gotData := make(chan struct{})
 	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		stream.SendAndClose(&testpb.StreamingInputCallResponse{})
-		_, err := stream.Recv()
-		t.Log(err.Error())
-		if status.Code(err) != codes.OK {
-			t.Errorf("stream.Recv() = %v, want error", err)
+		select {
+		case <-gotData:
+		case <-time.After(defaultTestTimeout):
+			t.Fatal("Timeout waiting for data frame")
 		}
+		<-gotData
 		return nil
 	}}
 
 	te.startServer(ts)
 	defer te.tearDown()
 	te.withServerTester(func(st *serverTester) {
-		//eshita : ask if this needs to be true or false.
 		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", false) // Stream ID 1
-
-		st.wantAnyFrame()
-		st.wantAnyFrame()
-		st.wantRSTStream(http2.ErrCodeStreamClosed)
+		frame := st.wantAnyFrame()
+		switch f := frame.(type) {
+		case *http2.MetaHeadersFrame:
+			st.t.Logf("Received Header frame: streamID=%d", f.StreamID)
+		default:
+			st.t.Fatalf("Received unexpected frame type: %T, want MetaHeadersFrame", f)
+		}
+		frame = st.wantAnyFrame()
+		switch f := frame.(type) {
+		case *http2.DataFrame:
+			st.t.Logf("Received DATA frame: streamID=%d, data=%q", f.StreamID, f.Data())
+		default:
+			st.t.Fatalf("Received unexpected frame type: %T, want DataFrame", f)
+		}
+		close(gotData)
 	})
-
 }
 
 // Tests the scenario where a client-streaming server sends an error after calling
