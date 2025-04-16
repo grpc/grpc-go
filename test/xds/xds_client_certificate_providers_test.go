@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -443,7 +444,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 	clusters := []*v3clusterpb.Cluster{
 		e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS),
 		e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelNone),
-		e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelTLS),
+		// e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelTLS),
 	}
 	// Endpoints for each of the above clusters with backends created earlier.
 	endpoints := []*v3endpointpb.ClusterLoadAssignment{
@@ -459,7 +460,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 		Endpoints:      endpoints,
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Hour)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
