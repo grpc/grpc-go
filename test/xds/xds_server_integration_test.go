@@ -421,3 +421,88 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 }
+
+// TestServerSideXDS_FileWatcherCerts is an e2e test which verifies xDS
+// credentials with file watcher certificate provider.
+//
+// The following sequence of events happen as part of this test:
+//   - An xDS-enabled gRPC server is created and xDS credentials are configured.
+//   - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
+//     credentials are configured.
+//   - Control plane is configured to send security configuration to both the
+//     client and the server, pointing to the file watcher certificate provider.
+//     We verify both TLS and mTLS scenarios.
+func (s) TestServerSideXDS_FileWatcherCertsSPIFFE(t *testing.T) {
+	tests := []struct {
+		name     string
+		secLevel e2e.SecurityLevel
+	}{
+		{
+			name:     "tls",
+			secLevel: e2e.SecurityLevelTLS,
+		},
+		{
+			name:     "mtls",
+			secLevel: e2e.SecurityLevelMTLS,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolverWithSPIFFE(t)
+			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+			defer cleanup2()
+
+			// Grab the host and port of the server and create client side xDS
+			// resources corresponding to it.
+			host, port, err := hostPortFromListener(lis)
+			if err != nil {
+				t.Fatalf("failed to retrieve host and port of server: %v", err)
+			}
+
+			// Create xDS resources to be consumed on the client side. This
+			// includes the listener, route configuration, cluster (with
+			// security configuration) and endpoint resources.
+			serviceName := "my-service-file-watcher-certs-" + test.name
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: serviceName,
+				NodeID:     nodeID,
+				Host:       host,
+				Port:       port,
+				SecLevel:   test.secLevel,
+			})
+
+			// Create an inbound xDS listener resource for the server side that
+			// contains security configuration pointing to the file watcher
+			// plugin.
+			inboundLis := e2e.DefaultServerListener(host, port, test.secLevel, "routeName")
+			resources.Listeners = append(resources.Listeners, inboundLis)
+
+			// Setup the management server with client and server resources.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if err := managementServer.Update(ctx, resources); err != nil {
+				t.Fatal(err)
+			}
+
+			// Create client-side xDS credentials with an insecure fallback.
+			creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+				FallbackCreds: insecure.NewCredentials(),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create a ClientConn with the xds scheme and make an RPC.
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolver))
+			if err != nil {
+				t.Fatalf("failed to create a client for server: %v", err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+				t.Fatalf("rpc EmptyCall() failed: %v", err)
+			}
+		})
+	}
+}

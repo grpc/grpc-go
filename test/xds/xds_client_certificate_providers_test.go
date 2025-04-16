@@ -269,7 +269,6 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	// - cluster1 with cert provider name e2e.ClientSideCertProviderInstance.
 	// - cluster2 with no security configuration.
 	// - cluster3 with non-existent cert provider name.
-	// TODO (gregorycooke) this security level settings ends up hard coding stuff with the cert providers
 	clusters := []*v3clusterpb.Cluster{
 		e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS),
 		e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelNone),
