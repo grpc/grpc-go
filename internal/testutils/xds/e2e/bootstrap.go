@@ -44,7 +44,7 @@ func DefaultFileWatcherConfig(certPath, keyPath, caPath string) json.RawMessage 
 		}`, certPath, keyPath, caPath))
 }
 
-// DefaultFileWatcherConfig is a helper function to create a default certificate
+// SPIFFEFileWatcherConfig is a helper function to create a default certificate
 // provider plugin configuration. The test is expected to have setup the files
 // appropriately before this configuration is used to instantiate providers.
 func SPIFFEFileWatcherConfig(certPath, keyPath, caPath, spiffeBundleMapPath string) json.RawMessage {
@@ -60,6 +60,10 @@ func SPIFFEFileWatcherConfig(certPath, keyPath, caPath, spiffeBundleMapPath stri
 		}`, certPath, keyPath, caPath, spiffeBundleMapPath))
 }
 
+// SPIFFEBootstrapContents creates a bootstrap configuration with the given node
+// ID and server URI. It also creates certificate provider configuration using
+// SPIFFE certificates and sets the listener resource name template to be used
+// on the server side.
 func SPIFFEBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	t.Helper()
 
