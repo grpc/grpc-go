@@ -81,6 +81,11 @@ const (
 	errorTolerance = .05 // For tests that rely on statistical significance.
 
 	virtualHostName = "test.server"
+
+	// minRingSize is the minimum ring size to use when testing randomly a
+	// backend for each request. It lowers the skew that may occur from
+	// an imbalanced ring.
+	minRingSize = 10000
 )
 
 // fastConnectParams disables connection attempts backoffs and lowers delays.
@@ -845,12 +850,8 @@ func computeIdealNumberOfRPCs(t *testing.T, p, errorTolerance float64) int {
 // minimum ring size to ensure that the ring is large enough to distribute
 // requests more uniformly across endpoints when a random hash is used.
 func setRingHashLBPolicyWithHighMinRingSize(t *testing.T, cluster *v3clusterpb.Cluster) {
-	const minRingSize = 100000
-	oldVal := envconfig.RingHashCap
-	envconfig.RingHashCap = minRingSize
-	t.Cleanup(func() {
-		envconfig.RingHashCap = oldVal
-	})
+	testutils.SetEnvConfig(t, &envconfig.RingHashCap, minRingSize)
+
 	// Increasing min ring size for random distribution.
 	config := testutils.MarshalAny(t, &v3ringhashpb.RingHash{
 		HashFunction:    v3ringhashpb.RingHash_XX_HASH,
@@ -2721,6 +2722,19 @@ func (s) TestRingHash_RequestHashKey(t *testing.T) {
 	}
 }
 
+func highRingSizeServiceConfig(t *testing.T) string {
+	t.Helper()
+	testutils.SetEnvConfig(t, &envconfig.RingHashCap, minRingSize)
+
+	return fmt.Sprintf(`{
+  "loadBalancingConfig": [{"ring_hash_experimental":{
+    "requestHashHeader": "address_hash",
+    "minRingSize": %d,
+    "maxRingSize": %d
+  }
+}]}`, minRingSize, minRingSize)
+}
+
 // Tests that when a request hash key is set in the balancer configuration via
 // service config, and the header is not set in the outgoing request, then it
 // is sent to a random backend.
@@ -2733,7 +2747,7 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 	// address of the test backend), and a default service config pointing to
 	// the use of the ring_hash_experimental LB policy with an explicit hash
 	// header.
-	const ringHashServiceConfig = `{"loadBalancingConfig": [{"ring_hash_experimental":{"requestHashHeader":"address_hash"}}]}`
+	ringHashServiceConfig := highRingSizeServiceConfig(t)
 	r := manual.NewBuilderWithScheme("whatever")
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -2774,11 +2788,11 @@ func (s) TestRingHash_RequestHashKeyRandom(t *testing.T) {
 	}
 
 	// Make sure that requests with the old hash are sent to random backends.
-	numRPCs := computeIdealNumberOfRPCs(t, .25, errorTolerance)
+	const want = 1.0 / 4
+	numRPCs := computeIdealNumberOfRPCs(t, want, errorTolerance)
 	gotPerBackend := checkRPCSendOK(ctx, t, client, numRPCs)
 	for _, backend := range backends {
 		got := float64(gotPerBackend[backend]) / float64(numRPCs)
-		want := .25
 		if !cmp.Equal(got, want, cmpopts.EquateApprox(0, errorTolerance)) {
 			t.Errorf("Fraction of RPCs to backend %s: got %v, want %v (margin: +-%v)", backend, got, want, errorTolerance)
 		}
@@ -2847,11 +2861,16 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 	}()
 	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
-	// Check that only one connection attempt was started.
+	// Wait for at least one connection attempt.
 	nConn := 0
-	for _, hold := range holds {
-		if hold.IsStarted() {
-			nConn++
+	for nConn == 0 {
+		if ctx.Err() != nil {
+			t.Fatal("Test timed out waiting for a connection attempt")
+		}
+		for _, hold := range holds {
+			if hold.IsStarted() {
+				nConn++
+			}
 		}
 	}
 	if wantMaxConn := 1; nConn > wantMaxConn {
