@@ -45,6 +45,7 @@ import (
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
+	v3maglevpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/maglev/v3"
 	v3pickfirstpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/pick_first/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3roundrobinpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/round_robin/v3"
@@ -382,7 +383,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
 							// Not supported by gRPC-Go.
-							TypedConfig: testutils.MarshalAny(t, &v3leastrequestpb.LeastRequest{}),
+							TypedConfig: testutils.MarshalAny(t, &v3maglevpb.Maglev{}),
 						},
 					},
 				},
