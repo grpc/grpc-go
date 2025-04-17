@@ -634,14 +634,6 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	}
 }
 
-func assertString(f func() (string, error)) string {
-	s, err := f()
-	if err != nil {
-		panic(err.Error())
-	}
-	return s
-}
-
 func testEndpointWithAttrs(addrStrs []string, localityWeight, endpointWeight uint32, priority string, lID *internal.LocalityID) resolver.Endpoint {
 	endpoint := resolver.Endpoint{}
 	for _, a := range addrStrs {
@@ -649,7 +641,7 @@ func testEndpointWithAttrs(addrStrs []string, localityWeight, endpointWeight uin
 	}
 	path := []string{priority}
 	if lID != nil {
-		path = append(path, assertString(lID.ToString))
+		path = append(path, lID.ToString())
 		endpoint = internal.SetLocalityIDInEndpoint(endpoint, *lID)
 	}
 	endpoint = hierarchy.SetInEndpoint(endpoint, path)
