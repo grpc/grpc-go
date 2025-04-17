@@ -1,7 +1,7 @@
 # OpenTelemetry
 
 This example shows how to configure OpenTelemetry on a client and server, and
-shows what type of telemetry data it can produce for certain RPC's.
+shows what type of telemetry data it can produce for certain RPCs.
 
 ## Try it
 
@@ -20,7 +20,7 @@ curl localhost:9465/metrics
 
 ## Explanation
 
-The client continuously makes RPC's to a server. The client and server both
+The client continuously makes RPCs to a server. The client and server both
 expose a prometheus exporter to listen and provide metrics. This defaults to
 :9464 for the server and :9465 for the client. The client and server are also
 configured to output traces directly to their standard output streams using

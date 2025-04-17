@@ -44,7 +44,6 @@ import (
 var (
 	addr               = flag.String("addr", ":50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
-	serviceName        = "grpc-server"
 )
 
 type echoServer struct {
@@ -62,18 +61,18 @@ func main() {
 		log.Fatalf("Failed to start prometheus exporter: %v", err)
 	}
 	// Configure meter provider for metrics
-	provider := otelmetric.NewMeterProvider(otelmetric.WithReader(exporter))
+	meterProvider := otelmetric.NewMeterProvider(otelmetric.WithReader(exporter))
 	// Configure exporter for traces
 	traceExporter, err := otelstdouttrace.New(otelstdouttrace.WithPrettyPrint())
 	if err != nil {
 		log.Fatalf("Failed to create stdouttrace exporter: %v", err)
 	}
-	tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(serviceName))))
+	traceProvider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName("grpc-server"))))
 	// Configure W3C Trace Context Propagator for traces
 	textMapPropagator := otelpropagation.TraceContext{}
 	so := opentelemetry.ServerOption(opentelemetry.Options{
-		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider},
-		TraceOptions:   oteltracing.TraceOptions{TracerProvider: tp, TextMapPropagator: textMapPropagator}})
+		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: meterProvider},
+		TraceOptions:   oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator}})
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
