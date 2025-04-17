@@ -698,7 +698,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	}()
 
 	targetAttr := attribute.String("grpc.target", target)
-	localityAttr := attribute.String("grpc.lb.locality", `{"region":"region-1","zone":"zone-1","subZone":"subzone-1"}`)
+	localityAttr := attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`)
 
 	wantMetrics := []metricdata.Metrics{
 		{

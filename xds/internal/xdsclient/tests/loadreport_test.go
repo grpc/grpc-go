@@ -44,8 +44,8 @@ import (
 )
 
 const (
-	testLocality1 = `{"region":"test-region1"}`
-	testLocality2 = `{"region":"test-region2"}`
+	testLocality1 = `{region="test-region1", zone="", sub_zone=""}`
+	testLocality2 = `{region="test-region2", zone="", sub_zone=""}`
 	testKey1      = "test-key1"
 	testKey2      = "test-key2"
 )

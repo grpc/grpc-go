@@ -71,7 +71,7 @@ func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 	}
 }
 
-func TestLocalityToAndFromJSON(t *testing.T) {
+func TestLocalityToAndFromString(t *testing.T) {
 	tests := []struct {
 		name       string
 		localityID LocalityID
@@ -81,25 +81,22 @@ func TestLocalityToAndFromJSON(t *testing.T) {
 		{
 			name:       "3 fields",
 			localityID: LocalityID{Region: "r:r", Zone: "z#z", SubZone: "s^s"},
-			str:        `{"region":"r:r","zone":"z#z","subZone":"s^s"}`,
+			str:        `{region="r:r", zone="z#z", sub_zone="s^s"}`,
 		},
 		{
 			name:       "2 fields",
 			localityID: LocalityID{Region: "r:r", Zone: "z#z"},
-			str:        `{"region":"r:r","zone":"z#z"}`,
+			str:        `{region="r:r", zone="z#z", sub_zone=""}`,
 		},
 		{
 			name:       "1 field",
 			localityID: LocalityID{Region: "r:r"},
-			str:        `{"region":"r:r"}`,
+			str:        `{region="r:r", zone="", sub_zone=""}`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStr, err := tt.localityID.ToString()
-			if err != nil {
-				t.Errorf("failed to marshal LocalityID: %#v", tt.localityID)
-			}
+			gotStr := tt.localityID.ToString()
 			if gotStr != tt.str {
 				t.Errorf("%#v.String() = %q, want %q", tt.localityID, gotStr, tt.str)
 			}
