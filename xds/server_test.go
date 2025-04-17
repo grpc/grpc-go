@@ -701,9 +701,8 @@ func (s) TestServeAndCloseDoNotRace(t *testing.T) {
 	// resource error notifications for the invalid listener resource leading
 	// to service mode change to "not serving" each time.
 	//
-	// Even if the server is currently NOT_SERVING, in the case (where we
-	// are NOT_SERVING and the new mode is also NOT_SERVING), the update is not
-	// suppressed as:
+	// Even if the server is currently NOT_SERVING and the new mode is also
+	// NOT_SERVING, the update is not suppressed as:
 	//   1. the error may have change
 	//   2. it provides a timestamp of the last backoff attempt
 	noopModeChangeCallback := func(_ net.Addr, _ ServingModeChangeArgs) {}
