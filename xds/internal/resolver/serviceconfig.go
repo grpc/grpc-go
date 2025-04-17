@@ -141,8 +141,8 @@ type erroringConfigSelector struct {
 	err error
 }
 
-func newErroringConfigSelector(xdsNodeID string) *erroringConfigSelector {
-	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Errorf(codes.Unavailable, "no valid clusters"), xdsNodeID)}
+func newErroringConfigSelector(err error, xdsNodeID string) *erroringConfigSelector {
+	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Errorf(codes.Unavailable, err.Error()), xdsNodeID)}
 }
 
 func (cs *erroringConfigSelector) SelectConfig(iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
@@ -203,7 +203,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
-	lbCtx = ringhash.SetRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	lbCtx = ringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.

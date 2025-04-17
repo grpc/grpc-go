@@ -404,7 +404,7 @@ func makeClients(bf stats.Features) ([]testgrpc.BenchmarkServiceClient, func()) 
 	conns := make([]*grpc.ClientConn, bf.Connections)
 	clients := make([]testgrpc.BenchmarkServiceClient, bf.Connections)
 	for cn := 0; cn < bf.Connections; cn++ {
-		conns[cn] = benchmark.NewClientConn("" /* target not used */, opts...)
+		conns[cn] = benchmark.NewClientConn("passthrough://" /* target not used */, opts...)
 		clients[cn] = testgrpc.NewBenchmarkServiceClient(conns[cn])
 	}
 
