@@ -40,13 +40,7 @@ func (h *serverTracingHandler) initializeTraces() {
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
-	ri := getRPCInfo(ctx)
-	var ai *attemptInfo
-	if ri == nil {
-		ai = &attemptInfo{}
-	} else {
-		ai = ri.ai
-	}
+	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
 	ctx, ai = h.traceTagRPC(ctx, ai)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }

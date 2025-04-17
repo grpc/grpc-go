@@ -47,17 +47,7 @@ func (h *clientTracingHandler) initializeTraces() {
 }
 
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	ci := getCallInfo(ctx)
-	if ci == nil {
-		if logger.V(2) {
-			logger.Info("Creating new CallInfo since its not present in context in clientTracingHandler unaryInterceptor")
-		}
-		ci = &callInfo{
-			target: cc.CanonicalTarget(),
-			method: determineMethod(method, opts...),
-		}
-		ctx = setCallInfo(ctx, ci)
-	}
+	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
@@ -67,17 +57,7 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 }
 
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ci := getCallInfo(ctx)
-	if ci == nil {
-		if logger.V(2) {
-			logger.Info("Creating new CallInfo since its not present in context in clientTracingHandler streamInterceptor")
-		}
-		ci = &callInfo{
-			target: cc.CanonicalTarget(),
-			method: determineMethod(method, opts...),
-		}
-		ctx = setCallInfo(ctx, ci)
-	}
+	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	var span trace.Span
 	ctx, span = h.createCallTraceSpan(ctx, method)
@@ -140,13 +120,7 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	ri := getRPCInfo(ctx)
-	var ai *attemptInfo
-	if ri == nil {
-		ai = &attemptInfo{}
-	} else {
-		ai = ri.ai
-	}
+	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
 	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }

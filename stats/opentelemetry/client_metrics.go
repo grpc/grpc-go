@@ -67,11 +67,13 @@ func (h *clientMetricsHandler) initializeMetrics() {
 	rm.registerMetrics(metrics, meter)
 }
 
-func (h *clientMetricsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+// getOrCreateCallInfo returns the existing callInfo from context if present,
+// or creates and attaches a new one.
+func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (context.Context, *callInfo) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
 		if logger.V(2) {
-			logger.Info("Creating new CallInfo since its not present in context in clientStatsHandler unaryInterceptor")
+			logger.Info("Creating new CallInfo since its not present in context")
 		}
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
@@ -79,6 +81,11 @@ func (h *clientMetricsHandler) unaryInterceptor(ctx context.Context, method stri
 		}
 		ctx = setCallInfo(ctx, ci)
 	}
+	return ctx, ci
+}
+
+func (h *clientMetricsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ctx, ci := getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -108,17 +115,7 @@ func determineMethod(method string, opts ...grpc.CallOption) string {
 }
 
 func (h *clientMetricsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	ci := getCallInfo(ctx)
-	if ci == nil {
-		if logger.V(2) {
-			logger.Info("Creating new CallInfo since its not present in context in clientStatsHandler streamInterceptor")
-		}
-		ci = &callInfo{
-			target: cc.CanonicalTarget(),
-			method: determineMethod(method, opts...),
-		}
-		ctx = setCallInfo(ctx, ci)
-	}
+	ctx, ci := getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	if h.options.MetricsOptions.pluginOption != nil {
 		md := h.options.MetricsOptions.pluginOption.GetMetadata()
@@ -156,6 +153,20 @@ func (h *clientMetricsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler.
 func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
+// getOrCreateRPCAttemptInfo retrieves or creates an rpc attemptInfo object
+// and ensures it is set in the context along with the rpcInfo.
+func getOrCreateRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		ri = &rpcInfo{}
+	}
+	ai := ri.ai
+	if ai == nil {
+		ai = &attemptInfo{}
+	}
+	return setRPCInfo(ctx, &rpcInfo{ai: ai}), ai
+}
+
 // TagRPC implements per RPC attempt context management for metrics.
 func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	// Numerous stats handlers can be used for the same channel. The cluster
@@ -174,16 +185,7 @@ func (h *clientMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		}
 		ctx = istats.SetLabels(ctx, labels)
 	}
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		ri = &rpcInfo{}
-	}
-	var ai *attemptInfo
-	if ri.ai == nil {
-		ai = &attemptInfo{}
-	} else {
-		ai = ri.ai
-	}
+	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
 	ai.startTime = time.Now()
 	ai.xdsLabels = labels.TelemetryLabels
 	ai.method = removeLeadingSlash(info.FullMethodName)

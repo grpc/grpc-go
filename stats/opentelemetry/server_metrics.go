@@ -196,16 +196,7 @@ func (h *serverMetricsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 			method = "other"
 		}
 	}
-	ri := getRPCInfo(ctx)
-	if ri == nil {
-		ri = &rpcInfo{}
-	}
-	var ai *attemptInfo
-	if ri.ai == nil {
-		ai = &attemptInfo{}
-	} else {
-		ai = ri.ai
-	}
+	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
 	ai.startTime = time.Now()
 	ai.method = removeLeadingSlash(method)
 
