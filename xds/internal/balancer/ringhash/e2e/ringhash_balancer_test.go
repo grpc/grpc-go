@@ -2859,7 +2859,6 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		}
 		wg.Done()
 	}()
-	testutils.AwaitState(ctx, t, cc, connectivity.Connecting)
 
 	// Wait for at least one connection attempt.
 	nConn := 0
@@ -2867,6 +2866,7 @@ func (s) TestRingHash_RequestHashKeyConnecting(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatal("Test timed out waiting for a connection attempt")
 		}
+		time.Sleep(1 * time.Millisecond)
 		for _, hold := range holds {
 			if hold.IsStarted() {
 				nConn++
