@@ -352,8 +352,9 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 }
 
 // Tests the case where the bootstrap configuration contains one certificate
-// provider configured with SPIFFE Bundle Map roots on the client side, and xDS credentials with an insecure fallback is specified at dial
-// time. The management server responds with three clusters:
+// provider configured with SPIFFE Bundle Map roots on the client side, and xDS
+// credentials with an insecure fallback is specified at dial time. The
+// management server responds with three clusters:
 //  1. contains valid security configuration pointing to the certificate provider
 //     instance specified in the bootstrap, and the server uses a SPIFFE cert.
 //  2. contains valid security configuration pointing to the certificate provider
@@ -364,22 +365,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 // The test verifies that RPCs to the first two clusters succeed, while RPCs to
 // the third cluster fails with an appropriate code and error message.
 func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *testing.T) {
-	// Spin up an xDS management server.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
-
-	// Create bootstrap configuration pointing to the above management server.
-	nodeID := uuid.New().String()
-	bc := e2e.SPIFFEBootstrapContents(t, nodeID, mgmtServer.Address)
-
-	// Create an xDS resolver with the above bootstrap configuration.
-	var xdsResolver resolver.Builder
-	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
-		var err error
-		xdsResolver, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
-	}
+	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolverWithSPIFFE(t)
 
 	// Create test backends for all three clusters
 	// backend1 configured with a SPIFFE cert, represents cluster1
@@ -388,7 +374,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 	serverCreds := testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.RequireAndVerifyClientCert)
 	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
 	defer server1.Stop()
-	serverCreds2 := testutils.CreateServerTLSCredentialsCompatibleWithSPIFFEChain(t, tls.NoClientCert)
+	serverCreds2 := testutils.CreateServerTLSCredentialsCompatibleWithSPIFFEChain(t, tls.RequireAndVerifyClientCert)
 	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds2))
 	defer server2.Stop()
 	server3 := stubserver.StartTestService(t, nil)
@@ -436,11 +422,11 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 	}}
 	// Clusters:
 	// - cluster1 with cert provider name e2e.ClientSideCertProviderInstance and mTLS.
-	// - cluster2 with cert provider name e2e.ClientSideCertProviderInstance and TLS.
+	// - cluster2 with cert provider name e2e.ClientSideCertProviderInstance and mTLS.
 	// - cluster3 with non-existent cert provider name.
 	clusters := []*v3clusterpb.Cluster{
 		e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS),
-		e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelTLS),
+		e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelMTLS),
 		func() *v3clusterpb.Cluster {
 			cluster3 := e2e.DefaultCluster(clusterName3, endpointsName3, e2e.SecurityLevelMTLS)
 			cluster3.TransportSocket = &v3corepb.TransportSocket{
@@ -505,6 +491,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 	if got, want := peer.Addr.String(), server1.Address; got != want {
 		t.Errorf("EmptyCall() routed to %q, want to be routed to: %q", got, want)
 	}
+	verifySecurityInformationFromPeerSPIFFE(t, peer, e2e.SecurityLevelMTLS, 1)
 
 	// Make an RPC to be routed to cluster2 and verify that it succeeds.
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Peer(peer)); err != nil {
@@ -513,6 +500,8 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *tes
 	if got, want := peer.Addr.String(), server2.Address; got != want {
 		t.Errorf("EmptyCall() routed to %q, want to be routed to: %q", got, want)
 	}
+	// In this call the server contains a peer chain of length 2
+	verifySecurityInformationFromPeerSPIFFE(t, peer, e2e.SecurityLevelMTLS, 2)
 
 	// Make an RPC to be routed to cluster3 and verify that it fails.
 	const wantErr = `identity certificate provider instance name "non-existent-certificate-provider-instance-name" missing in bootstrap configuration`

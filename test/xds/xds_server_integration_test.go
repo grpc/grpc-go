@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
@@ -38,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
@@ -500,10 +502,48 @@ func (s) TestServerSideXDS_FileWatcherCertsSPIFFE(t *testing.T) {
 			}
 			defer cc.Close()
 
+			peer := &peer.Peer{}
 			client := testgrpc.NewTestServiceClient(cc)
-			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
 				t.Fatalf("rpc EmptyCall() failed: %v", err)
 			}
+			verifySecurityInformationFromPeerSPIFFE(t, peer, test.secLevel, 1)
 		})
+	}
+}
+
+// Checks the AuthInfo available in the peer if it matches the expected security
+// level of the connection.
+func verifySecurityInformationFromPeerSPIFFE(t *testing.T, pr *peer.Peer, wantSecLevel e2e.SecurityLevel, wantPeerChainLen int) {
+	// This is not a true helper in the Go sense, because it does not perform
+	// setup or cleanup tasks. Marking it a helper is to ensure that when the
+	// test fails, the line information of the caller is outputted instead of
+	// from here.
+	//
+	// And this function directly calls t.Fatalf() instead of returning an error
+	// and letting the caller decide what to do with it. This is also OK since
+	// all callers will simply end up calling t.Fatalf() with the returned
+	// error, and can't add any contextual information of value to the error
+	// message.
+	t.Helper()
+
+	authType := pr.AuthInfo.AuthType()
+	switch wantSecLevel {
+	case e2e.SecurityLevelNone:
+		// if pr.AuthInfo.AuthType() != "insecure" {
+		if authType != "insecure" {
+			t.Fatalf("AuthType() is %s, want insecure", authType)
+		}
+	case e2e.SecurityLevelMTLS:
+		if authType != "tls" {
+			t.Fatalf("AuthType() is %s, want tls", authType)
+		}
+		ai, ok := pr.AuthInfo.(credentials.TLSInfo)
+		if !ok {
+			t.Fatalf("AuthInfo type is %T, want %T", pr.AuthInfo, credentials.TLSInfo{})
+		}
+		if len(ai.State.PeerCertificates) != wantPeerChainLen {
+			t.Fatalf("Number of peer certificates is %d, want %d", len(ai.State.PeerCertificates), wantPeerChainLen)
+		}
 	}
 }

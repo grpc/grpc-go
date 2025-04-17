@@ -178,10 +178,10 @@ func (hi *HandshakeInfo) buildVerifyFunc(km *certprovider.KeyMaterial, isClient 
 			intermediates.AddCert(cert)
 		}
 		roots := km.Roots
-		var err error
 		// If a SPIFFE Bundle Map is configured, find the roots for the trust
 		// domain of the leaf certificate.
 		if km.SPIFFEBundleMap != nil {
+			var err error
 			roots, err = spiffe.GetRootsFromSPIFFEBundleMap(km.SPIFFEBundleMap, certs[0])
 			if err != nil {
 				return err

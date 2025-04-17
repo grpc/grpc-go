@@ -60,18 +60,11 @@ func ManagementServerAndResolver(t *testing.T) (*e2e.ManagementServer, string, [
 	return xdsServer, nodeID, bc, r
 }
 
-// ManagementServerAndResolverWithSPIFFE sets up an xDS management server, creates
-// bootstrap configuration pointing to that server and creates an xDS resolver
-// using that configuration.
-//
-// Registers a cleanup function on t to stop the management server.
-//
-// Returns the following:
-// - the xDS management server
-// - the node ID to use when talking to this management server
-// - bootstrap configuration to use (if creating an xDS-enabled gRPC server)
-// - xDS resolver builder (if creating an xDS-enabled gRPC client)
-func ManagementServerAndResolverWithSPIFFE(t *testing.T) (*e2e.ManagementServer, string, []byte, resolver.Builder) {
+// ManagementServerAndResolverWithSPIFFE is exactly the same as
+// ManagementServerAndResolver, except that it uses a bootstrap configuration
+// containing certificate providers utilizing SPIFFE test certificates.
+func ManagementServerAndResolverWithSPIFFE(t *testing.T) (*e2e.ManagementServer,
+	string, []byte, resolver.Builder) {
 	// Start an xDS management server.
 	xdsServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 

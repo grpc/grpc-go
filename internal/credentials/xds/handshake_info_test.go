@@ -460,12 +460,11 @@ func TestBuildVerifyFuncFailures(t *testing.T) {
 			wantErr:       "x509: malformed certificate",
 		},
 		{
-			desc: "invalid x509",
+			desc: "invalid SPIFFE ID in peer cert",
 			// server1.pem doesn't have a valid SPIFFE ID, so attempted to get a
 			// root from the SPIFFE Bundle Map will fail
-			peerCertChain: loadCert(t, testdata.Path("server1.pem"),
-				testdata.Path("server1.key")),
-			wantErr: "spiffe: could not get spiffe ID from peer leaf cert but verification with spiffe trust map was configure",
+			peerCertChain: loadCert(t, testdata.Path("server1.pem"), testdata.Path("server1.key")),
+			wantErr:       "spiffe: could not get spiffe ID from peer leaf cert but verification with spiffe trust map was configure",
 		},
 	}
 	testProvider := testCertProviderWithKeyMaterial{}

@@ -68,10 +68,7 @@ func SPIFFEBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	t.Helper()
 
 	// Create a directory to hold certs and key files used on the server side.
-	var serverDir string
-	var err error
-
-	serverDir, err = createTmpDirWithCerts("testServerSideXDSSPIFFE*", "spiffe_end2end/server_spiffe.pem", "spiffe_end2end/server.key", "spiffe_end2end/ca.pem", "spiffe_end2end/server_spiffebundle.json")
+	serverDir, err := createTmpDirWithCerts("testServerSideXDSSPIFFE*", "spiffe_end2end/server_spiffe.pem", "spiffe_end2end/server.key", "spiffe_end2end/ca.pem", "spiffe_end2end/server_spiffebundle.json")
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}

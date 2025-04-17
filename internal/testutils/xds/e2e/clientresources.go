@@ -143,7 +143,6 @@ func marshalAny(m proto.Message) *anypb.Any {
 // DefaultServerListener returns a basic xds Listener resource to be used on the
 // server side. The returned Listener resource contains an inline route
 // configuration with the name of routeName.
-// TODO gregorycooke follow security level, it goes into filter chain
 func DefaultServerListener(host string, port uint32, secLevel SecurityLevel, routeName string) *v3listenerpb.Listener {
 	return defaultServerListenerCommon(host, port, secLevel, routeName, true)
 }
