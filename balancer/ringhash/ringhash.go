@@ -16,7 +16,11 @@
  *
  */
 
-// Package ringhash implements the ringhash balancer.
+// Package ringhash implements the ringhash balancer. See the following
+// gRFCs for details:
+// - https://github.com/grpc/proposal/blob/master/A42-xds-ring-hash-lb-policy.md
+// - https://github.com/grpc/proposal/blob/master/A61-IPv4-IPv6-dualstack-backends.md#ring-hash
+// - https://github.com/grpc/proposal/blob/master/A76-ring-hash-improvements.md
 package ringhash
 
 import (
