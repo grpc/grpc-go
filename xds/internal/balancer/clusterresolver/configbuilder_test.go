@@ -633,14 +633,6 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	}
 }
 
-func assertString(f func() (string, error)) string {
-	s, err := f()
-	if err != nil {
-		panic(err.Error())
-	}
-	return s
-}
-
 func testEndpointWithAttrs(addrStrs []string, localityWeight, endpointWeight uint32, priority string, lID *internal.LocalityID) resolver.Endpoint {
 	endpoint := resolver.Endpoint{}
 	for _, a := range addrStrs {

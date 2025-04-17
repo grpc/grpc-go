@@ -1016,11 +1016,3 @@ func (s) TestPickerUpdatedSynchronouslyOnConfigUpdate(t *testing.T) {
 		t.Fatal("Timed out waiting for client conn update to be completed.")
 	}
 }
-
-func assertString(f func() (string, error)) string {
-	s, err := f()
-	if err != nil {
-		panic(err.Error())
-	}
-	return s
-}
