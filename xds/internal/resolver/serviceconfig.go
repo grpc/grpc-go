@@ -142,7 +142,7 @@ type erroringConfigSelector struct {
 }
 
 func newErroringConfigSelector(err error, xdsNodeID string) *erroringConfigSelector {
-	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Errorf(codes.Unavailable, err.Error()), xdsNodeID)}
+	return &erroringConfigSelector{err: annotateErrorWithNodeID(status.Error(codes.Unavailable, err.Error()), xdsNodeID)}
 }
 
 func (cs *erroringConfigSelector) SelectConfig(iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
