@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -50,7 +51,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -134,7 +134,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	ctx = ringhash.SetXDSRequestHash(ctx, 0)
+	ctx = iringhash.SetXDSRequestHash(ctx, 0)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {

@@ -29,9 +29,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/internal/hierarchy"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
@@ -39,7 +41,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -601,12 +602,12 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 				},
 			},
 			priorityName: "test-priority",
-			childPolicy:  &iserviceconfig.BalancerConfig{Name: ringhash.Name, Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2}},
+			childPolicy:  &iserviceconfig.BalancerConfig{Name: ringhash.Name, Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2}},
 			// lrsServer is nil, so LRS policy will not be used.
 			wantConfig: &clusterimpl.LBConfig{
 				ChildPolicy: &iserviceconfig.BalancerConfig{
 					Name:   ringhash.Name,
-					Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
+					Config: &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
 				},
 			},
 			wantEndpoints: []resolver.Endpoint{

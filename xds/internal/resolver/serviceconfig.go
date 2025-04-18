@@ -32,12 +32,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -203,7 +203,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
-	lbCtx = ringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.

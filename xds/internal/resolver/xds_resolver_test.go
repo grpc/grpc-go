@@ -35,6 +35,7 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -42,7 +43,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	rinternal "google.golang.org/grpc/xds/internal/resolver/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -543,7 +543,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 	wantHash := xxhash.Sum64String("/products")
-	gotHash, ok := ringhash.XDSRequestHash(res.Context)
+	gotHash, ok := iringhash.XDSRequestHash(res.Context)
 	if !ok {
 		t.Fatalf("Got no request hash, want: %v", wantHash)
 	}
