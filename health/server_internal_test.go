@@ -19,6 +19,11 @@
 package health
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"sync"
 	"testing"
 	"time"
@@ -79,5 +84,67 @@ func (s) TestShutdown(t *testing.T) {
 	status = s.statusMap[testService]
 	if status != healthpb.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("status for %s is %v, want %v", testService, status, healthpb.HealthCheckResponse_NOT_SERVING)
+	}
+}
+
+// TestList verifies that List() returns the health status of all the services if no. of services are within
+// maxAllowedLimits
+func (s) TestList(t *testing.T) {
+	s := NewServer()
+	s.mu.Lock()
+	// Remove the zero value
+	delete(s.statusMap, "")
+	// Fill out status map with information
+	for i := 1; i <= 3; i++ {
+		s.statusMap[fmt.Sprintf("%d", i)] = healthpb.HealthCheckResponse_SERVING
+	}
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var in healthpb.HealthListRequest
+	out, err := s.List(ctx, &in)
+
+	if err != nil {
+		t.Fatalf("s.List(ctx, &in) returned err %v, want nil", err)
+	}
+	if len(out.GetStatuses()) != len(s.statusMap) {
+		t.Fatalf("len(out.GetStatuses()) = %d, want %d", len(out.GetStatuses()), len(s.statusMap))
+	}
+	for key := range out.GetStatuses() {
+		v, ok := s.statusMap[key]
+		if !ok {
+			t.Fatalf("key %s does not exist in s.statusMap", key)
+		}
+		if v != healthpb.HealthCheckResponse_SERVING {
+			t.Fatalf("%s returned status %d, want %d", key, healthpb.HealthCheckResponse_SERVING, v)
+		}
+	}
+}
+
+// TestListResourceExhausted verifies that List() returns a ResourceExhausted error if no. of services are more than
+// maxAllowedServices.
+func (s) TestListResourceExhausted(t *testing.T) {
+	s := NewServer()
+	s.mu.Lock()
+	// Remove the zero value
+	delete(s.statusMap, "")
+
+	// Fill out status map with service information, 101 elements will trigger an error.
+	for i := 1; i <= maxAllowedServices+1; i++ {
+		s.statusMap[fmt.Sprintf("%d", i)] = healthpb.HealthCheckResponse_SERVING
+	}
+	s.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var in healthpb.HealthListRequest
+	_, err := s.List(ctx, &in)
+
+	if err == nil {
+		t.Fatalf("s.List(ctx, &in) return nil error, want non-nil")
+	}
+	if !errors.Is(err, status.Errorf(codes.ResourceExhausted, "server health list exceeds maximum capacity: %d", maxAllowedServices)) {
+		t.Fatal("List should have failed with resource exhausted")
 	}
 }
