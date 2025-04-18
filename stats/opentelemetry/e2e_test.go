@@ -869,7 +869,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -886,7 +886,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -927,7 +927,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -944,7 +944,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1093,7 +1093,7 @@ func (s) TestSpan(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1110,7 +1110,7 @@ func (s) TestSpan(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1151,7 +1151,7 @@ func (s) TestSpan(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1168,7 +1168,7 @@ func (s) TestSpan(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1319,7 +1319,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1336,7 +1336,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1377,7 +1377,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -1394,7 +1394,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
