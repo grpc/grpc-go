@@ -19,18 +19,31 @@
 package xds
 
 import (
+	"context"
+	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"net"
 	"net/netip"
 	"net/url"
+	"os"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
+
+	"google.golang.org/grpc/testdata"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 	"google.golang.org/grpc/internal/xds/matcher"
 )
 
 type testCertProvider struct {
+	certprovider.Provider
+}
+
+type testCertProviderWithKeyMaterial struct {
 	certprovider.Provider
 }
 
@@ -396,4 +409,87 @@ func TestEqual(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (p *testCertProviderWithKeyMaterial) KeyMaterial(_ context.Context) (*certprovider.KeyMaterial, error) {
+	km := &certprovider.KeyMaterial{}
+	spiffeBundleMapContents, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	if err != nil {
+		return nil, err
+	}
+	bundleMap, err := spiffe.BundleMapFromBytes(spiffeBundleMapContents)
+	if err != nil {
+		return nil, err
+	}
+	km.SPIFFEBundleMap = bundleMap
+	rootFileContents, err := os.ReadFile(testdata.Path("spiffe_end2end/ca.pem"))
+	if err != nil {
+		return nil, err
+	}
+	trustPool := x509.NewCertPool()
+	if !trustPool.AppendCertsFromPEM(rootFileContents) {
+		return nil, fmt.Errorf("Failed to parse root certificate")
+	}
+	km.Roots = trustPool
+
+	certFileContents, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffe.pem"))
+	if err != nil {
+		return nil, err
+	}
+	keyFileContents, err := os.ReadFile(testdata.Path("spiffe_end2end/client.key"))
+	if err != nil {
+		return nil, err
+	}
+	cert, err := tls.X509KeyPair(certFileContents, keyFileContents)
+	if err != nil {
+		return nil, err
+	}
+	km.Certs = []tls.Certificate{cert}
+	return km, nil
+}
+
+func TestBuildVerifyFuncFailures(t *testing.T) {
+	tests := []struct {
+		desc          string
+		peerCertChain [][]byte
+		wantErr       string
+	}{
+		{
+			desc:          "invalid x509",
+			peerCertChain: [][]byte{[]byte("NOT_A_CERT")},
+			wantErr:       "x509: malformed certificate",
+		},
+		{
+			desc: "invalid SPIFFE ID in peer cert",
+			// server1.pem doesn't have a valid SPIFFE ID, so attempted to get a
+			// root from the SPIFFE Bundle Map will fail
+			peerCertChain: loadCert(t, testdata.Path("server1.pem"), testdata.Path("server1.key")),
+			wantErr:       "spiffe: could not get spiffe ID from peer leaf cert but verification with spiffe trust map was configure",
+		},
+	}
+	testProvider := testCertProviderWithKeyMaterial{}
+	hi := NewHandshakeInfo(&testProvider, &testProvider, nil, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	cfg, err := hi.ClientSideTLSConfig(ctx)
+	if err != nil {
+		t.Fatalf("hi.ClientSideTLSConfig() failed with err %v", err)
+	}
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			err = cfg.VerifyPeerCertificate(tc.peerCertChain, nil)
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("VerifyPeerCertificate got err %v, want: %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func loadCert(t *testing.T, certPath, keyPath string) [][]byte {
+	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("LoadX509KeyPair(%s, %s) failed: %v", certPath, keyPath, err)
+	}
+	return cert.Certificate
+
 }

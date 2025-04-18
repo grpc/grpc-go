@@ -44,6 +44,65 @@ func DefaultFileWatcherConfig(certPath, keyPath, caPath string) json.RawMessage 
 		}`, certPath, keyPath, caPath))
 }
 
+// SPIFFEFileWatcherConfig is a helper function to create a default certificate
+// provider plugin configuration. The test is expected to have setup the files
+// appropriately before this configuration is used to instantiate providers.
+func SPIFFEFileWatcherConfig(certPath, keyPath, caPath, spiffeBundleMapPath string) json.RawMessage {
+	return json.RawMessage(fmt.Sprintf(`{
+			"plugin_name": "file_watcher",
+			"config": {
+				"certificate_file": %q,
+				"private_key_file": %q,
+				"ca_certificate_file": %q,
+				"spiffe_trust_bundle_map_file": %q,
+				"refresh_interval": "600s"
+			}
+		}`, certPath, keyPath, caPath, spiffeBundleMapPath))
+}
+
+// SPIFFEBootstrapContents creates a bootstrap configuration with the given node
+// ID and server URI. It also creates certificate provider configuration using
+// SPIFFE certificates and sets the listener resource name template to be used
+// on the server side.
+func SPIFFEBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
+	t.Helper()
+
+	// Create a directory to hold certs and key files used on the server side.
+	serverDir, err := createTmpDirWithCerts("testServerSideXDSSPIFFE*", "spiffe_end2end/server_spiffe.pem", "spiffe_end2end/server.key", "spiffe_end2end/ca.pem", "spiffe_end2end/server_spiffebundle.json")
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+
+	// Create a directory to hold certs and key files used on the client side.
+	clientDir, err := createTmpDirWithCerts("testClientSideXDSSPIFFE*", "spiffe_end2end/client_spiffe.pem", "spiffe_end2end/client.key", "spiffe_end2end/ca.pem", "spiffe_end2end/client_spiffebundle.json")
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+
+	// Create certificate providers section of the bootstrap config with entries
+	// for both the client and server sides.
+	cpc := map[string]json.RawMessage{
+		ServerSideCertProviderInstance: SPIFFEFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile), path.Join(serverDir, spiffeBundleMapFile)),
+		ClientSideCertProviderInstance: SPIFFEFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile), path.Join(clientDir, spiffeBundleMapFile)),
+	}
+
+	// Create the bootstrap configuration.
+	bs, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[{
+			"server_uri": "passthrough:///%s",
+			"channel_creds": [{"type": "insecure"}]
+		}]`, serverURI)),
+		Node:                               []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+		CertificateProviders:               cpc,
+		ServerListenerResourceNameTemplate: ServerListenerResourceNameTemplate,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	}
+	return bs
+
+}
+
 // DefaultBootstrapContents creates a default bootstrap configuration with the
 // given node ID and server URI. It also creates certificate provider
 // configuration and sets the listener resource name template to be used on the
@@ -52,13 +111,13 @@ func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 	t.Helper()
 
 	// Create a directory to hold certs and key files used on the server side.
-	serverDir, err := createTmpDirWithCerts("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+	serverDir, err := createTmpDirWithCerts("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem", "")
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
 
 	// Create a directory to hold certs and key files used on the client side.
-	clientDir, err := createTmpDirWithCerts("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
+	clientDir, err := createTmpDirWithCerts("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem", "")
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap configuration: %v", err)
 	}
@@ -88,9 +147,10 @@ func DefaultBootstrapContents(t *testing.T, nodeID, serverURI string) []byte {
 
 const (
 	// Names of files inside tempdir, for certprovider plugin to watch.
-	certFile = "cert.pem"
-	keyFile  = "key.pem"
-	rootFile = "ca.pem"
+	certFile            = "cert.pem"
+	keyFile             = "key.pem"
+	rootFile            = "ca.pem"
+	spiffeBundleMapFile = "spiffe_bundle_map.json"
 )
 
 func createTmpFile(src, dst string) error {
@@ -109,7 +169,7 @@ func createTmpFile(src, dst string) error {
 // rootSrc files and creates appropriate files under the newly create tempDir.
 // Returns the path of the created tempDir if successful, and an error
 // otherwise.
-func createTmpDirWithCerts(dirPattern, certSrc, keySrc, rootSrc string) (string, error) {
+func createTmpDirWithCerts(dirPattern, certSrc, keySrc, rootSrc, spiffeBundleMapSrc string) (string, error) {
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
 	dir, err := os.MkdirTemp("", dirPattern)
@@ -125,6 +185,11 @@ func createTmpDirWithCerts(dirPattern, certSrc, keySrc, rootSrc string) (string,
 	}
 	if err := createTmpFile(testdata.Path(rootSrc), path.Join(dir, rootFile)); err != nil {
 		return "", err
+	}
+	if spiffeBundleMapSrc != "" {
+		if err := createTmpFile(testdata.Path(spiffeBundleMapSrc), path.Join(dir, spiffeBundleMapFile)); err != nil {
+			return "", err
+		}
 	}
 	return dir, nil
 }

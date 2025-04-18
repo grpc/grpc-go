@@ -350,3 +350,162 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 		t.Fatalf("FullDuplexCall failed: %v, wantCode: %s, wantErr: %s", err, codes.Unavailable, wantErr)
 	}
 }
+
+// Tests the case where the bootstrap configuration contains one certificate
+// provider configured with SPIFFE Bundle Map roots on the client side, and xDS
+// credentials with an insecure fallback is specified at dial time. The
+// management server responds with three clusters:
+//  1. contains valid security configuration pointing to the certificate provider
+//     instance specified in the bootstrap, and the server uses a SPIFFE cert.
+//  2. contains valid security configuration pointing to the certificate provider
+//     instance specified in the bootstrap, and the server uses a SPIFFE cert chain.
+//  3. contains invalid security configuration pointing to a non-existent
+//     certificate provider instance
+//
+// The test verifies that RPCs to the first two clusters succeed, while RPCs to
+// the third cluster fails with an appropriate code and error message.
+func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfigurationSPIFFE(t *testing.T) {
+	mgmtServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolverWithSPIFFE(t)
+
+	// Create test backends for all three clusters
+	// backend1 configured with a SPIFFE cert, represents cluster1
+	// backend2 configured with a SPIFFE cert chain, represents cluster2
+	// backend3 configured with insecure creds, represents cluster3
+	serverCreds := testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.RequireAndVerifyClientCert)
+	server1 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds))
+	defer server1.Stop()
+	serverCreds2 := testutils.CreateServerTLSCredentialsCompatibleWithSPIFFEChain(t, tls.RequireAndVerifyClientCert)
+	server2 := stubserver.StartTestService(t, nil, grpc.Creds(serverCreds2))
+	defer server2.Stop()
+	server3 := stubserver.StartTestService(t, nil)
+	defer server3.Stop()
+
+	// Configure client side xDS resources on the management server.
+	const serviceName = "my-service-client-side-xds"
+	const routeConfigName = "route-" + serviceName
+	const clusterName1 = "cluster1-" + serviceName
+	const clusterName2 = "cluster2-" + serviceName
+	const clusterName3 = "cluster3-" + serviceName
+	const endpointsName1 = "endpoints1-" + serviceName
+	const endpointsName2 = "endpoints2-" + serviceName
+	const endpointsName3 = "endpoints3-" + serviceName
+	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeConfigName)}
+	// Route configuration:
+	// - "/grpc.testing.TestService/EmptyCall" --> cluster1
+	// - "/grpc.testing.TestService/UnaryCall" --> cluster2
+	// - "/grpc.testing.TestService/FullDuplexCall" --> cluster3
+	routes := []*v3routepb.RouteConfiguration{{
+		Name: routeConfigName,
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			Domains: []string{serviceName},
+			Routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName1},
+					}},
+				},
+				{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName2},
+					}},
+				},
+				{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/FullDuplexCall"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName3},
+					}},
+				},
+			},
+		}},
+	}}
+	// Clusters:
+	// - cluster1 with cert provider name e2e.ClientSideCertProviderInstance and mTLS.
+	// - cluster2 with cert provider name e2e.ClientSideCertProviderInstance and mTLS.
+	// - cluster3 with non-existent cert provider name.
+	clusters := []*v3clusterpb.Cluster{
+		e2e.DefaultCluster(clusterName1, endpointsName1, e2e.SecurityLevelMTLS),
+		e2e.DefaultCluster(clusterName2, endpointsName2, e2e.SecurityLevelMTLS),
+		func() *v3clusterpb.Cluster {
+			cluster3 := e2e.DefaultCluster(clusterName3, endpointsName3, e2e.SecurityLevelMTLS)
+			cluster3.TransportSocket = &v3corepb.TransportSocket{
+				Name: "envoy.transport_sockets.tls",
+				ConfigType: &v3corepb.TransportSocket_TypedConfig{
+					TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
+						CommonTlsContext: &v3tlspb.CommonTlsContext{
+							ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+								ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName: "non-existent-certificate-provider-instance-name",
+								},
+							},
+							TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+								InstanceName: "non-existent-certificate-provider-instance-name",
+							},
+						},
+					}),
+				},
+			}
+			return cluster3
+		}(),
+	}
+	// Endpoints for each of the above clusters with backends created earlier.
+	endpoints := []*v3endpointpb.ClusterLoadAssignment{
+		e2e.DefaultEndpoint(endpointsName1, "localhost", []uint32{testutils.ParsePort(t, server1.Address)}),
+		e2e.DefaultEndpoint(endpointsName2, "localhost", []uint32{testutils.ParsePort(t, server2.Address)}),
+		e2e.DefaultEndpoint(endpointsName3, "localhost", []uint32{testutils.ParsePort(t, server3.Address)}),
+	}
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      listeners,
+		Routes:         routes,
+		Clusters:       clusters,
+		Endpoints:      endpoints,
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create client-side xDS credentials with an insecure fallback.
+	clientCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC to be routed to cluster1 and verify that it succeeds.
+	client := testgrpc.NewTestServiceClient(cc)
+	peer := &peer.Peer{}
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+	if got, want := peer.Addr.String(), server1.Address; got != want {
+		t.Errorf("EmptyCall() routed to %q, want to be routed to: %q", got, want)
+	}
+	verifySecurityInformationFromPeerSPIFFE(t, peer, e2e.SecurityLevelMTLS, 1)
+
+	// Make an RPC to be routed to cluster2 and verify that it succeeds.
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}, grpc.Peer(peer)); err != nil {
+		t.Fatalf("UnaryCall() failed: %v", err)
+	}
+	if got, want := peer.Addr.String(), server2.Address; got != want {
+		t.Errorf("EmptyCall() routed to %q, want to be routed to: %q", got, want)
+	}
+	// In this call the server contains a peer chain of length 2
+	verifySecurityInformationFromPeerSPIFFE(t, peer, e2e.SecurityLevelMTLS, 2)
+
+	// Make an RPC to be routed to cluster3 and verify that it fails.
+	const wantErr = `identity certificate provider instance name "non-existent-certificate-provider-instance-name" missing in bootstrap configuration`
+	if _, err := client.FullDuplexCall(ctx); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("FullDuplexCall failed: %v, wantCode: %s, wantErr: %s", err, codes.Unavailable, wantErr)
+	}
+}
