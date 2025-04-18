@@ -1707,3 +1707,94 @@ func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
 		t.Errorf("Expected span not found: %q (kind: %s)", want.name, want.spanKind)
 	}
 }
+
+// TestStreamingRPC_TraceSequenceNumbers verifies that sequence numbers
+// are incremented correctly for multiple messages sent and received
+// during a streaming RPC.
+func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
+	mo, _ := defaultMetricsOptions(t, nil)
+	to, exporter := defaultTraceOptions(t)
+	ss := setupStubServer(t, mo, to)
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
+	}
+
+	const numMessages = 3
+	for i := range numMessages {
+		if err := stream.Send(&testpb.StreamingOutputCallRequest{
+			ResponseType: testpb.PayloadType_COMPRESSABLE,
+			ResponseParameters: []*testpb.ResponseParameters{
+				{Size: 10},
+			},
+		}); err != nil {
+			t.Fatalf("stream.Send() failed at message %d: %v", i, err)
+		}
+	}
+	stream.CloseSend()
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("stream.Recv received an unexpected error: %v", err)
+		}
+	}
+
+	createMessageEvents := func(name string) []trace.Event {
+		var events []trace.Event
+		for i := 0; i < numMessages; i++ {
+			events = append(events, trace.Event{
+				Name: name,
+				Attributes: []attribute.KeyValue{
+					attribute.Int("sequence-number", i),
+					attribute.Int("message-size", 4),
+				},
+			})
+		}
+		return events
+	}
+
+	wantSpanInfos := []traceSpanInfo{
+		{
+			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", false),
+				attribute.Bool("FailFast", false),
+				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: createMessageEvents("Inbound message"),
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", true),
+				attribute.Bool("FailFast", true),
+				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: createMessageEvents("Outbound message"),
+		},
+		{
+			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: nil,
+			events:     nil,
+		},
+	}
+
+	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validateTraces(t, spans, wantSpanInfos)
+}
