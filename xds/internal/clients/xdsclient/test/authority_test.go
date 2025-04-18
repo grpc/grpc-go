@@ -20,7 +20,6 @@ package xdsclient_test
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"testing"
 
@@ -62,7 +61,7 @@ var (
 // the default and the third one pointing to the non-default).
 //
 // Returns two listeners used by the default and non-default management servers
-// respectively, and the xDS client and its close function.
+// respectively, and the xDS client.
 func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, *xdsclient.XDSClient) {
 	// Create listener wrappers which notify on to a channel whenever a new
 	// connection is accepted. We use this to track the number of transports
@@ -81,9 +80,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	ext := grpctransport.ServerIdentifierExtension{Credentials: "insecure"}
 	siDefault := clients.ServerIdentifier{
 		ServerURI:  defaultAuthorityServer.Address,
@@ -242,9 +239,7 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	psi := clients.ServerIdentifier{
 		ServerURI:  primaryMgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -307,15 +302,16 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	primaryLis.Close()
 
 	// Register a watch.
-	watcher := newListenerWatcherV2()
+	watcher := newListenerWatcher()
 	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
 	defer ldsCancel()
 
-	// Ensure that the connectivity error callback is not called.
+	// Ensure that the connectivity error callback is not called. Since, this
+	// is the first watch without cached resource, it checks for resourceErrCh
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if v, err := watcher.errCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("Error callback on the watcher with error:  %v", v.(error))
+	if v, err := watcher.resourceErrCh.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Fatalf("Resource error callback on the watcher with error:  %v", v.(error))
 	}
 
 	// Ensure that the resource update callback is invoked.
@@ -331,49 +327,9 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	// Stop the secondary.
 	secondaryLis.Close()
 
-	// Ensure that the connectivity error callback is called.
-	if _, err := watcher.errCh.Receive(ctx); err != nil {
-		t.Fatal("Timeout when waiting for error callback on the watcher")
+	// Ensure that the connectivity error callback is called as ambient error
+	// since cached resource exist.
+	if _, err := watcher.ambientErrCh.Receive(ctx); err != nil {
+		t.Fatal("Timeout when waiting for ambient error callback on the watcher")
 	}
-}
-
-type listenerWatcherV2 struct {
-	updateCh *testutils.Channel // Messages of type listenerUpdate
-	errCh    *testutils.Channel // Messages of type error
-}
-
-func newListenerWatcherV2() *listenerWatcherV2 {
-	return &listenerWatcherV2{
-		updateCh: testutils.NewChannelWithSize(1),
-		errCh:    testutils.NewChannelWithSize(1),
-	}
-}
-
-func (lw *listenerWatcherV2) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
-	lisData, ok := update.(*listenerResourceData)
-	if !ok {
-		lw.errCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
-		onDone()
-		return
-	}
-	select {
-	case <-lw.updateCh.C:
-	default:
-	}
-	lw.updateCh.Send(listenerUpdateErrTuple{update: lisData.Resource})
-	onDone()
-}
-
-func (lw *listenerWatcherV2) AmbientError(err error, onDone func()) {
-	// When used with a go-control-plane management server that continuously
-	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in OnResourceDoesNotExist() simplifies tests which will have
-	// access to the most recently received error.
-	lw.errCh.Replace(listenerUpdateErrTuple{ambientErr: err})
-	onDone()
-}
-
-func (lw *listenerWatcherV2) ResourceError(err error, onDone func()) {
-	lw.errCh.Replace(listenerUpdateErrTuple{resourceErr: err})
-	onDone()
 }

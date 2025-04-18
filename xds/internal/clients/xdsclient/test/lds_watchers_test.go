@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
@@ -40,7 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
@@ -64,19 +62,29 @@ type listenerUpdateErrTuple struct {
 }
 
 type listenerWatcher struct {
-	updateCh *testutils.Channel
+	updateCh      *testutils.Channel // Messages of type listenerUpdate
+	resourceErrCh *testutils.Channel // Messages of type resource error
+	ambientErrCh  *testutils.Channel // Messages of type ambient error
 }
 
 func newListenerWatcher() *listenerWatcher {
-	return &listenerWatcher{updateCh: testutils.NewChannelWithSize(1)}
+	return &listenerWatcher{
+		updateCh:      testutils.NewChannelWithSize(1),
+		resourceErrCh: testutils.NewChannelWithSize(1),
+		ambientErrCh:  testutils.NewChannelWithSize(1),
+	}
 }
 
 func (lw *listenerWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
 	lisData, ok := update.(*listenerResourceData)
 	if !ok {
-		lw.updateCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
+		lw.resourceErrCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
 		onDone()
 		return
+	}
+	select {
+	case <-lw.updateCh.C:
+	default:
 	}
 	lw.updateCh.Send(listenerUpdateErrTuple{update: lisData.Resource})
 	onDone()
@@ -87,43 +95,12 @@ func (lw *listenerWatcher) AmbientError(err error, onDone func()) {
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
-	lw.updateCh.Replace(listenerUpdateErrTuple{ambientErr: err})
+	lw.ambientErrCh.Replace(listenerUpdateErrTuple{ambientErr: err})
 	onDone()
 }
 
 func (lw *listenerWatcher) ResourceError(err error, onDone func()) {
-	lw.updateCh.Replace(listenerUpdateErrTuple{resourceErr: err})
-	onDone()
-}
-
-type listenerWatcherMultiple struct {
-	updateCh *testutils.Channel
-}
-
-// TODO: delete this once `newListenerWatcher` is modified to handle multiple
-// updates (https://github.com/grpc/grpc-go/issues/7864).
-func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
-	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
-}
-
-func (lw *listenerWatcherMultiple) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
-	lisData, ok := update.(*listenerResourceData)
-	if !ok {
-		lw.updateCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
-		onDone()
-		return
-	}
-	lw.updateCh.Send(listenerUpdateErrTuple{update: lisData.Resource})
-	onDone()
-}
-
-func (lw *listenerWatcherMultiple) AmbientError(err error, onDone func()) {
-	lw.updateCh.Send(listenerUpdateErrTuple{ambientErr: err})
-	onDone()
-}
-
-func (lw *listenerWatcherMultiple) ResourceError(err error, onDone func()) {
-	lw.updateCh.Send(listenerUpdateErrTuple{resourceErr: err})
+	lw.resourceErrCh.Replace(listenerUpdateErrTuple{resourceErr: err})
 	onDone()
 }
 
@@ -131,19 +108,10 @@ func (lw *listenerWatcherMultiple) ResourceError(err error, onDone func()) {
 // not contain the `RouteSpecifier` field in the HTTPConnectionManager, and
 // hence is expected to be NACKed by the client.
 func badListenerResource(t *testing.T, name string) *v3listenerpb.Listener {
-	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
-	})
+	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{})
 	return &v3listenerpb.Listener{
 		Name:        name,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
-		FilterChains: []*v3listenerpb.FilterChain{{
-			Name: "filter-chain-name",
-			Filters: []*v3listenerpb.Filter{{
-				Name:       wellknown.HTTPConnectionManager,
-				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: hcm},
-			}},
-		}},
 	}
 }
 
@@ -161,11 +129,20 @@ func verifyNoListenerUpdate(ctx context.Context, updateCh *testutils.Channel) er
 	return nil
 }
 
-// verifyListenerUpdate waits for an update to be received on the provided
-// update channel and verifies that it matches the expected update.
+// verifyListenerUpdate waits for a listenerUpdateErrTuple from the provided
+// updateCh (typically the updateCh, resourceErrCh, or ambientErrCh of
+// listenerWatcher) and verifies that it matches the expected wantUpdate tuple.
 //
-// Returns an error if no update is received before the context deadline expires
-// or the received update does not match the expected one.
+// It performs the following checks:
+//   - Waits for an item on updateCh until the context deadline.
+//   - If wantUpdate contains a resourceErr or ambientErr, it compares the
+//     xdsresource.ErrorType of the received error with the expected error
+//     type.
+//   - If wantUpdate contains an update, it compares the received update with
+//     the expected update, ignoring the Raw field.
+//
+// Returns an error if the context expires, or if the received tuple does not
+// match the expected tuple according to the comparison logic.
 func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate listenerUpdateErrTuple) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
@@ -272,9 +249,7 @@ func (s) TestLDSWatch(t *testing.T) {
 
 			nodeID := uuid.New().String()
 
-			resourceTypes := map[string]xdsclient.ResourceType{}
-			listenerType := listenerType
-			resourceTypes[xdsresource.V3ListenerURL] = listenerType
+			resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
 				Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -420,9 +395,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 			nodeID := uuid.New().String()
 
-			resourceTypes := map[string]xdsclient.ResourceType{}
-			listenerType := listenerType
-			resourceTypes[xdsresource.V3ListenerURL] = listenerType
+			resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
 				Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -527,9 +500,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -636,9 +607,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -720,9 +689,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -759,7 +726,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	wantErr := xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")
-	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{resourceErr: wantErr}); err != nil {
+	if err := verifyListenerUpdate(ctx, lw.resourceErrCh, listenerUpdateErrTuple{resourceErr: wantErr}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -773,9 +740,7 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -852,9 +817,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -937,7 +900,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 
 	// The first watcher should receive a resource error for resource removal,
 	// while the second watcher should not see an update.
-	if err := verifyListenerUpdate(ctx, lw1.updateCh, listenerUpdateErrTuple{
+	if err := verifyListenerUpdate(ctx, lw1.resourceErrCh, listenerUpdateErrTuple{
 		resourceErr: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, ""),
 	}); err != nil {
 		t.Fatal(err)
@@ -983,9 +946,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -1048,7 +1009,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	// The existing watcher should receive a resource error for resource
 	// removal.
 	updateError := listenerUpdateErrTuple{resourceErr: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "")}
-	if err := verifyListenerUpdate(ctx, lw1.updateCh, updateError); err != nil {
+	if err := verifyListenerUpdate(ctx, lw1.resourceErrCh, updateError); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1057,7 +1018,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyListenerUpdate(ctx, lw2.updateCh, updateError); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.resourceErrCh, updateError); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1071,9 +1032,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -1116,7 +1075,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is not cached, it should be received as resource
 	// error.
-	if err := verifyResourceErrorType(ctx, lw.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyResourceErrorType(ctx, lw.resourceErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1126,7 +1085,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyResourceErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyResourceErrorType(ctx, lw2.resourceErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1141,9 +1100,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -1206,13 +1163,13 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is cached, it should be received as ambient error.
-	if err := verifyAmbientErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyAmbientErrorType(ctx, lw1.ambientErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
 	// Register another watch for the same resource. This should get the update
 	// and error from the cache.
-	lw2 := newListenerWatcherMultiple(2)
+	lw2 := newListenerWatcher()
 	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, ldsName, lw2)
 	defer ldsCancel2()
 	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantUpdate); err != nil {
@@ -1220,7 +1177,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is cached, it should be received as ambient error.
-	if err := verifyAmbientErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyAmbientErrorType(ctx, lw2.ambientErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1236,9 +1193,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -1299,7 +1254,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// Verify that the expected error is propagated to the existing watcher.
 	// Since the resource is not cached, it should be received as resource
 	// error.
-	if err := verifyResourceErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyResourceErrorType(ctx, lw1.resourceErrCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1328,9 +1283,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},

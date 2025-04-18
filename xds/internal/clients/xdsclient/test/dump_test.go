@@ -44,10 +44,8 @@ import (
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 )
 
 func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.ClientResourceStatus, config *anypb.Any, failure *v3adminpb.UpdateFailureState) *v3statuspb.ClientConfig_GenericXdsConfig {
@@ -76,8 +74,8 @@ func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusRespons
 			lastErr = err
 			continue
 		}
-		var got v3statuspb.ClientStatusResponse
-		if err := proto.Unmarshal(b, &got); err != nil {
+		got := &v3statuspb.ClientStatusResponse{}
+		if err := proto.Unmarshal(b, got); err != nil {
 			lastErr = err
 			continue
 		}
@@ -94,11 +92,11 @@ func checkResourceDump(ctx context.Context, want *v3statuspb.ClientStatusRespons
 				return strings.Compare(a.TypeUrl, b.TypeUrl)
 			})
 		}
-		diff := cmp.Diff(want, &got, cmpOpts)
+		diff := cmp.Diff(want, got, cmpOpts)
 		if diff == "" {
 			return nil
 		}
-		lastErr = fmt.Errorf("received unexpected resource dump, diff (-got, +want):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(&got), pretty.ToJSON(want))
+		lastErr = fmt.Errorf("received unexpected resource dump, diff (-got, +want):\n%s, got: %s\n want:%s", diff, pretty.ToJSON(got), pretty.ToJSON(want))
 	}
 	return fmt.Errorf("timeout when waiting for resource dump to reach expected state: %v", lastErr)
 }
@@ -123,9 +121,7 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -239,19 +235,10 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	// Update the first resource of each type in the management server to a
 	// value which is expected to be NACK'ed by the xDS client.
 	listeners[0] = func() *v3listenerpb.Listener {
-		hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
-			HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
-		})
+		hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{})
 		return &v3listenerpb.Listener{
 			Name:        ldsTargets[0],
 			ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
-			FilterChains: []*v3listenerpb.FilterChain{{
-				Name: "filter-chain-name",
-				Filters: []*v3listenerpb.Filter{{
-					Name:       wellknown.HTTPConnectionManager,
-					ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: hcm},
-				}},
-			}},
 		}
 	}()
 	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{

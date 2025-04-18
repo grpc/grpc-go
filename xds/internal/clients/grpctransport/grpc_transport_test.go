@@ -124,14 +124,13 @@ func (s *testServer) StreamAggregatedResources(stream v3discoverygrpc.Aggregated
 type testCredentials struct {
 	credentials.Bundle
 	transportCredentials credentials.TransportCredentials
-	perRPCCredentials    credentials.PerRPCCredentials
 }
 
 func (tc *testCredentials) TransportCredentials() credentials.TransportCredentials {
 	return tc.transportCredentials
 }
 func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
-	return tc.perRPCCredentials
+	return nil
 }
 
 // TestBuild_Success verifies that the Builder successfully creates a new

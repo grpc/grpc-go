@@ -49,11 +49,10 @@ func (w *wrappingWatcher) ResourceError(err error, done func()) {
 // watcher.
 func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
-	//
-	// The client returned from the top-level API is a ref-counted client which
-	// contains a pointer to `XDSClient`. When all references are released, the
-	// ref-counted client sets its pointer to `nil`. And if any watch APIs are
-	// made on such a closed client, we will get here with a `nil` receiver.
+	if c.done.HasFired() {
+		logger.Warningf("Watch registered for type %q, but client is closed", typeURL)
+		return func() {}
+	}
 
 	watcher = &wrappingWatcher{
 		ResourceWatcher: watcher,
@@ -67,7 +66,7 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 		return func() {}
 	}
 
-	if c == nil || c.done.HasFired() {
+	if c.done.HasFired() {
 		logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeName, resourceName)
 		return func() {}
 	}
@@ -105,15 +104,4 @@ func (c *XDSClient) getAuthorityForResource(name *xdsresource.Name) *authority {
 		return c.topLevelAuthority
 	}
 	return c.authorities[name.Authority]
-}
-
-// A registry of ResourceType implementations indexed by their corresponding
-// type URLs. Registration of an ResourceType happens the first time a watch
-// for a resource of that type is invoked.
-type resourceTypeRegistry struct {
-	types map[string]ResourceType
-}
-
-func newResourceTypeRegistry(resourceTypes map[string]ResourceType) *resourceTypeRegistry {
-	return &resourceTypeRegistry{types: resourceTypes}
 }

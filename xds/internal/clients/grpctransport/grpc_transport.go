@@ -44,9 +44,7 @@ var (
 // clients.ServerIdentifier.Extensions field (See Example).
 type ServerIdentifierExtension struct {
 	// Credentials is name of the credentials to use for this transport to the
-	// server.
-	//
-	// It must be present in Builder.Credentials.
+	// server. It must be present in the map passed to NewBuilder.
 	Credentials string
 }
 
@@ -58,9 +56,10 @@ type Builder struct {
 	credentials map[string]credentials.Bundle
 
 	mu sync.Mutex
-	// transports is a map of clients.ServerIdentifiers in use by the
-	// Builder to connect to different servers.
-	transports map[clients.ServerIdentifier]*grpcTransport
+	// connections is a map of clients.ServerIdentifiers in use by the Builder
+	// to connect to different servers.
+	connections map[clients.ServerIdentifier]*grpc.ClientConn
+	refs        map[clients.ServerIdentifier]int
 }
 
 // NewBuilder provides a builder for creating gRPC-based Transports using
@@ -69,7 +68,8 @@ type Builder struct {
 func NewBuilder(credentials map[string]credentials.Bundle) *Builder {
 	return &Builder{
 		credentials: credentials,
-		transports:  make(map[clients.ServerIdentifier]*grpcTransport),
+		connections: make(map[clients.ServerIdentifier]*grpc.ClientConn),
+		refs:        make(map[clients.ServerIdentifier]int),
 	}
 }
 
@@ -88,20 +88,22 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if tr, ok := b.transports[si]; ok {
-		if logger.V(2) {
-			logger.Info("Reusing existing transport to the server for ServerIdentifier: %v", si)
-		}
-		tr.refCount++
-		return &transportRef{grpcTransport: tr}, nil
-	}
-
 	creds, ok := b.credentials[sce.Credentials]
 	if !ok {
 		return nil, fmt.Errorf("grpctransport: unknown credentials type %q specified in extensions", sce.Credentials)
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if cc, ok := b.connections[si]; ok {
+		if logger.V(2) {
+			logger.Info("Reusing existing connection to the server for ServerIdentifier: %v", si)
+		}
+		b.refs[si]++
+		tr := &grpcTransport{cc: cc}
+		tr.cleanup = b.cleanupFunc(si, tr)
+		return tr, nil
 	}
 
 	// Create a new gRPC client/channel for the server with the provided
@@ -114,45 +116,48 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	})
 	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(creds), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
-		return nil, fmt.Errorf("grpctransport: failed to create transport to server %q: %v", si.ServerURI, err)
+		return nil, fmt.Errorf("grpctransport: failed to create connection to server %q: %v", si.ServerURI, err)
 	}
-	tr := &grpcTransport{
-		cc:       cc,
-		refCount: 1,
-	}
-	// Register a cleanup function that decrements the refCount to the gRPC
+	tr := &grpcTransport{cc: cc}
+	// Register a cleanup function that decrements the refs to the gRPC
 	// transport each time Close() is called to close it and remove from
-	// transports map if last reference is being released.
-	tr.cleanup = func() {
-		b.mu.Lock()
-		defer b.mu.Unlock()
+	// transports and connections map if last reference is being released.
+	tr.cleanup = b.cleanupFunc(si, tr)
 
-		tr.refCount--
-		if tr.refCount != 0 {
-			return
-		}
-
-		tr.cc.Close()
-		delete(b.transports, si)
-	}
-
-	// Add the newly created transport to the map to re-use the transport.
-	b.transports[si] = tr
+	// Add the newly created connection to the maps to re-use the transport
+	// channel and track references.
+	b.connections[si] = cc
+	b.refs[si] = 1
 
 	if logger.V(2) {
 		logger.Info("Created a new transport to the server for ServerIdentifier: %v", si)
 	}
-	return &transportRef{grpcTransport: tr}, nil
+	return tr, nil
+}
+
+func (b *Builder) cleanupFunc(si clients.ServerIdentifier, tr *grpcTransport) func() {
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+
+		b.refs[si]--
+		if b.refs[si] != 0 {
+			return
+		}
+
+		tr.cc.Close()
+		delete(b.connections, si)
+		delete(b.refs, si)
+	}
 }
 
 type grpcTransport struct {
 	cc *grpc.ClientConn
 
-	// refCount is guarded by the parent Builder.mu.
-	refCount int32
 	// cleanup is the function to be invoked for releasing the references to
 	// the gRPC transport each time Close() is called.
 	cleanup func()
+	closed  sync.Once
 }
 
 // NewStream creates a new gRPC stream to the server for the specified method.
@@ -166,21 +171,9 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 
 // Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() {
-	g.cleanup()
-}
-
-// transportRef is the reference to the underlying gRPC transport.
-type transportRef struct {
-	*grpcTransport
-
-	closed sync.Once
-}
-
-// Close releases the reference to the underlying gRPC transport.
-func (tr *transportRef) Close() {
-	tr.closed.Do(func() {
-		tr.grpcTransport.Close()
-		tr.grpcTransport = nil
+	g.closed.Do(func() {
+		g.cleanup()
+		g.cc = nil
 	})
 }
 

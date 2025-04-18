@@ -56,12 +56,8 @@ const (
 
 	ldsName         = "xdsclient-test-lds-resource"
 	rdsName         = "xdsclient-test-rds-resource"
-	cdsName         = "xdsclient-test-cds-resource"
-	edsName         = "xdsclient-test-eds-resource"
 	ldsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-lds-resource"
 	rdsNameNewStyle = "xdstp:///envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource"
-	cdsNameNewStyle = "xdstp:///envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource"
-	edsNameNewStyle = "xdstp:///envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource"
 )
 
 var (
@@ -107,15 +103,6 @@ func processClientSideListener(lis *v3listenerpb.Listener) (*listenerUpdate, err
 	apiLis := &v3httppb.HttpConnectionManager{}
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal api_listener: %v", err)
-	}
-	// "HttpConnectionManager.xff_num_trusted_hops must be unset or zero and
-	// HttpConnectionManager.original_ip_detection_extensions must be empty. If
-	// either field has an incorrect value, the Listener must be NACKed." - A41
-	if apiLis.XffNumTrustedHops != 0 {
-		return nil, fmt.Errorf("xff_num_trusted_hops must be unset or zero %+v", apiLis)
-	}
-	if len(apiLis.OriginalIpDetectionExtensions) != 0 {
-		return nil, fmt.Errorf("original_ip_detection_extensions must be empty %+v", apiLis)
 	}
 
 	switch apiLis.RouteSpecifier.(type) {

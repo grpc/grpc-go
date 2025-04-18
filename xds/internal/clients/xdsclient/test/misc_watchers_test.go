@@ -106,9 +106,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	nodeID := uuid.New().String()
 	authority := makeAuthorityName(t.Name())
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -219,9 +217,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -260,7 +256,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	// Register a watch for the Listener resource.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	watcher := newListenerWatcherV2()
+	watcher := newListenerWatcher()
 	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, serviceName, watcher)
 	defer ldsCancel1()
 
@@ -322,7 +318,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for the connection error to be propagated to the watcher")
-	case <-watcher.errCh.C:
+	case <-watcher.ambientErrCh.C:
 	}
 	// Restart the management server.
 	lis.Restart()
@@ -386,9 +382,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -422,7 +416,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 
 	t.Run("Right_Wrong_ResourceType_Implementations", func(t *testing.T) {
 		const listenerName = "listener-name"
-		watcher := newListenerWatcherV2()
+		watcher := newListenerWatcher()
 		client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
 
 		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -431,7 +425,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		case <-sCtx.Done():
 		case <-watcher.updateCh.C:
 			t.Fatal("Unexpected resource update")
-		case <-watcher.errCh.C:
+		case <-watcher.resourceErrCh.C:
 			t.Fatal("Unexpected resource error")
 		}
 
@@ -439,9 +433,9 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for error callback to be invoked")
-		case u, ok := <-watcher.errCh.C:
+		case u, ok := <-watcher.resourceErrCh.C:
 			if !ok {
-				t.Fatalf("got no update, wanted listener error from the management server")
+				t.Fatalf("got no update, wanted listener resource error from the management server")
 			}
 			gotErr := u.(listenerUpdateErrTuple).resourceErr
 			if !strings.Contains(gotErr.Error(), nodeID) {
@@ -452,15 +446,15 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 
 	t.Run("Missing_Authority", func(t *testing.T) {
 		const listenerName = "xdstp://nonexistant-authority/envoy.config.listener.v3.Listener/listener-name"
-		watcher := newListenerWatcherV2()
+		watcher := newListenerWatcher()
 		client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
 
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for error callback to be invoked")
-		case u, ok := <-watcher.errCh.C:
+		case u, ok := <-watcher.resourceErrCh.C:
 			if !ok {
-				t.Fatalf("got no update, wanted listener error from the management server")
+				t.Fatalf("got no update, wanted listener resource error from the management server")
 			}
 			gotErr := u.(listenerUpdateErrTuple).resourceErr
 			if !strings.Contains(gotErr.Error(), nodeID) {
@@ -470,11 +464,11 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 	})
 }
 
-// testTransportBuilder is a transport builder which always returns a nil
+// erroringTransportBuilder is a transport builder which always returns a nil
 // transport along with an error.
-type testTransportBuilder struct{}
+type erroringTransportBuilder struct{}
 
-func (*testTransportBuilder) Build(_ clients.ServerIdentifier) (clients.Transport, error) {
+func (*erroringTransportBuilder) Build(_ clients.ServerIdentifier) (clients.Transport, error) {
 	return nil, fmt.Errorf("failed to create transport")
 }
 
@@ -486,9 +480,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 
-	resourceTypes := map[string]xdsclient.ResourceType{}
-	listenerType := listenerType
-	resourceTypes[xdsresource.V3ListenerURL] = listenerType
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
@@ -497,7 +489,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: &testTransportBuilder{},
+		TransportBuilder: &erroringTransportBuilder{},
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
@@ -520,15 +512,15 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 	defer cancel()
 
 	const listenerName = "listener-name"
-	watcher := newListenerWatcherV2()
+	watcher := newListenerWatcher()
 	client.WatchResource(xdsresource.V3ListenerURL, listenerName, watcher)
 
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for error callback to be invoked")
-	case u, ok := <-watcher.errCh.C:
+	case u, ok := <-watcher.resourceErrCh.C:
 		if !ok {
-			t.Fatalf("got no update, wanted listener error from the management server")
+			t.Fatalf("got no update, wanted listener resource error from the management server")
 		}
 		gotErr := u.(listenerUpdateErrTuple).resourceErr
 		if !strings.Contains(gotErr.Error(), nodeID) {
