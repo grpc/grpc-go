@@ -853,10 +853,11 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	var scheme string
 	opts, scheme = te.configDial(opts...)
 	var err error
-	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
+	te.cc, err = grpc.NewClient(scheme+te.srvAddr, opts...)
 	if err != nil {
-		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
+		te.t.Fatalf("grpc.NewClient() failed(%q) = %v", scheme+te.srvAddr, err)
 	}
+	te.cc.Connect()
 	return te.cc
 }
 
@@ -5071,7 +5072,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	c := testgrpc.NewTestServiceClient(cc)
@@ -5245,7 +5246,7 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 	defer s.Stop()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
 	if err != nil {
-		t.Fatalf("Failed to create a client for server")
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	c := testgrpc.NewTestServiceClient(cc)

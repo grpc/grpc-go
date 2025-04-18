@@ -72,7 +72,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("Failed to dial server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	c := testgrpc.NewTestServiceClient(cc)
@@ -804,7 +804,7 @@ func (s) TestClientSendsAGoAway(t *testing.T) {
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("error dialing: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	cc.Connect()
 

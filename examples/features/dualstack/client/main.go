@@ -89,7 +89,7 @@ func main() {
 	target := fmt.Sprintf("localhost:%d", port1)
 	cc, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatalf("grpc.NewClient(%q) = %v", target, err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
@@ -114,7 +114,7 @@ func main() {
 	}
 	cc, err = grpc.NewClient("example:///ignored", dOpts...)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	client = hwpb.NewGreeterClient(cc)
 

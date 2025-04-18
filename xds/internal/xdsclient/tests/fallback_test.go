@@ -369,7 +369,7 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	// Start a gRPC client that uses the above xDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -554,7 +554,7 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	// Start a gRPC client that uses the above xDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
@@ -705,7 +705,7 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 	// Start a gRPC client that uses the above xDS resolver.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
-		t.Fatalf("Failed to create gRPC client: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 

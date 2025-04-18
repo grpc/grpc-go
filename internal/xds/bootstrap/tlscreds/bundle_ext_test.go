@@ -179,7 +179,7 @@ func (s) TestCaReloading(t *testing.T) {
 		grpc.WithAuthority("x.test.example.com"),
 	)
 	if err != nil {
-		t.Fatalf("Error dialing: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", server.Address, err)
 	}
 	defer conn.Close()
 
@@ -342,7 +342,7 @@ func (s) TestMTLS(t *testing.T) {
 	defer stop()
 	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
 	if err != nil {
-		t.Fatalf("Error dialing: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", s.Address, err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)

@@ -125,7 +125,7 @@ func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	waitForFailedRPCWithStatus(ctx, t, cc, codes.Unavailable, "", "")
