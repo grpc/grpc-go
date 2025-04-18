@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -60,6 +61,23 @@ type mockNamedCompressor struct {
 
 func (mockNamedCompressor) Name() string {
 	return "mock-compressor"
+}
+
+type mockNoopCodec struct {
+	id   int
+	name string
+}
+
+func (m *mockNoopCodec) Marshal(v any) (out mem.BufferSlice, err error) {
+	return mem.BufferSlice{}, nil
+}
+
+func (m *mockNoopCodec) Unmarshal(data mem.BufferSlice, v any) error {
+	return nil
+}
+
+func (m *mockNoopCodec) Name() string {
+	return m.name
 }
 
 // Tests the case where a compressor with the same name is registered multiple
@@ -361,5 +379,86 @@ func (s) TestForceCodecName(t *testing.T) {
 	wantContentTypeCh <- []string{fmt.Sprintf("application/grpc+%s", strings.ToLower(t.Name()))}
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodecV2(codec)); err != nil {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+}
+
+// TestRegisterCodec tests the existing behavioral assumptions made by
+// RegisterCodeV2. The behavioral assumptions are:
+// 1. invalid codecs (nil, empty name) should panic
+// 2. same name codecs are valid, they just overwrite previous.
+func TestRegisterCodec(t *testing.T) {
+	cases := map[string]struct {
+		codec1      encoding.CodecV2
+		codec2      encoding.CodecV2
+		expectPanic bool
+	}{
+		"nil code panics": {
+			expectPanic: true,
+		},
+		"invalid codec name panics": {
+			codec1: &mockNoopCodec{
+				name: "",
+			},
+			codec2: &mockNoopCodec{
+				name: "",
+			},
+			expectPanic: true,
+		},
+		"valid codec": {
+			codec1: &mockNoopCodec{
+				name: "first",
+			},
+			expectPanic: false,
+		},
+		"codec overridden": {
+			codec1: &mockNoopCodec{
+				id:   1,
+				name: "first",
+			},
+			codec2: &mockNoopCodec{
+				id:   2,
+				name: "first",
+			},
+			expectPanic: false,
+		},
+	}
+
+	for caseName, c := range cases {
+		t.Run(caseName, func(t *testing.T) {
+
+			func() {
+				defer func() {
+					r := recover()
+					// If a panic occurred
+					if r != nil {
+						if !c.expectPanic {
+							t.Errorf("[%v] Unexpected panic: %v\n", caseName, r)
+						}
+					} else {
+						// If no panic occurred
+						if c.expectPanic {
+							t.Errorf("[%v] Expected panic but function did not panic\n", caseName)
+						}
+					}
+				}()
+
+				encoding.RegisterCodecV2(c.codec1)
+
+				actualCodec := encoding.GetCodecV2(c.codec1.Name())
+				if !reflect.DeepEqual(c.codec1, actualCodec) {
+					t.Errorf("[%v] Expected returned codec to be equal.\n", caseName)
+				}
+				if c.codec2 == nil {
+					t.Skip()
+				}
+
+				encoding.RegisterCodecV2(c.codec2)
+
+				actualCodec = encoding.GetCodecV2(c.codec1.Name())
+				if !reflect.DeepEqual(actualCodec, c.codec2) {
+					t.Errorf("[%v] Expected returned codec to be equal.\n", caseName)
+				}
+			}()
+		})
 	}
 }
