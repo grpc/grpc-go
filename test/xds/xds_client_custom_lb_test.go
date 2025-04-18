@@ -28,7 +28,6 @@ import (
 	_ "google.golang.org/grpc/balancer/leastrequest"       // To register least_request
 	_ "google.golang.org/grpc/balancer/weightedroundrobin" // To register weighted_round_robin
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
@@ -94,12 +93,6 @@ func clusterWithLBConfiguration(t *testing.T, clusterName, edsServiceName string
 // first) child load balancing policy, and asserts the correct distribution
 // based on the locality weights and the endpoint picking policy specified.
 func (s) TestWrrLocality(t *testing.T) {
-	oldLeastRequestLBSupport := envconfig.LeastRequestLB
-	envconfig.LeastRequestLB = true
-	defer func() {
-		envconfig.LeastRequestLB = oldLeastRequestLBSupport
-	}()
-
 	backend1 := stubserver.StartTestService(t, nil)
 	port1 := testutils.ParsePort(t, backend1.Address)
 	defer backend1.Stop()
