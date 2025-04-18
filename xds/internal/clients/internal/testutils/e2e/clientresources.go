@@ -21,7 +21,6 @@ package e2e
 import (
 	"fmt"
 
-	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -50,18 +49,10 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 			},
 			RouteConfigName: routeName,
 		}},
-		HttpFilters: []*v3httppb.HttpFilter{HTTPFilter("router", &v3routerpb.Router{})}, // router fields are unused by grpc
 	})
 	return &v3listenerpb.Listener{
 		Name:        target,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
-		FilterChains: []*v3listenerpb.FilterChain{{
-			Name: "filter-chain-name",
-			Filters: []*v3listenerpb.Filter{{
-				Name:       wellknown.HTTPConnectionManager,
-				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: hcm},
-			}},
-		}},
 	}
 }
 
