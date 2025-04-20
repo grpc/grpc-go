@@ -363,3 +363,101 @@ func (s) TestForceCodecName(t *testing.T) {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 }
+
+type noopCodec struct {
+	encoding.CodecV2
+	ID        int
+	CodecName string
+}
+
+func (m *noopCodec) Name() string {
+	return m.CodecName
+}
+
+// TestRegisterCodecV2 tests the existing behavioral assumptions made by
+// RegisterCodeV2. The behavioral assumptions are:
+// 1. invalid codecs (nil, empty name) should panic
+// 2. same name codecs are valid, they just overwrite previous.
+func TestRegisterCodecV2(t *testing.T) {
+	tests := []struct {
+		name        string
+		codec1      encoding.CodecV2
+		codec2      encoding.CodecV2
+		expectPanic bool
+	}{
+		{
+			name:        "nil codes, panic",
+			expectPanic: true,
+		},
+		{
+			name: "empty codecs, panic",
+			codec1: &noopCodec{
+				CodecName: "",
+			},
+			codec2: &noopCodec{
+				CodecName: "",
+			},
+			expectPanic: true,
+		},
+		{
+			name: "one of the codec has valid name",
+			codec1: &noopCodec{
+				CodecName: "first",
+			},
+			expectPanic: false,
+		},
+		{
+			name: "new codec overrides original codec if name is same",
+			codec1: &noopCodec{
+				ID:        1,
+				CodecName: "first",
+			},
+			codec2: &noopCodec{
+				ID:        2,
+				CodecName: "first",
+			},
+			expectPanic: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			func() {
+				defer func() {
+					r := recover()
+					// If a panic occurred
+					if r != nil {
+						if !test.expectPanic {
+							t.Errorf("[%v] Unexpected panic: %v\n", test.name, r)
+						}
+					} else {
+						// If no panic occurred
+						if test.expectPanic {
+							t.Errorf("[%v] Expected panic but function did not panic\n", test.name)
+						}
+					}
+				}()
+
+				// test behavior on initial registration
+				encoding.RegisterCodecV2(test.codec1)
+				actualCodec := encoding.GetCodecV2(test.codec1.Name())
+				if !cmp.Equal(test.codec1, actualCodec) {
+					t.Errorf("[%v] Expected returned codec to be equal.\n", test.name)
+				}
+				if test.codec2 == nil {
+					// only test behavior on subsequent registrations
+					// if the test case prescribes it by setting codec2
+					t.Skip()
+				}
+
+				// test behavior on subsequent registrations
+				encoding.RegisterCodecV2(test.codec2)
+				actualCodec = encoding.GetCodecV2(test.codec1.Name())
+				if !cmp.Equal(actualCodec, test.codec2) {
+					t.Errorf("[%v] Expected returned codec to be equal.\n", test.name)
+				}
+			}()
+		})
+	}
+}
