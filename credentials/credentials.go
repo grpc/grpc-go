@@ -219,8 +219,7 @@ func RequestInfoFromContext(ctx context.Context) (ri RequestInfo, ok bool) {
 	return ri, ok
 }
 
-// NewContextWithRequestInfo creates a new context with the given RequestInfo
-// attached to it.
+// NewContextWithRequestInfo creates a new context from ctx and attaches ri to it.
 //
 // This RequestInfo will be accessible via RequestInfoFromContext.
 //
