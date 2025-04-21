@@ -176,7 +176,7 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 		return fn(ctx, address)
 	}
 	if !ok {
-		networkType, address = parseDialTarget(address)
+		networkType, address = ParseDialTarget(address)
 	}
 	if opts, present := proxyattributes.Get(addr); present {
 		return proxyDial(ctx, addr, grpcUA, opts)

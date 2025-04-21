@@ -188,8 +188,11 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
-	proxyResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
+	targetResolver.UpdateState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: resolvedTargetTestAddr1},
+			{Addr: resolvedTargetTestAddr2},
+		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -199,11 +202,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	targetResolver.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedTargetTestAddr1},
-			{Addr: resolvedTargetTestAddr2},
-		},
+	proxyResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -326,8 +326,11 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
-	proxyResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
+	targetResolver.UpdateState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: resolvedTargetTestAddr1},
+			{Addr: resolvedTargetTestAddr2},
+		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -337,11 +340,8 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	targetResolver.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedTargetTestAddr1},
-			{Addr: resolvedTargetTestAddr2},
-		},
+	proxyResolver.UpdateState(resolver.State{
+		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -408,19 +408,6 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
-	proxyResolver.UpdateState(resolver.State{
-		Endpoints: []resolver.Endpoint{
-			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr1}}},
-			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr2}}},
-		},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
-	select {
-	case <-stateCh:
-		t.Fatalf("Delegating resolver invoked UpdateState before both the proxy and target resolvers had updated their states.")
-	case <-time.After(defaultTestShortTimeout):
-	}
 	targetResolver.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{
 			{
@@ -436,7 +423,19 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
+	select {
+	case <-stateCh:
+		t.Fatalf("Delegating resolver invoked UpdateState before both the proxy and target resolvers had updated their states.")
+	case <-time.After(defaultTestShortTimeout):
+	}
 
+	proxyResolver.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr1}}},
+			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr2}}},
+		},
+		ServiceConfig: &serviceconfig.ParseResult{},
+	})
 	wantState := resolver.State{
 		Endpoints: []resolver.Endpoint{
 			{
@@ -475,7 +474,7 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 // The test verifies that the delegating resolver combines unresolved proxy
 // host and target addresses correctly, returning addresses with the proxy host
 // populated and the target address included as an attribute.
-func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
+func (s) TestDelegatingResolverForMultipleProxyAddress(t *testing.T) {
 	const (
 		targetTestAddr          = "test.com"
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
@@ -511,10 +510,10 @@ func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
-	proxyResolver.UpdateState(resolver.State{
+	targetResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
-			{Addr: resolvedProxyTestAddr1},
-			{Addr: resolvedProxyTestAddr2},
+			{Addr: resolvedTargetTestAddr1},
+			{Addr: resolvedTargetTestAddr2},
 		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
@@ -525,10 +524,10 @@ func (s) TestDelegatingResolverForMutipleProxyAddress(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	targetResolver.UpdateState(resolver.State{
+	proxyResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
-			{Addr: resolvedTargetTestAddr1},
-			{Addr: resolvedTargetTestAddr2},
+			{Addr: resolvedProxyTestAddr1},
+			{Addr: resolvedProxyTestAddr2},
 		},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})

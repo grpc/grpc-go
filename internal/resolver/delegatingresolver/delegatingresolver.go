@@ -24,11 +24,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/proxyattributes"
+	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -46,9 +46,11 @@ var (
 //
 // It implements the [resolver.Resolver] interface.
 type delegatingResolver struct {
-	target   resolver.Target     // parsed target URI to be resolved
-	cc       resolver.ClientConn // gRPC ClientConn
-	proxyURL *url.URL            // proxy URL, derived from proxy environment and target
+	target               resolver.Target     // parsed target URI to be resolved
+	cc                   resolver.ClientConn // gRPC ClientConn
+	proxyURL             *url.URL            // proxy URL, derived from proxy environment and target
+	proxyResolverCh      chan struct{}       // closed once the proxy resolver has been created
+	proxyResolverCreated bool                // indicates if the proxy resolver has been created
 
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState *resolver.State    // state of the target resolver
@@ -97,8 +99,10 @@ func proxyURLForTarget(address string) (*url.URL, error) {
 //     resolution is enabled using the dial option.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
 	r := &delegatingResolver{
-		target: target,
-		cc:     cc,
+		target:               target,
+		cc:                   cc,
+		proxyResolverCh:      make(chan struct{}),
+		proxyResolverCreated: false,
 	}
 
 	var err error
@@ -130,6 +134,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
 		}
 		r.targetResolverState = &state
+		r.updateTargetResolverState(*r.targetResolverState)
 	} else {
 		wcc := &wrappingClientConn{
 			stateListener: r.updateTargetResolverState,
@@ -138,10 +143,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		if r.targetResolver, err = targetResolverBuilder.Build(target, wcc, opts); err != nil {
 			return nil, fmt.Errorf("delegating_resolver: unable to build the resolver for target %s: %v", target, err)
 		}
-	}
-
-	if r.proxyResolver, err = r.proxyURIResolver(opts); err != nil {
-		return nil, fmt.Errorf("delegating_resolver: failed to build resolver for proxy URL %q: %v", r.proxyURL, err)
 	}
 
 	if r.targetResolver == nil {
@@ -176,9 +177,15 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.childMu.Lock()
-	defer r.childMu.Unlock()
 	r.targetResolver.ResolveNow(o)
+	r.childMu.Unlock()
+	if !r.proxyResolverCreated {
+		<-r.proxyResolverCh
+	}
+	r.childMu.Lock()
 	r.proxyResolver.ResolveNow(o)
+	r.childMu.Unlock()
+
 }
 
 func (r *delegatingResolver) Close() {
@@ -191,38 +198,10 @@ func (r *delegatingResolver) Close() {
 	r.proxyResolver = nil
 }
 
-// parseDialTarget returns the network and address to pass to dialer.
-func parseDialTarget(target string) (string, string) {
-	net := "tcp"
-	m1 := strings.Index(target, ":")
-	m2 := strings.Index(target, ":/")
-	// handle unix:addr which will fail with url.Parse
-	if m1 >= 0 && m2 < 0 {
-		if n := target[0:m1]; n == "unix" {
-			return n, target[m1+1:]
-		}
-	}
-	if m2 >= 0 {
-		t, err := url.Parse(target)
-		if err != nil {
-			return net, target
-		}
-		scheme := t.Scheme
-		addr := t.Path
-		if scheme == "unix" {
-			if addr == "" {
-				addr = t.Host
-			}
-			return scheme, addr
-		}
-	}
-	return net, target
-}
-
 func networkTypeFromAddr(addr resolver.Address) (string, resolver.Address) {
 	networkType, ok := networktype.Get(addr)
 	if !ok {
-		networkType, addr.Addr = parseDialTarget(addr.Addr)
+		networkType, addr.Addr = transport.ParseDialTarget(addr.Addr)
 	}
 	return networkType, addr
 }
@@ -250,22 +229,11 @@ func tcpAddressPresent(state *resolver.State) bool {
 // not sent update even once and returns the error from ClientConn update once
 // both resolvers have sent update atleast once.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
-	if r.targetResolverState == nil {
+	if r.targetResolverState == nil || r.proxyAddrs == nil {
 		return nil
 	}
 
 	curState := *r.targetResolverState
-
-	// If no addresses returned by resolver have network type ßas tcp , do not
-	// wait for proxy update.
-	if !tcpAddressPresent(&curState) {
-		return r.cc.UpdateState(curState)
-	}
-
-	if r.proxyAddrs == nil {
-		return nil
-	}
-
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
 	// resolution when creating the transport. Sending all resolved addresses
@@ -382,6 +350,23 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 	}
 	r.targetResolverState = &state
+	// If no addresses returned by resolver have network type as tcp , do not
+	// wait for proxy update.
+	if !tcpAddressPresent(r.targetResolverState) {
+		return r.cc.UpdateState(*r.targetResolverState)
+	}
+
+	_, ok := r.proxyResolver.(nopResolver)
+	if r.proxyResolver == nil || ok || !r.proxyResolverCreated {
+		go func() {
+			r.childMu.Lock()
+			defer r.childMu.Unlock()
+			r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
+			close(r.proxyResolverCh)
+			r.proxyResolverCreated = true
+		}()
+	}
+
 	err := r.updateClientConnStateLocked()
 	if err != nil {
 		go func() {
