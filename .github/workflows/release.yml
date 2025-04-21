@@ -57,11 +57,7 @@ jobs:
           echo "name=${PACKAGE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload asset
-        uses: actions/upload-release-asset@v1
+        run: | 
+          gh release upload ${{ github.event.release.tag_name }} ${{ steps.package.outputs.name }} 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./${{ steps.package.outputs.name }}
-          asset_name: ${{ steps.package.outputs.name }}
-          asset_content_type: application/gzip
