@@ -588,7 +588,8 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 	// Set up a manual DNS resolver to control the proxy address resolution.
 	proxyResolver := setupDNS(t)
 
-	unblockProxyResolverClose := make(chan struct{})
+	// unblockProxyResolverClose is a buffered channel becuase introducing the 
+	unblockProxyResolverClose := make(chan struct{}, 1)
 	proxyResolver.CloseCallback = func() {
 		<-unblockProxyResolverClose
 		t.Log("Proxy resolver is closed.")
