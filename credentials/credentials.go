@@ -121,18 +121,16 @@ type AuthInfo interface {
 }
 
 // AuthorityValidator validates the authority used to override the `:authority`
-// header. This is an optional interface that implementations of AuthInfo
-// can implement if the credentials support per-RPC authority overrides.
-// It is invoked when the application attempts to override the `:authority`
+// header. This is an optional interface that implementations of AuthInfo can
+// implement if the credentials support per-RPC authority overrides. It is
+// invoked when the application attempts to override the HTTP/2 `:authority`
 // header using the CallAuthority call option.
 type AuthorityValidator interface {
 	// ValidateAuthority checks the authority value used to override the
-	// `:authority` header.
-	// The authority parameter is the override value
+	// `:authority` header. The authority parameter is the override value
 	// provided by the application via the CallAuthority option. This value
 	// typically corresponds to the server hostname or endpoint the RPC is
-	// targeting.
-	// It returns nil if the validation succeeds, and a non-nil error
+	// targeting. It returns nil if the validation succeeds, and a non-nil error
 	// if the validation fails.
 	ValidateAuthority(authority string) error
 }

@@ -51,12 +51,14 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
-// ValidateAuthority validates the authßority by checking it against the peer
-// certificates.
+// ValidateAuthority validates that the provided authority being used to
+// override the :authority header is valid by verifying it against the peer
+// certificates. It returns nil on successful validation, or a non-nil error if
+// the validation fails.
 func (t TLSInfo) ValidateAuthority(authority string) error {
-	var err error
 	var errs []error
 	for _, cert := range t.State.PeerCertificates {
+		var err error
 		if err = cert.VerifyHostname(authority); err == nil {
 			return nil
 		}

@@ -76,7 +76,7 @@ func authorityChecker(ctx context.Context, wantAuthority string) (*testpb.Empty,
 // that the provided authority is correctly propagated to the server when using
 // TLS. It covers both positive and negative cases: correct authority and
 // incorrect authority, expecting the RPC to fail with `UNAVAILABLE` status code
-// error in the latter case.
+// error in the later case.
 func TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -122,9 +122,9 @@ func TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 	}
 }
 
-// Tests the scenario where the grpc.CallAuthority per-RPC option is used with
+// Tests the scenario where the `grpc.CallAuthority`` call option is used with
 // insecure transport credentials. The test verifies that the specified
-// authority is correctly propagated to the server, even without TLS.
+// authority is correctly propagated to the server.
 func (s) TestAuthorityCallOptionWithInsecureCreds(t *testing.T) {
 	const wantAuthority = "test.server.name"
 
@@ -214,9 +214,13 @@ func (c *testCreds) OverrideServerName(serverName string) error {
 	return nil
 }
 
-// TestCorrectAuthorityWithCustomCreds tests the CallAuthority call option with
-// custom credentials that implement AuthorityValidator and verifies it with
-// both correct and incorrect authority override.
+// TestCorrectAuthorityWithCustomCreds tests the `grpc.CallAuthority`` call
+// option using custom credentials. It verifies behavior both, when the
+// credentials implement AuthorityValidator with both correct and incorrect
+// authority overrides, as well as when the credentials do not implement
+// AuthorityValidator. The later two cases, i.e when the credentials do not
+// implement AuthorityValidator, and the authority used to override is invalid,
+// are expected to fail with `UNAVAILABLE` status code.
 func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -255,18 +259,15 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 			}
 			defer ss.Stop()
 
-			// Create a gRPC client connection with FakeCredsWithAuthValidator.
-			clientConn, err := grpc.NewClient(ss.Address,
-				grpc.WithTransportCredentials(tt.creds))
+			cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(tt.creds))
 			if err != nil {
-				t.Fatalf("Failed to create gRPC client connection: %v", err)
+				t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
 			}
-			defer clientConn.Close()
+			defer cc.Close()
 
-			// Perform a test RPC with a specified call authority.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			if _, err = testgrpc.NewTestServiceClient(clientConn).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.wantAuth)); status.Code(err) != tt.wantStatus {
+			if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.wantAuth)); status.Code(err) != tt.wantStatus {
 				t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), tt.wantStatus)
 			}
 		})
