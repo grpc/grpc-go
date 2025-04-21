@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
@@ -58,10 +57,7 @@ type streamImpl struct {
 	doneCh    chan struct{}           // To notify exit of LRS goroutine.
 	logger    *igrpclog.PrefixLogger
 
-	// Guards access to the below fields.
-	mu           sync.Mutex
 	cancelStream context.CancelFunc // Cancel the stream. If nil, the stream is not active.
-	refCount     int                // Number of interested parties.
 	loadStore    *LoadStore         // LoadStore returned to user for pushing loads.
 	cleanup      func()             // Function to call after the stream is stopped.
 }
@@ -88,31 +84,6 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 	l := grpclog.Component("xds")
 	lrs.logger = igrpclog.NewPrefixLogger(l, opts.logPrefix+fmt.Sprintf("[lrs-stream %p] ", lrs))
 	return lrs
-}
-
-// reportLoad returns a LoadStore that can be used to report load, with a
-// Stop function that should be called when the load reporting is no longer
-// needed.
-//
-// The first call to reportLoad creates a new LoadStore, sets the reference
-// count to one, and starts the LRS streaming call. Subsequent calls increment
-// the reference count and returns the same LoadStore.
-func (lrs *streamImpl) reportLoad() *LoadStore {
-	lrs.mu.Lock()
-	defer lrs.mu.Unlock()
-
-	if lrs.refCount != 0 {
-		lrs.refCount++
-		return lrs.loadStore
-	}
-
-	lrs.refCount++
-	ctx, cancel := context.WithCancel(context.Background())
-	lrs.cancelStream = cancel
-	lrs.doneCh = make(chan struct{})
-	lrs.loadStore = newLoadStore(lrs)
-	go lrs.runner(ctx)
-	return lrs.loadStore
 }
 
 // runner is responsible for managing the lifetime of an LRS streaming call. It
