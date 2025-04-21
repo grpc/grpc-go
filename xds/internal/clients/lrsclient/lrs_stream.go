@@ -307,31 +307,8 @@ func getStreamError(stream clients.Stream) error {
 	}
 }
 
-// stop decrements the reference count and stops the LRS stream when the last
-// reference is removed.
+// stop calls the registered cleanup function by LRS client to stop the stream.
 func (lrs *streamImpl) stop() {
-	lrs.mu.Lock()
-	defer lrs.mu.Unlock()
-
-	if lrs.refCount == 0 {
-		lrs.logger.Errorf("Attempting to stop already stopped StreamImpl")
-		return
-	}
-	lrs.refCount--
-	if lrs.refCount != 0 {
-		return
-	}
-
-	if lrs.cancelStream == nil {
-		// It is possible that Stop() is called before the cleanup function
-		// is called, thereby setting cancelStream to nil. Hence we need a
-		// nil check here bofore invoking the cancel function.
-		return
-	}
-	lrs.cancelStream()
-	lrs.cancelStream = nil
-	lrs.logger.Infof("Stopping LRS stream")
-	<-lrs.doneCh
 	lrs.cleanup()
 }
 

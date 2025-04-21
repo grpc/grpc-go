@@ -130,11 +130,32 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		logPrefix: logPrefix,
 	})
 
-	// Register a cleanup function that closes the transport and removes the
-	// lrs stream from the map.
+	// Register a cleanup function that decrements the reference count, stops
+	// the LRS stream when the last reference is removed and closes the
+	// transport and removes the lrs stream from the map.
 	cleanup := func() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
+
+		if lrs.refCount == 0 {
+			lrs.logger.Errorf("Attempting to stop already stopped StreamImpl")
+			return
+		}
+		lrs.refCount--
+		if lrs.refCount != 0 {
+			return
+		}
+
+		if lrs.cancelStream == nil {
+			// It is possible that Stop() is called before the cleanup function
+			// is called, thereby setting cancelStream to nil. Hence we need a
+			// nil check here bofore invoking the cancel function.
+			return
+		}
+		lrs.cancelStream()
+		lrs.cancelStream = nil
+		lrs.logger.Infof("Stopping LRS stream")
+		<-lrs.doneCh
 
 		delete(c.lrsStreams, serverIdentifier)
 		tr.Close()
