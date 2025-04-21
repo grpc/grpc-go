@@ -122,7 +122,7 @@ func TestAuthorityCallOptionsWithTLSCreds(t *testing.T) {
 	}
 }
 
-// Tests the scenario where the `grpc.CallAuthority`` call option is used with
+// Tests the scenario where the `grpc.CallAuthority` call option is used with
 // insecure transport credentials. The test verifies that the specified
 // authority is correctly propagated to the server.
 func (s) TestAuthorityCallOptionWithInsecureCreds(t *testing.T) {
@@ -214,7 +214,7 @@ func (c *testCreds) OverrideServerName(serverName string) error {
 	return nil
 }
 
-// TestCorrectAuthorityWithCustomCreds tests the `grpc.CallAuthority`` call
+// TestCorrectAuthorityWithCustomCreds tests the `grpc.CallAuthority` call
 // option using custom credentials. It verifies behavior both, when the
 // credentials implement AuthorityValidator with both correct and incorrect
 // authority overrides, as well as when the credentials do not implement
