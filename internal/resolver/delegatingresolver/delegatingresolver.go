@@ -46,11 +46,10 @@ var (
 //
 // It implements the [resolver.Resolver] interface.
 type delegatingResolver struct {
-	target               resolver.Target     // parsed target URI to be resolved
-	cc                   resolver.ClientConn // gRPC ClientConn
-	proxyURL             *url.URL            // proxy URL, derived from proxy environment and target
-	proxyResolverCh      chan struct{}       // closed once the proxy resolver has been created
-	proxyResolverCreated bool                // indicates if the proxy resolver has been created
+	target          resolver.Target     // parsed target URI to be resolved
+	cc              resolver.ClientConn // gRPC ClientConn
+	proxyURL        *url.URL            // proxy URL, derived from proxy environment and target
+	proxyResolverCh chan struct{}       // closed once the proxy resolver has been created
 
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState *resolver.State    // state of the target resolver
@@ -99,10 +98,9 @@ func proxyURLForTarget(address string) (*url.URL, error) {
 //     resolution is enabled using the dial option.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
 	r := &delegatingResolver{
-		target:               target,
-		cc:                   cc,
-		proxyResolverCh:      make(chan struct{}),
-		proxyResolverCreated: false,
+		target:          target,
+		cc:              cc,
+		proxyResolverCh: make(chan struct{}),
 	}
 
 	var err error
@@ -179,12 +177,11 @@ func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.childMu.Lock()
 	r.targetResolver.ResolveNow(o)
 	r.childMu.Unlock()
-	if !r.proxyResolverCreated {
-		<-r.proxyResolverCh
+	if _, ok := <-r.proxyResolverCh; !ok {
+		r.childMu.Lock()
+		r.proxyResolver.ResolveNow(o)
+		r.childMu.Unlock()
 	}
-	r.childMu.Lock()
-	r.proxyResolver.ResolveNow(o)
-	r.childMu.Unlock()
 
 }
 
@@ -193,7 +190,6 @@ func (r *delegatingResolver) Close() {
 	defer r.childMu.Unlock()
 	r.targetResolver.Close()
 	r.targetResolver = nil
-
 	r.proxyResolver.Close()
 	r.proxyResolver = nil
 }
@@ -356,16 +352,15 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
-	_, ok := r.proxyResolver.(nopResolver)
-	if r.proxyResolver == nil || ok || !r.proxyResolverCreated {
-		go func() {
-			r.childMu.Lock()
-			defer r.childMu.Unlock()
+	go func() {
+		r.childMu.Lock()
+		defer r.childMu.Unlock()
+		_, ok := r.proxyResolver.(nopResolver)
+		if r.proxyResolver == nil || ok {
 			r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
 			close(r.proxyResolverCh)
-			r.proxyResolverCreated = true
-		}()
-	}
+		}
+	}()
 
 	err := r.updateClientConnStateLocked()
 	if err != nil {
