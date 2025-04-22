@@ -66,11 +66,6 @@ func (c *XDSClient) WatchResource(typeURL, resourceName string, watcher Resource
 		return func() {}
 	}
 
-	if c.done.HasFired() {
-		logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeName, resourceName)
-		return func() {}
-	}
-
 	n := xdsresource.ParseName(resourceName)
 	a := c.getAuthorityForResource(n)
 	if a == nil {

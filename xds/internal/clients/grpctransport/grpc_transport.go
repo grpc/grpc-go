@@ -136,7 +136,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 }
 
 func (b *Builder) cleanupFunc(si clients.ServerIdentifier, tr *grpcTransport) func() {
-	return func() {
+	return sync.OnceFunc(func() {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 
@@ -146,9 +146,10 @@ func (b *Builder) cleanupFunc(si clients.ServerIdentifier, tr *grpcTransport) fu
 		}
 
 		tr.cc.Close()
+		tr.cc = nil
 		delete(b.connections, si)
 		delete(b.refs, si)
-	}
+	})
 }
 
 type grpcTransport struct {
@@ -157,7 +158,6 @@ type grpcTransport struct {
 	// cleanup is the function to be invoked for releasing the references to
 	// the gRPC transport each time Close() is called.
 	cleanup func()
-	closed  sync.Once
 }
 
 // NewStream creates a new gRPC stream to the server for the specified method.
@@ -171,10 +171,7 @@ func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.S
 
 // Close closes the gRPC channel to the server.
 func (g *grpcTransport) Close() {
-	g.closed.Do(func() {
-		g.cleanup()
-		g.cc = nil
-	})
+	g.cleanup()
 }
 
 type stream struct {
