@@ -457,8 +457,8 @@ func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing
 	// it does not enter "serving" mode.
 	select {
 	case <-time.After(2 * defaultTestShortTimeout):
-	case <-modeChangeHandler2.modeCh:
-		if modeChangeHandler2.getCurrentMode() == connectivity.ServingModeServing {
+	case mode := <-modeChangeHandler2.modeCh:
+		if mode == connectivity.ServingModeServing {
 			t.Fatal("Server changed to serving mode when not expected to")
 		}
 	}

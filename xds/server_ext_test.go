@@ -121,13 +121,6 @@ func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.Se
 	m.currentErr = args.Err
 }
 
-// getCurrentMode safely returns the current serving mode.
-func (m *servingModeChangeHandler) getCurrentMode() connectivity.ServingMode {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.currentMode
-}
-
 // createStubServer creates a new xDS-enabled gRPC server and returns a
 // stubserver.StubServer that can be used for testing. The server is configured
 // with the provided modeChangeOpt and xdsclient.Pool.
