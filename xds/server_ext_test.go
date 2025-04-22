@@ -84,11 +84,12 @@ type servingModeChangeHandler struct {
 	logger interface {
 		Logf(format string, args ...any)
 	}
-	currentMode connectivity.ServingMode
-	currentErr  error
+	// Access to the below fields are guarded by this mutex.
 	mu          sync.Mutex
 	modeCh      chan connectivity.ServingMode
 	errCh       chan error
+	currentMode connectivity.ServingMode
+	currentErr  error
 }
 
 func newServingModeChangeHandler(t *testing.T) *servingModeChangeHandler {
@@ -118,6 +119,13 @@ func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.Se
 		m.errCh <- args.Err
 	}
 	m.currentErr = args.Err
+}
+
+// getCurrentMode safely returns the current serving mode.
+func (m *servingModeChangeHandler) getCurrentMode() connectivity.ServingMode {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.currentMode
 }
 
 // createStubServer creates a new xDS-enabled gRPC server and returns a
