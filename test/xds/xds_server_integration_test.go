@@ -530,7 +530,6 @@ func verifySecurityInformationFromPeerSPIFFE(t *testing.T, pr *peer.Peer, wantSe
 	authType := pr.AuthInfo.AuthType()
 	switch wantSecLevel {
 	case e2e.SecurityLevelNone:
-		// if pr.AuthInfo.AuthType() != "insecure" {
 		if authType != "insecure" {
 			t.Fatalf("AuthType() is %s, want insecure", authType)
 		}
