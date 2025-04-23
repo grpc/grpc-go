@@ -19,16 +19,31 @@
 package lrsclient_test
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/fakeserver"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/durationpb"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 )
 
 type s struct {
@@ -72,7 +87,6 @@ func (wl *wrappedListener) Accept() (net.Conn, error) {
 	return c, err
 }
 
-/*
 // Tests a load reporting scenario where the LRS client is reporting loads to
 // multiple servers. Verifies the following:
 //   - calling the load reporting API with different server configuration
@@ -586,4 +600,3 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
 }
-*/

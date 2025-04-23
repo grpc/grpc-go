@@ -25,8 +25,6 @@ import (
 	"time"
 )
 
-const negativeOneUInt64 = ^uint64(0)
-
 // A LoadStore aggregates loads for multiple clusters and services that are
 // intended to be reported via LRS.
 //
@@ -158,10 +156,6 @@ type PerClusterReporter struct {
 
 // CallStarted records a call started in the LoadStore.
 func (p *PerClusterReporter) CallStarted(locality string) {
-	if p == nil {
-		return
-	}
-
 	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		tp := newRPCCountData()
@@ -173,10 +167,6 @@ func (p *PerClusterReporter) CallStarted(locality string) {
 
 // CallFinished records a call finished in the LoadStore.
 func (p *PerClusterReporter) CallFinished(locality string, err error) {
-	if p == nil {
-		return
-	}
-
 	f, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -193,10 +183,6 @@ func (p *PerClusterReporter) CallFinished(locality string, err error) {
 
 // CallServerLoad records the server load in the LoadStore.
 func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) {
-	if p == nil {
-		return
-	}
-
 	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -208,10 +194,6 @@ func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) 
 
 // CallDropped records a call dropped in the LoadStore.
 func (p *PerClusterReporter) CallDropped(category string) {
-	if p == nil {
-		return
-	}
-
 	d, ok := p.drops.Load(category)
 	if !ok {
 		tp := new(uint64)
@@ -225,10 +207,6 @@ func (p *PerClusterReporter) CallDropped(category string) {
 //
 // It returns nil if the store doesn't contain any (new) data.
 func (p *PerClusterReporter) stats() *loadData {
-	if p == nil {
-		return nil
-	}
-
 	sd := newLoadData(p.cluster, p.service)
 	p.drops.Range(func(key, val any) bool {
 		d := atomic.SwapUint64(val.(*uint64), 0)
@@ -406,7 +384,7 @@ func (rcd *rpcCountData) incrInProgress() {
 }
 
 func (rcd *rpcCountData) decrInProgress() {
-	atomic.AddUint64(rcd.inProgress, negativeOneUInt64) // atomic.Add(x, -1)
+	atomic.AddUint64(rcd.inProgress, ^uint64(0)) // atomic.Add(x, -1)
 }
 
 func (rcd *rpcCountData) loadInProgress() uint64 {
@@ -454,10 +432,8 @@ func (rld *rpcLoadData) add(v float64) {
 
 func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
 	rld.mu.Lock()
-	s = rld.sum
-	rld.sum = 0
-	c = rld.count
-	rld.count = 0
+	s, rld.sum = rld.sum, 0
+	c, rld.count = rld.count, 0
 	rld.mu.Unlock()
-	return
+	return s, c
 }
