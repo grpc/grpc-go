@@ -3729,7 +3729,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
-	if resp, err := stream.CloseAndRecv(); err != wantError || resp != nil {
+	if resp, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal || resp != nil {
 		t.Fatalf("stream.CloseSend() = %v , %v, want <nil>, %s", resp, err, wantError)
 	}
 }
