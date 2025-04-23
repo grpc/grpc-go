@@ -118,7 +118,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(r.Scheme()+":///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -376,7 +376,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashAtStartup(t *testing.T
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -477,7 +477,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartup(
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -569,7 +569,7 @@ func (s) TestRingHash_AggregateClusterFallBackFromRingHashToLogicalDnsAtStartupN
 		grpc.WithConnectParams(cp)}
 	conn, err := grpc.NewClient("xds:///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -683,7 +683,7 @@ func (s) TestRingHash_ChannelIdHashing(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -743,7 +743,7 @@ func (s) TestRingHash_HeaderHashing(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -794,7 +794,7 @@ func (s) TestRingHash_HeaderHashingWithRegexRewrite(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -887,7 +887,7 @@ func (s) TestRingHash_NoHashPolicy(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -943,7 +943,7 @@ func (s) TestRingHash_EndpointWeights(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1015,7 +1015,7 @@ func (s) TestRingHash_ContinuesPastTerminalPolicyThatDoesNotProduceResult(t *tes
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1070,7 +1070,7 @@ func (s) TestRingHash_HashOnHeaderThatIsNotPresent(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1138,7 +1138,7 @@ func (s) TestRingHash_UnsupportedHashPolicyDefaultToRandomHashing(t *testing.T) 
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1210,7 +1210,7 @@ func (s) TestRingHash_UnsupportedHashPolicyUntilChannelIdHashing(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1278,7 +1278,7 @@ func (s) TestRingHash_RandomHashingDistributionAccordingToLocalityAndEndpointWei
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1346,7 +1346,7 @@ func (s) TestRingHash_FixedHashingTerminalPolicy(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1404,7 +1404,7 @@ func (s) TestRingHash_IdleToReady(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
@@ -1455,7 +1455,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	}
 	conn, err := grpc.NewClient("xds:///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1513,7 +1513,7 @@ func (s) TestRingHash_TransientFailureCheckNextOne(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1559,7 +1559,7 @@ func (s) TestRingHash_ReattemptWhenGoingFromTransientFailureToIdle(t *testing.T)
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
@@ -1651,7 +1651,7 @@ func (s) TestRingHash_TransientFailureSkipToAvailableReady(t *testing.T) {
 	}
 	conn, err := grpc.NewClient("xds:///test.server", opts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1748,7 +1748,7 @@ func (s) TestRingHash_ReattemptWhenAllEndpointsUnreachable(t *testing.T) {
 	}
 	conn, err := grpc.NewClient("xds:///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1833,7 +1833,7 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 	}
 	conn, err := grpc.NewClient("xds:///test.server", dopts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -1916,7 +1916,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicksToMultipleSubConnsConcurren
 	}
 	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 
@@ -2045,7 +2045,7 @@ func (s) TestRingHash_ReorderAddressessWithinEndpoint(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -2162,7 +2162,7 @@ func (s) TestRingHash_FallBackWithinEndpoint(t *testing.T) {
 
 	conn, err := grpc.NewClient("xds:///test.server", grpc.WithResolvers(xdsResolver), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -2253,7 +2253,7 @@ func (s) TestRingHash_RecoverWhenEndpointEntersIdle(t *testing.T) {
 	}
 	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 
@@ -2415,7 +2415,7 @@ func (s) TestRingHash_RecoverWhenResolverRemovesEndpoint(t *testing.T) {
 	}
 	conn, err := grpc.NewClient("xds:///test.server", dialOpts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create client: %s", err)
 	}
 	defer conn.Close()
 
