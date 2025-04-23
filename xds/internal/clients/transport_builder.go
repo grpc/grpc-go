@@ -39,7 +39,7 @@ type Transport interface {
 	NewStream(context.Context, string) (Stream, error)
 
 	// Close closes the Transport.
-	Close() error
+	Close()
 }
 
 // Stream provides methods to send and receive messages on a stream. Messages
