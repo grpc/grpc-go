@@ -3619,83 +3619,118 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 	}
 }
 
-// Test to verify for client-streaming RPCs, when SendAndClose is called, the
-// server sends dataframe to client.
-//emchandwani : need to cleanup and fix comments
-func (s) TestClientStreamingCardinalityViolation_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
-	e := tcpTLSEnv
-	te := newTest(t, e)
-	gotData := make(chan struct{})
-	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-		stream.SendAndClose(&testpb.StreamingInputCallResponse{})
-		select {
-		case <-gotData:
-		case <-time.After(defaultTestTimeout):
-			t.Fatal("Timeout waiting for data frame")
-		}
-		<-gotData
-		return nil
-	}}
-
-	te.startServer(ts)
-	defer te.tearDown()
-	te.withServerTester(func(st *serverTester) {
-		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", false) // Stream ID 1
-		frame := st.wantAnyFrame()
-		switch f := frame.(type) {
-		case *http2.MetaHeadersFrame:
-			st.t.Logf("Received Header frame: streamID=%d", f.StreamID)
-		default:
-			st.t.Fatalf("Received unexpected frame type: %T, want MetaHeadersFrame", f)
-		}
-		frame = st.wantAnyFrame()
-		switch f := frame.(type) {
-		case *http2.DataFrame:
-			st.t.Logf("Received DATA frame: streamID=%d, data=%q", f.StreamID, f.Data())
-		default:
-			st.t.Fatalf("Received unexpected frame type: %T, want DataFrame", f)
-		}
-		close(gotData)
-	})
-}
-
-// Tests the scenario where a client-streaming server sends an error after calling
-// `SendAndClose()`. The error should be ignored by the client because the RPC
-// should be closed when `SendAndClose()` is called.
-func (s) TestClientStreamingCardinalityViolation_IgnoreServerHandlerErrorAfterSendAndClose(t *testing.T) {
-	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
-	// after this is fixed.
-	t.Skip()
-	ss := &stubserver.StubServer{
+// Tests the behavior where Recv() can be called after SendAndClose(). Although
+// this is unexpected, we retain it for backward compatibility.
+func (s) TestClientStreaming_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
+	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-			stream.SendAndClose(&testpb.StreamingInputCallResponse{})
-			return status.Errorf(codes.Unimplemented, "error for testing")
+			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Fatalf("stream.SendAndClose(_) = %v, want <nil>", err)
+			}
+			if resp, err := stream.Recv(); err != nil || resp == nil {
+				t.Fatalf("stream.Recv() = %v, %v, want non-nil empty response, <nil>", resp, err)
+			}
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
+		t.Fatal("Error starting server:", err)
 	}
 	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
 	stream, err := ss.Client.StreamingInputCall(ctx)
 	if err != nil {
-		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
+	}
+	if resp, err := stream.CloseAndRecv(); err != nil || resp == nil {
+		t.Fatalf("stream.CloseSend() = %v , %v, want non-nil empty response, <nil>", resp, err)
+	}
+}
+
+// Tests the behavior where Recv() on client streaming client blocks till the
+// server handler returns even after calling SendAndClose from the server
+// handler.
+func (s) TestClientStreaming_RecvWaitsForServerHandlerRetrun(t *testing.T) {
+	waitForReturn := make(chan struct{})
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Fatalf("stream.SendAndClose(_) = %v, want <nil>", err)
+			}
+			<-waitForReturn
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	// Start Recv in a goroutine to test if it blocks until the server handler returns.
+	errCh := make(chan error, 1)
+	go func() {
+		resp := new(testpb.StreamingInputCallResponse)
+		err := stream.RecvMsg(resp)
+		errCh <- err
+	}()
+
+	// Check that Recv() is blocked.
+	select {
+	case err := <-errCh:
+		t.Fatalf("stream.RecvMsg(_) = %v returned unexpectedly", err)
+	case <-time.After(defaultTestShortTimeout):
 	}
 
-	req := &testpb.StreamingInputCallRequest{}
+	close(waitForReturn)
 
-	for ctx.Err() == nil {
-		if err := stream.Send(req); err == io.EOF {
-			break
-		} else if err != nil {
-			t.Fatalf("Stream.Send(req) = %v, want <nil>", err)
+	// Recv() should return after the server handler returns.
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("stream.RecvMsg(_) = %v, want <nil>", err)
 		}
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timed out waiting for stream.RecvMsg(_) to return")
 	}
-	if _, err = stream.CloseAndRecv(); err != nil {
-		t.Fatalf("stream.CloseAndRecv() = %v, want nil", err)
+}
+
+// Tests the behavior where server handler returns an error after calling
+// SendAndClose. It verifies the behavior that client receives nil message and
+// non-nil error.
+func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
+	wantError := status.Error(codes.Internal, "error for testing")
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Fatalf("stream.SendAndClose(_) = %v, want <nil>", err)
+			}
+			return wantError
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	if resp, err := stream.CloseAndRecv(); err != wantError || resp != nil {
+		t.Fatalf("stream.CloseSend() = %v , %v, want <nil>, %s", resp, err, wantError)
 	}
 }
 
