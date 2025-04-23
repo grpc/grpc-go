@@ -61,6 +61,7 @@ type delegatingResolver struct {
 	targetResolver       resolver.Resolver // resolver for the target URI, based on its scheme
 	proxyResolver        resolver.Resolver // resolver for the proxy URI; nil if no proxy is configured
 	proxyResolverCreated bool              // indicates if proxy resolver has been built once
+	resolveNowCalled     bool              // indicates if ResolveNow has been called on the target resolver
 }
 
 // nopResolver is a resolver that does nothing.
@@ -102,6 +103,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 		target:               target,
 		cc:                   cc,
 		proxyResolverCreated: false,
+		resolveNowCalled:     false,
 	}
 
 	var err error
@@ -176,14 +178,21 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.childMu.Lock()
+	defer r.childMu.Unlock()
 	r.targetResolver.ResolveNow(o)
-	r.childMu.Unlock()
-	if _, ok := <-r.proxyResolverCh; !ok {
-		r.childMu.Lock()
+	_, ok := r.proxyResolver.(nopResolver)
+	if r.proxyResolver == nil || ok {
+		r.resolveNowCalled = true
+		return
+	} else {
 		r.proxyResolver.ResolveNow(o)
-		r.childMu.Unlock()
 	}
-
+	// set boolean to check if resolve now on proxy needs to called after build in lock
+	// if _, ok := <-r.proxyResolverCh; !ok {
+	// 	r.childMu.Lock()
+	// 	r.proxyResolver.ResolveNow(o)
+	// 	r.childMu.Unlock()
+	// }
 }
 
 func (r *delegatingResolver) Close() {
@@ -353,19 +362,23 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
-	if !r.proxyResolverCreated {
-		r.proxyResolverCh = make(chan struct{})
-		go func() {
-			r.childMu.Lock()
-			defer r.childMu.Unlock()
-			_, ok := r.proxyResolver.(nopResolver)
-			if r.proxyResolver == nil || ok {
-				r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
-				r.proxyResolverCreated = true
-				close(r.proxyResolverCh)
+	// if !r.proxyResolverCreated {
+	// 	r.proxyResolverCh = make(chan struct{})
+	go func() {
+		r.childMu.Lock()
+		defer r.childMu.Unlock()
+		_, ok := r.proxyResolver.(nopResolver)
+		if r.proxyResolver == nil || ok {
+			r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
+			if r.resolveNowCalled {
+				r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
+				r.resolveNowCalled = false
 			}
-		}()
-	}
+			// r.proxyResolverCreated = true
+			// close(r.proxyResolverCh)
+		}
+	}()
+	// }
 
 	err := r.updateClientConnStateLocked()
 	if err != nil {
