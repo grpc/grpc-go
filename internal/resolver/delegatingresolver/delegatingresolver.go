@@ -57,9 +57,10 @@ type delegatingResolver struct {
 
 	// childMu serializes calls into child resolvers. It also protects access to
 	// the following fields.
-	childMu        sync.Mutex
-	targetResolver resolver.Resolver // resolver for the target URI, based on its scheme
-	proxyResolver  resolver.Resolver // resolver for the proxy URI; nil if no proxy is configured
+	childMu              sync.Mutex
+	targetResolver       resolver.Resolver // resolver for the target URI, based on its scheme
+	proxyResolver        resolver.Resolver // resolver for the proxy URI; nil if no proxy is configured
+	proxyResolverCreated bool              // indicates if proxy resolver has been built once
 }
 
 // nopResolver is a resolver that does nothing.
@@ -98,9 +99,9 @@ func proxyURLForTarget(address string) (*url.URL, error) {
 //     resolution is enabled using the dial option.
 func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions, targetResolverBuilder resolver.Builder, targetResolutionEnabled bool) (resolver.Resolver, error) {
 	r := &delegatingResolver{
-		target:          target,
-		cc:              cc,
-		proxyResolverCh: make(chan struct{}),
+		target:               target,
+		cc:                   cc,
+		proxyResolverCreated: false,
 	}
 
 	var err error
@@ -352,15 +353,19 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
-	go func() {
-		r.childMu.Lock()
-		defer r.childMu.Unlock()
-		_, ok := r.proxyResolver.(nopResolver)
-		if r.proxyResolver == nil || ok {
-			r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
-			close(r.proxyResolverCh)
-		}
-	}()
+	if !r.proxyResolverCreated {
+		r.proxyResolverCh = make(chan struct{})
+		go func() {
+			r.childMu.Lock()
+			defer r.childMu.Unlock()
+			_, ok := r.proxyResolver.(nopResolver)
+			if r.proxyResolver == nil || ok {
+				r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
+				r.proxyResolverCreated = true
+				close(r.proxyResolverCh)
+			}
+		}()
+	}
 
 	err := r.updateClientConnStateLocked()
 	if err != nil {
