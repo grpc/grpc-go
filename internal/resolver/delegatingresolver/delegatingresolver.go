@@ -181,6 +181,7 @@ func (r *delegatingResolver) Close() {
 	defer r.childMu.Unlock()
 	r.targetResolver.Close()
 	r.targetResolver = nil
+
 	r.proxyResolver.Close()
 	r.proxyResolver = nil
 }
