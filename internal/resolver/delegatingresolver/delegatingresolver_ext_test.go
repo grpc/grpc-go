@@ -773,7 +773,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 
 // Tests the scenario where a proxy is configured, and the resolver returns a
 // network type other than tcp for all addresses. The test verifies that the
-// delegating resolver avoids the proxy update and directly sends the update
+// delegating resolver avoids the proxy build and directly sends the update
 // from target resolver to clientconn.
 func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	const (
@@ -802,9 +802,9 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
 	proxyResolver := setupDNS(t)
-	proxyUpdateCalled := make(chan struct{})
-	proxyResolver.UpdateStateCallback = func(error) {
-		close(proxyUpdateCalled)
+	proxyBuildCalled := make(chan struct{})
+	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
+		close(proxyBuildCalled)
 	}
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
@@ -827,15 +827,10 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
 	}
 
-	proxyResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: envProxyAddr}},
-		ServiceConfig: &serviceconfig.ParseResult{},
-	})
-
 	// Verify that the delegating resolver doesn't call proxy resolver's
 	// UpdateState since we have no tcp address
 	select {
-	case <-proxyUpdateCalled:
+	case <-proxyBuildCalled:
 		t.Fatal("Unexpected call to proxy resolver update state")
 	case <-time.After(defaultTestShortTimeout):
 	}
