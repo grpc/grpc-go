@@ -56,12 +56,12 @@ const (
 // returns it along with channels for resolver state updates and errors.
 func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, chan resolver.State, chan error) {
 	t.Helper()
-	stateCh := make(chan resolver.State, 3)
+	stateCh := make(chan resolver.State, 1)
 	errCh := make(chan error, 1)
 
 	tcc := &testutils.ResolverClientConn{
 		Logger:       t,
-		UpdateStateF: func(s resolver.State) error { stateCh <- s; t.Log("eshita state received"); return nil },
+		UpdateStateF: func(s resolver.State) error { stateCh <- s; return nil },
 		ReportErrorF: func(err error) { errCh <- err },
 	}
 	return tcc, stateCh, errCh
@@ -744,7 +744,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	}
 
 	// ResolveNow of manual proxy resolver will not be called since proxy
-	// resolvr is only built when we get the first update from target resolver
+	// resolver is only built when we get the first update from target resolver
 	// and so , in the first resolveNow, proxy resolver will be a no-op resolver
 	// and only target resolver's ResolveNow will be called.
 	dr.ResolveNow(resolver.ResolveNowOptions{})
