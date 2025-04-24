@@ -64,6 +64,10 @@ var (
 	ErrClientClosed = errors.New("xds: the xDS client is closed")
 
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
+
+	xdsClientResourceUpdatesValidMetric   MetricHandle
+	xdsClientResourceUpdatesInvalidMetric MetricHandle
+	xdsClientServerFailureMetric          MetricHandle
 )
 
 // XDSClient is a client which queries a set of discovery APIs (collectively
@@ -83,7 +87,8 @@ type XDSClient struct {
 	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
 	logger             *grpclog.PrefixLogger        // Logger for this client.
-	target             string                       // The gRPC target for this client.
+	target             string                       // The target for this client.
+	metricsRecorder    MetricsRecorder              // Metrics recorder for metrics.
 
 	// The XDSClient owns a bunch of channels to individual xDS servers
 	// specified in the xDS client configuration. Authorities acquire references
@@ -140,6 +145,32 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 		xdsActiveChannels:  make(map[ServerConfig]*channelState),
 	}
 
+	if c.config.MetricsReporter != nil {
+		xdsClientResourceUpdatesValidMetric = c.config.MetricsReporter.RegisterMetric(MetricDescriptor{
+			Name:        "xds_client.resource_updates_valid",
+			Type:        MetricTypeIntCount,
+			Description: "A counter of resources received that were considered valid. The counter will be incremented even for resources that have not changed.",
+			Unit:        "resource",
+			Labels:      []string{"xds_client.target", "xds_client.server", "xds_client.resource_type"},
+		})
+		xdsClientResourceUpdatesInvalidMetric = c.config.MetricsReporter.RegisterMetric(MetricDescriptor{
+			Name:        "xds_client.resource_updates_invalid",
+			Type:        MetricTypeIntCount,
+			Description: "A counter of resources received that were considered invalid.",
+			Unit:        "resource",
+			Labels:      []string{"xds_client.target", "xds_client.server", "xds_client.resource_type"},
+		})
+		xdsClientServerFailureMetric = c.config.MetricsReporter.RegisterMetric(MetricDescriptor{
+			Name:        "xds_client.server_failure",
+			Type:        MetricTypeIntCount,
+			Description: "A counter of xDS servers going from healthy to unhealthy. A server goes unhealthy when we have a connectivity failure or when the ADS stream fails without seeing a response message.",
+			Unit:        "failure",
+			Labels:      []string{"xds_client.target", "xds_client.server"},
+		})
+
+		c.metricsRecorder = c.config.MetricsReporter.Recorder()
+	}
+
 	for name, cfg := range config.Authorities {
 		// If server configs are specified in the authorities map, use that.
 		// Else, use the top-level server configs.
@@ -154,6 +185,7 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 			getChannelForADS: c.getChannelForADS,
 			logPrefix:        clientPrefix(c),
 			target:           target,
+			metricsRecorder:  c.metricsRecorder,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -163,8 +195,10 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 		getChannelForADS: c.getChannelForADS,
 		logPrefix:        clientPrefix(c),
 		target:           target,
+		metricsRecorder:  c.metricsRecorder,
 	})
 	c.logger = prefixLogger(c)
+
 	return c, nil
 }
 
@@ -382,6 +416,10 @@ type channelState struct {
 func (cs *channelState) adsStreamFailure(err error) {
 	if cs.parent.done.HasFired() {
 		return
+	}
+
+	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsRecorder != nil {
+		cs.parent.metricsRecorder.Record(xdsClientServerFailureMetric, 1, cs.parent.target, cs.serverConfig.ServerIdentifier.ServerURI)
 	}
 
 	cs.parent.channelsMu.Lock()

@@ -87,6 +87,7 @@ type authority struct {
 	xdsClientSerializerClose  func()                       // Function to close the above serializer.
 	logger                    *igrpclog.PrefixLogger       // Logger for this authority.
 	target                    string                       // The gRPC Channel target.
+	metricsRecorder           MetricsRecorder              // metricsRecorder to emit metrics
 
 	// The below defined fields must only be accessed in the context of the
 	// serializer callback, owned by this authority.
@@ -121,6 +122,7 @@ type authorityBuildOptions struct {
 	getChannelForADS xdsChannelForADS             // Function to acquire a reference to an xdsChannel
 	logPrefix        string                       // Prefix for logging
 	target           string                       // Target for the gRPC Channel that owns xDS Client/Authority
+	metricsRecorder  MetricsRecorder              // Metrics recorder for metrics.
 }
 
 // newAuthority creates a new authority instance with the provided
@@ -145,6 +147,7 @@ func newAuthority(args authorityBuildOptions) *authority {
 		logger:                    igrpclog.NewPrefixLogger(l, logPrefix),
 		resources:                 make(map[ResourceType]map[string]*resourceState),
 		target:                    args.target,
+		metricsRecorder:           args.metricsRecorder,
 	}
 
 	// Create an ordered list of xdsChannels with their server configs. The
@@ -363,6 +366,9 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		// On error, keep previous version of the resource. But update status
 		// and error.
 		if uErr.Err != nil {
+			if a.metricsRecorder != nil {
+				a.metricsRecorder.Record(xdsClientResourceUpdatesInvalidMetric, int64(1), a.target, serverConfig.ServerIdentifier.ServerURI, rType.TypeName)
+			}
 			state.md.ErrState = md.ErrState
 			state.md.Status = md.Status
 			for watcher := range state.watchers {
@@ -376,6 +382,10 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 				}
 			}
 			continue
+		}
+
+		if a.metricsRecorder != nil {
+			a.metricsRecorder.Record(xdsClientResourceUpdatesValidMetric, int64(1), a.target, serverConfig.ServerIdentifier.ServerURI, rType.TypeName)
 		}
 
 		if state.deletionIgnored {

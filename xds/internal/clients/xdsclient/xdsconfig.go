@@ -56,6 +56,10 @@ type Config struct {
 	//
 	// For example: "type.googleapis.com/envoy.config.listener.v3.Listener"
 	ResourceTypes map[string]ResourceType
+
+	// MetricsReporter is used to report registered metrics. If unset, no
+	// metrics will be reported.
+	MetricsReporter MetricsReporter
 }
 
 // ServerConfig contains configuration for an xDS management server.
