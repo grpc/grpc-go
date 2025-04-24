@@ -137,7 +137,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*listenerUpdate, err
 	if n := len(lis.ListenerFilters); n != 0 {
 		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
 	}
-	if useOrigDst := lis.GetUseOriginalDst(); useOrigDst != nil && useOrigDst.GetValue() {
+	if lis.GetUseOriginalDst().GetValue() {
 		return nil, errors.New("unsupported field 'use_original_dst' is present and set to true")
 	}
 	addr := lis.GetAddress()
