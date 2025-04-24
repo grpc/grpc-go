@@ -755,7 +755,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("context timed out waiting for targetResolver.ResolveNow() to be called.")
 	}
-	// Allow some time for the proxy resolver to aquire the mutex and be built.
+	// Allow some time for the proxy resolver to acquire the mutex and be built.
 	time.Sleep(100 * time.Millisecond)
 
 	dr.ResolveNow(resolver.ResolveNowOptions{})
