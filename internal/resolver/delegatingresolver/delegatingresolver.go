@@ -210,12 +210,14 @@ func tcpAddressPresent(state *resolver.State) bool {
 	return false
 }
 
-// updateClientConnStateLocked creates a list of combined addresses by pairing
-// each proxy address with every target address. For each pair, it generates a
-// new [resolver.Address] using the proxy address, and adding the target address
-// as the attribute along with user info. It returns nil if either resolver has
-// not sent update even once and returns the error from ClientConn update once
-// both resolvers have sent update atleast once.
+// updateClientConnStateLocked constructs a combined list of addresses by
+// pairing each proxy address with every target address of type TCP. For each
+// pair, it creates a new [resolver.Address] using the proxy address and
+// attaches the corresponding target address and user info as attributes. Target
+// addresses that are not of type TCP are appended to the list as-is. The
+// function returns nil if either resolver has not yet provided an update, and
+// returns the result of ClientConn.UpdateState once both resolvers have
+// provided at least one update.
 func (r *delegatingResolver) updateClientConnStateLocked() error {
 	if r.targetResolverState == nil || r.proxyAddrs == nil {
 		return nil
@@ -326,11 +328,15 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 	return err
 }
 
-// updateTargetResolverState updates the target resolver state by storing target
-// addresses, endpoints, and service config, marking the resolver as ready, and
-// triggering a state update if both resolvers are ready. If the ClientConn
-// returns a non-nil error, it calls `ResolveNow()` on the proxy resolver. It is
-// a StateListener function of wrappingClientConn passed to the target resolver.
+// updateTargetResolverState is the StateListener function provided to the
+// target resolver via wrappingClientConn. It updates the resolver state by
+// storing the target addresses, endpoints, and service configuration, and marks
+// the target resolver as ready. If the update includes at least one TCP address
+// and the proxy resolver has not yet been constructed, it initializes the proxy
+// resolver. A combined state update is triggered once both resolvers are ready.
+// If all addresses are non-TCP, it proceeds without waiting for the proxy
+// resolver. If ClientConn.UpdateState returns a non-nil error, ResolveNow() is
+// called on the proxy resolver.
 func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
