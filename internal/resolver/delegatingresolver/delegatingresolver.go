@@ -178,15 +178,15 @@ func (r *delegatingResolver) proxyURIResolver(opts resolver.BuildOptions) (resol
 
 func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	r.childMu.Lock()
-	defer r.childMu.Unlock()
 	r.targetResolver.ResolveNow(o)
-	_, ok := r.proxyResolver.(nopResolver)
-	if r.proxyResolver == nil || ok {
-		r.resolveNowCalled = true
-		return
-	} else {
-		r.proxyResolver.ResolveNow(o)
-	}
+	r.proxyResolver.ResolveNow(o)
+	r.childMu.Unlock()
+	// _, ok := r.proxyResolver.(nopResolver)
+	// if r.proxyResolver == nil || ok {
+	// 	r.resolveNowCalled = true
+	// return
+	// } else {
+	// }
 	// set boolean to check if resolve now on proxy needs to called after build in lock
 	// if _, ok := <-r.proxyResolverCh; !ok {
 	// 	r.childMu.Lock()
@@ -364,16 +364,19 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 
 	// if !r.proxyResolverCreated {
 	// 	r.proxyResolverCh = make(chan struct{})
+	// if r.proxyResolver == nil {
+	// 	r.proxyResolver = nopResolver{}
+
 	go func() {
 		r.childMu.Lock()
 		defer r.childMu.Unlock()
 		_, ok := r.proxyResolver.(nopResolver)
 		if r.proxyResolver == nil || ok {
 			r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
-			if r.resolveNowCalled {
-				r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
-				r.resolveNowCalled = false
-			}
+			// if r.resolveNowCalled {
+			// 	r.proxyResolver.ResolveNow(resolver.ResolveNowOptions{})
+			// 	r.resolveNowCalled = false
+			// }
 			// r.proxyResolverCreated = true
 			// close(r.proxyResolverCh)
 		}
