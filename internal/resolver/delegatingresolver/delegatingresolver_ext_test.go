@@ -729,6 +729,10 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	// Set up a manual DNS resolver to control the proxy address resolution.
 	proxyResolver := setupDNS(t)
 	proxyResolverCalled := make(chan struct{})
+	proxyResolverBuilt := make(chan struct{})
+	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
+		close(proxyResolverBuilt)
+	}
 	proxyResolver.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		// Updating the resolver state should not deadlock.
 		proxyResolver.CC().UpdateState(resolver.State{
@@ -755,10 +759,16 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("context timed out waiting for targetResolver.ResolveNow() to be called.")
 	}
-	// Allow some time for the proxy resolver to acquire the mutex and be built.
-	time.Sleep(100 * time.Millisecond)
+
+	// Wait for proxy resolver to be built.
+	select {
+	case <-proxyResolverBuilt:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("Timeout when waiting for proxy resolver to be built")
+	}
 
 	dr.ResolveNow(resolver.ResolveNowOptions{})
+
 	select {
 	case <-targetResolverCalled:
 	case <-ctx.Done():
@@ -851,7 +861,7 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 
 // Tests the scenario where a proxy is configured, and the resolver returns
 // addresses with varied network type. The test verifies that the delegating
-// resolver doesnt add proxyatrribute to adresses with network type other than
+// resolver doesn't add proxyatrribute to adresses with network type other than
 // tcp , but adds the proxyattribute to addresses with network type tcp.
 func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	const (

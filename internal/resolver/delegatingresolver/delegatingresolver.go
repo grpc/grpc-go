@@ -41,8 +41,8 @@ var (
 )
 
 // delegatingResolver manages both target URI and proxy address resolution by
-// delegating these tasks to separate child resolvers. Essentially, it acts as a
-// intermediary between the gRPC ClientConn and the child resolvers.
+// delegating these tasks to separate child resolvers. Essentially, it acts as
+// an intermediary between the gRPC ClientConn and the child resolvers.
 //
 // It implements the [resolver.Resolver] interface.
 type delegatingResolver struct {
@@ -88,8 +88,8 @@ func proxyURLForTarget(address string) (*url.URL, error) {
 // resolvers:
 //   - one to resolve the proxy address specified using the supported
 //     environment variables. This uses the registered resolver for the "dns"
-//     scheme. It is intialised to be a no op resolver and only built if the
-//     update from target resolver contains atleast one TCP address.
+//     scheme. It is lazily built when a target resolver update contains at least
+//     one TCP address.
 //   - one to resolve the target URI using the resolver specified by the scheme
 //     in the target URI or specified by the user using the WithResolvers dial
 //     option. As a special case, if the target URI's scheme is "dns" and a
@@ -132,7 +132,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 			Addresses: []resolver.Address{{Addr: target.Endpoint()}},
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
 		}
-		r.targetResolver = nopResolver{}
 		r.targetResolverState = &state
 		r.updateTargetResolverState(*r.targetResolverState)
 		return r, nil
@@ -173,7 +172,6 @@ func (r *delegatingResolver) ResolveNow(o resolver.ResolveNowOptions) {
 	defer r.childMu.Unlock()
 	r.targetResolver.ResolveNow(o)
 	r.proxyResolver.ResolveNow(o)
-
 }
 
 func (r *delegatingResolver) Close() {
@@ -329,14 +327,13 @@ func (r *delegatingResolver) updateProxyResolverState(state resolver.State) erro
 }
 
 // updateTargetResolverState is the StateListener function provided to the
-// target resolver via wrappingClientConn. It updates the resolver state by
-// storing the target addresses, endpoints, and service configuration, and marks
-// the target resolver as ready. If the update includes at least one TCP address
-// and the proxy resolver has not yet been constructed, it initializes the proxy
-// resolver. A combined state update is triggered once both resolvers are ready.
-// If all addresses are non-TCP, it proceeds without waiting for the proxy
-// resolver. If ClientConn.UpdateState returns a non-nil error, ResolveNow() is
-// called on the proxy resolver.
+// target resolver via wrappingClientConn. It updates the resolver state and
+// marks the target resolver as ready. If the update includes at least one TCP
+// address and the proxy resolver has not yet been constructed, it initializes
+// the proxy resolver. A combined state update is triggered once both resolvers
+// are ready. If all addresses are non-TCP, it proceeds without waiting for the
+// proxy resolver. If ClientConn.UpdateState returns a non-nil error,
+// ResolveNow() is called on the proxy resolver.
 func (r *delegatingResolver) updateTargetResolverState(state resolver.State) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -351,13 +348,15 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
-	go func() {
-		r.childMu.Lock()
-		defer r.childMu.Unlock()
-		if _, ok := r.proxyResolver.(nopResolver); ok || r.proxyResolver == nil {
-			r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
-		}
-	}()
+	if len(r.proxyAddrs) == 0 {
+		go func() {
+			r.childMu.Lock()
+			defer r.childMu.Unlock()
+			if _, ok := r.proxyResolver.(nopResolver); ok {
+				r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
+			}
+		}()
+	}
 
 	err := r.updateClientConnStateLocked()
 	if err != nil {
