@@ -3594,6 +3594,8 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 	t.Skip()
 	ss := &stubserver.StubServer{
 		StreamingInputCallF: func(_ testgrpc.TestService_StreamingInputCallServer) error {
+			// Returning status OK without sending a response message.This is a
+			// cardinality violation.
 			return nil
 		},
 	}
@@ -3619,16 +3621,16 @@ func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClos
 	}
 }
 
-// Tests the behavior where Recv() can be called after SendAndClose(). Although
+// Tests that the server can continue to receive messages after calling SendAndClose. Although
 // this is unexpected, we retain it for backward compatibility.
 func (s) TestClientStreaming_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
-				t.Fatalf("stream.SendAndClose(_) = %v, want <nil>", err)
+				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
 			}
-			if resp, err := stream.Recv(); err != nil || resp == nil {
-				t.Fatalf("stream.Recv() = %v, %v, want non-nil empty response, <nil>", resp, err)
+			if resp, err := stream.Recv(); err != nil || !proto.Equal(resp, &testpb.StreamingInputCallRequest{}) {
+				t.Errorf("stream.Recv() = %s, %v, want non-nil empty response, <nil>", resp, err)
 			}
 			return nil
 		},
@@ -3647,20 +3649,19 @@ func (s) TestClientStreaming_ServerHandlerRecvAfterSendAndClose(t *testing.T) {
 	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
 	}
-	if resp, err := stream.CloseAndRecv(); err != nil || resp == nil {
+	if resp, err := stream.CloseAndRecv(); err != nil || !proto.Equal(resp, &testpb.StreamingInputCallResponse{}) {
 		t.Fatalf("stream.CloseSend() = %v , %v, want non-nil empty response, <nil>", resp, err)
 	}
 }
 
-// Tests the behavior where Recv() on client streaming client blocks till the
-// server handler returns even after calling SendAndClose from the server
-// handler.
+// Tests that Recv() on client streaming client blocks till the server handler
+// returns even after calling SendAndClose from the server handler.
 func (s) TestClientStreaming_RecvWaitsForServerHandlerRetrun(t *testing.T) {
 	waitForReturn := make(chan struct{})
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
-				t.Fatalf("stream.SendAndClose(_) = %v, want <nil>", err)
+				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
 			}
 			<-waitForReturn
 			return nil
@@ -3706,14 +3707,14 @@ func (s) TestClientStreaming_RecvWaitsForServerHandlerRetrun(t *testing.T) {
 }
 
 // Tests the behavior where server handler returns an error after calling
-// SendAndClose. It verifies the behavior that client receives nil message and
+// SendAndClose. It verifies the that client receives nil message and
 // non-nil error.
 func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	wantError := status.Error(codes.Internal, "error for testing")
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
-				t.Fatalf("stream.SendAndClose(_) = %v, want <nil>", err)
+				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
 			}
 			return wantError
 		},
@@ -3729,7 +3730,12 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
-	if resp, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal || resp != nil {
+	resp, err := stream.CloseAndRecv()
+
+	wantStatus, _ := status.FromError(wantError)
+	gotStatus, _ := status.FromError(err)
+
+	if gotStatus.Code() != wantStatus.Code() || gotStatus.Message() != wantStatus.Message() || resp != nil {
 		t.Fatalf("stream.CloseSend() = %v , %v, want <nil>, %s", resp, err, wantError)
 	}
 }
