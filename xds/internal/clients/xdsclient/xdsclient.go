@@ -82,9 +82,9 @@ type XDSClient struct {
 	resourceTypes      map[string]ResourceType      // Registry of resource types, for parsing incoming ADS responses.
 	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
-	logger             *grpclog.PrefixLogger        // Logger for this client.
-	target             string                       // The target for this client.
-	metricsReporter    MetricsReporter              // Metrics reporter for this client.
+	logger             *grpclog.PrefixLogger
+	target             string
+	metricsReporter    MetricsReporter
 
 	// The XDSClient owns a bunch of channels to individual xDS servers
 	// specified in the xDS client configuration. Authorities acquire references
@@ -139,6 +139,7 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 		transportBuilder:   config.TransportBuilder,
 		resourceTypes:      config.ResourceTypes,
 		xdsActiveChannels:  make(map[ServerConfig]*channelState),
+		metricsReporter:    config.MetricsReporter,
 	}
 
 	for name, cfg := range config.Authorities {

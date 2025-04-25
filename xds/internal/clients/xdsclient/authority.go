@@ -87,7 +87,7 @@ type authority struct {
 	xdsClientSerializerClose  func()                       // Function to close the above serializer.
 	logger                    *igrpclog.PrefixLogger       // Logger for this authority.
 	target                    string                       // The gRPC Channel target.
-	metricsReporter           MetricsReporter              // Metrics reporter for this authority.
+	metricsReporter           MetricsReporter
 
 	// The below defined fields must only be accessed in the context of the
 	// serializer callback, owned by this authority.

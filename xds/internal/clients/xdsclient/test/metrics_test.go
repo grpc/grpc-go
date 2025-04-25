@@ -16,50 +16,40 @@
  *
  */
 
-package xdsclient
+package xdsclient_test
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"net"
 	"testing"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/stats"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 )
-
-type noopListenerWatcher struct{}
-
-func (noopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
-	onDone()
-}
-
-func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
-	onDone()
-}
-
-func (noopListenerWatcher) AmbientError(_ error, onDone func()) {
-	onDone()
-}
 
 // TestResourceUpdateMetrics configures an xDS client, and a management server
 // to send valid and invalid LDS updates, and verifies that the expected metrics
 // for both good and bad updates are emitted.
 func (s) TestResourceUpdateMetrics(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	defer cancel()
 
-	tmr := stats.NewTestMetricsRecorder()
-	l, err := testutils.LocalTCPListener()
+	tmr := xdsclientinternal.NewTestMetricsReporter()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
+
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: l})
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
@@ -73,50 +63,50 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
-		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-		Authorities: map[string]json.RawMessage{
-			"authority": []byte("{}"),
-		},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(credentials),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
 	}
-	pool := NewPool(config)
-	client, close, err := pool.NewClientForTesting(OptionsForTesting{
-		Name:               t.Name(),
-		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-		MetricsRecorder:    tmr,
-	})
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client: %v", err)
+		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close()
+	defer client.Close()
 
 	// Watch the valid listener configured on the management server. This should
 	// cause a resource updates valid count to emit eventually.
-	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
-	mdWant := stats.MetricsData{
-		Handle:    xdsClientResourceUpdatesValidMetric.Descriptor(),
-		IntIncr:   1,
-		LabelKeys: []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
-		LabelVals: []string{"Test/ResourceUpdateMetrics", mgmtServer.Address, "ListenerResource"},
+	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
+	mdWant := xdsclientinternal.MetricsData{
+		IntIncr: 1,
+		Name:    "xds_client.resource_updates_valid",
+		Labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
 	}
 	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Invalid should have no recording point.
-	if got, _ := tmr.Metric("grpc.xds_client.resource_updates_invalid"); got != 0 {
-		t.Fatalf("Unexpected data for metric \"grpc.xds_client.resource_updates_invalid\", got: %v, want: %v", got, 0)
+	if got, _ := tmr.Metric("xds_client.resource_updates_invalid"); got != 0 {
+		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 0)
 	}
 
 	// Update management server with a bad update. Eventually, tmr should
@@ -132,18 +122,17 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	mdWant = stats.MetricsData{
-		Handle:    xdsClientResourceUpdatesInvalidMetric.Descriptor(),
-		IntIncr:   1,
-		LabelKeys: []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
-		LabelVals: []string{"Test/ResourceUpdateMetrics", mgmtServer.Address, "ListenerResource"},
+	mdWant = xdsclientinternal.MetricsData{
+		IntIncr: 1,
+		Name:    "xds_client.resource_updates_invalid",
+		Labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
 	}
 	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Valid should stay the same at 1.
-	if got, _ := tmr.Metric("grpc.xds_client.resource_updates_valid"); got != 1 {
-		t.Fatalf("Unexpected data for metric \"grpc.xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
+	if got, _ := tmr.Metric("xds_client.resource_updates_invalid"); got != 1 {
+		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
 	}
 }
 
@@ -155,8 +144,8 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	tmr := stats.NewTestMetricsRecorder()
-	l, err := testutils.LocalTCPListener()
+	tmr := xdsclientinternal.NewTestMetricsReporter()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
@@ -175,39 +164,40 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
-		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-		Authorities: map[string]json.RawMessage{
-			"authority": []byte("{}"),
-		},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(credentials),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
 	}
-	pool := NewPool(config)
-	client, close, err := pool.NewClientForTesting(OptionsForTesting{
-		Name:               t.Name(),
-		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-		MetricsRecorder:    tmr,
-	})
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client: %v", err)
+		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close()
+	defer client.Close()
 
 	const listenerResourceName = "test-listener-resource"
 
 	// Watch for the listener on the above management server.
-	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
+	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
 	// Verify that an ADS stream is opened and an LDS request with the above
 	// resource name is sent.
 	select {
@@ -223,11 +213,10 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	mdWant := stats.MetricsData{
-		Handle:    xdsClientServerFailureMetric.Descriptor(),
-		IntIncr:   1,
-		LabelKeys: []string{"grpc.target", "grpc.xds.server"},
-		LabelVals: []string{"Test/ServerFailureMetrics_BeforeResponseRecv", mgmtServer.Address},
+	mdWant := xdsclientinternal.MetricsData{
+		IntIncr: 1,
+		Name:    "xds_client.server_failure",
+		Labels:  []string{"xds-client", mgmtServer.Address},
 	}
 	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
@@ -244,8 +233,8 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	tmr := stats.NewTestMetricsRecorder()
-	l, err := testutils.LocalTCPListener()
+	tmr := xdsclientinternal.NewTestMetricsReporter()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
@@ -263,42 +252,43 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
-		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
-		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
-		Authorities: map[string]json.RawMessage{
-			"authority": []byte("{}"),
-		},
-	})
-	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
 
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(credentials),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		MetricsReporter: tmr,
 	}
-	pool := NewPool(config)
-	client, close, err := pool.NewClientForTesting(OptionsForTesting{
-		Name:            t.Name(),
-		MetricsRecorder: tmr,
-	})
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
-		t.Fatalf("Failed to create an xDS client: %v", err)
+		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer close()
+	defer client.Close()
 
 	// Watch the valid listener configured on the management server. This should
 	// cause a resource updates valid count to emit eventually.
-	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
-	mdWant := stats.MetricsData{
-		Handle:    xdsClientResourceUpdatesValidMetric.Descriptor(),
-		IntIncr:   1,
-		LabelKeys: []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
-		LabelVals: []string{"Test/ServerFailureMetrics_AfterResponseRecv", mgmtServer.Address, "ListenerResource"},
+	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
+	mdWant := xdsclientinternal.MetricsData{
+		IntIncr: 1,
+		Name:    "xds_client.resource_updates_valid",
+		Labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
 	}
 	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
@@ -317,11 +307,10 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	mdWant = stats.MetricsData{
-		Handle:    xdsClientServerFailureMetric.Descriptor(),
-		IntIncr:   1,
-		LabelKeys: []string{"grpc.target", "grpc.xds.server"},
-		LabelVals: []string{"Test/ServerFailureMetrics_AfterResponseRecv", mgmtServer.Address},
+	mdWant = xdsclientinternal.MetricsData{
+		IntIncr: 1,
+		Name:    "xds_client.server_failure",
+		Labels:  []string{"xds-client", mgmtServer.Address},
 	}
 	// Server failure should still have no recording point.
 	if err := tmr.WaitForInt64Count(ctx, mdWant); err == nil {
