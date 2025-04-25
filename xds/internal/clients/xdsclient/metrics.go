@@ -18,61 +18,57 @@
 
 package xdsclient
 
-// MetricsReporter provides a way for XDSClient to register MetricHandle(s)
-// and obtain a MetricsRecorder to record metrics.
+// Metric is type of metric to be reported by XDSClient.
+type Metric interface {
+	Target() string
+}
+
+// MetricResourceUpdateValid is a Metric to report valid resource updates from
+// the xDS management server for a given resource type.
+type MetricResourceUpdateValid struct {
+	ServerURI    string // ServerURI of the xDS management server.
+	Incr         int64  // Count to be incremented.
+	ResourceType string // Resource type.
+
+	target string
+}
+
+// Target returns the target of the metric.
+func (m MetricResourceUpdateValid) Target() string {
+	return m.target
+}
+
+// MetricResourceUpdateInvalid is a Metric to report invalid resource updates
+// from the xDS management server for a given resource type.
+type MetricResourceUpdateInvalid struct {
+	ServerURI    string // ServerURI of the xDS management server.
+	Incr         int64  // Count to be incremented.
+	ResourceType string // Resource type.
+
+	target string
+}
+
+// Target returns the target of the metric.
+func (m MetricResourceUpdateInvalid) Target() string {
+	return m.target
+}
+
+// MetricServerFailure is a Metric to report server failures of the xDS
+// management server.
+type MetricServerFailure struct {
+	ServerURI string // ServerURI of the xDS management server.
+	Incr      int64  // Count to be incremented.
+
+	target string
+}
+
+// Target returns the target of the metric.
+func (m MetricServerFailure) Target() string {
+	return m.target
+}
+
+// MetricsReporter is used by the XDSClient to report metrics.
 type MetricsReporter interface {
-	// RegisterMetric registers a metric instrument based on the
-	// MetricDescriptor. It Returns a MetricHandle to be used with the
-	// MetricsRecorder.
-	RegisterMetric(descriptor MetricDescriptor) MetricHandle
-
-	// Recorder returns the MetricsRecorder implementation associated with
-	// this reporter. The returned recorder is used by XDSClient to record
-	// values for MetricHandle(s) registered through this reporter.
-	Recorder() MetricsRecorder
+	// ReportMetric reports a metric.
+	ReportMetric(Metric)
 }
-
-// MetricHandle is a metric instrument registered by the XDSClient. It enables
-// MetricsRecorder implementation to associate values to be recorded with the
-// correct MetricType.
-type MetricHandle interface {
-	// Descriptor returns the MetricDescriptor used for registration.
-	Descriptor() MetricDescriptor
-}
-
-// MetricsRecorder records metrics for the XDSClient.
-type MetricsRecorder interface {
-	// Record processes a metric value for the instrument associated with
-	// the MetricHandle.
-	Record(handle MetricHandle, value any, labels ...string)
-}
-
-// MetricDescriptor is used by the XDSClient to provide the data for a
-// registered MetricHandle that can be used by the MetricsRecorder.
-type MetricDescriptor struct {
-	// The name of this metric. This name must be unique.
-	Name string
-	// The description of this metric.
-	Description string
-	// The unit (e.g. entries, seconds) of this metric.
-	Unit string
-	// The required label keys for this metric.
-	Labels []string
-	// The type of metric.
-	Type MetricType
-	// Bounds are the bounds of this metric. This only applies to histogram
-	// metrics. If unset or set with length 0, stats handlers will fall back to
-	// default bounds.
-	Bounds []float64
-}
-
-// MetricType is the type of metric.
-type MetricType int
-
-// Type of metric supported by XDSClient.
-const (
-	MetricTypeIntCount MetricType = iota
-	MetricTypeFloatCount
-	MetricTypeIntHisto
-	MetricTypeFloatHisto
-)
