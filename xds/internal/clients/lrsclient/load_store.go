@@ -33,7 +33,7 @@ import (
 //
 // It is safe for concurrent use.
 type LoadStore struct {
-	lrsStream *streamImpl
+	stop func(ctx context.Context) // Function to call to Stop the LoadStore
 
 	// mu only protects the map (2 layers). The read/write to
 	// *PerClusterReporter doesn't need to hold the mu.
@@ -49,31 +49,23 @@ type LoadStore struct {
 	clusters map[string]map[string]*PerClusterReporter
 }
 
-// newStore creates a LoadStore.
-func newLoadStore(lrsStream *streamImpl) *LoadStore {
+// newLoadStore creates a LoadStore.
+func newLoadStore() *LoadStore {
 	return &LoadStore{
-		clusters:  make(map[string]map[string]*PerClusterReporter),
-		lrsStream: lrsStream,
+		clusters: make(map[string]map[string]*PerClusterReporter),
 	}
 }
 
 // Stop stops the LRS stream associated with this LoadStore.
 //
-// If this LoadStore is the only one using the underlying LRS stream, the
-// stream will be closed. If other LoadStores are also using the same stream,
-// the reference count to the stream is decremented, and the stream remains
-// open until all LoadStores have called Stop().
+// If this is the last reference to the underlying LRS stream, the
+// stream will be closed.
 //
-// If this is the last LoadStore for the stream, this method makes a last
-// attempt to flush any unreported load data to the LRS server. It will either
-// wait for this attempt to complete, or for the provided context to be done
-// before canceling the LRS stream.
+// The provided context should have a deadline or timeout set. If this is the
+// last reference, Stop will block until the context is done, allowing any
+// pending load reports to be flushed before closing the stream.
 func (ls *LoadStore) Stop(ctx context.Context) {
-	// Wait for the provided context to be done (timeout or cancellation).
-	if ctx != nil {
-		<-ctx.Done()
-	}
-	ls.lrsStream.stop()
+	ls.stop(ctx)
 }
 
 // ReporterForCluster returns the PerClusterReporter for the given cluster and
@@ -111,22 +103,22 @@ func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClu
 // If a cluster's loadData is empty (no load to report), it's not appended to
 // the returned slice.
 func (ls *LoadStore) stats(clusterNames []string) []*loadData {
-	var ret []*loadData
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
+	var ret []*loadData
 	if len(clusterNames) == 0 {
 		for _, c := range ls.clusters {
 			ret = appendClusterStats(ret, c)
 		}
 		return ret
 	}
-
 	for _, n := range clusterNames {
 		if c, ok := ls.clusters[n]; ok {
 			ret = appendClusterStats(ret, c)
 		}
 	}
+
 	return ret
 }
 
@@ -314,12 +306,12 @@ type serverLoadData struct {
 	sum float64
 }
 
-// appendClusterStats gets Data for the given cluster, append to ret, and return
-// the new slice.
+// appendClusterStats gets the Data for all the given clusters, append to ret,
+// and return the new slice.
 //
 // Data is only appended to ret if it's not empty.
-func appendClusterStats(ret []*loadData, cluster map[string]*PerClusterReporter) []*loadData {
-	for _, d := range cluster {
+func appendClusterStats(ret []*loadData, clusters map[string]*PerClusterReporter) []*loadData {
+	for _, d := range clusters {
 		data := d.stats()
 		if data == nil {
 			// Skip this data if it doesn't contain any information.

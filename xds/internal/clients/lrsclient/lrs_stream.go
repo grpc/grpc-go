@@ -59,7 +59,6 @@ type streamImpl struct {
 
 	cancelStream context.CancelFunc // Cancel the stream. If nil, the stream is not active.
 	loadStore    *LoadStore         // LoadStore returned to user for pushing loads.
-	cleanup      func()             // Function to call after the stream is stopped.
 }
 
 // streamOpts holds the options for creating an lrsStream.
@@ -75,14 +74,20 @@ type streamOpts struct {
 // The actual streaming RPC call is initiated when the first call to ReportLoad
 // is made, and is terminated when the last call to ReportLoad is canceled.
 func newStreamImpl(opts streamOpts) *streamImpl {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	lrs := &streamImpl{
-		transport: opts.transport,
-		backoff:   opts.backoff,
-		nodeProto: opts.nodeProto,
+		transport:    opts.transport,
+		backoff:      opts.backoff,
+		nodeProto:    opts.nodeProto,
+		cancelStream: cancel,
+		doneCh:       make(chan struct{}),
 	}
 
 	l := grpclog.Component("xds")
 	lrs.logger = igrpclog.NewPrefixLogger(l, opts.logPrefix+fmt.Sprintf("[lrs-stream %p] ", lrs))
+	lrs.loadStore = newLoadStore()
+	go lrs.runner(ctx)
 	return lrs
 }
 
@@ -183,7 +188,9 @@ func (lrs *streamImpl) recvFirstLoadStatsResponse(stream clients.Stream) ([]stri
 	}
 	var resp v3lrspb.LoadStatsResponse
 	if err := proto.Unmarshal(r, &resp); err != nil {
-		lrs.logger.Infof("Failed to unmarshal response to LoadStatsResponse: %v", err)
+		if lrs.logger.V(2) {
+			lrs.logger.Infof("Failed to unmarshal response to LoadStatsResponse: %v", err)
+		}
 		return nil, time.Duration(0), fmt.Errorf("lrs: unexpected message type %T", r)
 	}
 	if lrs.logger.V(perRPCVerbosityLevel) {
@@ -260,7 +267,9 @@ func (lrs *streamImpl) sendLoadStatsRequest(stream clients.Stream, loads []*load
 	}
 	msg, err := proto.Marshal(req)
 	if err != nil {
-		lrs.logger.Warningf("Failed to marshal LoadStatsRequest: %v", err)
+		if lrs.logger.V(2) {
+			lrs.logger.Infof("Failed to marshal LoadStatsRequest: %v", err)
+		}
 		return err
 	}
 	err = stream.Send(msg)
@@ -276,11 +285,6 @@ func getStreamError(stream clients.Stream) error {
 			return err
 		}
 	}
-}
-
-// stop calls the registered cleanup function by LRS client to stop the stream.
-func (lrs *streamImpl) stop() {
-	lrs.cleanup()
 }
 
 // localityFromString converts a json representation of locality, into a

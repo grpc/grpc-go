@@ -39,6 +39,13 @@ type rpcData struct {
 	serverData              map[string]float64 // Will be reported with successful RPCs.
 }
 
+func verifyLoadStoreData(wantStoreData, gotStoreData []*loadData) error {
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
+		return fmt.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+	return nil
+}
+
 // TestDrops spawns a bunch of goroutines which report drop data. After the
 // goroutines have exited, the test dumps the stats from the Store and makes
 // sure they are as expected.
@@ -72,8 +79,8 @@ func TestDrops(t *testing.T) {
 	wg.Wait()
 
 	gotStoreData := ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData([]*loadData{wantStoreData}, []*loadData{gotStoreData}); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -165,8 +172,8 @@ func TestLocalityStats(t *testing.T) {
 	}
 
 	gotStoreData := ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData([]*loadData{wantStoreData}, []*loadData{gotStoreData}); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -260,8 +267,8 @@ func TestResetAfterStats(t *testing.T) {
 	ls := PerClusterReporter{}
 	reportLoad(&ls)
 	gotStoreData := ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData([]*loadData{wantStoreData}, []*loadData{gotStoreData}); err != nil {
+		t.Error(err)
 	}
 
 	// The above call to stats() should have reset all load reports except the
@@ -274,8 +281,8 @@ func TestResetAfterStats(t *testing.T) {
 	}
 	reportLoad(&ls)
 	gotStoreData = ls.stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval")); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData([]*loadData{wantStoreData}, []*loadData{gotStoreData}); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -304,7 +311,7 @@ func TestStoreStats(t *testing.T) {
 		testLocality = "test-locality"
 	)
 
-	store := newLoadStore(nil)
+	store := newLoadStore()
 	for _, c := range testClusters {
 		for _, s := range testServices {
 			store.ReporterForCluster(c, s).CallStarted(testLocality)
@@ -339,9 +346,7 @@ func TestStoreStats(t *testing.T) {
 	// Call Stats with just "c0", this should return data for "c0", and not
 	// touch data for other clusters.
 	gotC0 := store.stats([]string{"c0"})
-	if diff := cmp.Diff(wantC0, gotC0, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
-	}
+	verifyLoadStoreData(wantC0, gotC0)
 
 	wantOther := []*loadData{
 		{
@@ -388,8 +393,8 @@ func TestStoreStats(t *testing.T) {
 	// Call Stats with empty slice, this should return data for all the
 	// remaining clusters, and not include c0 (because c0 data was cleared).
 	gotOther := store.stats(nil)
-	if diff := cmp.Diff(wantOther, gotOther, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData(wantOther, gotOther); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -401,7 +406,7 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 		testLocality = "test-locality"
 	)
 
-	store := newLoadStore(nil)
+	store := newLoadStore()
 	// "c0"'s RPCs all finish with success.
 	for _, s := range testServices {
 		store.ReporterForCluster("c0", s).CallStarted(testLocality)
@@ -441,8 +446,8 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	// Call Stats with empty slice, this should return data for all the
 	// clusters.
 	got0 := store.stats(nil)
-	if diff := cmp.Diff(want0, got0, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData(want0, got0); err != nil {
+		t.Error(err)
 	}
 
 	want1 := []*loadData{
@@ -462,7 +467,7 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	// Call Stats with empty slice again, this should return data only for "c1",
 	// because "c0" data was cleared, but "c1" has in-progress RPCs.
 	got1 := store.stats(nil)
-	if diff := cmp.Diff(want1, got1, cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), cmpopts.IgnoreFields(loadData{}, "reportInterval"), sortDataSlice); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	if err := verifyLoadStoreData(want1, got1); err != nil {
+		t.Error(err)
 	}
 }

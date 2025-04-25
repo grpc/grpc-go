@@ -63,7 +63,7 @@ type LRSClient struct {
 func New(config Config) (*LRSClient, error) {
 	switch {
 	case config.Node.ID == "":
-		return nil, errors.New("lrsclient: node ID is empty")
+		return nil, errors.New("lrsclient: node ID in node is empty")
 	case config.TransportBuilder == nil:
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
@@ -81,6 +81,9 @@ func New(config Config) (*LRSClient, error) {
 
 // ReportLoad creates and returns a LoadStore for the caller to report loads
 // using a LoadReportingStream.
+//
+// Caller must call Stop on the returned LoadStore when they are done reporting
+// load to this server.
 func (c *LRSClient) ReportLoad(si clients.ServerIdentifier) (*LoadStore, error) {
 	lrs, err := c.getOrCreateLRSStream(si)
 	if err != nil {
@@ -133,17 +136,13 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		nodeProto: nodeProto,
 		logPrefix: logPrefix,
 	})
-	ctx, cancel := context.WithCancel(context.Background())
-	lrs.cancelStream = cancel
-	lrs.doneCh = make(chan struct{})
-	lrs.loadStore = newLoadStore(lrs)
-	go lrs.runner(ctx)
 
-	// Register a cleanup function that decrements the reference count, stops
+	// Register a stop function that decrements the reference count, stops
 	// the LRS stream when the last reference is removed and closes the
 	// transport and removes the lrs stream and its references from the
-	// respective maps.
-	cleanup := func() {
+	// respective maps. Before closing the stream, it waits for the provided
+	// context to be done (timeout or cancellation).
+	stop := func(ctx context.Context) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
@@ -156,12 +155,12 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 			return
 		}
 
-		if lrs.cancelStream == nil {
-			// It is possible that Stop() is called before the cleanup function
-			// is called, thereby setting cancelStream to nil. Hence we need a
-			// nil check here bofore invoking the cancel function.
-			return
+		// Wait for the provided context to be done (timeout or cancellation)
+		// before closing the stream.
+		if ctx != nil {
+			<-ctx.Done()
 		}
+
 		lrs.cancelStream()
 		lrs.cancelStream = nil
 		lrs.logger.Infof("Stopping LRS stream")
@@ -170,7 +169,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		delete(c.lrsStreams, serverIdentifier)
 		tr.Close()
 	}
-	lrs.cleanup = cleanup
+	lrs.loadStore.stop = stop
 
 	c.lrsStreams[serverIdentifier] = lrs
 	c.lrsRefs[serverIdentifier] = 1
