@@ -18,57 +18,28 @@
 
 package xdsclient
 
-// Metric is type of metric to be reported by XDSClient.
-type Metric interface {
-	Target() string
-}
-
 // MetricResourceUpdateValid is a Metric to report valid resource updates from
 // the xDS management server for a given resource type.
 type MetricResourceUpdateValid struct {
+	Target       string // Target of the metric.
 	ServerURI    string // ServerURI of the xDS management server.
 	Incr         int64  // Count to be incremented.
 	ResourceType string // Resource type.
-
-	target string
-}
-
-// Target returns the target of the metric.
-func (m MetricResourceUpdateValid) Target() string {
-	return m.target
 }
 
 // MetricResourceUpdateInvalid is a Metric to report invalid resource updates
 // from the xDS management server for a given resource type.
 type MetricResourceUpdateInvalid struct {
+	Target       string // Target of the metric.
 	ServerURI    string // ServerURI of the xDS management server.
 	Incr         int64  // Count to be incremented.
 	ResourceType string // Resource type.
-
-	target string
-}
-
-// Target returns the target of the metric.
-func (m MetricResourceUpdateInvalid) Target() string {
-	return m.target
 }
 
 // MetricServerFailure is a Metric to report server failures of the xDS
 // management server.
 type MetricServerFailure struct {
+	Target    string // Target of the metric.
 	ServerURI string // ServerURI of the xDS management server.
 	Incr      int64  // Count to be incremented.
-
-	target string
-}
-
-// Target returns the target of the metric.
-func (m MetricServerFailure) Target() string {
-	return m.target
-}
-
-// MetricsReporter is used by the XDSClient to report metrics.
-type MetricsReporter interface {
-	// ReportMetric reports a metric.
-	ReportMetric(Metric)
 }

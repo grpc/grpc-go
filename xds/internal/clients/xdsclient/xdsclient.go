@@ -84,7 +84,7 @@ type XDSClient struct {
 	serializerClose    func()                       // Function to close the serializer.
 	logger             *grpclog.PrefixLogger
 	target             string
-	metricsReporter    MetricsReporter
+	metricsReporter    clients.MetricsReporter
 
 	// The XDSClient owns a bunch of channels to individual xDS servers
 	// specified in the xDS client configuration. Authorities acquire references
@@ -391,7 +391,7 @@ func (cs *channelState) adsStreamFailure(err error) {
 
 	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsReporter != nil {
 		cs.parent.metricsReporter.ReportMetric(MetricServerFailure{
-			target: cs.parent.target, ServerURI: cs.serverConfig.ServerIdentifier.ServerURI, Incr: 1,
+			Target: cs.parent.target, ServerURI: cs.serverConfig.ServerIdentifier.ServerURI, Incr: 1,
 		})
 	}
 

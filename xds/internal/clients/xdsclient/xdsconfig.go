@@ -59,7 +59,7 @@ type Config struct {
 
 	// MetricsReporter is used to report registered metrics. If unset, no
 	// metrics will be reported.
-	MetricsReporter MetricsReporter
+	MetricsReporter clients.MetricsReporter
 }
 
 // ServerConfig contains configuration for an xDS management server.

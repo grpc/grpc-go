@@ -106,7 +106,7 @@ func (r *TestMetricsReporter) WaitForInt64CountIncr(ctx context.Context, incrWan
 
 // ReportMetric sends the metrics data to the intCountCh channel and updates
 // the internal data map with the recorded value.
-func (r *TestMetricsReporter) ReportMetric(m xdsclient.Metric) {
+func (r *TestMetricsReporter) ReportMetric(m any) {
 	r.intCountCh.ReceiveOrFail()
 
 	var metricName string
@@ -117,7 +117,7 @@ func (r *TestMetricsReporter) ReportMetric(m xdsclient.Metric) {
 		r.intCountCh.Send(MetricsData{
 			IntIncr: metric.Incr,
 			Name:    "xds_client.resource_updates_valid",
-			Labels:  []string{metric.Target(), metric.ServerURI, metric.ResourceType},
+			Labels:  []string{metric.Target, metric.ServerURI, metric.ResourceType},
 		})
 		metricName = "xds_client.resource_updates_valid"
 		incr = metric.Incr
@@ -126,7 +126,7 @@ func (r *TestMetricsReporter) ReportMetric(m xdsclient.Metric) {
 		r.intCountCh.Send(MetricsData{
 			IntIncr: metric.Incr,
 			Name:    "xds_client.resource_updates_invalid",
-			Labels:  []string{metric.Target(), metric.ServerURI, metric.ResourceType},
+			Labels:  []string{metric.Target, metric.ServerURI, metric.ResourceType},
 		})
 		metricName = "xds_client.resource_updates_invalid"
 		incr = metric.Incr
@@ -135,7 +135,7 @@ func (r *TestMetricsReporter) ReportMetric(m xdsclient.Metric) {
 		r.intCountCh.Send(MetricsData{
 			IntIncr: metric.Incr,
 			Name:    "xds_client.server_failure",
-			Labels:  []string{metric.Target(), metric.ServerURI},
+			Labels:  []string{metric.Target, metric.ServerURI},
 		})
 		metricName = "xds_client.server_failure"
 		incr = metric.Incr

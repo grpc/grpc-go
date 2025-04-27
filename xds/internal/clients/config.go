@@ -100,3 +100,12 @@ type Locality struct {
 	// SubZone is the further subdivision within a zone.
 	SubZone string
 }
+
+// MetricsReporter is used by the XDSClient to report metrics. Metric can be of
+// any type.
+//
+// For example: see xdsclient/internal/test_metrics_reporter.go
+type MetricsReporter interface {
+	// ReportMetric reports a metric.
+	ReportMetric(any)
+}
