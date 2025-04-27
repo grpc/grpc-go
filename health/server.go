@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	// maxAllowedServices defines the maximum number of resources a List operation can return.
-	// An error is returned if the number of services exceeds this limit.
+	// maxAllowedServices defines the maximum number of resources a List
+	// operation can return. An error is returned if the number of services
+	// exceeds this limit.
 	maxAllowedServices = 100
 )
 
