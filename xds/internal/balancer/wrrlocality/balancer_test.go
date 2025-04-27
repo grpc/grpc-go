@@ -218,13 +218,13 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	// child layer.
 	wantWtCfg := &weightedtarget.LBConfig{
 		Targets: map[string]weightedtarget.Target{
-			"{\"region\":\"region-1\",\"zone\":\"zone-1\",\"subZone\":\"subzone-1\"}": {
+			"{region=\"region-1\", zone=\"zone-1\", sub_zone=\"subzone-1\"}": {
 				Weight: 2,
 				ChildPolicy: &internalserviceconfig.BalancerConfig{
 					Name: "round_robin",
 				},
 			},
-			"{\"region\":\"region-2\",\"zone\":\"zone-2\",\"subZone\":\"subzone-2\"}": {
+			"{region=\"region-2\", zone=\"zone-2\", sub_zone=\"subzone-2\"}": {
 				Weight: 1,
 				ChildPolicy: &internalserviceconfig.BalancerConfig{
 					Name: "round_robin",

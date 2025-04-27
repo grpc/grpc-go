@@ -60,7 +60,7 @@ func (h *clientStatsHandler) createCallTraceSpan(ctx context.Context, method str
 		logger.Error("TraceProvider is not provided in trace options")
 		return ctx, nil
 	}
-	mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+	mn := "Sent." + strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	return ctx, span

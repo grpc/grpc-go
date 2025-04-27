@@ -23,10 +23,9 @@ import (
 	"math"
 	"testing"
 
+	xxhash "github.com/cespare/xxhash/v2"
 	"google.golang.org/grpc/internal/balancer/weight"
 	"google.golang.org/grpc/resolver"
-
-	xxhash "github.com/cespare/xxhash/v2"
 )
 
 var testEndpoints []resolver.Endpoint

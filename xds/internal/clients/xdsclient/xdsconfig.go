@@ -83,3 +83,7 @@ type Authority struct {
 	// See Config.Servers for more details.
 	XDSServers []ServerConfig
 }
+
+func isServerConfigEqual(a, b *ServerConfig) bool {
+	return a.ServerIdentifier == b.ServerIdentifier && a.IgnoreResourceDeletion == b.IgnoreResourceDeletion
+}

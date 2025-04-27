@@ -23,7 +23,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc/internal/envconfig"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
 )
 
@@ -33,26 +35,26 @@ func (s) TestParseConfig(t *testing.T) {
 		js                  string
 		envConfigCap        uint64
 		requestHeaderEnvVar bool
-		want                *LBConfig
+		want                *iringhash.LBConfig
 		wantErr             bool
 	}{
 		{
 			name:                "OK",
 			js:                  `{"minRingSize": 1, "maxRingSize": 2}`,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: 1, MaxRingSize: 2},
+			want:                &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
 		},
 		{
 			name:                "OK with default min",
 			js:                  `{"maxRingSize": 2000}`,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: defaultMinSize, MaxRingSize: 2000},
+			want:                &iringhash.LBConfig{MinRingSize: defaultMinSize, MaxRingSize: 2000},
 		},
 		{
 			name:                "OK with default max",
 			js:                  `{"minRingSize": 2000}`,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: 2000, MaxRingSize: defaultMaxSize},
+			want:                &iringhash.LBConfig{MinRingSize: 2000, MaxRingSize: defaultMaxSize},
 		},
 		{
 			name:                "min greater than max",
@@ -72,27 +74,27 @@ func (s) TestParseConfig(t *testing.T) {
 			name:                "max greater than global limit",
 			js:                  `{"minRingSize": 1, "maxRingSize": 6000}`,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: 1, MaxRingSize: 4096},
+			want:                &iringhash.LBConfig{MinRingSize: 1, MaxRingSize: 4096},
 		},
 		{
 			name:                "min and max greater than global limit",
 			js:                  `{"minRingSize": 5000, "maxRingSize": 6000}`,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: 4096, MaxRingSize: 4096},
+			want:                &iringhash.LBConfig{MinRingSize: 4096, MaxRingSize: 4096},
 		},
 		{
 			name:                "min and max less than raised global limit",
 			js:                  `{"minRingSize": 5000, "maxRingSize": 6000}`,
 			envConfigCap:        8000,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: 5000, MaxRingSize: 6000},
+			want:                &iringhash.LBConfig{MinRingSize: 5000, MaxRingSize: 6000},
 		},
 		{
 			name:                "min and max greater than raised global limit",
 			js:                  `{"minRingSize": 10000, "maxRingSize": 10000}`,
 			envConfigCap:        8000,
 			requestHeaderEnvVar: true,
-			want:                &LBConfig{MinRingSize: 8000, MaxRingSize: 8000},
+			want:                &iringhash.LBConfig{MinRingSize: 8000, MaxRingSize: 8000},
 		},
 		{
 			name:                "min greater than upper bound",
@@ -112,7 +114,17 @@ func (s) TestParseConfig(t *testing.T) {
 			name:                "request metadata key set",
 			js:                  `{"requestHashHeader": "x-foo"}`,
 			requestHeaderEnvVar: true,
-			want: &LBConfig{
+			want: &iringhash.LBConfig{
+				MinRingSize:       defaultMinSize,
+				MaxRingSize:       defaultMaxSize,
+				RequestHashHeader: "x-foo",
+			},
+		},
+		{
+			name:                "request metadata key set with uppercase letters",
+			js:                  `{"requestHashHeader": "x-FOO"}`,
+			requestHeaderEnvVar: true,
+			want: &iringhash.LBConfig{
 				MinRingSize:       defaultMinSize,
 				MaxRingSize:       defaultMaxSize,
 				RequestHashHeader: "x-foo",
@@ -136,7 +148,7 @@ func (s) TestParseConfig(t *testing.T) {
 			name:                "request hash header cleared when RingHashSetRequestHashKey env var is false",
 			js:                  `{"requestHashHeader": "x-foo"}`,
 			requestHeaderEnvVar: false,
-			want: &LBConfig{
+			want: &iringhash.LBConfig{
 				MinRingSize: defaultMinSize,
 				MaxRingSize: defaultMaxSize,
 			},

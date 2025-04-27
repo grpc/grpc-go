@@ -29,50 +29,55 @@ import "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 type TestResourceWatcher struct {
 	// UpdateCh is the channel on which xDS client updates are delivered.
 	UpdateCh chan *xdsresource.ResourceData
-	// ErrorCh is the channel on which errors from the xDS client are delivered.
-	ErrorCh chan error
-	// ResourceDoesNotExistCh is the channel used to indicate calls to OnResourceDoesNotExist
-	ResourceDoesNotExistCh chan struct{}
+	// AmbientErrorCh is the channel on which ambient errors from the xDS
+	// client are delivered.
+	AmbientErrorCh chan error
+	// ResourceErrorCh is the channel on which resource errors from the xDS
+	// client are delivered.
+	ResourceErrorCh chan struct{}
 }
 
-// OnUpdate is invoked by the xDS client to report the latest update on the resource
-// being watched.
-func (w *TestResourceWatcher) OnUpdate(data xdsresource.ResourceData, onDone xdsresource.OnDoneFunc) {
+// ResourceChanged is invoked by the xDS client to report the latest update.
+func (w *TestResourceWatcher) ResourceChanged(data xdsresource.ResourceData, onDone func()) {
 	defer onDone()
 	select {
 	case <-w.UpdateCh:
 	default:
 	}
 	w.UpdateCh <- &data
+
 }
 
-// OnError is invoked by the xDS client to report the latest error.
-func (w *TestResourceWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+// ResourceError is invoked by the xDS client to report the latest error to
+// stop watching the resource.
+func (w *TestResourceWatcher) ResourceError(err error, onDone func()) {
 	defer onDone()
 	select {
-	case <-w.ErrorCh:
+	case <-w.ResourceErrorCh:
+	case <-w.AmbientErrorCh:
 	default:
 	}
-	w.ErrorCh <- err
+	w.AmbientErrorCh <- err
+	w.ResourceErrorCh <- struct{}{}
 }
 
-// OnResourceDoesNotExist is used by the xDS client to report that the resource
-// being watched no longer exists.
-func (w *TestResourceWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+// AmbientError is invoked by the xDS client to report the latest ambient
+// error.
+func (w *TestResourceWatcher) AmbientError(err error, onDone func()) {
 	defer onDone()
 	select {
-	case <-w.ResourceDoesNotExistCh:
+	case <-w.AmbientErrorCh:
 	default:
 	}
-	w.ResourceDoesNotExistCh <- struct{}{}
+	w.AmbientErrorCh <- err
 }
 
 // NewTestResourceWatcher returns a TestResourceWatcher to watch for resources
 // via the xDS client.
 func NewTestResourceWatcher() *TestResourceWatcher {
 	return &TestResourceWatcher{
-		UpdateCh:               make(chan *xdsresource.ResourceData, 1),
-		ErrorCh:                make(chan error, 1),
-		ResourceDoesNotExistCh: make(chan struct{}, 1),
+		UpdateCh:        make(chan *xdsresource.ResourceData, 1),
+		AmbientErrorCh:  make(chan error, 1),
+		ResourceErrorCh: make(chan struct{}, 1),
 	}
 }

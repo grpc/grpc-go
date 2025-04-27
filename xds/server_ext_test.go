@@ -84,8 +84,12 @@ type servingModeChangeHandler struct {
 	logger interface {
 		Logf(format string, args ...any)
 	}
-	modeCh chan connectivity.ServingMode
-	errCh  chan error
+	// Access to the below fields are guarded by this mutex.
+	mu          sync.Mutex
+	modeCh      chan connectivity.ServingMode
+	errCh       chan error
+	currentMode connectivity.ServingMode
+	currentErr  error
 }
 
 func newServingModeChangeHandler(t *testing.T) *servingModeChangeHandler {
@@ -97,11 +101,24 @@ func newServingModeChangeHandler(t *testing.T) *servingModeChangeHandler {
 }
 
 func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.ServingModeChangeArgs) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Suppress pushing duplicate mode change and error if the mode is staying
+	// in NOT_SERVING and the error is the same.
+	//
+	// TODO(purnesh42h): Should we move this check to listener wrapper? This
+	// shouldn't happen in practice a lot. But we never know what kind of
+	// management servers users run.
+	if m.currentMode == args.Mode && m.currentMode == connectivity.ServingModeNotServing && m.currentErr.Error() == args.Err.Error() {
+		return
+	}
 	m.logger.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 	m.modeCh <- args.Mode
+	m.currentMode = args.Mode
 	if args.Err != nil {
 		m.errCh <- args.Err
 	}
+	m.currentErr = args.Err
 }
 
 // createStubServer creates a new xDS-enabled gRPC server and returns a
