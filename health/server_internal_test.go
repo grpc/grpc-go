@@ -134,7 +134,7 @@ func (s) TestListResourceExhausted(t *testing.T) {
 	s := NewServer()
 
 	// Fill out status map with service information,
-	//101 (100 + 1 existing) elements will trigger an error.
+	// 101 (100 + 1 existing) elements will trigger an error.
 	for i := 1; i <= maxAllowedServices; i++ {
 		s.SetServingStatus(fmt.Sprintf("%d", i),
 			healthpb.HealthCheckResponse_SERVING)
