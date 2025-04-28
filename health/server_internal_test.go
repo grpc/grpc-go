@@ -97,7 +97,7 @@ func (s) TestList(t *testing.T) {
 
 	// Fill out status map with information
 	const length = 3
-	for i := 0; i <= length-1; i++ {
+	for i := 0; i < length; i++ {
 		s.SetServingStatus(fmt.Sprintf("%d", i),
 			healthpb.HealthCheckResponse_ServingStatus(i))
 	}
