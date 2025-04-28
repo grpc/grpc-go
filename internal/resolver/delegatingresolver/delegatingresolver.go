@@ -187,7 +187,7 @@ func (r *delegatingResolver) Close() {
 func networkTypeFromAddr(addr resolver.Address) string {
 	networkType, ok := networktype.Get(addr)
 	if !ok {
-		networkType, addr.Addr = transport.ParseDialTarget(addr.Addr)
+		networkType, _ = transport.ParseDialTarget(addr.Addr)
 	}
 	return networkType
 }
@@ -237,7 +237,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		proxyAddr = resolver.Address{Addr: r.proxyURL.Host}
 	}
 	var addresses []resolver.Address
-	for _, targetAddr := range r.targetResolverState.Addresses {
+	for _, targetAddr := range (*r.targetResolverState).Addresses {
 		// Avoid proxy when network is not tcp.
 		if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" {
 			addresses = append(addresses, targetAddr)
@@ -257,7 +257,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	// list of addresses is then grouped into endpoints, covering all
 	// combinations of proxy and target endpoints.
 	var endpoints []resolver.Endpoint
-	for _, endpt := range r.targetResolverState.Endpoints {
+	for _, endpt := range (*r.targetResolverState).Endpoints {
 		var addrs []resolver.Address
 		for _, targetAddr := range endpt.Addresses {
 			// Avoid proxy when network is not tcp.
@@ -355,7 +355,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 			if _, ok := r.proxyResolver.(nopResolver); ok {
 				var err error
 				if r.proxyResolver, err = r.proxyURIResolver(resolver.BuildOptions{}); err != nil {
-					r.cc.ReportError(err)
+					r.cc.ReportError(fmt.Errorf("delegating_resolver: unable to build the proxy resolver: %v", err))
 				}
 			}
 		}()
