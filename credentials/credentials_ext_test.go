@@ -247,22 +247,22 @@ func (c *testCreds) OverrideServerName(serverName string) error {
 // cases are expected to fail with `UNAVAILABLE` status code.
 func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 	tests := []struct {
-		name         string
-		creds        credentials.TransportCredentials
-		authority string
-		wantStatus   codes.Code
+		name       string
+		creds      credentials.TransportCredentials
+		authority  string
+		wantStatus codes.Code
 	}{
 		{
-			name:         "IncorrectAuthorityWithFakeCreds",
-			authority: "auth.example.com",
-			creds:        &testCreds{WithValidator: true, Authority: "auth.test.example.com"},
-			wantStatus:   codes.Unavailable,
+			name:       "IncorrectAuthorityWithFakeCreds",
+			authority:  "auth.example.com",
+			creds:      &testCreds{WithValidator: true, Authority: "auth.test.example.com"},
+			wantStatus: codes.Unavailable,
 		},
 		{
-			name:         "FakeCredsWithNoAuthValidator",
-			creds:        &testCreds{WithValidator: false},
-			authority: "auth.test.example.com",
-			wantStatus:   codes.Unavailable,
+			name:       "FakeCredsWithNoAuthValidator",
+			creds:      &testCreds{WithValidator: false},
+			authority:  "auth.test.example.com",
+			wantStatus: codes.Unavailable,
 		},
 	}
 	for _, tt := range tests {
