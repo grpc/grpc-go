@@ -128,11 +128,11 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		state := resolver.State{
+		r.targetResolverState = &resolver.State{
 			Addresses: []resolver.Address{{Addr: target.Endpoint()}},
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
 		}
-		r.targetResolverState = &state
+		// r.targetResolverState = &state
 		r.updateTargetResolverState(*r.targetResolverState)
 		return r, nil
 	}
@@ -184,23 +184,23 @@ func (r *delegatingResolver) Close() {
 	r.proxyResolver = nil
 }
 
-func networkTypeFromAddr(addr resolver.Address) (string, resolver.Address) {
+func networkTypeFromAddr(addr resolver.Address) string {
 	networkType, ok := networktype.Get(addr)
 	if !ok {
 		networkType, addr.Addr = transport.ParseDialTarget(addr.Addr)
 	}
-	return networkType, addr
+	return networkType
 }
 
-func tcpAddressPresent(state *resolver.State) bool {
+func isTCPAddressPresent(state *resolver.State) bool {
 	for _, addr := range state.Addresses {
-		if networkType, _ := networkTypeFromAddr(addr); networkType == "tcp" {
+		if networkType := networkTypeFromAddr(addr); networkType == "tcp" {
 			return true
 		}
 	}
 	for _, endpoint := range state.Endpoints {
 		for _, addr := range endpoint.Addresses {
-			if networktype, _ := networkTypeFromAddr(addr); networktype == "tcp" {
+			if networktype := networkTypeFromAddr(addr); networktype == "tcp" {
 				return true
 			}
 		}
@@ -221,7 +221,6 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		return nil
 	}
 
-	curState := *r.targetResolverState
 	// If multiple resolved proxy addresses are present, we send only the
 	// unresolved proxy host and let net.Dial handle the proxy host name
 	// resolution when creating the transport. Sending all resolved addresses
@@ -238,9 +237,9 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		proxyAddr = resolver.Address{Addr: r.proxyURL.Host}
 	}
 	var addresses []resolver.Address
-	for _, targetAddr := range curState.Addresses {
+	for _, targetAddr := range r.targetResolverState.Addresses {
 		// Avoid proxy when network is not tcp.
-		if networkType, targetAddr := networkTypeFromAddr(targetAddr); networkType != "tcp" {
+		if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" {
 			addresses = append(addresses, targetAddr)
 			continue
 		}
@@ -258,11 +257,11 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	// list of addresses is then grouped into endpoints, covering all
 	// combinations of proxy and target endpoints.
 	var endpoints []resolver.Endpoint
-	for _, endpt := range curState.Endpoints {
+	for _, endpt := range r.targetResolverState.Endpoints {
 		var addrs []resolver.Address
 		for _, targetAddr := range endpt.Addresses {
 			// Avoid proxy when network is not tcp.
-			if networkType, targetAddr := networkTypeFromAddr(targetAddr); networkType != "tcp" {
+			if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" {
 				addrs = append(addrs, targetAddr)
 				continue
 			}
@@ -279,6 +278,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	// contents. The state update is only sent after both the target and proxy
 	// resolvers have sent their updates, and curState has been updated with the
 	// combined addresses.
+	curState := *r.targetResolverState
 	curState.Addresses = addresses
 	curState.Endpoints = endpoints
 	return r.cc.UpdateState(curState)
@@ -344,7 +344,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	r.targetResolverState = &state
 	// If no addresses returned by resolver have network type as tcp , do not
 	// wait for proxy update.
-	if !tcpAddressPresent(r.targetResolverState) {
+	if !isTCPAddressPresent(r.targetResolverState) {
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
@@ -353,7 +353,10 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 			r.childMu.Lock()
 			defer r.childMu.Unlock()
 			if _, ok := r.proxyResolver.(nopResolver); ok {
-				r.proxyResolver, _ = r.proxyURIResolver(resolver.BuildOptions{})
+				var err error
+				if r.proxyResolver, err = r.proxyURIResolver(resolver.BuildOptions{}); err != nil {
+					r.cc.ReportError(err)
+				}
 			}
 		}()
 	}
