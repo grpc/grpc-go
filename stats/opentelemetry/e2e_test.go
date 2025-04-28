@@ -1726,24 +1726,11 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 	}
 
 	const numMessages = 3
+	var wantOutboundEvents, wantInboundEvents []trace.Event
 	for i := range numMessages {
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 			t.Fatalf("stream.Send() failed at message %d: %v", i, err)
 		}
-	}
-	stream.CloseSend()
-	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("stream.Recv received an unexpected error: %v", err)
-		}
-	}
-
-	var wantOutboundEvents, wantInboundEvents []trace.Event
-	for i := 0; i < numMessages; i++ {
 		wantOutboundEvents = append(wantOutboundEvents, trace.Event{
 			Name: "Outbound message",
 			Attributes: []attribute.KeyValue{
@@ -1758,6 +1745,16 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 				attribute.Int("message-size", 0),
 			},
 		})
+	}
+	stream.CloseSend()
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("stream.Recv received an unexpected error: %v", err)
+		}
 	}
 
 	wantSpanInfos := []traceSpanInfo{
