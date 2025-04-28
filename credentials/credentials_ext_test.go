@@ -49,7 +49,7 @@ func authorityChecker(ctx context.Context, wantAuthority string) error {
 		return status.Error(codes.InvalidArgument, "no authority header")
 	}
 	if len(auths) != 1 {
-		return status.Errorf(codes.InvalidArgument, "expected exactly one :authority header, got %v", auths)
+		return status.Errorf(codes.InvalidArgument, "expected exactly one authority header, got %v", auths)
 	}
 	if auths[0] != wantAuthority {
 		return status.Errorf(codes.InvalidArgument, "invalid authority header %q, want %q", auths[0], wantAuthority)
@@ -57,7 +57,7 @@ func authorityChecker(ctx context.Context, wantAuthority string) error {
 	return nil
 }
 
-// Tests the grpc.CallAuthority option with TLS credentials. This test verifies
+// Tests the `grpc.CallAuthority` option with TLS credentials. This test verifies
 // that the provided authority is correctly propagated to the server when a
 // correct authority is used.
 func (s) TestCorrectAuthorityWithTLSCreds(t *testing.T) {
@@ -69,10 +69,10 @@ func (s) TestCorrectAuthorityWithTLSCreds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	expectedAuth := "auth.test.example.com"
+	authority := "auth.test.example.com"
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			if err := authorityChecker(ctx, expectedAuth); err != nil {
+			if err := authorityChecker(ctx, authority); err != nil {
 				return nil, err
 			}
 			return &testpb.Empty{}, nil
@@ -92,13 +92,13 @@ func (s) TestCorrectAuthorityWithTLSCreds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(expectedAuth)); status.Code(err) != codes.OK {
+	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); status.Code(err) != codes.OK {
 		t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.OK)
 	}
 
 }
 
-// Tests the grpc.CallAuthority option with TLS credentials. This test verifies
+// Tests the `grpc.CallAuthority` option with TLS credentials. This test verifies
 // that the RPC fails with `UNAVAILABLE` status code and doesn't reach the server
 // when an incorrect authority is used.
 func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
@@ -110,7 +110,7 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create credentials %v", err)
 	}
-	expectedAuth := "auth.example.com"
+	authority := "auth.example.com"
 	serverCalled := make(chan struct{})
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -132,12 +132,12 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(expectedAuth)); status.Code(err) != codes.Unavailable {
+	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); status.Code(err) != codes.Unavailable {
 		t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.Unavailable)
 	}
 	select {
 	case <-serverCalled:
-		t.Fatalf("Server should not have been called")
+		t.Fatalf("Server handler should not have been called")
 	case <-time.After(defaultTestShortTimeout):
 	}
 }
@@ -146,11 +146,11 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 // insecure transport credentials. The test verifies that the specified
 // authority is correctly propagated to the server.
 func (s) TestAuthorityCallOptionWithInsecureCreds(t *testing.T) {
-	const wantAuthority = "test.server.name"
+	authority := "test.server.name"
 
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			if err := authorityChecker(ctx, wantAuthority); err != nil {
+			if err := authorityChecker(ctx, authority); err != nil {
 				return nil, err
 			}
 			return &testpb.Empty{}, nil
@@ -169,7 +169,7 @@ func (s) TestAuthorityCallOptionWithInsecureCreds(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(wantAuthority)); err != nil {
+	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); err != nil {
 		t.Fatalf("EmptyCall() rpc failed: %v", err)
 	}
 }
@@ -249,19 +249,19 @@ func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 	tests := []struct {
 		name         string
 		creds        credentials.TransportCredentials
-		expectedAuth string
+		authority string
 		wantStatus   codes.Code
 	}{
 		{
 			name:         "IncorrectAuthorityWithFakeCreds",
-			expectedAuth: "auth.example.com",
+			authority: "auth.example.com",
 			creds:        &testCreds{WithValidator: true, Authority: "auth.test.example.com"},
 			wantStatus:   codes.Unavailable,
 		},
 		{
 			name:         "FakeCredsWithNoAuthValidator",
 			creds:        &testCreds{WithValidator: false},
-			expectedAuth: "auth.test.example.com",
+			authority: "auth.test.example.com",
 			wantStatus:   codes.Unavailable,
 		},
 	}
@@ -287,7 +287,7 @@ func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.expectedAuth)); status.Code(err) != tt.wantStatus {
+			if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority)); status.Code(err) != tt.wantStatus {
 				t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), tt.wantStatus)
 			}
 			select {
@@ -304,11 +304,11 @@ func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 // option using custom credentials. It verifies that the provided authority is
 // correctly propagated to the server when a correct authority is used.
 func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
-	expectedAuth := "auth.test.example.com"
+	authority := "auth.test.example.com"
 	creds := &testCreds{WithValidator: true, Authority: "auth.test.example.com"}
 	ss := stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			if err := authorityChecker(ctx, expectedAuth); err != nil {
+			if err := authorityChecker(ctx, authority); err != nil {
 				return nil, err
 			}
 			return &testpb.Empty{}, nil
@@ -327,7 +327,7 @@ func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(expectedAuth)); status.Code(err) != codes.OK {
+	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); status.Code(err) != codes.OK {
 		t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.OK)
 	}
 }
