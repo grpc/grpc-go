@@ -22,13 +22,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
-	"sync"
-	"testing"
-	"time"
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal/grpctest"
@@ -93,16 +94,12 @@ func (s) TestShutdown(t *testing.T) {
 // maxAllowedLimits
 func (s) TestList(t *testing.T) {
 	s := NewServer()
-	s.mu.Lock()
-	// Remove the zero value
-	delete(s.statusMap, "")
-	s.mu.Unlock()
 
 	// Fill out status map with information
 	const length = 3
-	for i := 1; i <= length; i++ {
+	for i := 0; i <= length-1; i++ {
 		s.SetServingStatus(fmt.Sprintf("%d", i),
-			healthpb.HealthCheckResponse_SERVING)
+			healthpb.HealthCheckResponse_ServingStatus(i))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -113,19 +110,20 @@ func (s) TestList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("s.List(ctx, &in) returned err %v, want nil", err)
 	}
-	if len(got.GetStatuses()) != length {
+	if len(got.GetStatuses()) != length+1 {
 		t.Fatalf("len(out.GetStatuses()) = %d, want %d",
-			len(got.GetStatuses()), length)
+			len(got.GetStatuses()), length+1)
 	}
 	want := &healthpb.HealthListResponse{
 		Statuses: map[string]*healthpb.HealthCheckResponse{
+			"":  {Status: healthpb.HealthCheckResponse_SERVING},
+			"0": {Status: healthpb.HealthCheckResponse_UNKNOWN},
 			"1": {Status: healthpb.HealthCheckResponse_SERVING},
-			"2": {Status: healthpb.HealthCheckResponse_SERVING},
-			"3": {Status: healthpb.HealthCheckResponse_SERVING},
+			"2": {Status: healthpb.HealthCheckResponse_NOT_SERVING},
 		},
 	}
 	if diff := cmp.Diff(got, want, protocmp.Transform()); diff != "" {
-		t.Fatalf("....: %s", diff)
+		t.Fatalf("Health response did not match expectation.  Diff (-got, +want): %s", diff)
 	}
 }
 
@@ -134,13 +132,10 @@ func (s) TestList(t *testing.T) {
 // maxAllowedServices.
 func (s) TestListResourceExhausted(t *testing.T) {
 	s := NewServer()
-	s.mu.Lock()
-	// Remove the zero value
-	delete(s.statusMap, "")
-	s.mu.Unlock()
 
-	// Fill out status map with service information, 101 elements will trigger an error.
-	for i := 1; i <= maxAllowedServices+1; i++ {
+	// Fill out status map with service information,
+	//101 (100 + 1 existing) elements will trigger an error.
+	for i := 1; i <= maxAllowedServices; i++ {
 		s.SetServingStatus(fmt.Sprintf("%d", i),
 			healthpb.HealthCheckResponse_SERVING)
 	}
