@@ -366,8 +366,9 @@ func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
 }
 func (o MaxRecvMsgSizeCallOption) after(*callInfo, *csAttempt) {}
 
-// CallAuthority creates a CallOption that sets the HTTP/2 :authority header of
-// an RPC to the specified value.
+// CallAuthority returns a CallOption that sets the HTTP/2 :authority header of
+// an RPC to the specified value. When using CallAuthority, the credentials in
+// use must implement the AuthorityValidator interface.
 //
 // # Experimental
 //

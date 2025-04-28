@@ -71,6 +71,8 @@ func (info) AuthType() string {
 	return "insecure"
 }
 
+// ValidateAuthority allows any value to be overridden for the :authority
+// header.
 func (info) ValidateAuthority(string) error {
 	return nil
 }

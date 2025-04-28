@@ -130,8 +130,7 @@ type AuthorityValidator interface {
 	// `:authority` header. The authority parameter is the override value
 	// provided by the application via the CallAuthority option. This value
 	// typically corresponds to the server hostname or endpoint the RPC is
-	// targeting. It returns nil if the validation succeeds, and a non-nil error
-	// if the validation fails.
+	// targeting. It returns non-nil error if the validation fails.
 	ValidateAuthority(authority string) error
 }
 

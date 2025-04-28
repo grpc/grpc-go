@@ -758,10 +758,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*ClientS
 	if callHdr.Authority != "" {
 		auth, ok := t.authInfo.(credentials.AuthorityValidator)
 		if !ok {
-			return nil, &NewStreamError{Err: status.Error(codes.Unavailable, fmt.Sprintf("credentials type %s does not implement the AuthorityValidator interface, but authority override specified with CallAuthority call option", t.authInfo.AuthType()))}
+			return nil, &NewStreamError{Err: status.Errorf(codes.Unavailable, "credentials type %q does not implement the AuthorityValidator interface, but authority override specified with CallAuthority call option", t.authInfo.AuthType())}
 		}
 		if err := auth.ValidateAuthority(callHdr.Authority); err != nil {
-			return nil, &NewStreamError{Err: status.Error(codes.Unavailable, fmt.Sprintf("failed to validate authority %s : %s", callHdr.Authority, err))}
+			return nil, &NewStreamError{Err: status.Errorf(codes.Unavailable, "failed to validate authority %q : %v", callHdr.Authority, err)}
 		}
 		newCallHdr := *callHdr
 		newCallHdr.Host = callHdr.Authority

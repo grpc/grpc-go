@@ -51,10 +51,9 @@ func (t TLSInfo) AuthType() string {
 	return "tls"
 }
 
-// ValidateAuthority validates that the provided authority being used to
-// override the :authority header is valid by verifying it against the peer
-// certificates. It returns nil on successful validation, or a non-nil error if
-// the validation fails.
+// ValidateAuthority validates the provided authority being used to override the
+// :authority header by verifying it against the peer certificates. It returns a
+// non-nil error if the validation fails.
 func (t TLSInfo) ValidateAuthority(authority string) error {
 	var errs []error
 	for _, cert := range t.State.PeerCertificates {
@@ -64,7 +63,7 @@ func (t TLSInfo) ValidateAuthority(authority string) error {
 		}
 		errs = append(errs, err)
 	}
-	return fmt.Errorf("credentials: invalid authority %q: %w", authority, errors.Join(errs...))
+	return fmt.Errorf("credentials: invalid authority %q: %v", authority, errors.Join(errs...))
 }
 
 // cipherSuiteLookup returns the string version of a TLS cipher suite ID.
