@@ -1727,12 +1727,7 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 
 	const numMessages = 3
 	for i := range numMessages {
-		if err := stream.Send(&testpb.StreamingOutputCallRequest{
-			ResponseType: testpb.PayloadType_COMPRESSABLE,
-			ResponseParameters: []*testpb.ResponseParameters{
-				{Size: 10},
-			},
-		}); err != nil {
+		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 			t.Fatalf("stream.Send() failed at message %d: %v", i, err)
 		}
 	}
@@ -1747,48 +1742,52 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 		}
 	}
 
-	createMessageEvents := func(name string) []trace.Event {
-		var events []trace.Event
-		for i := 0; i < numMessages; i++ {
-			events = append(events, trace.Event{
-				Name: name,
-				Attributes: []attribute.KeyValue{
-					attribute.Int("sequence-number", i),
-					attribute.Int("message-size", 4),
-				},
-			})
-		}
-		return events
+	var wantOutboundEvents, wantInboundEvents []trace.Event
+	for i := 0; i < numMessages; i++ {
+		wantOutboundEvents = append(wantOutboundEvents, trace.Event{
+			Name: "Outbound message",
+			Attributes: []attribute.KeyValue{
+				attribute.Int("sequence-number", i),
+				attribute.Int("message-size", 0),
+			},
+		})
+		wantInboundEvents = append(wantInboundEvents, trace.Event{
+			Name: "Inbound message",
+			Attributes: []attribute.KeyValue{
+				attribute.Int("sequence-number", i),
+				attribute.Int("message-size", 0),
+			},
+		})
 	}
 
 	wantSpanInfos := []traceSpanInfo{
 		{
+			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			events:     nil,
+			attributes: nil,
+		},
+		{
 			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
 			spanKind: oteltrace.SpanKindServer.String(),
+			events:   wantInboundEvents,
 			attributes: []attribute.KeyValue{
 				attribute.Bool("Client", false),
 				attribute.Bool("FailFast", false),
 				attribute.Int("previous-rpc-attempts", 0),
 				attribute.Bool("transparent-retry", false),
 			},
-			events: createMessageEvents("Inbound message"),
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
 			spanKind: oteltrace.SpanKindInternal.String(),
+			events:   wantOutboundEvents,
 			attributes: []attribute.KeyValue{
 				attribute.Bool("Client", true),
 				attribute.Bool("FailFast", true),
 				attribute.Int("previous-rpc-attempts", 0),
 				attribute.Bool("transparent-retry", false),
 			},
-			events: createMessageEvents("Outbound message"),
-		},
-		{
-			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
-			attributes: nil,
-			events:     nil,
 		},
 	}
 
