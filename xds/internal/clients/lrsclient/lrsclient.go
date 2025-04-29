@@ -146,7 +146,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
-		if c.lrsRefs[serverIdentifier] == 0 {
+		if r, ok := c.lrsRefs[serverIdentifier]; !ok || r == 0 {
 			c.logger.Errorf("Attempting to stop already stopped StreamImpl")
 			return
 		}
