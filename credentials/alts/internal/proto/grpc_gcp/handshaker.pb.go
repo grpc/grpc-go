@@ -331,9 +331,11 @@ type StartClientHandshakeReq struct {
 	// ALTS connections. The access token that should be used to authenticate to
 	// the peer. The access token MUST be strongly bound to the ALTS credentials
 	// used to establish the connection that the token is sent over.
-	AccessToken   string `protobuf:"bytes,11,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	AccessToken string `protobuf:"bytes,11,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	// (Optional) Ordered transport protocol preferences supported by the client.
+	TransportProtocolPreferences *TransportProtocolPreferences `protobuf:"bytes,12,opt,name=transport_protocol_preferences,json=transportProtocolPreferences,proto3" json:"transport_protocol_preferences,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *StartClientHandshakeReq) Reset() {
@@ -443,6 +445,13 @@ func (x *StartClientHandshakeReq) GetAccessToken() string {
 	return ""
 }
 
+func (x *StartClientHandshakeReq) GetTransportProtocolPreferences() *TransportProtocolPreferences {
+	if x != nil {
+		return x.TransportProtocolPreferences
+	}
+	return nil
+}
+
 type ServerHandshakeParameters struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The record protocols supported by the server, e.g.,
@@ -534,9 +543,11 @@ type StartServerHandshakeReq struct {
 	// (Optional) RPC protocol versions supported by the server.
 	RpcVersions *RpcProtocolVersions `protobuf:"bytes,6,opt,name=rpc_versions,json=rpcVersions,proto3" json:"rpc_versions,omitempty"`
 	// (Optional) Maximum frame size supported by the server.
-	MaxFrameSize  uint32 `protobuf:"varint,7,opt,name=max_frame_size,json=maxFrameSize,proto3" json:"max_frame_size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MaxFrameSize uint32 `protobuf:"varint,7,opt,name=max_frame_size,json=maxFrameSize,proto3" json:"max_frame_size,omitempty"`
+	// (Optional) Transport protocol preferences supported by the server.
+	TransportProtocolPreferences *TransportProtocolPreferences `protobuf:"bytes,8,opt,name=transport_protocol_preferences,json=transportProtocolPreferences,proto3" json:"transport_protocol_preferences,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *StartServerHandshakeReq) Reset() {
@@ -616,6 +627,13 @@ func (x *StartServerHandshakeReq) GetMaxFrameSize() uint32 {
 		return x.MaxFrameSize
 	}
 	return 0
+}
+
+func (x *StartServerHandshakeReq) GetTransportProtocolPreferences() *TransportProtocolPreferences {
+	if x != nil {
+		return x.TransportProtocolPreferences
+	}
+	return nil
 }
 
 type NextHandshakeMessageReq struct {
@@ -798,9 +816,11 @@ type HandshakerResult struct {
 	// The RPC protocol versions supported by the peer.
 	PeerRpcVersions *RpcProtocolVersions `protobuf:"bytes,7,opt,name=peer_rpc_versions,json=peerRpcVersions,proto3" json:"peer_rpc_versions,omitempty"`
 	// The maximum frame size of the peer.
-	MaxFrameSize  uint32 `protobuf:"varint,8,opt,name=max_frame_size,json=maxFrameSize,proto3" json:"max_frame_size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MaxFrameSize uint32 `protobuf:"varint,8,opt,name=max_frame_size,json=maxFrameSize,proto3" json:"max_frame_size,omitempty"`
+	// (Optional) The transport protocol negotiated for this connection.
+	TransportProtocol *NegotiatedTransportProtocol `protobuf:"bytes,9,opt,name=transport_protocol,json=transportProtocol,proto3" json:"transport_protocol,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *HandshakerResult) Reset() {
@@ -887,6 +907,13 @@ func (x *HandshakerResult) GetMaxFrameSize() uint32 {
 		return x.MaxFrameSize
 	}
 	return 0
+}
+
+func (x *HandshakerResult) GetTransportProtocol() *NegotiatedTransportProtocol {
+	if x != nil {
+		return x.TransportProtocol
+	}
+	return nil
 }
 
 type HandshakerStatus struct {
@@ -1041,7 +1068,7 @@ const file_grpc_gcp_handshaker_proto_rawDesc = "" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x10\n" +
-	"\x0eidentity_oneof\"\xfb\x04\n" +
+	"\x0eidentity_oneof\"\xe9\x05\n" +
 	"\x17StartClientHandshakeReq\x12[\n" +
 	"\x1bhandshake_security_protocol\x18\x01 \x01(\x0e2\x1b.grpc.gcp.HandshakeProtocolR\x19handshakeSecurityProtocol\x123\n" +
 	"\x15application_protocols\x18\x02 \x03(\tR\x14applicationProtocols\x12)\n" +
@@ -1055,12 +1082,13 @@ const file_grpc_gcp_handshaker_proto_rawDesc = "" +
 	"\frpc_versions\x18\t \x01(\v2\x1d.grpc.gcp.RpcProtocolVersionsR\vrpcVersions\x12$\n" +
 	"\x0emax_frame_size\x18\n" +
 	" \x01(\rR\fmaxFrameSize\x12&\n" +
-	"\faccess_token\x18\v \x01(\tB\x03\x80\x01\x01R\vaccessToken\"\xaf\x01\n" +
+	"\faccess_token\x18\v \x01(\tB\x03\x80\x01\x01R\vaccessToken\x12l\n" +
+	"\x1etransport_protocol_preferences\x18\f \x01(\v2&.grpc.gcp.TransportProtocolPreferencesR\x1ctransportProtocolPreferences\"\xaf\x01\n" +
 	"\x19ServerHandshakeParameters\x12)\n" +
 	"\x10record_protocols\x18\x01 \x03(\tR\x0frecordProtocols\x12=\n" +
 	"\x10local_identities\x18\x02 \x03(\v2\x12.grpc.gcp.IdentityR\x0flocalIdentities\x12\x1e\n" +
 	"\x05token\x18\x03 \x01(\tB\x03\x80\x01\x01H\x00R\x05token\x88\x01\x01B\b\n" +
-	"\x06_token\"\xa5\x04\n" +
+	"\x06_token\"\x93\x05\n" +
 	"\x17StartServerHandshakeReq\x123\n" +
 	"\x15application_protocols\x18\x01 \x03(\tR\x14applicationProtocols\x12m\n" +
 	"\x14handshake_parameters\x18\x02 \x03(\v2:.grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntryR\x13handshakeParameters\x12\x19\n" +
@@ -1068,7 +1096,8 @@ const file_grpc_gcp_handshaker_proto_rawDesc = "" +
 	"\x0elocal_endpoint\x18\x04 \x01(\v2\x12.grpc.gcp.EndpointR\rlocalEndpoint\x12;\n" +
 	"\x0fremote_endpoint\x18\x05 \x01(\v2\x12.grpc.gcp.EndpointR\x0eremoteEndpoint\x12@\n" +
 	"\frpc_versions\x18\x06 \x01(\v2\x1d.grpc.gcp.RpcProtocolVersionsR\vrpcVersions\x12$\n" +
-	"\x0emax_frame_size\x18\a \x01(\rR\fmaxFrameSize\x1ak\n" +
+	"\x0emax_frame_size\x18\a \x01(\rR\fmaxFrameSize\x12l\n" +
+	"\x1etransport_protocol_preferences\x18\b \x01(\v2&.grpc.gcp.TransportProtocolPreferencesR\x1ctransportProtocolPreferences\x1ak\n" +
 	"\x18HandshakeParametersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x129\n" +
 	"\x05value\x18\x02 \x01(\v2#.grpc.gcp.ServerHandshakeParametersR\x05value:\x028\x01\"b\n" +
@@ -1079,7 +1108,7 @@ const file_grpc_gcp_handshaker_proto_rawDesc = "" +
 	"\fclient_start\x18\x01 \x01(\v2!.grpc.gcp.StartClientHandshakeReqH\x00R\vclientStart\x12F\n" +
 	"\fserver_start\x18\x02 \x01(\v2!.grpc.gcp.StartServerHandshakeReqH\x00R\vserverStart\x127\n" +
 	"\x04next\x18\x03 \x01(\v2!.grpc.gcp.NextHandshakeMessageReqH\x00R\x04nextB\v\n" +
-	"\treq_oneof\"\x9a\x03\n" +
+	"\treq_oneof\"\xf0\x03\n" +
 	"\x10HandshakerResult\x121\n" +
 	"\x14application_protocol\x18\x01 \x01(\tR\x13applicationProtocol\x12'\n" +
 	"\x0frecord_protocol\x18\x02 \x01(\tR\x0erecordProtocol\x12\x19\n" +
@@ -1088,7 +1117,8 @@ const file_grpc_gcp_handshaker_proto_rawDesc = "" +
 	"\x0elocal_identity\x18\x05 \x01(\v2\x12.grpc.gcp.IdentityR\rlocalIdentity\x12*\n" +
 	"\x11keep_channel_open\x18\x06 \x01(\bR\x0fkeepChannelOpen\x12I\n" +
 	"\x11peer_rpc_versions\x18\a \x01(\v2\x1d.grpc.gcp.RpcProtocolVersionsR\x0fpeerRpcVersions\x12$\n" +
-	"\x0emax_frame_size\x18\b \x01(\rR\fmaxFrameSize\"@\n" +
+	"\x0emax_frame_size\x18\b \x01(\rR\fmaxFrameSize\x12T\n" +
+	"\x12transport_protocol\x18\t \x01(\v2%.grpc.gcp.NegotiatedTransportProtocolR\x11transportProtocol\"@\n" +
 	"\x10HandshakerStatus\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\rR\x04code\x12\x18\n" +
 	"\adetails\x18\x02 \x01(\tR\adetails\"\xbe\x01\n" +
@@ -1125,21 +1155,23 @@ func file_grpc_gcp_handshaker_proto_rawDescGZIP() []byte {
 var file_grpc_gcp_handshaker_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_grpc_gcp_handshaker_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_grpc_gcp_handshaker_proto_goTypes = []any{
-	(HandshakeProtocol)(0),            // 0: grpc.gcp.HandshakeProtocol
-	(NetworkProtocol)(0),              // 1: grpc.gcp.NetworkProtocol
-	(*Endpoint)(nil),                  // 2: grpc.gcp.Endpoint
-	(*Identity)(nil),                  // 3: grpc.gcp.Identity
-	(*StartClientHandshakeReq)(nil),   // 4: grpc.gcp.StartClientHandshakeReq
-	(*ServerHandshakeParameters)(nil), // 5: grpc.gcp.ServerHandshakeParameters
-	(*StartServerHandshakeReq)(nil),   // 6: grpc.gcp.StartServerHandshakeReq
-	(*NextHandshakeMessageReq)(nil),   // 7: grpc.gcp.NextHandshakeMessageReq
-	(*HandshakerReq)(nil),             // 8: grpc.gcp.HandshakerReq
-	(*HandshakerResult)(nil),          // 9: grpc.gcp.HandshakerResult
-	(*HandshakerStatus)(nil),          // 10: grpc.gcp.HandshakerStatus
-	(*HandshakerResp)(nil),            // 11: grpc.gcp.HandshakerResp
-	nil,                               // 12: grpc.gcp.Identity.AttributesEntry
-	nil,                               // 13: grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntry
-	(*RpcProtocolVersions)(nil),       // 14: grpc.gcp.RpcProtocolVersions
+	(HandshakeProtocol)(0),               // 0: grpc.gcp.HandshakeProtocol
+	(NetworkProtocol)(0),                 // 1: grpc.gcp.NetworkProtocol
+	(*Endpoint)(nil),                     // 2: grpc.gcp.Endpoint
+	(*Identity)(nil),                     // 3: grpc.gcp.Identity
+	(*StartClientHandshakeReq)(nil),      // 4: grpc.gcp.StartClientHandshakeReq
+	(*ServerHandshakeParameters)(nil),    // 5: grpc.gcp.ServerHandshakeParameters
+	(*StartServerHandshakeReq)(nil),      // 6: grpc.gcp.StartServerHandshakeReq
+	(*NextHandshakeMessageReq)(nil),      // 7: grpc.gcp.NextHandshakeMessageReq
+	(*HandshakerReq)(nil),                // 8: grpc.gcp.HandshakerReq
+	(*HandshakerResult)(nil),             // 9: grpc.gcp.HandshakerResult
+	(*HandshakerStatus)(nil),             // 10: grpc.gcp.HandshakerStatus
+	(*HandshakerResp)(nil),               // 11: grpc.gcp.HandshakerResp
+	nil,                                  // 12: grpc.gcp.Identity.AttributesEntry
+	nil,                                  // 13: grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntry
+	(*RpcProtocolVersions)(nil),          // 14: grpc.gcp.RpcProtocolVersions
+	(*TransportProtocolPreferences)(nil), // 15: grpc.gcp.TransportProtocolPreferences
+	(*NegotiatedTransportProtocol)(nil),  // 16: grpc.gcp.NegotiatedTransportProtocol
 }
 var file_grpc_gcp_handshaker_proto_depIdxs = []int32{
 	1,  // 0: grpc.gcp.Endpoint.protocol:type_name -> grpc.gcp.NetworkProtocol
@@ -1150,27 +1182,30 @@ var file_grpc_gcp_handshaker_proto_depIdxs = []int32{
 	2,  // 5: grpc.gcp.StartClientHandshakeReq.local_endpoint:type_name -> grpc.gcp.Endpoint
 	2,  // 6: grpc.gcp.StartClientHandshakeReq.remote_endpoint:type_name -> grpc.gcp.Endpoint
 	14, // 7: grpc.gcp.StartClientHandshakeReq.rpc_versions:type_name -> grpc.gcp.RpcProtocolVersions
-	3,  // 8: grpc.gcp.ServerHandshakeParameters.local_identities:type_name -> grpc.gcp.Identity
-	13, // 9: grpc.gcp.StartServerHandshakeReq.handshake_parameters:type_name -> grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntry
-	2,  // 10: grpc.gcp.StartServerHandshakeReq.local_endpoint:type_name -> grpc.gcp.Endpoint
-	2,  // 11: grpc.gcp.StartServerHandshakeReq.remote_endpoint:type_name -> grpc.gcp.Endpoint
-	14, // 12: grpc.gcp.StartServerHandshakeReq.rpc_versions:type_name -> grpc.gcp.RpcProtocolVersions
-	4,  // 13: grpc.gcp.HandshakerReq.client_start:type_name -> grpc.gcp.StartClientHandshakeReq
-	6,  // 14: grpc.gcp.HandshakerReq.server_start:type_name -> grpc.gcp.StartServerHandshakeReq
-	7,  // 15: grpc.gcp.HandshakerReq.next:type_name -> grpc.gcp.NextHandshakeMessageReq
-	3,  // 16: grpc.gcp.HandshakerResult.peer_identity:type_name -> grpc.gcp.Identity
-	3,  // 17: grpc.gcp.HandshakerResult.local_identity:type_name -> grpc.gcp.Identity
-	14, // 18: grpc.gcp.HandshakerResult.peer_rpc_versions:type_name -> grpc.gcp.RpcProtocolVersions
-	9,  // 19: grpc.gcp.HandshakerResp.result:type_name -> grpc.gcp.HandshakerResult
-	10, // 20: grpc.gcp.HandshakerResp.status:type_name -> grpc.gcp.HandshakerStatus
-	5,  // 21: grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntry.value:type_name -> grpc.gcp.ServerHandshakeParameters
-	8,  // 22: grpc.gcp.HandshakerService.DoHandshake:input_type -> grpc.gcp.HandshakerReq
-	11, // 23: grpc.gcp.HandshakerService.DoHandshake:output_type -> grpc.gcp.HandshakerResp
-	23, // [23:24] is the sub-list for method output_type
-	22, // [22:23] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	15, // 8: grpc.gcp.StartClientHandshakeReq.transport_protocol_preferences:type_name -> grpc.gcp.TransportProtocolPreferences
+	3,  // 9: grpc.gcp.ServerHandshakeParameters.local_identities:type_name -> grpc.gcp.Identity
+	13, // 10: grpc.gcp.StartServerHandshakeReq.handshake_parameters:type_name -> grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntry
+	2,  // 11: grpc.gcp.StartServerHandshakeReq.local_endpoint:type_name -> grpc.gcp.Endpoint
+	2,  // 12: grpc.gcp.StartServerHandshakeReq.remote_endpoint:type_name -> grpc.gcp.Endpoint
+	14, // 13: grpc.gcp.StartServerHandshakeReq.rpc_versions:type_name -> grpc.gcp.RpcProtocolVersions
+	15, // 14: grpc.gcp.StartServerHandshakeReq.transport_protocol_preferences:type_name -> grpc.gcp.TransportProtocolPreferences
+	4,  // 15: grpc.gcp.HandshakerReq.client_start:type_name -> grpc.gcp.StartClientHandshakeReq
+	6,  // 16: grpc.gcp.HandshakerReq.server_start:type_name -> grpc.gcp.StartServerHandshakeReq
+	7,  // 17: grpc.gcp.HandshakerReq.next:type_name -> grpc.gcp.NextHandshakeMessageReq
+	3,  // 18: grpc.gcp.HandshakerResult.peer_identity:type_name -> grpc.gcp.Identity
+	3,  // 19: grpc.gcp.HandshakerResult.local_identity:type_name -> grpc.gcp.Identity
+	14, // 20: grpc.gcp.HandshakerResult.peer_rpc_versions:type_name -> grpc.gcp.RpcProtocolVersions
+	16, // 21: grpc.gcp.HandshakerResult.transport_protocol:type_name -> grpc.gcp.NegotiatedTransportProtocol
+	9,  // 22: grpc.gcp.HandshakerResp.result:type_name -> grpc.gcp.HandshakerResult
+	10, // 23: grpc.gcp.HandshakerResp.status:type_name -> grpc.gcp.HandshakerStatus
+	5,  // 24: grpc.gcp.StartServerHandshakeReq.HandshakeParametersEntry.value:type_name -> grpc.gcp.ServerHandshakeParameters
+	8,  // 25: grpc.gcp.HandshakerService.DoHandshake:input_type -> grpc.gcp.HandshakerReq
+	11, // 26: grpc.gcp.HandshakerService.DoHandshake:output_type -> grpc.gcp.HandshakerResp
+	26, // [26:27] is the sub-list for method output_type
+	25, // [25:26] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_grpc_gcp_handshaker_proto_init() }
