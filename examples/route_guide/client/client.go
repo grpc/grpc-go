@@ -169,7 +169,7 @@ func main() {
 
 	conn, err := grpc.NewClient(*serverAddr, opts...)
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		log.Fatalf("fail to dial: %v", err)
 	}
 	defer conn.Close()
 	client := pb.NewRouteGuideClient(conn)
