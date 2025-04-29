@@ -5072,7 +5072,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("Failed to create a client for server: %v", err)
 	}
 	defer cc.Close()
 	c := testgrpc.NewTestServiceClient(cc)
@@ -5246,7 +5246,7 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 	defer s.Stop()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("Failed to create a client for server")
 	}
 	defer cc.Close()
 	c := testgrpc.NewTestServiceClient(cc)

@@ -164,7 +164,7 @@ func testResourceDeletionIgnored(t *testing.T, initialResource func(string) e2e.
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to dial local test server: %v.", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
@@ -219,7 +219,7 @@ func testResourceDeletionNotIgnored(t *testing.T, initialResource func(string) e
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	t.Cleanup(func() { cc.Close() })
 
@@ -398,7 +398,7 @@ func (s) TestListenerResourceDeletionOnServerIgnored(t *testing.T) {
 	// Create a ClientConn and make a successful RPCs.
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -465,7 +465,7 @@ func (s) TestListenerResourceDeletionOnServerNotIgnored(t *testing.T) {
 	// Create a ClientConn and make a successful RPCs.
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsR))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 	if err := verifyRPCtoAllEndpoints(cc); err != nil {

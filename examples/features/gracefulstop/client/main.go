@@ -38,7 +38,7 @@ func main() {
 
 	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("grpc.NewClient(%q) = %v", *addr, err)
+		log.Fatalf("Failed to create new client: %v", err)
 	}
 	defer conn.Close()
 	c := pb.NewEchoClient(conn)

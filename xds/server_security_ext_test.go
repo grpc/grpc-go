@@ -111,7 +111,7 @@ func (s) TestServer_Security_NoCertProvidersInBootstrap_Success(t *testing.T) {
 	// Create a client that uses insecure creds and verify RPCs.
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -228,7 +228,7 @@ func (s) TestServer_Security_NoCertificateProvidersInBootstrap_Failure(t *testin
 	// succeed.
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -432,7 +432,7 @@ func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing
 	clientCreds := testutils.CreateClientTLSCredentials(t)
 	cc1, err := grpc.NewClient(lis1.Addr().String(), grpc.WithTransportCredentials(clientCreds))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis1.Addr().String(), err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc1.Close()
 
@@ -460,7 +460,7 @@ func (s) TestServer_Security_WithValidAndInvalidSecurityConfiguration(t *testing
 	// succeed to listener2.
 	cc2, err := grpc.NewClient(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis2.Addr().String(), err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc2.Close()
 

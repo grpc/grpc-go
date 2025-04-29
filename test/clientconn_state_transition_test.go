@@ -636,7 +636,7 @@ func (s) TestChannelStateWaitingForFirstResolverUpdate(t *testing.T) {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 
@@ -669,7 +669,7 @@ func (s) TestChannelStateTransitionWithRPC(t *testing.T) {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 

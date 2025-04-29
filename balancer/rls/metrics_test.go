@@ -82,7 +82,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", grpcTarget, err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -193,7 +193,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", grpcTarget, err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -291,7 +291,7 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 	grpcTarget := r.Scheme() + ":///"
 	cc, err := grpc.NewClient(grpcTarget, grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()), opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: mo}))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", grpcTarget, err)
+		t.Fatalf("Failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 

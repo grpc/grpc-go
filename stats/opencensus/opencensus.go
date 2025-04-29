@@ -51,7 +51,7 @@ type TraceOptions struct {
 //
 // Client applications interested in instrumenting their grpc.ClientConn should
 // pass the dial option returned from this function as the first dial option to
-// grpc.NewClient().
+// grpc.Dial().
 //
 // Using this option will always lead to instrumentation, however in order to
 // use the data an exporter must be registered with the OpenCensus trace package

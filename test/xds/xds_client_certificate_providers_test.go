@@ -91,7 +91,7 @@ func (s) TestClientSideXDS_WithNoCertificateProvidersInBootstrap_Success(t *test
 	// Create a ClientConn and make a successful RPC.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolverBuilder))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
@@ -321,7 +321,7 @@ func (s) TestClientSideXDS_WithValidAndInvalidSecurityConfiguration(t *testing.T
 	// Create a ClientConn.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 

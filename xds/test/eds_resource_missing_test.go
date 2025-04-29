@@ -116,7 +116,7 @@ func (s) TestEDS_MissingResource(t *testing.T) {
 	// Create a ClientConn with the xds:/// scheme.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create a grpc channel: %v", err)
 	}
 	defer cc.Close()
 
@@ -169,7 +169,7 @@ func (s) TestEDS_NoEndpointsInResource(t *testing.T) {
 	// Create a ClientConn with the xds:/// scheme.
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 	if err != nil {
-		t.Fatalf("grpc.NewClient() failed: %v", err)
+		t.Fatalf("Failed to create a grpc channel: %v", err)
 	}
 	defer cc.Close()
 

@@ -95,7 +95,7 @@ func testLocalCredsE2ESucceed(t *testing.T, network, address string) error {
 		return fmt.Errorf("unsupported network %q", network)
 	}
 	if err != nil {
-		return fmt.Errorf("grpc.NewClient() failed: %v, %v", err, lisAddr)
+		return fmt.Errorf("Failed to create a client for server: %v, %v", err, lisAddr)
 	}
 	defer cc.Close()
 
@@ -184,7 +184,7 @@ func testLocalCredsE2EFail(t *testing.T, dopts []grpc.DialOption) error {
 
 	cc, err := grpc.NewClient(lis.Addr().String(), append(dopts, grpc.WithDialer(spoofDialer(fakeServerAddr)))...)
 	if err != nil {
-		return fmt.Errorf("grpc.NewClient() failed: %v, %v", err, lis.Addr().String())
+		return fmt.Errorf("Failed to dial server: %v, %v", err, lis.Addr().String())
 	}
 	defer cc.Close()
 
