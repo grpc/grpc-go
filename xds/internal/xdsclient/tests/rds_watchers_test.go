@@ -43,13 +43,13 @@ import (
 
 type noopRouteConfigWatcher struct{}
 
-func (noopRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (noopRouteConfigWatcher) ResourceChanged(_ *xdsresource.RouteConfigResourceData, onDone func()) {
 	onDone()
 }
-func (noopRouteConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (noopRouteConfigWatcher) ResourceError(_ error, onDone func()) {
 	onDone()
 }
-func (noopRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
+func (noopRouteConfigWatcher) AmbientError(_ error, onDone func()) {
 	onDone()
 }
 
@@ -66,22 +66,22 @@ func newRouteConfigWatcher() *routeConfigWatcher {
 	return &routeConfigWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (rw *routeConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (rw *routeConfigWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceData, onDone func()) {
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
 	onDone()
 }
 
-func (rw *routeConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (rw *routeConfigWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// here and in AmbientError() simplifies tests which will have
 	// access to the most recently received error.
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
 	onDone()
 }
 
-func (rw *routeConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
+func (rw *routeConfigWatcher) AmbientError(err error, onDone func()) {
+	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
 	onDone()
 }
 

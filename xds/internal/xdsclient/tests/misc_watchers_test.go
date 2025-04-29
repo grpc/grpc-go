@@ -72,7 +72,7 @@ func newTestRouteConfigWatcher(client xdsclient.XDSClient, name1, name2 string) 
 	}
 }
 
-func (rw *testRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResourceData, onDone xdsresource.OnDoneFunc) {
+func (rw *testRouteConfigWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceData, onDone func()) {
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
 
 	rw.cancel1 = xdsresource.WatchRouteConfig(rw.client, rw.name1, rw.rcw1)
@@ -80,17 +80,17 @@ func (rw *testRouteConfigWatcher) OnUpdate(update *xdsresource.RouteConfigResour
 	onDone()
 }
 
-func (rw *testRouteConfigWatcher) OnError(err error, onDone xdsresource.OnDoneFunc) {
+func (rw *testRouteConfigWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
-	// here and in OnResourceDoesNotExist() simplifies tests which will have
+	// here and in AmbientError() simplifies tests which will have
 	// access to the most recently received error.
 	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
 	onDone()
 }
 
-func (rw *testRouteConfigWatcher) OnResourceDoesNotExist(onDone xdsresource.OnDoneFunc) {
-	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: xdsresource.NewError(xdsresource.ErrorTypeResourceNotFound, "RouteConfiguration not found in received response")})
+func (rw *testRouteConfigWatcher) AmbientError(err error, onDone func()) {
+	rw.updateCh.Replace(routeConfigUpdateErrTuple{err: err})
 	onDone()
 }
 
@@ -322,7 +322,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for the connection error to be propagated to the watcher")
-	case <-watcher.ErrorCh:
+	case <-watcher.AmbientErrorCh:
 	}
 
 	// Restart the management server.
@@ -427,9 +427,9 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		case <-sCtx.Done():
 		case <-watcher.UpdateCh:
 			t.Fatal("Unexpected resource update")
-		case <-watcher.ErrorCh:
+		case <-watcher.AmbientErrorCh:
 			t.Fatal("Unexpected resource error")
-		case <-watcher.ResourceDoesNotExistCh:
+		case <-watcher.ResourceErrorCh:
 			t.Fatal("Unexpected resource does not exist")
 		}
 
@@ -437,7 +437,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for error callback to be invoked")
-		case err := <-watcher.ErrorCh:
+		case err := <-watcher.AmbientErrorCh:
 			if err == nil || !strings.Contains(err.Error(), nodeID) {
 				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 			}
@@ -452,7 +452,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timeout when waiting for error callback to be invoked")
-		case err := <-watcher.ErrorCh:
+		case err := <-watcher.AmbientErrorCh:
 			if err == nil || !strings.Contains(err.Error(), nodeID) {
 				t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 			}
@@ -500,7 +500,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for error callback to be invoked")
-	case err := <-watcher.ErrorCh:
+	case err := <-watcher.AmbientErrorCh:
 		if err == nil || !strings.Contains(err.Error(), nodeID) {
 			t.Fatalf("Unexpected error: %v, want error with node ID: %q", err, nodeID)
 		}

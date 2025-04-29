@@ -26,6 +26,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -649,6 +650,9 @@ type BackendOptions struct {
 	HealthStatus v3corepb.HealthStatus
 	// Weight sets the backend weight. Defaults to 1.
 	Weight uint32
+	// Metadata sets the LB endpoint metadata (envoy.lb FilterMetadata field).
+	// See https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/core/v3/base.proto#envoy-v3-api-msg-config-core-v3-metadata
+	Metadata map[string]any
 }
 
 // EndpointOptions contains options to configure an Endpoint (or
@@ -708,6 +712,10 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 					},
 				}
 			}
+			metadata, err := structpb.NewStruct(b.Metadata)
+			if err != nil {
+				panic(err)
+			}
 			lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
@@ -721,6 +729,11 @@ func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoad
 				}},
 				HealthStatus:        b.HealthStatus,
 				LoadBalancingWeight: &wrapperspb.UInt32Value{Value: b.Weight},
+				Metadata: &v3corepb.Metadata{
+					FilterMetadata: map[string]*structpb.Struct{
+						"envoy.lb": metadata,
+					},
+				},
 			})
 		}
 

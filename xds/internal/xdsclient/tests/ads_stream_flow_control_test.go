@@ -45,22 +45,22 @@ import (
 // DoneNotifier passed to the callback available to the test, thereby enabling
 // the test to block this watcher for as long as required.
 type blockingListenerWatcher struct {
-	doneNotifierCh chan xdsresource.OnDoneFunc // DoneNotifier passed to the callback.
-	updateCh       chan struct{}               // Written to when an update is received.
-	errorCh        chan struct{}               // Written to when an error is received.
-	notFoundCh     chan struct{}               // Written to when the resource is not found.
+	doneNotifierCh chan func()   // DoneNotifier passed to the callback.
+	updateCh       chan struct{} // Written to when an update is received.
+	ambientErrCh   chan struct{} // Written to when an ambient error is received.
+	resourceErrCh  chan struct{} // Written to when a resource error is received.
 }
 
 func newBLockingListenerWatcher() *blockingListenerWatcher {
 	return &blockingListenerWatcher{
-		doneNotifierCh: make(chan xdsresource.OnDoneFunc, 1),
+		doneNotifierCh: make(chan func(), 1),
 		updateCh:       make(chan struct{}, 1),
-		errorCh:        make(chan struct{}, 1),
-		notFoundCh:     make(chan struct{}, 1),
+		ambientErrCh:   make(chan struct{}, 1),
+		resourceErrCh:  make(chan struct{}, 1),
 	}
 }
 
-func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResourceData, done xdsresource.OnDoneFunc) {
+func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, done func()) {
 	// Notify receipt of the update.
 	select {
 	case lw.updateCh <- struct{}{}:
@@ -73,10 +73,10 @@ func (lw *blockingListenerWatcher) OnUpdate(update *xdsresource.ListenerResource
 	}
 }
 
-func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.OnDoneFunc) {
+func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
 	// Notify receipt of an error.
 	select {
-	case lw.errorCh <- struct{}{}:
+	case lw.resourceErrCh <- struct{}{}:
 	default:
 	}
 
@@ -86,10 +86,10 @@ func (lw *blockingListenerWatcher) OnError(err error, done xdsresource.OnDoneFun
 	}
 }
 
-func (lw *blockingListenerWatcher) OnResourceDoesNotExist(done xdsresource.OnDoneFunc) {
-	// Notify receipt of resource not found.
+func (lw *blockingListenerWatcher) AmbientError(err error, done func()) {
+	// Notify receipt of an error.
 	select {
-	case lw.notFoundCh <- struct{}{}:
+	case lw.ambientErrCh <- struct{}{}:
 	default:
 	}
 
@@ -396,7 +396,7 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	// guaranteed. So, we select on both of them and unblock the first watcher
 	// whose callback is invoked.
 	var otherWatcherUpdateCh chan struct{}
-	var otherWatcherDoneCh chan xdsresource.OnDoneFunc
+	var otherWatcherDoneCh chan func()
 	select {
 	case <-watcher1.updateCh:
 		onDone := <-watcher1.doneNotifierCh
@@ -438,9 +438,10 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 }
 
 // Test ADS stream flow control with a single resource that is expected to be
-// NACKed by the xDS client and the watcher's OnError() callback is expected to
-// be invoked. Verifies that no further reads are attempted until the error is
-// completely processed by the watcher.
+// NACKed by the xDS client and the watcher's ResourceError() callback is
+// expected to be invoked because resource is not cached. Verifies that no
+// further reads are attempted until the error is completely processed by the
+// watcher.
 func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -490,9 +491,9 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 		t.Fatalf("Timed out waiting for ADS stream to be read from")
 	}
 
-	// Wait for the error to reach the watcher.
+	// Wait for the resource error to reach the watcher.
 	select {
-	case <-watcher.errorCh:
+	case <-watcher.resourceErrCh:
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for error to reach watcher")
 	}
@@ -518,7 +519,7 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 }
 
 // Test ADS stream flow control with a single resource that is deleted from the
-// management server and therefore the watcher's OnResourceDoesNotExist()
+// management server and therefore the watcher's ResourceError()
 // callback is expected to be invoked. Verifies that no further reads are
 // attempted until the callback is completely handled by the watcher.
 func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
@@ -598,7 +599,7 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 
 	// Wait for the resource not found callback to be invoked.
 	select {
-	case <-watcher.notFoundCh:
+	case <-watcher.resourceErrCh:
 	case <-ctx.Done():
 		t.Fatalf("Timed out waiting for resource not found callback to be invoked on the watcher")
 	}

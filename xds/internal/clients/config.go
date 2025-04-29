@@ -59,6 +59,16 @@ type ServerIdentifier struct {
 	//
 	// For example, a custom TransportBuilder might use this field to
 	// configure a specific security credentials.
+	//
+	// Extensions may be any type that is comparable, as they are used as map
+	// keys internally. If Extensions are not able to be used as a map key,
+	// the client may panic.
+	//
+	// See: https://go.dev/ref/spec#Comparison_operators
+	//
+	// Any equivalent extensions in all ServerIdentifiers present in a single
+	// client's configuration should have the same value. Not following this
+	// restriction may result in excess resource usage.
 	Extensions any
 }
 

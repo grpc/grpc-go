@@ -26,11 +26,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/ringhash"
 	"google.golang.org/grpc/balancer/roundrobin"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 )
 
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
@@ -303,8 +304,12 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 				xdsLBPolicy: iserviceconfig.BalancerConfig{
-					Name:   ringhash.Name,
-					Config: &ringhash.LBConfig{MinRingSize: 1024, MaxRingSize: 4096}, // Ringhash LB config with default min and max.
+					Name: ringhash.Name,
+					Config: &iringhash.LBConfig{
+						// Ringhash LB config with default min and max.
+						MinRingSize: 1024,
+						MaxRingSize: 4096,
+					},
 				},
 			},
 			wantErr: false,

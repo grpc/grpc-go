@@ -42,8 +42,19 @@ jobs:
           mkdir "${TEMP_DIR}/before"
           scripts/gen-deps.sh "${TEMP_DIR}/before"
 
-          echo "Comparing dependencies..."
+          echo -e " \nComparing dependencies..."
           cd "${TEMP_DIR}"
-          # Run grep in a sub-shell since bash does not support ! in the middle of a pipe
-          diff -u0 -r "before" "after" | bash -c '! grep -v "@@"'
-          echo "No changes detected."
+          # Run grep in a sub-shell since bash does not support ! in the middle of a pipe.
+          if diff -u0 -r "before" "after" | bash -c '! grep -v "@@"'; then
+            echo "No changes detected."
+            exit 0
+          fi
+
+          # Print packages in `after` but not `before`.
+          for x in $(ls -1 after | grep -vF "$(ls -1 before)"); do
+            echo -e " \nDependencies of new package $x:"
+            cat "after/$x"
+          done
+
+          echo -e " \nChanges detected; exiting with error."
+          exit 1

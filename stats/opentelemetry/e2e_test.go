@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -48,9 +49,11 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -59,9 +62,13 @@ import (
 	setup "google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/stats/opentelemetry/internal/testutils"
+	"google.golang.org/grpc/status"
 )
 
 var defaultTestTimeout = 5 * time.Second
@@ -197,21 +204,28 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 
 		for _, span := range spans {
 			switch {
-			case span.Name == "grpc.testing.TestService.UnaryCall":
+			case span.Name == "Sent.grpc.testing.TestService.UnaryCall":
 				isUnary = true
 				if span.SpanKind == oteltrace.SpanKindClient {
 					unaryClient = &span
-				} else {
+				}
+			case span.Name == "Recv.grpc.testing.TestService.UnaryCall":
+				isUnary = true
+				if span.SpanKind == oteltrace.SpanKindServer {
 					unaryServer = &span
 				}
 			case span.Name == "Attempt.grpc.testing.TestService.UnaryCall":
 				isUnary = true
 				unaryAttempt = &span
-			case span.Name == "grpc.testing.TestService.FullDuplexCall":
+
+			case span.Name == "Sent.grpc.testing.TestService.FullDuplexCall":
 				isStream = true
 				if span.SpanKind == oteltrace.SpanKindClient {
 					streamClient = &span
-				} else {
+				}
+			case span.Name == "Recv.grpc.testing.TestService.FullDuplexCall":
+				isStream = true
+				if span.SpanKind == oteltrace.SpanKindServer {
 					streamServer = &span
 				}
 			case span.Name == "Attempt.grpc.testing.TestService.FullDuplexCall":
@@ -684,7 +698,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	}()
 
 	targetAttr := attribute.String("grpc.target", target)
-	localityAttr := attribute.String("grpc.lb.locality", `{"region":"region-1","zone":"zone-1","subZone":"subzone-1"}`)
+	localityAttr := attribute.String("grpc.lb.locality", `{region="region-1", zone="zone-1", sub_zone="subzone-1"}`)
 
 	wantMetrics := []metricdata.Metrics{
 		{
@@ -843,7 +857,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 
 	wantSpanInfos := []traceSpanInfo{
 		{
-			name:     "grpc.testing.TestService.UnaryCall",
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
 			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
@@ -865,11 +879,11 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Inbound compressed message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -882,11 +896,11 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					},
 				},
 				{
-					Name: "Outbound compressed message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -923,11 +937,11 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Outbound compressed message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -940,11 +954,11 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					},
 				},
 				{
-					Name: "Inbound compressed message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
@@ -959,13 +973,13 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			},
 		},
 		{
-			name:       "grpc.testing.TestService.UnaryCall",
+			name:       "Sent.grpc.testing.TestService.UnaryCall",
 			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: nil,
 			events:     nil,
 		},
 		{
-			name:     "grpc.testing.TestService.FullDuplexCall",
+			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
 			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
@@ -988,7 +1002,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			events: nil,
 		},
 		{
-			name:       "grpc.testing.TestService.FullDuplexCall",
+			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
 			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: nil,
 			events:     nil,
@@ -1067,7 +1081,7 @@ func (s) TestSpan(t *testing.T) {
 
 	wantSpanInfos := []traceSpanInfo{
 		{
-			name:     "grpc.testing.TestService.UnaryCall",
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
 			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
@@ -1089,35 +1103,27 @@ func (s) TestSpan(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Inbound compressed message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
 				},
 				{
-					Name: "Outbound compressed message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1147,35 +1153,27 @@ func (s) TestSpan(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Outbound compressed message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
 				},
 				{
-					Name: "Inbound compressed message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1183,13 +1181,13 @@ func (s) TestSpan(t *testing.T) {
 			},
 		},
 		{
-			name:       "grpc.testing.TestService.UnaryCall",
+			name:       "Sent.grpc.testing.TestService.UnaryCall",
 			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: nil,
 			events:     nil,
 		},
 		{
-			name:     "grpc.testing.TestService.FullDuplexCall",
+			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
 			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
@@ -1212,7 +1210,7 @@ func (s) TestSpan(t *testing.T) {
 			events: nil,
 		},
 		{
-			name:       "grpc.testing.TestService.FullDuplexCall",
+			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
 			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: nil,
 			events:     nil,
@@ -1293,7 +1291,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 
 	wantSpanInfos := []traceSpanInfo{
 		{
-			name:     "grpc.testing.TestService.UnaryCall",
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
 			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
@@ -1315,35 +1313,27 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Inbound compressed message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
 				},
 				{
-					Name: "Outbound compressed message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1373,35 +1363,27 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			},
 			events: []trace.Event{
 				{
-					Name: "Outbound compressed message",
+					Name: "Outbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
 				},
 				{
-					Name: "Inbound compressed message",
+					Name: "Inbound message",
 					Attributes: []attribute.KeyValue{
 						{
 							Key:   "sequence-number",
-							Value: attribute.IntValue(1),
+							Value: attribute.IntValue(0),
 						},
 						{
 							Key:   "message-size",
-							Value: attribute.IntValue(10006),
-						},
-						{
-							Key:   "message-size-compressed",
 							Value: attribute.IntValue(10006),
 						},
 					},
@@ -1409,13 +1391,13 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			},
 		},
 		{
-			name:       "grpc.testing.TestService.UnaryCall",
+			name:       "Sent.grpc.testing.TestService.UnaryCall",
 			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: nil,
 			events:     nil,
 		},
 		{
-			name:     "grpc.testing.TestService.FullDuplexCall",
+			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
 			spanKind: oteltrace.SpanKindServer.String(),
 			attributes: []attribute.KeyValue{
 				{
@@ -1438,7 +1420,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			events: nil,
 		},
 		{
-			name:       "grpc.testing.TestService.FullDuplexCall",
+			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
 			spanKind:   oteltrace.SpanKindClient.String(),
 			attributes: nil,
 			events:     nil,
@@ -1558,5 +1540,170 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	spans := exporter.GetSpans()
 	if got, want := spans[0].Status.Description, rpcErrorMsg; got != want {
 		t.Fatalf("got rpc error %s, want %s", spans[0].Status.Description, rpcErrorMsg)
+	}
+}
+
+const delayedResolutionEventName = "Delayed name resolution complete"
+
+// TestTraceSpan_WithRetriesAndNameResolutionDelay verifies that
+// "Delayed name resolution complete" event is recorded in the call trace span
+// only once if any of the retry attempt encountered a delay in name resolution
+func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupStub func() *stubserver.StubServer
+		doCall    func(context.Context, testgrpc.TestServiceClient) error
+		spanName  string
+	}{
+		{
+			name: "unary",
+			setupStub: func() *stubserver.StubServer {
+				return &stubserver.StubServer{
+					UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+						md, _ := metadata.FromIncomingContext(ctx)
+						headerAttempts := 0
+						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+							headerAttempts, _ = strconv.Atoi(h[0])
+						}
+						if headerAttempts < 2 {
+							return nil, status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
+						}
+						return &testpb.SimpleResponse{}, nil
+					},
+				}
+			},
+			doCall: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
+				return err
+			},
+			spanName: "Sent.grpc.testing.TestService.UnaryCall",
+		},
+		{
+			name: "streaming",
+			setupStub: func() *stubserver.StubServer {
+				return &stubserver.StubServer{
+					FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+						md, _ := metadata.FromIncomingContext(stream.Context())
+						headerAttempts := 0
+						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+							headerAttempts, _ = strconv.Atoi(h[0])
+						}
+						if headerAttempts < 2 {
+							return status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
+						}
+						for {
+							_, err := stream.Recv()
+							if err == io.EOF {
+								return nil
+							}
+							if err != nil {
+								return err
+							}
+						}
+					},
+				}
+			},
+			doCall: func(ctx context.Context, client testgrpc.TestServiceClient) error {
+				stream, err := client.FullDuplexCall(ctx)
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+					return err
+				}
+				if err := stream.CloseSend(); err != nil {
+					return err
+				}
+				_, err = stream.Recv()
+				if err != nil && err != io.EOF {
+					return err
+				}
+				return nil
+			},
+			spanName: "Sent.grpc.testing.TestService.FullDuplexCall",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolutionWait := grpcsync.NewEvent()
+			prevHook := internal.NewStreamWaitingForResolver
+			internal.NewStreamWaitingForResolver = func() { resolutionWait.Fire() }
+			defer func() { internal.NewStreamWaitingForResolver = prevHook }()
+
+			mo, _ := defaultMetricsOptions(t, nil)
+			to, exporter := defaultTraceOptions(t)
+			rb := manual.NewBuilderWithScheme("delayed")
+			ss := tt.setupStub()
+			opts := opentelemetry.Options{MetricsOptions: *mo, TraceOptions: *to}
+			if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opts)}); err != nil {
+				t.Fatal(err)
+			}
+			defer ss.Stop()
+
+			retryPolicy := `{
+				"methodConfig": [{
+					"name": [{"service": "grpc.testing.TestService"}],
+					"retryPolicy": {
+						"maxAttempts": 3,
+						"initialBackoff": "0.05s",
+						"maxBackoff": "0.2s",
+						"backoffMultiplier": 1.0,
+						"retryableStatusCodes": ["UNAVAILABLE"]
+					}
+				}]
+			}`
+			cc, err := grpc.NewClient(
+				rb.Scheme()+":///test.server",
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(rb),
+				opentelemetry.DialOption(opts),
+				grpc.WithDefaultServiceConfig(retryPolicy),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cc.Close()
+
+			client := testgrpc.NewTestServiceClient(cc)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			go func() {
+				<-resolutionWait.Done()
+				rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+			}()
+			if err := tt.doCall(ctx, client); err != nil {
+				t.Fatalf("%s call failed: %v", tt.name, err)
+			}
+
+			wantSpanInfo := traceSpanInfo{
+				name:     tt.spanName,
+				spanKind: oteltrace.SpanKindClient.String(),
+				events:   []trace.Event{{Name: delayedResolutionEventName}},
+			}
+			spans, err := waitForTraceSpans(ctx, exporter, []traceSpanInfo{wantSpanInfo})
+			if err != nil {
+				t.Fatal(err)
+			}
+			verifyTrace(t, spans, wantSpanInfo)
+		})
+	}
+}
+
+func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
+	match := false
+	for _, span := range spans {
+		if span.Name == want.name && span.SpanKind.String() == want.spanKind {
+			match = true
+			if diff := cmp.Diff(want.events, span.Events, cmpopts.IgnoreFields(trace.Event{}, "Time")); diff != "" {
+				t.Errorf("Span event mismatch for %q (kind: %s) (-want +got):\n%s",
+					want.name, want.spanKind, diff)
+			}
+			break
+		}
+	}
+	if !match {
+		t.Errorf("Expected span not found: %q (kind: %s)", want.name, want.spanKind)
 	}
 }

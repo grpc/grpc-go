@@ -18,6 +18,8 @@
 // Package testutils contains testing helpers for xDS and LRS clients.
 package testutils
 
+import "context"
+
 // Channel wraps a generic channel and provides a timed receive operation.
 type Channel struct {
 	// C is the underlying channel on which values sent using the SendXxx()
@@ -29,6 +31,32 @@ type Channel struct {
 // Send sends value on the underlying channel.
 func (c *Channel) Send(value any) {
 	c.C <- value
+}
+
+// Receive returns the value received on the underlying channel, or the error
+// returned by ctx if it is closed or cancelled.
+func (c *Channel) Receive(ctx context.Context) (any, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case got := <-c.C:
+		return got, nil
+	}
+}
+
+// Replace clears the value on the underlying channel, and sends the new value.
+//
+// It's expected to be used with a size-1 channel, to only keep the most
+// up-to-date item. This method is inherently racy when invoked concurrently
+// from multiple goroutines.
+func (c *Channel) Replace(value any) {
+	for {
+		select {
+		case c.C <- value:
+			return
+		case <-c.C:
+		}
+	}
 }
 
 // NewChannelWithSize returns a new Channel with a buffer of bufSize.

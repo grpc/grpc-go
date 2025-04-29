@@ -29,13 +29,13 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -294,7 +294,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
-				Config: &ringhash.LBConfig{
+				Config: &iringhash.LBConfig{
 					MinRingSize: 1024,
 					MaxRingSize: 4096,
 				},
@@ -347,7 +347,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
-				Config: &ringhash.LBConfig{
+				Config: &iringhash.LBConfig{
 					MinRingSize: 10,
 					MaxRingSize: 100,
 				},
@@ -419,7 +419,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
-				Config: &ringhash.LBConfig{
+				Config: &iringhash.LBConfig{
 					MinRingSize: 10,
 					MaxRingSize: 100,
 				},
@@ -544,7 +544,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantLBConfig: &iserviceconfig.BalancerConfig{
 				Name: "ring_hash_experimental",
-				Config: &ringhash.LBConfig{
+				Config: &iringhash.LBConfig{
 					MinRingSize: 10,
 					MaxRingSize: 100,
 				},
