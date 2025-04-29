@@ -353,10 +353,12 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 			r.childMu.Lock()
 			defer r.childMu.Unlock()
 			if _, ok := r.proxyResolver.(nopResolver); ok {
-				var err error
-				if r.proxyResolver, err = r.proxyURIResolver(resolver.BuildOptions{}); err != nil {
+				proxyResolver, err := r.proxyURIResolver(resolver.BuildOptions{})
+				if err != nil {
 					r.cc.ReportError(fmt.Errorf("delegating_resolver: unable to build the proxy resolver: %v", err))
+					return
 				}
+				r.proxyResolver = proxyResolver
 			}
 		}()
 	}
