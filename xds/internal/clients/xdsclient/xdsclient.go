@@ -390,8 +390,8 @@ func (cs *channelState) adsStreamFailure(err error) {
 	}
 
 	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsReporter != nil {
-		cs.parent.metricsReporter.ReportMetric(MetricServerFailure{
-			Target: cs.parent.target, ServerURI: cs.serverConfig.ServerIdentifier.ServerURI, Incr: 1,
+		cs.parent.metricsReporter.ReportMetric(&MetricServerFailure{
+			ServerURI: cs.serverConfig.ServerIdentifier.ServerURI,
 		})
 	}
 

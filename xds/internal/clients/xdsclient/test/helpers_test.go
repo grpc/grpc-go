@@ -20,21 +20,25 @@ package xdsclient_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	"github.com/google/go-cmp/cmp"
 )
 
 type s struct {
@@ -261,4 +265,95 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 		ID:            id,
 		ContextParams: ctxParams,
 	}).String()
+}
+
+// testMetricsReporter is a MetricsReporter to be used in tests. It sends
+// recording events on channels and provides helpers to check if certain events
+// have taken place. It also persists metrics data keyed on the metrics
+// type.
+type testMetricsReporter struct {
+	intCountCh *testutils.Channel
+
+	// mu protects data.
+	mu sync.Mutex
+	// data is the most recent update for each metric type.
+	data map[string]float64
+}
+
+// newTestMetricsReporter returns a new testMetricsReporter.
+func newTestMetricsReporter() *testMetricsReporter {
+	return &testMetricsReporter{
+		intCountCh: testutils.NewChannelWithSize(10),
+
+		data: make(map[string]float64),
+	}
+}
+
+// metric returns the most recent data for a metric, and whether this recorder
+// has received data for a metric.
+func (r *testMetricsReporter) metric(name string) (float64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	data, ok := r.data[name]
+	return data, ok
+}
+
+// metricsData represents data associated with a metric.
+type metricsData struct {
+	intIncr int64    // count to be incremented.
+	name    string   // name of the metric.
+	labels  []string // labels associated with the metric.
+}
+
+// waitForInt64Count waits for an int64 count metric to be recorded and verifies
+// that the recorded metrics data matches the expected metricsDataWant. Returns
+// an error if failed to wait or received wrong data.
+func (r *testMetricsReporter) waitForInt64Count(ctx context.Context, metricsDataWant metricsData) error {
+	got, err := r.intCountCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for int64Count")
+	}
+	metricsDataGot := got.(metricsData)
+	if diff := cmp.Diff(metricsDataGot, metricsDataWant, cmp.AllowUnexported(metricsData{})); diff != "" {
+		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
+	}
+	return nil
+}
+
+// ReportMetric sends the metrics data to the intCountCh channel and updates
+// the internal data map with the recorded value.
+func (r *testMetricsReporter) ReportMetric(m any) {
+	r.intCountCh.ReceiveOrFail()
+
+	var metricName string
+
+	switch metric := m.(type) {
+	case *xdsclient.MetricResourceUpdateValid:
+		r.intCountCh.Send(metricsData{
+			intIncr: 1,
+			name:    "xds_client.resource_updates_valid",
+			labels:  []string{"xds-client", metric.ServerURI, metric.ResourceType},
+		})
+		metricName = "xds_client.resource_updates_valid"
+
+	case *xdsclient.MetricResourceUpdateInvalid:
+		r.intCountCh.Send(metricsData{
+			intIncr: 1,
+			name:    "xds_client.resource_updates_invalid",
+			labels:  []string{"xds-client", metric.ServerURI, metric.ResourceType},
+		})
+		metricName = "xds_client.resource_updates_invalid"
+
+	case *xdsclient.MetricServerFailure:
+		r.intCountCh.Send(metricsData{
+			intIncr: 1,
+			name:    "xds_client.server_failure",
+			labels:  []string{"xds-client", metric.ServerURI},
+		})
+		metricName = "xds_client.server_failure"
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[metricName] = 1
 }

@@ -101,11 +101,12 @@ type Locality struct {
 	SubZone string
 }
 
-// MetricsReporter is used by the XDSClient to report metrics. Metric can be of
-// any type.
-//
-// For example: see xdsclient/internal/test_metrics_reporter.go
+// MetricsReporter is used by the XDSClient to report metrics.
 type MetricsReporter interface {
-	// ReportMetric reports a metric.
-	ReportMetric(any)
+	// ReportMetric reports a metric. The metric will be one of the predefined
+	// set of types depending on the client (XDSClient or LRSClient).
+	//
+	// Each client will produce different metrics. Please see the client's
+	// documentation for a list of possible metrics events.
+	ReportMetric(metric any)
 }

@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
-	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -44,7 +43,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
 	defer cancel()
 
-	tmr := xdsclientinternal.NewTestMetricsReporter()
+	tmr := newTestMetricsReporter()
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
@@ -96,16 +95,16 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	// Watch the valid listener configured on the management server. This should
 	// cause a resource updates valid count to emit eventually.
 	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
-	mdWant := xdsclientinternal.MetricsData{
-		IntIncr: 1,
-		Name:    "xds_client.resource_updates_valid",
-		Labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
+	mdWant := metricsData{
+		intIncr: 1,
+		name:    "xds_client.resource_updates_valid",
+		labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
 	}
-	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Invalid should have no recording point.
-	if got, _ := tmr.Metric("xds_client.resource_updates_invalid"); got != 0 {
+	if got, _ := tmr.metric("xds_client.resource_updates_invalid"); got != 0 {
 		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 0)
 	}
 
@@ -122,16 +121,16 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	mdWant = xdsclientinternal.MetricsData{
-		IntIncr: 1,
-		Name:    "xds_client.resource_updates_invalid",
-		Labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
+	mdWant = metricsData{
+		intIncr: 1,
+		name:    "xds_client.resource_updates_invalid",
+		labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
 	}
-	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Valid should stay the same at 1.
-	if got, _ := tmr.Metric("xds_client.resource_updates_invalid"); got != 1 {
+	if got, _ := tmr.metric("xds_client.resource_updates_invalid"); got != 1 {
 		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
 	}
 }
@@ -144,7 +143,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	tmr := xdsclientinternal.NewTestMetricsReporter()
+	tmr := newTestMetricsReporter()
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
@@ -213,12 +212,12 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	mdWant := xdsclientinternal.MetricsData{
-		IntIncr: 1,
-		Name:    "xds_client.server_failure",
-		Labels:  []string{"xds-client", mgmtServer.Address},
+	mdWant := metricsData{
+		intIncr: 1,
+		name:    "xds_client.server_failure",
+		labels:  []string{"xds-client", mgmtServer.Address},
 	}
-	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
 }
@@ -233,7 +232,7 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	tmr := xdsclientinternal.NewTestMetricsReporter()
+	tmr := newTestMetricsReporter()
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
@@ -285,16 +284,16 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Watch the valid listener configured on the management server. This should
 	// cause a resource updates valid count to emit eventually.
 	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
-	mdWant := xdsclientinternal.MetricsData{
-		IntIncr: 1,
-		Name:    "xds_client.resource_updates_valid",
-		Labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
+	mdWant := metricsData{
+		intIncr: 1,
+		name:    "xds_client.resource_updates_valid",
+		labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
 	}
-	if err := tmr.WaitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Server failure should have no recording point.
-	if got, _ := tmr.Metric("grpc.xds_client.server_failure"); got != 0 {
+	if got, _ := tmr.metric("grpc.xds_client.server_failure"); got != 0 {
 		t.Fatalf("Unexpected data for metric \"grpc.xds_client.server_failure\", got: %v, want: %v", got, 0)
 	}
 
@@ -307,13 +306,13 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	mdWant = xdsclientinternal.MetricsData{
-		IntIncr: 1,
-		Name:    "xds_client.server_failure",
-		Labels:  []string{"xds-client", mgmtServer.Address},
+	mdWant = metricsData{
+		intIncr: 1,
+		name:    "xds_client.server_failure",
+		labels:  []string{"xds-client", mgmtServer.Address},
 	}
 	// Server failure should still have no recording point.
-	if err := tmr.WaitForInt64Count(ctx, mdWant); err == nil {
+	if err := tmr.waitForInt64Count(ctx, mdWant); err == nil {
 		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
 	}
 }

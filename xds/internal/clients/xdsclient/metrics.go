@@ -18,28 +18,22 @@
 
 package xdsclient
 
-// MetricResourceUpdateValid is a Metric to report valid resource updates from
+// MetricResourceUpdateValid is a Metric to report a valid resource update from
 // the xDS management server for a given resource type.
 type MetricResourceUpdateValid struct {
-	Target       string // Target of the metric.
 	ServerURI    string // ServerURI of the xDS management server.
-	Incr         int64  // Count to be incremented.
 	ResourceType string // Resource type.
 }
 
-// MetricResourceUpdateInvalid is a Metric to report invalid resource updates
+// MetricResourceUpdateInvalid is a Metric to report an invalid resource update
 // from the xDS management server for a given resource type.
 type MetricResourceUpdateInvalid struct {
-	Target       string // Target of the metric.
 	ServerURI    string // ServerURI of the xDS management server.
-	Incr         int64  // Count to be incremented.
 	ResourceType string // Resource type.
 }
 
-// MetricServerFailure is a Metric to report server failures of the xDS
+// MetricServerFailure is a Metric to report a server failure of the xDS
 // management server.
 type MetricServerFailure struct {
-	Target    string // Target of the metric.
 	ServerURI string // ServerURI of the xDS management server.
-	Incr      int64  // Count to be incremented.
 }
