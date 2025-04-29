@@ -71,10 +71,6 @@ func (ls *LoadStore) Stop(ctx context.Context) {
 // ReporterForCluster returns the PerClusterReporter for the given cluster and
 // service.
 func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClusterReporter {
-	if ls == nil {
-		return nil
-	}
-
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	c, ok := ls.clusters[clusterName]
