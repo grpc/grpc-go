@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -368,7 +369,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		// and error.
 		if uErr.Err != nil {
 			if a.metricsReporter != nil {
-				a.metricsReporter.ReportMetric(&MetricResourceUpdateInvalid{
+				a.metricsReporter.ReportMetric(&metrics.MetricResourceUpdateInvalid{
 					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 				})
 			}
@@ -388,7 +389,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		}
 
 		if a.metricsReporter != nil {
-			a.metricsReporter.ReportMetric(&MetricResourceUpdateValid{
+			a.metricsReporter.ReportMetric(&metrics.MetricResourceUpdateValid{
 				ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 			})
 		}

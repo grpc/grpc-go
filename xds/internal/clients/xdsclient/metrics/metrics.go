@@ -16,23 +16,26 @@
  *
  */
 
-package xdsclient
+// Package metrics defines all metrics that can be produced by an xDS client.
+// All calls to the MetricsRecorder by the xDS client will contain a struct
+// from this package passed by pointer.
+package metrics
 
-// MetricResourceUpdateValid is a Metric to report a valid resource update from
+// MetricResourceUpdateValid is a metric to report a valid resource update from
 // the xDS management server for a given resource type.
 type MetricResourceUpdateValid struct {
 	ServerURI    string // ServerURI of the xDS management server.
 	ResourceType string // Resource type.
 }
 
-// MetricResourceUpdateInvalid is a Metric to report an invalid resource update
+// MetricResourceUpdateInvalid is a metric to report an invalid resource update
 // from the xDS management server for a given resource type.
 type MetricResourceUpdateInvalid struct {
 	ServerURI    string // ServerURI of the xDS management server.
 	ResourceType string // Resource type.
 }
 
-// MetricServerFailure is a Metric to report a server failure of the xDS
+// MetricServerFailure is a metric to report a server failure of the xDS
 // management server.
 type MetricServerFailure struct {
 	ServerURI string // ServerURI of the xDS management server.

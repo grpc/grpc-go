@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -283,7 +284,7 @@ type testMetricsReporter struct {
 // newTestMetricsReporter returns a new testMetricsReporter.
 func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
-		intCountCh: testutils.NewChannelWithSize(10),
+		intCountCh: testutils.NewChannelWithSize(1),
 
 		data: make(map[string]float64),
 	}
@@ -328,7 +329,7 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 	var metricName string
 
 	switch metric := m.(type) {
-	case *xdsclient.MetricResourceUpdateValid:
+	case *metrics.MetricResourceUpdateValid:
 		r.intCountCh.Send(metricsData{
 			intIncr: 1,
 			name:    "xds_client.resource_updates_valid",
@@ -336,7 +337,7 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 		})
 		metricName = "xds_client.resource_updates_valid"
 
-	case *xdsclient.MetricResourceUpdateInvalid:
+	case *metrics.MetricResourceUpdateInvalid:
 		r.intCountCh.Send(metricsData{
 			intIncr: 1,
 			name:    "xds_client.resource_updates_invalid",
@@ -344,7 +345,7 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 		})
 		metricName = "xds_client.resource_updates_invalid"
 
-	case *xdsclient.MetricServerFailure:
+	case *metrics.MetricServerFailure:
 		r.intCountCh.Send(metricsData{
 			intIncr: 1,
 			name:    "xds_client.server_failure",
@@ -355,5 +356,5 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[metricName] = 1
+	r.data[metricName]++
 }

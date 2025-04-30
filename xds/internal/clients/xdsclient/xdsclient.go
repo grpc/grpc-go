@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -390,7 +391,7 @@ func (cs *channelState) adsStreamFailure(err error) {
 	}
 
 	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsReporter != nil {
-		cs.parent.metricsReporter.ReportMetric(&MetricServerFailure{
+		cs.parent.metricsReporter.ReportMetric(&metrics.MetricServerFailure{
 			ServerURI: cs.serverConfig.ServerIdentifier.ServerURI,
 		})
 	}
