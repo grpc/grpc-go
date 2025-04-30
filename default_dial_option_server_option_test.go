@@ -176,3 +176,55 @@ func (s) TestHeaderListSizeDialOptionServerOption(t *testing.T) {
 		t.Fatalf("Unexpected s.opts.MaxHeaderListSizeDialOption.MaxHeaderListSize: %d != %d", serverHeaderListSize, maxHeaderListSize)
 	}
 }
+
+func (s) TestWithInitialConnWindowSize(t *testing.T) {
+	const initialConnWindowSize = 131072
+	dopt := WithInitialConnWindowSize(initialConnWindowSize)
+	cc, err := NewClient("fake", dopt, WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.InitialConnWindowSize != initialConnWindowSize {
+		t.Fatalf("Unexpected InitialConnWindowSize: %d != %d", cc.dopts.copts.InitialConnWindowSize, initialConnWindowSize)
+	}
+}
+
+func (s) TestWithStaticStreamWindowSize(t *testing.T) {
+	const staticWindowSize = 65536
+	dopt := WithStaticStreamWindowSize(staticWindowSize)
+	cc, err := NewClient("fake", dopt, WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.InitialWindowSize != staticWindowSize {
+		t.Fatalf("Unexpected InitialWindowSize: %d != %d", cc.dopts.copts.InitialWindowSize, staticWindowSize)
+	}
+}
+
+func (s) TestWithStaticConnWindowSize(t *testing.T) {
+	const staticConnWindowSize = 131072
+	dopt := WithStaticConnWindowSize(staticConnWindowSize)
+	cc, err := NewClient("fake", dopt, WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.InitialConnWindowSize != staticConnWindowSize {
+		t.Fatalf("Unexpected InitialConnWindowSize: %d != %d", cc.dopts.copts.InitialConnWindowSize, staticConnWindowSize)
+	}
+}
+
+func (s) TestWithInitialStreamWindowSize(t *testing.T) {
+	const initialStreamWindowSize = 32768
+	dopt := WithInitialStreamWindowSize(initialStreamWindowSize)
+	cc, err := NewClient("fake", dopt, WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.InitialWindowSize != initialStreamWindowSize {
+		t.Fatalf("Unexpected InitialWindowSize: %d != %d", cc.dopts.copts.InitialWindowSize, initialStreamWindowSize)
+	}
+}

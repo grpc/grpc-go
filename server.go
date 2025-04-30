@@ -290,6 +290,28 @@ func InitialConnWindowSize(s int32) ServerOption {
 	})
 }
 
+// StaticStreamWindowSize returns a ServerOption that sets a static window size
+// for streams.
+func StaticStreamWindowSize(s int32) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.initialWindowSize = s
+	})
+}
+
+// StaticConnWindowSize returns a ServerOption that sets a static window size
+// for connections.
+func StaticConnWindowSize(s int32) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.initialConnWindowSize = s
+	})
+}
+
+// InitialStreamWindowSize returns a ServerOption that sets the initial window
+// size for streams.
+func InitialStreamWindowSize(s int32) ServerOption {
+	return InitialWindowSize(s)
+}
+
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
 func KeepaliveParams(kp keepalive.ServerParameters) ServerOption {
 	if kp.Time > 0 && kp.Time < internal.KeepaliveMinServerPingTime {

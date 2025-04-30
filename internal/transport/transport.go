@@ -450,22 +450,24 @@ const (
 
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
-	MaxStreams            uint32
-	ConnectionTimeout     time.Duration
-	Credentials           credentials.TransportCredentials
-	InTapHandle           tap.ServerInHandle
-	StatsHandlers         []stats.Handler
-	KeepaliveParams       keepalive.ServerParameters
-	KeepalivePolicy       keepalive.EnforcementPolicy
-	InitialWindowSize     int32
-	InitialConnWindowSize int32
-	WriteBufferSize       int
-	ReadBufferSize        int
-	SharedWriteBuffer     bool
-	ChannelzParent        *channelz.Server
-	MaxHeaderListSize     *uint32
-	HeaderTableSize       *uint32
-	BufferPool            mem.BufferPool
+	MaxStreams             uint32
+	ConnectionTimeout      time.Duration
+	Credentials            credentials.TransportCredentials
+	InTapHandle            tap.ServerInHandle
+	StatsHandlers          []stats.Handler
+	KeepaliveParams        keepalive.ServerParameters
+	KeepalivePolicy        keepalive.EnforcementPolicy
+	InitialWindowSize      int32
+	InitialConnWindowSize  int32
+	StaticStreamWindowSize int32
+	StaticConnWindowSize   int32
+	WriteBufferSize        int
+	ReadBufferSize         int
+	SharedWriteBuffer      bool
+	ChannelzParent         *channelz.Server
+	MaxHeaderListSize      *uint32
+	HeaderTableSize        *uint32
+	BufferPool             mem.BufferPool
 }
 
 // ConnectOptions covers all relevant options for communicating with the server.
@@ -503,7 +505,9 @@ type ConnectOptions struct {
 	// MaxHeaderListSize sets the max (uncompressed) size of header list that is prepared to be received.
 	MaxHeaderListSize *uint32
 	// The mem.BufferPool to use when reading/writing to the wire.
-	BufferPool mem.BufferPool
+	BufferPool             mem.BufferPool
+	StaticConnWindowSize   int32
+	StaticStreamWindowSize int32
 }
 
 // WriteOptions provides additional hints and information for message

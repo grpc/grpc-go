@@ -176,6 +176,33 @@ func (s) TestStreamContext(t *testing.T) {
 	}
 }
 
+func (s) TestStaticStreamWindowSize(t *testing.T) {
+	const staticWindowSize = 65536
+	so := StaticStreamWindowSize(staticWindowSize)
+	s := NewServer(so)
+	if s.opts.initialWindowSize != staticWindowSize {
+		t.Fatalf("Unexpected initialWindowSize: %d != %d", s.opts.initialWindowSize, staticWindowSize)
+	}
+}
+
+func (s) TestStaticConnWindowSize(t *testing.T) {
+	const staticConnWindowSize = 131072
+	so := StaticConnWindowSize(staticConnWindowSize)
+	s := NewServer(so)
+	if s.opts.initialConnWindowSize != staticConnWindowSize {
+		t.Fatalf("Unexpected initialConnWindowSize: %d != %d", s.opts.initialConnWindowSize, staticConnWindowSize)
+	}
+}
+
+func (s) TestInitialStreamWindowSize(t *testing.T) {
+	const initialStreamWindowSize = 32768
+	so := InitialStreamWindowSize(initialStreamWindowSize)
+	s := NewServer(so)
+	if s.opts.initialWindowSize != initialStreamWindowSize {
+		t.Fatalf("Unexpected initialWindowSize: %d != %d", s.opts.initialWindowSize, initialStreamWindowSize)
+	}
+}
+
 func BenchmarkChainUnaryInterceptor(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
