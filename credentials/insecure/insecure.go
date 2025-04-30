@@ -71,6 +71,12 @@ func (info) AuthType() string {
 	return "insecure"
 }
 
+// ValidateAuthority allows any value to be overridden for the :authority
+// header.
+func (info) ValidateAuthority(string) error {
+	return nil
+}
+
 // insecureBundle implements an insecure bundle.
 // An insecure bundle provides a thin wrapper around insecureTC to support
 // the credentials.Bundle interface.
