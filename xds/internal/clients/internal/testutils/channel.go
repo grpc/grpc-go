@@ -59,17 +59,6 @@ func (c *Channel) Replace(value any) {
 	}
 }
 
-// ReceiveOrFail returns the value on the underlying channel and true, or nil
-// and false if the channel was empty.
-func (c *Channel) ReceiveOrFail() (any, bool) {
-	select {
-	case got := <-c.C:
-		return got, true
-	default:
-		return nil, false
-	}
-}
-
 // NewChannelWithSize returns a new Channel with a buffer of bufSize.
 func NewChannelWithSize(bufSize int) *Channel {
 	return &Channel{C: make(chan any, bufSize)}

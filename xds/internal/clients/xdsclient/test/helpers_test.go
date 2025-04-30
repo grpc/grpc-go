@@ -324,8 +324,6 @@ func (r *testMetricsReporter) waitForInt64Count(ctx context.Context, metricsData
 // ReportMetric sends the metrics data to the intCountCh channel and updates
 // the internal data map with the recorded value.
 func (r *testMetricsReporter) ReportMetric(m any) {
-	r.intCountCh.ReceiveOrFail()
-
 	var metricName string
 
 	switch metric := m.(type) {
