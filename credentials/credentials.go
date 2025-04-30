@@ -122,9 +122,9 @@ type AuthInfo interface {
 
 // AuthorityValidator validates the authority used to override the `:authority`
 // header. This is an optional interface that implementations of AuthInfo can
-// implement if the credentials support per-RPC authority overrides. It is
-// invoked when the application attempts to override the HTTP/2 `:authority`
-// header using the CallAuthority call option.
+// implement if they support per-RPC authority overrides. It is invoked when the
+// application attempts to override the HTTP/2 `:authority` header using the
+// CallAuthority call option.
 type AuthorityValidator interface {
 	// ValidateAuthority checks the authority value used to override the
 	// `:authority` header. The authority parameter is the override value
