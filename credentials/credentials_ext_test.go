@@ -286,7 +286,7 @@ func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority)); status.Code(err) != tt.wantStatus {
+			if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(tt.authority)); status.Code(err) != codes.Unavailable {
 				t.Fatalf("EmptyCall() returned status %v, want %v", status.Code(err), codes.Unavailable)
 			}
 			select {
@@ -304,7 +304,7 @@ func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 // correctly propagated to the server when a correct authority is used.
 func (s) TestCorrectAuthorityWithCustomCreds(t *testing.T) {
 	const authority = "auth.test.example.com"
-	creds := &testCreds{WithValidator: true, Authority: "auth.test.example.com"}
+	creds := &testCreds{authority: "auth.test.example.com"}
 	ss := stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if err := authorityChecker(ctx, authority); err != nil {
