@@ -352,14 +352,15 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		go func() {
 			r.childMu.Lock()
 			defer r.childMu.Unlock()
-			if _, ok := r.proxyResolver.(nopResolver); ok {
-				proxyResolver, err := r.proxyURIResolver(resolver.BuildOptions{})
-				if err != nil {
-					r.cc.ReportError(fmt.Errorf("delegating_resolver: unable to build the proxy resolver: %v", err))
-					return
-				}
-				r.proxyResolver = proxyResolver
+			if _, ok := r.proxyResolver.(nopResolver); !ok {
+				return
 			}
+			proxyResolver, err := r.proxyURIResolver(resolver.BuildOptions{})
+			if err != nil {
+				r.cc.ReportError(fmt.Errorf("delegating_resolver: unable to build the proxy resolver: %v", err))
+				return
+			}
+			r.proxyResolver = proxyResolver
 		}()
 	}
 

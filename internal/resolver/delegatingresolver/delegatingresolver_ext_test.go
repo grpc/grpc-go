@@ -747,10 +747,10 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
-	// ResolveNow of manual proxy resolver will not be called since proxy
-	// resolver is only built when we get the first update from target resolver
-	// and so , in the first resolveNow, proxy resolver will be a no-op resolver
-	// and only target resolver's ResolveNow will be called.
+	// ResolveNow of manual proxy resolver will not be called. Proxy resolver is
+	// only built when we get the first update from target resolver. Therefore
+	// in the first ResolveNow, proxy resolver will be a no-op resolver and only
+	// target resolver's ResolveNow will be called.
 	dr.ResolveNow(resolver.ResolveNowOptions{})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -763,7 +763,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	// Wait for proxy resolver to be built.
 	select {
 	case <-proxyResolverBuilt:
-	case <-time.After(defaultTestTimeout):
+	case <-ctx.Done():
 		t.Fatalf("Timeout when waiting for proxy resolver to be built")
 	}
 
@@ -855,14 +855,14 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	// resolver, since we want to avoid proxy for any network type apart from
 	// tcp.
 	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%s", diff)
 	}
 }
 
-// Tests the scenario where a proxy is configured, and the resolver returns
-// addresses with varied network type. The test verifies that the delegating
-// resolver doesn't add proxyatrribute to adresses with network type other than
-// tcp , but adds the proxyattribute to addresses with network type tcp.
+// Tests the scenario where a proxy is configured, and the resolver returns tcp
+// and non-tcp addresses. The test verifies that the delegating resolver doesn't
+// add proxyatrribute to adresses with network type other than tcp , but adds
+// the proxyattribute to addresses with network type tcp.
 func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	const (
 		targetTestAddr          = "test.target"
