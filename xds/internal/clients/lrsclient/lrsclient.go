@@ -155,10 +155,15 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 			return
 		}
 
-		// Wait for the provided context to be done (timeout or cancellation)
-		// before closing the stream.
-		if ctx != nil {
-			<-ctx.Done()
+		lrs.finalSendRequest <- struct{}{}
+
+		select {
+		case err := <-lrs.finalSendDone:
+			if err != nil {
+				c.logger.Warningf("Final send attempt failed: %v", err)
+			}
+		case <-ctx.Done():
+			c.logger.Warningf("Context canceled before finishing the final send attempt: %v", err)
 		}
 
 		lrs.cancelStream()

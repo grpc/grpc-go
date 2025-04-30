@@ -62,8 +62,8 @@ func newLoadStore() *LoadStore {
 // stream will be closed.
 //
 // The provided context should have a deadline or timeout set. If this is the
-// last reference, Stop will block until the context is done, allowing any
-// pending load reports to be flushed before closing the stream.
+// last reference, Stop will block until the context is done or an attempt
+// to flush pending load reports is made before closing the stream.
 func (ls *LoadStore) Stop(ctx context.Context) {
 	ls.stop(ctx)
 }

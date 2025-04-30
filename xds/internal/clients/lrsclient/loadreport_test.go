@@ -457,9 +457,10 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 // TestReportLoad_StopWithContext tests the behavior of LoadStore.Stop() when
 // called with a context. It verifies that:
-// - Stop() blocks until the context expires.
-// - Load reporting continues while Stop() is blocking.
-// - The stream is closed after Stop() returns.
+//   - Stop() blocks until the context expires or final load send attempt is
+//     made.
+//   - Final load report is seen on the server after stop is called.
+//   - The stream is closed after Stop() returns.
 func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -545,20 +546,23 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		t.Fatalf("Unexpected diff in LRS request (-got, +want):\n%s", diff)
 	}
 
-	// Create a context that we can cancel manually to unblock loadStore.Stop().
+	// Create a context for Stop() that remains until the end of test to ensure
+	// that only possibility of Stop()s to finish is if final load send attempt
+	// is made. If final load attempt is not made, test will timeout.
 	stopCtx, stopCancel := context.WithCancel(ctx)
 	defer stopCancel()
 
 	// Push more loads.
 	loadStore.ReporterForCluster("cluster2", "eds2").CallDropped("test")
 
-	// Channel to signal when Stop() has returned.
-	stopDone := make(chan struct{})
-	// Call Stop in a separate goroutine. It will block until stopCtx is canceled.
+	stopCalled := make(chan struct{})
+	// Call Stop in a separate goroutine. It will block until
+	// final load send attempt is made.
 	go func() {
 		loadStore.Stop(stopCtx)
-		close(stopDone)
+		close(stopCalled)
 	}()
+	<-stopCalled
 
 	// Ensure that loads are seen on the server. We need a loop here because
 	// there could have been some requests from the client in the time between
@@ -572,6 +576,17 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		req, err = lrsServer.LRSRequestChan.Receive(ctx)
 		if err != nil {
 			continue
+		}
+		if req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest) == nil {
+			// This can happen due to a race:
+			// 1. Load for "cluster2" is reported just before Stop().
+			// 2. The periodic ticker might send this load before Stop()'s
+			//    final send mechanism processes it, clearing the data.
+			// 3. Stop()'s final send might then send an empty report.
+			//    This is acceptable for this test because we only need to verify
+			//    if the final load report send attempt was made.
+			t.Logf("Empty final load report sent on server")
+			break
 		}
 		gotLoad = req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
 		if l := len(gotLoad); l != 1 {
@@ -590,10 +605,6 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		}
 		break
 	}
-
-	// Now, unblock the Stop() call by canceling its context and wait for it to return.
-	stopCancel()
-	<-stopDone
 
 	// Verify the stream is eventually closed on the server side.
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {

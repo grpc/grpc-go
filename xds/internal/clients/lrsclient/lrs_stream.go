@@ -59,6 +59,9 @@ type streamImpl struct {
 
 	cancelStream context.CancelFunc // Cancel the stream. If nil, the stream is not active.
 	loadStore    *LoadStore         // LoadStore returned to user for pushing loads.
+
+	finalSendRequest chan struct{} // To request for the final attempt to send loads.
+	finalSendDone    chan error    // To signal completion of the final attempt of sending loads.
 }
 
 // streamOpts holds the options for creating an lrsStream.
@@ -77,11 +80,13 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	lrs := &streamImpl{
-		transport:    opts.transport,
-		backoff:      opts.backoff,
-		nodeProto:    opts.nodeProto,
-		cancelStream: cancel,
-		doneCh:       make(chan struct{}),
+		transport:        opts.transport,
+		backoff:          opts.backoff,
+		nodeProto:        opts.nodeProto,
+		cancelStream:     cancel,
+		doneCh:           make(chan struct{}),
+		finalSendRequest: make(chan struct{}, 1),
+		finalSendDone:    make(chan error, 1),
 	}
 
 	l := grpclog.Component("xds")
@@ -150,9 +155,24 @@ func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clu
 		case <-tick.C:
 		case <-ctx.Done():
 			return
+		case <-lrs.finalSendRequest:
+			var finalSendErr error
+			if lrs.logger.V(2) {
+				lrs.logger.Infof("Final send request received. Attempting final LRS report.")
+			}
+			if err := lrs.sendLoadStatsRequest(stream, lrs.loadStore.stats(clusterNames)); err != nil {
+				lrs.logger.Warningf("Failed to send final load report. Writing to LRS stream failed: %v", err)
+				finalSendErr = err
+			}
+			if lrs.logger.V(2) {
+				lrs.logger.Infof("Successfully sent final load report.")
+			}
+			lrs.finalSendDone <- finalSendErr
+			return
 		}
+
 		if err := lrs.sendLoadStatsRequest(stream, lrs.loadStore.stats(clusterNames)); err != nil {
-			lrs.logger.Warningf("Writing to LRS stream failed: %v", err)
+			lrs.logger.Warningf("Failed to send periodic load report. Writing to LRS stream failed: %v", err)
 			return
 		}
 	}
