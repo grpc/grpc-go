@@ -354,10 +354,19 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 			t.Fatalf("(%v).WithDetails(%+v) failed: %v", str(s), tc.details, err)
 		}
 		details := s.Details()
+		if len(details) != len(tc.details) {
+			t.Fatalf("len(s.Details()) = %v, want = %v.", len(details), len(tc.details))
+		}
 		for i := range details {
 			if !proto.Equal(details[i].(protoreflect.ProtoMessage), tc.details[i].(protoreflect.ProtoMessage)) {
 				t.Fatalf("(%v).Details()[%d] = %+v, want %+v", str(s), i, details[i], tc.details[i])
 			}
+		}
+
+		hasDetails := s.HasDetails()
+		expectedHasDetails := len(tc.details) > 0
+		if hasDetails != expectedHasDetails {
+			t.Fatalf("(%v).HasDetails() = %v, want %v", str(s), hasDetails, expectedHasDetails)
 		}
 	}
 }
@@ -435,6 +444,12 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 			if !cmp.Equal(d, tc.want[i], cmp.Comparer(proto.Equal)) {
 				t.Fatalf("s.Details()[%v] was %v; want %v", i, d, tc.want[i])
 			}
+		}
+
+		hasDetails := tc.s.HasDetails()
+		expectedHasDetails := len(tc.want) > 0
+		if hasDetails != expectedHasDetails {
+			t.Fatalf("s.HasDetails() = %v, want %v", hasDetails, expectedHasDetails)
 		}
 	}
 }
