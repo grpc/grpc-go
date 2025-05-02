@@ -273,18 +273,17 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 // have taken place. It also persists metrics data keyed on the metrics
 // type.
 type testMetricsReporter struct {
-	intCountCh *testutils.Channel
+	metricsCh *testutils.Channel
 
-	// mu protects data.
 	mu sync.Mutex
-	// data is the most recent update for each metric type.
+	// data is the most recent update for each metric.
 	data map[string]float64
 }
 
 // newTestMetricsReporter returns a new testMetricsReporter.
 func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
-		intCountCh: testutils.NewChannelWithSize(1),
+		metricsCh: testutils.NewChannelWithSize(1),
 
 		data: make(map[string]float64),
 	}
@@ -299,56 +298,32 @@ func (r *testMetricsReporter) metric(name string) (float64, bool) {
 	return data, ok
 }
 
-// metricsData represents data associated with a metric.
-type metricsData struct {
-	intIncr int64    // count to be incremented.
-	name    string   // name of the metric.
-	labels  []string // labels associated with the metric.
-}
-
-// waitForInt64Count waits for an int64 count metric to be recorded and verifies
-// that the recorded metrics data matches the expected metricsDataWant. Returns
+// waitForMetric waits for a metric to be recorded and verifies that the
+// recorded metrics data matches the expected metricsDataWant. Returns
 // an error if failed to wait or received wrong data.
-func (r *testMetricsReporter) waitForInt64Count(ctx context.Context, metricsDataWant metricsData) error {
-	got, err := r.intCountCh.Receive(ctx)
+func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant any) error {
+	got, err := r.metricsCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout waiting for int64Count")
 	}
-	metricsDataGot := got.(metricsData)
-	if diff := cmp.Diff(metricsDataGot, metricsDataWant, cmp.AllowUnexported(metricsData{})); diff != "" {
-		return fmt.Errorf("int64count metricsData received unexpected value (-got, +want): %v", diff)
+	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+		return fmt.Errorf("received unexpected metrics value (-got, +want): %v", diff)
 	}
 	return nil
 }
 
-// ReportMetric sends the metrics data to the intCountCh channel and updates
+// ReportMetric sends the metrics data to the metricsCh channel and updates
 // the internal data map with the recorded value.
 func (r *testMetricsReporter) ReportMetric(m any) {
+	r.metricsCh.Send(m)
+
 	var metricName string
-
-	switch metric := m.(type) {
+	switch m.(type) {
 	case *metrics.ResourceUpdateValid:
-		r.intCountCh.Send(metricsData{
-			intIncr: 1,
-			name:    "xds_client.resource_updates_valid",
-			labels:  []string{"xds-client", metric.ServerURI, metric.ResourceType},
-		})
 		metricName = "xds_client.resource_updates_valid"
-
 	case *metrics.ResourceUpdateInvalid:
-		r.intCountCh.Send(metricsData{
-			intIncr: 1,
-			name:    "xds_client.resource_updates_invalid",
-			labels:  []string{"xds-client", metric.ServerURI, metric.ResourceType},
-		})
 		metricName = "xds_client.resource_updates_invalid"
-
 	case *metrics.ServerFailure:
-		r.intCountCh.Send(metricsData{
-			intIncr: 1,
-			name:    "xds_client.server_failure",
-			labels:  []string{"xds-client", metric.ServerURI},
-		})
 		metricName = "xds_client.server_failure"
 	}
 

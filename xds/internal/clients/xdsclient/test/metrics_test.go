@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 )
@@ -67,7 +68,6 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
-
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
@@ -84,7 +84,6 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		},
 		MetricsReporter: tmr,
 	}
-
 	// Create an xDS client with the above config.
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
@@ -95,12 +94,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	// Watch the valid listener configured on the management server. This should
 	// cause a resource updates valid count to emit eventually.
 	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
-	mdWant := metricsData{
-		intIncr: 1,
-		name:    "xds_client.resource_updates_valid",
-		labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
-	}
-	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Invalid should have no recording point.
@@ -120,13 +114,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
-
-	mdWant = metricsData{
-		intIncr: 1,
-		name:    "xds_client.resource_updates_invalid",
-		labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
-	}
-	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateInvalid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Valid should stay the same at 1.
@@ -148,6 +136,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
+
 	lis := testutils.NewRestartableListener(l)
 	streamOpened := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -168,7 +157,6 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
-
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
@@ -185,7 +173,6 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 		},
 		MetricsReporter: tmr,
 	}
-
 	// Create an xDS client with the above config.
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
@@ -212,12 +199,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	mdWant := metricsData{
-		intIncr: 1,
-		name:    "xds_client.server_failure",
-		labels:  []string{"xds-client", mgmtServer.Address},
-	}
-	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
 		t.Fatal(err.Error())
 	}
 }
@@ -237,6 +219,7 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
+
 	lis := testutils.NewRestartableListener(l)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lis})
 	const listenerResourceName = "test-listener-resource"
@@ -256,7 +239,6 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 		ServerURI:  mgmtServer.Address,
 		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
 	}
-
 	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
@@ -273,7 +255,6 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 		},
 		MetricsReporter: tmr,
 	}
-
 	// Create an xDS client with the above config.
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
@@ -284,12 +265,7 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Watch the valid listener configured on the management server. This should
 	// cause a resource updates valid count to emit eventually.
 	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
-	mdWant := metricsData{
-		intIncr: 1,
-		name:    "xds_client.resource_updates_valid",
-		labels:  []string{"xds-client", mgmtServer.Address, "ListenerResource"},
-	}
-	if err := tmr.waitForInt64Count(ctx, mdWant); err != nil {
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
 	// Server failure should have no recording point.
@@ -306,13 +282,8 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	mdWant = metricsData{
-		intIncr: 1,
-		name:    "xds_client.server_failure",
-		labels:  []string{"xds-client", mgmtServer.Address},
-	}
 	// Server failure should still have no recording point.
-	if err := tmr.waitForInt64Count(ctx, mdWant); err == nil {
+	if err := tmr.waitForMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err == nil {
 		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
 	}
 }
