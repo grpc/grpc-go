@@ -88,6 +88,8 @@ type ClientHandshakerOptions struct {
 	TargetServiceAccounts []string
 	// RPCVersions specifies the gRPC versions accepted by the client.
 	RPCVersions *altspb.RpcProtocolVersions
+	// BoundAccessToken is a bound access token to be sent to the server for authentication.
+	BoundAccessToken string
 }
 
 // ServerHandshakerOptions contains the server handshaker options that can
@@ -195,7 +197,9 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 			},
 		},
 	}
-
+	if h.clientOpts.BoundAccessToken != "" {
+		req.GetClientStart().AccessToken = h.clientOpts.BoundAccessToken
+	}
 	conn, result, err := h.doHandshake(req)
 	if err != nil {
 		return nil, nil, err
