@@ -152,7 +152,7 @@ func (s) TestJoinDialOption(t *testing.T) {
 // size passed through a joined dial option is correctly applied. It configures
 // a joined dial option using WithStaticStreamWindowSize and verifies that the
 // resulting dial options include the expected stream window size.
-func TestJoinDialOption_StaticStreamWindowSize(t *testing.T) {
+func (s) TestJoinDialOption_StaticStreamWindowSize(t *testing.T) {
 	const staticWindowSize = 123456
 	jdo := newJoinDialOption(
 		WithTransportCredentials(insecure.NewCredentials()),
