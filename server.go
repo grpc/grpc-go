@@ -312,8 +312,10 @@ func StaticConnWindowSize(s int32) ServerOption {
 	})
 }
 
-// Alias for clarity — behaves like InitialWindowSize
-// Deprecated: use WithStaticStreamWindowSize to retain BDP
+// InitialStreamWindowSize is an alias for InitialWindowSize, provided for
+// naming clarity.
+//
+// Deprecated: Use StaticStreamWindowSize instead to retain BDP estimation.
 func InitialStreamWindowSize(n int32) ServerOption {
 	return InitialWindowSize(n)
 }

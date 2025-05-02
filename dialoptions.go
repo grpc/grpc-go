@@ -245,8 +245,10 @@ func WithStaticConnWindowSize(s int32) DialOption {
 	})
 }
 
-// Alias for clarity — behaves like InitialWindowSize
-// Deprecated: use WithStaticStreamWindowSize to retain BDP
+// WithInitialStreamWindowSize is an alias for WithInitialWindowSize, provided
+// for naming clarity.
+//
+// Deprecated: Use WithStaticStreamWindowSize instead to retain BDP estimation.
 func WithInitialStreamWindowSize(n int32) DialOption {
 	return WithInitialWindowSize(n)
 }
