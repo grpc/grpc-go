@@ -56,14 +56,13 @@ func newLoadStore() *LoadStore {
 	}
 }
 
-// Stop stops the LRS stream associated with this LoadStore.
+// Stop signals the LoadStore to stop reporting.
 //
-// If this is the last reference to the underlying LRS stream, the
-// stream will be closed.
+// Before closing the underlying LRS stream, this method may block until a
+// final load report send attempt completes or the provided context `ctx` expires.
 //
-// The provided context should have a deadline or timeout set. If this is the
-// last reference, Stop will block until the context is done or an attempt
-// to flush pending load reports is made before closing the stream.
+// The provided `ctx` must have a deadline or timeout set to prevent Stop from
+// blocking indefinitely if the final send attempt fails to complete.
 func (ls *LoadStore) Stop(ctx context.Context) {
 	ls.stop(ctx)
 }
