@@ -369,7 +369,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		// and error.
 		if uErr.Err != nil {
 			if a.metricsReporter != nil {
-				a.metricsReporter.ReportMetric(&metrics.MetricResourceUpdateInvalid{
+				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
 					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 				})
 			}
@@ -389,7 +389,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		}
 
 		if a.metricsReporter != nil {
-			a.metricsReporter.ReportMetric(&metrics.MetricResourceUpdateValid{
+			a.metricsReporter.ReportMetric(&metrics.ResourceUpdateValid{
 				ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
 			})
 		}

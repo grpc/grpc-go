@@ -21,22 +21,22 @@
 // from this package passed by pointer.
 package metrics
 
-// MetricResourceUpdateValid is a metric to report a valid resource update from
+// ResourceUpdateValid is a metric to report a valid resource update from
 // the xDS management server for a given resource type.
-type MetricResourceUpdateValid struct {
+type ResourceUpdateValid struct {
 	ServerURI    string // ServerURI of the xDS management server.
 	ResourceType string // Resource type.
 }
 
-// MetricResourceUpdateInvalid is a metric to report an invalid resource update
+// ResourceUpdateInvalid is a metric to report an invalid resource update
 // from the xDS management server for a given resource type.
-type MetricResourceUpdateInvalid struct {
+type ResourceUpdateInvalid struct {
 	ServerURI    string // ServerURI of the xDS management server.
 	ResourceType string // Resource type.
 }
 
-// MetricServerFailure is a metric to report a server failure of the xDS
+// ServerFailure is a metric to report a server failure of the xDS
 // management server.
-type MetricServerFailure struct {
+type ServerFailure struct {
 	ServerURI string // ServerURI of the xDS management server.
 }

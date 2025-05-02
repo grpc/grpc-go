@@ -327,7 +327,7 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 	var metricName string
 
 	switch metric := m.(type) {
-	case *metrics.MetricResourceUpdateValid:
+	case *metrics.ResourceUpdateValid:
 		r.intCountCh.Send(metricsData{
 			intIncr: 1,
 			name:    "xds_client.resource_updates_valid",
@@ -335,7 +335,7 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 		})
 		metricName = "xds_client.resource_updates_valid"
 
-	case *metrics.MetricResourceUpdateInvalid:
+	case *metrics.ResourceUpdateInvalid:
 		r.intCountCh.Send(metricsData{
 			intIncr: 1,
 			name:    "xds_client.resource_updates_invalid",
@@ -343,7 +343,7 @@ func (r *testMetricsReporter) ReportMetric(m any) {
 		})
 		metricName = "xds_client.resource_updates_invalid"
 
-	case *metrics.MetricServerFailure:
+	case *metrics.ServerFailure:
 		r.intCountCh.Send(metricsData{
 			intIncr: 1,
 			name:    "xds_client.server_failure",
