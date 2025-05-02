@@ -47,4 +47,20 @@ if [[ -n "${DIFF}" ]]; then
     exit 1
 fi
 
+# test use separate service package
+protoc \
+    --go-grpc_out="${TEMPDIR}" \
+    --go-grpc_opt=paths=source_relative,use_separate_service_package=true \
+    "examples/route_guide/routeguide/route_guide.proto"
+
+# grep is piped to [[ $? == 1 ]] to avoid exiting on grep but exit on error
+# (like if the file was not found). See man grep for more info.
+GREP=$(grep 'routeguide "google.golang.org/grpc/examples/route_guide/routeguide"' \
+    "${TEMPDIR}/examples/route_guide/routeguide/route_guide_grpc.pb.go" || [[ $? == 1 ]])
+
+if [[ -z "${GREP}" ]]; then
+    echo -e "ERROR: Generated file not import routeguide package\n"
+    exit 1
+fi
+
 echo SUCCESS
