@@ -132,7 +132,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 			Addresses: []resolver.Address{{Addr: target.Endpoint()}},
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
 		}
-		// r.targetResolverState = &state
 		r.updateTargetResolverState(*r.targetResolverState)
 		return r, nil
 	}
@@ -249,13 +248,9 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		}))
 	}
 
-	// Create a list of combined endpoints by pairing all proxy endpoints with
-	// every target endpoint. Each time, it constructs a new [resolver.Endpoint]
-	// using the all addresses from all the proxy endpoint and the target
-	// addresses from one endpoint. The target address and user information from
-	// the proxy URL are added as attributes to the proxy address.The resulting
-	// list of addresses is then grouped into endpoints, covering all
-	// combinations of proxy and target endpoints.
+	// For each target endpoint, construct a new [resolver.Endpoint] that
+	// includes all addresses from all proxy endpoints and the addresses from
+	// that target endpoint, preserving the number of target endpoints.
 	var endpoints []resolver.Endpoint
 	for _, endpt := range (*r.targetResolverState).Endpoints {
 		var addrs []resolver.Address
