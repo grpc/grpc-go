@@ -61,8 +61,8 @@ func newLoadStore() *LoadStore {
 // Before closing the underlying LRS stream, this method may block until a
 // final load report send attempt completes or the provided context `ctx` expires.
 //
-// The provided `ctx` must have a deadline or timeout set to prevent Stop from
-// blocking indefinitely if the final send attempt fails to complete.
+// The provided context must have a deadline or timeout set to prevent Stop
+// from blocking indefinitely if the final send attempt fails to complete.
 func (ls *LoadStore) Stop(ctx context.Context) {
 	ls.stop(ctx)
 }
