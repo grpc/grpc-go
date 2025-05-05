@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/pretty"
+	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
@@ -1083,10 +1084,7 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(st.Code()))})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(st.Message())})
 
-	if st.HasDetails() {
-		// len(p.Details) must be > 0 since st.HasDetails() is true.
-		p := st.Proto()
-
+	if p := istatus.RawStatusProto(st); len(p.GetDetails()) > 0 {
 		// Do not use the user's grpc-status-details-bin (if present) if we are
 		// even attempting to set our own.
 		delete(s.trailer, grpcStatusDetailsBinHeader)

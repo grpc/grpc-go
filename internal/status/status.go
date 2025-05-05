@@ -198,14 +198,6 @@ func (s *Status) Details() []any {
 	return details
 }
 
-// HasDetails returns true if the status has details.
-func (s *Status) HasDetails() bool {
-	if s == nil || s.s == nil {
-		return false
-	}
-	return len(s.s.Details) > 0
-}
-
 func (s *Status) String() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", s.Code(), s.Message())
 }
@@ -243,4 +235,12 @@ func IsRestrictedControlPlaneCode(s *Status) bool {
 		return true
 	}
 	return false
+}
+
+// RawStatusProto returns the internal protobuf message for use by gRPC itself.
+func RawStatusProto(s *Status) *spb.Status {
+	if s == nil {
+		return nil
+	}
+	return s.s
 }
