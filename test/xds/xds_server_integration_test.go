@@ -122,8 +122,6 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte, opts ...grpc.Server
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
 
-	stubserver.StartTestService(t, stub)
-
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -135,11 +133,8 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte, opts ...grpc.Server
 		serverReady: *grpcsync.NewEvent(),
 	}
 
-	go func() {
-		if err := stub.S.Serve(readyLis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stub.Listener = readyLis
+	stubserver.StartTestService(t, stub)
 
 	// Wait for the server to start running.
 	select {
