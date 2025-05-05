@@ -1747,14 +1747,9 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 		})
 	}
 	stream.CloseSend()
-	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("stream.Recv received an unexpected error: %v", err)
-		}
+	_, err = stream.Recv()
+	if err != io.EOF {
+		t.Fatalf("stream.Recv() got unexpected err=%v; want io.EOF", err)
 	}
 
 	wantSpanInfos := []traceSpanInfo{
