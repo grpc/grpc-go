@@ -148,15 +148,18 @@ func (s) TestJoinDialOption(t *testing.T) {
 	}
 }
 
-// TestJoinDialOption_StaticStreamWindowSize tests that a static stream window
-// size passed through a joined dial option is correctly applied. It configures
-// a joined dial option using WithStaticStreamWindowSize and verifies that the
-// resulting dial options include the expected stream window size.
-func (s) TestJoinDialOption_StaticStreamWindowSize(t *testing.T) {
-	const staticWindowSize = 123456
+// TestJoinDialOption_StaticConnAndStreamWindowSizes verifies that both static
+// stream and connection window sizes set via joined dial options are correctly
+// applied.
+func (s) TestJoinDialOption_StaticConnAndStreamWindowSizes(t *testing.T) {
+	const (
+		staticWindowSize = 123456
+		staticConnSize   = 654321
+	)
 	jdo := newJoinDialOption(
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithStaticStreamWindowSize(staticWindowSize),
+		WithStaticConnWindowSize(staticConnSize),
 	)
 	cc, err := Dial("fake", jdo)
 	if err != nil {
@@ -164,8 +167,10 @@ func (s) TestJoinDialOption_StaticStreamWindowSize(t *testing.T) {
 	}
 	defer cc.Close()
 	if cc.dopts.copts.StaticStreamWindowSize != staticWindowSize {
-		t.Fatalf("Unexpected StaticStreamWindowSize: got %d, want %d",
-			cc.dopts.copts.StaticStreamWindowSize, staticWindowSize)
+		t.Fatalf("Unexpected cc.dopts.copts.StaticStreamWindowSize: %d != %d", cc.dopts.copts.StaticStreamWindowSize, staticWindowSize)
+	}
+	if cc.dopts.copts.StaticConnWindowSize != staticConnSize {
+		t.Fatalf("Expected StaticConnWindowSize = %d, got %d", staticConnSize, cc.dopts.copts.StaticConnWindowSize)
 	}
 
 }
