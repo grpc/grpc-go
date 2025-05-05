@@ -33,12 +33,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz/audit"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -842,9 +844,22 @@ func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uin
 
 func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
+	// We need to wait for the server to enter SERVING mode before making RPCs
+	// to avoid flakes due to the server closing connections.
+	servingCh := make(chan struct{})
 
-	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+	// Initialize a test gRPC server, assign it to the stub server, and start
+	// the test service.
+	opt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		if args.Mode == connectivity.ServingModeServing {
+			close(servingCh)
+		}
+	})
+	lis, cleanup2 := setupGRPCServer(t, bootstrapContents, opt)
 	defer cleanup2()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
@@ -867,11 +882,15 @@ func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 	inboundLis := serverListenerWithBadRouteConfiguration(t, host, port)
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	// Setup the management server with client and server-side resources.
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go SERVING")
+	case <-servingCh:
 	}
 
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))

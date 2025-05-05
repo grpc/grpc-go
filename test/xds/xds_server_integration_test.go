@@ -83,7 +83,7 @@ func (l *acceptNotifyingListener) Accept() (net.Conn, error) {
 // Returns the following:
 // - local listener on which the xDS-enabled gRPC server is serving on
 // - cleanup function to be invoked by the tests when done
-func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func()) {
+func setupGRPCServer(t *testing.T, bootstrapContents []byte, opts ...grpc.ServerOption) (net.Listener, func()) {
 	t.Helper()
 
 	// Configure xDS credentials to be used on the server-side.
@@ -113,11 +113,14 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		},
 	}
 
-	if stub.S, err = xds.NewGRPCServer(grpc.Creds(creds), testModeChangeServerOption(t), xds.BootstrapContentsForTesting(bootstrapContents)); err != nil {
+	opts = append([]grpc.ServerOption{
+		grpc.Creds(creds),
+		testModeChangeServerOption(t),
+		xds.BootstrapContentsForTesting(bootstrapContents),
+	}, opts...)
+	if stub.S, err = xds.NewGRPCServer(opts...); err != nil {
 		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
 	}
-
-	stubserver.StartTestService(t, stub)
 
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
@@ -130,11 +133,8 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		serverReady: *grpcsync.NewEvent(),
 	}
 
-	go func() {
-		if err := stub.S.Serve(readyLis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
+	stub.Listener = readyLis
+	stubserver.StartTestService(t, stub)
 
 	// Wait for the server to start running.
 	select {
