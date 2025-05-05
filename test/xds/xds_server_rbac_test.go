@@ -35,9 +35,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -846,49 +844,19 @@ func serverListenerWithBadRouteConfiguration(t *testing.T, host string, port uin
 
 func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 	managementServer, nodeID, bootstrapContents, xdsResolver := setup.ManagementServerAndResolver(t)
-
-	// Initialize a test gRPC server, assign it to the stub server, and start
-	// the test service.
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	stub := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		Listener: lis,
-	}
-
 	// We need to wait for the server to enter SERVING mode before making RPCs
 	// to avoid flakes due to the server closing connections.
 	servingCh := make(chan struct{})
-	// Configure xDS credentials to be used on the server-side.
-	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
-		FallbackCreds: insecure.NewCredentials(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	opts := []grpc.ServerOption{
-		grpc.Creds(creds),
-		testModeChangeServerOption(t),
-		xds.BootstrapContentsForTesting(bootstrapContents),
-		xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
-			if args.Mode == connectivity.ServingModeServing {
-				close(servingCh)
-			}
-		}),
-	}
-	if stub.S, err = xds.NewGRPCServer(opts...); err != nil {
-		t.Fatalf("Failed to create an xDS enabled gRPC server: %v", err)
-	}
 
-	stubserver.StartTestService(t, stub)
-	defer stub.S.Stop()
+	// Initialize a test gRPC server, assign it to the stub server, and start
+	// the test service.
+	opt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		if args.Mode == connectivity.ServingModeServing {
+			close(servingCh)
+		}
+	})
+	lis, cleanup2 := setupGRPCServer(t, bootstrapContents, opt)
+	defer cleanup2()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
