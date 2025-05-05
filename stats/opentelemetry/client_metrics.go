@@ -158,9 +158,6 @@ func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 func getOrCreateRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
 	ri := getRPCInfo(ctx)
 	if ri != nil {
-		if ri.ai == nil {
-			ri.ai = &attemptInfo{}
-		}
 		return ctx, ri.ai
 	}
 	ri = &rpcInfo{ai: &attemptInfo{}}
