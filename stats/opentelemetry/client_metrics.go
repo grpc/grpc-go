@@ -157,14 +157,14 @@ func (h *clientMetricsHandler) HandleConn(context.Context, stats.ConnStats) {}
 // and ensures it is set in the context along with the rpcInfo.
 func getOrCreateRPCAttemptInfo(ctx context.Context) (context.Context, *attemptInfo) {
 	ri := getRPCInfo(ctx)
-	if ri == nil {
-		ri = &rpcInfo{}
+	if ri != nil {
+		if ri.ai == nil {
+			ri.ai = &attemptInfo{}
+		}
+		return ctx, ri.ai
 	}
-	ai := ri.ai
-	if ai == nil {
-		ai = &attemptInfo{}
-	}
-	return setRPCInfo(ctx, &rpcInfo{ai: ai}), ai
+	ri = &rpcInfo{ai: &attemptInfo{}}
+	return setRPCInfo(ctx, ri), ri.ai
 }
 
 // TagRPC implements per RPC attempt context management for metrics.
