@@ -24,24 +24,19 @@ package metrics
 // ResourceUpdateValid is a metric to report a valid resource update from
 // the xDS management server for a given resource type.
 type ResourceUpdateValid struct {
-	// ServerURI of the xDS management server.
-	ServerURI string
-	// Resource type that was updated by the xDS management server.
+	ServerURI    string
 	ResourceType string
 }
 
 // ResourceUpdateInvalid is a metric to report an invalid resource update
 // from the xDS management server for a given resource type.
 type ResourceUpdateInvalid struct {
-	// ServerURI of the xDS management server.
-	ServerURI string
-	// Resource type that was updated by the xDS management server.
+	ServerURI    string
 	ResourceType string
 }
 
 // ServerFailure is a metric to report a server failure of the xDS
 // management server.
 type ServerFailure struct {
-	// ServerURI of the xDS management server.
 	ServerURI string
 }
