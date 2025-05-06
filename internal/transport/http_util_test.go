@@ -22,13 +22,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"reflect"
 	"testing"
 	"time"
 )
 
-func (s) TestTimeoutDecode(t *testing.T) {
+func (s) TestDecodeTimeout(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		s string
@@ -36,14 +37,31 @@ func (s) TestTimeoutDecode(t *testing.T) {
 		d   time.Duration
 		err error
 	}{
+		{"0S", 0, nil},
+		{"00000000S", 0, nil},
+		{"00000001n", time.Nanosecond, nil},
+		{"10u", time.Microsecond * 10, nil},
+		{"00000010m", time.Millisecond * 10, nil},
 		{"1234S", time.Second * 1234, nil},
+		{"00000001M", time.Minute, nil},
+		{"09999999S", time.Second * 9999999, nil},
+		{"99999999S", time.Second * 99999999, nil},
+		{"99999999M", time.Minute * 99999999, nil},
+		{"2562047H", time.Hour * 2562047, nil},
+		{"2562048H", time.Duration(math.MaxInt64), nil},
+		{"99999999H", time.Duration(math.MaxInt64), nil},
+		{"-1S", 0, fmt.Errorf("strconv.ParseUint: parsing %q: invalid syntax", "-1")},
 		{"1234x", 0, fmt.Errorf("transport: timeout unit is not recognized: %q", "1234x")},
+		{"1234s", 0, fmt.Errorf("transport: timeout unit is not recognized: %q", "1234s")},
+		{"1234", 0, fmt.Errorf("transport: timeout unit is not recognized: %q", "1234")},
 		{"1", 0, fmt.Errorf("transport: timeout string is too short: %q", "1")},
 		{"", 0, fmt.Errorf("transport: timeout string is too short: %q", "")},
+		{"9a1S", 0, fmt.Errorf("strconv.ParseUint: parsing %q: invalid syntax", "9a1")},
+		{"000000000S", 0, fmt.Errorf("transport: timeout string is too long: %q", "000000000S")},
 	} {
 		d, err := decodeTimeout(test.s)
 		if d != test.d || fmt.Sprint(err) != fmt.Sprint(test.err) {
-			t.Fatalf("timeoutDecode(%q) = %d, %v, want %d, %v", test.s, int64(d), err, int64(test.d), test.err)
+			t.Errorf("timeoutDecode(%q) = %d, %v, want %d, %v", test.s, int64(d), err, int64(test.d), test.err)
 		}
 	}
 }
