@@ -49,6 +49,12 @@ func (info) AuthType() string {
 	return "local"
 }
 
+// ValidateAuthority allows any value to be overridden for the :authority
+// header.
+func (info) ValidateAuthority(string) error {
+	return nil
+}
+
 // localTC is the credentials required to establish a local connection.
 type localTC struct {
 	info credentials.ProtocolInfo

@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -163,6 +164,38 @@ func (s) TestAuthorityCallOptionWithInsecureCreds(t *testing.T) {
 	defer ss.Stop()
 
 	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(authority)); err != nil {
+		t.Fatalf("EmptyCall() rpc failed: %v", err)
+	}
+}
+
+// Tests the scenario where the `grpc.CallAuthority` call option is used with
+// local transport credentials. The test verifies that the specified
+// authority is correctly propagated to the server.
+func (s) TestAuthorityCallOptionWithLocalCreds(t *testing.T) {
+	const authority = "test.server.name"
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			if err := authorityChecker(ctx, authority); err != nil {
+				return nil, err
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
 	}
