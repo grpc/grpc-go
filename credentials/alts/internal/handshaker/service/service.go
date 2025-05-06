@@ -26,6 +26,7 @@ import (
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -55,10 +56,12 @@ func Dial(hsAddress string) (*grpc.ClientConn, error) {
 		opts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDisableServiceConfig(),
-			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+		}
+		if envconfig.ALTSHandshakerKeepaliveParams {
+			opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
 				Timeout: 10 * time.Second,
 				Time:    10 * time.Minute,
-			}),
+			}))
 		}
 		hsConn, err = grpc.NewClient(hsAddress, opts...)
 		if err != nil {
