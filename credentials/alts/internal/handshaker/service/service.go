@@ -56,8 +56,8 @@ func Dial(hsAddress string) (*grpc.ClientConn, error) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDisableServiceConfig(),
 			grpc.WithKeepaliveParams(keepalive.ClientParameters{
-				Timeout: 5 * time.Second,
-				Time:    time.Hour,
+				Timeout: 10 * time.Second,
+				Time:    10 * time.Minute,
 			}),
 		}
 		hsConn, err = grpc.NewClient(hsAddress, opts...)
