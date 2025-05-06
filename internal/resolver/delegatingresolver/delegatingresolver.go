@@ -50,6 +50,9 @@ type delegatingResolver struct {
 	cc       resolver.ClientConn // gRPC ClientConn
 	proxyURL *url.URL            // proxy URL, derived from proxy environment and target
 
+	// We do not hold both mu and childMu in the same goroutine. Avoid holding
+	// both locks when calling into the child, as the child resolver may
+	// synchronously callback into the channel.
 	mu                  sync.Mutex         // protects all the fields below
 	targetResolverState *resolver.State    // state of the target resolver
 	proxyAddrs          []resolver.Address // resolved proxy addresses; empty if no proxy is configured
