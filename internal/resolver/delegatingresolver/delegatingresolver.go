@@ -346,6 +346,9 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
+	// The proxy resolver may be rebuilt multiple times, specifically each time
+	// the target resolver sends an update, even if the target resolver is built
+	// successfully but building the proxy resolver fails.
 	if len(r.proxyAddrs) == 0 {
 		go func() {
 			r.childMu.Lock()
