@@ -22,9 +22,11 @@ package service
 
 import (
 	"sync"
+	"time"
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 )
 
 var (
@@ -50,7 +52,16 @@ func Dial(hsAddress string) (*grpc.ClientConn, error) {
 		// Disable the service config to avoid unnecessary TXT record lookups that
 		// cause timeouts with some versions of systemd-resolved.
 		var err error
-		hsConn, err = grpc.NewClient(hsAddress, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDisableServiceConfig())
+		opts := []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDisableServiceConfig(),
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Timeout:             5 * time.Second,
+				Time:                time.Hour,
+				PermitWithoutStream: true,
+			}),
+		}
+		hsConn, err = grpc.NewClient(hsAddress, opts...)
 		if err != nil {
 			return nil, err
 		}
