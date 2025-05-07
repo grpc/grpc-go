@@ -1136,12 +1136,6 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 			}
 			return io.EOF // indicates successful end of stream.
 		}
-		// The RPC status may be obtained from the RST_STREAM error code.
-		if err == io.ErrUnexpectedEOF {
-			if status := a.transportStream.Status(); status != nil {
-				return status.Err()
-			}
-		}
 
 		return toRPCErr(err)
 	}
@@ -1481,12 +1475,6 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 				return statusErr
 			}
 			return io.EOF // indicates successful end of stream.
-		}
-		// The RPC status may be obtained from the RST_STREAM error code.
-		if err == io.ErrUnexpectedEOF {
-			if status := as.transportStream.Status(); status != nil {
-				return status.Err()
-			}
 		}
 		return toRPCErr(err)
 	}
