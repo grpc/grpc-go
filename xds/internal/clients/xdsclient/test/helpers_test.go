@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,7 +35,6 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -277,7 +277,7 @@ type testMetricsReporter struct {
 
 	mu sync.Mutex
 	// data is the most recent update for each metric.
-	data map[string]float64
+	data map[reflect.Type]float64
 }
 
 // newTestMetricsReporter returns a new testMetricsReporter.
@@ -285,16 +285,16 @@ func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
 		metricsCh: testutils.NewChannelWithSize(1),
 
-		data: make(map[string]float64),
+		data: make(map[reflect.Type]float64),
 	}
 }
 
-// metric returns the most recent data for a metric, and whether this recorder
-// has received data for a metric.
-func (r *testMetricsReporter) metric(name string) (float64, bool) {
+// metric returns the most recent data for a metric type, and whether this
+// recorder has received data for a metric.
+func (r *testMetricsReporter) metric(metricType reflect.Type) (float64, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	data, ok := r.data[name]
+	data, ok := r.data[metricType]
 	return data, ok
 }
 
@@ -317,17 +317,7 @@ func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant
 func (r *testMetricsReporter) ReportMetric(m any) {
 	r.metricsCh.Send(m)
 
-	var metricName string
-	switch m.(type) {
-	case *metrics.ResourceUpdateValid:
-		metricName = "xds_client.resource_updates_valid"
-	case *metrics.ResourceUpdateInvalid:
-		metricName = "xds_client.resource_updates_invalid"
-	case *metrics.ServerFailure:
-		metricName = "xds_client.server_failure"
-	}
-
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.data[metricName]++
+	r.data[reflect.TypeOf(m)]++
 }

@@ -21,6 +21,7 @@ package xdsclient_test
 import (
 	"context"
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -98,7 +99,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	// Invalid should have no recording point.
-	if got, _ := tmr.metric("xds_client.resource_updates_invalid"); got != 0 {
+	if got, _ := tmr.metric(reflect.TypeOf(&metrics.ResourceUpdateInvalid{})); got != 0 {
 		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 0)
 	}
 
@@ -118,7 +119,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	// Valid should stay the same at 1.
-	if got, _ := tmr.metric("xds_client.resource_updates_invalid"); got != 1 {
+	if got, _ := tmr.metric(reflect.TypeOf(&metrics.ResourceUpdateInvalid{})); got != 1 {
 		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
 	}
 }
@@ -269,7 +270,7 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	// Server failure should have no recording point.
-	if got, _ := tmr.metric("grpc.xds_client.server_failure"); got != 0 {
+	if got, _ := tmr.metric(reflect.TypeOf(&metrics.ServerFailure{})); got != 0 {
 		t.Fatalf("Unexpected data for metric \"grpc.xds_client.server_failure\", got: %v, want: %v", got, 0)
 	}
 
