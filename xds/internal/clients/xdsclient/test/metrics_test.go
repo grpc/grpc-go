@@ -21,7 +21,6 @@ package xdsclient_test
 import (
 	"context"
 	"net"
-	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -93,19 +92,14 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	defer client.Close()
 
 	// Watch the valid listener configured on the management server. This should
-	// cause a resource updates valid count to emit eventually.
+	// cause a resource update valid metric to emit eventually.
 	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
 	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
-	// Invalid should have no recording point.
-	if got, _ := tmr.metric(reflect.TypeOf(&metrics.ResourceUpdateInvalid{})); got != 0 {
-		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 0)
-	}
 
-	// Update management server with a bad update. Eventually, tmr should
-	// receive an invalid count received metric. The successful metric should
-	// stay the same.
+	// Update management server with a bad update. This should cause a resource
+	// update invalid metric to emit eventually.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerResourceName, routeConfigurationName)},
@@ -118,16 +112,17 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateInvalid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
-	// Valid should stay the same at 1.
-	if got, _ := tmr.metric(reflect.TypeOf(&metrics.ResourceUpdateInvalid{})); got != 1 {
-		t.Fatalf("Unexpected data for metric \"xds_client.resource_updates_invalid\", got: %v, want: %v", got, 1)
+
+	// Resource update valid metric should have not emitted.
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err == nil {
+		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
 	}
 }
 
 // TestServerFailureMetrics_BeforeResponseRecv configures an xDS client, and a
 // management server. It then register a watcher and stops the management
 // server before sending a resource update, and verifies that the expected
-// metrics for server failure are emitted.
+// metric for server failure is emitted.
 func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -194,7 +189,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	}
 
 	// Close the listener and ensure that the ADS stream breaks. This should
-	// cause a server failure count to emit eventually.
+	// cause a server failure metric to emit eventually.
 	lis.Stop()
 
 	// Restart to prevent the attempt to create a new ADS stream after back off.
@@ -207,10 +202,10 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 
 // TestServerFailureMetrics_AfterResponseRecv configures an xDS client, and a
 // management server to send a valid LDS updates, and verifies that the
-// server failure metric is not emitted. It then closes the management server
+// resource update valid metric is emitted. It then closes the management server
 // listener to close the ADS stream and verifies that the server failure metric
-// is still not emitted because the the ADS stream was closed after having
-// received a response on the stream.
+// is not emitted because the ADS stream was closed after having received a
+// response on the stream.
 func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -269,13 +264,9 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
-	// Server failure should have no recording point.
-	if got, _ := tmr.metric(reflect.TypeOf(&metrics.ServerFailure{})); got != 0 {
-		t.Fatalf("Unexpected data for metric \"grpc.xds_client.server_failure\", got: %v, want: %v", got, 0)
-	}
 
 	// Close the listener and ensure that the ADS stream breaks. This should
-	// cause a server failure count to emit eventually.
+	// cause a server failure metric to emit eventually.
 	lis.Stop()
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout when waiting for ADS stream to close")
@@ -283,7 +274,7 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	// Restart to prevent the attempt to create a new ADS stream after back off.
 	lis.Restart()
 
-	// Server failure should still have no recording point.
+	// Server failure should not have emitted.
 	if err := tmr.waitForMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err == nil {
 		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
 	}

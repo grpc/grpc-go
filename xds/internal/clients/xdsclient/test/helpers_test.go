@@ -23,10 +23,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -270,32 +268,16 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 
 // testMetricsReporter is a MetricsReporter to be used in tests. It sends
 // recording events on channels and provides helpers to check if certain events
-// have taken place. It also persists metrics data keyed on the metrics
-// type.
+// have taken place.
 type testMetricsReporter struct {
 	metricsCh *testutils.Channel
-
-	mu sync.Mutex
-	// data is the most recent update for each metric.
-	data map[reflect.Type]float64
 }
 
 // newTestMetricsReporter returns a new testMetricsReporter.
 func newTestMetricsReporter() *testMetricsReporter {
 	return &testMetricsReporter{
 		metricsCh: testutils.NewChannelWithSize(1),
-
-		data: make(map[reflect.Type]float64),
 	}
-}
-
-// metric returns the most recent data for a metric type, and whether this
-// recorder has received data for a metric.
-func (r *testMetricsReporter) metric(metricType reflect.Type) (float64, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	data, ok := r.data[metricType]
-	return data, ok
 }
 
 // waitForMetric waits for a metric to be recorded and verifies that the
@@ -312,12 +294,7 @@ func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant
 	return nil
 }
 
-// ReportMetric sends the metrics data to the metricsCh channel and updates
-// the internal data map with the recorded value.
+// ReportMetric sends the metrics data to the metricsCh channel.
 func (r *testMetricsReporter) ReportMetric(m any) {
 	r.metricsCh.Send(m)
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.data[reflect.TypeOf(m)]++
 }
