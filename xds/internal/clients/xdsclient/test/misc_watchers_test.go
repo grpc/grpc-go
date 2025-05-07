@@ -26,7 +26,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
@@ -109,14 +108,14 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -220,14 +219,14 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
@@ -385,14 +384,14 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
@@ -483,7 +482,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
 	xdsClientConfig := xdsclient.Config{

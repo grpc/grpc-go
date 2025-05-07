@@ -72,14 +72,14 @@ func (s) TestBuild_Single(t *testing.T) {
 
 	serverID := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "local"},
 	}
-	credentials := map[string]credentials.Bundle{
-		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	configs := map[string]grpctransport.Config{
+		"local": {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 
 	// Calling Build() first time should create new gRPC transport.
-	builder := grpctransport.NewBuilder(credentials)
+	builder := grpctransport.NewBuilder(configs)
 	tr, err := builder.Build(serverID)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -173,19 +173,19 @@ func (s) TestBuild_Multiple(t *testing.T) {
 
 	serverID1 := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "local"},
 	}
 	serverID2 := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	credentials := map[string]credentials.Bundle{
-		"local":    &testCredentials{transportCredentials: local.NewCredentials()},
-		"insecure": insecure.NewBundle(),
+	configs := map[string]grpctransport.Config{
+		"local":    {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"insecure": {Credential: insecure.NewBundle()},
 	}
 
 	// Create two gRPC transports.
-	builder := grpctransport.NewBuilder(credentials)
+	builder := grpctransport.NewBuilder(configs)
 
 	tr1, err := builder.Build(serverID1)
 	if err != nil {

@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
@@ -81,7 +80,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	nodeID := uuid.New().String()
 
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
-	ext := grpctransport.ServerIdentifierExtension{Credentials: "insecure"}
+	ext := grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}
 	siDefault := clients.ServerIdentifier{
 		ServerURI:  defaultAuthorityServer.Address,
 		Extensions: ext,
@@ -91,11 +90,11 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 		Extensions: ext,
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: siDefault}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -242,20 +241,20 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	psi := clients.ServerIdentifier{
 		ServerURI:  primaryMgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 	ssi := clients.ServerIdentifier{
 		ServerURI:  secondaryMgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
 	// Create config with the above primary and fallback management servers,
 	// and an xDS client with that configuration.
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: psi}, {ServerIdentifier: ssi}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the

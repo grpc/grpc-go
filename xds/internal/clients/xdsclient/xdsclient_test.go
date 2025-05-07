@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
@@ -30,7 +29,7 @@ import (
 )
 
 func (s) TestXDSClient_New(t *testing.T) {
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 
 	tests := []struct {
 		name    string
@@ -62,7 +61,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(credentials),
+				TransportBuilder: grpctransport.NewBuilder(configs),
 			},
 			wantErr: "no servers or authorities specified",
 		},
@@ -71,7 +70,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(credentials),
+				TransportBuilder: grpctransport.NewBuilder(configs),
 				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
 			},
 			wantErr: "",
@@ -81,7 +80,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-				TransportBuilder: grpctransport.NewBuilder(credentials),
+				TransportBuilder: grpctransport.NewBuilder(configs),
 				Authorities:      map[string]Authority{"authority-name": {XDSServers: []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}}}},
 			},
 			wantErr: "",
@@ -107,11 +106,11 @@ func (s) TestXDSClient_New(t *testing.T) {
 }
 
 func (s) TestXDSClient_Close(t *testing.T) {
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
 	config := Config{
 		Node:             clients.Node{ID: "node-id"},
 		ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
 	}
 	c, err := New(config)

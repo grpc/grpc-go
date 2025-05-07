@@ -29,7 +29,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
@@ -55,10 +54,10 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	// Create a grpc transport to the above management server.
 	si := clients.ServerIdentifier{
 		ServerURI:  serverURI,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
-	tr, err := (grpctransport.NewBuilder(credentials)).Build(si)
+	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	tr, err := (grpctransport.NewBuilder(configs)).Build(si)
 	if err != nil {
 		t.Fatalf("Failed to create a transport for server config %v: %v", si, err)
 	}
