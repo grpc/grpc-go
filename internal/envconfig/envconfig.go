@@ -69,6 +69,10 @@ var (
 	// to gRFC A76. It can be enabled by setting the environment variable
 	// "GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY" to "true".
 	RingHashSetRequestHashKey = boolFromEnv("GRPC_EXPERIMENTAL_RING_HASH_SET_REQUEST_HASH_KEY", false)
+
+	// ALTSHandshakerKeepaliveParams is set if we should add the
+	// KeepaliveParams when dial the ALTS handshaker service.
+	ALTSHandshakerKeepaliveParams = boolFromEnv("GRPC_EXPERIMENTAL_ALTS_HANDSHAKER_KEEPALIVE_PARAMS", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
