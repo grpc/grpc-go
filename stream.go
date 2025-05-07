@@ -1380,7 +1380,7 @@ func (as *addrConnStream) Trailer() metadata.MD {
 
 func (as *addrConnStream) CloseSend() error {
 	if as.sentLast {
-		// TODO: return an error and finish the stream instead, due to API misuse?
+		// Return a nil error on repeated calls to this method.
 		return nil
 	}
 	as.sentLast = true
