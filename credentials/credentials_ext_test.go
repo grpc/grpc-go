@@ -58,18 +58,19 @@ func authorityChecker(ctx context.Context, wantAuthority string) error {
 	return nil
 }
 
-func loadTLSCreds() (serverCreds credentials.TransportCredentials, clientCreds credentials.TransportCredentials, err error) {
+func loadTLSCreds(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
 	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
-		return nil, nil, fmt.Errorf("LoadX509KeyPair: %w", err)
+		t.Fatalf("Failed to load key pair: %s", err)
+		return nil, nil
 	}
-	serverCreds = credentials.NewServerTLSFromCert(&cert)
+	serverCreds := grpc.Creds(credentials.NewServerTLSFromCert(&cert))
 
-	clientCreds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+	clientCreds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 	if err != nil {
-		return nil, nil, fmt.Errorf("NewClientTLSFromFile: %w", err)
+		t.Fatalf("Failed to create client credentials: %s", err)
 	}
-	return serverCreds, clientCreds, nil
+	return serverCreds, grpc.WithTransportCredentials(clientCreds)
 }
 
 // Tests the scenario where the `grpc.CallAuthority` call option is used with
@@ -79,31 +80,32 @@ func loadTLSCreds() (serverCreds credentials.TransportCredentials, clientCreds c
 func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
 	const authority = "auth.test.example.com"
 
-	serverTLS, clientTLS, err := loadTLSCreds()
-	if err != nil {
-		t.Fatalf("Failed to load TLS credentials: %v", err)
-	}
-
 	tests := []struct {
 		name         string
-		serverCreds  grpc.ServerOption
-		clientCreds  grpc.DialOption
+		creds        func(t *testing.T) (grpc.ServerOption, grpc.DialOption)
 		expectedAuth string
 	}{
 		{
-			name:         "Insecure",
-			clientCreds:  grpc.WithTransportCredentials(insecure.NewCredentials()),
+			name: "Insecure",
+			creds: func(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
+				c := insecure.NewCredentials()
+				return grpc.Creds(c), grpc.WithTransportCredentials(c)
+			},
 			expectedAuth: authority,
 		},
 		{
-			name:         "Local",
-			clientCreds:  grpc.WithTransportCredentials(local.NewCredentials()),
+			name: "Local",
+			creds: func(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
+				c := local.NewCredentials()
+				return grpc.Creds(c), grpc.WithTransportCredentials(c)
+			},
 			expectedAuth: authority,
 		},
 		{
-			name:         "TLS",
-			serverCreds:  grpc.Creds(serverTLS),
-			clientCreds:  grpc.WithTransportCredentials(clientTLS),
+			name: "TLS",
+			creds: func(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
+				return loadTLSCreds(t)
+			},
 			expectedAuth: authority,
 		},
 	}
@@ -118,19 +120,15 @@ func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
 					return &testpb.Empty{}, nil
 				},
 			}
-
-			if tt.serverCreds != nil {
-				err = ss.StartServer(tt.serverCreds)
-			} else {
-				err = ss.StartServer()
-			}
+			serverOpt, dialOpt := tt.creds(t)
+			err := ss.StartServer(serverOpt)
 
 			if err != nil {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}
 			defer ss.Stop()
 
-			cc, err := grpc.NewClient(ss.Address, tt.clientCreds)
+			cc, err := grpc.NewClient(ss.Address, dialOpt)
 			if err != nil {
 				t.Fatalf("grpc.NewClient(%q) = %v", ss.Address, err)
 			}
