@@ -16,22 +16,25 @@
  *
  */
 
-package status
+package status_test
 
 import (
 	"testing"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/status"
 )
 
 func TestRawStatusProto(t *testing.T) {
-	spb := RawStatusProto(nil)
+	spb := status.RawStatusProto(nil)
 	if spb != nil {
-		t.Errorf("RawStatusProto(nil) must return nil (was %v)", spb)
+		t.Errorf("RawStatusProto(nil) = %v; must return nil", spb)
 	}
-	s := New(codes.Internal, "test internal error")
-	spb = RawStatusProto(s)
-	if spb != s.s {
-		t.Errorf("RawStatusProto(s) must return s.s=%p (was %p)", s.s, spb)
+	s := status.New(codes.Internal, "test internal error")
+	spb1 := status.RawStatusProto(s)
+	spb2 := status.RawStatusProto(s)
+	// spb1 and spb2 should be the same pointer: no copies
+	if spb1 != spb2 {
+		t.Errorf("RawStatusProto(s)=%p then %p; must return the same pointer", spb1, spb2)
 	}
 }

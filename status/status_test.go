@@ -355,7 +355,7 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 		}
 		details := s.Details()
 		if len(details) != len(tc.details) {
-			t.Fatalf("len(s.Details()) = %v, want = %v.", len(details), len(tc.details))
+			t.Fatalf("len(s.Details()) = %d, want = %d.", len(details), len(tc.details))
 		}
 		for i := range details {
 			if !proto.Equal(details[i].(protoreflect.ProtoMessage), tc.details[i].(protoreflect.ProtoMessage)) {
@@ -423,7 +423,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	for _, tc := range tests {
 		details := tc.s.Details()
 		if len(details) != len(tc.want) {
-			t.Fatalf("len(s.Details()) = %v, want = %v.", len(details), len(tc.want))
+			t.Fatalf("len(s.Details()) = %d, want = %d.", len(details), len(tc.want))
 		}
 		for i, d := range details {
 			// s.Details can either contain an error or a proto message.  We
