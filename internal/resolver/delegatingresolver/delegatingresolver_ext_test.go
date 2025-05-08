@@ -588,6 +588,10 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 	// Set up a manual DNS resolver to control the proxy address resolution.
 	proxyResolver := setupDNS(t)
 
+	proxyResolverBuilt := make(chan struct{})
+	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
+		close(proxyResolverBuilt)
+	}
 	unblockProxyResolverClose := make(chan struct{}, 1)
 	proxyResolver.CloseCallback = func() {
 		<-unblockProxyResolverClose
@@ -607,11 +611,17 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 	})
 
+	// Wait for the proxy resolver to be built before calling Close.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-proxyResolverBuilt:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
+	}
 	// Closing the delegating resolver will block until the test writes to the
 	// unblockProxyResolverClose channel.
 	go dr.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	select {
 	case <-targetResolverCloseCalled:
 	case <-ctx.Done():
