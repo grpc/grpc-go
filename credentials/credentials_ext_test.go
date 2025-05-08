@@ -59,16 +59,17 @@ func authorityChecker(ctx context.Context, wantAuthority string) error {
 }
 
 func loadTLSCreds(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
+	t.Helper()
 	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
-		t.Fatalf("Failed to load key pair: %s", err)
+		t.Fatalf("Failed to load key pair: %v", err)
 		return nil, nil
 	}
 	serverCreds := grpc.Creds(credentials.NewServerTLSFromCert(&cert))
 
 	clientCreds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 	if err != nil {
-		t.Fatalf("Failed to create client credentials: %s", err)
+		t.Fatalf("Failed to create client credentials: %v", err)
 	}
 	return serverCreds, grpc.WithTransportCredentials(clientCreds)
 }
@@ -121,9 +122,7 @@ func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
 				},
 			}
 			serverOpt, dialOpt := tt.creds(t)
-			err := ss.StartServer(serverOpt)
-
-			if err != nil {
+			if err := ss.StartServer(serverOpt); err != nil {
 				t.Fatalf("Error starting endpoint server: %v", err)
 			}
 			defer ss.Stop()
