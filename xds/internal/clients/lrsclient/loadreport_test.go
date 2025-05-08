@@ -28,7 +28,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
@@ -132,17 +131,17 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	// reporting is per-server and not per-authority.
 	nodeID := uuid.New().String()
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
 		t.Fatalf("lrsclient.New() failed: %v", err)
 	}
 
-	serverIdentifier1 := clients.ServerIdentifier{ServerURI: mgmtServer1.Address, Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"}}
+	serverIdentifier1 := clients.ServerIdentifier{ServerURI: mgmtServer1.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
 	loadStore1, err := client.ReportLoad(serverIdentifier1)
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
@@ -162,7 +161,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 
 	// Call the load reporting API to report load to the first management
 	// server, and ensure that a connection to the server is created.
-	serverIdentifier2 := clients.ServerIdentifier{ServerURI: mgmtServer2.Address, Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"}}
+	serverIdentifier2 := clients.ServerIdentifier{ServerURI: mgmtServer2.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
 	loadStore2, err := client.ReportLoad(serverIdentifier2)
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
@@ -276,10 +275,10 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	// Create an LRS client with configuration pointing to the above server.
 	nodeID := uuid.New().String()
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
@@ -287,7 +286,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Call the load reporting API, and ensure that an LRS stream is created.
-	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"}}
+	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
 	loadStore1, err := client.ReportLoad(serverIdentifier)
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
@@ -471,10 +470,10 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	// Create an LRS client with configuration pointing to the above server.
 	nodeID := uuid.New().String()
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 	}
 	client, err := lrsclient.New(config)
 	if err != nil {
@@ -482,7 +481,7 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	}
 
 	// Call the load reporting API, and ensure that an LRS stream is created.
-	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"}}
+	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
 	loadStore, err := client.ReportLoad(serverIdentifier)
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
