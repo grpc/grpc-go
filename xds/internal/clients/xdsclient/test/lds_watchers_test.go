@@ -254,7 +254,7 @@ func (s) TestLDSWatch(t *testing.T) {
 				Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 			}
 
-			configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+			configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 			xdsClientConfig := xdsclient.Config{
 				Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 				Node:             clients.Node{ID: nodeID},
@@ -400,7 +400,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 			}
 
-			configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+			configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 			xdsClientConfig := xdsclient.Config{
 				Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 				Node:             clients.Node{ID: nodeID},
@@ -505,7 +505,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -612,7 +612,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -694,7 +694,7 @@ func TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -745,7 +745,7 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -822,7 +822,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -951,7 +951,7 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -1037,7 +1037,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -1105,7 +1105,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -1198,7 +1198,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -1288,7 +1288,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},

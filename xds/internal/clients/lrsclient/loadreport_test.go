@@ -131,7 +131,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	// reporting is per-server and not per-authority.
 	nodeID := uuid.New().String()
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
 		TransportBuilder: grpctransport.NewBuilder(configs),
@@ -275,7 +275,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	// Create an LRS client with configuration pointing to the above server.
 	nodeID := uuid.New().String()
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
 		TransportBuilder: grpctransport.NewBuilder(configs),
@@ -470,7 +470,7 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	// Create an LRS client with configuration pointing to the above server.
 	nodeID := uuid.New().String()
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := lrsclient.Config{
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
 		TransportBuilder: grpctransport.NewBuilder(configs),

@@ -62,11 +62,11 @@ type Builder struct {
 	refs map[clients.ServerIdentifier]int
 }
 
-// Config defines the configuration for a gRPC transport, including credentials
-// and an optional custom new client function.
+// Config defines the configuration for connecting to a gRPC server, including
+// credentials and an optional custom new client function.
 type Config struct {
-	// Credential is the credentials bundle to be used for the connection.
-	Credential credentials.Bundle
+	// Credentials is the credentials bundle to be used for the connection.
+	Credentials credentials.Bundle
 	// GRPCNewClient is an optional custom function to establish a gRPC connection.
 	// If nil, grpc.NewClient will be used as the default.
 	GRPCNewClient func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
@@ -102,7 +102,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 	if !ok {
 		return nil, fmt.Errorf("grpctransport: unknown config name %q specified in ServerIdentifierExtension", sce.ConfigName)
 	}
-	if config.Credential == nil {
+	if config.Credentials == nil {
 		return nil, fmt.Errorf("grpctransport: config %q has nil credentials bundle", sce.ConfigName)
 	}
 
@@ -127,7 +127,7 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	dopts := []grpc.DialOption{kpCfg, grpc.WithCredentialsBundle(config.Credential), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{}))}
+	dopts := []grpc.DialOption{kpCfg, grpc.WithCredentialsBundle(config.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{}))}
 	newClientFunc := grpc.NewClient
 	if config.GRPCNewClient != nil {
 		newClientFunc = config.GRPCNewClient

@@ -138,8 +138,8 @@ func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
 // one of the existing transport or a new one.
 func (s) TestBuild_Success(t *testing.T) {
 	configs := map[string]Config{
-		"local":    {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
-		"insecure": {Credential: insecure.NewBundle()},
+		"local":    {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"insecure": {Credentials: insecure.NewBundle()},
 	}
 	b := NewBuilder(configs)
 
@@ -237,8 +237,8 @@ func (s) TestBuild_Failure(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			configs := map[string]Config{
-				"local":           {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
-				"nil-credentials": {Credential: nil},
+				"local":           {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+				"nil-credentials": {Credentials: nil},
 			}
 			b := NewBuilder(configs)
 			tr, err := b.Build(test.serverID)
@@ -263,7 +263,7 @@ func (s) TestNewStream_Success(t *testing.T) {
 		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
 	configs := map[string]Config{
-		"local": {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 	builder := NewBuilder(configs)
 	transport, err := builder.Build(serverCfg)
@@ -298,7 +298,7 @@ func (s) TestNewStream_Success_WithCustomGRPCNewClient(t *testing.T) {
 
 	configs := map[string]Config{
 		"custom-dialer-config": {
-			Credential:    &testCredentials{transportCredentials: local.NewCredentials()},
+			Credentials:   &testCredentials{transportCredentials: local.NewCredentials()},
 			GRPCNewClient: customGRPCNewClient,
 		},
 	}
@@ -335,7 +335,7 @@ func (s) TestNewStream_Error(t *testing.T) {
 		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
 	configs := map[string]Config{
-		"local": {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 	builder := NewBuilder(configs)
 	transport, err := builder.Build(serverCfg)
@@ -371,7 +371,7 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
 	configs := map[string]Config{
-		"local": {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 	builder := NewBuilder(configs)
 	transport, err := builder.Build(serverCfg)

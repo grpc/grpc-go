@@ -29,7 +29,7 @@ import (
 )
 
 func (s) TestXDSClient_New(t *testing.T) {
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 
 	tests := []struct {
 		name    string
@@ -106,7 +106,7 @@ func (s) TestXDSClient_New(t *testing.T) {
 }
 
 func (s) TestXDSClient_Close(t *testing.T) {
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	config := Config{
 		Node:             clients.Node{ID: "node-id"},
 		ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},

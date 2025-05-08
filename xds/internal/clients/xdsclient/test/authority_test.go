@@ -90,7 +90,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 		Extensions: ext,
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: siDefault}},
 		Node:             clients.Node{ID: nodeID},
@@ -250,7 +250,7 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 
 	// Create config with the above primary and fallback management servers,
 	// and an xDS client with that configuration.
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: psi}, {ServerIdentifier: ssi}},
 		Node:             clients.Node{ID: nodeID},

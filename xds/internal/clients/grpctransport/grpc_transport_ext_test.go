@@ -75,7 +75,7 @@ func (s) TestBuild_Single(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "local"},
 	}
 	configs := map[string]grpctransport.Config{
-		"local": {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
 
 	// Calling Build() first time should create new gRPC transport.
@@ -180,8 +180,8 @@ func (s) TestBuild_Multiple(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 	configs := map[string]grpctransport.Config{
-		"local":    {Credential: &testCredentials{transportCredentials: local.NewCredentials()}},
-		"insecure": {Credential: insecure.NewBundle()},
+		"local":    {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"insecure": {Credentials: insecure.NewBundle()},
 	}
 
 	// Create two gRPC transports.

@@ -111,7 +111,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -222,7 +222,7 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
@@ -387,7 +387,7 @@ func (s) TestWatchErrorsContainNodeID(t *testing.T) {
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},

@@ -56,7 +56,7 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 		ServerURI:  serverURI,
 		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	configs := map[string]grpctransport.Config{"insecure": {Credential: insecure.NewBundle()}}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	tr, err := (grpctransport.NewBuilder(configs)).Build(si)
 	if err != nil {
 		t.Fatalf("Failed to create a transport for server config %v: %v", si, err)
