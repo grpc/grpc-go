@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -66,13 +65,13 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
@@ -153,13 +152,13 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
@@ -235,13 +234,13 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
