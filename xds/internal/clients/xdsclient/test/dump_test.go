@@ -28,7 +28,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
@@ -124,14 +123,14 @@ func (s) TestDumpResources_ManyToOne(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp resource names used in this test do not specify an
 		// authority. These will end up looking up an entry with the
@@ -308,18 +307,18 @@ func (s) TestDumpResources_ManyToMany(t *testing.T) {
 	resourceTypes[xdsresource.V3ListenerURL] = listenerType
 	si1 := clients.ServerIdentifier{
 		ServerURI:  mgmtServer1.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 	si2 := clients.ServerIdentifier{
 		ServerURI:  mgmtServer2.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si1}},
 		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config

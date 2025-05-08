@@ -28,7 +28,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
@@ -252,14 +251,14 @@ func (s) TestLDSWatch(t *testing.T) {
 			resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
-				Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+				Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 			}
 
-			credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+			configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 			xdsClientConfig := xdsclient.Config{
 				Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 				Node:             clients.Node{ID: nodeID},
-				TransportBuilder: grpctransport.NewBuilder(credentials),
+				TransportBuilder: grpctransport.NewBuilder(configs),
 				ResourceTypes:    resourceTypes,
 				// Xdstp resource names used in this test do not specify an
 				// authority. These will end up looking up an entry with the
@@ -398,14 +397,14 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 			si := clients.ServerIdentifier{
 				ServerURI:  mgmtServer.Address,
-				Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+				Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 			}
 
-			credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+			configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 			xdsClientConfig := xdsclient.Config{
 				Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 				Node:             clients.Node{ID: nodeID},
-				TransportBuilder: grpctransport.NewBuilder(credentials),
+				TransportBuilder: grpctransport.NewBuilder(configs),
 				ResourceTypes:    resourceTypes,
 				// Xdstp resource names used in this test do not specify an
 				// authority. These will end up looking up an entry with the
@@ -503,14 +502,14 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -610,14 +609,14 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -684,7 +683,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 // does not receive an LDS response for the request that it sends. The test
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
-func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
+func TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()
@@ -692,14 +691,14 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -743,14 +742,14 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -820,14 +819,14 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -949,14 +948,14 @@ func (s) TestLDSWatch_NewWatcherForRemovedResource(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -1035,14 +1034,14 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -1103,14 +1102,14 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 	}
 
@@ -1196,14 +1195,14 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config
@@ -1286,14 +1285,14 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
 	si := clients.ServerIdentifier{
 		ServerURI:  mgmtServer.Address,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 
-	credentials := map[string]credentials.Bundle{"insecure": insecure.NewBundle()}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
 	xdsClientConfig := xdsclient.Config{
 		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
 		Node:             clients.Node{ID: nodeID},
-		TransportBuilder: grpctransport.NewBuilder(credentials),
+		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
 		// Xdstp style resource names used in this test use a slash removed
 		// version of t.Name as their authority, and the empty config

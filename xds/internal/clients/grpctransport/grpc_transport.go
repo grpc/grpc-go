@@ -43,31 +43,41 @@ var (
 // It must be set by value (not pointer) in the
 // clients.ServerIdentifier.Extensions field (See Example).
 type ServerIdentifierExtension struct {
-	// Credentials is name of the credentials to use for this transport to the
-	// server. It must be present in the map passed to NewBuilder.
-	Credentials string
+	// ConfigName is the name of the configuration to use for this transport.
+	// It must be present as a key in the map of configs passed to NewBuilder.
+	ConfigName string
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
 // that contain an Extension field of type ServerIdentifierExtension.
 type Builder struct {
-	// credentials is a map of credentials names to credentials.Bundle which
-	// can be used to connect to the server.
-	credentials map[string]credentials.Bundle
+	// configs is a map of configuration names to their respective Config.
+	configs map[string]Config
 
 	mu sync.Mutex
 	// connections is a map of clients.ServerIdentifiers in use by the Builder
 	// to connect to different servers.
 	connections map[clients.ServerIdentifier]*grpc.ClientConn
-	refs        map[clients.ServerIdentifier]int
+	// refs tracks the number of active references to each connection.
+	refs map[clients.ServerIdentifier]int
+}
+
+// Config defines the configuration for connecting to a gRPC server, including
+// credentials and an optional custom new client function.
+type Config struct {
+	// Credentials is the credentials bundle to be used for the connection.
+	Credentials credentials.Bundle
+	// GRPCNewClient is an optional custom function to establish a gRPC connection.
+	// If nil, grpc.NewClient will be used as the default.
+	GRPCNewClient func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
 }
 
 // NewBuilder provides a builder for creating gRPC-based Transports using
 // the credentials from provided map of credentials names to
 // credentials.Bundle.
-func NewBuilder(credentials map[string]credentials.Bundle) *Builder {
+func NewBuilder(configs map[string]Config) *Builder {
 	return &Builder{
-		credentials: credentials,
+		configs:     configs,
 		connections: make(map[clients.ServerIdentifier]*grpc.ClientConn),
 		refs:        make(map[clients.ServerIdentifier]int),
 	}
@@ -88,9 +98,12 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		return nil, fmt.Errorf("grpctransport: Extensions field is %T, but must be %T in ServerIdentifier", si.Extensions, ServerIdentifierExtension{})
 	}
 
-	creds, ok := b.credentials[sce.Credentials]
+	config, ok := b.configs[sce.ConfigName]
 	if !ok {
-		return nil, fmt.Errorf("grpctransport: unknown credentials type %q specified in extensions", sce.Credentials)
+		return nil, fmt.Errorf("grpctransport: unknown config name %q specified in ServerIdentifierExtension", sce.ConfigName)
+	}
+	if config.Credentials == nil {
+		return nil, fmt.Errorf("grpctransport: config %q has nil credentials bundle", sce.ConfigName)
 	}
 
 	b.mu.Lock()
@@ -114,7 +127,12 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(creds), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	dopts := []grpc.DialOption{kpCfg, grpc.WithCredentialsBundle(config.Credentials), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{}))}
+	newClientFunc := grpc.NewClient
+	if config.GRPCNewClient != nil {
+		newClientFunc = config.GRPCNewClient
+	}
+	cc, err := newClientFunc(si.ServerURI, dopts...)
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create connection to server %q: %v", si.ServerURI, err)
 	}
