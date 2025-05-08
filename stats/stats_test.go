@@ -269,7 +269,7 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 	te.srvAddr = lis.Addr().String()
 }
 
-func (te *test) clientConn() *grpc.ClientConn {
+func (te *test) clientConn(ctx context.Context) *grpc.ClientConn {
 	if te.cc != nil {
 		return te.cc
 	}
@@ -293,8 +293,6 @@ func (te *test) clientConn() *grpc.ClientConn {
 		te.t.Fatalf("grpc.NewClient() failed(%q) = %v", te.srvAddr, err)
 	}
 	te.cc.Connect()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	testutils.AwaitState(ctx, te.t, te.cc, connectivity.Ready)
 	return te.cc
 }
@@ -321,15 +319,15 @@ func (te *test) doUnaryCall(c *rpcConfig) (*testpb.SimpleRequest, *testpb.Simple
 		req  *testpb.SimpleRequest
 		err  error
 	)
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	tc := testgrpc.NewTestServiceClient(te.clientConn(tCtx))
 	if c.success {
 		req = &testpb.SimpleRequest{Payload: idToPayload(errorID + 1)}
 	} else {
 		req = &testpb.SimpleRequest{Payload: idToPayload(errorID)}
 	}
 
-	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
 	return req, resp, err
 }
@@ -340,9 +338,9 @@ func (te *test) doFullDuplexCallRoundtrip(c *rpcConfig) ([]proto.Message, []prot
 		resps []proto.Message
 		err   error
 	)
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	tc := testgrpc.NewTestServiceClient(te.clientConn(tCtx))
 	stream, err := tc.FullDuplexCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return reqs, resps, err
@@ -381,9 +379,9 @@ func (te *test) doClientStreamCall(c *rpcConfig) ([]proto.Message, *testpb.Strea
 		resp *testpb.StreamingInputCallResponse
 		err  error
 	)
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	tc := testgrpc.NewTestServiceClient(te.clientConn(tCtx))
 	stream, err := tc.StreamingInputCall(metadata.NewOutgoingContext(tCtx, testMetadata), grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return reqs, resp, err
@@ -411,16 +409,15 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallReq
 		resps []proto.Message
 		err   error
 	)
-
-	tc := testgrpc.NewTestServiceClient(te.clientConn())
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	tc := testgrpc.NewTestServiceClient(te.clientConn(tCtx))
 
 	var startID int32
 	if !c.success {
 		startID = errorID
 	}
 	req = &testpb.StreamingOutputCallRequest{Payload: idToPayload(startID)}
-	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	stream, err := tc.StreamingOutputCall(metadata.NewOutgoingContext(tCtx, testMetadata), req, grpc.WaitForReady(!c.failfast))
 	if err != nil {
 		return req, resps, err
