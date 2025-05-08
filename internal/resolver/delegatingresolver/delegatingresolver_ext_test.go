@@ -613,6 +613,7 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 
 	// Wait for the proxy resolver to be built before calling Close.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	select {
 	case <-proxyResolverBuilt:
 	case <-ctx.Done():
@@ -621,7 +622,6 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 	// Closing the delegating resolver will block until the test writes to the
 	// unblockProxyResolverClose channel.
 	go dr.Close()
-	defer cancel()
 	select {
 	case <-targetResolverCloseCalled:
 	case <-ctx.Done():
