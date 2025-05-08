@@ -20,6 +20,7 @@ package xdsclient_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -29,12 +30,14 @@ import (
 
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	"github.com/google/go-cmp/cmp"
 )
 
 type s struct {
@@ -261,4 +264,37 @@ func buildResourceName(typeName, auth, id string, ctxParams map[string]string) s
 		ID:            id,
 		ContextParams: ctxParams,
 	}).String()
+}
+
+// testMetricsReporter is a MetricsReporter to be used in tests. It sends
+// recording events on channels and provides helpers to check if certain events
+// have taken place.
+type testMetricsReporter struct {
+	metricsCh *testutils.Channel
+}
+
+// newTestMetricsReporter returns a new testMetricsReporter.
+func newTestMetricsReporter() *testMetricsReporter {
+	return &testMetricsReporter{
+		metricsCh: testutils.NewChannelWithSize(1),
+	}
+}
+
+// waitForMetric waits for a metric to be recorded and verifies that the
+// recorded metrics data matches the expected metricsDataWant. Returns
+// an error if failed to wait or received wrong data.
+func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant any) error {
+	got, err := r.metricsCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout waiting for int64Count")
+	}
+	if diff := cmp.Diff(got, metricsDataWant); diff != "" {
+		return fmt.Errorf("received unexpected metrics value (-got, +want): %v", diff)
+	}
+	return nil
+}
+
+// ReportMetric sends the metrics data to the metricsCh channel.
+func (r *testMetricsReporter) ReportMetric(m any) {
+	r.metricsCh.Send(m)
 }

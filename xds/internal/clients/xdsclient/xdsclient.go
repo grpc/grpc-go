@@ -44,6 +44,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -82,8 +83,9 @@ type XDSClient struct {
 	resourceTypes      map[string]ResourceType      // Registry of resource types, for parsing incoming ADS responses.
 	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
-	logger             *grpclog.PrefixLogger        // Logger for this client.
-	target             string                       // The gRPC target for this client.
+	logger             *grpclog.PrefixLogger
+	target             string
+	metricsReporter    clients.MetricsReporter
 
 	// The XDSClient owns a bunch of channels to individual xDS servers
 	// specified in the xDS client configuration. Authorities acquire references
@@ -138,6 +140,7 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 		transportBuilder:   config.TransportBuilder,
 		resourceTypes:      config.ResourceTypes,
 		xdsActiveChannels:  make(map[ServerConfig]*channelState),
+		metricsReporter:    config.MetricsReporter,
 	}
 
 	for name, cfg := range config.Authorities {
@@ -154,6 +157,7 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 			getChannelForADS: c.getChannelForADS,
 			logPrefix:        clientPrefix(c),
 			target:           target,
+			metricsReporter:  c.metricsReporter,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -163,8 +167,10 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 		getChannelForADS: c.getChannelForADS,
 		logPrefix:        clientPrefix(c),
 		target:           target,
+		metricsReporter:  c.metricsReporter,
 	})
 	c.logger = prefixLogger(c)
+
 	return c, nil
 }
 
@@ -382,6 +388,12 @@ type channelState struct {
 func (cs *channelState) adsStreamFailure(err error) {
 	if cs.parent.done.HasFired() {
 		return
+	}
+
+	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsReporter != nil {
+		cs.parent.metricsReporter.ReportMetric(&metrics.ServerFailure{
+			ServerURI: cs.serverConfig.ServerIdentifier.ServerURI,
+		})
 	}
 
 	cs.parent.channelsMu.Lock()
