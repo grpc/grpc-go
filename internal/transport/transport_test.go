@@ -320,22 +320,23 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *ServerStream)
 }
 
 type server struct {
-	lis          net.Listener
-	port         string
-	startedErr   chan error // error (or nil) with server start value
-	mu           sync.Mutex
-	conns        map[ServerTransport]net.Conn
-	h            *testStreamHandler
-	ready        chan struct{}
-	channelz     *channelz.Server
-	servingTasks sync.WaitGroup
+	lis              net.Listener
+	port             string
+	startedErr       chan error // error (or nil) with server start value
+	mu               sync.Mutex
+	conns            map[ServerTransport]net.Conn
+	h                *testStreamHandler
+	ready            chan struct{}
+	channelz         *channelz.Server
+	servingTasksDone chan struct{}
 }
 
 func newTestServer() *server {
 	return &server{
-		startedErr: make(chan error, 1),
-		ready:      make(chan struct{}),
-		channelz:   channelz.RegisterServer("test server"),
+		startedErr:       make(chan error, 1),
+		ready:            make(chan struct{}),
+		servingTasksDone: make(chan struct{}),
+		channelz:         channelz.RegisterServer("test server"),
 	}
 }
 
@@ -359,6 +360,12 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 	s.port = p
 	s.conns = make(map[ServerTransport]net.Conn)
 	s.startedErr <- nil
+	wg := sync.WaitGroup{}
+	defer func() {
+		wg.Wait()
+		close(s.servingTasksDone)
+	}()
+
 	for {
 		conn, err := s.lis.Accept()
 		if err != nil {
@@ -384,38 +391,38 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		s.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		s.servingTasks.Add(1)
+		wg.Add(1)
 		switch ht {
 		case notifyCall:
 			go func() {
 				transport.HandleStreams(ctx, h.handleStreamAndNotify)
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		case suspended:
 			go func() {
 				transport.HandleStreams(ctx, func(*ServerStream) {})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		case misbehaved:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					go h.handleStreamMisbehave(t, s)
 				})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		case encodingRequiredStatus:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					go h.handleStreamEncodingRequiredStatus(s)
 				})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		case invalidHeaderField:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					go h.handleStreamInvalidHeaderField(s)
 				})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		case delayRead:
 			h.notify = make(chan struct{})
@@ -427,21 +434,21 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					go h.handleStreamDelayRead(t, s)
 				})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		case pingpong:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					go h.handleStreamPingPong(t, s)
 				})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		default:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
 					go h.handleStream(t, s)
 				})
-				s.servingTasks.Done()
+				wg.Done()
 			}()
 		}
 	}
@@ -466,7 +473,7 @@ func (s *server) stop() {
 	}
 	s.conns = nil
 	s.mu.Unlock()
-	s.servingTasks.Wait()
+	<-s.servingTasksDone
 }
 
 func (s *server) addr() string {
