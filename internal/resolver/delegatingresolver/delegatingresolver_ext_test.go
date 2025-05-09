@@ -131,15 +131,29 @@ func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
 // overwriting the previously registered DNS resolver. This allows the test to
 // mock the DNS resolution for the proxy resolver. It also registers the
 // original DNS resolver after the test is done.
-func setupDNS(t *testing.T) *manual.Resolver {
+func setupDNS(t *testing.T) (*manual.Resolver, chan struct{}) {
 	t.Helper()
 	mr := manual.NewBuilderWithScheme("dns")
 
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(mr)
 
+	resolverBuilt := make(chan struct{})
+	mr.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
+		close(resolverBuilt)
+	}
+
 	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
-	return mr
+	return mr, resolverBuilt
+}
+
+func mustBuildResolver(ctx context.Context, t *testing.T, buildCh chan struct{}) {
+	t.Helper()
+	select {
+	case <-buildCh:
+	case <-ctx.Done():
+		t.Fatalf("Context timed out waiting for resolver to be built.")
+	}
 }
 
 // proxyAddressWithTargetAttribute creates a resolver.Address for the proxy,
@@ -181,11 +195,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
+
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, true); err != nil {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
@@ -208,11 +219,9 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
+
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
+
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
@@ -268,11 +277,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -282,12 +287,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
 
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: resolvedProxyTestAddr1},
@@ -343,11 +344,7 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -371,12 +368,8 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
 
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
@@ -438,11 +431,7 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -473,12 +462,8 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
 
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{
 			{Addresses: []resolver.Address{{Addr: resolvedProxyTestAddr1}}},
@@ -553,11 +538,7 @@ func (s) TestDelegatingResolverForMultipleProxyAddress(t *testing.T) {
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
 		t.Fatalf("Failed to create delegating resolver: %v", err)
@@ -580,12 +561,8 @@ func (s) TestDelegatingResolverForMultipleProxyAddress(t *testing.T) {
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
 
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
 			{Addr: resolvedProxyTestAddr1},
@@ -648,12 +625,8 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 
 	target := targetResolver.Scheme() + ":///" + "ignored"
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
 	unblockProxyResolverClose := make(chan struct{}, 1)
 	proxyResolver.CloseCallback = func() {
 		<-unblockProxyResolverClose
@@ -676,11 +649,7 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 	// Wait for the proxy resolver to be built before calling Close.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	// Closing the delegating resolver will block until the test writes to the
 	// unblockProxyResolverClose channel.
 	go dr.Close()
@@ -739,11 +708,7 @@ func (s) TestDelegatingResolverUpdateStateFromResolveNow(t *testing.T) {
 
 	target := targetResolver.Scheme() + ":///" + "ignored"
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 	tcc, _, _ := createTestResolverClientConn(t)
 	tcc.UpdateStateF = func(resolver.State) error {
@@ -761,11 +726,7 @@ func (s) TestDelegatingResolverUpdateStateFromResolveNow(t *testing.T) {
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 
 	// Updating the channel will result in an error being returned. The
 	// delegating resolver should call call "ResolveNow" on the target resolver.
@@ -810,12 +771,9 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 
 	target := targetResolver.Scheme() + ":///" + "ignored"
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
+
 	proxyResolverCalled := make(chan struct{})
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
 	proxyResolver.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		// Updating the resolver state should not deadlock.
 		proxyResolver.CC().UpdateState(resolver.State{
@@ -843,12 +801,7 @@ func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 		t.Fatalf("context timed out waiting for targetResolver.ResolveNow() to be called.")
 	}
 
-	// Wait for proxy resolver to be built.
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Timeout when waiting for proxy resolver to be built")
-	}
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 
 	dr.ResolveNow(resolver.ResolveNowOptions{})
 
@@ -894,11 +847,7 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyBuildCalled := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyBuildCalled)
-	}
+	_, proxyResolverBuilt := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -923,7 +872,7 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 	// Verify that the delegating resolver doesn't call proxy resolver's
 	// UpdateState since we have no tcp address
 	select {
-	case <-proxyBuildCalled:
+	case <-proxyResolverBuilt:
 		t.Fatal("Unexpected call to proxy resolver update state")
 	case <-time.After(defaultTestShortTimeout):
 	}
@@ -973,11 +922,7 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
-	proxyResolverBuilt := make(chan struct{})
-	proxyResolver.BuildCallback = func(resolver.Target, resolver.ClientConn, resolver.BuildOptions) {
-		close(proxyResolverBuilt)
-	}
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -1000,12 +945,8 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	select {
-	case <-proxyResolverBuilt:
-	case <-ctx.Done():
-		t.Fatalf("Context timed out waiting for proxy resolver to be built.")
-	}
 
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: envProxyAddr}},
 		ServiceConfig: &serviceconfig.ParseResult{},
