@@ -23,14 +23,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	// "sync"
-
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal"
-	// "google.golang.osrg/grpc/internal"
 )
 
 type testLogger struct {
