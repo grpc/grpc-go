@@ -919,8 +919,9 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	}
 	// The server will send an RST stream frame on observing the deadline
 	// expiration making the client stream fail with a DeadlineExceeded status.
-	if _, err := s.readTo(make([]byte, 8)); err != io.EOF {
-		t.Fatalf("Read got unexpected error: %v, want %v", err, io.EOF)
+	_, err = s.readTo(make([]byte, 8))
+	if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
+		t.Fatalf("Read got unexpected error: %v, want status with code %v", err, codes.DeadlineExceeded)
 	}
 	if got, want := s.Status().Code(), codes.DeadlineExceeded; got != want {
 		t.Fatalf("Read got status %v with code %v, want %v", s.Status(), got, want)
