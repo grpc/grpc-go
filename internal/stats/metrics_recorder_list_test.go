@@ -23,7 +23,6 @@ package stats_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -154,7 +153,7 @@ func (s) TestMetricsRecorderList(t *testing.T) {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(mr2))
 	if err != nil {
-		log.Fatalf("Failed to dial: %v", err)
+		t.Fatalf("grpc.NewClient() failed: %v", err)
 	}
 	defer cc.Close()
 

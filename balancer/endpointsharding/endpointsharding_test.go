@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -166,7 +165,7 @@ func (s) TestEndpointShardingBasic(t *testing.T) {
 	}
 	cc, err := grpc.NewClient(mr.Scheme()+":///", dOpts...)
 	if err != nil {
-		log.Fatalf("Failed to create new client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -246,7 +245,7 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 
 	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to create new client: %v", err)
+		t.Fatalf("Failed to create new client: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
