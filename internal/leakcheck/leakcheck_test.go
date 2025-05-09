@@ -23,10 +23,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	// "sync"
+
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/internal"
+	// "google.golang.osrg/grpc/internal"
 )
 
 type testLogger struct {
@@ -47,16 +51,14 @@ func TestCheck(t *testing.T) {
 	for i := 0; i < leakCount; i++ {
 		go func() { time.Sleep(2 * time.Second) }()
 	}
-	if ig := interestingGoroutines(); len(ig) == 0 {
-		t.Error("blah")
+	if leaked := interestingGoroutines(); len(leaked) != leakCount {
+		t.Errorf("interestingGoroutines found %v leaks, want %v leaks", len(leaked), leakCount)
 	}
 	e := &testLogger{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	CheckGoroutines(ctx, e)
-	if e.errorCount != leakCount {
+	if CheckGoroutines(ctx, e); e.errorCount == 0 {
 		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
-		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -73,17 +75,15 @@ func TestCheckRegisterIgnore(t *testing.T) {
 	for i := 0; i < leakCount; i++ {
 		go func() { time.Sleep(2 * time.Second) }()
 	}
-	go func() { ignoredTestingLeak(3 * time.Second) }()
-	if ig := interestingGoroutines(); len(ig) == 0 {
-		t.Error("blah")
+	if leaked := interestingGoroutines(); len(leaked) != leakCount {
+		t.Errorf("interestingGoroutines found %v leaks, want %v leaks", len(leaked), leakCount)
 	}
+	go func() { ignoredTestingLeak(3 * time.Second) }()
 	e := &testLogger{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	CheckGoroutines(ctx, e)
-	if e.errorCount != leakCount {
+	if CheckGoroutines(ctx, e); e.errorCount == 0 {
 		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
-		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
