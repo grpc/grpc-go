@@ -239,13 +239,7 @@ func (s) TestRSTDuringMessageRead(t *testing.T) {
 	// The server will send a partial gRPC message before cancelling the stream.
 	// The client should get a gRPC status with code CANCELLED.
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-
-	s, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("client.EmptyCall() returned non-status error: %v", err)
-	}
-	if s.Code() != codes.Canceled {
-		t.Fatalf("client.EmptyCall() returned status %v with code %v, want %v", s, s.Code(), codes.Canceled)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
+		t.Fatalf("client.EmptyCall() returned %v; want status with code %v", err, codes.Canceled)
 	}
 }
