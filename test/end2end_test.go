@@ -3588,9 +3588,6 @@ func testClientStreamingError(t *testing.T, e env) {
 // Tests that a client receives a cardinality violation error for client-streaming
 // RPCs if the server doesn't send a message before returning status OK.
 func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClose(t *testing.T) {
-	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
-	// after this is fixed.
-	t.Skip()
 	ss := &stubserver.StubServer{
 		StreamingInputCallF: func(_ testgrpc.TestService_StreamingInputCallServer) error {
 			// Returning status OK without sending a response message.This is a
