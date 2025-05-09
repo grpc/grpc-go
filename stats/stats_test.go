@@ -290,7 +290,7 @@ func (te *test) clientConn(ctx context.Context) *grpc.ClientConn {
 	var err error
 	te.cc, err = grpc.NewClient(te.srvAddr, opts...)
 	if err != nil {
-		te.t.Fatalf("grpc.NewClient() failed(%q) = %v", te.srvAddr, err)
+		te.t.Fatalf("grpc.NewClient(%q) failed: %v", te.srvAddr, err)
 	}
 	te.cc.Connect()
 	testutils.AwaitState(ctx, te.t, te.cc, connectivity.Ready)
