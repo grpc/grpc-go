@@ -91,7 +91,7 @@ func (s) TestShutdown(t *testing.T) {
 }
 
 // TestList verifies that List() returns the health status of all the services if no. of services are within
-// maxAllowedLimits
+// maxAllowedLimits.
 func (s) TestList(t *testing.T) {
 	s := NewServer()
 
@@ -127,8 +127,8 @@ func (s) TestList(t *testing.T) {
 	}
 }
 
-// TestListResourceExhausted verifies that List(
-// ) returns a ResourceExhausted error if no. of services are more than
+// TestListResourceExhausted verifies that List()
+// returns a ResourceExhausted error if no. of services are more than
 // maxAllowedServices.
 func (s) TestListResourceExhausted(t *testing.T) {
 	s := NewServer()
