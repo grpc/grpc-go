@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -112,6 +113,12 @@ func badListenerResource(t *testing.T, name string) *v3listenerpb.Listener {
 		Name:        name,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
 	}
+}
+
+func overrideWatchExpiryTimeout(t *testing.T, watchExpiryTimeout time.Duration) {
+	originalWatchExpiryTimeout := xdsclientinternal.WatchExpiryTimeout
+	xdsclientinternal.WatchExpiryTimeout = watchExpiryTimeout
+	t.Cleanup(func() { xdsclientinternal.WatchExpiryTimeout = originalWatchExpiryTimeout })
 }
 
 // verifyNoListenerUpdate verifies that no listener update is received on the
@@ -723,12 +730,12 @@ func TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	// Create an xDS client with the above config and override the default
 	// watch expiry timeout.
+	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer client.Close()
-	client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 
 	// Register a watch for a resource which is expected to fail with an error
 	// after the watch expiry timer fires.
@@ -774,12 +781,12 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Create an xDS client with the above config and override the default
 	// watch expiry timeout.
+	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer client.Close()
-	client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 
 	// Register a watch for a listener resource and have the watch
 	// callback push the received update on to a channel.

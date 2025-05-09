@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -46,6 +47,12 @@ func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
 }
 func (noopListenerWatcher) AmbientError(_ error, onDone func()) {
 	onDone()
+}
+
+func overrideWatchExpiryTimeout(t *testing.T, watchExpiryTimeout time.Duration) {
+	originalWatchExpiryTimeout := xdsclientinternal.WatchExpiryTimeout
+	xdsclientinternal.WatchExpiryTimeout = watchExpiryTimeout
+	t.Cleanup(func() { xdsclientinternal.WatchExpiryTimeout = originalWatchExpiryTimeout })
 }
 
 // Creates an xDS client with the given management server address, node ID
@@ -191,8 +198,8 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	// short resource expiry timeout.
 	nodeID := uuid.New().String()
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	overrideWatchExpiryTimeout(t, defaultTestShortTimeout)
 	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
-	client.SetWatchExpiryTimeoutForTesting(defaultTestShortTimeout)
 
 	// Create a watch for the first listener resource and verify that the timer
 	// is running and the watch state is `requested`.
@@ -252,13 +259,13 @@ func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName
 	return resourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
 }
 
-func adsResourceWatchStateForTesting(s *adsStreamImpl, typ ResourceType, resourceName string) (resourceWatchState, error) {
+func adsResourceWatchStateForTesting(s *adsStreamImpl, rType ResourceType, resourceName string) (resourceWatchState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	state, ok := s.resourceTypeState[typ]
+	state, ok := s.resourceTypeState[rType]
 	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", typ)
+		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", rType)
 	}
 	resourceState, ok := state.subscribedResources[resourceName]
 	if !ok {

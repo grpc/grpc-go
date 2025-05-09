@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -43,6 +44,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 )
+
+func overrideStreamBackOff(t *testing.T, streamBackOff func(int) time.Duration) {
+	originalStreamBackoff := xdsclientinternal.StreamBackoff
+	xdsclientinternal.StreamBackoff = streamBackOff
+	t.Cleanup(func() { xdsclientinternal.StreamBackoff = originalStreamBackoff })
+}
 
 // Creates an xDS client with the given bootstrap contents and backoff function.
 func createXDSClientWithBackoff(t *testing.T, mgmtServerAddress string, nodeID string, streamBackoff func(int) time.Duration) *xdsclient.XDSClient {
@@ -71,11 +78,12 @@ func createXDSClientWithBackoff(t *testing.T, mgmtServerAddress string, nodeID s
 	}
 
 	// Create an xDS client with the above config.
+	overrideStreamBackOff(t, streamBackoff)
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	client.SetStreamBackOffForTesting(streamBackoff)
+
 	t.Cleanup(func() { client.Close() })
 
 	return client
