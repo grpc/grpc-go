@@ -216,12 +216,11 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
-
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
 		ServiceConfig: &serviceconfig.ParseResult{},
@@ -284,10 +283,10 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
@@ -365,10 +364,10 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: resolvedProxyTestAddr1}},
@@ -459,10 +458,10 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{
@@ -558,10 +557,10 @@ func (s) TestDelegatingResolverForMultipleProxyAddress(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses: []resolver.Address{
@@ -723,9 +722,10 @@ func (s) TestDelegatingResolverUpdateStateFromResolveNow(t *testing.T) {
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1"}}}},
 	})
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
 
 	// Updating the channel will result in an error being returned. The
@@ -942,10 +942,10 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
-	// Wait for the proxy resolver to be built before calling UpdateState.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
+	// Wait for the proxy resolver to be built before calling UpdateState.
 	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: envProxyAddr}},
