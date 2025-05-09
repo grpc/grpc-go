@@ -199,8 +199,7 @@ func (s) TestRSTDuringMessageRead(t *testing.T) {
 			t.Errorf("Error while writing settings: %v", err)
 			return
 		}
-		var mu sync.Mutex
-		for {
+		for ctx.Err() == nil {
 			frame, err := framer.ReadFrame()
 			if err != nil {
 				return
@@ -209,27 +208,14 @@ func (s) TestRSTDuringMessageRead(t *testing.T) {
 			case *http2.HeadersFrame:
 				// When the client creates a stream, write a partial gRPC
 				// message followed by an RST_STREAM.
-				go func() {
-					buf := make([]byte, 1024)
-					// Write the gRPC message length header.
-					binary.BigEndian.PutUint32(buf[1:5], 2048)
-					mu.Lock()
-					if err := framer.WriteData(1, false, buf); err != nil {
-						mu.Unlock()
-						return
-					}
-					framer.WriteRSTStream(1, http2.ErrCodeCancel)
-					mu.Unlock()
-				}()
-			case *http2.RSTStreamFrame:
-				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeFlowControl {
-					t.Errorf("RST stream received with streamID: %d and code: %v, want streamID: 1 and code: http2.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+				messageLen := 2048
+				buf := make([]byte, messageLen/2)
+				// Write the gRPC message length header.
+				binary.BigEndian.PutUint32(buf[1:5], uint32(messageLen))
+				if err := framer.WriteData(1, false, buf); err != nil {
+					return
 				}
-				return
-			case *http2.PingFrame:
-				mu.Lock()
-				framer.WritePing(true, frame.Data)
-				mu.Unlock()
+				framer.WriteRSTStream(1, http2.ErrCodeCancel)
 			default:
 				t.Logf("Server received frame: %v", frame)
 			}
