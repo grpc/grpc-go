@@ -44,8 +44,11 @@ import (
 
 const version = "1.5.1"
 
-var requireUnimplemented *bool
-var useGenericStreams *bool
+var (
+	requireUnimplemented      *bool
+	useGenericStreams         *bool
+	useSeparateServicePackage *bool
+)
 
 func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -58,6 +61,7 @@ func main() {
 	var flags flag.FlagSet
 	requireUnimplemented = flags.Bool("require_unimplemented_servers", true, "set to false to match legacy behavior")
 	useGenericStreams = flags.Bool("use_generic_streams_experimental", true, "set to true to use generic types for streaming client and server objects; this flag is EXPERIMENTAL and may be changed or removed in a future release")
+	useSeparateServicePackage = flags.Bool("use_separate_service_package", false, "set to true to use separate service package, service package will import protobuf package")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
