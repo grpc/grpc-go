@@ -21,23 +21,26 @@ package xdsclient_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"testing"
 	"time"
 
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	xdsclientinternal "google.golang.org/grpc/xds/internal/xdsclient/internal"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+)
 
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+var (
+	adsStreamCh chan *stream
 )
 
 // blockingListenerWatcher implements xdsresource.ListenerWatcher. It writes to
@@ -60,7 +63,7 @@ func newBLockingListenerWatcher() *blockingListenerWatcher {
 	}
 }
 
-func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, done func()) {
+func (lw *blockingListenerWatcher) ResourceChanged(update xdsclient.ResourceData, done func()) {
 	// Notify receipt of the update.
 	select {
 	case lw.updateCh <- struct{}{}:
@@ -99,70 +102,86 @@ func (lw *blockingListenerWatcher) AmbientError(err error, done func()) {
 	}
 }
 
-type wrappedADSStream struct {
-	v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+type transportBuilder struct{}
+
+func (*transportBuilder) Build(si clients.ServerIdentifier) (clients.Transport, error) {
+	cc, err := grpc.NewClient(si.ServerURI, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	if err != nil {
+		return nil, err
+	}
+
+	adsStreamCh = make(chan *stream, 1)
+	return &transport{cc: cc}, nil
+}
+
+type transport struct {
+	cc *grpc.ClientConn
+}
+
+func (t *transport) NewStream(ctx context.Context, method string) (clients.Stream, error) {
+	s, err := t.cc.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, method)
+	if err != nil {
+		return nil, err
+	}
+
+	stream := &stream{
+		stream: s,
+		recvCh: make(chan struct{}, 1),
+		doneCh: make(chan struct{}),
+	}
+	adsStreamCh <- stream
+
+	return stream, nil
+}
+
+func (t *transport) Close() {
+	t.cc.Close()
+}
+
+type stream struct {
+	stream grpc.ClientStream
+
 	recvCh chan struct{}
 	doneCh <-chan struct{}
 }
 
-func newWrappedADSStream(stream v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient, doneCh <-chan struct{}) *wrappedADSStream {
-	return &wrappedADSStream{
-		AggregatedDiscoveryService_StreamAggregatedResourcesClient: stream,
-		recvCh: make(chan struct{}, 1),
-		doneCh: doneCh,
-	}
+func (s *stream) Send(msg []byte) error {
+	return s.stream.SendMsg(msg)
 }
 
-func (w *wrappedADSStream) Recv() (*v3discoverypb.DiscoveryResponse, error) {
+func (s *stream) Recv() ([]byte, error) {
 	select {
-	case w.recvCh <- struct{}{}:
-	case <-w.doneCh:
+	case s.recvCh <- struct{}{}:
+	case <-s.doneCh:
 		return nil, errors.New("Recv() called after the test has finished")
 	}
-	return w.AggregatedDiscoveryService_StreamAggregatedResourcesClient.Recv()
+
+	var typedRes []byte
+	if err := s.stream.RecvMsg(&typedRes); err != nil {
+		return nil, err
+	}
+	return typedRes, nil
 }
 
-// Overrides the function to create a new ADS stream (used by the xdsclient
-// transport), and returns a wrapped ADS stream, where the test can monitor
-// Recv() calls.
-func overrideADSStreamCreation(t *testing.T) chan *wrappedADSStream {
-	t.Helper()
+type byteCodec struct{}
 
-	adsStreamCh := make(chan *wrappedADSStream, 1)
-	origNewADSStream := xdsclientinternal.NewADSStream
-	xdsclientinternal.NewADSStream = func(ctx context.Context, cc *grpc.ClientConn) (v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient, error) {
-		s, err := v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ws := newWrappedADSStream(s, ctx.Done())
-		select {
-		case adsStreamCh <- ws:
-		default:
-		}
-		return ws, nil
+func (c *byteCodec) Marshal(v any) ([]byte, error) {
+	if b, ok := v.([]byte); ok {
+		return b, nil
 	}
-	t.Cleanup(func() { xdsclientinternal.NewADSStream = origNewADSStream })
-	return adsStreamCh
+	return nil, fmt.Errorf("transport: message is %T, but must be a []byte", v)
 }
 
-// Creates an xDS client with the given bootstrap contents.
-func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
-	t.Helper()
+func (c *byteCodec) Unmarshal(data []byte, v any) error {
+	if b, ok := v.(*[]byte); ok {
+		*b = data
+		return nil
+	}
+	return fmt.Errorf("transport: target is %T, but must be *[]byte", v)
+}
 
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	t.Cleanup(close)
-	return client
+func (c *byteCodec) Name() string {
+	return "transport.byteCodec"
 }
 
 // Tests ADS stream level flow control with a single resource. The test does the
@@ -178,34 +197,29 @@ func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient
 //   - Resource is updated on the management server, and the test verifies that
 //     the update reaches the watchers.
 func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 10000*defaultTestTimeout)
 	defer cancel()
-
-	// Override the ADS stream creation.
-	adsStreamCh := overrideADSStreamCreation(t)
 
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	// Create an xDS client with the above bootstrap contents.
-	client := createXDSClient(t, bc)
+	// Create an xDS client pointing to the above server.
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
 
 	// Configure two watchers for the same listener resource.
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
 	watcher1 := newBLockingListenerWatcher()
-	cancel1 := xdsresource.WatchListener(client, listenerResourceName, watcher1)
+	cancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerResourceName, watcher1)
 	defer cancel1()
 	watcher2 := newBLockingListenerWatcher()
-	cancel2 := xdsresource.WatchListener(client, listenerResourceName, watcher2)
+	cancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerResourceName, watcher2)
 	defer cancel2()
 
-	// Wait for the wrapped ADS stream to be created.
-	var adsStream *wrappedADSStream
+	// Wait for the ADS stream to be created.
+	var adsStream *stream
 	select {
 	case adsStream = <-adsStreamCh:
 	case <-ctx.Done():
@@ -307,9 +321,6 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Override the ADS stream creation.
-	adsStreamCh := overrideADSStreamCreation(t)
-
 	// Start an xDS management server.
 	const listenerResourceName1 = "test-listener-resource-1"
 	const listenerResourceName2 = "test-listener-resource-2"
@@ -335,25 +346,23 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 		},
 	})
 
-	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	// Create an xDS client with the above bootstrap contents.
-	client := createXDSClient(t, bc)
+	// Create an xDS client pointing to the above server.
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
 
 	// Configure two watchers for two different listener resources.
 	const routeConfigurationName1 = "test-route-configuration-resource-1"
 	watcher1 := newBLockingListenerWatcher()
-	cancel1 := xdsresource.WatchListener(client, listenerResourceName1, watcher1)
+	cancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerResourceName1, watcher1)
 	defer cancel1()
 	const routeConfigurationName2 = "test-route-configuration-resource-2"
 	watcher2 := newBLockingListenerWatcher()
-	cancel2 := xdsresource.WatchListener(client, listenerResourceName2, watcher2)
+	cancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerResourceName2, watcher2)
 	defer cancel2()
 
 	// Wait for the wrapped ADS stream to be created.
-	var adsStream *wrappedADSStream
+	var adsStream *stream
 	select {
 	case adsStream = <-adsStreamCh:
 	case <-ctx.Done():
@@ -446,27 +455,22 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Override the ADS stream creation.
-	adsStreamCh := overrideADSStreamCreation(t)
-
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	// Create an xDS client with the above bootstrap contents.
-	client := createXDSClient(t, bc)
+	// Create an xDS client pointing to the above server.
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
 
 	// Configure a watcher for a listener resource.
 	const listenerResourceName = "test-listener-resource"
 	watcher := newBLockingListenerWatcher()
-	cancel = xdsresource.WatchListener(client, listenerResourceName, watcher)
+	cancel = client.WatchResource(xdsresource.V3ListenerURL, listenerResourceName, watcher)
 	defer cancel()
 
-	// Wait for the wrapped ADS stream to be created.
-	var adsStream *wrappedADSStream
+	// Wait for the stream to be created.
+	var adsStream *stream
 	select {
 	case adsStream = <-adsStreamCh:
 	case <-ctx.Done():
@@ -526,28 +530,23 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Override the ADS stream creation.
-	adsStreamCh := overrideADSStreamCreation(t)
-
 	// Start an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
-	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	// Create an xDS client with the above bootstrap contents.
-	client := createXDSClient(t, bc)
+	// Create an xDS client pointing to the above server.
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
 
 	// Configure a watcher for a listener resource.
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
 	watcher := newBLockingListenerWatcher()
-	cancel = xdsresource.WatchListener(client, listenerResourceName, watcher)
+	cancel = client.WatchResource(xdsresource.V3ListenerURL, listenerResourceName, watcher)
 	defer cancel()
 
-	// Wait for the wrapped ADS stream to be created.
-	var adsStream *wrappedADSStream
+	// Wait for the ADS stream to be created.
+	var adsStream *stream
 	select {
 	case adsStream = <-adsStreamCh:
 	case <-ctx.Done():

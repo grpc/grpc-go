@@ -20,17 +20,17 @@ package xdsclient_test
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -41,7 +41,7 @@ import (
 // failed, those resources are re-requested after the stream is restarted.
 func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 	// Create a restartable listener that can simulate a broken ADS stream.
-	l, err := testutils.LocalTCPListener()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
@@ -52,8 +52,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 
 	// Start an xDS management server that uses a couple of channels to inform
 	// the test about the specific LDS and CDS resource names being requested.
-	ldsResourcesCh := make(chan []string, 1)
-	cdsResourcesCh := make(chan []string, 1)
+	ldsResourcesCh := make(chan []string, 2)
 	streamOpened := make(chan struct{}, 1)
 	streamClosed := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -65,12 +64,6 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 			// that the most recently requested names are made available to the
 			// test.
 			switch req.GetTypeUrl() {
-			case version.V3ClusterURL:
-				select {
-				case <-cdsResourcesCh:
-				default:
-				}
-				cdsResourcesCh <- req.GetResourceNames()
 			case version.V3ListenerURL:
 				select {
 				case <-ldsResourcesCh:
@@ -109,26 +102,13 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create bootstrap configuration pointing to the above management server.
-	bootstrapContents := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-
-	// Create an xDS client with the above bootstrap configuration.
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
+	// Create an xDS client pointing to the above server.
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
 	// Register a watch for a listener resource.
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that an ADS stream is opened and an LDS request with the above
@@ -144,51 +124,49 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantListenerUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
+		update: listenerUpdate{
 			RouteConfigName: routeConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 		},
 	}
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantListenerUpdate); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a cluster resource on the management server, in addition to the
-	// existing listener resource.
-	const clusterName = "cluster"
+	// Create another listener resource on the management server, in addition
+	// to the existing listener resource.
+	const listenerName2 = "listener2"
+	const routeConfigName2 = "route-config2"
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeConfigName)},
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, clusterName, e2e.SecurityLevelNone)},
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeConfigName), e2e.DefaultClientListener(listenerName2, routeConfigName2)},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	// Register a watch for a cluster resource, and verify that a CDS request
-	// with the above resource name is sent.
-	cw := newClusterWatcher()
-	cdsCancel := xdsresource.WatchCluster(client, clusterName, cw)
-	if err := waitForResourceNames(ctx, t, cdsResourcesCh, []string{clusterName}); err != nil {
+	// Register a watch for another listener resource, and verify that a LDS request
+	// with the both listener resource names are sent.
+	lw2 := newListenerWatcher()
+	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerName2, lw2)
+	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName, listenerName2}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Verify the update received by the watcher.
-	wantClusterUpdate := clusterUpdateErrTuple{
-		update: xdsresource.ClusterUpdate{
-			ClusterName:    clusterName,
-			EDSServiceName: clusterName,
+	wantListenerUpdate = listenerUpdateErrTuple{
+		update: listenerUpdate{
+			RouteConfigName: routeConfigName2,
 		},
 	}
-	if err := verifyClusterUpdate(ctx, cw.updateCh, wantClusterUpdate); err != nil {
+	if err := verifyListenerUpdate(ctx, lw2.updateCh, wantListenerUpdate); err != nil {
 		t.Fatal(err)
 	}
 
-	// Cancel the watch for the above cluster resource, and verify that a CDS
-	// request with no resource names is sent.
-	cdsCancel()
-	if err := waitForResourceNames(ctx, t, cdsResourcesCh, []string{}); err != nil {
+	// Cancel the watch for the second listener resource, and verify that an LDS
+	// request with only first listener resource names is sent.
+	ldsCancel2()
+	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -208,18 +186,18 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 		t.Fatal("Timeout when waiting for ADS stream to open")
 	}
 
-	// Verify that the listener resource is requested again.
+	// Verify that the first listener resource is requested again.
 	if err := waitForResourceNames(ctx, t, ldsResourcesCh, []string{listenerName}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Wait for a short duration and verify that no CDS request is sent, since
+	// Wait for a short duration and verify that no LDS request is sent, since
 	// there are no resources being watched.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	select {
 	case <-sCtx.Done():
-	case names := <-cdsResourcesCh:
-		t.Fatalf("CDS request sent for resource names %v, when expecting no request", names)
+	case names := <-ldsResourcesCh:
+		t.Fatalf("LDS request sent for resource names %v, when expecting no request", names)
 	}
 }

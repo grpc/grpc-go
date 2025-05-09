@@ -27,12 +27,13 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -40,6 +41,41 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
+
+// Creates an xDS client with the given management server address, node ID
+// and transport builder.
+func createXDSClient(t *testing.T, mgmtServerAddress string, nodeID string, transportBuilder clients.TransportBuilder) *xdsclient.XDSClient {
+	t.Helper()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServerAddress,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: transportBuilder,
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+	}
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(func() { client.Close() })
+	return client
+}
 
 // Tests simple ACK and NACK scenarios on the ADS stream:
 //  1. When a good response is received, i.e. once that is expected to be ACKed,
@@ -57,8 +93,8 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	// Create an xDS management server listening on a local port. Configure the
 	// request and response handlers to push on channels that are inspected by
 	// the test goroutine to verify ACK version and nonce.
-	streamRequestCh := testutils.NewChannel()
-	streamResponseCh := testutils.NewChannel()
+	streamRequestCh := testutils.NewChannelWithSize(1)
+	streamResponseCh := testutils.NewChannelWithSize(1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			streamRequestCh.SendContext(ctx, req)
@@ -83,13 +119,13 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client with bootstrap pointing to the above server.
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	client := createXDSClient(t, bc)
+	// Create an xDS client pointing to the above server.
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
 	// Register a watch for a listener resource.
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that the initial discovery request matches expectation.
@@ -102,8 +138,8 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 		VersionInfo: "",
 		Node: &v3corepb.Node{
 			Id:                   nodeID,
-			UserAgentName:        "gRPC Go",
-			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+			UserAgentName:        "user-agent",
+			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 			ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 		},
 		ResourceNames: []string{listenerName},
@@ -135,10 +171,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
-			RouteConfigName: routeConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
+		update: listenerUpdate{RouteConfigName: routeConfigName},
 	}
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -162,7 +195,7 @@ func (s) TestADS_ACK_NACK_Simple(t *testing.T) {
 	gotResp = r.(*v3discoverypb.DiscoveryResponse)
 
 	wantNackErr := xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
-	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
+	if err := verifyListenerUpdate(ctx, lw.ambientErrCh, listenerUpdateErrTuple{ambientErr: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -241,8 +274,8 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 	// Create an xDS management server listening on a local port. Configure the
 	// request and response handlers to push on channels that are inspected by
 	// the test goroutine to verify ACK version and nonce.
-	streamRequestCh := testutils.NewChannel()
-	streamResponseCh := testutils.NewChannel()
+	streamRequestCh := testutils.NewChannelWithSize(1)
+	streamResponseCh := testutils.NewChannelWithSize(1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			streamRequestCh.SendContext(ctx, req)
@@ -269,13 +302,13 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client with bootstrap pointing to the above server.
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	client := createXDSClient(t, bc)
+	// Create an xDS client pointing to the above server.
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
 	// Register a watch for a listener resource.
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that the initial discovery request matches expectation.
@@ -288,8 +321,8 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 		VersionInfo: "",
 		Node: &v3corepb.Node{
 			Id:                   nodeID,
-			UserAgentName:        "gRPC Go",
-			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+			UserAgentName:        "user-agent",
+			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 			ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 		},
 		ResourceNames: []string{listenerName},
@@ -309,7 +342,7 @@ func (s) TestADS_NACK_InvalidFirstResponse(t *testing.T) {
 
 	// Verify that the error is propagated to the watcher.
 	var wantNackErr = xdsresource.NewError(xdsresource.ErrorTypeNACKed, "unexpected http connection manager resource type")
-	if err := verifyListenerUpdate(ctx, lw.updateCh, listenerUpdateErrTuple{err: wantNackErr}); err != nil {
+	if err := verifyListenerUpdate(ctx, lw.resourceErrCh, listenerUpdateErrTuple{resourceErr: wantNackErr}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -346,9 +379,9 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	// Create an xDS management server listening on a local port. Configure the
 	// request and response handlers to push on channels that are inspected by
 	// the test goroutine to verify ACK version and nonce.
-	streamRequestCh := testutils.NewChannel()
-	streamResponseCh := testutils.NewChannel()
-	streamCloseCh := testutils.NewChannel()
+	streamRequestCh := testutils.NewChannelWithSize(1)
+	streamResponseCh := testutils.NewChannelWithSize(1)
+	streamCloseCh := testutils.NewChannelWithSize(1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			streamRequestCh.SendContext(ctx, req)
@@ -376,24 +409,13 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client with bootstrap pointing to the above server.
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	config, err := bootstrap.NewConfigFromContents(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	defer close()
+	// Create an xDS client pointing to the above server.
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
 	// Register a watch for a listener resource.
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that the initial discovery request matches expectation.
@@ -406,8 +428,8 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 		VersionInfo: "",
 		Node: &v3corepb.Node{
 			Id:                   nodeID,
-			UserAgentName:        "gRPC Go",
-			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+			UserAgentName:        "user-agent",
+			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 			ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 		},
 		ResourceNames: []string{listenerName},
@@ -440,10 +462,7 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
-			RouteConfigName: routeConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
+		update: listenerUpdate{RouteConfigName: routeConfigName},
 	}
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -468,7 +487,7 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Register a watch for the same listener resource.
 	lw = newListenerWatcher()
-	ldsCancel = xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel = client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that the discovery request is identical to the first one sent out

@@ -123,6 +123,12 @@ func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Dura
 	c.watchExpiryTimeout = watchExpiryTimeout
 }
 
+// SetStreamBackOffForTesting override the default stream backoff function
+// with provided function.
+func (c *XDSClient) SetStreamBackOffForTesting(streamBackoff func(int) time.Duration) {
+	c.backoff = streamBackoff
+}
+
 // newClient returns a new XDSClient with the given config.
 func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, target string) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())

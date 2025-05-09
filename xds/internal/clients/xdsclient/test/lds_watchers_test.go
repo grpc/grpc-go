@@ -168,6 +168,25 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	return nil
 }
 
+func verifyListenerResourceError(ctx context.Context, updateCh *testutils.Channel, wantErr, wantNodeID string) error {
+	u, err := updateCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
+	}
+	gotErr := u.(listenerUpdateErrTuple).resourceErr
+	return verifyListenerError(ctx, gotErr, wantErr, wantNodeID)
+}
+
+func verifyListenerError(ctx context.Context, gotErr error, wantErr, wantNodeID string) error {
+	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
+		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
+	}
+	if !strings.Contains(gotErr.Error(), wantNodeID) {
+		return fmt.Errorf("update received with error: %v, want error with node ID: %q", gotErr, wantNodeID)
+	}
+	return nil
+}
+
 func verifyAmbientErrorType(ctx context.Context, updateCh *testutils.Channel, wantErrType xdsresource.ErrorType, wantNodeID string) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {

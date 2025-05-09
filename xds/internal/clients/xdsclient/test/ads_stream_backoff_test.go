@@ -22,43 +22,62 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 )
 
 // Creates an xDS client with the given bootstrap contents and backoff function.
-func createXDSClientWithBackoff(t *testing.T, bootstrapContents []byte, streamBackoff func(int) time.Duration) xdsclient.XDSClient {
+func createXDSClientWithBackoff(t *testing.T, mgmtServerAddress string, nodeID string, streamBackoff func(int) time.Duration) *xdsclient.XDSClient {
 	t.Helper()
 
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServerAddress,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	pool := xdsclient.NewPool(config)
-	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:                      t.Name(),
-		StreamBackoffAfterFailure: streamBackoff,
-	})
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+	}
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	t.Cleanup(close)
+	client.SetStreamBackOffForTesting(streamBackoff)
+	t.Cleanup(func() { client.Close() })
+
 	return client
 }
 
@@ -115,13 +134,12 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	client := createXDSClientWithBackoff(t, bc, streamBackoff)
+	client := createXDSClientWithBackoff(t, mgmtServer.Address, nodeID, streamBackoff)
 
 	// Register a watch for a listener resource.
 	const listenerName = "listener"
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that an ADS stream is created and an LDS request with the above
@@ -131,7 +149,7 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	}
 
 	// Verify that the received stream error is reported to the watcher.
-	if err := verifyListenerError(ctx, lw.updateCh, streamErr.Error(), nodeID); err != nil {
+	if err := verifyListenerResourceError(ctx, lw.resourceErrCh, streamErr.Error(), nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,9 +191,9 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 	defer cancel()
 
 	// Create an xDS management server listening on a local port.
-	l, err := testutils.LocalTCPListener()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to create a local listener for the xDS management server: %v", err)
+		t.Fatalf("net.Listen() failed: %v", err)
 	}
 	lis := testutils.NewRestartableListener(l)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
@@ -225,13 +243,12 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 		return 0
 	}
 
-	// Create an xDS client with bootstrap pointing to the above server.
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	client := createXDSClientWithBackoff(t, bc, streamBackoff)
+	// Create an xDS client pointing to the above server.
+	client := createXDSClientWithBackoff(t, mgmtServer.Address, nodeID, streamBackoff)
 
 	// Register a watch for a listener resource.
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// Verify that the initial discovery request matches expectation.
@@ -245,8 +262,8 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 		VersionInfo: "",
 		Node: &v3corepb.Node{
 			Id:                   nodeID,
-			UserAgentName:        "gRPC Go",
-			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+			UserAgentName:        "user-agent",
+			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 			ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 		},
 		ResourceNames: []string{listenerName},
@@ -281,10 +298,8 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 
 	// Verify the update received by the watcher.
 	wantUpdate := listenerUpdateErrTuple{
-		update: xdsresource.ListenerUpdate{
-			RouteConfigName: routeConfigName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
-		},
+		update: listenerUpdate{
+			RouteConfigName: routeConfigName},
 	}
 	if err := verifyListenerUpdate(ctx, lw.updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -344,9 +359,9 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1) // Discovery request is received.
 
 	// Create an xDS management server listening on a local port.
-	l, err := testutils.LocalTCPListener()
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to create a local listener: %v", err)
+		t.Fatalf("net.Listen() failed: %v", err)
 	}
 	lis := testutils.NewRestartableListener(l)
 	streamErr := errors.New("ADS stream error")
@@ -387,13 +402,12 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 
 	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
-	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
-	client := createXDSClientWithBackoff(t, bc, streamBackoff)
+	client := createXDSClientWithBackoff(t, mgmtServer.Address, nodeID, streamBackoff)
 
 	// Register a watch for a listener resource.
 	const listenerName = "listener"
 	lw := newListenerWatcher()
-	ldsCancel := xdsresource.WatchListener(client, listenerName, lw)
+	ldsCancel := client.WatchResource(xdsresource.V3ListenerURL, listenerName, lw)
 	defer ldsCancel()
 
 	// The above watch results in an attempt to create a new stream, which will
@@ -420,8 +434,8 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 		VersionInfo: "",
 		Node: &v3corepb.Node{
 			Id:                   nodeID,
-			UserAgentName:        "gRPC Go",
-			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+			UserAgentName:        "user-agent",
+			UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
 			ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw"},
 		},
 		ResourceNames: []string{listenerName},
