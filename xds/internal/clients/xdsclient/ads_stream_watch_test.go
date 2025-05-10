@@ -90,6 +90,62 @@ func createXDSClient(t *testing.T, mgmtServerAddress string, nodeID string, tran
 	return client
 }
 
+func waitForResourceWatchState(ctx context.Context, client *XDSClient, resourceName string, wantState watchState, wantTimer bool) error {
+	var lastErr error
+	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+		err := verifyResourceWatchState(client, resourceName, wantState, wantTimer)
+		if err == nil {
+			break
+		}
+		lastErr = err
+	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("timeout when waiting for expected watch state for resource %q: %v", resourceName, lastErr)
+	}
+	return nil
+}
+
+func verifyResourceWatchState(client *XDSClient, resourceName string, wantState watchState, wantTimer bool) error {
+	gotState, err := resourceWatchStateForTesting(client, listenerType, resourceName)
+	if err != nil {
+		return fmt.Errorf("failed to get watch state for resource %q: %v", resourceName, err)
+	}
+	if gotState.State != wantState {
+		return fmt.Errorf("watch state for resource %q is %v, want %v", resourceName, gotState.State, wantState)
+	}
+	if (gotState.ExpiryTimer != nil) != wantTimer {
+		return fmt.Errorf("expiry timer for resource %q is %t, want %t", resourceName, gotState.ExpiryTimer != nil, wantTimer)
+	}
+	return nil
+}
+
+func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (resourceWatchState, error) {
+	c.channelsMu.Lock()
+	defer c.channelsMu.Unlock()
+
+	for _, state := range c.xdsActiveChannels {
+		if st, err := adsResourceWatchStateForTesting(state.channel.ads, rType, resourceName); err == nil {
+			return st, nil
+		}
+	}
+	return resourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
+}
+
+func adsResourceWatchStateForTesting(s *adsStreamImpl, rType ResourceType, resourceName string) (resourceWatchState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.resourceTypeState[rType]
+	if !ok {
+		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", rType)
+	}
+	resourceState, ok := state.subscribedResources[resourceName]
+	if !ok {
+		return resourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
+	}
+	return *resourceState, nil
+}
+
 // Tests the state transitions of the resource specific watch state within the
 // ADS stream, specifically when the stream breaks (for both resources that have
 // been previously received and for resources that are yet to be received).
@@ -216,60 +272,4 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	if err := waitForResourceWatchState(ctx, client, listenerName, resourceWatchStateTimeout, false); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func waitForResourceWatchState(ctx context.Context, client *XDSClient, resourceName string, wantState watchState, wantTimer bool) error {
-	var lastErr error
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		err := verifyResourceWatchState(client, resourceName, wantState, wantTimer)
-		if err == nil {
-			break
-		}
-		lastErr = err
-	}
-	if ctx.Err() != nil {
-		return fmt.Errorf("timeout when waiting for expected watch state for resource %q: %v", resourceName, lastErr)
-	}
-	return nil
-}
-
-func verifyResourceWatchState(client *XDSClient, resourceName string, wantState watchState, wantTimer bool) error {
-	gotState, err := resourceWatchStateForTesting(client, listenerType, resourceName)
-	if err != nil {
-		return fmt.Errorf("failed to get watch state for resource %q: %v", resourceName, err)
-	}
-	if gotState.State != wantState {
-		return fmt.Errorf("watch state for resource %q is %v, want %v", resourceName, gotState.State, wantState)
-	}
-	if (gotState.ExpiryTimer != nil) != wantTimer {
-		return fmt.Errorf("expiry timer for resource %q is %t, want %t", resourceName, gotState.ExpiryTimer != nil, wantTimer)
-	}
-	return nil
-}
-
-func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (resourceWatchState, error) {
-	c.channelsMu.Lock()
-	defer c.channelsMu.Unlock()
-
-	for _, state := range c.xdsActiveChannels {
-		if st, err := adsResourceWatchStateForTesting(state.channel.ads, rType, resourceName); err == nil {
-			return st, nil
-		}
-	}
-	return resourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
-}
-
-func adsResourceWatchStateForTesting(s *adsStreamImpl, rType ResourceType, resourceName string) (resourceWatchState, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state, ok := s.resourceTypeState[rType]
-	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", rType)
-	}
-	resourceState, ok := state.subscribedResources[resourceName]
-	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
-	}
-	return *resourceState, nil
 }
