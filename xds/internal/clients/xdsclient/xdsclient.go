@@ -43,6 +43,7 @@ import (
 	clientsinternal "google.golang.org/grpc/xds/internal/clients/internal"
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
@@ -66,6 +67,11 @@ var (
 
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
+
+func init() {
+	xdsclientinternal.WatchExpiryTimeout = defaultWatchExpiryTimeout
+	xdsclientinternal.StreamBackoff = defaultExponentialBackoff
+}
 
 // XDSClient is a client which queries a set of discovery APIs (collectively
 // termed as xDS) on a remote management server, to discover
@@ -112,7 +118,7 @@ func New(config Config) (*XDSClient, error) {
 		return nil, errors.New("xdsclient: no servers or authorities specified")
 	}
 
-	client, err := newClient(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, name)
+	client, err := newClient(&config, name)
 	if err != nil {
 		return nil, err
 	}
@@ -126,15 +132,15 @@ func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Dura
 }
 
 // newClient returns a new XDSClient with the given config.
-func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, target string) (*XDSClient, error) {
+func newClient(config *Config, target string) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &XDSClient{
 		target:             target,
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
-		watchExpiryTimeout: watchExpiryTimeout,
-		backoff:            streamBackoff,
+		watchExpiryTimeout: xdsclientinternal.WatchExpiryTimeout,
+		backoff:            xdsclientinternal.StreamBackoff,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
 		transportBuilder:   config.TransportBuilder,
