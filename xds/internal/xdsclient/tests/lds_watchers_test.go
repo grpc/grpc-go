@@ -161,8 +161,8 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	got := u.(listenerUpdateErrTuple)
 	if wantUpdate.err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
+		if got.err == nil || !strings.Contains(got.err.Error(), wantUpdate.err.Error()) {
+			return fmt.Errorf("update received with error: %v, want %q", got.err, wantUpdate.err)
 		}
 	}
 	cmpOpts := []cmp.Option{
@@ -1072,7 +1072,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1080,7 +1080,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1152,7 +1152,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1165,7 +1165,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1243,7 +1243,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 

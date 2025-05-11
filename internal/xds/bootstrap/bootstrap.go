@@ -217,6 +217,10 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 	return false
 }
 
+func (sc *ServerConfig) SelectedCreds() ChannelCreds {
+	return sc.selectedCreds
+}
+
 // DialOptions returns a slice of all the configured dial options for this
 // server.
 func (sc *ServerConfig) DialOptions() []grpc.DialOption {
