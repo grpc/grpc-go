@@ -18,24 +18,43 @@
 package xdsclient
 
 import (
+	"context"
+	"sync"
+	"time"
+
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
+)
+
+const (
+	loadStoreStopTimeout = 1 * time.Second
 )
 
 // ReportLoad starts a load reporting stream to the given server. All load
 // reports to the same server share the LRS stream.
 //
-// It returns a Store for the user to report loads, a function to cancel the
-// load reporting stream.
-func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*load.Store, func()) {
-	xc, releaseChannelRef, err := c.getChannelForLRS(server)
+// It returns a lrsclient.LoadStore for the user to report loads.
+func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.LoadStore, func()) {
+	if c.lrsClient == nil {
+		lrsConfig := lrsclient.Config{Node: c.gConfig.Node, TransportBuilder: c.gConfig.TransportBuilder}
+		lrsC, err := lrsclient.New(lrsConfig)
+		if err != nil {
+			c.logger.Warningf("Failed to create an lrs client to the management server to report load: %v", server, err)
+			return nil, func() {}
+		}
+		c.lrsClient = lrsC
+	}
+
+	load, err := c.lrsClient.ReportLoad(clients.ServerIdentifier{ServerURI: server.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: server.SelectedCreds().Type}})
 	if err != nil {
-		c.logger.Warningf("Failed to create a channel to the management server to report load: %v", server, err)
+		c.logger.Warningf("Failed to create a load store to the management server to report load: %v", server, err)
 		return nil, func() {}
 	}
-	load, stopLoadReporting := xc.reportLoad()
-	return load, func() {
-		stopLoadReporting()
-		releaseChannelRef()
-	}
+	return load, sync.OnceFunc(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), loadStoreStopTimeout)
+		defer cancel()
+		load.Stop(ctx)
+	})
 }
