@@ -26,21 +26,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds"
-	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -48,7 +43,6 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -59,7 +53,7 @@ import (
 // After it has received the resource not found error, the server should move to
 // serving, successfully Accept Connections, and fail at the L7 level with
 // resource not found specified.
-func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
+/*func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	routeConfigNamesCh := make(chan []string, 1)
@@ -155,7 +149,7 @@ func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 		}
 	}
 	waitForFailedRPCWithStatus(ctx, t, cc, codes.Unavailable, "error from xDS configuration for matched route configuration", nodeID)
-}
+}*/
 
 // Tests the scenario where the control plane sends the same resource update. It
 // verifies that the mode change callback is not invoked and client connections

@@ -19,7 +19,6 @@ package lrsclient
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -310,9 +309,9 @@ func getStreamError(stream clients.Stream) error {
 // localityFromString converts a json representation of locality, into a
 // clients.Locality struct.
 func localityFromString(s string) (ret clients.Locality, _ error) {
-	err := json.Unmarshal([]byte(s), &ret)
+	_, err := fmt.Sscanf(s, "{region=%q, zone=%q, sub_zone=%q}", &ret.Region, &ret.Zone, &ret.SubZone)
 	if err != nil {
-		return clients.Locality{}, fmt.Errorf("%s is not a well formatted locality, error: %v", s, err)
+		return clients.Locality{}, fmt.Errorf("%s is not a well formatted locality ID, error: %v", s, err)
 	}
 	return ret, nil
 }

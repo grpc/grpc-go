@@ -171,7 +171,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Push some loads on the received store.
-	store2.PerCluster("cluster", "eds").CallDropped("test")
+	store2.ReporterForCluster("cluster", "eds").CallDropped("test")
 
 	// Ensure the initial load reporting request is received at the server.
 	lrsServer := mgmtServer2.LRSServer
@@ -280,14 +280,14 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Push some loads on the received store.
-	store1.PerCluster("cluster1", "eds1").CallDropped("test")
-	store1.PerCluster("cluster1", "eds1").CallStarted(testLocality1)
-	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 3.14)
-	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 2.718)
-	store1.PerCluster("cluster1", "eds1").CallFinished(testLocality1, nil)
-	store1.PerCluster("cluster1", "eds1").CallStarted(testLocality2)
-	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality2, testKey2, 1.618)
-	store1.PerCluster("cluster1", "eds1").CallFinished(testLocality2, nil)
+	store1.ReporterForCluster("cluster1", "eds1").CallDropped("test")
+	store1.ReporterForCluster("cluster1", "eds1").CallStarted(testLocality1)
+	store1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 3.14)
+	store1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 2.718)
+	store1.ReporterForCluster("cluster1", "eds1").CallFinished(testLocality1, nil)
+	store1.ReporterForCluster("cluster1", "eds1").CallStarted(testLocality2)
+	store1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality2, testKey2, 1.618)
+	store1.ReporterForCluster("cluster1", "eds1").CallFinished(testLocality2, nil)
 
 	// Ensure the initial load reporting request is received at the server.
 	req, err := lrsServer.LRSRequestChan.Receive(ctx)
@@ -367,7 +367,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Push more loads.
-	store2.PerCluster("cluster2", "eds2").CallDropped("test")
+	store2.ReporterForCluster("cluster2", "eds2").CallDropped("test")
 
 	// Ensure that loads are seen on the server. We need a loop here because
 	// there could have been some requests from the client in the time between
