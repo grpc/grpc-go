@@ -32,7 +32,8 @@ type Event struct {
 
 // Fire causes e to complete.  It is safe to call multiple times, and
 // concurrently.  It returns true iff this call to Fire caused the signaling
-// channel returned by Done to close.
+// channel returned by Done to close. If Fire returns false, it is possible
+// the Done channel has not been closed yet.
 func (e *Event) Fire() bool {
 	if e.fired.CompareAndSwap(false, true) {
 		close(e.c)
