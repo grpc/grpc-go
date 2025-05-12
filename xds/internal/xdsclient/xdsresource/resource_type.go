@@ -199,7 +199,7 @@ func (a *genericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts gxdsclie
 	return &gxdsclient.DecodeResult{Name: result.Name, Resource: &genericResourceData{xdsResourceData: result.Resource}}, nil
 }
 
-// genericResourceData embed ResourceData and implements
+// genericResourceData embed an xdsresource.ResourceData and implements
 // gxdsclient.ResourceData.
 type genericResourceData struct {
 	xdsResourceData ResourceData
@@ -218,7 +218,7 @@ func (a *genericResourceData) Equal(other gxdsclient.ResourceData) bool {
 	return a.xdsResourceData.RawEqual(otherResourceData.xdsResourceData)
 }
 
-// Bytes returns the underlying raw bytes of the resource proto.
+// Bytes returns the underlying raw bytes of the wrapped resource.
 func (a *genericResourceData) Bytes() []byte {
 	rawAny := a.xdsResourceData.Raw()
 	if rawAny == nil {
@@ -233,7 +233,8 @@ type genericResourceWatcher struct {
 	xdsResourceWatcher ResourceWatcher
 }
 
-// ResourceChanged indicates a new version of the resource is available.
+// ResourceChanged indicates a new version of the wrapped resource is
+// available.
 func (a *genericResourceWatcher) ResourceChanged(gData gxdsclient.ResourceData, done func()) {
 	if gData == nil {
 		a.xdsResourceWatcher.ResourceChanged(nil, done)
@@ -250,22 +251,22 @@ func (a *genericResourceWatcher) ResourceChanged(gData gxdsclient.ResourceData, 
 }
 
 // ResourceError indicates an error occurred while trying to fetch or
-// decode the associated resource. The previous version of the resource
-// should be considered invalid.
+// decode the associated wrapped resource. The previous version of the
+// wrapped resource should be considered invalid.
 func (a *genericResourceWatcher) ResourceError(err error, done func()) {
 	a.xdsResourceWatcher.ResourceError(err, done)
 }
 
 // AmbientError indicates an error occurred after a resource has been
-// received that should not modify the use of that resource but may provide
-// useful information about the state of the XDSClient for debugging
-// purposes. The previous version of the resource should still be
+// received that should not modify the use of that wrapped resource but may
+// provide useful information about the state of the XDSClient for debugging
+// purposes. The previous version of the wrapped resource should still be
 // considered valid.
 func (a *genericResourceWatcher) AmbientError(err error, done func()) {
 	a.xdsResourceWatcher.AmbientError(err, done)
 }
 
-// GenericResourceWatcher returns a  that wraps an
+// GenericResourceWatcher returns a gxdsclient.ResourceWatcher that wraps an
 // xdsresource.ResourceWatcher to make it compatible with gxdsclient.ResourceWatcher.
 func GenericResourceWatcher(xdsResourceWatcher ResourceWatcher) gxdsclient.ResourceWatcher {
 	if xdsResourceWatcher == nil {
