@@ -25,7 +25,9 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -36,6 +38,7 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -43,6 +46,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -50,12 +54,13 @@ import (
 // Tests the case where an LDS points to an RDS which returns resource not
 // found. Before getting the resource not found, the xDS Server has not received
 // all configuration needed, so it should Accept and Close any new connections.
-// After it has received the resource not found error, the server should move to
-// serving, successfully Accept Connections, and fail at the L7 level with
-// resource not found specified.
-/*func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
+// After it has received the resource not found error (due to short watch
+// expiry), the server should move to serving, successfully Accept Connections,
+// and fail at the L7 level with resource not found specified.
+func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+
 	routeConfigNamesCh := make(chan []string, 1)
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
@@ -85,7 +90,6 @@ import (
 	if err != nil {
 		t.Fatalf("Failed to retrieve host and port of server: %v", err)
 	}
-
 	const routeConfigResourceName = "routeName"
 	listener := e2e.DefaultServerListenerWithRouteConfigName(host, port, e2e.SecurityLevelNone, routeConfigResourceName)
 	resources := e2e.UpdateOptions{
@@ -93,17 +97,29 @@ import (
 		Listeners:      []*v3listenerpb.Listener{listener},
 		SkipValidation: true,
 	}
-
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
+
 	modeChangeHandler := newServingModeChangeHandler(t)
 	modeChangeOpt := xds.ServingModeCallback(modeChangeHandler.modeChangeCallback)
+
 	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
+	// Create a specific xDS client instance within that pool for the server,
+	// configuring it with a short WatchExpiryTimeout.
 	pool := xdsclient.NewPool(config)
+	_, serverXDSClientClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name:               xdsclient.NameForServer,
+		WatchExpiryTimeout: 500 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client for server: %v", err)
+	}
+	defer serverXDSClientClose()
+	// Start an xDS-enabled gRPC server using the above client from the pool.
 	createStubServer(t, lis, modeChangeOpt, xds.ClientPoolForTesting(pool))
 
 	// Wait for the route configuration resource to be requested from the
@@ -117,29 +133,20 @@ import (
 		t.Fatal("Timeout waiting for route config resource to be requested")
 	}
 
+	// Do NOT send the RDS resource. The xDS client's watch expiry timer will
+	// fire. After the RDS resource is deemed "not found" (due to the short
+	// watch expiry), the server transitions to SERVING mode.
+
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
+	// Before the watch expiry, the server is NOT_SERVING, RPCs should fail with UNAVAILABLE.
 	waitForFailedRPCWithStatus(ctx, t, cc, codes.Unavailable, "", "")
 
-	// Lookup the xDS client in use based on the dedicated well-known key, as
-	// defined in A71, used by the xDS enabled gRPC server.
-	xdsC, close, err := pool.GetClientForTesting(xdsclient.NameForServer)
-	if err != nil {
-		t.Fatalf("Failed to find xDS client for configuration: %v", string(bootstrapContents))
-	}
-	defer close()
-
-	// Invoke resource not found error for the route configuration resource.
-	// This should cause the server to go SERVING, but fail RPCs with the
-	// appropriate error code.
-	triggerResourceNotFound := internal.TriggerXDSResourceNotFoundForTesting.(func(xdsclient.XDSClient, xdsresource.Type, string) error)
-	routeConfigResourceType := xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL].(xdsresource.Type)
-	if err := triggerResourceNotFound(xdsC, routeConfigResourceType, routeConfigResourceName); err != nil {
-		t.Fatalf("Failed to trigger resource name not found for testing: %v", err)
-	}
+	// Wait for the xDS-enabled gRPC server to go SERVING. This should happen
+	// after the RDS watch expiry timer fires.
 	select {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the xDS-enabled gRPC server to go SERVING")
@@ -148,8 +155,10 @@ import (
 			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeServing)
 		}
 	}
+	// After watch expiry, the server should be SERVING, but RPCs should fail
+	// at the L7 level with resource not found.
 	waitForFailedRPCWithStatus(ctx, t, cc, codes.Unavailable, "error from xDS configuration for matched route configuration", nodeID)
-}*/
+}
 
 // Tests the scenario where the control plane sends the same resource update. It
 // verifies that the mode change callback is not invoked and client connections
