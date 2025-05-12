@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -71,10 +72,10 @@ func (d *dropper) drop() (ret bool) {
 
 // loadReporter wraps the methods from the loadStore that are used here.
 type loadReporter interface {
-	CallStarted(locality string)
-	CallFinished(locality string, err error)
-	CallServerLoad(locality, name string, val float64)
-	CallDropped(locality string)
+	CallStarted(locality internal.LocalityID)
+	CallFinished(locality internal.LocalityID, err error)
+	CallServerLoad(locality internal.LocalityID, name string, val float64)
+	CallDropped(category string)
 }
 
 // Picker implements RPC drop, circuit breaking drop and load reporting.
@@ -133,7 +134,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 	}
 
-	var lIDStr string
+	var lID internal.LocalityID
 	pr, err := d.s.Picker.Pick(info)
 	if scw, ok := pr.SubConn.(*scWrapper); ok {
 		// This OK check also covers the case err!=nil, because SubConn will be
@@ -141,7 +142,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		pr.SubConn = scw.SubConn
 		// If locality ID isn't found in the wrapper, an empty locality ID will
 		// be used.
-		lIDStr = scw.localityID().ToString()
+		lID = scw.localityID()
 	}
 
 	if err != nil {
@@ -153,24 +154,24 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	if labels := telemetryLabels(info.Ctx); labels != nil {
-		labels["grpc.lb.locality"] = lIDStr
+		labels["grpc.lb.locality"] = lID.ToString()
 	}
 
 	if d.loadStore != nil {
-		d.loadStore.CallStarted(lIDStr)
+		d.loadStore.CallStarted(lID)
 		oldDone := pr.Done
 		pr.Done = func(info balancer.DoneInfo) {
 			if oldDone != nil {
 				oldDone(info)
 			}
-			d.loadStore.CallFinished(lIDStr, info.Err)
+			d.loadStore.CallFinished(lID, info.Err)
 
 			load, ok := info.ServerLoad.(*v3orcapb.OrcaLoadReport)
 			if !ok || load == nil {
 				return
 			}
 			for n, c := range load.NamedMetrics {
-				d.loadStore.CallServerLoad(lIDStr, n, c)
+				d.loadStore.CallServerLoad(lID, n, c)
 			}
 		}
 	}

@@ -23,6 +23,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc/xds/internal/clients"
 )
 
 // A LoadStore aggregates loads for multiple clusters and services that are
@@ -134,15 +136,15 @@ func (ls *LoadStore) stats(clusterNames []string) []*loadData {
 // regular map with a mutex for better type safety.
 type PerClusterReporter struct {
 	cluster, service string
-	drops            sync.Map // map[string]*uint64
-	localityRPCCount sync.Map // map[string]*rpcCountData
+	drops            sync.Map // map[clients.Locality]*uint64
+	localityRPCCount sync.Map // map[clients.Locality]*rpcCountData
 
 	mu               sync.Mutex
 	lastLoadReportAt time.Time
 }
 
 // CallStarted records a call started in the LoadStore.
-func (p *PerClusterReporter) CallStarted(locality string) {
+func (p *PerClusterReporter) CallStarted(locality clients.Locality) {
 	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		tp := newRPCCountData()
@@ -153,7 +155,7 @@ func (p *PerClusterReporter) CallStarted(locality string) {
 }
 
 // CallFinished records a call finished in the LoadStore.
-func (p *PerClusterReporter) CallFinished(locality string, err error) {
+func (p *PerClusterReporter) CallFinished(locality clients.Locality, err error) {
 	f, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -169,7 +171,7 @@ func (p *PerClusterReporter) CallFinished(locality string, err error) {
 }
 
 // CallServerLoad records the server load in the LoadStore.
-func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) {
+func (p *PerClusterReporter) CallServerLoad(locality clients.Locality, name string, val float64) {
 	s, ok := p.localityRPCCount.Load(locality)
 	if !ok {
 		// The map is never cleared, only values in the map are reset. So the
@@ -181,7 +183,8 @@ func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) 
 
 // CallDropped records a call dropped in the LoadStore.
 func (p *PerClusterReporter) CallDropped(category string) {
-	d, ok := p.drops.Load(category)
+	c := clients.Locality{Region: category}
+	d, ok := p.drops.Load(c)
 	if !ok {
 		tp := new(uint64)
 		d, _ = p.drops.LoadOrStore(category, tp)
@@ -239,7 +242,7 @@ func (p *PerClusterReporter) stats() *loadData {
 			}
 			return true
 		})
-		sd.localityStats[key.(string)] = ld
+		sd.localityStats[key.(clients.Locality)] = ld
 		return true
 	})
 
@@ -266,7 +269,7 @@ type loadData struct {
 	// drops is the number of dropped requests per category.
 	drops map[string]uint64
 	// localityStats contains load reports per locality.
-	localityStats map[string]localityData
+	localityStats map[clients.Locality]localityData
 	// reportInternal is the duration since last time load was reported (stats()
 	// was called).
 	reportInterval time.Duration
@@ -322,7 +325,7 @@ func newLoadData(cluster, service string) *loadData {
 		cluster:       cluster,
 		service:       service,
 		drops:         make(map[string]uint64),
-		localityStats: make(map[string]localityData),
+		localityStats: make(map[clients.Locality]localityData),
 	}
 }
 

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -44,13 +45,13 @@ import (
 )
 
 const (
-	testLocality1 = `{region="test-region1", zone="", sub_zone=""}`
-	testLocality2 = `{region="test-region2", zone="", sub_zone=""}`
-	testKey1      = "test-key1"
-	testKey2      = "test-key2"
+	testKey1 = "test-key1"
+	testKey2 = "test-key2"
 )
 
 var (
+	testLocality1     = clients.Locality{Region: "test-region1"}
+	testLocality2     = clients.Locality{Region: "test-region2"}
 	toleranceCmpOpt   = cmpopts.EquateApprox(0, 1e-5)
 	ignoreOrderCmpOpt = protocmp.FilterField(&v3endpointpb.ClusterStats{}, "upstream_locality_stats",
 		cmpopts.SortSlices(func(a, b protocmp.Message) bool {
