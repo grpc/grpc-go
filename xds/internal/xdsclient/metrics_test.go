@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
 type noopListenerWatcher struct{}
