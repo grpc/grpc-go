@@ -148,7 +148,7 @@ func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func())
 	return p.WatchResource(endpointsType, name, delegator)
 }
 
-// NewGenericEndpointResourceTypeDecoder returns a gxdsclient.Decoder that
+// NewGenericEndpointsResourceTypeDecoder returns a gxdsclient.Decoder that
 // wraps the xdsresource.endpointsType.
 func NewGenericEndpointsResourceTypeDecoder() gxdsclient.Decoder {
 	return &genericResourceTypeDecoder{xdsResourceType: endpointsType}
