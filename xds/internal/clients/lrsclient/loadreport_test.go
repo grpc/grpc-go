@@ -55,8 +55,6 @@ func Test(t *testing.T) {
 }
 
 const (
-	testLocality1                 = `{region="test-region1", zone="", sub_zone=""}`
-	testLocality2                 = `{region="test-region2", zone="", sub_zone=""}`
 	testKey1                      = "test-key1"
 	testKey2                      = "test-key2"
 	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
@@ -65,6 +63,8 @@ const (
 )
 
 var (
+	testLocality1     = clients.Locality{Region: "test-region1"}
+	testLocality2     = clients.Locality{Region: "test-region2"}
 	toleranceCmpOpt   = cmpopts.EquateApprox(0, 1e-5)
 	ignoreOrderCmpOpt = protocmp.FilterField(&v3endpointpb.ClusterStats{}, "upstream_locality_stats",
 		cmpopts.SortSlices(func(a, b protocmp.Message) bool {

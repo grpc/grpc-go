@@ -135,7 +135,7 @@ func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 
 	// Do NOT send the RDS resource. The xDS client's watch expiry timer will
 	// fire. After the RDS resource is deemed "not found" (due to the short
-	// watch expiry), the server transitions to SERVING mode.
+	// watch expiry), the server will transition to SERVING mode.
 
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
