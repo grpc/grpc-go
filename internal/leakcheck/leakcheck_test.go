@@ -49,13 +49,14 @@ func TestCheck(t *testing.T) {
 		go func() { <-ch }()
 	}
 	if leaked := interestingGoroutines(); len(leaked) != leakCount {
-		t.Errorf("interestingGoroutines found %v leaks, want %v leaks", len(leaked), leakCount)
+		t.Errorf("interestingGoroutines() = %v, want length %v", len(leaked), leakCount)
 	}
 	e := &testLogger{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if CheckGoroutines(ctx, e); e.errorCount < 3 {
-		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
+	if CheckGoroutines(ctx, e); e.errorCount < leakCount {
+		t.Errorf("CheckGoroutines() = %v, want count %v", e.errorCount, leakCount)
+		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
 	close(ch)
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
@@ -75,14 +76,15 @@ func TestCheckRegisterIgnore(t *testing.T) {
 		go func() { <-ch }()
 	}
 	if leaked := interestingGoroutines(); len(leaked) != leakCount {
-		t.Errorf("interestingGoroutines found %v leaks, want %v leaks", len(leaked), leakCount)
+		t.Errorf("interestingGoroutines() = %v, want length %v", len(leaked), leakCount)
 	}
 	go func() { ignoredTestingLeak(3 * time.Second) }()
 	e := &testLogger{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if CheckGoroutines(ctx, e); e.errorCount < 3 {
-		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
+	if CheckGoroutines(ctx, e); e.errorCount < leakCount {
+		t.Errorf("CheckGoroutines() = %v, want count %v", e.errorCount, leakCount)
+		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
 	close(ch)
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
