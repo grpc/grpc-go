@@ -217,6 +217,8 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 	return false
 }
 
+// SelectedCreds returns the selected credentials configuration for
+// communicating with this server.
 func (sc *ServerConfig) SelectedCreds() ChannelCreds {
 	return sc.selectedCreds
 }
