@@ -855,7 +855,7 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	var err error
 	te.cc, err = grpc.NewClient(scheme+te.srvAddr, opts...)
 	if err != nil {
-		te.t.Fatalf("grpc.NewClient() failed(%q) = %v", scheme+te.srvAddr, err)
+		te.t.Fatalf("grpc.NewClient(%q) failed: %v", scheme+te.srvAddr, err)
 	}
 	te.cc.Connect()
 	return te.cc
