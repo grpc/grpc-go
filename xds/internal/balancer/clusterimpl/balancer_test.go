@@ -170,27 +170,6 @@ func (s) TestDropByCategory(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-	/*
-		 const dropCount = rpcCount * dropNumerator / dropDenominator
-		 wantStatsData0 := []*load.Data{{
-			 Cluster:    testClusterName,
-			 Service:    testServiceName,
-			 TotalDrops: dropCount,
-			 Drops:      map[string]uint64{dropReason: dropCount},
-			 LocalityStats: map[string]load.LocalityData{
-				 xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
-					 Succeeded: (rpcCount - dropCount) * 3 / 4,
-					 Errored:   (rpcCount - dropCount) / 4,
-					 Issued:    rpcCount - dropCount,
-				 }},
-			 },
-		 }}
-
-		 gotStatsData0 := loadStore.Stats([]string{testClusterName})
-		 if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
-			 t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
-		 }
-	*/
 
 	// Send an update with new drop configs.
 	const (
@@ -237,27 +216,6 @@ func (s) TestDropByCategory(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err.Error())
 	}
-
-	/*
-		 const dropCount2 = rpcCount * dropNumerator2 / dropDenominator2
-		 wantStatsData1 := []*load.Data{{
-			 Cluster:    testClusterName,
-			 Service:    testServiceName,
-			 TotalDrops: dropCount2,
-			 Drops:      map[string]uint64{dropReason2: dropCount2},
-			 LocalityStats: map[string]load.LocalityData{
-				 xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
-					 Succeeded: rpcCount - dropCount2,
-					 Issued:    rpcCount - dropCount2,
-				 }},
-			 },
-		 }}
-
-		 gotStatsData1 := loadStore.Stats([]string{testClusterName})
-		 if diff := cmp.Diff(gotStatsData1, wantStatsData1, cmpOpts); diff != "" {
-			 t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
-		 }
-	*/
 }
 
 // TestDropCircuitBreaking verifies that the balancer correctly drops the picks
@@ -363,26 +321,6 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-
-	/*
-		 wantStatsData0 := []*load.Data{{
-			 Cluster:    testClusterName,
-			 Service:    testServiceName,
-			 TotalDrops: uint64(maxRequest),
-			 LocalityStats: map[string]load.LocalityData{
-				 xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
-					 Succeeded: uint64(rpcCount - maxRequest),
-					 Errored:   50,
-					 Issued:    uint64(rpcCount - maxRequest + 50),
-				 }},
-			 },
-		 }}
-
-		 gotStatsData0 := loadStore.Stats([]string{testClusterName})
-		 if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
-			 t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
-		 }
-	*/
 }
 
 // TestPickerUpdateAfterClose covers the case where a child policy sends a
@@ -698,38 +636,6 @@ func (s) TestLoadReporting(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-	/*
-		 sds := loadStore.Stats([]string{testClusterName})
-		 if len(sds) == 0 {
-			 t.Fatalf("loads for cluster %v not found in store", testClusterName)
-		 }
-		 sd := sds[0]
-		 if sd.Cluster != testClusterName || sd.Service != testServiceName {
-			 t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
-		 }
-		 testLocalityStr := testLocality.ToString()
-		 localityData, ok := sd.LocalityStats[testLocalityStr]
-		 if !ok {
-			 t.Fatalf("loads for %v not found in store", testLocality)
-		 }
-		 reqStats := localityData.RequestStats
-		 if reqStats.Succeeded != successCount {
-			 t.Errorf("got succeeded %v, want %v", reqStats.Succeeded, successCount)
-		 }
-		 if reqStats.Errored != errorCount {
-			 t.Errorf("got errord %v, want %v", reqStats.Errored, errorCount)
-		 }
-		 if reqStats.InProgress != 0 {
-			 t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
-		 }
-		 wantLoadStats := map[string]load.ServerLoadData{
-			 testNamedMetricsKey1: {Count: 5, Sum: 15.7},  // aggregation of 5 * 3.14 = 15.7
-			 testNamedMetricsKey2: {Count: 5, Sum: 13.59}, // aggregation of 5 * 2.718 = 13.59
-		 }
-		 if diff := cmp.Diff(wantLoadStats, localityData.LoadStats, toleranceCmpOpt); diff != "" {
-			 t.Errorf("localityData.LoadStats returned unexpected diff (-want +got):\n%s", diff)
-		 }
-	*/
 	b.Close()
 	if err := xdsC.WaitForCancelReportLoad(ctx); err != nil {
 		t.Fatalf("unexpected error waiting form load report to be canceled: %v", err)
