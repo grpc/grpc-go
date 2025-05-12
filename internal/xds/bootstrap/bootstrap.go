@@ -224,9 +224,9 @@ func (sc *ServerConfig) SelectedCreds() ChannelCreds {
 }
 
 // DialOptions returns a slice of all the configured dial options for this
-// server.
+// server except grpc.WithCredentialsBundle().
 func (sc *ServerConfig) DialOptions() []grpc.DialOption {
-	dopts := []grpc.DialOption{sc.credsDialOption}
+	var dopts []grpc.DialOption
 	if sc.extraDialOptions != nil {
 		dopts = append(dopts, sc.extraDialOptions...)
 	}

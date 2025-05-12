@@ -142,7 +142,7 @@ func (ls *LoadStore) stats(clusterNames []string) []*loadData {
 // regular map with a mutex for better type safety.
 type PerClusterReporter struct {
 	cluster, service string
-	drops            sync.Map // map[clients.Locality]*uint64
+	drops            sync.Map // map[string]*uint64
 	localityRPCCount sync.Map // map[clients.Locality]*rpcCountData
 
 	mu               sync.Mutex
