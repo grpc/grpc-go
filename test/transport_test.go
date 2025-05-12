@@ -208,7 +208,7 @@ func (s) TestRSTDuringMessageRead(t *testing.T) {
 			case *http2.HeadersFrame:
 				// When the client creates a stream, write a partial gRPC
 				// message followed by an RST_STREAM.
-				messageLen := 2048
+				const messageLen = 2048
 				buf := make([]byte, messageLen/2)
 				// Write the gRPC message length header.
 				binary.BigEndian.PutUint32(buf[1:5], uint32(messageLen))
