@@ -22,6 +22,8 @@ package loadstore
 import (
 	"sync"
 
+	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 )
 
@@ -91,29 +93,29 @@ func (lsw *Wrapper) UpdateLoadStore(store *lrsclient.LoadStore) {
 }
 
 // CallStarted records a call started in the store.
-func (lsw *Wrapper) CallStarted(locality string) {
+func (lsw *Wrapper) CallStarted(locality internal.LocalityID) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
-		lsw.perCluster.CallStarted(locality)
+		lsw.perCluster.CallStarted(clients.Locality{Region: locality.Region, Zone: locality.Zone, SubZone: locality.SubZone})
 	}
 }
 
 // CallFinished records a call finished in the store.
-func (lsw *Wrapper) CallFinished(locality string, err error) {
+func (lsw *Wrapper) CallFinished(locality internal.LocalityID, err error) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
-		lsw.perCluster.CallFinished(locality, err)
+		lsw.perCluster.CallFinished(clients.Locality{Region: locality.Region, Zone: locality.Zone, SubZone: locality.SubZone}, err)
 	}
 }
 
 // CallServerLoad records the server load in the store.
-func (lsw *Wrapper) CallServerLoad(locality, name string, val float64) {
+func (lsw *Wrapper) CallServerLoad(locality internal.LocalityID, name string, val float64) {
 	lsw.mu.RLock()
 	defer lsw.mu.RUnlock()
 	if lsw.perCluster != nil {
-		lsw.perCluster.CallServerLoad(locality, name, val)
+		lsw.perCluster.CallServerLoad(clients.Locality{Region: locality.Region, Zone: locality.Zone, SubZone: locality.SubZone}, name, val)
 	}
 }
 

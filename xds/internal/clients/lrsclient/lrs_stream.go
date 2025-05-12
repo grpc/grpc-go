@@ -242,11 +242,7 @@ func (lrs *streamImpl) sendLoadStatsRequest(stream clients.Stream, loads []*load
 			})
 		}
 		localityStats := make([]*v3endpointpb.UpstreamLocalityStats, 0, len(sd.localityStats))
-		for l, localityData := range sd.localityStats {
-			lid, err := localityFromString(l)
-			if err != nil {
-				return err
-			}
+		for lid, localityData := range sd.localityStats {
 			loadMetricStats := make([]*v3endpointpb.EndpointLoadMetricStats, 0, len(localityData.loadStats))
 			for name, loadData := range localityData.loadStats {
 				loadMetricStats = append(loadMetricStats, &v3endpointpb.EndpointLoadMetricStats{
@@ -304,14 +300,4 @@ func getStreamError(stream clients.Stream) error {
 			return err
 		}
 	}
-}
-
-// localityFromString converts a json representation of locality, into a
-// clients.Locality struct.
-func localityFromString(s string) (ret clients.Locality, _ error) {
-	_, err := fmt.Sscanf(s, "{region=%q, zone=%q, sub_zone=%q}", &ret.Region, &ret.Zone, &ret.SubZone)
-	if err != nil {
-		return clients.Locality{}, fmt.Errorf("%s is not a well formatted locality ID, error: %v", s, err)
-	}
-	return ret, nil
 }
