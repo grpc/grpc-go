@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/experimental/stats"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpclog"
@@ -99,7 +98,7 @@ type clientImpl struct {
 // metricsReporter implements the clients.MetricsReporter interface and uses an
 // underlying stats.MetricsRecorderList to record metrics.
 type metricsReporter struct {
-	stats.MetricsRecorder
+	estats.MetricsRecorder
 
 	target string
 }
@@ -252,7 +251,9 @@ func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.Metri
 	if err != nil {
 		return nil, err
 	}
-	return &clientImpl{XDSClient: client, gConfig: gConfig, config: config, target: target}, nil
+	c := &clientImpl{XDSClient: client, gConfig: gConfig, config: config, target: target}
+	c.logger = prefixLogger(c)
+	return c, nil
 }
 
 // BootstrapConfig returns the configuration read from the bootstrap file.
