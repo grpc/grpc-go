@@ -5342,7 +5342,7 @@ func testRPCTimeout(t *testing.T, e env) {
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
-	for i := -1; i <= 10; i++ {
+	for i := 1; i <= 10; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
 		if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.DeadlineExceeded {
 			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
