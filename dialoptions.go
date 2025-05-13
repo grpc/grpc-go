@@ -210,8 +210,6 @@ func WithReadBufferSize(s int) DialOption {
 // WithInitialWindowSize returns a DialOption which sets the value for initial
 // window size on a stream. The lower bound for window size is 64K and any value
 // smaller than that will be ignored.
-//
-// Deprecated: use WithStaticStreamWindowSize instead
 func WithInitialWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.InitialWindowSize = s
@@ -221,8 +219,6 @@ func WithInitialWindowSize(s int32) DialOption {
 // WithInitialConnWindowSize returns a DialOption which sets the value for
 // initial window size on a connection. The lower bound for window size is 64K
 // and any value smaller than that will be ignored.
-//
-// Deprecated: use WithStaticConnWindowSize instead
 func WithInitialConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.InitialConnWindowSize = s
@@ -243,14 +239,6 @@ func WithStaticConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticConnWindowSize = s
 	})
-}
-
-// WithInitialStreamWindowSize is an alias for WithInitialWindowSize, provided
-// for naming clarity.
-//
-// Deprecated: Use WithStaticStreamWindowSize instead to retain BDP estimation.
-func WithInitialStreamWindowSize(n int32) DialOption {
-	return WithInitialWindowSize(n)
 }
 
 // WithMaxMsgSize returns a DialOption which sets the maximum message size the

@@ -278,8 +278,6 @@ func ReadBufferSize(s int) ServerOption {
 
 // InitialWindowSize returns a ServerOption that sets window size for stream.
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
-//
-// Deprecated: use StaticStreamWindowSize instead.
 func InitialWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
@@ -288,8 +286,6 @@ func InitialWindowSize(s int32) ServerOption {
 
 // InitialConnWindowSize returns a ServerOption that sets window size for a connection.
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
-//
-// // Deprecated: use StaticConnWindowSize instead.
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
@@ -310,14 +306,6 @@ func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
 	})
-}
-
-// InitialStreamWindowSize is an alias for InitialWindowSize, provided for
-// naming clarity.
-//
-// Deprecated: Use StaticStreamWindowSize instead to retain BDP estimation.
-func InitialStreamWindowSize(n int32) ServerOption {
-	return InitialWindowSize(n)
 }
 
 // KeepaliveParams returns a ServerOption that sets keepalive and max-age parameters for the server.
