@@ -5342,12 +5342,37 @@ func testRPCTimeout(t *testing.T, e env) {
 		ResponseSize: respSize,
 		Payload:      payload,
 	}
-	for i := 1; i <= 10; i++ {
+	for i := -1; i <= 10; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i)*time.Millisecond)
 		if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.DeadlineExceeded {
 			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
 		}
 		cancel()
+	}
+}
+
+// Tests that the client doesn't send a negative timeout to the server. If the
+// server receives a negative timeout, it would return an internal status. The
+// client checks the context error before starting a stream, however the context
+// may expire after this check and before the timeout is calculated.
+func (s) TestNegativeRPCTimeout(t *testing.T) {
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	if err := server.StartClient(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try increasingly larger timeout values to trigger the condition when the
+	// context has expired while creating the grpc-timeout header.
+	for i := range 10 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i*100)*time.Nanosecond)
+		defer cancel()
+
+		client := server.Client
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
+		}
 	}
 }
 
