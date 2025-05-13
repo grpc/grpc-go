@@ -211,9 +211,9 @@ func (s) TestParseDialTarget(t *testing.T) {
 		{"dns:///google.com", "tcp", "dns:///google.com"},
 		{"/unix/socket/address", "tcp", "/unix/socket/address"},
 	} {
-		gotNet, gotAddr := parseDialTarget(test.target)
+		gotNet, gotAddr := ParseDialTarget(test.target)
 		if gotNet != test.wantNet || gotAddr != test.wantAddr {
-			t.Errorf("parseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
+			t.Errorf("ParseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
 		}
 	}
 }
