@@ -56,9 +56,6 @@ const (
 )
 
 var (
-	// ErrClientClosed is returned when the xDS client is closed.
-	errClientClosed = errors.New("xds: the xDS client is closed")
-
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
 
@@ -216,7 +213,7 @@ func (c *XDSClient) Close() {
 // A non-nil error is returned if an xdsChannel was not created.
 func (c *XDSClient) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
-		return nil, nil, errClientClosed
+		return nil, nil, errors.New("xds: the xDS client is closed")
 	}
 
 	initLocked := func(s *channelState) {

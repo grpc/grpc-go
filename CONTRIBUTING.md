@@ -87,7 +87,7 @@ How to get your contributions merged smoothly and quickly:
 
 - The grpc package should only depend on standard Go packages and a small number
   of exceptions. **If your contribution introduces new dependencies**, you will
-  need a discussion with gRPC-Go maintainers. A Github action check will run on
+  need a discussion with gRPC-Go maintainers. A GitHub action check will run on
   every PR, and will flag any transitive dependency changes from any public
   package.
 
