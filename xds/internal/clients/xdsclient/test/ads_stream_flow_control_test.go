@@ -39,10 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
-var (
-	adsStreamCh chan *stream
-)
-
 // blockingListenerWatcher implements xdsresource.ListenerWatcher. It writes to
 // a channel when it receives a callback from the watch. It also makes the
 // DoneNotifier passed to the callback available to the test, thereby enabling
@@ -102,20 +98,22 @@ func (lw *blockingListenerWatcher) AmbientError(err error, done func()) {
 	}
 }
 
-type transportBuilder struct{}
+type transportBuilder struct {
+	adsStreamCh chan *stream
+}
 
-func (*transportBuilder) Build(si clients.ServerIdentifier) (clients.Transport, error) {
+func (b *transportBuilder) Build(si clients.ServerIdentifier) (clients.Transport, error) {
 	cc, err := grpc.NewClient(si.ServerURI, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
 	if err != nil {
 		return nil, err
 	}
 
-	adsStreamCh = make(chan *stream, 1)
-	return &transport{cc: cc}, nil
+	return &transport{cc: cc, adsStreamCh: b.adsStreamCh}, nil
 }
 
 type transport struct {
-	cc *grpc.ClientConn
+	cc          *grpc.ClientConn
+	adsStreamCh chan *stream
 }
 
 func (t *transport) NewStream(ctx context.Context, method string) (clients.Stream, error) {
@@ -129,7 +127,7 @@ func (t *transport) NewStream(ctx context.Context, method string) (clients.Strea
 		recvCh: make(chan struct{}, 1),
 		doneCh: make(chan struct{}),
 	}
-	adsStreamCh <- stream
+	t.adsStreamCh <- stream
 
 	return stream, nil
 }
@@ -197,7 +195,7 @@ func (c *byteCodec) Name() string {
 //   - Resource is updated on the management server, and the test verifies that
 //     the update reaches the watchers.
 func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10000*defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	// Start an xDS management server.
@@ -205,8 +203,10 @@ func (s) TestADSFlowControl_ResourceUpdates_SingleResource(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	// Create an xDS client pointing to the above server.
-	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
+	// Create an xDS client pointing to the above server with a test transport
+	// that allow monitoring the underlying stream through adsStreamCh.
+	adsStreamCh := make(chan *stream, 1)
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{adsStreamCh: adsStreamCh})
 
 	// Configure two watchers for the same listener resource.
 	const listenerResourceName = "test-listener-resource"
@@ -348,8 +348,10 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	// Create an xDS client pointing to the above server.
-	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
+	// Create an xDS client pointing to the above server with a test transport
+	// that allow monitoring the underlying stream through adsStreamCh.
+	adsStreamCh := make(chan *stream, 1)
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{adsStreamCh: adsStreamCh})
 
 	// Configure two watchers for two different listener resources.
 	const routeConfigurationName1 = "test-route-configuration-resource-1"
@@ -460,8 +462,10 @@ func (s) TestADSFlowControl_ResourceErrors(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	// Create an xDS client pointing to the above server.
-	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
+	// Create an xDS client pointing to the above server with a test transport
+	// that allow monitoring the underlying stream through adsStreamCh.
+	adsStreamCh := make(chan *stream, 1)
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{adsStreamCh: adsStreamCh})
 
 	// Configure a watcher for a listener resource.
 	const listenerResourceName = "test-listener-resource"
@@ -535,8 +539,10 @@ func (s) TestADSFlowControl_ResourceDoesNotExist(t *testing.T) {
 
 	nodeID := uuid.New().String()
 
-	// Create an xDS client pointing to the above server.
-	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{})
+	// Create an xDS client pointing to the above server with a test transport
+	// that allow monitoring the underlying stream through adsStreamCh.
+	adsStreamCh := make(chan *stream, 1)
+	client := createXDSClient(t, mgmtServer.Address, nodeID, &transportBuilder{adsStreamCh: adsStreamCh})
 
 	// Configure a watcher for a listener resource.
 	const listenerResourceName = "test-listener-resource"

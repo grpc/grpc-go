@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
@@ -51,42 +50,12 @@ func overrideStreamBackOff(t *testing.T, streamBackOff func(int) time.Duration) 
 	t.Cleanup(func() { xdsclientinternal.StreamBackoff = originalStreamBackoff })
 }
 
-// Creates an xDS client with the given bootstrap contents and backoff function.
+// Creates an xDS client with the given management server address, nodeID and backoff function.
 func createXDSClientWithBackoff(t *testing.T, mgmtServerAddress string, nodeID string, streamBackoff func(int) time.Duration) *xdsclient.XDSClient {
 	t.Helper()
-
-	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
-	si := clients.ServerIdentifier{
-		ServerURI:  mgmtServerAddress,
-		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
-	}
-
-	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
-	xdsClientConfig := xdsclient.Config{
-		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
-		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: grpctransport.NewBuilder(configs),
-		ResourceTypes:    resourceTypes,
-		// Xdstp resource names used in this test do not specify an
-		// authority. These will end up looking up an entry with the
-		// empty key in the authorities map. Having an entry with an
-		// empty key and empty configuration, results in these
-		// resources also using the top-level configuration.
-		Authorities: map[string]xdsclient.Authority{
-			"": {XDSServers: []xdsclient.ServerConfig{}},
-		},
-	}
-
-	// Create an xDS client with the above config.
 	overrideStreamBackOff(t, streamBackoff)
-	client, err := xdsclient.New(xdsClientConfig)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-
-	t.Cleanup(func() { client.Close() })
-
-	return client
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	return createXDSClient(t, mgmtServerAddress, nodeID, grpctransport.NewBuilder(configs))
 }
 
 // Tests the case where the management server returns an error in the ADS
