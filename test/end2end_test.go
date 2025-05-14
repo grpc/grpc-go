@@ -5360,7 +5360,7 @@ func (s) TestNegativeRPCTimeout(t *testing.T) {
 	defer server.Stop()
 
 	if err := server.StartClient(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to create client: %v", err)
 	}
 
 	// Try increasingly larger timeout values to trigger the condition when the
