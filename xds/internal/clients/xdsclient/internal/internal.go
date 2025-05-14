@@ -28,4 +28,9 @@ var (
 	// StreamBackoff is the stream backoff for xDS client. It can be overridden
 	// by tests to change the default backoff strategy.
 	StreamBackoff func(int) time.Duration
+
+	// ResourceWatchStateForTesting gets the watch state for the resource
+	// identified by the given resource type and resource name. Returns a
+	// non-nil error if there is no such resource being watched.
+	ResourceWatchStateForTesting any // func(*xdsclient.XDSClient, xdsclient.ResourceType, string) error
 )

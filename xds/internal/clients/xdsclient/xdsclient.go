@@ -70,6 +70,7 @@ var (
 func init() {
 	xdsclientinternal.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	xdsclientinternal.StreamBackoff = defaultExponentialBackoff
+	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
 }
 
 // XDSClient is a client which queries a set of discovery APIs (collectively
@@ -432,4 +433,16 @@ func (cs *channelState) adsResourceDoesNotExist(typ ResourceType, resourceName s
 	for authority := range cs.interestedAuthorities {
 		authority.adsResourceDoesNotExist(typ, resourceName)
 	}
+}
+
+func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
+	c.channelsMu.Lock()
+	defer c.channelsMu.Unlock()
+
+	for _, state := range c.xdsActiveChannels {
+		if st, err := state.channel.ads.adsResourceWatchStateForTesting(rType, resourceName); err == nil {
+			return st, nil
+		}
+	}
+	return xdsresource.ResourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
 }

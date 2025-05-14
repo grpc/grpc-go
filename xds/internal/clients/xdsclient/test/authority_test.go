@@ -108,7 +108,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	}
 
 	// Create an xDS client with the above config.
-	overrideWatchExpiryTimeout(t, defaultTestShortTimeout)
+	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

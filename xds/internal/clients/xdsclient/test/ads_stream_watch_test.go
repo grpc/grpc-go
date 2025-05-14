@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient
+package xdsclient_test
 
 import (
 	"context"
@@ -28,69 +28,16 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 )
 
-type noopListenerWatcher struct{}
-
-func (noopListenerWatcher) ResourceChanged(_ ResourceData, onDone func()) {
-	onDone()
-}
-func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
-	onDone()
-}
-func (noopListenerWatcher) AmbientError(_ error, onDone func()) {
-	onDone()
-}
-
-func overrideWatchExpiryTimeout(t *testing.T, watchExpiryTimeout time.Duration) {
-	originalWatchExpiryTimeout := xdsclientinternal.WatchExpiryTimeout
-	xdsclientinternal.WatchExpiryTimeout = watchExpiryTimeout
-	t.Cleanup(func() { xdsclientinternal.WatchExpiryTimeout = originalWatchExpiryTimeout })
-}
-
-// Creates an xDS client with the given management server address, node ID
-// and transport builder.
-func createXDSClient(t *testing.T, mgmtServerAddress string, nodeID string, transportBuilder clients.TransportBuilder) *XDSClient {
-	t.Helper()
-
-	resourceTypes := map[string]ResourceType{xdsresource.V3ListenerURL: listenerType}
-	si := clients.ServerIdentifier{
-		ServerURI:  mgmtServerAddress,
-		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
-	}
-
-	xdsClientConfig := Config{
-		Servers:          []ServerConfig{{ServerIdentifier: si}},
-		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
-		TransportBuilder: transportBuilder,
-		ResourceTypes:    resourceTypes,
-		// Xdstp resource names used in this test do not specify an
-		// authority. These will end up looking up an entry with the
-		// empty key in the authorities map. Having an entry with an
-		// empty key and empty configuration, results in these
-		// resources also using the top-level configuration.
-		Authorities: map[string]Authority{
-			"": {XDSServers: []ServerConfig{}},
-		},
-	}
-
-	// Create an xDS client with the above config.
-	client, err := New(xdsClientConfig)
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	t.Cleanup(func() { client.Close() })
-	return client
-}
-
-func waitForResourceWatchState(ctx context.Context, client *XDSClient, resourceName string, wantState watchState, wantTimer bool) error {
+func waitForResourceWatchState(ctx context.Context, client *xdsclient.XDSClient, resourceName string, wantState xdsresource.WatchState, wantTimer bool) error {
 	var lastErr error
 	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
 		err := verifyResourceWatchState(client, resourceName, wantState, wantTimer)
@@ -105,7 +52,8 @@ func waitForResourceWatchState(ctx context.Context, client *XDSClient, resourceN
 	return nil
 }
 
-func verifyResourceWatchState(client *XDSClient, resourceName string, wantState watchState, wantTimer bool) error {
+func verifyResourceWatchState(client *xdsclient.XDSClient, resourceName string, wantState xdsresource.WatchState, wantTimer bool) error {
+	resourceWatchStateForTesting := xdsclientinternal.ResourceWatchStateForTesting.(func(*xdsclient.XDSClient, xdsclient.ResourceType, string) (xdsresource.ResourceWatchState, error))
 	gotState, err := resourceWatchStateForTesting(client, listenerType, resourceName)
 	if err != nil {
 		return fmt.Errorf("failed to get watch state for resource %q: %v", resourceName, err)
@@ -117,33 +65,6 @@ func verifyResourceWatchState(client *XDSClient, resourceName string, wantState 
 		return fmt.Errorf("expiry timer for resource %q is %t, want %t", resourceName, gotState.ExpiryTimer != nil, wantTimer)
 	}
 	return nil
-}
-
-func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (resourceWatchState, error) {
-	c.channelsMu.Lock()
-	defer c.channelsMu.Unlock()
-
-	for _, state := range c.xdsActiveChannels {
-		if st, err := adsResourceWatchStateForTesting(state.channel.ads, rType, resourceName); err == nil {
-			return st, nil
-		}
-	}
-	return resourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
-}
-
-func adsResourceWatchStateForTesting(s *adsStreamImpl, rType ResourceType, resourceName string) (resourceWatchState, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state, ok := s.resourceTypeState[rType]
-	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource type: %v", rType)
-	}
-	resourceState, ok := state.subscribedResources[resourceName]
-	if !ok {
-		return resourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
-	}
-	return *resourceState, nil
 }
 
 // Tests the state transitions of the resource specific watch state within the
@@ -171,7 +92,7 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	const listenerName1 = "listener1"
 	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerName1, noopListenerWatcher{})
 	defer ldsCancel1()
-	if err := waitForResourceWatchState(ctx, client, listenerName1, resourceWatchStateRequested, true); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName1, xdsresource.ResourceWatchStateRequested, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +109,7 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := waitForResourceWatchState(ctx, client, listenerName1, resourceWatchStateReceived, false); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName1, xdsresource.ResourceWatchStateReceived, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -197,7 +118,7 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	const listenerName2 = "listener2"
 	ldsCancel2 := client.WatchResource(xdsresource.V3ListenerURL, listenerName2, noopListenerWatcher{})
 	defer ldsCancel2()
-	if err := waitForResourceWatchState(ctx, client, listenerName2, resourceWatchStateRequested, true); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName2, xdsresource.ResourceWatchStateRequested, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,10 +127,10 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	// second resource, it should result in the timer getting stopped and the
 	// watch state moving to `started`.
 	lis.Stop()
-	if err := waitForResourceWatchState(ctx, client, listenerName2, resourceWatchStateStarted, false); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName2, xdsresource.ResourceWatchStateStarted, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyResourceWatchState(client, listenerName1, resourceWatchStateReceived, false); err != nil {
+	if err := verifyResourceWatchState(client, listenerName1, xdsresource.ResourceWatchStateReceived, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -217,10 +138,10 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	// state is `requested`, for the second resource. For the first resource,
 	// nothing should change.
 	lis.Restart()
-	if err := waitForResourceWatchState(ctx, client, listenerName2, resourceWatchStateRequested, true); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName2, xdsresource.ResourceWatchStateRequested, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyResourceWatchState(client, listenerName1, resourceWatchStateReceived, false); err != nil {
+	if err := verifyResourceWatchState(client, listenerName1, xdsresource.ResourceWatchStateReceived, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,7 +157,7 @@ func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := waitForResourceWatchState(ctx, client, listenerName2, resourceWatchStateReceived, false); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName2, xdsresource.ResourceWatchStateReceived, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -254,7 +175,7 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	// short resource expiry timeout.
 	nodeID := uuid.New().String()
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
-	overrideWatchExpiryTimeout(t, defaultTestShortTimeout)
+	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
 	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
 
 	// Create a watch for the first listener resource and verify that the timer
@@ -262,14 +183,14 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	const listenerName = "listener"
 	ldsCancel1 := client.WatchResource(xdsresource.V3ListenerURL, listenerName, noopListenerWatcher{})
 	defer ldsCancel1()
-	if err := waitForResourceWatchState(ctx, client, listenerName, resourceWatchStateRequested, true); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName, xdsresource.ResourceWatchStateRequested, true); err != nil {
 		t.Fatal(err)
 	}
 
 	// Since the resource is not configured on the management server, the watch
 	// expiry timer is expected to fire, and the watch state should move to
 	// `timeout`.
-	if err := waitForResourceWatchState(ctx, client, listenerName, resourceWatchStateTimeout, false); err != nil {
+	if err := waitForResourceWatchState(ctx, client, listenerName, xdsresource.ResourceWatchStateTimeout, false); err != nil {
 		t.Fatal(err)
 	}
 }
