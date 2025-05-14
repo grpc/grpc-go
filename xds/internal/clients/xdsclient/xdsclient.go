@@ -51,19 +51,11 @@ import (
 )
 
 const (
-	// NameForServer represents the value to be passed as name when creating an xDS
-	// client from xDS-enabled gRPC servers. This is a well-known dedicated key
-	// value, and is defined in gRFC A71.
-	NameForServer = "#server"
-
 	defaultWatchExpiryTimeout = 15 * time.Second
 	name                      = "xds-client"
 )
 
 var (
-	// ErrClientClosed is returned when the xDS client is closed.
-	ErrClientClosed = errors.New("xds: the xDS client is closed")
-
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
 
@@ -221,7 +213,7 @@ func (c *XDSClient) Close() {
 // A non-nil error is returned if an xdsChannel was not created.
 func (c *XDSClient) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
-		return nil, nil, ErrClientClosed
+		return nil, nil, errors.New("xds: the xDS client is closed")
 	}
 
 	initLocked := func(s *channelState) {
