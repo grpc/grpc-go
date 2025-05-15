@@ -947,10 +947,10 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 // adds the proxyattribute to all other addresses.
 func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	const (
-		targetTestAddr                 = "test.target"
+		targetTestAddr             = "test.target"
 		noproxyresolvedTargetAddr1 = "1.1.1.1:8080"
-		resolvedTargetTestAddr2        = "2.2.2.2:8080"
-		envProxyAddr                   = "proxytest.com"
+		resolvedTargetTestAddr2    = "2.2.2.2:8080"
+		envProxyAddr               = "proxytest.com"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		// return nil to mimick the scenario where the address is excluded using
