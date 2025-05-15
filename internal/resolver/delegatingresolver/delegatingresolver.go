@@ -109,6 +109,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 
 	var err error
 	r.proxyURL, err = proxyURLForTarget(target.Endpoint())
+	logger.Info("Eshita proxy url %s", r.proxyURL)
 	if err != nil {
 		return nil, fmt.Errorf("delegating_resolver: failed to determine proxy URL for target %s: %v", target, err)
 	}
@@ -210,6 +211,18 @@ func isTCPAddressPresent(state *resolver.State) bool {
 	return false
 }
 
+func isProxyNeeded(address string) bool {
+	req := &http.Request{URL: &url.URL{
+		Scheme: "https",
+		Host:   address,
+	}}
+	url, err := HTTPSProxyFromEnvironment(req)
+	if err != nil || url == nil {
+		return false
+	}
+	return true
+}
+
 // updateClientConnStateLocked constructs a combined list of addresses by
 // pairing each proxy address with every target address of type TCP. For each
 // pair, it creates a new [resolver.Address] using the proxy address and
@@ -241,7 +254,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	var addresses []resolver.Address
 	for _, targetAddr := range (*r.targetResolverState).Addresses {
 		// Avoid proxy when network is not tcp.
-		if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" {
+		if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" || !isProxyNeeded(targetAddr.Addr) {
 			addresses = append(addresses, targetAddr)
 			continue
 		}
@@ -259,7 +272,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		var addrs []resolver.Address
 		for _, targetAddr := range endpt.Addresses {
 			// Avoid proxy when network is not tcp.
-			if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" {
+			if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" || !isProxyNeeded(targetAddr.Addr) {
 				addrs = append(addrs, targetAddr)
 				continue
 			}
