@@ -20,8 +20,12 @@ package xdsclient_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -35,6 +39,25 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
+
+// waitForResourceNames waits for the wantNames to be received on namesCh.
+// Returns a non-nil error if the context expires before that.
+func waitForResourceNames(ctx context.Context, t *testing.T, namesCh chan []string, wantNames []string) error {
+	t.Helper()
+
+	var lastRequestedNames []string
+	for ; ; <-time.After(defaultTestShortTimeout) {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for resources %v to be requested from the management server. Last requested resources: %v", wantNames, lastRequestedNames)
+		case gotNames := <-namesCh:
+			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
+				return nil
+			}
+			lastRequestedNames = gotNames
+		}
+	}
+}
 
 // Tests that an ADS stream is restarted after a connection failure. Also
 // verifies that if there were any watches registered before the connection

@@ -111,8 +111,8 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	got := u.(clusterUpdateErrTuple)
 	if wantUpdate.err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
+		if got.err == nil || !strings.Contains(got.err.Error(), wantUpdate.err.Error()) {
+			return fmt.Errorf("update received with error: %v, want %q", got.err, wantUpdate.err)
 		}
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels")}
