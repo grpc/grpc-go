@@ -73,39 +73,13 @@ type adsStreamEventHandler interface {
 	onResponse(response, func()) ([]string, error) // Called when a response is received on the ADS stream.
 }
 
-// watchState is a enum that describes the watch state of a particular
-// resource.
-type watchState int
-
-const (
-	// resourceWatchStateStarted is the state where a watch for a resource was
-	// started, but a request asking for that resource is yet to be sent to the
-	// management server.
-	resourceWatchStateStarted watchState = iota
-	// resourceWatchStateRequested is the state when a request has been sent for
-	// the resource being watched.
-	resourceWatchStateRequested
-	// ResourceWatchStateReceived is the state when a response has been received
-	// for the resource being watched.
-	resourceWatchStateReceived
-	// resourceWatchStateTimeout is the state when the watch timer associated
-	// with the resource expired because no response was received.
-	resourceWatchStateTimeout
-)
-
-// resourceWatchState is the state corresponding to a resource being watched.
-type resourceWatchState struct {
-	State       watchState  // Watch state of the resource.
-	ExpiryTimer *time.Timer // Timer for the expiry of the watch.
-}
-
 // state corresponding to a resource type.
 type resourceTypeState struct {
-	version             string                         // Last acked version. Should not be reset when the stream breaks.
-	nonce               string                         // Last received nonce. Should be reset when the stream breaks.
-	bufferedRequests    chan struct{}                  // Channel to buffer requests when writing is blocked.
-	subscribedResources map[string]*resourceWatchState // Map of subscribed resource names to their state.
-	pendingWrite        bool                           // True if there is a pending write for this resource type.
+	version             string                                     // Last acked version. Should not be reset when the stream breaks.
+	nonce               string                                     // Last received nonce. Should be reset when the stream breaks.
+	bufferedRequests    chan struct{}                              // Channel to buffer requests when writing is blocked.
+	subscribedResources map[string]*xdsresource.ResourceWatchState // Map of subscribed resource names to their state.
+	pendingWrite        bool                                       // True if there is a pending write for this resource type.
 }
 
 // adsStreamImpl provides the functionality associated with an ADS (Aggregated
@@ -198,7 +172,7 @@ func (s *adsStreamImpl) subscribe(typ ResourceType, name string) {
 		// An entry in the type state map is created as part of the first
 		// subscription request for this type.
 		state = &resourceTypeState{
-			subscribedResources: make(map[string]*resourceWatchState),
+			subscribedResources: make(map[string]*xdsresource.ResourceWatchState),
 			bufferedRequests:    make(chan struct{}, 1),
 		}
 		s.resourceTypeState[typ] = state
@@ -206,7 +180,7 @@ func (s *adsStreamImpl) subscribe(typ ResourceType, name string) {
 
 	// Create state for the newly subscribed resource. The watch timer will
 	// be started when a request for this resource is actually sent out.
-	state.subscribedResources[name] = &resourceWatchState{State: resourceWatchStateStarted}
+	state.subscribedResources[name] = &xdsresource.ResourceWatchState{State: xdsresource.ResourceWatchStateStarted}
 	state.pendingWrite = true
 
 	// Send a request for the resource type with updated subscriptions.
@@ -616,8 +590,8 @@ func (s *adsStreamImpl) onRecv(stream clients.Stream, names []string, url, versi
 			s.logger.Warningf("ADS stream received a response for resource %q, but no state exists for it", name)
 			continue
 		}
-		if ws := rs.State; ws == resourceWatchStateStarted || ws == resourceWatchStateRequested {
-			rs.State = resourceWatchStateReceived
+		if ws := rs.State; ws == xdsresource.ResourceWatchStateStarted || ws == xdsresource.ResourceWatchStateRequested {
+			rs.State = xdsresource.ResourceWatchStateReceived
 			if rs.ExpiryTimer != nil {
 				rs.ExpiryTimer.Stop()
 				rs.ExpiryTimer = nil
@@ -652,14 +626,14 @@ func (s *adsStreamImpl) onError(err error, msgReceived bool) {
 	s.mu.Lock()
 	for _, state := range s.resourceTypeState {
 		for _, rs := range state.subscribedResources {
-			if rs.State != resourceWatchStateRequested {
+			if rs.State != xdsresource.ResourceWatchStateRequested {
 				continue
 			}
 			if rs.ExpiryTimer != nil {
 				rs.ExpiryTimer.Stop()
 				rs.ExpiryTimer = nil
 			}
-			rs.State = resourceWatchStateStarted
+			rs.State = xdsresource.ResourceWatchStateStarted
 		}
 	}
 	s.mu.Unlock()
@@ -691,15 +665,15 @@ func (s *adsStreamImpl) startWatchTimersLocked(typ ResourceType, names []string)
 		if !ok {
 			continue
 		}
-		if resourceState.State != resourceWatchStateStarted {
+		if resourceState.State != xdsresource.ResourceWatchStateStarted {
 			continue
 		}
-		resourceState.State = resourceWatchStateRequested
+		resourceState.State = xdsresource.ResourceWatchStateRequested
 
 		rs := resourceState
 		resourceState.ExpiryTimer = time.AfterFunc(s.watchExpiryTimeout, func() {
 			s.mu.Lock()
-			rs.State = resourceWatchStateTimeout
+			rs.State = xdsresource.ResourceWatchStateTimeout
 			rs.ExpiryTimer = nil
 			s.mu.Unlock()
 			s.eventHandler.onWatchExpiry(typ, name)
@@ -707,7 +681,22 @@ func (s *adsStreamImpl) startWatchTimersLocked(typ ResourceType, names []string)
 	}
 }
 
-func resourceNames(m map[string]*resourceWatchState) []string {
+func (s *adsStreamImpl) adsResourceWatchStateForTesting(rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.resourceTypeState[rType]
+	if !ok {
+		return xdsresource.ResourceWatchState{}, fmt.Errorf("unknown resource type: %v", rType)
+	}
+	resourceState, ok := state.subscribedResources[resourceName]
+	if !ok {
+		return xdsresource.ResourceWatchState{}, fmt.Errorf("unknown resource name: %v", resourceName)
+	}
+	return *resourceState, nil
+}
+
+func resourceNames(m map[string]*xdsresource.ResourceWatchState) []string {
 	ret := make([]string, len(m))
 	idx := 0
 	for name := range m {

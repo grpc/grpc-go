@@ -59,6 +59,28 @@ func (c *Channel) Replace(value any) {
 	}
 }
 
+// SendContext sends value on the underlying channel, or returns an error if
+// the context expires.
+func (c *Channel) SendContext(ctx context.Context, value any) error {
+	select {
+	case c.C <- value:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Drain drains the channel by repeatedly reading from it until it is empty.
+func (c *Channel) Drain() {
+	for {
+		select {
+		case <-c.C:
+		default:
+			return
+		}
+	}
+}
+
 // NewChannelWithSize returns a new Channel with a buffer of bufSize.
 func NewChannelWithSize(bufSize int) *Channel {
 	return &Channel{C: make(chan any, bufSize)}
