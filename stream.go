@@ -1167,7 +1167,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	} else if err != nil {
 		return toRPCErr(err)
 	}
-	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
+	return status.Errorf(codes.Internal, "client streaming cardinality violation: get <nil>, want <EOF>")
 }
 
 func (a *csAttempt) finish(err error) {
