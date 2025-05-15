@@ -109,7 +109,6 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 
 	var err error
 	r.proxyURL, err = proxyURLForTarget(target.Endpoint())
-	logger.Info("Eshita proxy url %s", r.proxyURL)
 	if err != nil {
 		return nil, fmt.Errorf("delegating_resolver: failed to determine proxy URL for target %s: %v", target, err)
 	}
