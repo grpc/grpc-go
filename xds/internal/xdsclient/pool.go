@@ -34,7 +34,7 @@ import (
 var (
 	// DefaultPool is the default pool for xDS clients. It is created at init
 	// time by reading bootstrap configuration from env vars.
-	DefaultPool *Pool
+	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
 )
 
 // Pool represents a pool of xDS clients that share the same bootstrap

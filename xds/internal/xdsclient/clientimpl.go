@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -121,10 +122,6 @@ func (mr *metricsReporter) ReportMetric(metric any) {
 	}
 }
 
-func init() {
-	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
-}
-
 func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType, target string) (*clientImpl, error) {
 	grpcTransportConfigs := make(map[string]grpctransport.Config)
 	gServerCfgMap := make(map[gxdsclient.ServerConfig]*bootstrap.ServerConfig)
@@ -139,22 +136,8 @@ func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.Metri
 		}
 		var gServerCfg []gxdsclient.ServerConfig
 		for _, sc := range serverCfg {
-			for _, cc := range sc.ChannelCreds() {
-				c := xdsbootstrap.GetCredentials(cc.Type)
-				if c == nil {
-					continue
-				}
-				bundle, _, err := c.Build(cc.Config)
-				if err != nil {
-					continue
-				}
-				grpcTransportConfigs[cc.Type] = grpctransport.Config{
-					Credentials: bundle,
-					GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-						opts = append(opts, sc.DialOptions()...)
-						return grpc.NewClient(target, opts...)
-					},
-				}
+			if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
+				return nil, err
 			}
 			gsc := gxdsclient.ServerConfig{
 				ServerIdentifier:       gclients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedCreds().Type}},
@@ -167,22 +150,8 @@ func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.Metri
 
 	gServerCfgs := make([]gxdsclient.ServerConfig, 0, len(config.XDSServers()))
 	for _, sc := range config.XDSServers() {
-		for _, cc := range sc.ChannelCreds() {
-			c := xdsbootstrap.GetCredentials(cc.Type)
-			if c == nil {
-				continue
-			}
-			bundle, _, err := c.Build(cc.Config)
-			if err != nil {
-				continue
-			}
-			grpcTransportConfigs[cc.Type] = grpctransport.Config{
-				Credentials: bundle,
-				GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-					opts = append(opts, sc.DialOptions()...)
-					return grpc.NewClient(target, opts...)
-				},
-			}
+		if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
+			return nil, err
 		}
 		gsc := gxdsclient.ServerConfig{
 			ServerIdentifier:       gclients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedCreds().Type}},
@@ -276,4 +245,28 @@ func (c *clientRefCounted) incrRef() int32 {
 
 func (c *clientRefCounted) decrRef() int32 {
 	return atomic.AddInt32(&c.refCount, -1)
+}
+
+// populateGRPCTransportConfigsFromServerConfig iterates through the channel
+// credentials of the provided server configuration, builds credential bundles,
+// and populates the grpctransport.Config map.
+func populateGRPCTransportConfigsFromServerConfig(sc *bootstrap.ServerConfig, grpcTransportConfigs map[string]grpctransport.Config) error {
+	for _, cc := range sc.ChannelCreds() {
+		c := xdsbootstrap.GetCredentials(cc.Type)
+		if c == nil {
+			continue
+		}
+		bundle, _, err := c.Build(cc.Config)
+		if err != nil {
+			return fmt.Errorf("xds: failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
+		}
+		grpcTransportConfigs[cc.Type] = grpctransport.Config{
+			Credentials: bundle,
+			GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+				opts = append(opts, sc.DialOptions()...)
+				return grpc.NewClient(target, opts...)
+			},
+		}
+	}
+	return nil
 }
