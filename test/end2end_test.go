@@ -854,10 +854,11 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	var scheme string
 	opts, scheme = te.configDial(opts...)
 	var err error
-	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
+	te.cc, err = grpc.NewClient(scheme+te.srvAddr, opts...)
 	if err != nil {
-		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
+		te.t.Fatalf("grpc.NewClient(%q) failed: %v", scheme+te.srvAddr, err)
 	}
+	te.cc.Connect()
 	return te.cc
 }
 
@@ -5347,6 +5348,31 @@ func testRPCTimeout(t *testing.T, e env) {
 			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
 		}
 		cancel()
+	}
+}
+
+// Tests that the client doesn't send a negative timeout to the server. If the
+// server receives a negative timeout, it would return an internal status. The
+// client checks the context error before starting a stream, however the context
+// may expire after this check and before the timeout is calculated.
+func (s) TestNegativeRPCTimeout(t *testing.T) {
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	if err := server.StartClient(); err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Try increasingly larger timeout values to trigger the condition when the
+	// context has expired while creating the grpc-timeout header.
+	for i := range 10 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i*100)*time.Nanosecond)
+		defer cancel()
+
+		client := server.Client
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
+		}
 	}
 }
 

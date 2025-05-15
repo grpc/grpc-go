@@ -43,28 +43,28 @@ import (
 	clientsinternal "google.golang.org/grpc/xds/internal/clients/internal"
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
+	xdsclientinternal "google.golang.org/grpc/xds/internal/clients/xdsclient/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/proto"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
 const (
-	// NameForServer represents the value to be passed as name when creating an xDS
-	// client from xDS-enabled gRPC servers. This is a well-known dedicated key
-	// value, and is defined in gRFC A71.
-	NameForServer = "#server"
-
 	defaultWatchExpiryTimeout = 15 * time.Second
 	name                      = "xds-client"
 )
 
 var (
-	// ErrClientClosed is returned when the xDS client is closed.
-	ErrClientClosed = errors.New("xds: the xDS client is closed")
-
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
 )
+
+func init() {
+	xdsclientinternal.WatchExpiryTimeout = defaultWatchExpiryTimeout
+	xdsclientinternal.StreamBackoff = defaultExponentialBackoff
+	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
+}
 
 // XDSClient is a client which queries a set of discovery APIs (collectively
 // termed as xDS) on a remote management server, to discover
@@ -82,8 +82,9 @@ type XDSClient struct {
 	resourceTypes      map[string]ResourceType      // Registry of resource types, for parsing incoming ADS responses.
 	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
 	serializerClose    func()                       // Function to close the serializer.
-	logger             *grpclog.PrefixLogger        // Logger for this client.
-	target             string                       // The gRPC target for this client.
+	logger             *grpclog.PrefixLogger
+	target             string
+	metricsReporter    clients.MetricsReporter
 
 	// The XDSClient owns a bunch of channels to individual xDS servers
 	// specified in the xDS client configuration. Authorities acquire references
@@ -110,7 +111,7 @@ func New(config Config) (*XDSClient, error) {
 		return nil, errors.New("xdsclient: no servers or authorities specified")
 	}
 
-	client, err := newClient(&config, defaultWatchExpiryTimeout, defaultExponentialBackoff, name)
+	client, err := newClient(&config, name)
 	if err != nil {
 		return nil, err
 	}
@@ -124,20 +125,21 @@ func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Dura
 }
 
 // newClient returns a new XDSClient with the given config.
-func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, target string) (*XDSClient, error) {
+func newClient(config *Config, target string) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &XDSClient{
 		target:             target,
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
-		watchExpiryTimeout: watchExpiryTimeout,
-		backoff:            streamBackoff,
+		watchExpiryTimeout: xdsclientinternal.WatchExpiryTimeout,
+		backoff:            xdsclientinternal.StreamBackoff,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
 		transportBuilder:   config.TransportBuilder,
 		resourceTypes:      config.ResourceTypes,
 		xdsActiveChannels:  make(map[ServerConfig]*channelState),
+		metricsReporter:    config.MetricsReporter,
 	}
 
 	for name, cfg := range config.Authorities {
@@ -154,6 +156,7 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 			getChannelForADS: c.getChannelForADS,
 			logPrefix:        clientPrefix(c),
 			target:           target,
+			metricsReporter:  c.metricsReporter,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -163,8 +166,10 @@ func newClient(config *Config, watchExpiryTimeout time.Duration, streamBackoff f
 		getChannelForADS: c.getChannelForADS,
 		logPrefix:        clientPrefix(c),
 		target:           target,
+		metricsReporter:  c.metricsReporter,
 	})
 	c.logger = prefixLogger(c)
+
 	return c, nil
 }
 
@@ -215,7 +220,7 @@ func (c *XDSClient) Close() {
 // A non-nil error is returned if an xdsChannel was not created.
 func (c *XDSClient) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
-		return nil, nil, ErrClientClosed
+		return nil, nil, errors.New("xds: the xDS client is closed")
 	}
 
 	initLocked := func(s *channelState) {
@@ -384,6 +389,12 @@ func (cs *channelState) adsStreamFailure(err error) {
 		return
 	}
 
+	if xdsresource.ErrType(err) != xdsresource.ErrTypeStreamFailedAfterRecv && cs.parent.metricsReporter != nil {
+		cs.parent.metricsReporter.ReportMetric(&metrics.ServerFailure{
+			ServerURI: cs.serverConfig.ServerIdentifier.ServerURI,
+		})
+	}
+
 	cs.parent.channelsMu.Lock()
 	defer cs.parent.channelsMu.Unlock()
 	for authority := range cs.interestedAuthorities {
@@ -426,4 +437,16 @@ func (cs *channelState) adsResourceDoesNotExist(typ ResourceType, resourceName s
 	for authority := range cs.interestedAuthorities {
 		authority.adsResourceDoesNotExist(typ, resourceName)
 	}
+}
+
+func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
+	c.channelsMu.Lock()
+	defer c.channelsMu.Unlock()
+
+	for _, state := range c.xdsActiveChannels {
+		if st, err := state.channel.ads.adsResourceWatchStateForTesting(rType, resourceName); err == nil {
+			return st, nil
+		}
+	}
+	return xdsresource.ResourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
 }

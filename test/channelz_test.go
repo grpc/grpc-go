@@ -304,11 +304,11 @@ func (s) TestCZTopChannelRegistrationAndDeletion(t *testing.T) {
 	}
 }
 
-func (s) TestCZTopChannelRegistrationAndDeletionWhenDialFail(t *testing.T) {
-	// Make dial fails (due to no transport security specified)
+func (s) TestCZTopChannelRegistrationAndDeletionWhenNewClientFail(t *testing.T) {
+	// Make newclient fails (due to no transport security specified)
 	_, err := grpc.NewClient("fake.addr")
 	if err == nil {
-		t.Fatal("expecting dial to fail")
+		t.Fatal("expecting newclient to fail")
 	}
 	if tcs, end := channelz.GetTopChannels(0, 0); tcs != nil || !end {
 		t.Fatalf("GetTopChannels(0, 0) = %v, %v, want <nil>, true", tcs, end)
