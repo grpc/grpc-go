@@ -948,14 +948,14 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	const (
 		targetTestAddr                 = "test.target"
-		noproxyresolvedTargetTestAddr1 = "1.1.1.1:8080"
+		noproxyresolvedTargetAddr1 = "1.1.1.1:8080"
 		resolvedTargetTestAddr2        = "2.2.2.2:8080"
 		envProxyAddr                   = "proxytest.com"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		// return nil to mimick the scenario where the address is excluded using
 		// `NO_PROXY` env variable.
-		if req.URL.Host == noproxyresolvedTargetTestAddr1 {
+		if req.URL.Host == noproxyresolvedTargetAddr1 {
 			return nil, nil
 		}
 		return &url.URL{
@@ -973,7 +973,7 @@ func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	targetResolver := manual.NewBuilderWithScheme("test")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
 	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver := setupDNS(t)
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
@@ -981,8 +981,8 @@ func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	}
 
 	targetResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetTestAddr1}, {Addr: resolvedTargetTestAddr2}},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetTestAddr1}, {Addr: resolvedTargetTestAddr2}}}},
+		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, {Addr: resolvedTargetTestAddr2}},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, {Addr: resolvedTargetTestAddr2}}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -992,6 +992,11 @@ func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Wait for the proxy resolver to be built before calling UpdateState.
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
 	proxyResolver.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: envProxyAddr}},
 		ServiceConfig: &serviceconfig.ParseResult{},
@@ -1000,12 +1005,12 @@ func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	var gotState resolver.State
 	select {
 	case gotState = <-stateCh:
-	case <-time.After(defaultTestTimeout):
-		t.Fatal("Timeout when waiting for a state update from the delegating resolver")
+	case <-ctx.Done():
+		t.Fatal("Context timed out when waiting for a state update from the delegating resolver")
 	}
 	wantState := resolver.State{
-		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetTestAddr1}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetTestAddr1}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)}}},
+		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 
