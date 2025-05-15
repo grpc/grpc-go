@@ -542,8 +542,6 @@ type clientStream struct {
 
 	sentLast bool // sent an end stream
 
-	recvFirstMsg bool // received first msg from server
-
 	methodConfig *MethodConfig
 
 	ctx context.Context // the application's context, wrapped by stats/tracing
@@ -1137,16 +1135,13 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 				return statusErr
 			}
 			// received no msg and status ok for non-server streaming rpcs.
-			if !cs.desc.ServerStreams && !cs.recvFirstMsg {
+			if !cs.desc.ServerStreams {
 				return status.Errorf(codes.Internal, "client streaming cardinality violation")
 			}
 			return io.EOF // indicates successful end of stream.
 		}
 
 		return toRPCErr(err)
-	}
-	if !cs.desc.ServerStreams {
-		cs.recvFirstMsg = true
 	}
 	if a.trInfo != nil {
 		a.mu.Lock()
