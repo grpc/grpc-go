@@ -3736,6 +3736,8 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
+// Tests that a client receives a cardinality violation error for unary
+// RPCs if the server doesn't send a message before returning status OK.
 func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
