@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/status"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -704,5 +705,33 @@ func (s) TestLeastRequestEndpoints_MultipleAddresses(t *testing.T) {
 	}
 	if err := checkRoundRobinRPCs(ctx, testServiceClient, wantAddrs); err != nil {
 		t.Fatalf("error in expected round robin: %v", err)
+	}
+}
+
+func (s) TestLeastRequestEndpoints_ResolverError(t *testing.T) {
+	mr := manual.NewBuilderWithScheme("lr-e2e")
+	defer mr.Close()
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient() failed: %v", err)
+	}
+	defer cc.Close()
+
+	cc.Connect()
+	resolverErr := fmt.Errorf("simulated resolver error")
+	mr.CC().ReportError(resolverErr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Ensure the client handles the resolver error gracefully.
+	testServiceClient := testgrpc.NewTestServiceClient(cc)
+	_, err = testServiceClient.EmptyCall(ctx, &testpb.Empty{})
+	if err == nil {
+		t.Fatal("Got successful call, want error")
+	}
+	if st, _ := status.FromError(err); st.Message() != resolverErr.Error() {
+		t.Fatalf("Got error %v, want: %v", st.Message(), resolverErr)
 	}
 }
