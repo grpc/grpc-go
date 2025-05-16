@@ -151,34 +151,36 @@ type Server struct {
 }
 
 type serverOptions struct {
-	creds                 credentials.TransportCredentials
-	codec                 baseCodec
-	cp                    Compressor
-	dc                    Decompressor
-	unaryInt              UnaryServerInterceptor
-	streamInt             StreamServerInterceptor
-	chainUnaryInts        []UnaryServerInterceptor
-	chainStreamInts       []StreamServerInterceptor
-	binaryLogger          binarylog.Logger
-	inTapHandle           tap.ServerInHandle
-	statsHandlers         []stats.Handler
-	maxConcurrentStreams  uint32
-	maxReceiveMessageSize int
-	maxSendMessageSize    int
-	unknownStreamDesc     *StreamDesc
-	keepaliveParams       keepalive.ServerParameters
-	keepalivePolicy       keepalive.EnforcementPolicy
-	initialWindowSize     int32
-	initialConnWindowSize int32
-	writeBufferSize       int
-	readBufferSize        int
-	sharedWriteBuffer     bool
-	connectionTimeout     time.Duration
-	maxHeaderListSize     *uint32
-	headerTableSize       *uint32
-	numServerWorkers      uint32
-	bufferPool            mem.BufferPool
-	waitForHandlers       bool
+	creds                  credentials.TransportCredentials
+	codec                  baseCodec
+	cp                     Compressor
+	dc                     Decompressor
+	unaryInt               UnaryServerInterceptor
+	streamInt              StreamServerInterceptor
+	chainUnaryInts         []UnaryServerInterceptor
+	chainStreamInts        []StreamServerInterceptor
+	binaryLogger           binarylog.Logger
+	inTapHandle            tap.ServerInHandle
+	statsHandlers          []stats.Handler
+	maxConcurrentStreams   uint32
+	maxReceiveMessageSize  int
+	maxSendMessageSize     int
+	unknownStreamDesc      *StreamDesc
+	keepaliveParams        keepalive.ServerParameters
+	keepalivePolicy        keepalive.EnforcementPolicy
+	initialWindowSize      int32
+	initialConnWindowSize  int32
+	writeBufferSize        int
+	readBufferSize         int
+	sharedWriteBuffer      bool
+	connectionTimeout      time.Duration
+	maxHeaderListSize      *uint32
+	headerTableSize        *uint32
+	numServerWorkers       uint32
+	bufferPool             mem.BufferPool
+	waitForHandlers        bool
+	staticStreamWindowSize int32
+	staticConnWindowSize   int32
 }
 
 var defaultServerOptions = serverOptions{
@@ -287,6 +289,22 @@ func InitialWindowSize(s int32) ServerOption {
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
+	})
+}
+
+// StaticStreamWindowSize returns a ServerOption to set the static initial
+// stream window size.
+func StaticStreamWindowSize(s int32) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.staticStreamWindowSize = s
+	})
+}
+
+// StaticConnWindowSize returns a ServerOption to set the static initial
+// connection window size.
+func StaticConnWindowSize(s int32) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.staticConnWindowSize = s
 	})
 }
 

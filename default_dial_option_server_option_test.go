@@ -148,6 +148,33 @@ func (s) TestJoinDialOption(t *testing.T) {
 	}
 }
 
+// TestJoinDialOption_StaticConnAndStreamWindowSizes verifies that both static
+// stream and connection window sizes set via joined dial options are correctly
+// applied.
+func (s) TestJoinDialOption_StaticConnAndStreamWindowSizes(t *testing.T) {
+	const (
+		staticWindowSize = 123456
+		staticConnSize   = 654321
+	)
+	jdo := newJoinDialOption(
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithStaticStreamWindowSize(staticWindowSize),
+		WithStaticConnWindowSize(staticConnSize),
+	)
+	cc, err := Dial("fake", jdo)
+	if err != nil {
+		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.StaticStreamWindowSize != staticWindowSize {
+		t.Fatalf("Unexpected cc.dopts.copts.StaticStreamWindowSize: %d != %d", cc.dopts.copts.StaticStreamWindowSize, staticWindowSize)
+	}
+	if cc.dopts.copts.StaticConnWindowSize != staticConnSize {
+		t.Fatalf("Expected StaticConnWindowSize = %d, got %d", staticConnSize, cc.dopts.copts.StaticConnWindowSize)
+	}
+
+}
+
 // TestJoinServerOption tests the join server option. It configures a joined
 // server option with three individual server options, and verifies that all
 // three are successfully applied.
