@@ -210,16 +210,21 @@ func isTCPAddressPresent(state *resolver.State) bool {
 	return false
 }
 
-func isProxyNeeded(address string) bool {
+func skipProxy(address resolver.Address) bool {
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
-		Host:   address,
+		Host:   address.Addr,
 	}}
+	// Avoid proxy when address included in `NO_PROXY` environment variable.
 	url, err := HTTPSProxyFromEnvironment(req)
 	if err != nil || url == nil {
-		return false
+		return true
 	}
-	return true
+	// Avoid proxy when network is not tcp.
+	if networkType := networkTypeFromAddr(address); networkType != "tcp" {
+		return true
+	}
+	return false
 }
 
 // updateClientConnStateLocked constructs a combined list of addresses by
@@ -252,8 +257,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 	}
 	var addresses []resolver.Address
 	for _, targetAddr := range (*r.targetResolverState).Addresses {
-		// Avoid proxy when network is not tcp.
-		if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" || !isProxyNeeded(targetAddr.Addr) {
+		if skipProxy(targetAddr) {
 			addresses = append(addresses, targetAddr)
 			continue
 		}
@@ -271,7 +275,7 @@ func (r *delegatingResolver) updateClientConnStateLocked() error {
 		var addrs []resolver.Address
 		for _, targetAddr := range endpt.Addresses {
 			// Avoid proxy when network is not tcp.
-			if networkType := networkTypeFromAddr(targetAddr); networkType != "tcp" || !isProxyNeeded(targetAddr.Addr) {
+			if skipProxy(targetAddr) {
 				addrs = append(addrs, targetAddr)
 				continue
 			}
