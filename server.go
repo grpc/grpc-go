@@ -2109,7 +2109,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 //
 // Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SetSendCompressor(ctx context.Context, name string) error {
+func SetSendCompressor(ctx context.Context, name string, compressorOptions ...any) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.ServerStream)
 	if !ok || stream == nil {
 		return fmt.Errorf("failed to fetch the stream from the given context")

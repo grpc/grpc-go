@@ -451,7 +451,7 @@ func (o PerRPCCredsCallOption) after(*callInfo, *csAttempt) {}
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func UseCompressor(name string) CallOption {
+func UseCompressor(name string, compressorOptions ...any) CallOption {
 	return CompressorCallOption{CompressorType: name}
 }
 
