@@ -960,15 +960,15 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 // adds the proxyattribute to all other addresses.
 func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	const (
-		targetTestAddr             = "test.target"
-		noproxyresolvedTargetAddr1 = "1.1.1.1:8080"
-		resolvedTargetTestAddr2    = "2.2.2.2:8080"
-		envProxyAddr               = "proxytest.com"
+		targetTestAddr            = "test.target"
+		noproxyresolvedTargetAddr = "1.1.1.1:8080"
+		resolvedTargetTestAddr    = "2.2.2.2:8080"
+		envProxyAddr              = "proxytest.com"
 	)
 	hpfe := func(req *http.Request) (*url.URL, error) {
 		// return nil to mimick the scenario where the address is excluded using
 		// `NO_PROXY` env variable.
-		if req.URL.Host == noproxyresolvedTargetAddr1 {
+		if req.URL.Host == noproxyresolvedTargetAddr {
 			return nil, nil
 		}
 		return &url.URL{
@@ -994,8 +994,8 @@ func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	}
 
 	targetResolver.UpdateState(resolver.State{
-		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, {Addr: resolvedTargetTestAddr2}},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, {Addr: resolvedTargetTestAddr2}}}},
+		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetAddr}, {Addr: resolvedTargetTestAddr}},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetAddr}, {Addr: resolvedTargetTestAddr}}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	})
 
@@ -1022,8 +1022,8 @@ func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 		t.Fatal("Context timed out when waiting for a state update from the delegating resolver")
 	}
 	wantState := resolver.State{
-		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)},
-		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetAddr1}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr2)}}},
+		Addresses:     []resolver.Address{{Addr: noproxyresolvedTargetAddr}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr)},
+		Endpoints:     []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: noproxyresolvedTargetAddr}, proxyAddressWithTargetAttribute(envProxyAddr, resolvedTargetTestAddr)}}},
 		ServiceConfig: &serviceconfig.ParseResult{},
 	}
 

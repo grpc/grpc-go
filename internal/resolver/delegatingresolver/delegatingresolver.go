@@ -194,15 +194,15 @@ func networkTypeFromAddr(addr resolver.Address) string {
 	return networkType
 }
 
-func isTCPAddressPresent(state *resolver.State) bool {
+func needsProxyResolver(state *resolver.State) bool {
 	for _, addr := range state.Addresses {
-		if networkType := networkTypeFromAddr(addr); networkType == "tcp" {
+		if !skipProxy(addr) {
 			return true
 		}
 	}
 	for _, endpoint := range state.Endpoints {
 		for _, addr := range endpoint.Addresses {
-			if networktype := networkTypeFromAddr(addr); networktype == "tcp" {
+			if !skipProxy(addr) {
 				return true
 			}
 		}
@@ -211,6 +211,10 @@ func isTCPAddressPresent(state *resolver.State) bool {
 }
 
 func skipProxy(address resolver.Address) bool {
+	// Avoid proxy when network is not tcp.
+	if networkType := networkTypeFromAddr(address); networkType != "tcp" {
+		return true
+	}
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
 		Host:   address.Addr,
@@ -218,10 +222,6 @@ func skipProxy(address resolver.Address) bool {
 	// Avoid proxy when address included in `NO_PROXY` environment variable.
 	url, err := HTTPSProxyFromEnvironment(req)
 	if err != nil || url == nil {
-		return true
-	}
-	// Avoid proxy when network is not tcp.
-	if networkType := networkTypeFromAddr(address); networkType != "tcp" {
 		return true
 	}
 	return false
@@ -358,7 +358,7 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 	r.targetResolverState = &state
 	// If no addresses returned by resolver have network type as tcp , do not
 	// wait for proxy update.
-	if !isTCPAddressPresent(r.targetResolverState) {
+	if !needsProxyResolver(r.targetResolverState) {
 		return r.cc.UpdateState(*r.targetResolverState)
 	}
 
