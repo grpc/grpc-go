@@ -55,18 +55,18 @@ var (
 type Options struct {
 	// CertFile is the file that holds the identity certificate.
 	// Optional. If this is set, KeyFile must also be set.
-	CertFile string
+	CertFile string `json:"certificate_file,omitempty"`
 	// KeyFile is the file that holds identity private key.
 	// Optional. If this is set, CertFile must also be set.
-	KeyFile string
+	KeyFile string `json:"private_key_file,omitempty"`
 	// RootFile is the file that holds trusted root certificate(s).
 	// Optional.
-	RootFile string
+	RootFile string `json:"ca_certificate_file,omitempty"`
 	// SPIFFEBundleMapFile is the file that holds the spiffe bundle map.
 	// If a given provider configures both the RootFile and the
 	// SPIFFEBundleMapFile, the SPIFFEBundleMapFile will be preferred.
 	// Optional.
-	SPIFFEBundleMapFile string
+	SPIFFEBundleMapFile string `json:"spiffe_trust_bundle_map_file,omitempty"`
 	// RefreshDuration is the amount of time the plugin waits before checking
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
