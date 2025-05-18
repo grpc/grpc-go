@@ -73,7 +73,7 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 
 	var rawMap map[string]json.RawMessage
 	if err := json.Unmarshal(jd, &rawMap); err != nil {
-		return Options{}, fmt.Errorf("pemfile: json.Unmarshal map failed: %v", err)
+		return Options{}, fmt.Errorf("pemfile: json.Unmarshal map(%s) failed: %v", string(jd), err)
 	}
 
 	if rawMap["refresh_interval"] != nil {
