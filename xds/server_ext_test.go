@@ -35,19 +35,24 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -523,5 +528,161 @@ func (s) TestServer_MultipleServers_DifferentBootstrapConfigurations(t *testing.
 	waitForSuccessfulRPC(ctx, t, cc2, grpc.Peer(&peer2))
 	if peer2.Addr.String() != lis2.Addr().String() {
 		t.Errorf("Connected to wrong peer: %s, want %s", peer2.Addr, lis2.Addr())
+	}
+}
+
+// TestXDSRace_ClientStuckOnLDS reproduces a race condition where an xDS client
+// can get stuck waiting for an LDS resource if channels are created and shut
+// down rapidly for the same target.
+func TestXDSRace_ClientStuckOnLDS(t *testing.T) {
+	wrappedLis := testutils.NewListenerWrapper(t, nil)
+	lis := testutils.NewRestartableListener(wrappedLis)
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lis})
+
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	nodeID := uuid.New().String()
+	const targetName = "my-xds-target-for-lds-race.com"
+	const routeConfigName = "route-for-lds-race-target"
+	const clusterName = "cluster-for-lds-race-target"
+	const edsServiceName = clusterName
+
+	// Generate bootstrap configuration with the above two servers.
+	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+		Servers: []byte(fmt.Sprintf(`[
+		{
+			"server_uri": %q,
+			"channel_creds": [{"type": "insecure"}]
+		}]`, mgmtServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap file: %v", err)
+	}
+
+	// Create an xDS client with the above bootstrap configuration.
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+
+	// Get the xDS resolver to use the above xDS client.
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	resolver, err := resolverBuilder(pool)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	listener := e2e.DefaultClientListener(targetName, routeConfigName)
+	routeConfig := e2e.DefaultRouteConfig(routeConfigName, targetName, clusterName)
+	cluster := e2e.DefaultCluster(clusterName, edsServiceName, e2e.SecurityLevelNone)
+	endpoints := e2e.DefaultEndpoint(edsServiceName, "localhost", []uint32{testutils.ParsePort(t, backend.Address)})
+
+	numIterations := 20 // Number of attempts to trigger the race.
+	// Each iteration can take up to ~20-25s. Add a buffer for overall test timeout.
+	overallTestTimeout := time.Duration(numIterations)*25*time.Second + 30*time.Second
+	if overallTestTimeout < 60*time.Second { // Minimum reasonable timeout
+		overallTestTimeout = 60 * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), overallTestTimeout)
+	defer cancel()
+
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{routeConfig},
+		Clusters:       []*v3clusterpb.Cluster{cluster},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{endpoints},
+		SkipValidation: true,
+	}); err != nil {
+		t.Fatalf("Failed to update management server: %v", err)
+	}
+
+	raceConditionHit := false
+	var hitIteration int
+
+	for i := 0; i < numIterations; i++ {
+		select {
+		case <-ctx.Done():
+			t.Errorf("Overall test timeout reached at iteration %d before completing all iterations or hitting race.", i)
+			goto endLoop // Use goto to break out of the outer loop and proceed to final logging.
+		default:
+		}
+
+		t.Logf("Starting iteration %d to trigger race condition", i)
+		// Iteration timeout must be > 15s (LDS timeout) + RPC processing + buffer.
+		iterCtx, iterCancel := context.WithTimeout(ctx, 25*time.Second)
+
+		var cc1 *grpc.ClientConn
+		var errDial error
+		cc1, errDial = grpc.NewClient(fmt.Sprintf("xds:///%s", targetName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+		if errDial != nil {
+			t.Logf("Iteration %d: cc1.NewClient failed: %v", i, errDial)
+		}
+
+		client1 := testgrpc.NewTestServiceClient(cc1)
+		rpcCtx, rpcCancel := context.WithTimeout(iterCtx, 5*time.Second)
+		_, errRPC := client1.EmptyCall(rpcCtx, &testpb.Empty{}) // Prime xDS for cc1.
+		rpcCancel()
+		if errRPC != nil {
+			t.Logf("Iteration %d: cc1 RPC failed: %v", i, errRPC)
+		} else {
+			t.Logf("Iteration %d: cc1 RPC successful", i)
+		}
+		go func() {
+			cc1.Close() // This initiates unsubscription when goroutine exits.
+		}()
+
+		cc2, errDial := grpc.NewClient(fmt.Sprintf("xds:///%s", targetName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver)) // Channel 2 created "around the same time".
+		if errDial != nil {
+			t.Errorf("Iteration %d: cc2.NewClient failed: %v", i, errDial)
+			iterCancel()
+			continue
+		}
+
+		client2 := testgrpc.NewTestServiceClient(cc2)
+		rpcAttemptCtx, rpcAttemptCancel := context.WithTimeout(iterCtx, 18*time.Second) // RPC on cc2, expect >15s hang if race hits.
+		startTime := time.Now()
+		_, rpcErr := client2.EmptyCall(rpcAttemptCtx, &testpb.Empty{})
+		duration := time.Since(startTime)
+		rpcAttemptCancel()
+
+		cc2.Close() // Clean up cc2.
+
+		if rpcErr != nil {
+			st, _ := status.FromError(rpcErr)
+			isUnavailable := st.Code() == codes.Unavailable
+			rpcContextTimedOut := rpcAttemptCtx.Err() == context.DeadlineExceeded
+
+			t.Logf("Iteration %d: cc2 RPC failed after %v. Error: %q. Code: %s. RPC_CTX_ERR: %v", i, duration, rpcErr, st.Code(), rpcAttemptCtx.Err())
+
+			// Symptom of the race: RPC takes ~15s and fails (Unavailable or context timeout).
+			if duration > 14*time.Second && duration < 20*time.Second {
+				if isUnavailable || rpcContextTimedOut {
+					t.Errorf("Iteration %d: cc2 RPC behavior consistent with LDS timeout due to race. Duration: %v, Error: %v. RACE CONDITION HIT.", i, duration, rpcErr)
+					raceConditionHit = true
+					hitIteration = i
+					iterCancel()
+					goto endLoop // Exit loop, race condition reproduced.
+				}
+			}
+		} else {
+			t.Logf("Iteration %d: cc2 RPC succeeded in %v (race not hit this iteration)", i, duration)
+		}
+		iterCancel() // Clean up this iteration's context.
+	}
+
+endLoop:
+	if raceConditionHit {
+		t.Logf("Successfully reproduced the race condition on iteration %d where channel 2's RPC was stuck.", hitIteration)
+	} else {
+		t.Logf("Race condition not reproduced after %d iterations. The bug might be fixed or is difficult to trigger consistently.", numIterations)
 	}
 }
