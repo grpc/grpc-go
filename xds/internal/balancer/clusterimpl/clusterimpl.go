@@ -24,7 +24,6 @@
 package clusterimpl
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -99,7 +98,7 @@ type clusterImplBalancer struct {
 	// The following fields are only accessed from balancer API methods, which
 	// are guaranteed to be called serially by gRPC.
 	xdsClient        xdsclient.XDSClient     // Sent down in ResolverState attributes.
-	cancelLoadReport func(context.Context)   // To stop reporting load through the above xDS client.
+	cancelLoadReport func(time.Duration)     // To stop reporting load through the above xDS client.
 	edsServiceName   string                  // EDS service name to report load for.
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
 	dropCategories   []DropConfig            // The categories for drops.
@@ -221,9 +220,7 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 
 	if stopOldLoadReport {
 		if b.cancelLoadReport != nil {
-			stopCtx, stopCancel := context.WithTimeout(context.Background(), loadStoreStopTimeout)
-			defer stopCancel()
-			b.cancelLoadReport(stopCtx)
+			b.cancelLoadReport(loadStoreStopTimeout)
 			b.cancelLoadReport = nil
 			if !startNewLoadReport {
 				// If a new LRS stream will be started later, no need to update
@@ -349,9 +346,7 @@ func (b *clusterImplBalancer) Close() {
 	b.childState = balancer.State{}
 
 	if b.cancelLoadReport != nil {
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), loadStoreStopTimeout)
-		defer stopCancel()
-		b.cancelLoadReport(stopCtx)
+		b.cancelLoadReport(loadStoreStopTimeout)
 		b.cancelLoadReport = nil
 	}
 	b.logger.Infof("Shutdown")

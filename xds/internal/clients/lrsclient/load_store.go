@@ -19,7 +19,6 @@
 package lrsclient
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,7 +35,8 @@ import (
 //
 // It is safe for concurrent use.
 type LoadStore struct {
-	stop func(ctx context.Context) // Function to call to Stop the LoadStore
+	// stop is the function to call to Stop the LoadStore reporting.
+	stop func(timeout time.Duration)
 
 	// mu only protects the map (2 layers). The read/write to
 	// *PerClusterReporter doesn't need to hold the mu.
@@ -66,12 +66,13 @@ func newLoadStore() *LoadStore {
 // Stop signals the LoadStore to stop reporting.
 //
 // Before closing the underlying LRS stream, this method may block until a
-// final load report send attempt completes or the provided context `ctx` expires.
+// final load report send attempt completes or the provided timeout duration
+// expires.
 //
-// The provided context must have a deadline or timeout set to prevent Stop
-// from blocking indefinitely if the final send attempt fails to complete.
-func (ls *LoadStore) Stop(ctx context.Context) {
-	ls.stop(ctx)
+// The `timeout` duration should be set to prevent Stop from blocking
+// indefinitely if the final send attempt fails to complete.
+func (ls *LoadStore) Stop(timeout time.Duration) {
+	ls.stop(timeout)
 }
 
 // ReporterForCluster returns the PerClusterReporter for the given cluster and

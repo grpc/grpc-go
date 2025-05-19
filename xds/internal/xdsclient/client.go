@@ -21,7 +21,7 @@
 package xdsclient
 
 import (
-	"context"
+	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -49,7 +49,7 @@ type XDSClient interface {
 	// the watcher is canceled. Callers need to handle this case.
 	WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func())
 
-	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context))
+	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func(time.Duration))
 
 	BootstrapConfig() *bootstrap.Config
 }
