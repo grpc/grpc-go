@@ -81,7 +81,6 @@ func (o Options) canonical() []byte {
 func (o Options) validate() error {
 	// Guard against SPIFFE bundle map usage
 	if os.Getenv(spiffeEnabledEnvVar) != "true" {
-		logger.Warningf("pemfile: a SPIFFE Bundle Map %q was configured but the environment variable to enabled SPIFFE verification %q is not true", o.SPIFFEBundleMapFile, spiffeEnabledEnvVar)
 		o.SPIFFEBundleMapFile = ""
 	}
 	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {
