@@ -71,7 +71,7 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 	if opts.RefreshInterval != "" {
 		dur, err := time.ParseDuration(opts.RefreshInterval)
 		if err != nil {
-			return Options{}, fmt.Errorf("pemfile: failed to parse refresh interval %q: %v", opts, err)
+			return Options{}, fmt.Errorf("pemfile: failed to parse refresh interval: %v", err)
 		}
 		opts.RefreshDuration = dur
 	}
