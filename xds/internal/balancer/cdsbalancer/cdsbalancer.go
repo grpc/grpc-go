@@ -426,6 +426,8 @@ func (b *cdsBalancer) ExitIdle() {
 		// will be connected.
 		if ei, ok := b.childLB.(balancer.ExitIdler); ok {
 			ei.ExitIdle()
+		} else {
+			b.logger.Errorf("Child balancer doesn't implement ExitIdler.")
 		}
 	})
 }

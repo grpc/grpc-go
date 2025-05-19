@@ -341,6 +341,8 @@ func (b *clusterResolverBalancer) run() {
 				// will be connected.
 				if ei, ok := b.child.(balancer.ExitIdler); ok {
 					ei.ExitIdle()
+				} else {
+					b.logger.Errorf("Child balancer doesn't implement ExitIdler.")
 				}
 			}
 		case u := <-b.resourceWatcher.updateChannel:

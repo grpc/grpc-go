@@ -406,6 +406,8 @@ func (b *wrrBalancer) Close() {
 func (b *wrrBalancer) ExitIdle() {
 	if ei, ok := b.child.(balancer.ExitIdler); ok { // Should always be ok, as child is endpoint sharding.
 		ei.ExitIdle()
+	} else {
+		b.logger.Errorf("Child balancer doesn't implement ExitIdler.")
 	}
 }
 

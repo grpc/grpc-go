@@ -127,6 +127,8 @@ func (lrb *leastRequestBalancer) ResolverError(err error) {
 func (lrb *leastRequestBalancer) ExitIdle() {
 	if ei, ok := lrb.child.(balancer.ExitIdler); ok { // Should always be ok, as child is endpoint sharding.
 		ei.ExitIdle()
+	} else {
+		lrb.logger.Errorf("Child balancer doesn't implement ExitIdler.")
 	}
 }
 

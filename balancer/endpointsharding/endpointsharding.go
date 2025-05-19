@@ -205,6 +205,17 @@ func (es *endpointSharding) Close() {
 	}
 }
 
+func (es *endpointSharding) ExitIdle() {
+	es.childMu.Lock()
+	defer es.childMu.Unlock()
+	for _, bw := range es.children.Load().Values() {
+		ei, ok := bw.child.(balancer.ExitIdler)
+		if ok && !bw.isClosed {
+			ei.ExitIdle()
+		}
+	}
+}
+
 // updateState updates this component's state. It sends the aggregated state,
 // and a picker with round robin behavior with all the child states present if
 // needed.
