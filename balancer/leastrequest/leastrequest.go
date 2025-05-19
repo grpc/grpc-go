@@ -124,6 +124,12 @@ func (lrb *leastRequestBalancer) ResolverError(err error) {
 	lrb.child.ResolverError(err)
 }
 
+func (lrb *leastRequestBalancer) ExitIdle() {
+	if ei, ok := lrb.child.(balancer.ExitIdler); ok { // Should always be ok, as child is endpoint sharding.
+		ei.ExitIdle()
+	}
+}
+
 func (lrb *leastRequestBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	lrCfg, ok := ccs.BalancerConfig.(*LBConfig)
 	if !ok {
