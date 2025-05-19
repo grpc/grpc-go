@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -37,6 +38,8 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	"google.golang.org/grpc/internal/credentials/spiffe"
 )
+
+const spiffeEnabledEnvVar = "GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE"
 
 // bundle is an implementation of credentials.Bundle which implements mTLS
 // Credentials in xDS Bootstrap File.
@@ -64,6 +67,9 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		}
 	} // Else the config field is absent. Treat it as an empty config.
 
+	if os.Getenv(spiffeEnabledEnvVar) != "true" {
+		cfg.SPIFFETrustBundleMapFile = ""
+	}
 	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" && cfg.SPIFFETrustBundleMapFile == "" {
 		// We cannot use (and do not need) a file_watcher provider in this case,
 		// and can simply directly use the TLS transport credentials.

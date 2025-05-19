@@ -42,6 +42,7 @@ import (
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
+const spiffeEnabledEnvVar = "GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE"
 
 var (
 	// For overriding from unit tests.
@@ -78,6 +79,11 @@ func (o Options) canonical() []byte {
 }
 
 func (o Options) validate() error {
+	// Guard against SPIFFE bundle map usage
+	if os.Getenv(spiffeEnabledEnvVar) != "true" {
+		logger.Warningf("pemfile: a SPIFFE Bundle Map %q was configured but the environment variable to enabled SPIFFE verification %q is not true", o.SPIFFEBundleMapFile, spiffeEnabledEnvVar)
+		o.SPIFFEBundleMapFile = ""
+	}
 	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {
 		return fmt.Errorf("pemfile: at least one credential file needs to be specified")
 	}
