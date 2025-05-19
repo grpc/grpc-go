@@ -743,10 +743,10 @@ func (s) TestLeastRequestEndpoints_ResolverError(t *testing.T) {
 		}
 		conn.Close()
 	}()
+	cc.Connect()
 	mr.UpdateState(resolver.State{
 		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}}},
 	})
-	cc.Connect()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -754,7 +754,7 @@ func (s) TestLeastRequestEndpoints_ResolverError(t *testing.T) {
 
 	// Report an error through the resolver
 	resolverErr := fmt.Errorf("simulated resolver error")
-	mr.CC().ReportError(resolverErr)
+	mr.CC.ReportError(resolverErr)
 
 	// Ensure the client returns the expected resolver error.
 	testServiceClient := testgrpc.NewTestServiceClient(cc)
