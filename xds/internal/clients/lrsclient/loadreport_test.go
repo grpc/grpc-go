@@ -147,9 +147,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
 	}
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer ssCancel()
-	defer loadStore1.Stop(ssCtx)
+	defer loadStore1.Stop(defaultTestShortTimeout)
 
 	// Call the load reporting API to report load to the first management
 	// server, and ensure that a connection to the server is created.
@@ -234,9 +232,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Stop this load reporting stream, server should see error canceled.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
-	defer ssCancel()
-	loadStore2.Stop(ssCtx)
+	loadStore2.Stop(defaultTestShortTimeout)
 
 	// Server should receive a stream canceled error. There may be additional
 	// load reports from the client in the channel.
@@ -423,9 +419,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	// Cancel the first load reporting call, and ensure that the stream does not
 	// close (because we have another call open).
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
-	defer ssCancel()
-	loadStore1.Stop(ssCtx)
+	loadStore1.Stop(defaultTestShortTimeout)
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(sCtx); err != context.DeadlineExceeded {
@@ -433,9 +427,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Stop the second load reporting call, and ensure the stream is closed.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
-	defer ssCancel()
-	loadStore2.Stop(ssCtx)
+	loadStore2.Stop(defaultTestShortTimeout)
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
@@ -450,18 +442,16 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
-	defer ssCancel()
-	loadStore3.Stop(ssCtx)
+	loadStore3.Stop(defaultTestShortTimeout)
 }
 
-// TestReportLoad_StopWithContext tests the behavior of LoadStore.Stop() when
-// called with a context. It verifies that:
-//   - Stop() blocks until the context expires or final load send attempt is
+// TestReportLoad_StopWithTimeout tests the behavior of LoadStore.Stop() when
+// called with a timeout duration. It verifies that:
+//   - Stop() blocks until the timeout expires or final load send attempt is
 //     made.
 //   - Final load report is seen on the server after stop is called.
 //   - The stream is closed after Stop() returns.
-func (s) TestReportLoad_StopWithContext(t *testing.T) {
+func (s) TestReportLoad_StopWithTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -546,11 +536,11 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		t.Fatalf("Unexpected diff in LRS request (-got, +want):\n%s", diff)
 	}
 
-	// Create a context for Stop() that remains until the end of test to ensure
-	// that only possibility of Stop()s to finish is if final load send attempt
-	// is made. If final load attempt is not made, test will timeout.
-	stopCtx, stopCancel := context.WithCancel(ctx)
-	defer stopCancel()
+	// Create a timeout duration for Stop() that remains until the end of test
+	// to ensure that only possibility of Stop() to finish is if final load
+	// send attempt is made. If final load attempt is not made, test itself
+	// will timeout.
+	largeStopTimeout := 10 * defaultTestTimeout
 
 	// Push more loads.
 	loadStore.ReporterForCluster("cluster2", "eds2").CallDropped("test")
@@ -559,7 +549,7 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	// Call Stop in a separate goroutine. It will block until
 	// final load send attempt is made.
 	go func() {
-		loadStore.Stop(stopCtx)
+		loadStore.Stop(largeStopTimeout)
 		close(stopCalled)
 	}()
 	<-stopCalled
@@ -574,7 +564,7 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		}
 
 		req, err = lrsServer.LRSRequestChan.Receive(ctx)
-		if err != nil {
+		if err != nil || req.(*fakeserver.Request).Err != nil {
 			continue
 		}
 		if req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest) == nil {
