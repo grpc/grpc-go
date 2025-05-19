@@ -71,6 +71,10 @@ type Options struct {
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
 	RefreshDuration time.Duration
+	// RefreshInterval is the duration string parsed to set RefreshDuration.
+	// This field must be a valid Go duration string (e.g., "10s", "5m").
+	// If unset, the default value for RefreshDuration will be used.
+	RefreshInterval string `json:"refresh_interval,omitempty"`
 }
 
 func (o Options) canonical() []byte {

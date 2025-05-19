@@ -23,9 +23,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/durationpb"
-
 	"google.golang.org/grpc/credentials/tls/certprovider"
 )
 
@@ -71,17 +68,12 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 		return Options{}, fmt.Errorf("pemfile: json.Unmarshal(%s) failed: %v", string(jd), err)
 	}
 
-	var rawMap map[string]json.RawMessage
-	if err := json.Unmarshal(jd, &rawMap); err != nil {
-		return Options{}, fmt.Errorf("pemfile: json.Unmarshal map(%s) failed: %v", string(jd), err)
-	}
-
-	if rawMap["refresh_interval"] != nil {
-		dur := &durationpb.Duration{}
-		if err := protojson.Unmarshal(rawMap["refresh_interval"], dur); err != nil {
-			return Options{}, fmt.Errorf("pemfile: protojson.Unmarshal(%+v) failed: %v", rawMap["refresh_interval"], err)
+	if opts.RefreshInterval != "" {
+		dur, err := time.ParseDuration(opts.RefreshInterval)
+		if err != nil {
+			return Options{}, fmt.Errorf("pemfile: failed to parse refresh interval %q: %v", opts, err)
 		}
-		opts.RefreshDuration = dur.AsDuration()
+		opts.RefreshDuration = dur
 	}
 
 	if err := opts.validate(); err != nil {
