@@ -186,14 +186,6 @@ func (r *delegatingResolver) Close() {
 	r.proxyResolver = nil
 }
 
-func networkTypeFromAddr(addr resolver.Address) string {
-	networkType, ok := networktype.Get(addr)
-	if !ok {
-		networkType, _ = transport.ParseDialTarget(addr.Addr)
-	}
-	return networkType
-}
-
 func needsProxyResolver(state *resolver.State) bool {
 	for _, addr := range state.Addresses {
 		if !skipProxy(addr) {
@@ -212,14 +204,20 @@ func needsProxyResolver(state *resolver.State) bool {
 
 func skipProxy(address resolver.Address) bool {
 	// Avoid proxy when network is not tcp.
-	if networkType := networkTypeFromAddr(address); networkType != "tcp" {
+	networkType, ok := networktype.Get(address)
+	if !ok {
+		networkType, _ = transport.ParseDialTarget(address.Addr)
+	}
+	if networkType != "tcp" {
 		return true
 	}
+
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
 		Host:   address.Addr,
 	}}
-	// Avoid proxy when address included in `NO_PROXY` environment variable.
+	// Avoid proxy when address included in `NO_PROXY` environment variable or
+	// fails to get the proxy address.
 	url, err := HTTPSProxyFromEnvironment(req)
 	if err != nil || url == nil {
 		return true
