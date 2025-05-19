@@ -406,6 +406,8 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	return cs, nil
 }
 
+type clientStreamKey struct{}
+
 // newAttemptLocked creates a new csAttempt without a transport or stream.
 func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error) {
 	if err := cs.ctx.Err(); err != nil {
@@ -430,6 +432,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 			IsServerStream:            cs.desc.ServerStreams,
 			IsTransparentRetryAttempt: isTransparent,
 		}
+		ctx = context.WithValue(ctx, clientStreamKey{}, cs.numRetries)
 		sh.HandleRPC(ctx, begin)
 	}
 

@@ -26,6 +26,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type clientStreamKey struct{}
+
 // populateSpan populates span information based on stats passed in, representing
 // invariants of the RPC lifecycle. It ends the span, triggering its export.
 // This function handles attempt spans on the client-side and call spans on the
@@ -50,6 +52,11 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
 			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
+		if !rs.IsTransparentRetryAttempt {
+			if retries, ok := ai.ctx.Value(clientStreamKey{}).(int); ok {
+				span.SetAttributes(attribute.Int("grpc.previous-rpc-attempts", retries))
+			}
+		}
 		// increment previous rpc attempts applicable for next attempt
 		atomic.AddUint32(&ai.previousRPCAttempts, 1)
 	case *stats.PickerUpdated:
