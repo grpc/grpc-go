@@ -77,7 +77,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 // TestNewProvider tests the NewProvider() function with different inputs.
 func (s) TestNewProvider(t *testing.T) {
 	os.Setenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE", "true")
-	t.Cleanup(func() { os.Unsetenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE")})
+	t.Cleanup(func() { os.Unsetenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE") })
 	tests := []struct {
 		desc      string
 		options   Options

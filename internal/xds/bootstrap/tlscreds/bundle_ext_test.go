@@ -238,7 +238,7 @@ func (s) TestCaReloading(t *testing.T) {
 // the changed-on-disk bundle map.
 func (s) Test_SPIFFE_Reloading(t *testing.T) {
 	os.Setenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE", "true")
-	t.Cleanup(func() { os.Unsetenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE")})
+	t.Cleanup(func() { os.Unsetenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE") })
 	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Failed to read test SPIFFE bundle: %v", err)
