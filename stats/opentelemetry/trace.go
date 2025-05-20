@@ -26,8 +26,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type clientStreamKey struct{}
-
 // populateSpan populates span information based on stats passed in, representing
 // invariants of the RPC lifecycle. It ends the span, triggering its export.
 // This function handles attempt spans on the client-side and call spans on the
