@@ -406,21 +406,33 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case misbehaved:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
-					go h.handleStreamMisbehave(t, s)
+					wg.Add(1)
+					go func() {
+						h.handleStreamMisbehave(t, s)
+						wg.Done()
+					}()
 				})
 				wg.Done()
 			}()
 		case encodingRequiredStatus:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
-					go h.handleStreamEncodingRequiredStatus(s)
+					wg.Add(1)
+					go func() {
+						h.handleStreamEncodingRequiredStatus(s)
+						wg.Done()
+					}()
 				})
 				wg.Done()
 			}()
 		case invalidHeaderField:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
-					go h.handleStreamInvalidHeaderField(s)
+					wg.Add(1)
+					go func() {
+						h.handleStreamInvalidHeaderField(s)
+						wg.Done()
+					}()
 				})
 				wg.Done()
 			}()
@@ -432,21 +444,33 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			s.mu.Unlock()
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
-					go h.handleStreamDelayRead(t, s)
+					wg.Add(1)
+					go func() {
+						h.handleStreamDelayRead(t, s)
+						wg.Done()
+					}()
 				})
 				wg.Done()
 			}()
 		case pingpong:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
-					go h.handleStreamPingPong(t, s)
+					wg.Add(1)
+					go func() {
+						h.handleStreamPingPong(t, s)
+						wg.Done()
+					}()
 				})
 				wg.Done()
 			}()
 		default:
 			go func() {
 				transport.HandleStreams(ctx, func(s *ServerStream) {
-					go h.handleStream(t, s)
+					wg.Add(1)
+					go func() {
+						h.handleStream(t, s)
+						wg.Done()
+					}()
 				})
 				wg.Done()
 			}()
