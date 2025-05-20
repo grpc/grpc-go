@@ -154,6 +154,15 @@ type wrrLocalityBalancer struct {
 	logger *grpclog.PrefixLogger
 }
 
+func (b *wrrLocalityBalancer) ExitIdle() {
+	ei, ok := b.child.(balancer.ExitIdler)
+	if ok {
+		ei.ExitIdle()
+	} else if !ok {
+		b.logger.Errorf("Child balancer doesn't implement ExitIdler.")
+	}
+}
+
 func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	lbCfg, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {

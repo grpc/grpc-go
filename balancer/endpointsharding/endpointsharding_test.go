@@ -102,6 +102,10 @@ type fakePetiole struct {
 	bOpts balancer.BuildOptions
 }
 
+func (fp *fakePetiole) ExitIdle() {
+	fp.Balancer.(balancer.ExitIdler).ExitIdle()
+}
+
 func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) error {
 	if el := state.ResolverState.Endpoints; len(el) != 2 {
 		return fmt.Errorf("UpdateClientConnState wants two endpoints, got: %v", el)

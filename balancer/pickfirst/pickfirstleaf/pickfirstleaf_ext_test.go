@@ -1593,9 +1593,7 @@ func (b *stateStoringBalancer) Close() {
 }
 
 func (b *stateStoringBalancer) ExitIdle() {
-	if ib, ok := b.Balancer.(balancer.ExitIdler); ok {
-		ib.ExitIdle()
-	}
+	b.Balancer.(balancer.ExitIdler).ExitIdle()
 }
 
 type stateStoringBalancerBuilder struct {

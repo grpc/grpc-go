@@ -1010,6 +1010,8 @@ func (vb *verifyBalancer) UpdateClientConnState(balancer.ClientConnState) error 
 	return nil
 }
 
+func (vb *verifyBalancer) ExitIdle() {}
+
 func (vb *verifyBalancer) ResolverError(error) {}
 
 func (vb *verifyBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
