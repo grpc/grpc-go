@@ -873,6 +873,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Value: attribute.IntValue(0),
 				},
 				{
+					Key:   "retry-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
 					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
@@ -928,6 +932,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 				},
 				{
 					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "retry-attempts",
 					Value: attribute.IntValue(0),
 				},
 				{
@@ -995,6 +1003,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Value: attribute.IntValue(0),
 				},
 				{
+					Key:   "retry-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
 					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
@@ -1021,6 +1033,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 				},
 				{
 					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "retry-attempts",
 					Value: attribute.IntValue(0),
 				},
 				{
@@ -1097,6 +1113,10 @@ func (s) TestSpan(t *testing.T) {
 					Value: attribute.IntValue(0),
 				},
 				{
+					Key:   "retry-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
 					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
@@ -1144,6 +1164,10 @@ func (s) TestSpan(t *testing.T) {
 				},
 				{
 					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "retry-attempts",
 					Value: attribute.IntValue(0),
 				},
 				{
@@ -1203,6 +1227,10 @@ func (s) TestSpan(t *testing.T) {
 					Value: attribute.IntValue(0),
 				},
 				{
+					Key:   "retry-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
 					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
@@ -1229,6 +1257,10 @@ func (s) TestSpan(t *testing.T) {
 				},
 				{
 					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "retry-attempts",
 					Value: attribute.IntValue(0),
 				},
 				{
@@ -1307,6 +1339,10 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Value: attribute.IntValue(0),
 				},
 				{
+					Key:   "retry-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
 					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
@@ -1354,6 +1390,10 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 				},
 				{
 					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "retry-attempts",
 					Value: attribute.IntValue(0),
 				},
 				{
@@ -1413,6 +1453,10 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Value: attribute.IntValue(0),
 				},
 				{
+					Key:   "retry-attempts",
+					Value: attribute.IntValue(0),
+				},
+				{
 					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
@@ -1439,6 +1483,10 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 				},
 				{
 					Key:   "previous-rpc-attempts",
+					Value: attribute.IntValue(1),
+				},
+				{
+					Key:   "retry-attempts",
 					Value: attribute.IntValue(0),
 				},
 				{
@@ -1767,6 +1815,7 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 				attribute.Bool("Client", false),
 				attribute.Bool("FailFast", false),
 				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Int("retry-attempts", 0),
 				attribute.Bool("transparent-retry", false),
 			},
 		},
@@ -1777,7 +1826,8 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 			attributes: []attribute.KeyValue{
 				attribute.Bool("Client", true),
 				attribute.Bool("FailFast", true),
-				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Int("previous-rpc-attempts", 1),
+				attribute.Int("retry-attempts", 0),
 				attribute.Bool("transparent-retry", false),
 			},
 		},

@@ -20,6 +20,7 @@ import (
 	"context"
 	"log"
 	"strings"
+	"sync/atomic"
 
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -121,7 +122,10 @@ func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
-	ai.ctx = ctx
+	if ai.previousRPCAttempts > 0 {
+		atomic.AddUint32(&ai.explicitRetryCount, 1)
+	}
+	atomic.AddUint32(&ai.previousRPCAttempts, 1)
 	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
