@@ -65,7 +65,7 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 	}
 
 	if err := json.Unmarshal(jd, &opts); err != nil {
-		return Options{}, fmt.Errorf("pemfile: json.Unmarshal(%s) failed: %v", string(jd), err)
+		return Options{}, fmt.Errorf("pemfile: json.Unmarshal failed: %v", err)
 	}
 
 	if opts.RefreshInterval != "" {
