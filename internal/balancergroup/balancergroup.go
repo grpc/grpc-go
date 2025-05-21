@@ -106,7 +106,7 @@ func (sbc *subBalancerWrapper) startBalancer() {
 	}
 }
 
-// exitIdle invokes the sub-balancer's ExitIdle method. Returns a boolean
+// exitIdle invokes the sub-balancer's ExitIdle method. Returns a true
 // indicating whether or not the operation was completed.
 func (sbc *subBalancerWrapper) exitIdle() (complete bool) {
 	if b := sbc.balancer; b != nil {
