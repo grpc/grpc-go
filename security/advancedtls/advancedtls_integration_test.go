@@ -509,7 +509,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	clientIdentityOptions := pemfile.Options{
 		CertFile:        tmpFiles.clientCertTmp.Name(),
 		KeyFile:         tmpFiles.clientKeyTmp.Name(),
-		RefreshDuration: credRefreshingInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshingInterval},
 	}
 	clientIdentityProvider, err := pemfile.NewProvider(clientIdentityOptions)
 	if err != nil {
@@ -517,7 +517,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	}
 	clientRootOptions := pemfile.Options{
 		RootFile:        tmpFiles.clientTrustTmp.Name(),
-		RefreshDuration: credRefreshingInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshingInterval},
 	}
 	clientRootProvider, err := pemfile.NewProvider(clientRootOptions)
 	if err != nil {
@@ -526,7 +526,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	serverIdentityOptions := pemfile.Options{
 		CertFile:        tmpFiles.serverCertTmp.Name(),
 		KeyFile:         tmpFiles.serverKeyTmp.Name(),
-		RefreshDuration: credRefreshingInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshingInterval},
 	}
 	serverIdentityProvider, err := pemfile.NewProvider(serverIdentityOptions)
 	if err != nil {
@@ -534,7 +534,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	}
 	serverRootOptions := pemfile.Options{
 		RootFile:        tmpFiles.serverTrustTmp.Name(),
-		RefreshDuration: credRefreshingInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshingInterval},
 	}
 	serverRootProvider, err := pemfile.NewProvider(serverRootOptions)
 	if err != nil {
