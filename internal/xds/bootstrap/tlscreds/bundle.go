@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -37,9 +36,8 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
 	"google.golang.org/grpc/internal/credentials/spiffe"
+	"google.golang.org/grpc/internal/envconfig"
 )
-
-const spiffeEnabledEnvVar = "GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE"
 
 // bundle is an implementation of credentials.Bundle which implements mTLS
 // Credentials in xDS Bootstrap File.
@@ -67,7 +65,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		}
 	} // Else the config field is absent. Treat it as an empty config.
 
-	if os.Getenv(spiffeEnabledEnvVar) != "true" {
+	if !envconfig.XDSSpiffeEnabled {
 		cfg.SPIFFETrustBundleMapFile = ""
 	}
 	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" && cfg.SPIFFETrustBundleMapFile == "" {

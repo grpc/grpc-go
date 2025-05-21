@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/testdata"
@@ -76,8 +77,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 
 // TestNewProvider tests the NewProvider() function with different inputs.
 func (s) TestNewProvider(t *testing.T) {
-	os.Setenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE", "true")
-	t.Cleanup(func() { os.Unsetenv("GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE") })
+	testutils.SetEnvConfig(t, &envconfig.XDSSpiffeEnabled, true)
 	tests := []struct {
 		desc      string
 		options   Options

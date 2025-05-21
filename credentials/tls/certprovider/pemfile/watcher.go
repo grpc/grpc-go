@@ -39,10 +39,10 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/credentials/spiffe"
+	"google.golang.org/grpc/internal/envconfig"
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
-const spiffeEnabledEnvVar = "GRPC_EXPERIMENTAL_XDS_MTLS_SPIFFE"
 
 var (
 	// For overriding from unit tests.
@@ -80,7 +80,7 @@ func (o Options) canonical() []byte {
 
 func (o Options) validate() error {
 	// Guard against SPIFFE bundle map usage
-	if os.Getenv(spiffeEnabledEnvVar) != "true" {
+	if !envconfig.XDSSpiffeEnabled {
 		o.SPIFFEBundleMapFile = ""
 	}
 	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {
