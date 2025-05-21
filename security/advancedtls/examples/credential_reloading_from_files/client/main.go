@@ -58,7 +58,7 @@ func main() {
 	identityOptions := pemfile.Options{
 		CertFile:        *tmpCertFile,
 		KeyFile:         *tmpKeyFile,
-		RefreshDuration: credRefreshingInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshingInterval},
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {
@@ -66,7 +66,7 @@ func main() {
 	}
 	rootOptions := pemfile.Options{
 		RootFile:        testdata.Path("client_trust_cert_1.pem"),
-		RefreshDuration: credRefreshingInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshingInterval},
 	}
 	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {
