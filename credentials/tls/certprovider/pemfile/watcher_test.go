@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -225,7 +226,7 @@ func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (st
 		CertFile:        path.Join(dir, certFile),
 		KeyFile:         path.Join(dir, keyFile),
 		RootFile:        path.Join(dir, rootFile),
-		RefreshDuration: defaultTestRefreshDuration,
+		RefreshDuration: Duration{defaultTestRefreshDuration},
 	}
 	if useSPIFFEBundle {
 		opts.SPIFFEBundleMapFile = path.Join(dir, spiffeBundleFile)
@@ -384,7 +385,7 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 				KeyFile:             path.Join(symLinkName, keyFile),
 				RootFile:            path.Join(symLinkName, rootFile),
 				SPIFFEBundleMapFile: path.Join(symLinkName, spiffeBundleFile),
-				RefreshDuration:     defaultTestRefreshDuration,
+				RefreshDuration:     Duration{defaultTestRefreshDuration},
 			}
 			if useSPIFFEBundle {
 				opts.SPIFFEBundleMapFile = path.Join(symLinkName, spiffeBundleFile)
