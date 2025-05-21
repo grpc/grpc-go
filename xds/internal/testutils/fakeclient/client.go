@@ -69,7 +69,6 @@ func (*transport) Close() {
 }
 
 type stream struct {
-	clients.Stream
 }
 
 func (*stream) Send([]byte) error {

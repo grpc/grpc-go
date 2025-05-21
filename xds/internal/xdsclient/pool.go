@@ -34,7 +34,7 @@ import (
 var (
 	// DefaultPool is the default pool for xDS clients. It is created at init
 	// time by reading bootstrap configuration from env vars.
-	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
+	DefaultPool = &Pool{clients: make(map[string]*clientImpl)}
 )
 
 // Pool represents a pool of xDS clients that share the same bootstrap
@@ -44,7 +44,7 @@ type Pool struct {
 	// it to guard config as well since SetFallbackBootstrapConfig writes to
 	// config.
 	mu      sync.Mutex
-	clients map[string]*clientRefCounted
+	clients map[string]*clientImpl
 	config  *bootstrap.Config
 }
 
@@ -86,7 +86,7 @@ type OptionsForTesting struct {
 // bootstrap configuration), xDS client creation will fail.
 func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
-		clients: make(map[string]*clientRefCounted),
+		clients: make(map[string]*clientImpl),
 		config:  config,
 	}
 }
@@ -130,7 +130,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if err != nil {
 		return nil, nil, err
 	}
-	c.clientImpl.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
+	c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
 	return c, cancel, nil
 }
 
@@ -178,7 +178,7 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 
 	resp := &v3statuspb.ClientStatusResponse{}
 	for key, client := range p.clients {
-		b, err := client.clientImpl.DumpResources()
+		b, err := client.DumpResources()
 		if err != nil {
 			return nil
 		}
@@ -231,14 +231,14 @@ func (p *Pool) clientRefCountedClose(name string) {
 	// This attempts to close the transport to the management server and could
 	// theoretically call back into the xdsclient package again and deadlock.
 	// Hence, this needs to be called without holding the lock.
-	client.clientImpl.Close()
+	client.Close()
 	xdsClientImplCloseHook(name)
 }
 
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType) (*clientRefCounted, func(), error) {
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -269,17 +269,16 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	c, err := newClientImplGeneric(p.config, metricsRecorder, resourceTypes, name)
+	c, err := newClientImpl(p.config, metricsRecorder, resourceTypes, name)
 	if err != nil {
 		return nil, nil, err
 	}
 	if logger.V(2) {
 		c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
 	}
-	client := &clientRefCounted{clientImpl: c, refCount: 1}
-	p.clients[name] = client
+	p.clients[name] = c
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
-	return client, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }

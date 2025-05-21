@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -72,9 +73,9 @@ func (d *dropper) drop() (ret bool) {
 
 // loadReporter wraps the methods from the loadStore that are used here.
 type loadReporter interface {
-	CallStarted(locality internal.LocalityID)
-	CallFinished(locality internal.LocalityID, err error)
-	CallServerLoad(locality internal.LocalityID, name string, val float64)
+	CallStarted(locality clients.Locality)
+	CallFinished(locality clients.Locality, err error)
+	CallServerLoad(locality clients.Locality, name string, val float64)
 	CallDropped(category string)
 }
 
@@ -158,20 +159,21 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	if d.loadStore != nil {
-		d.loadStore.CallStarted(lID)
+		locality := clients.Locality{Region: lID.Region, Zone: lID.Zone, SubZone: lID.SubZone}
+		d.loadStore.CallStarted(locality)
 		oldDone := pr.Done
 		pr.Done = func(info balancer.DoneInfo) {
 			if oldDone != nil {
 				oldDone(info)
 			}
-			d.loadStore.CallFinished(lID, info.Err)
+			d.loadStore.CallFinished(locality, info.Err)
 
 			load, ok := info.ServerLoad.(*v3orcapb.OrcaLoadReport)
 			if !ok || load == nil {
 				return
 			}
 			for n, c := range load.NamedMetrics {
-				d.loadStore.CallServerLoad(lID, n, c)
+				d.loadStore.CallServerLoad(locality, n, c)
 			}
 		}
 	}
