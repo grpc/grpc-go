@@ -119,13 +119,20 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler for tracing.
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
+type retryCountKey struct{}
+
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
-	if ai.previousRPCAttempts > 0 {
-		atomic.AddUint32(&ai.explicitRetryCount, 1)
+	var counter *int32
+	if val := ctx.Value(retryCountKey{}); val != nil {
+		counter = val.(*int32)
+	} else {
+		counter = new(int32)
+		ctx = context.WithValue(ctx, retryCountKey{}, counter)
 	}
-	atomic.AddUint32(&ai.previousRPCAttempts, 1)
+	ai.previousRPCAttempts = uint32(atomic.LoadInt32(counter))
+	ai.ctx = ctx
 	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }

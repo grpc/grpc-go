@@ -242,7 +242,7 @@ type attemptInfo struct {
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRPCAttempts uint32
-	explicitRetryCount  uint32
+	ctx                 context.Context
 }
 
 type clientMetrics struct {
