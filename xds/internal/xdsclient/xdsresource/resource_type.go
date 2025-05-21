@@ -171,7 +171,7 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 	return r.allResourcesRequiredInSotW
 }
 
-// genericResourceTypeDecoder embed an xdsresource.Type and implements
+// genericResourceTypeDecoder wraps an xdsresource.Type and implements
 // gxdsclient.Decoder.
 type genericResourceTypeDecoder struct {
 	xdsResourceType  Type
@@ -227,7 +227,7 @@ func (a *genericResourceData) Bytes() []byte {
 	return rawAny.Value
 }
 
-// genericResourceWatcher embed ResourceWatcher and implements
+// genericResourceWatcher wraps xdsresource.ResourceWatcher and implements
 // gxdsclient.ResourceWatcher.
 type genericResourceWatcher struct {
 	xdsResourceWatcher ResourceWatcher
