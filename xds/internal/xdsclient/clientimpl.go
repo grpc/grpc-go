@@ -19,7 +19,6 @@
 package xdsclient
 
 import (
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -50,10 +49,6 @@ const (
 )
 
 var (
-
-	// ErrClientClosed is returned when the xDS client is closed.
-	ErrClientClosed = errors.New("xds: the xDS client is closed")
-
 	// The following functions are no-ops in the actual code, but can be
 	// overridden in tests to give them visibility into certain events.
 	xdsClientImplCreateHook = func(string) {}
@@ -84,8 +79,9 @@ var (
 	})
 )
 
-// clientImpl is the real implementation of the xDS client. The exported Client
-// is a wrapper of this struct with a ref count.
+// clientImpl embed gxdsclient.XDSClient and implement internal XDSClient
+// interface with ref counting so that it can be shared by the xds resolver and
+// balancer implementations, across multiple ClientConns and Servers.
 type clientImpl struct {
 	*gxdsclient.XDSClient
 
@@ -94,35 +90,35 @@ type clientImpl struct {
 	logger    *grpclog.PrefixLogger
 	target    string
 	lrsClient *glrsclient.LRSClient
+	refCount  int32 // accessed atomically
 }
 
 // metricsReporter implements the clients.MetricsReporter interface and uses an
 // underlying stats.MetricsRecorderList to record metrics.
 type metricsReporter struct {
-	estats.MetricsRecorder
-
-	target string
+	recorder estats.MetricsRecorder
+	target   string
 }
 
 // ReportMetric implements the clients.MetricsReporter interface.
 // It receives metric data, determines the appropriate metric based on the type
 // of the data, and records it using the embedded MetricsRecorderList.
 func (mr *metricsReporter) ReportMetric(metric any) {
-	if mr.MetricsRecorder == nil {
+	if mr.recorder == nil {
 		return
 	}
 
 	switch m := metric.(type) {
 	case *gxdsmetrics.ResourceUpdateValid:
-		xdsClientResourceUpdatesValidMetric.Record(mr.MetricsRecorder, 1, mr.target, m.ServerURI, m.ResourceType)
+		xdsClientResourceUpdatesValidMetric.Record(mr.recorder, 1, mr.target, m.ServerURI, m.ResourceType)
 	case *gxdsmetrics.ResourceUpdateInvalid:
-		xdsClientResourceUpdatesInvalidMetric.Record(mr.MetricsRecorder, 1, mr.target, m.ServerURI, m.ResourceType)
+		xdsClientResourceUpdatesInvalidMetric.Record(mr.recorder, 1, mr.target, m.ServerURI, m.ResourceType)
 	case *gxdsmetrics.ServerFailure:
-		xdsClientServerFailureMetric.Record(mr.MetricsRecorder, 1, mr.target, m.ServerURI)
+		xdsClientServerFailureMetric.Record(mr.recorder, 1, mr.target, m.ServerURI)
 	}
 }
 
-func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType, target string) (*clientImpl, error) {
+func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType, target string) (*clientImpl, error) {
 	grpcTransportConfigs := make(map[string]grpctransport.Config)
 	gServerCfgMap := make(map[gxdsclient.ServerConfig]*bootstrap.ServerConfig)
 
@@ -206,7 +202,7 @@ func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.Metri
 		}
 	}
 
-	mr := &metricsReporter{MetricsRecorder: metricsRecorder, target: target}
+	mr := &metricsReporter{recorder: metricsRecorder, target: target}
 
 	gConfig := gxdsclient.Config{
 		Authorities:      gAuthorities,
@@ -220,7 +216,7 @@ func newClientImplGeneric(config *bootstrap.Config, metricsRecorder estats.Metri
 	if err != nil {
 		return nil, err
 	}
-	c := &clientImpl{XDSClient: client, gConfig: gConfig, config: config, target: target}
+	c := &clientImpl{XDSClient: client, gConfig: gConfig, config: config, target: target, refCount: 1}
 	c.logger = prefixLogger(c)
 	return c, nil
 }
@@ -231,19 +227,11 @@ func (c *clientImpl) BootstrapConfig() *bootstrap.Config {
 	return c.config
 }
 
-// clientRefCounted is ref-counted, and to be shared by the xds resolver and
-// balancer implementations, across multiple ClientConns and Servers.
-type clientRefCounted struct {
-	*clientImpl
-
-	refCount int32 // accessed atomically
-}
-
-func (c *clientRefCounted) incrRef() int32 {
+func (c *clientImpl) incrRef() int32 {
 	return atomic.AddInt32(&c.refCount, 1)
 }
 
-func (c *clientRefCounted) decrRef() int32 {
+func (c *clientImpl) decrRef() int32 {
 	return atomic.AddInt32(&c.refCount, -1)
 }
 
