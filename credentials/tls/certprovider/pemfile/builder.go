@@ -61,19 +61,11 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 	// is that the refresh_interval is represented here as a duration proto,
 	// while in the latter a time.Duration is used.
 	opts := Options{
-		RefreshDuration: defaultRefreshInterval,
+		RefreshDuration: Duration{defaultRefreshInterval},
 	}
 
 	if err := json.Unmarshal(jd, &opts); err != nil {
 		return Options{}, fmt.Errorf("pemfile: json.Unmarshal failed: %v", err)
-	}
-
-	if opts.RefreshInterval != "" {
-		dur, err := time.ParseDuration(opts.RefreshInterval)
-		if err != nil {
-			return Options{}, fmt.Errorf("pemfile: failed to parse refresh interval: %v", err)
-		}
-		opts.RefreshDuration = dur
 	}
 
 	if err := opts.validate(); err != nil {

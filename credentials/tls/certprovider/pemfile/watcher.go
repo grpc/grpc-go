@@ -30,6 +30,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -70,11 +71,26 @@ type Options struct {
 	// RefreshDuration is the amount of time the plugin waits before checking
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
-	RefreshDuration time.Duration
-	// RefreshInterval is the duration string parsed to set RefreshDuration.
-	// This field must be a valid Go duration string (e.g., "10s", "5m").
-	// If unset, the default value for RefreshDuration will be used.
-	RefreshInterval string `json:"refresh_interval,omitempty"`
+	RefreshDuration Duration `json:"refresh_interval,omitempty"`
+}
+
+// Duration wraps time.Duration to support Go-style duration strings in JSON (e.g., "10s", "5m").
+type Duration struct {
+	time.Duration
+}
+
+// UnmarshalJSON allows decoding a duration string like "200s" into time.Duration.
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("duration must be a string: %w", err)
+	}
+	dur, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q: %w", s, err)
+	}
+	d.Duration = dur
+	return nil
 }
 
 func (o Options) canonical() []byte {
@@ -111,8 +127,8 @@ func NewProvider(o Options) (certprovider.Provider, error) {
 // newProvider is used to create a new certificate provider plugin after
 // validating the options, and hence does not return an error.
 func newProvider(o Options) certprovider.Provider {
-	if o.RefreshDuration == 0 {
-		o.RefreshDuration = defaultCertRefreshDuration
+	if o.RefreshDuration.Duration == 0 {
+		o.RefreshDuration.Duration = defaultCertRefreshDuration
 	}
 
 	provider := &watcher{opts: o}
@@ -132,7 +148,7 @@ func newProvider(o Options) certprovider.Provider {
 // watcher is a certificate provider plugin that implements the
 // certprovider.Provider interface. It watches a set of certificate and key
 // files and provides the most up-to-date key material for consumption by
-// credentials implementation.
+// credentials' implementation.
 type watcher struct {
 	identityDistributor         distributor
 	rootDistributor             distributor
@@ -254,7 +270,7 @@ func (w *watcher) maybeUpdateRootFile() {
 // changes, and pushes new key material into the appropriate distributors which
 // is returned from calls to KeyMaterial().
 func (w *watcher) run(ctx context.Context) {
-	ticker := time.NewTicker(w.opts.RefreshDuration)
+	ticker := time.NewTicker(w.opts.RefreshDuration.Duration)
 	for {
 		w.updateIdentityDistributor()
 		w.updateRootDistributor()
