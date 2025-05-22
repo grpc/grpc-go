@@ -135,7 +135,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 	}
 
-	var lID internal.LocalityID
+	var lID clients.Locality
 	pr, err := d.s.Picker.Pick(info)
 	if scw, ok := pr.SubConn.(*scWrapper); ok {
 		// This OK check also covers the case err!=nil, because SubConn will be
@@ -155,7 +155,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	if labels := telemetryLabels(info.Ctx); labels != nil {
-		labels["grpc.lb.locality"] = lID.ToString()
+		labels["grpc.lb.locality"] = internal.LocalityString(lID)
 	}
 
 	if d.loadStore != nil {

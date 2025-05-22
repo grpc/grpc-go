@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -1090,13 +1090,13 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				Localities: []xdsresource.Locality{
 					{
 						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr1:314"}, Weight: 1}},
-						ID:        internal.LocalityID{SubZone: "locality-1"},
+						ID:        clients.Locality{SubZone: "locality-1"},
 						Priority:  1,
 						Weight:    1,
 					},
 					{
 						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr2:159"}, Weight: 1}},
-						ID:        internal.LocalityID{SubZone: "locality-2"},
+						ID:        clients.Locality{SubZone: "locality-2"},
 						Priority:  0,
 						Weight:    1,
 					},
@@ -1124,13 +1124,13 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				Localities: []xdsresource.Locality{
 					{
 						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr1:314"}, Weight: 1}},
-						ID:        internal.LocalityID{SubZone: "locality-1"},
+						ID:        clients.Locality{SubZone: "locality-1"},
 						Priority:  1,
 						Weight:    1,
 					},
 					{
 						Endpoints: []xdsresource.Endpoint{{Addresses: []string{"addr2:159"}, Weight: 1}},
-						ID:        internal.LocalityID{SubZone: "locality-2"},
+						ID:        clients.Locality{SubZone: "locality-2"},
 						Priority:  0,
 						Weight:    1,
 					},

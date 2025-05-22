@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 
@@ -541,7 +542,7 @@ func (s) TestReResolution(t *testing.T) {
 }
 
 func (s) TestLoadReporting(t *testing.T) {
-	var testLocality = xdsinternal.LocalityID{
+	var testLocality = clients.Locality{
 		Region:  "test-region",
 		Zone:    "test-zone",
 		SubZone: "test-sub-zone",
@@ -647,7 +648,7 @@ func (s) TestLoadReporting(t *testing.T) {
 // - config modifies LRS server to a different string
 // - config sets LRS server to nil to stop load reporting
 func (s) TestUpdateLRSServer(t *testing.T) {
-	var testLocality = xdsinternal.LocalityID{
+	var testLocality = clients.Locality{
 		Region:  "test-region",
 		Zone:    "test-zone",
 		SubZone: "test-sub-zone",

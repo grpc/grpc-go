@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
@@ -293,7 +293,7 @@ func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 				{
 					Endpoints: []xdsresource.Endpoint{{Addresses: []string{"localhost:666"}, Weight: 1}},
 					Weight:    1,
-					ID: internal.LocalityID{
+					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
 						SubZone: "subzone-1",
