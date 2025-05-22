@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -177,7 +177,7 @@ func (s) TestEDSWatch(t *testing.T) {
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-							ID: internal.LocalityID{
+							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
 								SubZone: "subzone-1",
@@ -200,7 +200,7 @@ func (s) TestEDSWatch(t *testing.T) {
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-							ID: internal.LocalityID{
+							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
 								SubZone: "subzone-1",
@@ -339,7 +339,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-							ID: internal.LocalityID{
+							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
 								SubZone: "subzone-1",
@@ -355,7 +355,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1}},
-							ID: internal.LocalityID{
+							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
 								SubZone: "subzone-1",
@@ -377,7 +377,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-							ID: internal.LocalityID{
+							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
 								SubZone: "subzone-1",
@@ -393,7 +393,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 					Localities: []xdsresource.Locality{
 						{
 							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1}},
-							ID: internal.LocalityID{
+							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
 								SubZone: "subzone-1",
@@ -591,7 +591,7 @@ func (s) TestEDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-					ID: internal.LocalityID{
+					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
 						SubZone: "subzone-1",
@@ -682,7 +682,7 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-					ID: internal.LocalityID{
+					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
 						SubZone: "subzone-1",
@@ -814,7 +814,7 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-					ID: internal.LocalityID{
+					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
 						SubZone: "subzone-1",
@@ -977,7 +977,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 			Localities: []xdsresource.Locality{
 				{
 					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1}},
-					ID: internal.LocalityID{
+					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
 						SubZone: "subzone-1",

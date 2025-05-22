@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/loadstore"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
@@ -408,15 +409,15 @@ type scWrapper struct {
 	balancer.SubConn
 	// locality needs to be atomic because it can be updated while being read by
 	// the picker.
-	locality atomic.Value // type xdsinternal.LocalityID
+	locality atomic.Value // type clients.Locality
 }
 
-func (scw *scWrapper) updateLocalityID(lID xdsinternal.LocalityID) {
+func (scw *scWrapper) updateLocalityID(lID clients.Locality) {
 	scw.locality.Store(lID)
 }
 
-func (scw *scWrapper) localityID() xdsinternal.LocalityID {
-	lID, _ := scw.locality.Load().(xdsinternal.LocalityID)
+func (scw *scWrapper) localityID() clients.Locality {
+	lID, _ := scw.locality.Load().(clients.Locality)
 	return lID
 }
 
@@ -438,7 +439,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		// address's locality. https://github.com/grpc/grpc-go/issues/7339
 		addr := connectedAddress(state)
 		lID := xdsinternal.GetLocalityID(addr)
-		if lID.Empty() {
+		if xdsinternal.IsLocalityEmpty(lID) {
 			if b.logger.V(2) {
 				b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
 			}
@@ -461,7 +462,7 @@ func (b *clusterImplBalancer) RemoveSubConn(sc balancer.SubConn) {
 func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
 	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
-	var lID xdsinternal.LocalityID
+	var lID clients.Locality
 	for i, addr := range addrs {
 		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
