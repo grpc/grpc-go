@@ -82,8 +82,9 @@ func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClu
 		return p
 	}
 	p := &PerClusterReporter{
-		cluster: clusterName,
-		service: serviceName,
+		cluster:          clusterName,
+		service:          serviceName,
+		lastLoadReportAt: time.Now(),
 	}
 	c[serviceName] = p
 	return p

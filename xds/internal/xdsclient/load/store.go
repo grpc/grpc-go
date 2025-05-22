@@ -115,8 +115,9 @@ func (s *Store) PerCluster(clusterName, serviceName string) PerClusterReporter {
 		return p
 	}
 	p := &perClusterStore{
-		cluster: clusterName,
-		service: serviceName,
+		cluster:          clusterName,
+		service:          serviceName,
+		lastLoadReportAt: time.Now(),
 	}
 	c[serviceName] = p
 	return p
