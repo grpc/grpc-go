@@ -48,6 +48,8 @@ func (h *clientTracingHandler) initializeTraces() {
 }
 
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ci := &callInfo{numRetries: 0}
+	ctx = setRetryCount(ctx, ci)
 	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	var span trace.Span
@@ -58,6 +60,8 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 }
 
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ci := &callInfo{numRetries: 0}
+	ctx = setRetryCount(ctx, ci)
 	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	var span trace.Span
@@ -124,14 +128,9 @@ type retryCountKey struct{}
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
-	var counter *int32
-	if val := ctx.Value(retryCountKey{}); val != nil {
-		counter = val.(*int32)
-	} else {
-		counter = new(int32)
-		ctx = context.WithValue(ctx, retryCountKey{}, counter)
+	if ci, ok := getRetryCount(ctx); ok {
+		ai.previousRPCAttempts = uint32(atomic.LoadInt32(&ci.numRetries))
 	}
-	ai.previousRPCAttempts = uint32(atomic.LoadInt32(counter))
 	ai.ctx = ctx
 	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
