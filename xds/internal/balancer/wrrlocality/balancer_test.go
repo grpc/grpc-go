@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 )
 
 const (
@@ -178,7 +179,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	addr1 := resolver.Address{
 		Addr: "locality-1",
 	}
-	addr1 = internal.SetLocalityID(addr1, internal.LocalityID{
+	addr1 = internal.SetLocalityID(addr1, clients.Locality{
 		Region:  "region-1",
 		Zone:    "zone-1",
 		SubZone: "subzone-1",
@@ -188,7 +189,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 	addr2 := resolver.Address{
 		Addr: "locality-2",
 	}
-	addr2 = internal.SetLocalityID(addr2, internal.LocalityID{
+	addr2 = internal.SetLocalityID(addr2, clients.Locality{
 		Region:  "region-2",
 		Zone:    "zone-2",
 		SubZone: "subzone-2",
