@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -193,11 +192,10 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Send a response from the server with a small deadline.
-	serverReportInterval := 50 * time.Millisecond
 	lrsServer.LRSResponseChan <- &fakeserver.Response{
 		Resp: &v3lrspb.LoadStatsResponse{
 			SendAllClusters:       true,
-			LoadReportingInterval: &durationpb.Duration{Nanos: int32(serverReportInterval.Nanoseconds())}, // 50ms
+			LoadReportingInterval: &durationpb.Duration{Nanos: 50000000}, // 50ms
 		},
 	}
 
@@ -209,19 +207,6 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	gotLoad := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
 	if l := len(gotLoad); l != 1 {
 		t.Fatalf("Received load for %d clusters, want 1", l)
-	}
-
-	// Verify that LoadReportInterval for the first load report is positive but
-	// not excessively large.
-	//
-	// Max expected: serverReportInterval + tolerance (e.g., 500ms).
-	firstLoadReportInterval := gotLoad[0].GetLoadReportInterval().AsDuration()
-	if firstLoadReportInterval <= 0 {
-		t.Fatalf("First LoadReportInterval for cluster1 = %v, want > 0", firstLoadReportInterval)
-	}
-	tolerance := 500 * time.Millisecond
-	if firstLoadReportInterval > serverReportInterval+tolerance {
-		t.Errorf("First LoadReportInterval for cluster1 is unexpectedly large: %v", firstLoadReportInterval)
 	}
 
 	// This field is set by the client to indicate the actual time elapsed since
@@ -322,11 +307,10 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Send a response from the server with a small deadline.
-	serverReportInterval := 50 * time.Millisecond
 	lrsServer.LRSResponseChan <- &fakeserver.Response{
 		Resp: &v3lrspb.LoadStatsResponse{
 			SendAllClusters:       true,
-			LoadReportingInterval: &durationpb.Duration{Nanos: int32(serverReportInterval.Nanoseconds())}, // 50ms
+			LoadReportingInterval: &durationpb.Duration{Nanos: 50000000}, // 50ms
 		},
 	}
 
@@ -338,19 +322,6 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	gotLoad := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
 	if l := len(gotLoad); l != 1 {
 		t.Fatalf("Received load for %d clusters, want 1", l)
-	}
-
-	// Verify that LoadReportInterval for the first load report is positive but
-	// not excessively large.
-	//
-	// Max expected: serverReportInterval + tolerance (e.g., 500ms).
-	firstLoadReportInterval := gotLoad[0].GetLoadReportInterval().AsDuration()
-	if firstLoadReportInterval <= 0 {
-		t.Fatalf("First LoadReportInterval for cluster1 = %v, want > 0", firstLoadReportInterval)
-	}
-	tolerance := 500 * time.Millisecond
-	if firstLoadReportInterval > serverReportInterval+tolerance {
-		t.Errorf("First LoadReportInterval for cluster1 is unexpectedly large: %v", firstLoadReportInterval)
 	}
 
 	// This field is set by the client to indicate the actual time elapsed since
@@ -414,17 +385,6 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 		gotLoad = req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
 		if l := len(gotLoad); l != 1 {
 			continue
-		}
-		// Verify that LoadReportInterval for the subsequent load reports is
-		// positive but not excessively large.
-		//
-		// Max expected: serverReportInterval + tolerance (e.g., 500ms).
-		loadReportInterval := gotLoad[0].GetLoadReportInterval().AsDuration()
-		if loadReportInterval <= 0 {
-			t.Fatalf("LoadReportInterval = %v, want > 0", firstLoadReportInterval)
-		}
-		if loadReportInterval > serverReportInterval+tolerance {
-			t.Errorf("LoadReportInterval is unexpectedly large: %v", loadReportInterval)
 		}
 		gotLoad[0].LoadReportInterval = nil
 		wantLoad := &v3endpointpb.ClusterStats{

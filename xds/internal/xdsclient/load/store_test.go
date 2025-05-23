@@ -22,6 +22,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -464,5 +465,51 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	got1 := store.Stats(nil)
 	if diff := cmp.Diff(want1, got1, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
+
+// TestStoreReportInterval tests that the report interval is correctly
+// calculated between consecutive calls to Stats().
+func TestStoreReportInterval(t *testing.T) {
+	originalClockNow := clockNow
+	t.Cleanup(func() { clockNow = originalClockNow })
+
+	// Initial time for reporter creation
+	currentTime := time.Now()
+	clockNow = func() time.Time {
+		return currentTime
+	}
+
+	store := NewStore()
+	reporter := store.PerCluster("test-cluster", "test-service")
+	// To ensure Stats() returns non-nil data, report a dummy drop.
+	reporter.CallDropped("dummy-category")
+
+	// First call to Stats() calculates the report interval from reporter
+	// creation time.
+	currentTime = currentTime.Add(5 * time.Second)
+	stats1 := store.Stats(nil)
+
+	if stats1 == nil {
+		t.Fatalf("stats1 is nil after reporting a drop, want non-nil")
+	}
+	wantInterval := 5 * time.Second
+	if stats1[0].ReportInterval != wantInterval {
+		t.Errorf("First call stats() = %v, want %v", stats1[0].ReportInterval, wantInterval)
+	}
+
+	// Second call to Stats() calculates the report interval from last Stats()
+	// call time.
+	currentTime = currentTime.Add(10 * time.Second)
+	// Report another dummy drop to ensure stats2 is not nil.
+	reporter.CallDropped("dummy-category-2")
+	stats2 := store.Stats(nil)
+
+	if stats2 == nil {
+		t.Fatalf("stats2 is nil after reporting a drop, want non-nil")
+	}
+	wantInterval = 10 * time.Second
+	if stats2[0].ReportInterval != wantInterval {
+		t.Errorf("Second call stats() = %v, want %v", stats2[0].ReportInterval, wantInterval)
 	}
 }

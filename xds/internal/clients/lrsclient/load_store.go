@@ -25,6 +25,9 @@ import (
 	"time"
 )
 
+// clockNow is used to get the current time. It can be overridden in tests.
+var clockNow = time.Now
+
 // A LoadStore aggregates loads for multiple clusters and services that are
 // intended to be reported via LRS.
 //
@@ -84,7 +87,7 @@ func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClu
 	p := &PerClusterReporter{
 		cluster:          clusterName,
 		service:          serviceName,
-		lastLoadReportAt: time.Now(),
+		lastLoadReportAt: clockNow(),
 	}
 	c[serviceName] = p
 	return p
@@ -245,8 +248,8 @@ func (p *PerClusterReporter) stats() *loadData {
 	})
 
 	p.mu.Lock()
-	sd.reportInterval = time.Since(p.lastLoadReportAt)
-	p.lastLoadReportAt = time.Now()
+	sd.reportInterval = clockNow().Sub(p.lastLoadReportAt)
+	p.lastLoadReportAt = clockNow()
 	p.mu.Unlock()
 
 	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
