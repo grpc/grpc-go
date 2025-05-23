@@ -468,48 +468,51 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	}
 }
 
-// TestStoreReportInterval tests that the report interval is correctly
-// calculated between consecutive calls to Stats().
+// TestStoreReportInterval verify that the load report interval gets
+// calculated at every stats() call and is the duration between start of last
+// load reporting to next stats() call.
 func TestStoreReportInterval(t *testing.T) {
-	originalClockNow := clockNow
-	t.Cleanup(func() { clockNow = originalClockNow })
+	originaltimeNow := timeNow
+	t.Cleanup(func() { timeNow = originaltimeNow })
 
 	// Initial time for reporter creation
 	currentTime := time.Now()
-	clockNow = func() time.Time {
+	timeNow = func() time.Time {
 		return currentTime
 	}
 
 	store := NewStore()
 	reporter := store.PerCluster("test-cluster", "test-service")
-	// To ensure Stats() returns non-nil data, report a dummy drop.
+	// Report dummy drop to ensure stats1 is not nil.
 	reporter.CallDropped("dummy-category")
 
-	// First call to Stats() calculates the report interval from reporter
-	// creation time.
+	// Update currentTime to simulate the passage of time between the reporter
+	// creation and first stats() call.
 	currentTime = currentTime.Add(5 * time.Second)
 	stats1 := store.Stats(nil)
 
-	if stats1 == nil {
-		t.Fatalf("stats1 is nil after reporting a drop, want non-nil")
+	if len(stats1) == 0 {
+		t.Fatalf("stats1 is empty after reporting a drop, want non-nil")
 	}
-	wantInterval := 5 * time.Second
-	if stats1[0].ReportInterval != wantInterval {
-		t.Errorf("First call stats() = %v, want %v", stats1[0].ReportInterval, wantInterval)
+	// Verify Stats() call calculate the report interval from the time of
+	// reporter creation.
+	if got, want := stats1[0].ReportInterval, 5*time.Second; got != want {
+		t.Errorf("stats1[0].ReportInterval = %v, want %v", stats1[0].ReportInterval, want)
 	}
 
-	// Second call to Stats() calculates the report interval from last Stats()
-	// call time.
+	// Update currentTime to simulate the passage of time between the first
+	// and second stats() call.
 	currentTime = currentTime.Add(10 * time.Second)
 	// Report another dummy drop to ensure stats2 is not nil.
 	reporter.CallDropped("dummy-category-2")
 	stats2 := store.Stats(nil)
 
-	if stats2 == nil {
-		t.Fatalf("stats2 is nil after reporting a drop, want non-nil")
+	if len(stats2) == 0 {
+		t.Fatalf("stats2 is empty after reporting a drop, want non-nil")
 	}
-	wantInterval = 10 * time.Second
-	if stats2[0].ReportInterval != wantInterval {
-		t.Errorf("Second call stats() = %v, want %v", stats2[0].ReportInterval, wantInterval)
+	// Verify Stats() call calculate the report interval from the time of first
+	// Stats() call.
+	if got, want := stats2[0].ReportInterval, 10*time.Second; got != want {
+		t.Errorf("stats2[0].ReportInterval = %v, want %v", stats2[0].ReportInterval, want)
 	}
 }
