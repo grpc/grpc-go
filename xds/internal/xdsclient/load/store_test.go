@@ -22,6 +22,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -464,5 +465,54 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	got1 := store.Stats(nil)
 	if diff := cmp.Diff(want1, got1, cmpopts.EquateEmpty(), cmpopts.IgnoreFields(Data{}, "ReportInterval"), sortDataSlice); diff != "" {
 		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+}
+
+// TestStoreReportInterval verify that the load report interval gets
+// calculated at every stats() call and is the duration between start of last
+// load reporting to next stats() call.
+func TestStoreReportInterval(t *testing.T) {
+	originaltimeNow := timeNow
+	t.Cleanup(func() { timeNow = originaltimeNow })
+
+	// Initial time for reporter creation
+	currentTime := time.Now()
+	timeNow = func() time.Time {
+		return currentTime
+	}
+
+	store := NewStore()
+	reporter := store.PerCluster("test-cluster", "test-service")
+	// Report dummy drop to ensure stats1 is not nil.
+	reporter.CallDropped("dummy-category")
+
+	// Update currentTime to simulate the passage of time between the reporter
+	// creation and first stats() call.
+	currentTime = currentTime.Add(5 * time.Second)
+	stats1 := store.Stats(nil)
+
+	if len(stats1) == 0 {
+		t.Fatalf("stats1 is empty after reporting a drop, want non-nil")
+	}
+	// Verify Stats() call calculate the report interval from the time of
+	// reporter creation.
+	if got, want := stats1[0].ReportInterval, 5*time.Second; got != want {
+		t.Errorf("stats1[0].ReportInterval = %v, want %v", stats1[0].ReportInterval, want)
+	}
+
+	// Update currentTime to simulate the passage of time between the first
+	// and second stats() call.
+	currentTime = currentTime.Add(10 * time.Second)
+	// Report another dummy drop to ensure stats2 is not nil.
+	reporter.CallDropped("dummy-category-2")
+	stats2 := store.Stats(nil)
+
+	if len(stats2) == 0 {
+		t.Fatalf("stats2 is empty after reporting a drop, want non-nil")
+	}
+	// Verify Stats() call calculate the report interval from the time of first
+	// Stats() call.
+	if got, want := stats2[0].ReportInterval, 10*time.Second; got != want {
+		t.Errorf("stats2[0].ReportInterval = %v, want %v", stats2[0].ReportInterval, want)
 	}
 }

@@ -23,6 +23,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	lrsclientinternal "google.golang.org/grpc/xds/internal/clients/lrsclient/internal"
 )
 
 // A LoadStore aggregates loads for multiple clusters and services that are
@@ -47,6 +49,10 @@ type LoadStore struct {
 	// (cluster,service) pair, and the memory allocated is just pointers and
 	// maps. So this shouldn't get too bad.
 	clusters map[string]map[string]*PerClusterReporter
+}
+
+func init() {
+	lrsclientinternal.TimeNow = time.Now
 }
 
 // newLoadStore creates a LoadStore.
@@ -82,8 +88,9 @@ func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClu
 		return p
 	}
 	p := &PerClusterReporter{
-		cluster: clusterName,
-		service: serviceName,
+		cluster:          clusterName,
+		service:          serviceName,
+		lastLoadReportAt: lrsclientinternal.TimeNow(),
 	}
 	c[serviceName] = p
 	return p
@@ -244,8 +251,8 @@ func (p *PerClusterReporter) stats() *loadData {
 	})
 
 	p.mu.Lock()
-	sd.reportInterval = time.Since(p.lastLoadReportAt)
-	p.lastLoadReportAt = time.Now()
+	sd.reportInterval = lrsclientinternal.TimeNow().Sub(p.lastLoadReportAt)
+	p.lastLoadReportAt = lrsclientinternal.TimeNow()
 	p.mu.Unlock()
 
 	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
