@@ -225,6 +225,22 @@ func WithInitialConnWindowSize(s int32) DialOption {
 	})
 }
 
+// WithStaticStreamWindowSize returns a DialOption to set the static initial
+// stream window size.
+func WithStaticStreamWindowSize(s int32) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.copts.StaticStreamWindowSize = s
+	})
+}
+
+// WithStaticConnWindowSize returns a DialOption to set the static initial
+// connection window size.
+func WithStaticConnWindowSize(s int32) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.copts.StaticConnWindowSize = s
+	})
+}
+
 // WithMaxMsgSize returns a DialOption which sets the maximum message size the
 // client can receive.
 //
