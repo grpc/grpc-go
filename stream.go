@@ -1138,6 +1138,10 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 			if statusErr := a.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
 			}
+			// received no msg and status ok for non-server streaming rpcs.
+			if !cs.desc.ServerStreams {
+				return status.Errorf(codes.Internal, "client streaming cardinality violation")
+			}
 			return io.EOF // indicates successful end of stream.
 		}
 
