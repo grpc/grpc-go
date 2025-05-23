@@ -21,7 +21,6 @@ package fakeclient
 
 import (
 	"context"
-	"time"
 
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -81,14 +80,14 @@ func (*stream) Recv() ([]byte, error) {
 }
 
 // ReportLoad starts reporting load about clusterName to server.
-func (xdsC *Client) ReportLoad(server *bootstrap.ServerConfig) (loadStore *lrsclient.LoadStore, cancel func(time.Duration)) {
+func (xdsC *Client) ReportLoad(server *bootstrap.ServerConfig) (loadStore *lrsclient.LoadStore, cancel func(context.Context)) {
 	lrsClient, _ := lrsclient.New(lrsclient.Config{Node: clients.Node{ID: "fake-node-id"}, TransportBuilder: &transportBuilder{}})
 	xdsC.loadStore, _ = lrsClient.ReportLoad(clients.ServerIdentifier{ServerURI: server.ServerURI()})
 
 	xdsC.loadReportCh.Send(ReportLoadArgs{Server: server})
 
-	return xdsC.loadStore, func(timeout time.Duration) {
-		xdsC.loadStore.Stop(timeout)
+	return xdsC.loadStore, func(ctx context.Context) {
+		xdsC.loadStore.Stop(ctx)
 		xdsC.lrsCancelCh.Send(nil)
 	}
 }
