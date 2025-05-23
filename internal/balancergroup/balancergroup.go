@@ -106,13 +106,13 @@ func (sbc *subBalancerWrapper) startBalancer() {
 	}
 }
 
-// exitIdle invokes the sub-balancer's ExitIdle method. Returns a true
-// indicating whether or not the operation was completed.
-func (sbc *subBalancerWrapper) exitIdle() (complete bool) {
-	if b := sbc.balancer; b != nil {
-		b.ExitIdle()
+// exitIdle invokes the sub-balancer's ExitIdle method.
+func (sbc *subBalancerWrapper) exitIdle() {
+	b := sbc.balancer
+	if b == nil {
+		return
 	}
-	return true
+	b.ExitIdle()
 }
 
 func (sbc *subBalancerWrapper) updateClientConnState(s balancer.ClientConnState) error {
@@ -573,9 +573,7 @@ func (bg *BalancerGroup) ExitIdle() {
 		return
 	}
 	for _, config := range bg.idToBalancerConfig {
-		if !config.exitIdle() {
-			bg.connect(config)
-		}
+		config.exitIdle()
 	}
 }
 
@@ -588,9 +586,7 @@ func (bg *BalancerGroup) ExitIdleOne(id string) {
 		return
 	}
 	if config := bg.idToBalancerConfig[id]; config != nil {
-		if !config.exitIdle() {
-			bg.connect(config)
-		}
+		config.exitIdle()
 	}
 }
 
