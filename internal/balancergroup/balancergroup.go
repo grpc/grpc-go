@@ -409,20 +409,6 @@ func (bg *BalancerGroup) cleanupSubConns(config *subBalancerWrapper) {
 	}
 }
 
-// connect attempts to connect to all subConns belonging to sb.
-func (bg *BalancerGroup) connect(sb *subBalancerWrapper) {
-	bg.incomingMu.Lock()
-	defer bg.incomingMu.Unlock()
-	if bg.incomingClosed {
-		return
-	}
-	for sc, b := range bg.scToSubBalancer {
-		if b == sb {
-			sc.Connect()
-		}
-	}
-}
-
 // Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
 
 // updateSubConnState forwards the update to cb and updates scToSubBalancer if
