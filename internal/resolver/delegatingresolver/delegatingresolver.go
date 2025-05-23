@@ -354,8 +354,9 @@ func (r *delegatingResolver) updateTargetResolverState(state resolver.State) err
 		logger.Infof("Addresses received from target resolver: %v", state.Addresses)
 	}
 	r.targetResolverState = &state
-	// If no addresses returned by resolver have network type as tcp , do not
-	// wait for proxy update.
+	// If all addresses returned by the target resolver have a non-TCP network
+	// type, or are listed in the `NO_PROXY` environment variable, do not wait
+	// for proxy update.
 	if !needsProxyResolver(r.targetResolverState) {
 		return r.cc.UpdateState(*r.targetResolverState)
 	}

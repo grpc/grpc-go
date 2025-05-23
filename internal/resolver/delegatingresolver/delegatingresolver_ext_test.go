@@ -164,6 +164,19 @@ func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolv
 	return addr
 }
 
+func overrideTestHTTPSProxy(t *testing.T, proxyAddr string) {
+	t.Helper()
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		return &url.URL{
+			Scheme: "https",
+			Host:   proxyAddr,
+		}, nil
+	}
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
+	t.Cleanup(func() { delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe })
+}
+
 // Tests the scenario where proxy is configured and the target URI contains the
 // "dns" scheme and target resolution is enabled. The test verifies that the
 // addresses returned by the delegating resolver combines the addresses
@@ -176,17 +189,8 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 		envProxyAddr            = "proxytest.com"
 		resolvedProxyTestAddr1  = "11.11.11.11:7687"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
+
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
@@ -253,17 +257,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		envProxyAddr           = "proxytest.com"
 		resolvedProxyTestAddr1 = "11.11.11.11:7687"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	targetResolver := manual.NewBuilderWithScheme("dns")
 	target := targetResolver.Scheme() + ":///" + targetTestAddr
@@ -315,17 +309,7 @@ func (s) TestDelegatingResolverwithCustomResolverAndProxy(t *testing.T) {
 		envProxyAddr            = "proxytest.com"
 		resolvedProxyTestAddr1  = "11.11.11.11:7687"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -398,17 +382,7 @@ func (s) TestDelegatingResolverForEndpointsWithProxy(t *testing.T) {
 		resolvedProxyTestAddr1  = "11.11.11.11:7687"
 		resolvedProxyTestAddr2  = "22.22.22.22:7687"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -501,17 +475,7 @@ func (s) TestDelegatingResolverForMultipleProxyAddress(t *testing.T) {
 		resolvedProxyTestAddr1  = "11.11.11.11:7687"
 		resolvedProxyTestAddr2  = "22.22.22.22:7687"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -578,17 +542,7 @@ func (s) TestDelegatingResolverForMultipleProxyAddress(t *testing.T) {
 func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 	const envProxyAddr = "proxytest.com"
 
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -675,17 +629,7 @@ func (s) TestDelegatingResolverUpdateStateDuringClose(t *testing.T) {
 func (s) TestDelegatingResolverUpdateStateFromResolveNow(t *testing.T) {
 	const envProxyAddr = "proxytest.com"
 
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -739,17 +683,7 @@ func (s) TestDelegatingResolverUpdateStateFromResolveNow(t *testing.T) {
 func (s) TestDelegatingResolverResolveNow(t *testing.T) {
 	const envProxyAddr = "proxytest.com"
 
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -820,17 +754,7 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 		resolvedTargetTestAddr1 = "1.1.1.1:8080"
 		envProxyAddr            = "proxytest.com"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -882,7 +806,7 @@ func (s) TestDelegatingResolverForNonTCPTarget(t *testing.T) {
 
 // Tests the scenario where a proxy is configured, and the resolver returns tcp
 // and non-tcp addresses. The test verifies that the delegating resolver doesn't
-// add proxyatrribute to adresses with network type other than tcp , but adds
+// add proxyatrribute to adresses with network type other than tcp, but adds
 // the proxyattribute to addresses with network type tcp.
 func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 	const (
@@ -891,17 +815,7 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 		resolvedTargetTestAddr2 = "2.2.2.2:8080"
 		envProxyAddr            = "proxytest.com"
 	)
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		return &url.URL{
-			Scheme: "https",
-			Host:   envProxyAddr,
-		}, nil
-	}
-	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() {
-		delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe
-	}()
+	overrideTestHTTPSProxy(t, envProxyAddr)
 
 	// Manual resolver to control the target resolution.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -956,7 +870,7 @@ func (s) TestDelegatingResolverForMixNetworkType(t *testing.T) {
 
 // Tests the scenario where a proxy is configured but some addresses are
 // excluded (by using the NO_PROXY environment variable). The test verifies that
-// the delegating resolver doesn't add proxyatrribute to adresses excluded , but
+// the delegating resolver doesn't add proxyatrribute to adresses excluded, but
 // adds the proxyattribute to all other addresses.
 func (s) TestDelegatingResolverWithNoProxyEnvUsed(t *testing.T) {
 	const (
