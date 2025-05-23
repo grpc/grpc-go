@@ -50,8 +50,13 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
 			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
-		// increment previous rpc attempts applicable for next attempt
-		atomic.AddUint32(&ai.previousRPCAttempts, 1)
+		// Increment retry count for the next attempt if not a transparent
+		// retry.
+		if !rs.IsTransparentRetryAttempt {
+			if ci, ok := getRetryCount(ai.ctx); ok {
+				atomic.AddInt32(&ci.numRetries, 1)
+			}
+		}
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:

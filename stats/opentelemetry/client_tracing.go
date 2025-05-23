@@ -20,6 +20,7 @@ import (
 	"context"
 	"log"
 	"strings"
+	"sync/atomic"
 
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -47,6 +48,8 @@ func (h *clientTracingHandler) initializeTraces() {
 }
 
 func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	ci := &callInfo{numRetries: 0}
+	ctx = setRetryCount(ctx, ci)
 	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	var span trace.Span
@@ -57,6 +60,8 @@ func (h *clientTracingHandler) unaryInterceptor(ctx context.Context, method stri
 }
 
 func (h *clientTracingHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	ci := &callInfo{numRetries: 0}
+	ctx = setRetryCount(ctx, ci)
 	ctx, _ = getOrCreateCallInfo(ctx, cc, method, opts...)
 
 	var span trace.Span
@@ -118,9 +123,15 @@ func (h *clientTracingHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo
 // HandleConn exists to satisfy stats.Handler for tracing.
 func (h *clientTracingHandler) HandleConn(context.Context, stats.ConnStats) {}
 
+type retryCountKey struct{}
+
 // TagRPC implements per RPC attempt context management for traces.
 func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
+	if ci, ok := getRetryCount(ctx); ok {
+		ai.previousRPCAttempts = uint32(atomic.LoadInt32(&ci.numRetries))
+	}
+	ai.ctx = ctx
 	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }

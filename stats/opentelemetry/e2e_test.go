@@ -22,6 +22,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1687,6 +1688,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatal(err)
 			}
 			verifyTrace(t, spans, wantSpanInfo)
+			verifyPreviousRPCAttempts(t, spans)
 		})
 	}
 }
@@ -1705,6 +1707,32 @@ func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
 	}
 	if !match {
 		t.Errorf("Expected span not found: %q (kind: %s)", want.name, want.spanKind)
+	}
+}
+
+func verifyPreviousRPCAttempts(t *testing.T, spans tracetest.SpanStubs) {
+	t.Helper()
+	const maxAttempts = 3
+	foundAttempts := make(map[int]bool)
+	observedSpans := make(map[int][]string)
+
+	for _, span := range spans {
+		if !strings.HasPrefix(span.Name, "Attempt.") {
+			continue
+		}
+		for _, attr := range span.Attributes {
+			if attr.Key == "previous-rpc-attempts" {
+				val := int(attr.Value.AsInt64())
+				foundAttempts[val] = true
+				observedSpans[val] = append(observedSpans[val], span.Name)
+			}
+		}
+	}
+
+	for i := range maxAttempts {
+		if !foundAttempts[i] {
+			t.Errorf("Missing span for retry attempt #%d (expected previous-rpc-attempts = %d)", i+1, i)
+		}
 	}
 }
 
