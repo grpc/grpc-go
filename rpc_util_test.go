@@ -429,7 +429,7 @@ type mockCompressor struct {
 	ch chan<- struct{}
 }
 
-func (m *mockCompressor) Compress(io.Writer) (io.WriteCloser, error) {
+func (m *mockCompressor) Compress(io.Writer, ...any) (io.WriteCloser, error) {
 	panic("unimplemented")
 }
 

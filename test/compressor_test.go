@@ -348,7 +348,7 @@ type wrapCompressor struct {
 	compressInvokes int32
 }
 
-func (wc *wrapCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+func (wc *wrapCompressor) Compress(w io.Writer, compressorOptions ...any) (io.WriteCloser, error) {
 	atomic.AddInt32(&wc.compressInvokes, 1)
 	return wc.Compressor.Compress(w)
 }
@@ -792,7 +792,7 @@ type fakeCompressor struct {
 	decompressedMessageSize int
 }
 
-func (f *fakeCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+func (f *fakeCompressor) Compress(w io.Writer, compressorOptions ...any) (io.WriteCloser, error) {
 	return nopWriteCloser{w}, nil
 }
 

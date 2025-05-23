@@ -46,7 +46,7 @@ type Compressor interface {
 	// Compress writes the data written to wc to w after compressing it.  If an
 	// error occurs while initializing the compressor, that error is returned
 	// instead.
-	Compress(w io.Writer) (io.WriteCloser, error)
+	Compress(w io.Writer, compressorOptions ...any) (io.WriteCloser, error)
 	// Decompress reads data from r, decompresses it, and provides the
 	// uncompressed data via the returned io.Reader.  If an error occurs while
 	// initializing the decompressor, that error is returned instead.

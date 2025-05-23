@@ -910,7 +910,7 @@ func (cs *clientStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, cs.compressorV0, cs.compressorV1, cs.cc.dopts.copts.BufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, cs.codec, cs.compressorV0, cs.compressorV1, cs.cc.dopts.copts.BufferPool, cs.callInfo.compressorOptions)
 	if err != nil {
 		return err
 	}
@@ -1417,7 +1417,7 @@ func (as *addrConnStream) SendMsg(m any) (err error) {
 	}
 
 	// load hdr, payload, data
-	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.sendCompressorV0, as.sendCompressorV1, as.ac.dopts.copts.BufferPool)
+	hdr, data, payload, pf, err := prepareMsg(m, as.codec, as.sendCompressorV0, as.sendCompressorV1, as.ac.dopts.copts.BufferPool, as.callInfo.compressorOptions)
 	if err != nil {
 		return err
 	}
@@ -1814,7 +1814,7 @@ func MethodFromServerStream(stream ServerStream) (string, bool) {
 // compression was made and therefore whether the payload needs to be freed in
 // addition to the returned data. Freeing the payload if the returned boolean is
 // false can lead to undefined behavior.
-func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool) (hdr []byte, data, payload mem.BufferSlice, pf payloadFormat, err error) {
+func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor, pool mem.BufferPool, compressorOptions ...any) (hdr []byte, data, payload mem.BufferSlice, pf payloadFormat, err error) {
 	if preparedMsg, ok := m.(*PreparedMsg); ok {
 		return preparedMsg.hdr, preparedMsg.encodedData, preparedMsg.payload, preparedMsg.pf, nil
 	}
@@ -1824,7 +1824,7 @@ func prepareMsg(m any, codec baseCodec, cp Compressor, comp encoding.Compressor,
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}
-	compData, pf, err := compress(data, cp, comp, pool)
+	compData, pf, err := compress(data, cp, comp, pool, compressorOptions...)
 	if err != nil {
 		data.Free()
 		return nil, nil, nil, 0, err
