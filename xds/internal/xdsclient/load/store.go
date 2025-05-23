@@ -25,8 +25,8 @@ import (
 
 const negativeOneUInt64 = ^uint64(0)
 
-// clockNow is used to get the current time. It can be overridden in tests.
-var clockNow = time.Now
+// timeNow is used to get the current time. It can be overridden in tests.
+var timeNow = time.Now
 
 // Store keeps the loads for multiple clusters and services to be reported via
 // LRS. It contains loads to reported to one LRS server. Create multiple stores
@@ -120,7 +120,7 @@ func (s *Store) PerCluster(clusterName, serviceName string) PerClusterReporter {
 	p := &perClusterStore{
 		cluster:          clusterName,
 		service:          serviceName,
-		lastLoadReportAt: clockNow(),
+		lastLoadReportAt: timeNow(),
 	}
 	c[serviceName] = p
 	return p
@@ -333,8 +333,8 @@ func (ls *perClusterStore) stats() *Data {
 	})
 
 	ls.mu.Lock()
-	sd.ReportInterval = clockNow().Sub(ls.lastLoadReportAt)
-	ls.lastLoadReportAt = clockNow()
+	sd.ReportInterval = timeNow().Sub(ls.lastLoadReportAt)
+	ls.lastLoadReportAt = timeNow()
 	ls.mu.Unlock()
 
 	if sd.TotalDrops == 0 && len(sd.Drops) == 0 && len(sd.LocalityStats) == 0 {

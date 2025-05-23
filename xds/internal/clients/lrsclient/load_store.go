@@ -23,10 +23,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-)
 
-// clockNow is used to get the current time. It can be overridden in tests.
-var clockNow = time.Now
+	lrsclientinternal "google.golang.org/grpc/xds/internal/clients/lrsclient/internal"
+)
 
 // A LoadStore aggregates loads for multiple clusters and services that are
 // intended to be reported via LRS.
@@ -50,6 +49,10 @@ type LoadStore struct {
 	// (cluster,service) pair, and the memory allocated is just pointers and
 	// maps. So this shouldn't get too bad.
 	clusters map[string]map[string]*PerClusterReporter
+}
+
+func init() {
+	lrsclientinternal.TimeNow = time.Now
 }
 
 // newLoadStore creates a LoadStore.
@@ -87,7 +90,7 @@ func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) *PerClu
 	p := &PerClusterReporter{
 		cluster:          clusterName,
 		service:          serviceName,
-		lastLoadReportAt: clockNow(),
+		lastLoadReportAt: lrsclientinternal.TimeNow(),
 	}
 	c[serviceName] = p
 	return p
@@ -248,8 +251,8 @@ func (p *PerClusterReporter) stats() *loadData {
 	})
 
 	p.mu.Lock()
-	sd.reportInterval = clockNow().Sub(p.lastLoadReportAt)
-	p.lastLoadReportAt = clockNow()
+	sd.reportInterval = lrsclientinternal.TimeNow().Sub(p.lastLoadReportAt)
+	p.lastLoadReportAt = lrsclientinternal.TimeNow()
 	p.mu.Unlock()
 
 	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
