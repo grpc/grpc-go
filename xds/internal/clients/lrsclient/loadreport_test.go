@@ -146,7 +146,9 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
 	}
-	defer loadStore1.Stop(defaultTestShortTimeout)
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	defer loadStore1.Stop(ssCtx)
 
 	// Call the load reporting API to report load to the first management
 	// server, and ensure that a connection to the server is created.
@@ -231,7 +233,9 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Stop this load reporting stream, server should see error canceled.
-	loadStore2.Stop(defaultTestShortTimeout)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	loadStore2.Stop(ssCtx)
 
 	// Server should receive a stream canceled error. There may be additional
 	// load reports from the client in the channel.
@@ -418,7 +422,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	// Cancel the first load reporting call, and ensure that the stream does not
 	// close (because we have another call open).
-	loadStore1.Stop(defaultTestShortTimeout)
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	loadStore1.Stop(ssCtx)
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(sCtx); err != context.DeadlineExceeded {
@@ -426,7 +432,9 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Stop the second load reporting call, and ensure the stream is closed.
-	loadStore2.Stop(defaultTestShortTimeout)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	loadStore2.Stop(ssCtx)
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
@@ -441,16 +449,18 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
-	loadStore3.Stop(defaultTestShortTimeout)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer ssCancel()
+	loadStore3.Stop(ssCtx)
 }
 
-// TestReportLoad_StopWithTimeout tests the behavior of LoadStore.Stop() when
-// called with a timeout duration. It verifies that:
-//   - Stop() blocks until the timeout expires or final load send attempt is
+// TestReportLoad_StopWithContext tests the behavior of LoadStore.Stop() when
+// called with a context. It verifies that:
+//   - Stop() blocks until the context expires or final load send attempt is
 //     made.
 //   - Final load report is seen on the server after stop is called.
 //   - The stream is closed after Stop() returns.
-func (s) TestReportLoad_StopWithTimeout(t *testing.T) {
+func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -535,11 +545,11 @@ func (s) TestReportLoad_StopWithTimeout(t *testing.T) {
 		t.Fatalf("Unexpected diff in LRS request (-got, +want):\n%s", diff)
 	}
 
-	// Create a timeout duration for Stop() that remains until the end of test
-	// to ensure that only possibility of Stop() to finish is if final load
-	// send attempt is made. If final load attempt is not made, test itself
-	// will timeout.
-	largeStopTimeout := 10 * defaultTestTimeout
+	// Create a context for Stop() that remains until the end of test to ensure
+	// that only possibility of Stop()s to finish is if final load send attempt
+	// is made. If final load attempt is not made, test will timeout.
+	stopCtx, stopCancel := context.WithCancel(ctx)
+	defer stopCancel()
 
 	// Push more loads.
 	loadStore.ReporterForCluster("cluster2", "eds2").CallDropped("test")
@@ -548,7 +558,7 @@ func (s) TestReportLoad_StopWithTimeout(t *testing.T) {
 	// Call Stop in a separate goroutine. It will block until
 	// final load send attempt is made.
 	go func() {
-		loadStore.Stop(largeStopTimeout)
+		loadStore.Stop(stopCtx)
 		close(stopCalled)
 	}()
 	<-stopCalled
