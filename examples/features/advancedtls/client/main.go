@@ -52,7 +52,7 @@ const message string = "Hello"
 func makeRootProvider(credsDirectory string) certprovider.Provider {
 	rootOptions := pemfile.Options{
 		RootFile:        filepath.Join(credsDirectory, "ca_cert.pem"),
-		RefreshDuration: credRefreshInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshInterval},
 	}
 	rootProvider, err := pemfile.NewProvider(rootOptions)
 	if err != nil {
@@ -72,7 +72,7 @@ func makeIdentityProvider(revoked bool, credsDirectory string) certprovider.Prov
 	identityOptions := pemfile.Options{
 		CertFile:        certFile,
 		KeyFile:         filepath.Join(credsDirectory, "client_key.pem"),
-		RefreshDuration: credRefreshInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshInterval},
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {

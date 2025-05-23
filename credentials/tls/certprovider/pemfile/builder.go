@@ -24,8 +24,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -62,34 +60,12 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 	// The only difference between this anonymous struct and the Options struct
 	// is that the refresh_interval is represented here as a duration proto,
 	// while in the latter a time.Duration is used.
-	cfg := &struct {
-		CertificateFile          string          `json:"certificate_file,omitempty"`
-		PrivateKeyFile           string          `json:"private_key_file,omitempty"`
-		CACertificateFile        string          `json:"ca_certificate_file,omitempty"`
-		SPIFFETrustBundleMapFile string          `json:"spiffe_trust_bundle_map_file,omitempty"`
-		RefreshInterval          json.RawMessage `json:"refresh_interval,omitempty"`
-	}{}
-	if err := json.Unmarshal(jd, cfg); err != nil {
-		return Options{}, fmt.Errorf("pemfile: json.Unmarshal(%s) failed: %v", string(jd), err)
+	opts := Options{
+		RefreshDuration: Duration{defaultRefreshInterval},
 	}
 
-	opts := Options{
-		CertFile:            cfg.CertificateFile,
-		KeyFile:             cfg.PrivateKeyFile,
-		RootFile:            cfg.CACertificateFile,
-		SPIFFEBundleMapFile: cfg.SPIFFETrustBundleMapFile,
-		// Refresh interval is the only field in the configuration for which we
-		// support a default value. We cannot possibly have valid defaults for
-		// file paths to watch. Also, it is valid to specify an empty path for
-		// some of those fields if the user does not want to watch them.
-		RefreshDuration: defaultRefreshInterval,
-	}
-	if cfg.RefreshInterval != nil {
-		dur := &durationpb.Duration{}
-		if err := protojson.Unmarshal(cfg.RefreshInterval, dur); err != nil {
-			return Options{}, fmt.Errorf("pemfile: protojson.Unmarshal(%+v) failed: %v", cfg.RefreshInterval, err)
-		}
-		opts.RefreshDuration = dur.AsDuration()
+	if err := json.Unmarshal(jd, &opts); err != nil {
+		return Options{}, fmt.Errorf("pemfile: json.Unmarshal failed: %v", err)
 	}
 
 	if err := opts.validate(); err != nil {

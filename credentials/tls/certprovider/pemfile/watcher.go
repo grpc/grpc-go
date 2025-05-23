@@ -30,6 +30,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -55,22 +56,41 @@ var (
 type Options struct {
 	// CertFile is the file that holds the identity certificate.
 	// Optional. If this is set, KeyFile must also be set.
-	CertFile string
+	CertFile string `json:"certificate_file,omitempty"`
 	// KeyFile is the file that holds identity private key.
 	// Optional. If this is set, CertFile must also be set.
-	KeyFile string
+	KeyFile string `json:"private_key_file,omitempty"`
 	// RootFile is the file that holds trusted root certificate(s).
 	// Optional.
-	RootFile string
+	RootFile string `json:"ca_certificate_file,omitempty"`
 	// SPIFFEBundleMapFile is the file that holds the spiffe bundle map.
 	// If a given provider configures both the RootFile and the
 	// SPIFFEBundleMapFile, the SPIFFEBundleMapFile will be preferred.
 	// Optional.
-	SPIFFEBundleMapFile string
+	SPIFFEBundleMapFile string `json:"spiffe_trust_bundle_map_file,omitempty"`
 	// RefreshDuration is the amount of time the plugin waits before checking
 	// for updates in the specified files.
 	// Optional. If not set, a default value (1 hour) will be used.
-	RefreshDuration time.Duration
+	RefreshDuration Duration `json:"refresh_interval,omitempty"`
+}
+
+// Duration wraps time.Duration to support Go-style duration strings in JSON (e.g., "10s", "5m").
+type Duration struct {
+	time.Duration
+}
+
+// UnmarshalJSON allows decoding a duration string like "200s" into time.Duration.
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("duration must be a string: %w", err)
+	}
+	dur, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q: %w", s, err)
+	}
+	d.Duration = dur
+	return nil
 }
 
 func (o Options) canonical() []byte {
@@ -107,8 +127,8 @@ func NewProvider(o Options) (certprovider.Provider, error) {
 // newProvider is used to create a new certificate provider plugin after
 // validating the options, and hence does not return an error.
 func newProvider(o Options) certprovider.Provider {
-	if o.RefreshDuration == 0 {
-		o.RefreshDuration = defaultCertRefreshDuration
+	if o.RefreshDuration.Duration == 0 {
+		o.RefreshDuration.Duration = defaultCertRefreshDuration
 	}
 
 	provider := &watcher{opts: o}
@@ -128,7 +148,7 @@ func newProvider(o Options) certprovider.Provider {
 // watcher is a certificate provider plugin that implements the
 // certprovider.Provider interface. It watches a set of certificate and key
 // files and provides the most up-to-date key material for consumption by
-// credentials implementation.
+// credentials' implementation.
 type watcher struct {
 	identityDistributor         distributor
 	rootDistributor             distributor
@@ -250,7 +270,7 @@ func (w *watcher) maybeUpdateRootFile() {
 // changes, and pushes new key material into the appropriate distributors which
 // is returned from calls to KeyMaterial().
 func (w *watcher) run(ctx context.Context) {
-	ticker := time.NewTicker(w.opts.RefreshDuration)
+	ticker := time.NewTicker(w.opts.RefreshDuration.Duration)
 	for {
 		w.updateIdentityDistributor()
 		w.updateRootDistributor()

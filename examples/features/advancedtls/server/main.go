@@ -121,7 +121,7 @@ func createAndRunTLSServer(credsDirectory string, useRevokedCert bool, port int)
 func makeRootProvider(credsDirectory string) certprovider.Provider {
 	rootOptions := pemfile.Options{
 		RootFile:        filepath.Join(credsDirectory, "/ca_cert.pem"),
-		RefreshDuration: credRefreshInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshInterval},
 	}
 
 	rootProvider, err := pemfile.NewProvider(rootOptions)
@@ -142,7 +142,7 @@ func makeIdentityProvider(useRevokedCert bool, credsDirectory string) certprovid
 	identityOptions := pemfile.Options{
 		CertFile:        certFilePath,
 		KeyFile:         filepath.Join(credsDirectory, "server_key.pem"),
-		RefreshDuration: credRefreshInterval,
+		RefreshDuration: pemfile.Duration{Duration: credRefreshInterval},
 	}
 	identityProvider, err := pemfile.NewProvider(identityOptions)
 	if err != nil {
