@@ -22,6 +22,7 @@
 package lrsclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -140,8 +141,8 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 	// the LRS stream when the last reference is removed and closes the
 	// transport and removes the lrs stream and its references from the
 	// respective maps. Before closing the stream, it waits for the provided
-	// timeout duration for the final load report attempt to complete.
-	stop := func(timeout time.Duration) {
+	// context to be done (timeout or cancellation).
+	stop := func(ctx context.Context) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
@@ -156,16 +157,13 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 
 		lrs.finalSendRequest <- struct{}{}
 
-		timer := time.NewTimer(timeout)
-		defer timer.Stop()
-
 		select {
 		case err := <-lrs.finalSendDone:
 			if err != nil {
 				c.logger.Warningf("Final send attempt failed: %v", err)
 			}
-		case <-timer.C:
-			c.logger.Warningf("Timed out before finishing the final send attempt: %v", err)
+		case <-ctx.Done():
+			c.logger.Warningf("Context canceled before finishing the final send attempt: %v", err)
 		}
 
 		lrs.cancelStream()
