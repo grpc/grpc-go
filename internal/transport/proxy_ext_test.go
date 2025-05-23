@@ -71,6 +71,19 @@ func isIPAddr(addr string) bool {
 	return err == nil
 }
 
+func overrideTestHTTPSProxy(t *testing.T, proxyAddr string) {
+	t.Helper()
+	hpfe := func(req *http.Request) (*url.URL, error) {
+		return &url.URL{
+			Scheme: "https",
+			Host:   proxyAddr,
+		}, nil
+	}
+	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
+	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
+	t.Cleanup(func() { delegatingresolver.HTTPSProxyFromEnvironment = originalhpfe })
+}
+
 // Tests the scenario where grpc.Dial is performed using a proxy with the
 // default resolver in the target URI. The test verifies that the connection is
 // established to the proxy server, sends the unresolved target URI in the HTTP
@@ -86,7 +99,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := host, "localhost"; got != want {
-			t.Errorf(" Unexpected request host: %s , want = %s ", got, want)
+			t.Errorf(" Unexpected request host: %s, want = %s ", got, want)
 		}
 	}
 	pServer := proxyserver.New(t, reqCheck, false)
@@ -95,20 +108,7 @@ func (s) TestGRPCDialWithProxy(t *testing.T) {
 	// correctly even when unresolved.
 	pAddr := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pServer.Addr))
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pAddr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pAddr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -152,20 +152,7 @@ func (s) TestGRPCDialWithDNSAndProxy(t *testing.T) {
 	}
 	pServer := proxyserver.New(t, reqCheck, false)
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pServer.Addr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pServer.Addr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -202,7 +189,7 @@ func (s) TestNewClientWithProxy(t *testing.T) {
 			t.Error(err)
 		}
 		if got, want := host, "localhost"; got != want {
-			t.Errorf(" Unexpected request host: %s , want = %s ", got, want)
+			t.Errorf(" Unexpected request host: %s, want = %s ", got, want)
 		}
 	}
 	pServer := proxyserver.New(t, reqCheck, false)
@@ -211,20 +198,7 @@ func (s) TestNewClientWithProxy(t *testing.T) {
 	// correctly even when unresolved.
 	pAddr := fmt.Sprintf("localhost:%d", testutils.ParsePort(t, pServer.Addr))
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pAddr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pAddr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -265,20 +239,7 @@ func (s) TestNewClientWithProxyAndCustomResolver(t *testing.T) {
 	}
 	pServer := proxyserver.New(t, reqCheck, false)
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pServer.Addr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pServer.Addr)
 
 	// Create and update a custom resolver for target URI.
 	targetResolver := manual.NewBuilderWithScheme("test")
@@ -327,20 +288,7 @@ func (s) TestNewClientWithProxyAndTargetResolutionEnabled(t *testing.T) {
 	}
 	pServer := proxyserver.New(t, reqCheck, false)
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pServer.Addr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pServer.Addr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -372,20 +320,7 @@ func (s) TestNewClientWithNoProxy(t *testing.T) {
 	reqCheck := func(_ *http.Request) { t.Error("proxy server should not have received a Connect request") }
 	pServer := proxyserver.New(t, reqCheck, false)
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pServer.Addr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pServer.Addr)
 
 	dopts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -417,20 +352,7 @@ func (s) TestNewClientWithContextDialer(t *testing.T) {
 	reqCheck := func(_ *http.Request) { t.Error("proxy server should not have received a Connect request") }
 	pServer := proxyserver.New(t, reqCheck, false)
 
-	// Overwrite the function in the test and restore them in defer.
-	hpfe := func(req *http.Request) (*url.URL, error) {
-		if req.URL.Host == unresolvedTargetURI {
-			return &url.URL{
-				Scheme: "https",
-				Host:   pServer.Addr,
-			}, nil
-		}
-		t.Errorf("Unexpected request host to proxy: %s want %s", req.URL.Host, unresolvedTargetURI)
-		return nil, nil
-	}
-	orighpfe := delegatingresolver.HTTPSProxyFromEnvironment
-	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
-	defer func() { delegatingresolver.HTTPSProxyFromEnvironment = orighpfe }()
+	overrideTestHTTPSProxy(t, pServer.Addr)
 
 	// Create a custom dialer that directly dials the backend.
 	customDialer := func(_ context.Context, unresolvedTargetURI string) (net.Conn, error) {
@@ -472,7 +394,7 @@ func (s) TestBasicAuthInNewClientWithProxy(t *testing.T) {
 	reqCheck := func(req *http.Request) {
 		proxyCalled = true
 		if got, want := req.URL.Host, "example.test"; got != want {
-			t.Errorf(" Unexpected request host: %s , want = %s ", got, want)
+			t.Errorf(" Unexpected request host: %s, want = %s ", got, want)
 		}
 		wantProxyAuthStr := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 		if got := req.Header.Get("Proxy-Authorization"); got != wantProxyAuthStr {
