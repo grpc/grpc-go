@@ -24,10 +24,12 @@
 package clusterimpl
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -41,14 +43,15 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/loadstore"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 const (
 	// Name is the name of the cluster_impl balancer.
 	Name                   = "xds_cluster_impl_experimental"
 	defaultRequestCountMax = 1024
+	loadStoreStopTimeout   = 1 * time.Second
 )
 
 var (
@@ -96,7 +99,7 @@ type clusterImplBalancer struct {
 	// The following fields are only accessed from balancer API methods, which
 	// are guaranteed to be called serially by gRPC.
 	xdsClient        xdsclient.XDSClient     // Sent down in ResolverState attributes.
-	cancelLoadReport func()                  // To stop reporting load through the above xDS client.
+	cancelLoadReport func(context.Context)   // To stop reporting load through the above xDS client.
 	edsServiceName   string                  // EDS service name to report load for.
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
 	dropCategories   []DropConfig            // The categories for drops.
@@ -218,7 +221,9 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 
 	if stopOldLoadReport {
 		if b.cancelLoadReport != nil {
-			b.cancelLoadReport()
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), loadStoreStopTimeout)
+			defer stopCancel()
+			b.cancelLoadReport(stopCtx)
 			b.cancelLoadReport = nil
 			if !startNewLoadReport {
 				// If a new LRS stream will be started later, no need to update
@@ -228,7 +233,7 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 		}
 	}
 	if startNewLoadReport {
-		var loadStore *load.Store
+		var loadStore *lrsclient.LoadStore
 		if b.xdsClient != nil {
 			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(b.lrsServer)
 		}
@@ -344,7 +349,9 @@ func (b *clusterImplBalancer) Close() {
 	b.childState = balancer.State{}
 
 	if b.cancelLoadReport != nil {
-		b.cancelLoadReport()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), loadStoreStopTimeout)
+		defer stopCancel()
+		b.cancelLoadReport(stopCtx)
 		b.cancelLoadReport = nil
 	}
 	b.logger.Infof("Shutdown")

@@ -20,7 +20,10 @@ package xdsresource
 import (
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
 // UpdateMetadata contains the metadata for each update, including timestamp,
@@ -49,6 +52,21 @@ func IsListenerResource(url string) bool {
 // HTTPConnManager resource.
 func IsHTTPConnManagerResource(url string) bool {
 	return url == V3HTTPConnManagerURL
+}
+
+// UnwrapResource unwraps and returns the inner resource if it's in a resource
+// wrapper. The original resource is returned if it's not wrapped.
+func UnwrapResource(r *anypb.Any) (*anypb.Any, error) {
+	url := r.GetTypeUrl()
+	if url != V3ResourceWrapperURL {
+		// Not wrapped.
+		return r, nil
+	}
+	inner := &v3discoverypb.Resource{}
+	if err := proto.Unmarshal(r.GetValue(), inner); err != nil {
+		return nil, err
+	}
+	return inner.Resource, nil
 }
 
 // ServiceStatus is the status of the update.
@@ -80,14 +98,4 @@ type UpdateErrorMetadata struct {
 	Err error
 	// Timestamp is when the NACKed response was received.
 	Timestamp time.Time
-}
-
-// UpdateWithMD contains the raw message of the update and the metadata,
-// including version, raw message, timestamp.
-//
-// This is to be used for config dump and CSDS, not directly by users (like
-// resolvers/balancers).
-type UpdateWithMD struct {
-	MD  UpdateMetadata
-	Raw *anypb.Any
 }
