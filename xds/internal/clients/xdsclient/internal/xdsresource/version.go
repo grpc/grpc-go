@@ -27,4 +27,5 @@ const (
 
 	V3ListenerURL        = googleapiPrefix + "envoy.config.listener.v3.Listener"
 	V3HTTPConnManagerURL = googleapiPrefix + "envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
+	V3ResourceWrapperURL = googleapiPrefix + "envoy.service.discovery.v3.Resource"
 )

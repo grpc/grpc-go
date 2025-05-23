@@ -23,12 +23,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -43,11 +43,13 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	xdsinternal "google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const (
@@ -63,11 +65,8 @@ const (
 
 var (
 	testBackendEndpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}}}
-	cmpOpts              = cmp.Options{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
-	}
-	toleranceCmpOpt = cmpopts.EquateApprox(0, 1e-5)
+	cmpOpts              = cmp.Options{cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), sortDataSlice}
+	toleranceCmpOpt      = cmp.Options{cmpopts.EquateApprox(0, 1e-5), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{})}
 )
 
 type s struct {
@@ -78,8 +77,230 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// testLoadReporter records load data pertaining to a single cluster.
+//
+// It implements loadReporter interface for the picker. Tests can use it to
+// override the loadStore in the picker to verify load reporting.
+type testLoadReporter struct {
+	cluster, service string
+
+	mu               sync.Mutex
+	drops            map[string]uint64
+	localityRPCCount map[clients.Locality]*rpcCountData
+}
+
+// CallStarted records a call started for the clients.Locality.
+func (lr *testLoadReporter) CallStarted(locality clients.Locality) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	if _, ok := lr.localityRPCCount[locality]; !ok {
+		lr.localityRPCCount[locality] = &rpcCountData{}
+	}
+	lr.localityRPCCount[locality].inProgress++
+	lr.localityRPCCount[locality].issued++
+}
+
+// CallFinished records a call finished for the clients.Locality.
+func (lr *testLoadReporter) CallFinished(locality clients.Locality, err error) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	if lr.localityRPCCount == nil {
+		return
+	}
+	lrc := lr.localityRPCCount[locality]
+	lrc.inProgress--
+	if err == nil {
+		lrc.succeeded++
+	} else {
+		lrc.errored++
+	}
+}
+
+// CallServerLoad records a server load for the clients.Locality.
+func (lr *testLoadReporter) CallServerLoad(locality clients.Locality, name string, val float64) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	if lr.localityRPCCount == nil {
+		return
+	}
+	lrc, ok := lr.localityRPCCount[locality]
+	if !ok {
+		return
+	}
+	if lrc.serverLoads == nil {
+		lrc.serverLoads = make(map[string]*rpcLoadData)
+	}
+	if _, ok := lrc.serverLoads[name]; !ok {
+		lrc.serverLoads[name] = &rpcLoadData{}
+	}
+	rld := lrc.serverLoads[name]
+	rld.add(val)
+}
+
+// CallDropped records a call dropped for the category.
+func (lr *testLoadReporter) CallDropped(category string) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	lr.drops[category]++
+}
+
+// stats returns and resets all loads reported for a cluster and service,
+// except inProgress rpc counts.
+//
+// It returns nil if the store doesn't contain any (new) data.
+func (lr *testLoadReporter) stats() *loadData {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+
+	sd := newLoadData(lr.cluster, lr.service)
+	for category, val := range lr.drops {
+		if val == 0 {
+			continue
+		}
+		if category != "" {
+			// Skip drops without category. They are counted in total_drops, but
+			// not in per category. One example is drops by circuit breaking.
+			sd.drops[category] = val
+		}
+		sd.totalDrops += val
+		lr.drops[category] = 0 // clear drops for next report
+	}
+	for locality, countData := range lr.localityRPCCount {
+		if countData.succeeded == 0 && countData.errored == 0 && countData.inProgress == 0 && countData.issued == 0 {
+			continue
+		}
+
+		ld := localityData{
+			requestStats: requestData{
+				succeeded:  countData.succeeded,
+				errored:    countData.errored,
+				inProgress: countData.inProgress,
+				issued:     countData.issued,
+			},
+			loadStats: make(map[string]serverLoadData),
+		}
+		// clear localityRPCCount for next report
+		countData.succeeded = 0
+		countData.errored = 0
+		countData.inProgress = 0
+		countData.issued = 0
+		for key, rld := range countData.serverLoads {
+			s, c := rld.loadAndClear() // get and clear serverLoads for next report
+			if c == 0 {
+				continue
+			}
+			ld.loadStats[key] = serverLoadData{sum: s, count: c}
+		}
+		sd.localityStats[locality] = ld
+	}
+	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
+		return nil
+	}
+	return sd
+}
+
+// loadData contains all load data reported to the LoadStore since the most recent
+// call to stats().
+type loadData struct {
+	// cluster is the name of the cluster this data is for.
+	cluster string
+	// service is the name of the EDS service this data is for.
+	service string
+	// totalDrops is the total number of dropped requests.
+	totalDrops uint64
+	// drops is the number of dropped requests per category.
+	drops map[string]uint64
+	// localityStats contains load reports per locality.
+	localityStats map[clients.Locality]localityData
+}
+
+// localityData contains load data for a single locality.
+type localityData struct {
+	// requestStats contains counts of requests made to the locality.
+	requestStats requestData
+	// loadStats contains server load data for requests made to the locality,
+	// indexed by the load type.
+	loadStats map[string]serverLoadData
+}
+
+// requestData contains request counts.
+type requestData struct {
+	// succeeded is the number of succeeded requests.
+	succeeded uint64
+	// errored is the number of requests which ran into errors.
+	errored uint64
+	// inProgress is the number of requests in flight.
+	inProgress uint64
+	// issued is the total number requests that were sent.
+	issued uint64
+}
+
+// serverLoadData contains server load data.
+type serverLoadData struct {
+	// count is the number of load reports.
+	count uint64
+	// sum is the total value of all load reports.
+	sum float64
+}
+
+func newLoadData(cluster, service string) *loadData {
+	return &loadData{
+		cluster:       cluster,
+		service:       service,
+		drops:         make(map[string]uint64),
+		localityStats: make(map[clients.Locality]localityData),
+	}
+}
+
+type rpcCountData struct {
+	succeeded   uint64
+	errored     uint64
+	inProgress  uint64
+	issued      uint64
+	serverLoads map[string]*rpcLoadData
+}
+
+type rpcLoadData struct {
+	sum   float64
+	count uint64
+}
+
+func (rld *rpcLoadData) add(v float64) {
+	rld.sum += v
+	rld.count++
+}
+
+func (rld *rpcLoadData) loadAndClear() (s float64, c uint64) {
+	s, rld.sum = rld.sum, 0
+	c, rld.count = rld.count, 0
+	return s, c
+}
+
 func init() {
 	NewRandomWRR = testutils.NewTestWRR
+}
+
+var sortDataSlice = cmp.Transformer("SortDataSlice", func(in []*loadData) []*loadData {
+	out := append([]*loadData(nil), in...) // Copy input to avoid mutating it
+	sort.Slice(out,
+		func(i, j int) bool {
+			if out[i].cluster < out[j].cluster {
+				return true
+			}
+			if out[i].cluster == out[j].cluster {
+				return out[i].service < out[j].service
+			}
+			return false
+		},
+	)
+	return out
+})
+
+func verifyLoadStoreData(wantStoreData, gotStoreData *loadData) error {
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpOpts); diff != "" {
+		return fmt.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
+	}
+	return nil
 }
 
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
@@ -144,8 +365,16 @@ func (s) TestDropByCategory(t *testing.T) {
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 
+	testClusterLoadReporter := &testLoadReporter{cluster: testClusterName, service: testServiceName, drops: make(map[string]uint64), localityRPCCount: make(map[clients.Locality]*rpcCountData)}
+
 	const rpcCount = 24
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+		// Override the loadStore in the picker with testClusterLoadReporter.
+		picker := p.(*picker)
+		originalLoadStore := picker.loadStore
+		picker.loadStore = testClusterLoadReporter
+		defer func() { picker.loadStore = originalLoadStore }()
+
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			// Even RPCs are dropped.
@@ -174,28 +403,24 @@ func (s) TestDropByCategory(t *testing.T) {
 	}
 
 	// Dump load data from the store and compare with expected counts.
-	loadStore := xdsC.LoadStore()
-	if loadStore == nil {
-		t.Fatal("loadStore is nil in xdsClient")
-	}
 	const dropCount = rpcCount * dropNumerator / dropDenominator
-	wantStatsData0 := []*load.Data{{
-		Cluster:    testClusterName,
-		Service:    testServiceName,
-		TotalDrops: dropCount,
-		Drops:      map[string]uint64{dropReason: dropCount},
-		LocalityStats: map[string]load.LocalityData{
-			xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
-				Succeeded: (rpcCount - dropCount) * 3 / 4,
-				Errored:   (rpcCount - dropCount) / 4,
-				Issued:    rpcCount - dropCount,
+	wantStatsData0 := &loadData{
+		cluster:    testClusterName,
+		service:    testServiceName,
+		totalDrops: dropCount,
+		drops:      map[string]uint64{dropReason: dropCount},
+		localityStats: map[clients.Locality]localityData{
+			{}: {requestStats: requestData{
+				succeeded: (rpcCount - dropCount) * 3 / 4,
+				errored:   (rpcCount - dropCount) / 4,
+				issued:    rpcCount - dropCount,
 			}},
 		},
-	}}
+	}
 
-	gotStatsData0 := loadStore.Stats([]string{testClusterName})
-	if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
-		t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
+	gotStatsData0 := testClusterLoadReporter.stats()
+	if err := verifyLoadStoreData(wantStatsData0, gotStatsData0); err != nil {
+		t.Fatal(err)
 	}
 
 	// Send an update with new drop configs.
@@ -223,6 +448,11 @@ func (s) TestDropByCategory(t *testing.T) {
 	}
 
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+		// Override the loadStore in the picker with testClusterLoadReporter.
+		picker := p.(*picker)
+		originalLoadStore := picker.loadStore
+		picker.loadStore = testClusterLoadReporter
+		defer func() { picker.loadStore = originalLoadStore }()
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			// Even RPCs are dropped.
@@ -245,22 +475,22 @@ func (s) TestDropByCategory(t *testing.T) {
 	}
 
 	const dropCount2 = rpcCount * dropNumerator2 / dropDenominator2
-	wantStatsData1 := []*load.Data{{
-		Cluster:    testClusterName,
-		Service:    testServiceName,
-		TotalDrops: dropCount2,
-		Drops:      map[string]uint64{dropReason2: dropCount2},
-		LocalityStats: map[string]load.LocalityData{
-			xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
-				Succeeded: rpcCount - dropCount2,
-				Issued:    rpcCount - dropCount2,
+	wantStatsData1 := &loadData{
+		cluster:    testClusterName,
+		service:    testServiceName,
+		totalDrops: dropCount2,
+		drops:      map[string]uint64{dropReason2: dropCount2},
+		localityStats: map[clients.Locality]localityData{
+			{}: {requestStats: requestData{
+				succeeded: rpcCount - dropCount2,
+				issued:    rpcCount - dropCount2,
 			}},
 		},
-	}}
+	}
 
-	gotStatsData1 := loadStore.Stats([]string{testClusterName})
-	if diff := cmp.Diff(gotStatsData1, wantStatsData1, cmpOpts); diff != "" {
-		t.Fatalf("got unexpected reports, diff (-got, +want): %v", diff)
+	gotStatsData1 := testClusterLoadReporter.stats()
+	if err := verifyLoadStoreData(wantStatsData1, gotStatsData1); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -318,9 +548,16 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
+	testClusterLoadReporter := &testLoadReporter{cluster: testClusterName, service: testServiceName, drops: make(map[string]uint64), localityRPCCount: make(map[clients.Locality]*rpcCountData)}
 	const rpcCount = 100
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		dones := []func(){}
+		// Override the loadStore in the picker with testClusterLoadReporter.
+		picker := p.(*picker)
+		originalLoadStore := picker.loadStore
+		picker.loadStore = testClusterLoadReporter
+		defer func() { picker.loadStore = originalLoadStore }()
+
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			if i < 50 && err != nil {
@@ -363,27 +600,22 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	}
 
 	// Dump load data from the store and compare with expected counts.
-	loadStore := xdsC.LoadStore()
-	if loadStore == nil {
-		t.Fatal("loadStore is nil in xdsClient")
-	}
-
-	wantStatsData0 := []*load.Data{{
-		Cluster:    testClusterName,
-		Service:    testServiceName,
-		TotalDrops: uint64(maxRequest),
-		LocalityStats: map[string]load.LocalityData{
-			xdsinternal.LocalityID{}.ToString(): {RequestStats: load.RequestData{
-				Succeeded: uint64(rpcCount - maxRequest),
-				Errored:   50,
-				Issued:    uint64(rpcCount - maxRequest + 50),
+	wantStatsData0 := &loadData{
+		cluster:    testClusterName,
+		service:    testServiceName,
+		totalDrops: uint64(maxRequest),
+		localityStats: map[clients.Locality]localityData{
+			{}: {requestStats: requestData{
+				succeeded: uint64(rpcCount - maxRequest),
+				errored:   50,
+				issued:    uint64(rpcCount - maxRequest + 50),
 			}},
 		},
-	}}
+	}
 
-	gotStatsData0 := loadStore.Stats([]string{testClusterName})
-	if diff := cmp.Diff(gotStatsData0, wantStatsData0, cmpOpts); diff != "" {
-		t.Fatalf("got unexpected drop reports, diff (-got, +want): %v", diff)
+	gotStatsData0 := testClusterLoadReporter.stats()
+	if err := verifyLoadStoreData(wantStatsData0, gotStatsData0); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -605,7 +837,7 @@ func (s) TestReResolution(t *testing.T) {
 }
 
 func (s) TestLoadReporting(t *testing.T) {
-	var testLocality = xdsinternal.LocalityID{
+	var testLocality = clients.Locality{
 		Region:  "test-region",
 		Zone:    "test-zone",
 		SubZone: "test-sub-zone",
@@ -670,9 +902,15 @@ func (s) TestLoadReporting(t *testing.T) {
 	sca(&scs, endpoints[0].Addresses[0])
 	sc1.UpdateState(scs)
 	// Test pick with one backend.
+	testClusterLoadReporter := &testLoadReporter{cluster: testClusterName, service: testServiceName, drops: make(map[string]uint64), localityRPCCount: make(map[clients.Locality]*rpcCountData)}
 	const successCount = 5
 	const errorCount = 5
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+		// Override the loadStore in the picker with testClusterLoadReporter.
+		picker := p.(*picker)
+		originalLoadStore := picker.loadStore
+		picker.loadStore = testClusterLoadReporter
+		defer func() { picker.loadStore = originalLoadStore }()
 		for i := 0; i < successCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			if gotSCSt.SubConn != sc1 {
@@ -696,38 +934,32 @@ func (s) TestLoadReporting(t *testing.T) {
 	}
 
 	// Dump load data from the store and compare with expected counts.
-	loadStore := xdsC.LoadStore()
-	if loadStore == nil {
-		t.Fatal("loadStore is nil in xdsClient")
-	}
-	sds := loadStore.Stats([]string{testClusterName})
-	if len(sds) == 0 {
+	sd := testClusterLoadReporter.stats()
+	if sd == nil {
 		t.Fatalf("loads for cluster %v not found in store", testClusterName)
 	}
-	sd := sds[0]
-	if sd.Cluster != testClusterName || sd.Service != testServiceName {
-		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
+	if sd.cluster != testClusterName || sd.service != testServiceName {
+		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.cluster, sd.service, testClusterName, testServiceName)
 	}
-	testLocalityStr := testLocality.ToString()
-	localityData, ok := sd.LocalityStats[testLocalityStr]
+	localityData, ok := sd.localityStats[testLocality]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)
 	}
-	reqStats := localityData.RequestStats
-	if reqStats.Succeeded != successCount {
-		t.Errorf("got succeeded %v, want %v", reqStats.Succeeded, successCount)
+	reqStats := localityData.requestStats
+	if reqStats.succeeded != successCount {
+		t.Errorf("got succeeded %v, want %v", reqStats.succeeded, successCount)
 	}
-	if reqStats.Errored != errorCount {
-		t.Errorf("got errord %v, want %v", reqStats.Errored, errorCount)
+	if reqStats.errored != errorCount {
+		t.Errorf("got errord %v, want %v", reqStats.errored, errorCount)
 	}
-	if reqStats.InProgress != 0 {
-		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
+	if reqStats.inProgress != 0 {
+		t.Errorf("got inProgress %v, want %v", reqStats.inProgress, 0)
 	}
-	wantLoadStats := map[string]load.ServerLoadData{
-		testNamedMetricsKey1: {Count: 5, Sum: 15.7},  // aggregation of 5 * 3.14 = 15.7
-		testNamedMetricsKey2: {Count: 5, Sum: 13.59}, // aggregation of 5 * 2.718 = 13.59
+	wantLoadStats := map[string]serverLoadData{
+		testNamedMetricsKey1: {count: 5, sum: 15.7},  // aggregation of 5 * 3.14 = 15.7
+		testNamedMetricsKey2: {count: 5, sum: 13.59}, // aggregation of 5 * 2.718 = 13.59
 	}
-	if diff := cmp.Diff(wantLoadStats, localityData.LoadStats, toleranceCmpOpt); diff != "" {
+	if diff := cmp.Diff(wantLoadStats, localityData.loadStats, toleranceCmpOpt); diff != "" {
 		t.Errorf("localityData.LoadStats returned unexpected diff (-want +got):\n%s", diff)
 	}
 	b.Close()
@@ -741,7 +973,7 @@ func (s) TestLoadReporting(t *testing.T) {
 // - config modifies LRS server to a different string
 // - config sets LRS server to nil to stop load reporting
 func (s) TestUpdateLRSServer(t *testing.T) {
-	var testLocality = xdsinternal.LocalityID{
+	var testLocality = clients.Locality{
 		Region:  "test-region",
 		Zone:    "test-zone",
 		SubZone: "test-sub-zone",

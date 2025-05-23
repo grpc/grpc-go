@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -149,7 +149,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
+						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
 						Weight:   1,
 					},
@@ -159,7 +159,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-2"},
+						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
 						Weight:   1,
 					},
@@ -191,7 +191,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
+						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
 						Weight:   1,
 					},
@@ -201,7 +201,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
+						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
 					},
@@ -302,7 +302,7 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
+						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
 						Weight:   1,
 					},
@@ -312,7 +312,7 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 							HealthStatus: EndpointHealthStatusHealthy,
 							Weight:       828,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-2"},
+						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
 						Weight:   1,
 					},
@@ -522,7 +522,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
+						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
 						Weight:   1,
 					},
@@ -532,7 +532,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-2"},
+						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
 						Weight:   1,
 					},
@@ -553,7 +553,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							HealthStatus: EndpointHealthStatusUnhealthy,
 							Weight:       271,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
+						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 1,
 						Weight:   1,
 					},
@@ -563,7 +563,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 							HealthStatus: EndpointHealthStatusDraining,
 							Weight:       828,
 						}},
-						ID:       internal.LocalityID{SubZone: "locality-2"},
+						ID:       clients.Locality{SubZone: "locality-2"},
 						Priority: 0,
 						Weight:   1,
 					},
