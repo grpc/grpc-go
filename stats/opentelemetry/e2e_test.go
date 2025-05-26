@@ -1678,22 +1678,36 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
 
-			wantSpanInfo := traceSpanInfo{
+			methodName := strings.TrimPrefix(tt.spanName, "Sent.")
+			var wantSpanInfos []traceSpanInfo
+			wantSpanInfos = append(wantSpanInfos, traceSpanInfo{
 				name:     tt.spanName,
 				spanKind: oteltrace.SpanKindClient.String(),
 				events:   []trace.Event{{Name: delayedResolutionEventName}},
+			})
+			for i := range 3 {
+				wantSpanInfos = append(wantSpanInfos, traceSpanInfo{
+					name:     "Attempt." + methodName,
+					spanKind: oteltrace.SpanKindInternal.String(),
+					attributes: []attribute.KeyValue{
+						attribute.Int64("previous-rpc-attempts", int64(i)),
+					},
+				})
 			}
-			spans, err := waitForTraceSpans(ctx, exporter, []traceSpanInfo{wantSpanInfo})
+
+			spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
 			if err != nil {
 				t.Fatal(err)
 			}
-			verifyTrace(t, spans, wantSpanInfo)
-			verifyPreviousRPCAttempts(t, spans)
+			for _, want := range wantSpanInfos {
+				verifyTrace(t, spans, want)
+			}
 		})
 	}
 }
 
 func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
+	t.Helper()
 	match := false
 	for _, span := range spans {
 		if span.Name == want.name && span.SpanKind.String() == want.spanKind {
@@ -1704,35 +1718,22 @@ func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
 			}
 			break
 		}
+		for _, wantAttr := range want.attributes {
+			for _, attr := range span.Attributes {
+				fmt.Println("Span Name", span.Name)
+				fmt.Println("want Name", want.name)
+				if attr.Key == wantAttr.Key && span.Name == want.name {
+					if attr.Value.AsInt64() != wantAttr.Value.AsInt64() {
+						t.Errorf("Span %q: %s = %d; want %d", span.Name, attr.Key, attr.Value.AsInt64(), wantAttr.Value.AsInt64())
+					}
+				}
+			}
+		}
+
+		return
 	}
 	if !match {
 		t.Errorf("Expected span not found: %q (kind: %s)", want.name, want.spanKind)
-	}
-}
-
-func verifyPreviousRPCAttempts(t *testing.T, spans tracetest.SpanStubs) {
-	t.Helper()
-	const maxAttempts = 3
-	foundAttempts := make(map[int]bool)
-	observedSpans := make(map[int][]string)
-
-	for _, span := range spans {
-		if !strings.HasPrefix(span.Name, "Attempt.") {
-			continue
-		}
-		for _, attr := range span.Attributes {
-			if attr.Key == "previous-rpc-attempts" {
-				val := int(attr.Value.AsInt64())
-				foundAttempts[val] = true
-				observedSpans[val] = append(observedSpans[val], span.Name)
-			}
-		}
-	}
-
-	for i := range maxAttempts {
-		if !foundAttempts[i] {
-			t.Errorf("Missing span for retry attempt #%d (expected previous-rpc-attempts = %d)", i+1, i)
-		}
 	}
 }
 

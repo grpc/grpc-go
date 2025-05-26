@@ -179,8 +179,8 @@ type callInfo struct {
 	// nameResolutionEventAdded is set when the resolver delay trace event
 	// is added. Prevents duplicate events, since it is reported per-attempt.
 	nameResolutionEventAdded atomic.Bool
-	// numRetries holds the count of non-transparent retry attempts.
-	numRetries int32
+	// previousRPCAttempts holds the count of non-transparent retry attempts.
+	previousRPCAttempts atomic.Int32
 }
 
 type callInfoKey struct{}
@@ -219,8 +219,7 @@ func setRetryCount(ctx context.Context, ci *callInfo) context.Context {
 	return context.WithValue(ctx, retryCountKey{}, ci)
 }
 
-// getRetryCount retrieves the retry count tracking struct from the context.
-func getRetryCount(ctx context.Context) (*callInfo, bool) {
+func retryCount(ctx context.Context) (*callInfo, bool) {
 	ci, ok := ctx.Value(retryCountKey{}).(*callInfo)
 	return ci, ok
 }

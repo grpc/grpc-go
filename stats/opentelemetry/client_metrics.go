@@ -81,6 +81,7 @@ func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string
 		}
 		ctx = setCallInfo(ctx, ci)
 	}
+	ctx = setRetryCount(ctx, ci)
 	return ctx, ci
 }
 
