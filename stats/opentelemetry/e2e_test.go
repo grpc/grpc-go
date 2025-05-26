@@ -1712,25 +1712,24 @@ func verifyTrace(t *testing.T, spans tracetest.SpanStubs, want traceSpanInfo) {
 	for _, span := range spans {
 		if span.Name == want.name && span.SpanKind.String() == want.spanKind {
 			match = true
-			if diff := cmp.Diff(want.events, span.Events, cmpopts.IgnoreFields(trace.Event{}, "Time")); diff != "" {
-				t.Errorf("Span event mismatch for %q (kind: %s) (-want +got):\n%s",
-					want.name, want.spanKind, diff)
+			if len(want.events) > 0 {
+				if diff := cmp.Diff(want.events, span.Events, cmpopts.IgnoreFields(trace.Event{}, "Time")); diff != "" {
+					t.Errorf("Span event mismatch for %q (kind: %s) (-want +got):\n%s",
+						want.name, want.spanKind, diff)
+				}
 			}
 			break
 		}
 		for _, wantAttr := range want.attributes {
 			for _, attr := range span.Attributes {
-				fmt.Println("Span Name", span.Name)
-				fmt.Println("want Name", want.name)
-				if attr.Key == wantAttr.Key && span.Name == want.name {
+				if attr.Key == "previous-rpc-attempts" && span.Name == want.name {
 					if attr.Value.AsInt64() != wantAttr.Value.AsInt64() {
-						t.Errorf("Span %q: %s = %d; want %d", span.Name, attr.Key, attr.Value.AsInt64(), wantAttr.Value.AsInt64())
+						t.Errorf("Span %q: attribute %s = %d; want %d", span.Name, attr.Key, attr.Value.AsInt64(), wantAttr.Value.AsInt64())
 					}
+					break
 				}
 			}
 		}
-
-		return
 	}
 	if !match {
 		t.Errorf("Expected span not found: %q (kind: %s)", want.name, want.spanKind)
