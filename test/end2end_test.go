@@ -3749,14 +3749,14 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	defer cancel()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%s) = %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
 	}
 	defer cc.Close()
 
 	go func() {
 		conn, err := lis.Accept()
 		if err != nil {
-			t.Errorf("lis.Accept() = %v", err)
+			t.Errorf("lis.Accept() failed unexpectedly: %v", err)
 			return
 		}
 		defer conn.Close()
@@ -3791,9 +3791,9 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 
 				var buf bytes.Buffer
 				enc := hpack.NewEncoder(&buf)
-				_ = enc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-				_ = enc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-				_ = enc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
+				enc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
+				enc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
+				enc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
 
 				if err := framer.WriteHeaders(http2.HeadersFrameParam{
 					StreamID:      1,
