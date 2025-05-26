@@ -3745,6 +3745,27 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	}
 	defer lis.Close()
 
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "EmptyCall",
+				Handler: func(any, grpc.ServerStream) error {
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: false,
+			},
+		},
+		Metadata: "grpc/testing/test.proto",
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -3752,64 +3773,6 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
 	}
 	defer cc.Close()
-
-	go func() {
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("lis.Accept() failed unexpectedly: %v", err)
-			return
-		}
-		defer conn.Close()
-		framer := http2.NewFramer(conn, conn)
-
-		if _, err := io.ReadFull(conn, make([]byte, len(clientPreface))); err != nil {
-			t.Errorf("Error reading client preface: %v", err)
-			return
-		}
-		if err := framer.WriteSettings(); err != nil {
-			t.Errorf("Error writing server settings: %v", err)
-			return
-		}
-		if err := framer.WriteSettingsAck(); err != nil {
-			t.Errorf("Error writing settings ack: %v", err)
-			return
-		}
-
-		for ctx.Err() == nil {
-			frame, err := framer.ReadFrame()
-			if err != nil {
-				t.Errorf("Error reading frame: %v", err)
-				return
-			}
-
-			switch frame := frame.(type) {
-			case *http2.HeadersFrame:
-				if frame.Header().StreamID != 1 {
-					t.Errorf("Expected stream ID 1, got %d", frame.Header().StreamID)
-					return
-				}
-
-				var buf bytes.Buffer
-				enc := hpack.NewEncoder(&buf)
-				enc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
-				enc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"})
-				enc.WriteField(hpack.HeaderField{Name: "grpc-status", Value: "0"})
-
-				if err := framer.WriteHeaders(http2.HeadersFrameParam{
-					StreamID:      1,
-					BlockFragment: buf.Bytes(),
-					EndHeaders:    true,
-					EndStream:     true,
-				}); err != nil {
-					t.Errorf("Error while writing headers: %v", err)
-					return
-				}
-				time.Sleep(50 * time.Millisecond)
-			default:
-				t.Logf("Server received frame: %v", frame)
-			}
-		}
-	}()
 
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal {
