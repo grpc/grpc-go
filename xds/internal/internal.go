@@ -41,11 +41,6 @@ func IsLocalityEqual(l clients.Locality, o any) bool {
 	return l.Region == ol.Region && l.Zone == ol.Zone && l.SubZone == ol.SubZone
 }
 
-// IsLocalityEmpty returns whether or not the clients.locality is empty.
-func IsLocalityEmpty(l clients.Locality) bool {
-	return l.Region == "" && l.Zone == "" && l.SubZone == ""
-}
-
 // LocalityFromString converts a string representation of clients.locality as
 // specified in gRFC A76, into a LocalityID struct.
 func LocalityFromString(s string) (ret clients.Locality, _ error) {

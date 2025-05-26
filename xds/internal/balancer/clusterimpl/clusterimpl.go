@@ -414,16 +414,25 @@ type scWrapper struct {
 	balancer.SubConn
 	// locality needs to be atomic because it can be updated while being read by
 	// the picker.
-	locality atomic.Value // type clients.Locality
+	locality atomic.Pointer[clients.Locality]
 }
 
 func (scw *scWrapper) updateLocalityID(lID clients.Locality) {
-	scw.locality.Store(lID)
+	// Store a pointer to a new, heap-allocated clients.Locality because the
+	// pointer (scw.locality) is stored in an atomic.Pointer, and must remain
+	// valid for concurrent access by other goroutines even after this function
+	// returns.
+	l := new(clients.Locality)
+	*l = lID
+	scw.locality.Store(l)
 }
 
 func (scw *scWrapper) localityID() clients.Locality {
-	lID, _ := scw.locality.Load().(clients.Locality)
-	return lID
+	lID := scw.locality.Load()
+	if lID == nil {
+		return clients.Locality{}
+	}
+	return *lID
 }
 
 func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -444,7 +453,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		// address's locality. https://github.com/grpc/grpc-go/issues/7339
 		addr := connectedAddress(state)
 		lID := xdsinternal.GetLocalityID(addr)
-		if xdsinternal.IsLocalityEmpty(lID) {
+		if (lID == clients.Locality{}) {
 			if b.logger.V(2) {
 				b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
 			}
