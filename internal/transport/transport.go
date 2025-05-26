@@ -450,24 +450,23 @@ const (
 
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
-	MaxStreams             uint32
-	ConnectionTimeout      time.Duration
-	Credentials            credentials.TransportCredentials
-	InTapHandle            tap.ServerInHandle
-	StatsHandlers          []stats.Handler
-	KeepaliveParams        keepalive.ServerParameters
-	KeepalivePolicy        keepalive.EnforcementPolicy
-	InitialWindowSize      int32
-	InitialConnWindowSize  int32
-	WriteBufferSize        int
-	ReadBufferSize         int
-	SharedWriteBuffer      bool
-	ChannelzParent         *channelz.Server
-	MaxHeaderListSize      *uint32
-	HeaderTableSize        *uint32
-	BufferPool             mem.BufferPool
-	StaticStreamWindowSize int32
-	StaticConnWindowSize   int32
+	MaxStreams           uint32
+	ConnectionTimeout    time.Duration
+	Credentials          credentials.TransportCredentials
+	InTapHandle          tap.ServerInHandle
+	StatsHandlers        []stats.Handler
+	KeepaliveParams      keepalive.ServerParameters
+	KeepalivePolicy      keepalive.EnforcementPolicy
+	StaticWindowSize     int32
+	StaticConnWindowSize int32
+	WriteBufferSize      int
+	ReadBufferSize       int
+	SharedWriteBuffer    bool
+	ChannelzParent       *channelz.Server
+	MaxHeaderListSize    *uint32
+	HeaderTableSize      *uint32
+	BufferPool           mem.BufferPool
+	EnableBDPEstimation  bool
 }
 
 // ConnectOptions covers all relevant options for communicating with the server.
@@ -490,10 +489,10 @@ type ConnectOptions struct {
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandlers stores the handler for stats.
 	StatsHandlers []stats.Handler
-	// InitialWindowSize sets the initial window size for a stream.
-	InitialWindowSize int32
-	// InitialConnWindowSize sets the initial window size for a connection.
-	InitialConnWindowSize int32
+	// StaticWindowSize sets the initial window size for a stream.
+	StaticWindowSize int32
+	// StaticConnWindowSize sets the initial window size for a connection.
+	StaticConnWindowSize int32
 	// WriteBufferSize sets the size of write buffer which in turn determines how much data can be batched before it's written on the wire.
 	WriteBufferSize int
 	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.
@@ -505,9 +504,9 @@ type ConnectOptions struct {
 	// MaxHeaderListSize sets the max (uncompressed) size of header list that is prepared to be received.
 	MaxHeaderListSize *uint32
 	// The mem.BufferPool to use when reading/writing to the wire.
-	BufferPool             mem.BufferPool
-	StaticConnWindowSize   int32
-	StaticStreamWindowSize int32
+	BufferPool mem.BufferPool
+	// EnableBDPEstimation controls whether dynamic window sizing is enabled.
+	EnableBDPEstimation bool
 }
 
 // WriteOptions provides additional hints and information for message

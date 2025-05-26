@@ -128,66 +128,19 @@ func (s) TestAddGlobalServerOptions(t *testing.T) {
 	}
 }
 
-// TestJoinDialOption tests the join dial option. It configures a joined dial
-// option with three individual dial options, and verifies that all three are
-// successfully applied.
-func (s) TestJoinDialOption(t *testing.T) {
-	const maxRecvSize = 998765
-	const initialWindowSize = 100
-	jdo := newJoinDialOption(WithTransportCredentials(insecure.NewCredentials()), WithReadBufferSize(maxRecvSize), WithInitialWindowSize(initialWindowSize))
-	cc, err := Dial("fake", jdo)
-	if err != nil {
-		t.Fatalf("Dialing with insecure credentials failed: %v", err)
-	}
-	defer cc.Close()
-	if cc.dopts.copts.ReadBufferSize != maxRecvSize {
-		t.Fatalf("Unexpected cc.dopts.copts.ReadBufferSize: %d != %d", cc.dopts.copts.ReadBufferSize, maxRecvSize)
-	}
-	if cc.dopts.copts.InitialWindowSize != initialWindowSize {
-		t.Fatalf("Unexpected cc.dopts.copts.InitialWindowSize: %d != %d", cc.dopts.copts.InitialWindowSize, initialWindowSize)
-	}
-}
-
-// TestJoinDialOption_StaticConnAndStreamWindowSizes verifies that both static
-// stream and connection window sizes set via joined dial options are correctly
-// applied.
-func (s) TestJoinDialOption_StaticConnAndStreamWindowSizes(t *testing.T) {
-	const (
-		staticWindowSize = 123456
-		staticConnSize   = 654321
-	)
-	jdo := newJoinDialOption(
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithStaticStreamWindowSize(staticWindowSize),
-		WithStaticConnWindowSize(staticConnSize),
-	)
-	cc, err := Dial("fake", jdo)
-	if err != nil {
-		t.Fatalf("Dialing with insecure credentials failed: %v", err)
-	}
-	defer cc.Close()
-	if cc.dopts.copts.StaticStreamWindowSize != staticWindowSize {
-		t.Fatalf("Unexpected cc.dopts.copts.StaticStreamWindowSize: %d != %d", cc.dopts.copts.StaticStreamWindowSize, staticWindowSize)
-	}
-	if cc.dopts.copts.StaticConnWindowSize != staticConnSize {
-		t.Fatalf("Expected StaticConnWindowSize = %d, got %d", staticConnSize, cc.dopts.copts.StaticConnWindowSize)
-	}
-
-}
-
 // TestJoinServerOption tests the join server option. It configures a joined
 // server option with three individual server options, and verifies that all
 // three are successfully applied.
 func (s) TestJoinServerOption(t *testing.T) {
 	const maxRecvSize = 998765
-	const initialWindowSize = 100
-	jso := newJoinServerOption(Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize), InitialWindowSize(initialWindowSize))
+	const staticWindowSize = 100
+	jso := newJoinServerOption(Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize), InitialWindowSize(staticWindowSize))
 	s := NewServer(jso)
 	if s.opts.maxReceiveMessageSize != maxRecvSize {
 		t.Fatalf("Unexpected s.opts.maxReceiveMessageSize: %d != %d", s.opts.maxReceiveMessageSize, maxRecvSize)
 	}
-	if s.opts.initialWindowSize != initialWindowSize {
-		t.Fatalf("Unexpected s.opts.initialWindowSize: %d != %d", s.opts.initialWindowSize, initialWindowSize)
+	if s.opts.staticWindowSize != staticWindowSize {
+		t.Fatalf("Unexpected s.opts.staticWindowSize: %d != %d", s.opts.staticWindowSize, staticWindowSize)
 	}
 }
 

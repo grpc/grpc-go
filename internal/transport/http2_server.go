@@ -176,21 +176,15 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			Val: config.MaxStreams,
 		})
 	}
-	dynamicWindow := true
 	iwz := int32(initialWindowSize)
-	if config.StaticStreamWindowSize > 0 {
-		iwz = config.StaticStreamWindowSize
-	} else if config.InitialWindowSize >= defaultWindowSize {
-		iwz = config.InitialWindowSize
-		dynamicWindow = false
+	if config.StaticWindowSize >= defaultWindowSize {
+		iwz = config.StaticWindowSize
 	}
 	icwz := int32(initialWindowSize)
-	if config.StaticConnWindowSize > 0 {
+	if config.StaticConnWindowSize >= defaultWindowSize {
 		icwz = config.StaticConnWindowSize
-	} else if config.InitialConnWindowSize >= defaultWindowSize {
-		icwz = config.InitialConnWindowSize
-		dynamicWindow = false
 	}
+	dynamicWindow := config.EnableBDPEstimation
 	if iwz != defaultWindowSize {
 		isettings = append(isettings, http2.Setting{
 			ID:  http2.SettingInitialWindowSize,

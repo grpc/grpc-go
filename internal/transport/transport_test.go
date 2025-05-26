@@ -727,12 +727,12 @@ func (s) TestLargeMessage(t *testing.T) {
 func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	// Disable dynamic flow control.
 	sc := &ServerConfig{
-		InitialWindowSize:     defaultWindowSize,
-		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:     defaultWindowSize,
+		StaticConnWindowSize: defaultWindowSize,
 	}
 	co := ConnectOptions{
-		InitialWindowSize:     defaultWindowSize,
-		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:     defaultWindowSize,
+		StaticConnWindowSize: defaultWindowSize,
 	}
 	server, ct, cancel := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer cancel()
@@ -1067,8 +1067,8 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 
 func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	connectOptions := ConnectOptions{
-		InitialWindowSize:     defaultWindowSize,
-		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:     defaultWindowSize,
+		StaticConnWindowSize: defaultWindowSize,
 	}
 	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions)
 	defer cancel()
@@ -1156,8 +1156,8 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 
 func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	serverConfig := &ServerConfig{
-		InitialWindowSize:     defaultWindowSize,
-		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:     defaultWindowSize,
+		StaticConnWindowSize: defaultWindowSize,
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
@@ -1635,12 +1635,12 @@ func (s) TestAccountCheckDynamicWindowLargeMessage(t *testing.T) {
 
 func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig) {
 	sc := &ServerConfig{
-		InitialWindowSize:     wc.serverStream,
-		InitialConnWindowSize: wc.serverConn,
+		StaticWindowSize:     wc.serverStream,
+		StaticConnWindowSize: wc.serverConn,
 	}
 	co := ConnectOptions{
-		InitialWindowSize:     wc.clientStream,
-		InitialConnWindowSize: wc.clientConn,
+		StaticWindowSize:     wc.clientStream,
+		StaticConnWindowSize: wc.clientConn,
 	}
 	server, client, cancel := setUpWithOptions(t, 0, sc, pingpong, co)
 	defer cancel()
