@@ -72,6 +72,8 @@ func newLoadStore() *LoadStore {
 //
 // The provided context must have a deadline or timeout set to prevent Stop
 // from blocking indefinitely if the final send attempt fails to complete.
+//
+// Calling Stop on an already stopped LoadStore is a no-op.
 func (ls *LoadStore) Stop(ctx context.Context) {
 	ls.stop(ctx)
 }
