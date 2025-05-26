@@ -106,8 +106,8 @@ func (sbc *subBalancerWrapper) startBalancer() {
 	}
 }
 
-// exitIdle invokes the sub-balancer's ExitIdle method
-// which is a graceful switch balancer.
+// exitIdle invokes the ExitIdle method on the sub-balancer, a gracefulswitch
+// balancer.
 func (sbc *subBalancerWrapper) exitIdle() {
 	b := sbc.balancer
 	if b == nil {
