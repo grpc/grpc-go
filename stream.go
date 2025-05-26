@@ -1136,7 +1136,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 			}
 			// received no msg and status ok for non-server streaming rpcs.
 			if !cs.desc.ServerStreams {
-				return status.Errorf(codes.Internal, "client streaming cardinality violation")
+				return status.Errorf(codes.Internal, "cardinality violation: received no response message from non-streaming RPC")
 			}
 			return io.EOF // indicates successful end of stream.
 		}
