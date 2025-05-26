@@ -226,12 +226,22 @@ func (p *Pool) clientRefCountedClose(name string) {
 		return
 	}
 	delete(p.clients, name)
+
+	client.Close()
+	for _, s := range client.config.XDSServers() {
+		for _, f := range s.Cleanups() {
+			f()
+		}
+	}
+	for _, a := range client.config.Authorities() {
+		for _, s := range a.XDSServers {
+			for _, f := range s.Cleanups() {
+				f()
+			}
+		}
+	}
 	p.mu.Unlock()
 
-	// This attempts to close the transport to the management server and could
-	// theoretically call back into the xdsclient package again and deadlock.
-	// Hence, this needs to be called without holding the lock.
-	client.Close()
 	xdsClientImplCloseHook(name)
 }
 
