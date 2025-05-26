@@ -203,10 +203,11 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *ServerStream)
 			}
 		}
 		data := newBufferSlice(p)
+		data.Ref()
 		conn.controlBuf.put(&dataFrame{
 			streamID:    s.id,
 			h:           nil,
-			reader:      data.Reader(),
+			data:        data,
 			onEachWrite: func() {},
 		})
 		sent += len(p)
@@ -1092,11 +1093,12 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
 	d := newBufferSlice(make([]byte, http2MaxFrameLen))
+	d.Ref()
 	ct.controlBuf.put(&dataFrame{
 		streamID:    s.id,
 		endStream:   false,
 		h:           nil,
-		reader:      d.Reader(),
+		data:        d,
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.

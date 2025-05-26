@@ -1132,17 +1132,13 @@ func (t *http2Server) writeStatus(s *ServerStream, st *status.Status) error {
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
 // is returns if it fails (e.g., framing error, transport error).
 func (t *http2Server) write(s *ServerStream, hdr []byte, data mem.BufferSlice, _ *WriteOptions) error {
-	reader := data.Reader()
-
 	if !s.isHeaderSent() { // Headers haven't been written yet.
 		if err := t.writeHeader(s, nil); err != nil {
-			_ = reader.Close()
 			return err
 		}
 	} else {
 		// Writing headers checks for this condition.
 		if s.getState() == streamDone {
-			_ = reader.Close()
 			return t.streamContextErr(s)
 		}
 	}
@@ -1150,15 +1146,16 @@ func (t *http2Server) write(s *ServerStream, hdr []byte, data mem.BufferSlice, _
 	df := &dataFrame{
 		streamID:    s.id,
 		h:           hdr,
-		reader:      reader,
+		data:        data,
 		onEachWrite: t.setResetPingStrikes,
 	}
-	if err := s.wq.get(int32(len(hdr) + df.reader.Remaining())); err != nil {
-		_ = reader.Close()
+	dataLen := data.Len()
+	if err := s.wq.get(int32(len(hdr) + dataLen)); err != nil {
 		return t.streamContextErr(s)
 	}
+	data.Ref()
 	if err := t.controlBuf.put(df); err != nil {
-		_ = reader.Close()
+		data.Free()
 		return err
 	}
 	t.incrMsgSent()
