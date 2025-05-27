@@ -128,6 +128,26 @@ func (s) TestAddGlobalServerOptions(t *testing.T) {
 	}
 }
 
+// TestJoinDialOption tests the join dial option. It configures a joined dial
+// option with three individual dial options, and verifies that all three are
+// successfully applied.
+func (s) TestJoinDialOption(t *testing.T) {
+	const maxRecvSize = 998765
+	const staticWindowSize = 100
+	jdo := newJoinDialOption(WithTransportCredentials(insecure.NewCredentials()), WithReadBufferSize(maxRecvSize), WithInitialWindowSize(staticWindowSize))
+	cc, err := Dial("fake", jdo)
+	if err != nil {
+		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.ReadBufferSize != maxRecvSize {
+		t.Fatalf("Unexpected cc.dopts.copts.ReadBufferSize: %d != %d", cc.dopts.copts.ReadBufferSize, maxRecvSize)
+	}
+	if cc.dopts.copts.StaticWindowSize != staticWindowSize {
+		t.Fatalf("Unexpected cc.dopts.copts.StaticWindowSize: %d != %d", cc.dopts.copts.StaticWindowSize, staticWindowSize)
+	}
+}
+
 // TestJoinServerOption tests the join server option. It configures a joined
 // server option with three individual server options, and verifies that all
 // three are successfully applied.
