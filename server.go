@@ -179,7 +179,7 @@ type serverOptions struct {
 	numServerWorkers      uint32
 	bufferPool            mem.BufferPool
 	waitForHandlers       bool
-	enableBDPEstimation   bool
+	bdpEstimationEnabled  bool
 }
 
 var defaultServerOptions = serverOptions{
@@ -280,7 +280,7 @@ func ReadBufferSize(s int) ServerOption {
 func InitialWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticWindowSize = s
-		o.enableBDPEstimation = false
+		o.bdpEstimationEnabled = false
 	})
 }
 
@@ -289,7 +289,7 @@ func InitialWindowSize(s int32) ServerOption {
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
-		o.enableBDPEstimation = false
+		o.bdpEstimationEnabled = false
 	})
 }
 
@@ -298,7 +298,7 @@ func InitialConnWindowSize(s int32) ServerOption {
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticWindowSize = s
-		o.enableBDPEstimation = true
+		o.bdpEstimationEnabled = true
 	})
 }
 
@@ -307,7 +307,7 @@ func StaticStreamWindowSize(s int32) ServerOption {
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
-		o.enableBDPEstimation = true
+		o.bdpEstimationEnabled = true
 	})
 }
 
@@ -1007,7 +1007,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		MaxHeaderListSize:    s.opts.maxHeaderListSize,
 		HeaderTableSize:      s.opts.headerTableSize,
 		BufferPool:           s.opts.bufferPool,
-		EnableBDPEstimation:  s.opts.enableBDPEstimation,
+		BdpEstimationEnabled: s.opts.bdpEstimationEnabled,
 	}
 	st, err := transport.NewServerTransport(c, config)
 	if err != nil {
