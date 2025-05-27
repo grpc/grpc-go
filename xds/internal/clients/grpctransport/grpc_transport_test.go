@@ -359,7 +359,7 @@ func (s) TestNewStream_Error(t *testing.T) {
 // request on the server is same as sent. It then wait to receive a
 // testDiscoverResponse from the server and verifies that the received
 // discovery response is same as sent from the server.
-func (s) TestStream_SendAndRecv(t *testing.T) {
+func TestStream_SendAndRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
