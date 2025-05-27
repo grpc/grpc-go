@@ -3736,6 +3736,38 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
+// Tests for a successful RPC, client will continue to receive io.EOF for successive calls to CloseAndRecv().
+func (s) TestClientStreaming_ClientCallCloseAndRecvAfterCloseAndRecv(t *testing.T) {
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
+	}
+	if _, err := stream.CloseAndRecv(); err != nil {
+		t.Fatalf("stream.CloseAndRecv() = %v , want <nil>", err)
+	}
+	if _, err := stream.CloseAndRecv(); err != io.EOF {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, io.EOF)
+	}
+}
+
 // Tests that a client receives a cardinality violation error for unary
 // RPCs if the server doesn't send a message before returning status OK.
 func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
