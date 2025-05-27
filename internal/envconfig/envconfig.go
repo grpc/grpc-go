@@ -82,6 +82,11 @@ var (
 	// This feature is defined in gRFC A81 and is enabled by setting the
 	// environment variable GRPC_EXPERIMENTAL_XDS_AUTHORITY_REWRITE to "true".
 	XDSAuthorityRewrite = boolFromEnv("GRPC_EXPERIMENTAL_XDS_AUTHORITY_REWRITE", false)
+
+	// XDSLiteralAuthorityRewrite indicates whether xDS host_rewrite_literal field
+	// is honored. This feature is defined in gRFC A111 and is enabled by setting the
+	// environment variable GRPC_EXPERIMENTAL_XDS_LITERAL_AUTHORITY_REWRITE to "true".
+	XDSLiteralAuthorityRewrite = boolFromEnv("GRPC_EXPERIMENTAL_XDS_LITERAL_AUTHORITY_REWRITE", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

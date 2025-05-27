@@ -226,7 +226,7 @@ func (tcc *BalancerClientConn) WaitForErrPicker(ctx context.Context) error {
 	case <-ctx.Done():
 		return errors.New("timeout when waiting for an error picker")
 	case picker := <-tcc.NewPickerCh:
-		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+		if _, perr := picker.Pick(balancer.PickInfo{Ctx: context.Background()}); perr == nil {
 			return fmt.Errorf("balancer returned a picker which is not an error picker")
 		}
 	}
@@ -244,7 +244,8 @@ func (tcc *BalancerClientConn) WaitForPickerWithErr(ctx context.Context, want er
 		case <-ctx.Done():
 			return fmt.Errorf("timeout when waiting for an error picker with %v; last picker error: %v", want, lastErr)
 		case picker := <-tcc.NewPickerCh:
-			if _, lastErr = picker.Pick(balancer.PickInfo{}); lastErr != nil && lastErr.Error() == want.Error() {
+			pi := balancer.PickInfo{Ctx: context.Background()}
+			if _, lastErr = picker.Pick(pi); lastErr != nil && lastErr.Error() == want.Error() {
 				return nil
 			}
 		}
@@ -292,7 +293,7 @@ func (tcc *BalancerClientConn) WaitForRoundRobinPicker(ctx context.Context, want
 			}
 			var pickerErr error
 			if err := IsRoundRobin(want, func() balancer.SubConn {
-				sc, err := p.Pick(balancer.PickInfo{})
+				sc, err := p.Pick(balancer.PickInfo{Ctx: context.Background()})
 				if err != nil {
 					pickerErr = err
 				} else if sc.Done != nil {
@@ -390,7 +391,7 @@ func IsRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 // Every invocation of the returned function results in a new pick.
 func SubConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
-		scst, _ := p.Pick(balancer.PickInfo{})
+		scst, _ := p.Pick(balancer.PickInfo{Ctx: context.Background()})
 		return scst.SubConn
 	}
 }

@@ -304,9 +304,12 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 		case *v3routepb.Route_Route:
 			action := r.GetRoute()
 
-			if envconfig.XDSAuthorityRewrite {
-				if opts != nil && opts.ServerConfig != nil && opts.ServerConfig.SupportsServerFeature(xdsclient.ServerFeatureTrustedXDSServer) {
+			if opts != nil && opts.ServerConfig != nil && opts.ServerConfig.SupportsServerFeature(xdsclient.ServerFeatureTrustedXDSServer) {
+				if envconfig.XDSAuthorityRewrite {
 					route.AutoHostRewrite = action.GetAutoHostRewrite().GetValue()
+				}
+				if envconfig.XDSLiteralAuthorityRewrite {
+					route.HostRewriteLiteral = action.GetHostRewriteLiteral()
 				}
 			}
 

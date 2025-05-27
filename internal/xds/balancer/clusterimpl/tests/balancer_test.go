@@ -48,6 +48,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -1464,6 +1465,153 @@ func (s) TestAuthorityOverridingWithTLS(t *testing.T) {
 				if status.Code(err) != codes.Unavailable {
 					t.Fatalf("Expected TLS failure due to authority mismatch, got: %q want: %q", codes.Unavailable, status.Code(err))
 				}
+			}
+		})
+	}
+}
+
+// Tests that if a client receives its configuration via xDS and it has the host
+// rewrite literal value configured, the authority pseudo-header in the RPC call
+// is set appropriately. Also verifies that CallAuthority call option takes
+// precedence.
+//
+// Per gRFC A111, the host rewrite literal feature should only be active if two
+// conditions are met:
+// 1. The environment variable (XDSAuthorityLiteralRewrite) is enabled.
+// 2. The xDS server is marked as "trusted_xds_server" in the bootstrap config.
+func (s) TestHostRewriteLiteral(t *testing.T) {
+	const (
+		dialTargetName        = "original.target.example.com" // Used in xds:/// URI and matched by Listener & VirtualHost
+		hostRewriteValue      = "rewritten.host.example.com"
+		userAuthorityOverride = "user-override.com"
+	)
+
+	for _, tt := range []struct {
+		name                   string
+		xdsAuthorityRewriteEnv bool
+		trustedXdsServer       bool
+		wantAuthority          string
+	}{
+		{
+			name:                   "EnvDisabled_NonTrustedServer",
+			xdsAuthorityRewriteEnv: false,
+			trustedXdsServer:       false,
+			wantAuthority:          dialTargetName,
+		},
+		{
+			name:                   "EnvDisabled_TrustedServer",
+			xdsAuthorityRewriteEnv: false,
+			trustedXdsServer:       true,
+			wantAuthority:          dialTargetName,
+		},
+		{
+			name:                   "EnvEnabled_NonTrustedServer",
+			xdsAuthorityRewriteEnv: true,
+			trustedXdsServer:       false,
+			wantAuthority:          dialTargetName,
+		},
+		{
+			name:                   "EnvEnabled_TrustedServer",
+			xdsAuthorityRewriteEnv: true,
+			trustedXdsServer:       true,
+			wantAuthority:          hostRewriteValue,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSLiteralAuthorityRewrite, tt.xdsAuthorityRewriteEnv)
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			var gotAuthority string
+			stubServer := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+					if md, ok := metadata.FromIncomingContext(ctx); ok {
+						if authVals := md.Get(":authority"); len(authVals) > 0 {
+							gotAuthority = authVals[0]
+						}
+					}
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := stubServer.StartServer(); err != nil {
+				t.Fatalf("Failed to start stub server: %v", err)
+			}
+			defer stubServer.Stop()
+			t.Logf("Stub server listening at: %s", stubServer.Address)
+
+			mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+			defer mgmtServer.Stop()
+
+			nodeID := uuid.New().String()
+
+			// Build bootstrap configuration with or without trusted_xds_server
+			serverFeatures := "[]"
+			if tt.trustedXdsServer {
+				serverFeatures = `["trusted_xds_server"]`
+			}
+			bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
+				Servers: []byte(fmt.Sprintf(`[{
+					"server_uri": "passthrough:///%s",
+					"channel_creds": [{"type": "insecure"}],
+					"server_features": %s
+				}]`, mgmtServer.Address, serverFeatures)),
+				Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
+			})
+			if err != nil {
+				t.Fatalf("Failed to create bootstrap configuration: %v", err)
+			}
+
+			resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+			if err != nil {
+				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+			}
+
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: dialTargetName,
+				NodeID:     nodeID,
+				Host:       "localhost",
+				Port:       testutils.ParsePort(t, stubServer.Address),
+			})
+
+			// Modify the route to enable HostRewriteLiteral.
+			resources.Routes[0].VirtualHosts[0].Routes[0].GetRoute().HostRewriteSpecifier = &v3routepb.RouteAction_HostRewriteLiteral{
+				HostRewriteLiteral: hostRewriteValue,
+			}
+
+			if err := mgmtServer.Update(ctx, resources); err != nil {
+				t.Fatalf("xDS server update failed: %v", err)
+			}
+
+			cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", dialTargetName),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithResolvers(resolverBuilder),
+			)
+			if err != nil {
+				t.Fatalf("Failed to create gRPC client: %v", err)
+			}
+			defer cc.Close()
+
+			client := testpb.NewTestServiceClient(cc)
+
+			// Test RPC without CallAuthority override
+			_, err = client.EmptyCall(ctx, &testpb.Empty{})
+			if err != nil {
+				t.Fatalf("EmptyCall failed: %v", err)
+			}
+
+			if gotAuthority != tt.wantAuthority {
+				t.Errorf("Server received :authority header %q, want %q", gotAuthority, tt.wantAuthority)
+			}
+
+			// Test RPC with CallAuthority override - should always use the override
+			_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.CallAuthority(userAuthorityOverride))
+			if err != nil {
+				t.Fatalf("EmptyCall with CallAuthority failed: %v", err)
+			}
+
+			if gotAuthority != userAuthorityOverride {
+				t.Errorf("Server received :authority header %q, want %q", gotAuthority, userAuthorityOverride)
 			}
 		})
 	}

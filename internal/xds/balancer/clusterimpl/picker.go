@@ -147,11 +147,18 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		// be used.
 		lID = scw.localityID
 
-		if scw.hostname != "" && autoHostRewriteEnabled(info.Ctx) {
+		authorityOverride := ""
+		if hostRewriteLiteral(info.Ctx) != "" {
+			authorityOverride = hostRewriteLiteral(info.Ctx)
+		} else if scw.hostname != "" && autoHostRewriteEnabled(info.Ctx) {
+			authorityOverride = scw.hostname
+		}
+
+		if authorityOverride != "" {
 			if pr.Metadata == nil {
-				pr.Metadata = metadata.Pairs(":authority", scw.hostname)
+				pr.Metadata = metadata.Pairs(":authority", authorityOverride)
 			} else {
-				pr.Metadata.Set(":authority", scw.hostname)
+				pr.Metadata.Set(":authority", authorityOverride)
 			}
 		}
 	}
@@ -224,4 +231,20 @@ func AutoHostRewriteEnabledForTesting(ctx context.Context) bool {
 // the xds_cluster_impl LB policy to pick.
 func EnableAutoHostRewrite(ctx context.Context) context.Context {
 	return context.WithValue(ctx, autoHostRewriteKey{}, true)
+}
+
+// hostRewriteLiteralKey is the context key used to store the value of
+// route's hostRewriteLiteral in the RPC context.
+type hostRewriteLiteralKey struct{}
+
+// SetHostRewriteLiteral sets a hostRewriteLiteral value to the context for the
+// xds_cluster_impl LB policy to pick.
+func SetHostRewriteLiteral(ctx context.Context, hostRewriteLiteral string) context.Context {
+	return context.WithValue(ctx, hostRewriteLiteralKey{}, hostRewriteLiteral)
+}
+
+// hostRewriteLiteral returns the value of hostRewriteLiteral set in the ctx.
+func hostRewriteLiteral(ctx context.Context) string {
+	v, _ := ctx.Value(hostRewriteLiteralKey{}).(string)
+	return v
 }

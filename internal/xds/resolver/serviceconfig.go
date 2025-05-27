@@ -109,13 +109,14 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *xdsresource.CompositeMatcher // converted from route matchers
-	actionType        xdsresource.RouteActionType   // holds route action type
-	clusters          wrr.WRR                       // holds *routeCluster entries
-	maxStreamDuration time.Duration
-	retryConfig       *xdsresource.RetryConfig
-	hashPolicies      []*xdsresource.HashPolicy
-	autoHostRewrite   bool
+	m                  *xdsresource.CompositeMatcher // converted from route matchers
+	actionType         xdsresource.RouteActionType   // holds route action type
+	clusters           wrr.WRR                       // holds *routeCluster entries
+	maxStreamDuration  time.Duration
+	retryConfig        *xdsresource.RetryConfig
+	hashPolicies       []*xdsresource.HashPolicy
+	autoHostRewrite    bool
+	hostRewriteLiteral string
 }
 
 func (r route) String() string {
@@ -201,6 +202,9 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	lbCtx = iringhash.SetXDSRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 	if rt.autoHostRewrite {
 		lbCtx = clusterimpl.EnableAutoHostRewrite(lbCtx)
+	}
+	if rt.hostRewriteLiteral != "" {
+		lbCtx = clusterimpl.SetHostRewriteLiteral(lbCtx, rt.hostRewriteLiteral)
 	}
 
 	config := &iresolver.RPCConfig{

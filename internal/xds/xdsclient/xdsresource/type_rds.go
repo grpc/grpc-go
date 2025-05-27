@@ -150,9 +150,14 @@ type Route struct {
 	// ClusterSpecifierPlugin is the name of the Cluster Specifier Plugin that
 	// this Route is linked to, if specified by xDS.
 	ClusterSpecifierPlugin string
+
 	// AutoHostRewrite indicates that the ":authority" header can be rewritten
 	// to the hostname of the upstream endpoint.
 	AutoHostRewrite bool
+
+	// HostRewriteLiteral contains the Host override that is set by the Route
+	// Action host_rewrite_literal.
+	HostRewriteLiteral string
 }
 
 // WeightedCluster contains settings for an xds ActionType.WeightedCluster.
