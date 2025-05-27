@@ -3740,15 +3740,15 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 }
 
 // Tests that a client receives a cardinality violation error for client-streaming
-// RPCs if the server call SendAndClose multiple times.
-func (s) TestClientStreaming_ServerHandlerSendAndCloseAfterSendAndClose(t *testing.T) {
+// RPCs if the server call SendMsg multiple times.
+func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
-				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
+			if err := stream.SendMsg(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendMsg(_) = %v, want <nil>", err)
 			}
-			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
-				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
+			if err := stream.SendMsg(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendMsg(_) = %v, want <nil>", err)
 			}
 			return nil
 		},
