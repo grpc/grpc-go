@@ -293,8 +293,9 @@ func InitialConnWindowSize(s int32) ServerOption {
 	})
 }
 
-// StaticStreamWindowSize returns a ServerOption to set the static stream
-// window size.
+// StaticStreamWindowSize returns a ServerOption to set the initial stream
+// window size to the value provided and prevents dynamic flow control
+// from adjusting it.
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticWindowSize = s
@@ -302,8 +303,9 @@ func StaticStreamWindowSize(s int32) ServerOption {
 	})
 }
 
-// StaticConnWindowSize returns a ServerOption to set the static connection
-// window size.
+// StaticConnWindowSize returns a ServerOption to set the initial connection
+// window size to the value provided and prevents dynamic flow control
+// from adjusting it.
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
