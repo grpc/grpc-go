@@ -418,13 +418,7 @@ type scWrapper struct {
 }
 
 func (scw *scWrapper) updateLocalityID(lID clients.Locality) {
-	// Store a pointer to a new, heap-allocated clients.Locality because the
-	// pointer (scw.locality) is stored in an atomic.Pointer, and must remain
-	// valid for concurrent access by other goroutines even after this function
-	// returns.
-	l := new(clients.Locality)
-	*l = lID
-	scw.locality.Store(l)
+	scw.locality.Store(&lID)
 }
 
 func (scw *scWrapper) localityID() clients.Locality {
