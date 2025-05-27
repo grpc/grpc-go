@@ -298,7 +298,7 @@ func InitialConnWindowSize(s int32) ServerOption {
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticWindowSize = s
-		o.bdpEstimationEnabled = true
+		o.bdpEstimationEnabled = false
 	})
 }
 
@@ -307,7 +307,7 @@ func StaticStreamWindowSize(s int32) ServerOption {
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
-		o.bdpEstimationEnabled = true
+		o.bdpEstimationEnabled = false
 	})
 }
 

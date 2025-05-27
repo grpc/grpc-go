@@ -233,7 +233,7 @@ func WithInitialConnWindowSize(s int32) DialOption {
 func WithStaticStreamWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticWindowSize = s
-		o.copts.BdpEstimationEnabled = true
+		o.copts.BdpEstimationEnabled = false
 	})
 }
 
@@ -243,7 +243,7 @@ func WithStaticStreamWindowSize(s int32) DialOption {
 func WithStaticConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticConnWindowSize = s
-		o.copts.BdpEstimationEnabled = true
+		o.copts.BdpEstimationEnabled = false
 	})
 }
 
