@@ -296,5 +296,5 @@ func (r *testMetricsReporter) waitForMetric(ctx context.Context, metricsDataWant
 
 // ReportMetric sends the metrics data to the metricsCh channel.
 func (r *testMetricsReporter) ReportMetric(m any) {
-	r.metricsCh.Send(m)
+	r.metricsCh.Replace(m)
 }
