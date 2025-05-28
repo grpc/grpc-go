@@ -3736,8 +3736,8 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests for a successful RPC, client will continue to receive io.EOF for successive calls to CloseAndRecv().
-func (s) TestClientStreaming_ClientCallCloseAndRecvAfterCloseAndRecv(t *testing.T) {
+// Tests for a successful RPC, client will receive io.EOF for second call to RecvMsg().
+func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
@@ -3760,11 +3760,15 @@ func (s) TestClientStreaming_ClientCallCloseAndRecvAfterCloseAndRecv(t *testing.
 	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
 		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
 	}
-	if _, err := stream.CloseAndRecv(); err != nil {
-		t.Fatalf("stream.CloseAndRecv() = %v , want <nil>", err)
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend() = %v, want <nil>", err)
 	}
-	if _, err := stream.CloseAndRecv(); err != io.EOF {
-		t.Fatalf("stream.CloseAndRecv() = %v, want error %s", err, io.EOF)
+	resp := new(testpb.StreamingInputCallResponse)
+	if err := stream.RecvMsg(resp); err != nil {
+		t.Fatalf("stream.RecvMsg() = %v , want <nil>", err)
+	}
+	if err := stream.RecvMsg(resp); err != io.EOF {
+		t.Fatalf("stream.RecvMsg() = %v, want error %s", err, io.EOF)
 	}
 }
 
@@ -3809,6 +3813,42 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+	}
+}
+
+// Tests for a successful unary RPC, client will receive io.EOF for second call to RecvMsg().
+func (s) TestUnaryCall_ClientCallRecvMsgTwice(t *testing.T) {
+	e := tcpTLSEnv
+	te := newTest(t, e)
+	defer te.tearDown()
+
+	te.startServer(&testServer{security: e.security})
+
+	cc := te.clientConn()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "UnaryCall",
+		ServerStreams: false,
+		ClientStreams: false,
+	}
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/UnaryCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.SendMsg(&testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("stream.SendMsg(_) = %v, want <nil>", err)
+	}
+
+	resp := &testpb.SimpleResponse{}
+	if err := stream.RecvMsg(resp); err != nil {
+		t.Fatalf("stream.RecvMsg() = %v , want <nil>", err)
+	}
+
+	if err = stream.RecvMsg(resp); err != io.EOF {
+		t.Fatalf("stream.RecvMsg() = %v, want error %s", err, io.EOF)
 	}
 }
 
