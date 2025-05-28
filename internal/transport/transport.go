@@ -450,23 +450,23 @@ const (
 
 // ServerConfig consists of all the configurations to establish a server transport.
 type ServerConfig struct {
-	MaxStreams           uint32
-	ConnectionTimeout    time.Duration
-	Credentials          credentials.TransportCredentials
-	InTapHandle          tap.ServerInHandle
-	StatsHandlers        []stats.Handler
-	KeepaliveParams      keepalive.ServerParameters
-	KeepalivePolicy      keepalive.EnforcementPolicy
-	StaticWindowSize     int32
-	StaticConnWindowSize int32
-	WriteBufferSize      int
-	ReadBufferSize       int
-	SharedWriteBuffer    bool
-	ChannelzParent       *channelz.Server
-	MaxHeaderListSize    *uint32
-	HeaderTableSize      *uint32
-	BufferPool           mem.BufferPool
-	BdpEstimationEnabled bool
+	MaxStreams             uint32
+	ConnectionTimeout      time.Duration
+	Credentials            credentials.TransportCredentials
+	InTapHandle            tap.ServerInHandle
+	StatsHandlers          []stats.Handler
+	KeepaliveParams        keepalive.ServerParameters
+	KeepalivePolicy        keepalive.EnforcementPolicy
+	StaticWindowSize       int32
+	StaticConnWindowSize   int32
+	WriteBufferSize        int
+	ReadBufferSize         int
+	SharedWriteBuffer      bool
+	ChannelzParent         *channelz.Server
+	MaxHeaderListSize      *uint32
+	HeaderTableSize        *uint32
+	BufferPool             mem.BufferPool
+	UseDynamicWindowSizing bool
 }
 
 // ConnectOptions covers all relevant options for communicating with the server.
@@ -505,8 +505,8 @@ type ConnectOptions struct {
 	MaxHeaderListSize *uint32
 	// The mem.BufferPool to use when reading/writing to the wire.
 	BufferPool mem.BufferPool
-	// BdpEstimationEnabled controls whether dynamic window sizing is enabled.
-	BdpEstimationEnabled bool
+	// UseDynamicWindowSizing controls whether dynamic window sizing is enabled.
+	UseDynamicWindowSizing bool
 }
 
 // WriteOptions provides additional hints and information for message

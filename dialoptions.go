@@ -213,7 +213,7 @@ func WithReadBufferSize(s int) DialOption {
 func WithInitialWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticWindowSize = s
-		o.copts.BdpEstimationEnabled = false
+		o.copts.UseDynamicWindowSizing = false
 	})
 }
 
@@ -223,27 +223,26 @@ func WithInitialWindowSize(s int32) DialOption {
 func WithInitialConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticConnWindowSize = s
-		o.copts.BdpEstimationEnabled = false
+		o.copts.UseDynamicWindowSizing = false
 	})
 }
 
 // WithStaticStreamWindowSize returns a DialOption which sets the initial
-// stream window size to the value provided and prevents dynamic flow control
-// from adjusting it
+// stream window size to the value provided and disables dynamic flow control.
 func WithStaticStreamWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticWindowSize = s
-		o.copts.BdpEstimationEnabled = false
+		o.copts.UseDynamicWindowSizing = false
 	})
 }
 
 // WithStaticConnWindowSize returns a DialOption which sets the initial
-// connection window size to the value provided and prevents dynamic flow control
-// from adjusting it
+// connection window size to the value provided and disables dynamic flow
+// control.
 func WithStaticConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.StaticConnWindowSize = s
-		o.copts.BdpEstimationEnabled = false
+		o.copts.UseDynamicWindowSizing = false
 	})
 }
 

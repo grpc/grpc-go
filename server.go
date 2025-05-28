@@ -151,35 +151,35 @@ type Server struct {
 }
 
 type serverOptions struct {
-	creds                 credentials.TransportCredentials
-	codec                 baseCodec
-	cp                    Compressor
-	dc                    Decompressor
-	unaryInt              UnaryServerInterceptor
-	streamInt             StreamServerInterceptor
-	chainUnaryInts        []UnaryServerInterceptor
-	chainStreamInts       []StreamServerInterceptor
-	binaryLogger          binarylog.Logger
-	inTapHandle           tap.ServerInHandle
-	statsHandlers         []stats.Handler
-	maxConcurrentStreams  uint32
-	maxReceiveMessageSize int
-	maxSendMessageSize    int
-	unknownStreamDesc     *StreamDesc
-	keepaliveParams       keepalive.ServerParameters
-	keepalivePolicy       keepalive.EnforcementPolicy
-	staticWindowSize      int32
-	staticConnWindowSize  int32
-	writeBufferSize       int
-	readBufferSize        int
-	sharedWriteBuffer     bool
-	connectionTimeout     time.Duration
-	maxHeaderListSize     *uint32
-	headerTableSize       *uint32
-	numServerWorkers      uint32
-	bufferPool            mem.BufferPool
-	waitForHandlers       bool
-	bdpEstimationEnabled  bool
+	creds                  credentials.TransportCredentials
+	codec                  baseCodec
+	cp                     Compressor
+	dc                     Decompressor
+	unaryInt               UnaryServerInterceptor
+	streamInt              StreamServerInterceptor
+	chainUnaryInts         []UnaryServerInterceptor
+	chainStreamInts        []StreamServerInterceptor
+	binaryLogger           binarylog.Logger
+	inTapHandle            tap.ServerInHandle
+	statsHandlers          []stats.Handler
+	maxConcurrentStreams   uint32
+	maxReceiveMessageSize  int
+	maxSendMessageSize     int
+	unknownStreamDesc      *StreamDesc
+	keepaliveParams        keepalive.ServerParameters
+	keepalivePolicy        keepalive.EnforcementPolicy
+	staticWindowSize       int32
+	staticConnWindowSize   int32
+	writeBufferSize        int
+	readBufferSize         int
+	sharedWriteBuffer      bool
+	connectionTimeout      time.Duration
+	maxHeaderListSize      *uint32
+	headerTableSize        *uint32
+	numServerWorkers       uint32
+	bufferPool             mem.BufferPool
+	waitForHandlers        bool
+	useDynamicWindowSizing bool
 }
 
 var defaultServerOptions = serverOptions{
@@ -280,7 +280,7 @@ func ReadBufferSize(s int) ServerOption {
 func InitialWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticWindowSize = s
-		o.bdpEstimationEnabled = false
+		o.useDynamicWindowSizing = false
 	})
 }
 
@@ -289,27 +289,29 @@ func InitialWindowSize(s int32) ServerOption {
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
-		o.bdpEstimationEnabled = false
+		o.useDynamicWindowSizing = false
 	})
 }
 
 // StaticStreamWindowSize returns a ServerOption to set the initial stream
-// window size to the value provided and prevents dynamic flow control
-// from adjusting it.
+// window size to the value provided and disables dynamic flow control.
+// The lower bound for window size is 64K and any value smaller than that
+// will be ignored.
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticWindowSize = s
-		o.bdpEstimationEnabled = false
+		o.useDynamicWindowSizing = false
 	})
 }
 
 // StaticConnWindowSize returns a ServerOption to set the initial connection
-// window size to the value provided and prevents dynamic flow control
-// from adjusting it.
+// window size to the value provided and disables dynamic flow control.
+// The lower bound for window size is 64K and any value smaller than that
+// will be ignored.
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.staticConnWindowSize = s
-		o.bdpEstimationEnabled = false
+		o.useDynamicWindowSizing = false
 	})
 }
 
@@ -993,23 +995,23 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 // gRPC http2 server transport in transport/http2_server.go).
 func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 	config := &transport.ServerConfig{
-		MaxStreams:           s.opts.maxConcurrentStreams,
-		ConnectionTimeout:    s.opts.connectionTimeout,
-		Credentials:          s.opts.creds,
-		InTapHandle:          s.opts.inTapHandle,
-		StatsHandlers:        s.opts.statsHandlers,
-		KeepaliveParams:      s.opts.keepaliveParams,
-		KeepalivePolicy:      s.opts.keepalivePolicy,
-		StaticWindowSize:     s.opts.staticWindowSize,
-		StaticConnWindowSize: s.opts.staticConnWindowSize,
-		WriteBufferSize:      s.opts.writeBufferSize,
-		ReadBufferSize:       s.opts.readBufferSize,
-		SharedWriteBuffer:    s.opts.sharedWriteBuffer,
-		ChannelzParent:       s.channelz,
-		MaxHeaderListSize:    s.opts.maxHeaderListSize,
-		HeaderTableSize:      s.opts.headerTableSize,
-		BufferPool:           s.opts.bufferPool,
-		BdpEstimationEnabled: s.opts.bdpEstimationEnabled,
+		MaxStreams:             s.opts.maxConcurrentStreams,
+		ConnectionTimeout:      s.opts.connectionTimeout,
+		Credentials:            s.opts.creds,
+		InTapHandle:            s.opts.inTapHandle,
+		StatsHandlers:          s.opts.statsHandlers,
+		KeepaliveParams:        s.opts.keepaliveParams,
+		KeepalivePolicy:        s.opts.keepalivePolicy,
+		StaticWindowSize:       s.opts.staticWindowSize,
+		StaticConnWindowSize:   s.opts.staticConnWindowSize,
+		WriteBufferSize:        s.opts.writeBufferSize,
+		ReadBufferSize:         s.opts.readBufferSize,
+		SharedWriteBuffer:      s.opts.sharedWriteBuffer,
+		ChannelzParent:         s.channelz,
+		MaxHeaderListSize:      s.opts.maxHeaderListSize,
+		HeaderTableSize:        s.opts.headerTableSize,
+		BufferPool:             s.opts.bufferPool,
+		UseDynamicWindowSizing: s.opts.useDynamicWindowSizing,
 	}
 	st, err := transport.NewServerTransport(c, config)
 	if err != nil {
