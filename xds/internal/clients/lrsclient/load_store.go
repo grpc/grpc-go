@@ -193,8 +193,7 @@ func (p *PerClusterReporter) CallServerLoad(locality clients.Locality, name stri
 
 // CallDropped records a call dropped in the LoadStore.
 func (p *PerClusterReporter) CallDropped(category string) {
-	c := clients.Locality{Region: category}
-	d, ok := p.drops.Load(c)
+	d, ok := p.drops.Load(category)
 	if !ok {
 		tp := new(uint64)
 		d, _ = p.drops.LoadOrStore(category, tp)
