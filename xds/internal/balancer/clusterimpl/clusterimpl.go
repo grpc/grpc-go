@@ -94,7 +94,9 @@ type clusterImplBalancer struct {
 
 	// The following fields are set at creation time, and are read-only after
 	// that, and therefore need not be protected by a mutex.
-	logger      *grpclog.PrefixLogger
+	logger *grpclog.PrefixLogger
+	// TODO: #8366 -  Refactor usage of loadWrapper to easily plugin a test
+	// load reporter from tests.
 	loadWrapper *loadstore.Wrapper
 
 	// The following fields are only accessed from balancer API methods, which
