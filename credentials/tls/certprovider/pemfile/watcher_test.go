@@ -82,6 +82,7 @@ func (s) TestNewProvider(t *testing.T) {
 		desc      string
 		options   Options
 		wantError bool
+		disableSPIFFE bool
 	}{
 		{
 			desc:      "No credential files specified",
@@ -131,15 +132,41 @@ func (s) TestNewProvider(t *testing.T) {
 			},
 			wantError: false,
 		},
+		{
+			desc: "Everything is specified spiffe disabled",
+			options: Options{
+				KeyFile:             testdata.Path("x509/client1_key.pem"),
+				CertFile:            testdata.Path("x509/client1_cert.pem"),
+				RootFile:            testdata.Path("x509/client_ca_cert.pem"),
+				SPIFFEBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+			},
+			wantError: false,
+			disableSPIFFE: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
+			if test.disableSPIFFE {
+				testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, false)
+			}
 			provider, err := NewProvider(test.options)
 			if (err != nil) != test.wantError {
 				t.Fatalf("NewProvider(%v) = %v, want %v", test.options, err, test.wantError)
 			}
 			if err != nil {
 				return
+			}
+			if test.disableSPIFFE {
+				ctx, cc := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cc()
+				km, err := provider.KeyMaterial(ctx)
+				if err != nil {
+					t.Fatalf("provider.KeyMaterial() failed: %v", err)
+				}
+				if len(km.SPIFFEBundleMap) != 0 {
+					t.Fatalf("provider.KeyMaterial() got a SPIFFE Bundle Map, want none")
+				}
+
 			}
 			provider.Close()
 		})
@@ -259,6 +286,7 @@ func initializeProvider(t *testing.T, testName string, useSPIFFEBundle bool) (st
 // successfully, and the underlying files do not change. Verifies that the
 // plugin does not push new updates to the distributor in this case.
 func (s) TestProvider_NoUpdate(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	baseName := "no_update"
 	for _, useSPIFFEBundle := range []bool{true, false} {
 		testName := baseName
@@ -290,6 +318,7 @@ func (s) TestProvider_NoUpdate(t *testing.T) {
 // created successfully and the underlying files change. Verifies that the
 // changes are picked up by the provider.
 func (s) TestProvider_UpdateSuccess(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	baseName := "update_success"
 	for _, useSPIFFEBundle := range []bool{true, false} {
 		testName := baseName
@@ -351,6 +380,7 @@ func (s) TestProvider_UpdateSuccess(t *testing.T) {
 // symlink is updates to point to new files. Verifies that the changes are
 // picked up by the provider.
 func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	baseName := "update_with_symlink"
 	for _, useSPIFFEBundle := range []bool{true, false} {
 		testName := baseName

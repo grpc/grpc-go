@@ -359,6 +359,7 @@ func (s) TestMTLS(t *testing.T) {
 // chain that is compatible with the client's configured SPIFFE bundle map. An
 // MTLS connection is attempted between the two and checked for success.
 func (s) Test_MTLS_SPIFFE(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		name         string
 		serverOption grpc.ServerOption
@@ -406,6 +407,7 @@ func (s) Test_MTLS_SPIFFE(t *testing.T) {
 }
 
 func (s) Test_MTLS_SPIFFE_Failure(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		name             string
 		certFile         string
