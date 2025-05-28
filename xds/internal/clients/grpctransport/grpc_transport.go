@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -211,6 +212,8 @@ func (s *stream) Recv() ([]byte, error) {
 	return typedRes, nil
 }
 
+// byteCodec here is still sending proto messages. It's just they are
+// in []byte form.
 type byteCodec struct{}
 
 func (c *byteCodec) Marshal(v any) ([]byte, error) {
@@ -229,5 +232,7 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 }
 
 func (c *byteCodec) Name() string {
-	return "grpctransport.byteCodec"
+	// Return "proto" to ensure the Content-Type header is "application/grpc",
+	// which is expected by standard gRPC servers for protobuf messages.
+	return proto.Name
 }
