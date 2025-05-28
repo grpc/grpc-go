@@ -80,7 +80,7 @@ func (o Options) canonical() []byte {
 
 func (o Options) validate() error {
 	// Guard against SPIFFE bundle map usage
-	if !envconfig.XDSSpiffeEnabled {
+	if !envconfig.XDSSPIFFEEnabled {
 		o.SPIFFEBundleMapFile = ""
 	}
 	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {

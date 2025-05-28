@@ -65,7 +65,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		}
 	} // Else the config field is absent. Treat it as an empty config.
 
-	if !envconfig.XDSSpiffeEnabled {
+	if !envconfig.XDSSPIFFEEnabled {
 		cfg.SPIFFETrustBundleMapFile = ""
 	}
 	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" && cfg.SPIFFETrustBundleMapFile == "" {

@@ -77,7 +77,7 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 
 // TestNewProvider tests the NewProvider() function with different inputs.
 func (s) TestNewProvider(t *testing.T) {
-	testutils.SetEnvConfig(t, &envconfig.XDSSpiffeEnabled, true)
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		desc      string
 		options   Options
