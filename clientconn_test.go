@@ -1220,10 +1220,6 @@ type stateRecordingBalancer struct {
 	balancer.Balancer
 }
 
-func (b *stateRecordingBalancer) ExitIdle() {
-	b.Balancer.ExitIdle()
-}
-
 func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
 	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, s))
 }

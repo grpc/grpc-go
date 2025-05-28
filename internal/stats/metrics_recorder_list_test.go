@@ -124,10 +124,6 @@ type recordingLoadBalancer struct {
 	balancer.Balancer
 }
 
-func (b *recordingLoadBalancer) ExitIdle() {
-	b.Balancer.ExitIdle()
-}
-
 // TestMetricsRecorderList tests the metrics recorder list functionality of the
 // ClientConn. It configures a global and local stats handler Dial Option. These
 // stats handlers implement the MetricsRecorder interface. It also configures a

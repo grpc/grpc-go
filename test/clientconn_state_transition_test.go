@@ -474,10 +474,6 @@ type stateRecordingBalancer struct {
 	balancer.Balancer
 }
 
-func (b *stateRecordingBalancer) ExitIdle() {
-	b.Balancer.ExitIdle()
-}
-
 func (b *stateRecordingBalancer) Close() {
 	b.Balancer.Close()
 }

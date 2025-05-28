@@ -102,10 +102,6 @@ type RLSChildPolicyConfig struct {
 	Random  string // A random field to test child policy config changes.
 }
 
-func (b *bal) ExitIdle() {
-	b.Balancer.ExitIdle()
-}
-
 func (b *bal) UpdateClientConnState(c balancer.ClientConnState) error {
 	cfg, ok := c.BalancerConfig.(*RLSChildPolicyConfig)
 	if !ok {
