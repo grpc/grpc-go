@@ -3817,7 +3817,7 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 }
 
 // Tests for a successful unary RPC, client will receive io.EOF for second call to RecvMsg().
-func (s) TestUnaryCall_ClientCallRecvMsgTwice(t *testing.T) {
+func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 	e := tcpTLSEnv
 	te := newTest(t, e)
 	defer te.tearDown()
