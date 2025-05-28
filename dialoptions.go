@@ -212,7 +212,7 @@ func WithReadBufferSize(s int) DialOption {
 // smaller than that will be ignored.
 func WithInitialWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.StaticWindowSize = s
+		o.copts.InitialWindowSize = s
 		o.copts.UseDynamicWindowSizing = false
 	})
 }
@@ -222,7 +222,7 @@ func WithInitialWindowSize(s int32) DialOption {
 // and any value smaller than that will be ignored.
 func WithInitialConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.StaticConnWindowSize = s
+		o.copts.InitialConnWindowSize = s
 		o.copts.UseDynamicWindowSizing = false
 	})
 }

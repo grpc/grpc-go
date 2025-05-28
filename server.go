@@ -168,6 +168,8 @@ type serverOptions struct {
 	unknownStreamDesc      *StreamDesc
 	keepaliveParams        keepalive.ServerParameters
 	keepalivePolicy        keepalive.EnforcementPolicy
+	initialWindowSize      int32
+	initialConnWindowSize  int32
 	staticWindowSize       int32
 	staticConnWindowSize   int32
 	writeBufferSize        int
@@ -279,7 +281,7 @@ func ReadBufferSize(s int) ServerOption {
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
 func InitialWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.staticWindowSize = s
+		o.initialWindowSize = s
 		o.useDynamicWindowSizing = false
 	})
 }
@@ -288,7 +290,7 @@ func InitialWindowSize(s int32) ServerOption {
 // The lower bound for window size is 64K and any value smaller than that will be ignored.
 func InitialConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.staticConnWindowSize = s
+		o.initialConnWindowSize = s
 		o.useDynamicWindowSizing = false
 	})
 }
@@ -1002,8 +1004,8 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		StatsHandlers:          s.opts.statsHandlers,
 		KeepaliveParams:        s.opts.keepaliveParams,
 		KeepalivePolicy:        s.opts.keepalivePolicy,
-		StaticWindowSize:       s.opts.staticWindowSize,
-		StaticConnWindowSize:   s.opts.staticConnWindowSize,
+		InitialWindowSize:      s.opts.initialWindowSize,
+		InitialConnWindowSize:  s.opts.initialConnWindowSize,
 		WriteBufferSize:        s.opts.writeBufferSize,
 		ReadBufferSize:         s.opts.readBufferSize,
 		SharedWriteBuffer:      s.opts.sharedWriteBuffer,

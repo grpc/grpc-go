@@ -178,13 +178,13 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	}
 	dynamicWindow := true
 	iwz := int32(initialWindowSize)
-	if config.StaticWindowSize >= defaultWindowSize {
-		iwz = config.StaticWindowSize
+	if config.InitialWindowSize >= defaultWindowSize {
+		iwz = config.InitialWindowSize
 		dynamicWindow = config.UseDynamicWindowSizing
 	}
 	icwz := int32(initialWindowSize)
-	if config.StaticConnWindowSize >= defaultWindowSize {
-		icwz = config.StaticConnWindowSize
+	if config.InitialConnWindowSize >= defaultWindowSize {
+		icwz = config.InitialConnWindowSize
 		dynamicWindow = config.UseDynamicWindowSizing
 	}
 	if iwz != defaultWindowSize {

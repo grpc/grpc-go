@@ -457,6 +457,8 @@ type ServerConfig struct {
 	StatsHandlers          []stats.Handler
 	KeepaliveParams        keepalive.ServerParameters
 	KeepalivePolicy        keepalive.EnforcementPolicy
+	InitialWindowSize      int32
+	InitialConnWindowSize  int32
 	StaticWindowSize       int32
 	StaticConnWindowSize   int32
 	WriteBufferSize        int
@@ -489,6 +491,10 @@ type ConnectOptions struct {
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandlers stores the handler for stats.
 	StatsHandlers []stats.Handler
+	// InitialWindowSize sets the initial window size for a stream.
+	InitialWindowSize int32
+	// InitialConnWindowSize sets the initial window size for a connection.
+	InitialConnWindowSize int32
 	// StaticWindowSize sets the initial window size for a stream.
 	StaticWindowSize int32
 	// StaticConnWindowSize sets the initial window size for a connection.
