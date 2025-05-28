@@ -154,7 +154,7 @@ func (r *sliceReader) Remaining() int {
 }
 
 func (r *sliceReader) Reset(s BufferSlice) {
-	r.Close()
+	r.data.Free()
 	s.Ref()
 	r.data = s
 	r.len = s.Len()
