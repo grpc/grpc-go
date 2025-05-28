@@ -155,12 +155,7 @@ type wrrLocalityBalancer struct {
 }
 
 func (b *wrrLocalityBalancer) ExitIdle() {
-	ei, ok := b.child.(balancer.ExitIdler)
-	if ok {
-		ei.ExitIdle()
-	} else if !ok {
-		b.logger.Errorf("Child balancer doesn't implement ExitIdler.")
-	}
+	b.child.ExitIdle()
 }
 
 func (b *wrrLocalityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {

@@ -6542,7 +6542,7 @@ type triggerRPCBlockBalancer struct {
 }
 
 func (bpb *triggerRPCBlockBalancer) ExitIdle() {
-	bpb.Balancer.(balancer.ExitIdler).ExitIdle()
+	bpb.Balancer.ExitIdle()
 }
 
 func (bpb *triggerRPCBlockBalancer) UpdateClientConnState(s balancer.ClientConnState) error {

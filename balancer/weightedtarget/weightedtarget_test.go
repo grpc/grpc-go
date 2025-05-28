@@ -131,7 +131,7 @@ func getConfigKey(attr *attributes.Attributes) (string, bool) {
 }
 
 func (b *testConfigBalancer) ExitIdle() {
-	b.Balancer.(balancer.ExitIdler).ExitIdle()
+	b.Balancer.ExitIdle()
 }
 
 func (b *testConfigBalancer) UpdateClientConnState(s balancer.ClientConnState) error {

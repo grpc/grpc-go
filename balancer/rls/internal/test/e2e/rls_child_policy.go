@@ -103,7 +103,7 @@ type RLSChildPolicyConfig struct {
 }
 
 func (b *bal) ExitIdle() {
-	b.Balancer.(balancer.ExitIdler).ExitIdle()
+	b.Balancer.ExitIdle()
 }
 
 func (b *bal) UpdateClientConnState(c balancer.ClientConnState) error {

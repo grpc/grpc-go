@@ -125,7 +125,7 @@ type recordingLoadBalancer struct {
 }
 
 func (b *recordingLoadBalancer) ExitIdle() {
-	b.Balancer.(balancer.ExitIdler).ExitIdle()
+	b.Balancer.ExitIdle()
 }
 
 // TestMetricsRecorderList tests the metrics recorder list functionality of the

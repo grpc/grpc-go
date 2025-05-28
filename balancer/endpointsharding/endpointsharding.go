@@ -27,7 +27,6 @@ package endpointsharding
 
 import (
 	"errors"
-	"fmt"
 	rand "math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -35,12 +34,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 )
-
-var logger = grpclog.Component("endpointsharding-lb")
 
 // ChildState is the balancer state of a child along with the endpoint which
 // identifies the child balancer.
@@ -50,7 +45,15 @@ type ChildState struct {
 
 	// Balancer exposes only the ExitIdler interface of the child LB policy.
 	// Other methods of the child policy are called only by endpointsharding.
-	Balancer balancer.ExitIdler
+	Balancer ExitIdler
+}
+
+// ExitIdler provides access to only the ExitIdle method of the child balancer.
+type ExitIdler interface {
+	// ExitIdle instructs the LB policy to reconnect to backends / exit the
+	// IDLE state, if appropriate and possible.  Note that SubConns that enter
+	// the IDLE state will not reconnect until SubConn.Connect is called.
+	ExitIdle()
 }
 
 // Options are the options to configure the behaviour of the
@@ -78,7 +81,6 @@ func NewBalancer(cc balancer.ClientConn, opts balancer.BuildOptions, childBuilde
 		esOpts:       esOpts,
 		childBuilder: childBuilder,
 	}
-	es.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[endpointsharding-lb %p] ", es))
 	es.children.Store(resolver.NewEndpointMap[*balancerWrapper]())
 	return es
 }
@@ -91,7 +93,6 @@ type endpointSharding struct {
 	bOpts        balancer.BuildOptions
 	esOpts       Options
 	childBuilder ChildBuilderFunc
-	logger       *internalgrpclog.PrefixLogger // Prefix logger for all logging.
 
 	// childMu synchronizes calls to any single child. It must be held for all
 	// calls into a child. To avoid deadlocks, do not acquire childMu while
@@ -220,11 +221,8 @@ func (es *endpointSharding) ExitIdle() {
 		// exitidle (but still checks for the interface's existence to
 		// avoid a panic if not). If the child does not, no subconns
 		// will be connected.
-		ei, ok := bw.child.(balancer.ExitIdler)
-		if ok && !bw.isClosed {
-			ei.ExitIdle()
-		} else if !ok {
-			es.logger.Errorf("Child balancer doesn't implement ExitIdler.")
+		if !bw.isClosed {
+			bw.child.ExitIdle()
 		}
 	}
 }
@@ -350,21 +348,13 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 // ExitIdle pings an IDLE child balancer to exit idle in a new goroutine to
 // avoid deadlocks due to synchronous balancer state updates.
 func (bw *balancerWrapper) ExitIdle() {
-	// this implementation assumes the child balancer supports
-	// exitidle (but still checks for the interface's existence to
-	// avoid a panic if not). If the child does not, no subconns
-	// will be connected.
-	if ei, ok := bw.child.(balancer.ExitIdler); ok {
-		go func() {
-			bw.es.childMu.Lock()
-			if !bw.isClosed {
-				ei.ExitIdle()
-			}
-			bw.es.childMu.Unlock()
-		}()
-	} else if !ok {
-		bw.es.logger.Errorf("Child balancer doesn't implement ExitIdler.")
-	}
+	go func() {
+		bw.es.childMu.Lock()
+		if !bw.isClosed {
+			bw.child.ExitIdle()
+		}
+		bw.es.childMu.Unlock()
+	}()
 }
 
 // updateClientConnStateLocked delivers the ClientConnState to the child

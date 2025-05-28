@@ -103,7 +103,7 @@ type fakePetiole struct {
 }
 
 func (fp *fakePetiole) ExitIdle() {
-	fp.Balancer.(balancer.ExitIdler).ExitIdle()
+	fp.Balancer.ExitIdle()
 }
 
 func (fp *fakePetiole) UpdateClientConnState(state balancer.ClientConnState) error {
@@ -316,7 +316,7 @@ func (s) TestEndpointShardingExitIdle(t *testing.T) {
 			bd.Data.(balancer.Balancer).Close()
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 		},
 	}
 	stub.Register(name, bf)

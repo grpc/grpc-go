@@ -1221,7 +1221,7 @@ type stateRecordingBalancer struct {
 }
 
 func (b *stateRecordingBalancer) ExitIdle() {
-	b.Balancer.(balancer.ExitIdler).ExitIdle()
+	b.Balancer.ExitIdle()
 }
 
 func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {

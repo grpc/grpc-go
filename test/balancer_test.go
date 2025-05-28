@@ -1034,7 +1034,7 @@ func (s) TestSubConn_RegisterHealthListener(t *testing.T) {
 			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 		},
 	}
 
