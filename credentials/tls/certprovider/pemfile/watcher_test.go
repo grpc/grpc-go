@@ -79,9 +79,9 @@ func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
 func (s) TestNewProvider(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
-		desc      string
-		options   Options
-		wantError bool
+		desc          string
+		options       Options
+		wantError     bool
 		disableSPIFFE bool
 	}{
 		{
@@ -140,7 +140,7 @@ func (s) TestNewProvider(t *testing.T) {
 				RootFile:            testdata.Path("x509/client_ca_cert.pem"),
 				SPIFFEBundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
 			},
-			wantError: false,
+			wantError:     false,
 			disableSPIFFE: true,
 		},
 	}
