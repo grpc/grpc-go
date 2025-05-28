@@ -132,6 +132,10 @@ type http2Server struct {
 	maxStreamID uint32 // max stream ID ever seen
 
 	logger *grpclog.PrefixLogger
+	// setResetPingStrikes is stored as a closure instead of making this a
+	// method on http2Server to avoid a heap allocation when converting a method
+	// to a closure for passing to frames objects.
+	setResetPingStrikes func()
 }
 
 // NewServerTransport creates a http2 transport with conn and configuration
@@ -265,6 +269,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		kep:               kep,
 		initialWindowSize: iwz,
 		bufferPool:        config.BufferPool,
+	}
+	t.setResetPingStrikes = func() {
+		atomic.StoreUint32(&t.resetPingStrikes, 1)
 	}
 	var czSecurity credentials.ChannelzSecurityValue
 	if au, ok := authInfo.(credentials.ChannelzSecurityInfo); ok {
@@ -1014,10 +1021,6 @@ func (t *http2Server) writeHeader(s *ServerStream, md metadata.MD) error {
 		}
 	}
 	return nil
-}
-
-func (t *http2Server) setResetPingStrikes() {
-	atomic.StoreUint32(&t.resetPingStrikes, 1)
 }
 
 func (t *http2Server) writeHeaderLocked(s *ServerStream) error {

@@ -40,6 +40,13 @@ var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {
 	e.SetMaxDynamicTableSizeLimit(v)
 }
 
+// itemNodePool is used to reduce heap allocations.
+var itemNodePool = sync.Pool{
+	New: func() any {
+		return &itemNode{}
+	},
+}
+
 type itemNode struct {
 	it   any
 	next *itemNode
@@ -51,7 +58,9 @@ type itemList struct {
 }
 
 func (il *itemList) enqueue(i any) {
-	n := &itemNode{it: i}
+	n := itemNodePool.Get().(*itemNode)
+	n.next = nil
+	n.it = i
 	if il.tail == nil {
 		il.head, il.tail = n, n
 		return
@@ -71,7 +80,9 @@ func (il *itemList) dequeue() any {
 		return nil
 	}
 	i := il.head.it
+	temp := il.head
 	il.head = il.head.next
+	itemNodePool.Put(temp)
 	if il.head == nil {
 		il.tail = nil
 	}
