@@ -71,6 +71,7 @@ type adsStreamEventHandler interface {
 	onStreamError(error)                           // Called when the ADS stream breaks.
 	onWatchExpiry(ResourceType, string)            // Called when the watch timer expires for a resource.
 	onResponse(response, func()) ([]string, error) // Called when a response is received on the ADS stream.
+	onDiscoveryRequestSent(typeURL string)         // Called when a discovery request is sent on the ADS stream.
 }
 
 // state corresponding to a resource type.
@@ -460,6 +461,10 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 	} else if s.logger.V(2) {
 		s.logger.Warningf("ADS request sent for type %q, resources: %v, version: %q, nonce: %q", url, names, version, nonce)
 	}
+
+	// Notify the event handler that a discovery request was sent.
+	s.eventHandler.onDiscoveryRequestSent(url)
+
 	return nil
 }
 
