@@ -313,7 +313,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	icwz := int32(initialWindowSize)
 	if opts.InitialConnWindowSize >= defaultWindowSize {
 		icwz = opts.InitialConnWindowSize
-		dynamicWindow = opts.UseDynamicWindowSizing
+		opts.UseDynamicWindowSizing = false
 	}
 	writeBufSize := opts.WriteBufferSize
 	readBufSize := opts.ReadBufferSize
@@ -381,7 +381,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	t.controlBuf = newControlBuffer(t.ctxDone)
 	if opts.InitialWindowSize >= defaultWindowSize {
 		t.initialWindowSize = opts.InitialWindowSize
-		dynamicWindow = opts.UseDynamicWindowSizing
+		opts.UseDynamicWindowSizing = false
 	}
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{

@@ -180,12 +180,12 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	iwz := int32(initialWindowSize)
 	if config.InitialWindowSize >= defaultWindowSize {
 		iwz = config.InitialWindowSize
-		dynamicWindow = config.UseDynamicWindowSizing
+		config.UseDynamicWindowSizing = false
 	}
 	icwz := int32(initialWindowSize)
 	if config.InitialConnWindowSize >= defaultWindowSize {
 		icwz = config.InitialConnWindowSize
-		dynamicWindow = config.UseDynamicWindowSizing
+		config.UseDynamicWindowSizing = false
 	}
 	if iwz != defaultWindowSize {
 		isettings = append(isettings, http2.Setting{
