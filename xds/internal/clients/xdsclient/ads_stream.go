@@ -68,9 +68,10 @@ type dataAndErrTuple struct {
 // occur on the ADS stream. Methods on this interface may be invoked
 // concurrently and implementations need to handle them in a thread-safe manner.
 type adsStreamEventHandler interface {
-	onStreamError(error)                           // Called when the ADS stream breaks.
-	onWatchExpiry(ResourceType, string)            // Called when the watch timer expires for a resource.
-	onResponse(response, func()) ([]string, error) // Called when a response is received on the ADS stream.
+	onStreamError(error)                                       // Called when the ADS stream breaks.
+	onWatchExpiry(ResourceType, string)                        // Called when the watch timer expires for a resource.
+	onResponse(response, func()) ([]string, error)             // Called when a response is received on the ADS stream.
+	onRequiredToRemoveUnsubscribedCacheEntries(typeURL string) // Called when it is needed to remove unsubscribed cache entries.
 }
 
 // state corresponding to a resource type.
@@ -444,6 +445,9 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 		}
 	}
 
+	// Call the event handler to remove unsubscribed cache entries.
+	s.eventHandler.onRequiredToRemoveUnsubscribedCacheEntries(url)
+
 	msg, err := proto.Marshal(req)
 	if err != nil {
 		s.logger.Warningf("Failed to marshal DiscoveryRequest: %v", err)
@@ -460,6 +464,7 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 	} else if s.logger.V(2) {
 		s.logger.Warningf("ADS request sent for type %q, resources: %v, version: %q, nonce: %q", url, names, version, nonce)
 	}
+
 	return nil
 }
 

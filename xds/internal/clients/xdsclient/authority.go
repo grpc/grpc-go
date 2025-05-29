@@ -655,6 +655,17 @@ func (a *authority) watchResource(rType ResourceType, resourceName string, watch
 			}
 			resources[resourceName] = state
 			xdsChannel.channel.subscribe(rType, resourceName)
+		} else if len(state.watchers) == 0 {
+			if a.logger.V(2) {
+				a.logger.Infof("Re-watch for type %q, resource name %q before unsubscription", rType.TypeName, resourceName)
+			}
+			// Add the active channel to the resource's channel configs if not
+			// already present.
+			state.xdsChannelConfigs[xdsChannel] = true
+			// Ensure the resource is subscribed on the active channel. We do this
+			// even if resource is present in cache as re-watches  might occur
+			// after unsubscribes or channel changes.
+			xdsChannel.channel.subscribe(rType, resourceName)
 		}
 		// Always add the new watcher to the set of watchers.
 		state.watchers[watcher] = true
@@ -720,6 +731,10 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 			// there when the watch was registered.
 			resources := a.resources[rType]
 			state := resources[resourceName]
+			if state == nil {
+				a.logger.Warningf("Attempting to unwatch resource %q of type %q which is not currently watched", resourceName, rType.TypeName)
+				return
+			}
 
 			// Delete this particular watcher from the list of watchers, so that its
 			// callback will not be invoked in the future.
@@ -732,31 +747,15 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 			}
 
 			// There are no more watchers for this resource. Unsubscribe this
-			// resource from all channels where it was subscribed to and delete
-			// the state associated with it.
+			// resource from all channels where it was subscribed to but do not
+			// delete the state associated with it in case the resource is
+			// re-requested later before un-subscription request is completed by
+			// the management server.
 			if a.logger.V(2) {
 				a.logger.Infof("Removing last watch for resource name %q", resourceName)
 			}
 			for xcc := range state.xdsChannelConfigs {
 				xcc.channel.unsubscribe(rType, resourceName)
-			}
-			delete(resources, resourceName)
-
-			// If there are no more watchers for this resource type, delete the
-			// resource type from the top-level map.
-			if len(resources) == 0 {
-				if a.logger.V(2) {
-					a.logger.Infof("Removing last watch for resource type %q", rType.TypeName)
-				}
-				delete(a.resources, rType)
-			}
-			// If there are no more watchers for any resource type, release the
-			// reference to the xdsChannels.
-			if len(a.resources) == 0 {
-				if a.logger.V(2) {
-					a.logger.Infof("Removing last watch for for any resource type, releasing reference to the xdsChannel")
-				}
-				a.closeXDSChannels()
 			}
 		}, func() { close(done) })
 		<-done
@@ -871,6 +870,41 @@ func (a *authority) close() {
 	<-a.xdsClientSerializer.Done()
 	if a.logger.V(2) {
 		a.logger.Infof("Closed")
+	}
+}
+
+// removeUnsubscribedCacheEntries iterates through all resources of the given type and
+// removes the state for resources that have no active watchers. This is called
+// after sending a discovery request to ensure that resources that were
+// unsubscribed (and thus have no watchers) are eventually removed from the
+// authority's cache.
+func (a *authority) removeUnsubscribedCacheEntries(rType ResourceType) {
+	resources := a.resources[rType]
+	if resources == nil {
+		return
+	}
+
+	for name, state := range resources {
+		if len(state.watchers) == 0 {
+			if a.logger.V(2) {
+				a.logger.Infof("Removing resource state for %q of type %q as it has no watchers after an update cycle", name, rType.TypeName)
+			}
+			delete(resources, name)
+		}
+	}
+
+	if len(resources) == 0 {
+		if a.logger.V(2) {
+			a.logger.Infof("Removing resource type %q from cache as it has no more resources", rType.TypeName)
+		}
+		delete(a.resources, rType)
+	}
+
+	if len(a.resources) == 0 {
+		if a.logger.V(2) {
+			a.logger.Infof("Removing last watch for any resource type, releasing reference to the xdsChannels")
+		}
+		a.closeXDSChannels()
 	}
 }
 
