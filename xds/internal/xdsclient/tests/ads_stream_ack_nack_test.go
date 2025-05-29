@@ -41,6 +41,25 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
+// Creates an xDS client with the given bootstrap contents.
+func createXDSClient(t *testing.T, bootstrapContents []byte) xdsclient.XDSClient {
+	t.Helper()
+
+	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
+	}
+	pool := xdsclient.NewPool(config)
+	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(close)
+	return client
+}
+
 // Tests simple ACK and NACK scenarios on the ADS stream:
 //  1. When a good response is received, i.e. once that is expected to be ACKed,
 //     the test verifies that an ACK is sent matching the version and nonce from

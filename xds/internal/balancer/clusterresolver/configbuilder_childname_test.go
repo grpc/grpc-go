@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -38,8 +38,8 @@ func Test_nameGenerator_generate(t *testing.T) {
 			prefix: 3,
 			input1: nil,
 			input2: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L1"}}},
 			},
 			want: []string{"priority-3-0", "priority-3-1"},
 		},
@@ -47,11 +47,11 @@ func Test_nameGenerator_generate(t *testing.T) {
 			name:   "one new priority",
 			prefix: 1,
 			input1: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
 			},
 			input2: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L1"}}},
 			},
 			want: []string{"priority-1-0", "priority-1-1"},
 		},
@@ -59,40 +59,40 @@ func Test_nameGenerator_generate(t *testing.T) {
 			name:   "merge two priorities",
 			prefix: 4,
 			input1: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L1"}}},
-				{{ID: internal.LocalityID{Zone: "L2"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L2"}}},
 			},
 			input2: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}, {ID: internal.LocalityID{Zone: "L1"}}},
-				{{ID: internal.LocalityID{Zone: "L2"}}},
+				{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L2"}}},
 			},
 			want: []string{"priority-4-0", "priority-4-2"},
 		},
 		{
 			name: "swap two priorities",
 			input1: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L1"}}},
-				{{ID: internal.LocalityID{Zone: "L2"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L2"}}},
 			},
 			input2: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L1"}}},
-				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L2"}}},
+				{{ID: clients.Locality{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L2"}}},
 			},
 			want: []string{"priority-0-1", "priority-0-0", "priority-0-2"},
 		},
 		{
 			name: "split priority",
 			input1: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}, {ID: internal.LocalityID{Zone: "L1"}}},
-				{{ID: internal.LocalityID{Zone: "L2"}}},
+				{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+				{{ID: clients.Locality{Zone: "L2"}}},
 			},
 			input2: [][]xdsresource.Locality{
-				{{ID: internal.LocalityID{Zone: "L0"}}},
-				{{ID: internal.LocalityID{Zone: "L1"}}}, // This gets a newly generated name, since "0-0" was already picked.
-				{{ID: internal.LocalityID{Zone: "L2"}}},
+				{{ID: clients.Locality{Zone: "L0"}}},
+				{{ID: clients.Locality{Zone: "L1"}}}, // This gets a newly generated name, since "0-0" was already picked.
+				{{ID: clients.Locality{Zone: "L2"}}},
 			},
 			want: []string{"priority-0-0", "priority-0-2", "priority-0-1"},
 		},
