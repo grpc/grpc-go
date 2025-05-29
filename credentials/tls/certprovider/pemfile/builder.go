@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -71,6 +72,9 @@ func pluginConfigFromJSON(jd json.RawMessage) (Options, error) {
 	}{}
 	if err := json.Unmarshal(jd, cfg); err != nil {
 		return Options{}, fmt.Errorf("pemfile: json.Unmarshal(%s) failed: %v", string(jd), err)
+	}
+	if !envconfig.XDSSPIFFEEnabled {
+		cfg.SPIFFETrustBundleMapFile = ""
 	}
 
 	opts := Options{

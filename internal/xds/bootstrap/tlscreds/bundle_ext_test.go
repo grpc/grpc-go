@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -237,6 +238,7 @@ func (s) TestCaReloading(t *testing.T) {
 // is performed and checked for failure, ensuring that gRPC is correctly using
 // the changed-on-disk bundle map.
 func (s) Test_SPIFFE_Reloading(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Failed to read test SPIFFE bundle: %v", err)
@@ -357,6 +359,7 @@ func (s) TestMTLS(t *testing.T) {
 // chain that is compatible with the client's configured SPIFFE bundle map. An
 // MTLS connection is attempted between the two and checked for success.
 func (s) Test_MTLS_SPIFFE(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		name         string
 		serverOption grpc.ServerOption
@@ -404,6 +407,7 @@ func (s) Test_MTLS_SPIFFE(t *testing.T) {
 }
 
 func (s) Test_MTLS_SPIFFE_Failure(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		name             string
 		certFile         string
