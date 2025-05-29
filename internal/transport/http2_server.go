@@ -176,7 +176,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			Val: config.MaxStreams,
 		})
 	}
-	//dynamicWindow := true
+	config.UseDynamicWindowSizing = true
 	iwz := int32(initialWindowSize)
 	if config.InitialWindowSize >= defaultWindowSize {
 		iwz = config.InitialWindowSize

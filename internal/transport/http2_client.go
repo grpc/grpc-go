@@ -309,6 +309,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			scheme = "https"
 		}
 	}
+	opts.UseDynamicWindowSizing = true
 	icwz := int32(initialWindowSize)
 	if opts.InitialConnWindowSize >= defaultWindowSize {
 		icwz = opts.InitialConnWindowSize
