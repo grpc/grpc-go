@@ -59,6 +59,9 @@ type xdsChannelEventHandler interface {
 	// adsResourceDoesNotExist is called when the xdsChannel determines that a
 	// requested ADS resource does not exist.
 	adsResourceDoesNotExist(ResourceType, string)
+
+	// adsRequestSent is called when the xdsChannel sends a discovery request.
+	adsRequestSent(ResourceType)
 }
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
@@ -226,6 +229,24 @@ func (xc *xdsChannel) onResponse(resp response, onDone func()) ([]string, error)
 
 	xc.eventHandler.adsResourceUpdate(rType, updates, md, onDone)
 	return names, err
+}
+
+func (xc *xdsChannel) onDiscoveryRequestSent(typeURL string) {
+	if xc.closed.HasFired() {
+		if xc.logger.V(2) {
+			xc.logger.Infof("Received an update from the ADS stream on closed ADS stream")
+		}
+		return
+	}
+
+	// Lookup the resource parser based on the resource type.
+	rType, ok := xc.clientConfig.ResourceTypes[typeURL]
+	if !ok {
+		logger.Warningf("Resource type URL %q unknown in response from server", typeURL)
+		return
+	}
+
+	xc.eventHandler.adsRequestSent(rType)
 }
 
 // decodeResponse decodes the resources in the given ADS response.
