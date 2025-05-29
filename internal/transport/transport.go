@@ -459,8 +459,6 @@ type ServerConfig struct {
 	KeepalivePolicy        keepalive.EnforcementPolicy
 	InitialWindowSize      int32
 	InitialConnWindowSize  int32
-	StaticWindowSize       int32
-	StaticConnWindowSize   int32
 	WriteBufferSize        int
 	ReadBufferSize         int
 	SharedWriteBuffer      bool
@@ -495,10 +493,6 @@ type ConnectOptions struct {
 	InitialWindowSize int32
 	// InitialConnWindowSize sets the initial window size for a connection.
 	InitialConnWindowSize int32
-	// StaticWindowSize sets the initial window size for a stream.
-	StaticWindowSize int32
-	// StaticConnWindowSize sets the initial window size for a connection.
-	StaticConnWindowSize int32
 	// WriteBufferSize sets the size of write buffer which in turn determines how much data can be batched before it's written on the wire.
 	WriteBufferSize int
 	// ReadBufferSize sets the size of read buffer, which in turn determines how much data can be read at most for one read syscall.

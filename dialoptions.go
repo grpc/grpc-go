@@ -231,7 +231,7 @@ func WithInitialConnWindowSize(s int32) DialOption {
 // stream window size to the value provided and disables dynamic flow control.
 func WithStaticStreamWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.StaticWindowSize = s
+		o.copts.InitialWindowSize = s
 		o.copts.UseDynamicWindowSizing = false
 	})
 }
@@ -241,7 +241,7 @@ func WithStaticStreamWindowSize(s int32) DialOption {
 // control.
 func WithStaticConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.StaticConnWindowSize = s
+		o.copts.InitialConnWindowSize = s
 		o.copts.UseDynamicWindowSizing = false
 	})
 }

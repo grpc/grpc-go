@@ -170,8 +170,6 @@ type serverOptions struct {
 	keepalivePolicy        keepalive.EnforcementPolicy
 	initialWindowSize      int32
 	initialConnWindowSize  int32
-	staticWindowSize       int32
-	staticConnWindowSize   int32
 	writeBufferSize        int
 	readBufferSize         int
 	sharedWriteBuffer      bool
@@ -301,7 +299,7 @@ func InitialConnWindowSize(s int32) ServerOption {
 // will be ignored.
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.staticWindowSize = s
+		o.initialWindowSize = s
 		o.useDynamicWindowSizing = false
 	})
 }
@@ -312,7 +310,7 @@ func StaticStreamWindowSize(s int32) ServerOption {
 // will be ignored.
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.staticConnWindowSize = s
+		o.initialConnWindowSize = s
 		o.useDynamicWindowSizing = false
 	})
 }
