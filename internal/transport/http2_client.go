@@ -309,7 +309,6 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			scheme = "https"
 		}
 	}
-	dynamicWindow := true
 	icwz := int32(initialWindowSize)
 	if opts.InitialConnWindowSize >= defaultWindowSize {
 		icwz = opts.InitialConnWindowSize
@@ -383,7 +382,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		t.initialWindowSize = opts.InitialWindowSize
 		opts.UseDynamicWindowSizing = false
 	}
-	if dynamicWindow {
+	if opts.UseDynamicWindowSizing {
 		t.bdpEst = &bdpEstimator{
 			bdp:               initialWindowSize,
 			updateFlowControl: t.updateFlowControl,
