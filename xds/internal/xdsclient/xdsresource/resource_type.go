@@ -29,7 +29,7 @@ import (
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsinternal "google.golang.org/grpc/xds/internal"
-	gxdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -172,42 +172,42 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 }
 
 // genericResourceTypeDecoder wraps an xdsresource.Type and implements
-// gxdsclient.Decoder.
+// xdsclient.Decoder.
 type genericResourceTypeDecoder struct {
-	xdsResourceType  Type
+	resourceType     Type
 	bootstrapConfig  *bootstrap.Config
-	gServerConfigMap map[gxdsclient.ServerConfig]*bootstrap.ServerConfig
+	gServerConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
 // Decode deserialize and validate resource bytes of an xDS resource received
 // from the xDS management server.
-func (a *genericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts gxdsclient.DecodeOptions) (*gxdsclient.DecodeResult, error) {
-	raw := &anypb.Any{TypeUrl: a.xdsResourceType.TypeURL(), Value: resourceBytes}
-	opts := &DecodeOptions{BootstrapConfig: a.bootstrapConfig}
+func (gd *genericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	raw := &anypb.Any{TypeUrl: gd.resourceType.TypeURL(), Value: resourceBytes}
+	opts := &DecodeOptions{BootstrapConfig: gd.bootstrapConfig}
 	if gOpts.ServerConfig != nil {
-		opts.ServerConfig = a.gServerConfigMap[*gOpts.ServerConfig]
+		opts.ServerConfig = gd.gServerConfigMap[*gOpts.ServerConfig]
 	}
 
-	result, err := a.xdsResourceType.Decode(opts, raw)
+	result, err := gd.resourceType.Decode(opts, raw)
 	if result == nil {
 		return nil, err
 	}
 	if err != nil {
-		return &gxdsclient.DecodeResult{Name: result.Name}, err
+		return &xdsclient.DecodeResult{Name: result.Name}, err
 	}
 
-	return &gxdsclient.DecodeResult{Name: result.Name, Resource: &genericResourceData{xdsResourceData: result.Resource}}, nil
+	return &xdsclient.DecodeResult{Name: result.Name, Resource: &genericResourceData{resourceData: result.Resource}}, nil
 }
 
 // genericResourceData embed an xdsresource.ResourceData and implements
-// gxdsclient.ResourceData.
+// xdsclient.ResourceData.
 type genericResourceData struct {
-	xdsResourceData ResourceData
+	resourceData ResourceData
 }
 
-// Equal returns true if the passed in gxdsclient.ResourceData
+// Equal returns true if the passed in xdsclient.ResourceData
 // is equal to that of the receiver.
-func (a *genericResourceData) Equal(other gxdsclient.ResourceData) bool {
+func (grd *genericResourceData) Equal(other xdsclient.ResourceData) bool {
 	if other == nil {
 		return false
 	}
@@ -215,12 +215,12 @@ func (a *genericResourceData) Equal(other gxdsclient.ResourceData) bool {
 	if !ok {
 		return false
 	}
-	return a.xdsResourceData.RawEqual(otherResourceData.xdsResourceData)
+	return grd.resourceData.RawEqual(otherResourceData.resourceData)
 }
 
 // Bytes returns the underlying raw bytes of the wrapped resource.
-func (a *genericResourceData) Bytes() []byte {
-	rawAny := a.xdsResourceData.Raw()
+func (grd *genericResourceData) Bytes() []byte {
+	rawAny := grd.resourceData.Raw()
 	if rawAny == nil {
 		return nil
 	}
@@ -228,33 +228,33 @@ func (a *genericResourceData) Bytes() []byte {
 }
 
 // genericResourceWatcher wraps xdsresource.ResourceWatcher and implements
-// gxdsclient.ResourceWatcher.
+// xdsclient.ResourceWatcher.
 type genericResourceWatcher struct {
 	xdsResourceWatcher ResourceWatcher
 }
 
 // ResourceChanged indicates a new version of the wrapped resource is
 // available.
-func (a *genericResourceWatcher) ResourceChanged(gData gxdsclient.ResourceData, done func()) {
+func (gw *genericResourceWatcher) ResourceChanged(gData xdsclient.ResourceData, done func()) {
 	if gData == nil {
-		a.xdsResourceWatcher.ResourceChanged(nil, done)
+		gw.xdsResourceWatcher.ResourceChanged(nil, done)
 		return
 	}
 
 	grd, ok := gData.(*genericResourceData)
 	if !ok {
-		err := fmt.Errorf("genericResourceWatcher received unexpected gxdsclient.ResourceData type %T, want *genericResourceData", gData)
-		a.xdsResourceWatcher.ResourceError(err, done)
+		err := fmt.Errorf("genericResourceWatcher received unexpected xdsclient.ResourceData type %T, want *genericResourceData", gData)
+		gw.xdsResourceWatcher.ResourceError(err, done)
 		return
 	}
-	a.xdsResourceWatcher.ResourceChanged(grd.xdsResourceData, done)
+	gw.xdsResourceWatcher.ResourceChanged(grd.resourceData, done)
 }
 
 // ResourceError indicates an error occurred while trying to fetch or
 // decode the associated wrapped resource. The previous version of the
 // wrapped resource should be considered invalid.
-func (a *genericResourceWatcher) ResourceError(err error, done func()) {
-	a.xdsResourceWatcher.ResourceError(err, done)
+func (gw *genericResourceWatcher) ResourceError(err error, done func()) {
+	gw.xdsResourceWatcher.ResourceError(err, done)
 }
 
 // AmbientError indicates an error occurred after a resource has been
@@ -262,13 +262,13 @@ func (a *genericResourceWatcher) ResourceError(err error, done func()) {
 // provide useful information about the state of the XDSClient for debugging
 // purposes. The previous version of the wrapped resource should still be
 // considered valid.
-func (a *genericResourceWatcher) AmbientError(err error, done func()) {
-	a.xdsResourceWatcher.AmbientError(err, done)
+func (gw *genericResourceWatcher) AmbientError(err error, done func()) {
+	gw.xdsResourceWatcher.AmbientError(err, done)
 }
 
-// GenericResourceWatcher returns a gxdsclient.ResourceWatcher that wraps an
-// xdsresource.ResourceWatcher to make it compatible with gxdsclient.ResourceWatcher.
-func GenericResourceWatcher(xdsResourceWatcher ResourceWatcher) gxdsclient.ResourceWatcher {
+// GenericResourceWatcher returns a xdsclient.ResourceWatcher that wraps an
+// xdsresource.ResourceWatcher to make it compatible with xdsclient.ResourceWatcher.
+func GenericResourceWatcher(xdsResourceWatcher ResourceWatcher) xdsclient.ResourceWatcher {
 	if xdsResourceWatcher == nil {
 		return nil
 	}

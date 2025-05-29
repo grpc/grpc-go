@@ -32,11 +32,11 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
-	gclients "google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/grpctransport"
-	glrsclient "google.golang.org/grpc/xds/internal/clients/lrsclient"
-	gxdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
-	gxdsmetrics "google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 )
 
 const (
@@ -79,18 +79,22 @@ var (
 	})
 )
 
-// clientImpl embed gxdsclient.XDSClient and implement internal XDSClient
+// clientImpl embed xdsclient.XDSClient and implement internal XDSClient
 // interface with ref counting so that it can be shared by the xds resolver and
 // balancer implementations, across multiple ClientConns and Servers.
 type clientImpl struct {
-	*gxdsclient.XDSClient
+	*xdsclient.XDSClient
 
-	gConfig   gxdsclient.Config
-	config    *bootstrap.Config
-	logger    *grpclog.PrefixLogger
-	target    string
-	lrsClient *glrsclient.LRSClient
-	refCount  int32 // accessed atomically
+	// The following fields are initialized at creation time and are read-only
+	// after that.
+	xdsClientConfig xdsclient.Config
+	bootstrapConfig *bootstrap.Config
+	logger          *grpclog.PrefixLogger
+	target          string
+	lrsClient       *lrsclient.LRSClient
+
+	// Accessed atomically
+	refCount int32
 }
 
 // metricsReporter implements the clients.MetricsReporter interface and uses an
@@ -109,114 +113,25 @@ func (mr *metricsReporter) ReportMetric(metric any) {
 	}
 
 	switch m := metric.(type) {
-	case *gxdsmetrics.ResourceUpdateValid:
+	case *metrics.ResourceUpdateValid:
 		xdsClientResourceUpdatesValidMetric.Record(mr.recorder, 1, mr.target, m.ServerURI, m.ResourceType)
-	case *gxdsmetrics.ResourceUpdateInvalid:
+	case *metrics.ResourceUpdateInvalid:
 		xdsClientResourceUpdatesInvalidMetric.Record(mr.recorder, 1, mr.target, m.ServerURI, m.ResourceType)
-	case *gxdsmetrics.ServerFailure:
+	case *metrics.ServerFailure:
 		xdsClientServerFailureMetric.Record(mr.recorder, 1, mr.target, m.ServerURI)
 	}
 }
 
-func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType, target string) (*clientImpl, error) {
-	grpcTransportConfigs := make(map[string]grpctransport.Config)
-	gServerCfgMap := make(map[gxdsclient.ServerConfig]*bootstrap.ServerConfig)
-
-	gAuthorities := make(map[string]gxdsclient.Authority)
-	for name, cfg := range config.Authorities() {
-		// If server configs are specified in the authorities map, use that.
-		// Else, use the top-level server configs.
-		serverCfg := config.XDSServers()
-		if len(cfg.XDSServers) >= 1 {
-			serverCfg = cfg.XDSServers
-		}
-		var gServerCfg []gxdsclient.ServerConfig
-		for _, sc := range serverCfg {
-			if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
-				return nil, err
-			}
-			gsc := gxdsclient.ServerConfig{
-				ServerIdentifier:       gclients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedCreds().Type}},
-				IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()}
-			gServerCfg = append(gServerCfg, gsc)
-			gServerCfgMap[gsc] = sc
-		}
-		gAuthorities[name] = gxdsclient.Authority{XDSServers: gServerCfg}
-	}
-
-	gServerCfgs := make([]gxdsclient.ServerConfig, 0, len(config.XDSServers()))
-	for _, sc := range config.XDSServers() {
-		if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
-			return nil, err
-		}
-		gsc := gxdsclient.ServerConfig{
-			ServerIdentifier:       gclients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedCreds().Type}},
-			IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()}
-		gServerCfgs = append(gServerCfgs, gsc)
-		gServerCfgMap[gsc] = sc
-	}
-
-	node := config.Node()
-	gNode := gclients.Node{
-		ID:               node.GetId(),
-		Cluster:          node.GetCluster(),
-		Metadata:         node.Metadata,
-		UserAgentName:    node.UserAgentName,
-		UserAgentVersion: node.GetUserAgentVersion(),
-	}
-	if node.Locality != nil {
-		gNode.Locality = gclients.Locality{
-			Region:  node.Locality.Region,
-			Zone:    node.Locality.Zone,
-			SubZone: node.Locality.SubZone,
-		}
-	}
-
-	gTransportBuilder := grpctransport.NewBuilder(grpcTransportConfigs)
-
-	if resourceTypes == nil {
-		resourceTypes = make(map[string]gxdsclient.ResourceType)
-		resourceTypes[version.V3ListenerURL] = gxdsclient.ResourceType{
-			TypeURL:                    version.V3ListenerURL,
-			TypeName:                   xdsresource.ListenerResourceTypeName,
-			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewGenericListenerResourceTypeDecoder(config),
-		}
-		resourceTypes[version.V3RouteConfigURL] = gxdsclient.ResourceType{
-			TypeURL:                    version.V3RouteConfigURL,
-			TypeName:                   xdsresource.RouteConfigTypeName,
-			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.NewGenericRouteConfigResourceTypeDecoder(),
-		}
-		resourceTypes[version.V3ClusterURL] = gxdsclient.ResourceType{
-			TypeURL:                    version.V3ClusterURL,
-			TypeName:                   xdsresource.ClusterResourceTypeName,
-			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewGenericClusterResourceTypeDecoder(config, gServerCfgMap),
-		}
-		resourceTypes[version.V3EndpointsURL] = gxdsclient.ResourceType{
-			TypeURL:                    version.V3EndpointsURL,
-			TypeName:                   xdsresource.EndpointsResourceTypeName,
-			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.NewGenericEndpointsResourceTypeDecoder(),
-		}
-	}
-
-	mr := &metricsReporter{recorder: metricsRecorder, target: target}
-
-	gConfig := gxdsclient.Config{
-		Authorities:      gAuthorities,
-		Servers:          gServerCfgs,
-		Node:             gNode,
-		TransportBuilder: gTransportBuilder,
-		ResourceTypes:    resourceTypes,
-		MetricsReporter:  mr,
-	}
-	client, err := gxdsclient.New(gConfig)
+func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string) (*clientImpl, error) {
+	gConfig, err := buildXDSClientConfig(config, metricsRecorder, target)
 	if err != nil {
 		return nil, err
 	}
-	c := &clientImpl{XDSClient: client, gConfig: gConfig, config: config, target: target, refCount: 1}
+	client, err := xdsclient.New(gConfig)
+	if err != nil {
+		return nil, err
+	}
+	c := &clientImpl{XDSClient: client, xdsClientConfig: gConfig, bootstrapConfig: config, target: target, refCount: 1}
 	c.logger = prefixLogger(c)
 	return c, nil
 }
@@ -224,7 +139,7 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 // BootstrapConfig returns the configuration read from the bootstrap file.
 // Callers must treat the return value as read-only.
 func (c *clientImpl) BootstrapConfig() *bootstrap.Config {
-	return c.config
+	return c.bootstrapConfig
 }
 
 func (c *clientImpl) incrRef() int32 {
@@ -233,6 +148,102 @@ func (c *clientImpl) incrRef() int32 {
 
 func (c *clientImpl) decrRef() int32 {
 	return atomic.AddInt32(&c.refCount, -1)
+}
+
+// buildXDSClientConfig builds the xdsclient.Config from the bootstrap.Config.
+func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string) (xdsclient.Config, error) {
+	grpcTransportConfigs := make(map[string]grpctransport.Config)
+	gServerCfgMap := make(map[xdsclient.ServerConfig]*bootstrap.ServerConfig)
+
+	gAuthorities := make(map[string]xdsclient.Authority)
+	for name, cfg := range config.Authorities() {
+		// If server configs are specified in the authorities map, use that.
+		// Else, use the top-level server configs.
+		serverCfg := config.XDSServers()
+		if len(cfg.XDSServers) >= 1 {
+			serverCfg = cfg.XDSServers
+		}
+		var gServerCfg []xdsclient.ServerConfig
+		for _, sc := range serverCfg {
+			if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
+				return xdsclient.Config{}, err
+			}
+			gsc := xdsclient.ServerConfig{
+				ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedCreds().Type}},
+				IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()}
+			gServerCfg = append(gServerCfg, gsc)
+			gServerCfgMap[gsc] = sc
+		}
+		gAuthorities[name] = xdsclient.Authority{XDSServers: gServerCfg}
+	}
+
+	gServerCfgs := make([]xdsclient.ServerConfig, 0, len(config.XDSServers()))
+	for _, sc := range config.XDSServers() {
+		if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
+			return xdsclient.Config{}, err
+		}
+		gsc := xdsclient.ServerConfig{
+			ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: sc.SelectedCreds().Type}},
+			IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()}
+		gServerCfgs = append(gServerCfgs, gsc)
+		gServerCfgMap[gsc] = sc
+	}
+
+	node := config.Node()
+	gNode := clients.Node{
+		ID:               node.GetId(),
+		Cluster:          node.GetCluster(),
+		Metadata:         node.Metadata,
+		UserAgentName:    node.UserAgentName,
+		UserAgentVersion: node.GetUserAgentVersion(),
+	}
+	if node.Locality != nil {
+		gNode.Locality = clients.Locality{
+			Region:  node.Locality.Region,
+			Zone:    node.Locality.Zone,
+			SubZone: node.Locality.SubZone,
+		}
+	}
+
+	gTransportBuilder := grpctransport.NewBuilder(grpcTransportConfigs)
+
+	resourceTypes := map[string]xdsclient.ResourceType{
+		version.V3ListenerURL: {
+			TypeURL:                    version.V3ListenerURL,
+			TypeName:                   xdsresource.ListenerResourceTypeName,
+			AllResourcesRequiredInSotW: true,
+			Decoder:                    xdsresource.NewGenericListenerResourceTypeDecoder(config),
+		},
+		version.V3RouteConfigURL: {
+			TypeURL:                    version.V3RouteConfigURL,
+			TypeName:                   xdsresource.RouteConfigTypeName,
+			AllResourcesRequiredInSotW: false,
+			Decoder:                    xdsresource.NewGenericRouteConfigResourceTypeDecoder(),
+		},
+		version.V3ClusterURL: {
+			TypeURL:                    version.V3ClusterURL,
+			TypeName:                   xdsresource.ClusterResourceTypeName,
+			AllResourcesRequiredInSotW: true,
+			Decoder:                    xdsresource.NewGenericClusterResourceTypeDecoder(config, gServerCfgMap),
+		},
+		version.V3EndpointsURL: {
+			TypeURL:                    version.V3EndpointsURL,
+			TypeName:                   xdsresource.EndpointsResourceTypeName,
+			AllResourcesRequiredInSotW: false,
+			Decoder:                    xdsresource.NewGenericEndpointsResourceTypeDecoder(),
+		},
+	}
+
+	mr := &metricsReporter{recorder: metricsRecorder, target: target}
+
+	return xdsclient.Config{
+		Authorities:      gAuthorities,
+		Servers:          gServerCfgs,
+		Node:             gNode,
+		TransportBuilder: gTransportBuilder,
+		ResourceTypes:    resourceTypes,
+		MetricsReporter:  mr,
+	}, nil
 }
 
 // populateGRPCTransportConfigsFromServerConfig iterates through the channel
