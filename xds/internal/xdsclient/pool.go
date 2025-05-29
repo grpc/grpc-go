@@ -27,13 +27,13 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	gxdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/protobuf/proto"
 )
 
 var (
 	// DefaultPool is the default pool for xDS clients. It is created at init
-	// time by reading bootstrap configuration from env vars.
+	// time and reads bootstrap configuration from env vars to create the xDS
+	// client.
 	DefaultPool = &Pool{clients: make(map[string]*clientImpl)}
 )
 
@@ -66,15 +66,6 @@ type OptionsForTesting struct {
 	// MetricsRecorder is the metrics recorder the xDS Client will use. If
 	// unspecified, uses a no-op MetricsRecorder.
 	MetricsRecorder estats.MetricsRecorder
-
-	// ResourceTypes is a map from resource type URLs to resource type
-	// implementations. Each resource type URL uniquely identifies a specific
-	// kind of xDS resource, and the corresponding resource type implementation
-	// provides logic for parsing, validating, and processing resources of that
-	// type.
-	//
-	// For example: "type.googleapis.com/envoy.config.listener.v3.Listener"
-	ResourceTypes map[string]gxdsclient.ResourceType
 }
 
 // NewPool creates a new xDS client pool with the given bootstrap config.
@@ -99,7 +90,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCounted(name, metricsRecorder, nil)
+	return p.newRefCounted(name, metricsRecorder)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -126,7 +117,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.ResourceTypes)
+	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,12 +219,12 @@ func (p *Pool) clientRefCountedClose(name string) {
 	delete(p.clients, name)
 
 	client.Close()
-	for _, s := range client.config.XDSServers() {
+	for _, s := range client.bootstrapConfig.XDSServers() {
 		for _, f := range s.Cleanups() {
 			f()
 		}
 	}
-	for _, a := range client.config.Authorities() {
+	for _, a := range client.bootstrapConfig.Authorities() {
 		for _, s := range a.XDSServers {
 			for _, f := range s.Cleanups() {
 				f()
@@ -248,7 +239,7 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType) (*clientImpl, func(), error) {
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -279,7 +270,7 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	c, err := newClientImpl(p.config, metricsRecorder, resourceTypes, name)
+	c, err := newClientImpl(p.config, metricsRecorder, name)
 	if err != nil {
 		return nil, nil, err
 	}

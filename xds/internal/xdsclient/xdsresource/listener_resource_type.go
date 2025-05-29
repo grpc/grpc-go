@@ -22,7 +22,7 @@ import (
 
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	gxdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
+	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -182,8 +182,8 @@ func WatchListener(p Producer, name string, w ListenerWatcher) (cancel func()) {
 	return p.WatchResource(listenerType, name, delegator)
 }
 
-// NewGenericListenerResourceTypeDecoder returns a gxdsclient.Decoder that wraps
+// NewGenericListenerResourceTypeDecoder returns a xdsclient.Decoder that wraps
 // the xdsresource.listenerType.
-func NewGenericListenerResourceTypeDecoder(bc *bootstrap.Config) gxdsclient.Decoder {
-	return &genericResourceTypeDecoder{xdsResourceType: listenerType, bootstrapConfig: bc}
+func NewGenericListenerResourceTypeDecoder(bc *bootstrap.Config) xdsclient.Decoder {
+	return &genericResourceTypeDecoder{resourceType: listenerType, bootstrapConfig: bc}
 }
