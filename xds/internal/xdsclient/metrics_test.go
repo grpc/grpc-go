@@ -208,8 +208,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 
 	// Watch for the listener on the above management server.
 	xdsresource.WatchListener(client, listenerResourceName, noopListenerWatcher{})
-	// Verify that an ADS stream is opened and an LDS request with the above
-	// resource name is sent.
+	// Ensure that an ADS stream is opened.
 	select {
 	case <-streamOpened:
 	case <-ctx.Done():
@@ -219,9 +218,6 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	// Close the listener and ensure that the ADS stream breaks. This should
 	// cause a server failure count to emit eventually.
 	lis.Stop()
-
-	// Restart to prevent the attempt to create a new ADS stream after back off.
-	lis.Restart()
 
 	mdWant := stats.MetricsData{
 		Handle:    xdsClientServerFailureMetric.Descriptor(),
@@ -309,13 +305,12 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	}
 
 	// Close the listener and ensure that the ADS stream breaks. This should
-	// cause a server failure count to emit eventually.
+	// not cause a server failure count to emit because the stream was closed
+	// after having received a response on the stream.
 	lis.Stop()
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout when waiting for ADS stream to close")
 	}
-	// Restart to prevent the attempt to create a new ADS stream after back off.
-	lis.Restart()
 
 	mdWant = stats.MetricsData{
 		Handle:    xdsClientServerFailureMetric.Descriptor(),
@@ -324,7 +319,9 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 		LabelVals: []string{"Test/ServerFailureMetrics_AfterResponseRecv", mgmtServer.Address},
 	}
 	// Server failure should still have no recording point.
-	if err := tmr.WaitForInt64Count(ctx, mdWant); err == nil {
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if err := tmr.WaitForInt64Count(sCtx, mdWant); err == nil {
 		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
 	}
 }
