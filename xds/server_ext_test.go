@@ -211,7 +211,7 @@ func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.Clie
 //     not yet started serving RPCs
 //   - Once the route configuration is received from the management server, it
 //     verifies that the server can serve RPCs successfully.
-func TestServer_Basic(t *testing.T) {
+func (s) TestServer_Basic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
