@@ -67,8 +67,7 @@ func (s) TestWarningDepth(*testing.T) {
 	grpclog.WarningDepth(0, "Warning", "depth", "message.")
 }
 
-func (s) TestError(t *testing.T) {
-	Update(t)
+func (s) TestError(*testing.T) {
 	const numErrors = 10
 	ExpectError("Expected error")
 	ExpectError("Expected ln error")
