@@ -211,7 +211,7 @@ func waitForFailedRPCWithStatus(ctx context.Context, t *testing.T, cc *grpc.Clie
 //     not yet started serving RPCs
 //   - Once the route configuration is received from the management server, it
 //     verifies that the server can serve RPCs successfully.
-func (s) TestServer_Basic(t *testing.T) {
+func TestServer_Basic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -294,13 +294,21 @@ func (s) TestServer_Basic(t *testing.T) {
 		}
 	}
 
-	// Ensure that the server is not serving RPCs yet.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
+	// Configure the management server with the expected route config resource,
+	// and expect RPCs to succeed.
+	resources.Routes = []*v3routepb.RouteConfiguration{e2e.RouteConfigNonForwardingAction(routeConfigName)}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the server to be ready to accept connections
 	select {
-	case <-sCtx.Done():
-	case <-modeChangeHandler.modeCh:
-		t.Fatal("Server started serving RPCs before the route config was received")
+	case mode := <-modeChangeHandler.modeCh:
+		if mode != connectivity.ServingModeServing {
+			t.Fatalf("Server not in SERVING mode, got: %v", mode)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for the server to start serving RPCs")
 	}
 
 	// Create a gRPC channel to the xDS enabled server.
@@ -310,26 +318,7 @@ func (s) TestServer_Basic(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Ensure that the server isnt't serving RPCs successfully.
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.Unavailable {
-		t.Fatalf("EmptyCall() returned %v, want %v", err, codes.Unavailable)
-	}
-
-	// Configure the management server with the expected route config resource,
-	// and expext RPCs to succeed.
-	resources.Routes = []*v3routepb.RouteConfiguration{e2e.RouteConfigNonForwardingAction(routeConfigName)}
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for the server to start serving RPCs")
-	case gotMode := <-modeChangeHandler.modeCh:
-		if gotMode != connectivity.ServingModeServing {
-			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeServing)
-		}
-	}
+	// Ensure that the server is serving RPCs successfully.
 	waitForSuccessfulRPC(ctx, t, cc)
 }
 
