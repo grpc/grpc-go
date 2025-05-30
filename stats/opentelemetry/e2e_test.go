@@ -1937,7 +1937,7 @@ func (s) TestRetrySpans_UnaryCallAttributes(t *testing.T) {
 		wantSpanInfosMap[key] = info
 	}
 	compareAttr := cmp.Comparer(func(a, b attribute.KeyValue) bool {
-		return a.Key == b.Key && a.Value.AsInterface() == b.Value.AsInterface()
+		return a.Key == b.Key && a.Value.Emit() == b.Value.Emit()
 	})
 	sortAttr := cmpopts.SortSlices(func(a, b attribute.KeyValue) bool {
 		return a.Key < b.Key
