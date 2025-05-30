@@ -132,7 +132,7 @@ type StreamImpl struct {
 	resourceTypeState map[xdsresource.Type]*resourceTypeState // Map of resource types to their state.
 	fc                *adsFlowControl                         // Flow control for ADS stream.
 	firstRequest      bool                                    // False after the first request is sent out.
-	messageReceived   bool                                    // True if atleast message was received on the stream.
+	messageReceived   bool                                    // True if at-least one message was received. It is reset after first attempt of stream restart.
 }
 
 // StreamOpts contains the options for creating a new ADS Stream.
@@ -257,6 +257,9 @@ func (s *StreamImpl) runner(ctx context.Context) {
 		if err != nil {
 			s.logger.Warningf("Failed to create a new ADS streaming RPC: %v", err)
 			s.onError(err, s.messageReceived)
+			s.mu.Lock()
+			s.messageReceived = false
+			s.mu.Unlock()
 			return nil
 		}
 		if s.logger.V(2) {
