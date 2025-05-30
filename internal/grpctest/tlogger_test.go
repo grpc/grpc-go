@@ -19,6 +19,9 @@
 package grpctest
 
 import (
+	"os"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
@@ -66,14 +69,104 @@ func (s) TestWarningDepth(*testing.T) {
 
 func (s) TestError(*testing.T) {
 	const numErrors = 10
-	TLogger.ExpectError("Expected error")
-	TLogger.ExpectError("Expected ln error")
-	TLogger.ExpectError("Expected formatted error")
-	TLogger.ExpectErrorN("Expected repeated error", numErrors)
+	ExpectError("Expected error")
+	ExpectError("Expected ln error")
+	ExpectError("Expected formatted error")
+	ExpectErrorN("Expected repeated error", numErrors)
 	grpclog.Error("Expected", "error")
 	grpclog.Errorln("Expected", "ln", "error")
 	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")
 	for i := 0; i < numErrors; i++ {
 		grpclog.Error("Expected repeated error")
+	}
+}
+
+func (s) TestInit(t *testing.T) {
+	// Reset the atomic value
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+
+	// Test initial state
+	tl := getLogger()
+	if tl == nil {
+		t.Fatal("getLogger() returned nil")
+	}
+	if tl.errors == nil {
+		t.Error("tl.errors is nil")
+	}
+	if len(tl.errors) != 0 {
+		t.Errorf("tl.errors = %v; want empty map", tl.errors)
+	}
+	if tl.initialized {
+		t.Error("tl.initialized = true; want false")
+	}
+	if tl.t != nil {
+		t.Error("tl.t is not nil")
+	}
+	if !tl.start.IsZero() {
+		t.Error("tl.start is not zero")
+	}
+}
+
+func (s) TestInitVerbosityLevel(t *testing.T) {
+	// Save original env var and reset atomic value
+	origLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	defer os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", origLevel)
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+
+	// Test with valid verbosity level
+	testLevel := "2"
+	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
+
+	// Initialize tl with verbosity level
+	tl := getLogger()
+	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	if vl, err := strconv.Atoi(vLevel); err == nil {
+		tl.v = vl
+	}
+
+	// Verify verbosity level
+	if tl.v != 2 {
+		t.Errorf("tl.v = %d; want 2", tl.v)
+	}
+
+	// Test with invalid verbosity level
+	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
+
+	// Reset atomic value and initialize new tl
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	tl = getLogger()
+	vLevel = os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	if vl, err := strconv.Atoi(vLevel); err == nil {
+		tl.v = vl
+	}
+
+	// Verify verbosity level remains at default (0) for invalid input
+	if tl.v != 0 {
+		t.Errorf("tl.v = %d; want 0", tl.v)
+	}
+}
+
+func (s) TestAtomicValue(t *testing.T) {
+	// Save original logger
+	origLogger := getLogger()
+	defer tLoggerAtomic.Store(origLogger)
+
+	// Create new logger
+	newLogger := &tLogger{errors: map[*regexp.Regexp]int{}}
+	tLoggerAtomic.Store(newLogger)
+
+	// Verify new logger is retrieved
+	retrievedLogger := getLogger()
+	if retrievedLogger != newLogger {
+		t.Error("getLogger() did not return the newly stored logger")
+	}
+
+	// Restore original logger
+	tLoggerAtomic.Store(origLogger)
+
+	// Verify original logger is retrieved
+	retrievedLogger = getLogger()
+	if retrievedLogger != origLogger {
+		t.Error("getLogger() did not return the original logger after restore")
 	}
 }
