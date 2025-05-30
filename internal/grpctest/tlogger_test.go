@@ -83,6 +83,9 @@ func (s) TestError(t *testing.T) {
 }
 
 func (s) TestInit(t *testing.T) {
+	// Reset the atomic value
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	
 	// Test initial state
 	logger := getLogger()
 	if logger == nil {
@@ -106,25 +109,23 @@ func (s) TestInit(t *testing.T) {
 }
 
 func (s) TestInitVerbosityLevel(t *testing.T) {
-	// Save original env var
+	// Save original env var and reset atomic value
 	origLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	defer os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", origLevel)
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
 
 	// Test with valid verbosity level
 	testLevel := "2"
 	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
 	
-	// Create new logger to trigger init
-	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	// Initialize logger with verbosity level
+	logger := getLogger()
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
-		if logger, ok := tLoggerAtomic.Load().(*tLogger); ok {
-			logger.v = vl
-		}
+		logger.v = vl
 	}
 
 	// Verify verbosity level
-	logger := getLogger()
 	if logger.v != 2 {
 		t.Errorf("logger.v = %d; want 2", logger.v)
 	}
@@ -132,25 +133,24 @@ func (s) TestInitVerbosityLevel(t *testing.T) {
 	// Test with invalid verbosity level
 	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
 	
-	// Create new logger to trigger init
+	// Reset atomic value and initialize new logger
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	logger = getLogger()
 	vLevel = os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
-		if logger, ok := tLoggerAtomic.Load().(*tLogger); ok {
-			logger.v = vl
-		}
+		logger.v = vl
 	}
 
-	// Verify verbosity level remains unchanged
-	logger = getLogger()
-	if logger.v != 2 {
-		t.Errorf("logger.v = %d; want 2", logger.v)
+	// Verify verbosity level remains at default (0) for invalid input
+	if logger.v != 0 {
+		t.Errorf("logger.v = %d; want 0", logger.v)
 	}
 }
 
 func (s) TestAtomicValue(t *testing.T) {
-	// Test atomic value storage and retrieval
+	// Save original logger
 	origLogger := getLogger()
+	defer tLoggerAtomic.Store(origLogger)
 	
 	// Create new logger
 	newLogger := &tLogger{errors: map[*regexp.Regexp]int{}}
