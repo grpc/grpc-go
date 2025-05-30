@@ -319,12 +319,6 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 
 	// Stop the management server and expect the error callback to be invoked.
 	lis.Stop()
-	select {
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for the connection error to be propagated to the watcher")
-	case <-watcher.AmbientErrorCh:
-	}
-
 	// Restart the management server.
 	lis.Restart()
 

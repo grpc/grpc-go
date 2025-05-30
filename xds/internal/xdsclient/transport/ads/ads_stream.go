@@ -132,6 +132,7 @@ type StreamImpl struct {
 	resourceTypeState map[xdsresource.Type]*resourceTypeState // Map of resource types to their state.
 	fc                *adsFlowControl                         // Flow control for ADS stream.
 	firstRequest      bool                                    // False after the first request is sent out.
+	messageReceived   bool                                    // True if atleast message was received on the stream.
 }
 
 // StreamOpts contains the options for creating a new ADS Stream.
@@ -255,7 +256,7 @@ func (s *StreamImpl) runner(ctx context.Context) {
 		stream, err := s.transport.CreateStreamingCall(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources")
 		if err != nil {
 			s.logger.Warningf("Failed to create a new ADS streaming RPC: %v", err)
-			s.onError(err, false)
+			s.onError(err, s.messageReceived)
 			return nil
 		}
 		if s.logger.V(2) {
@@ -267,6 +268,7 @@ func (s *StreamImpl) runner(ctx context.Context) {
 		// needs to be initialized everytime a new one is created.
 		s.fc = newADSFlowControl(s.logger)
 		s.firstRequest = true
+		s.messageReceived = false
 		s.mu.Unlock()
 
 		// Ensure that the most recently created stream is pushed on the
@@ -280,6 +282,9 @@ func (s *StreamImpl) runner(ctx context.Context) {
 		// Backoff state is reset upon successful receipt of at least one
 		// message from the server.
 		if s.recv(ctx, stream) {
+			s.mu.Lock()
+			s.messageReceived = true
+			s.mu.Unlock()
 			return backoff.ErrResetBackoff
 		}
 		return nil
