@@ -144,16 +144,16 @@ func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
 // Update updates the testing.T that the testing logger logs to. Should be done
 // before every test. It also initializes the tLogger if it has not already.
 func Update(t *testing.T) {
-	logger := getLogger()
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-	if !logger.initialized {
-		grpclog.SetLoggerV2(logger)
-		logger.initialized = true
+	tl := getLogger()
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	if !tl.initialized {
+		grpclog.SetLoggerV2(tl)
+		tl.initialized = true
 	}
-	logger.t = t
-	logger.start = time.Now()
-	logger.errors = map[*regexp.Regexp]int{}
+	tl.t = t
+	tl.start = time.Now()
+	tl.errors = map[*regexp.Regexp]int{}
 }
 
 // ExpectError declares an error to be expected. For the next test, the first
@@ -167,28 +167,28 @@ func ExpectError(expr string) {
 
 // ExpectErrorN declares an error to be expected n times.
 func ExpectErrorN(expr string, n int) {
-	logger := getLogger()
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
+	tl := getLogger()
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
 	re, err := regexp.Compile(expr)
 	if err != nil {
-		logger.t.Error(err)
+		tl.t.Error(err)
 		return
 	}
-	logger.errors[re] += n
+	tl.errors[re] += n
 }
 
 // EndTest checks if expected errors were not encountered.
 func EndTest(t *testing.T) {
-	logger := getLogger()
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-	for re, count := range logger.errors {
+	tl := getLogger()
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	for re, count := range tl.errors {
 		if count > 0 {
 			t.Errorf("Expected error '%v' not encountered", re.String())
 		}
 	}
-	logger.errors = map[*regexp.Regexp]int{}
+	tl.errors = map[*regexp.Regexp]int{}
 }
 
 // expected determines if the error string is protected or not.
