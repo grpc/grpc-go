@@ -254,7 +254,7 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 // If Watch returns Unimplemented, then the ClientConn should go into READY state.
 func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
-	grpctest.TLogger.ExpectError("Subchannel health check is unimplemented at server side, thus health check is disabled")
+	grpctest.ExpectError("Subchannel health check is unimplemented at server side, thus health check is disabled")
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
