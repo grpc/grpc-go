@@ -45,7 +45,7 @@ func (s) TestClientSideRetry(t *testing.T) {
 	managementServer, nodeID, _, xdsResolver := setup.ManagementServerAndResolver(t)
 
 	server := stubserver.StartTestService(t, &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			defer func() { ctr++ }()
 			if ctr < len(errs) {
 				return nil, status.Errorf(errs[ctr], "this should be retried")

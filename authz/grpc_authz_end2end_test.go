@@ -295,7 +295,7 @@ func (s) TestStaticPolicyEnd2End(t *testing.T) {
 			i, _ := authz.NewStatic(test.authzPolicy)
 
 			stub := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{}, nil
 				},
 				StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
@@ -374,7 +374,7 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnTLSAuthenticatedConnection(t *
 	}
 
 	stub := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		S: grpc.NewServer(grpc.Creds(creds), grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
@@ -436,7 +436,7 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t 
 		ClientCAs:    certPool,
 	})
 	stub := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		S: grpc.NewServer(grpc.Creds(creds), grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),
@@ -486,7 +486,7 @@ func (s) TestFileWatcherEnd2End(t *testing.T) {
 			defer i.Close()
 
 			stub := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{}, nil
 				},
 				StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
@@ -563,7 +563,7 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	defer i.Close()
 
 	stub := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		// Start a gRPC server with gRPC authz unary server interceptor.
@@ -608,7 +608,7 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	defer i.Close()
 
 	stub := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		// Start a gRPC server with gRPC authz unary server interceptors.
@@ -656,7 +656,7 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	defer i.Close()
 
 	stub := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		S: grpc.NewServer(grpc.ChainUnaryInterceptor(i.UnaryInterceptor)),

@@ -122,7 +122,7 @@ func (fsh *fakeStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) co
 	return ctx
 }
 
-func (fsh *fakeStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+func (fsh *fakeStatsHandler) HandleRPC(_ context.Context, rs stats.RPCStats) {
 	switch rs.(type) {
 	// stats.Begin won't get Telemetry Labels because happens after picker
 	// picks.

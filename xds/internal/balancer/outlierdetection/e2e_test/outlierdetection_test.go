@@ -77,7 +77,7 @@ func setupBackends(t *testing.T) ([]string, func()) {
 	// Construct and start 2 working backends.
 	for i := 0; i < 2; i++ {
 		backend := &stubserver.StubServer{
-			EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 				return &testpb.Empty{}, nil
 			},
 		}
@@ -91,7 +91,7 @@ func setupBackends(t *testing.T) ([]string, func()) {
 
 	// Construct and start a failing backend.
 	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return nil, errors.New("some error")
 		},
 	}

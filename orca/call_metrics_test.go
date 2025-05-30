@@ -73,7 +73,7 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 
 			// An interceptor to injects custom backend metrics, added only when
 			// the injectMetrics field in the test is set.
-			injectingInterceptor := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+			injectingInterceptor := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 				recorder := orca.CallMetricsRecorderFromContext(ctx)
 				if recorder == nil {
 					err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
@@ -91,7 +91,7 @@ func (s) TestE2ECallMetricsUnary(t *testing.T) {
 			// injectMetrics field in the test is set. It overwrites one of the
 			// values injected above, by the interceptor.
 			srv := stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 					if !test.injectMetrics {
 						return &testpb.Empty{}, nil
 					}
@@ -179,7 +179,7 @@ func (s) TestE2ECallMetricsStreaming(t *testing.T) {
 
 			// An interceptor which injects custom backend metrics, added only
 			// when the injectMetrics field in the test is set.
-			injectingInterceptor := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			injectingInterceptor := func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 				recorder := orca.CallMetricsRecorderFromContext(ss.Context())
 				if recorder == nil {
 					err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")

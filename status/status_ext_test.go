@@ -176,7 +176,7 @@ func (s) TestStatusDetails(t *testing.T) {
 					// Start a simple server that returns the trailer and error it receives from
 					// channels.
 					ss := &stubserver.StubServer{
-						UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+						UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 							grpc.SetTrailer(ctx, tc.trailerSent)
 							return nil, tc.errSent
 						},

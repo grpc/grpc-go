@@ -377,21 +377,21 @@ type server struct {
 	pb.UnimplementedSearchServiceServer
 }
 
-func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchResponse, error) {
+func (s *server) Search(context.Context, *pb.SearchRequest) (*pb.SearchResponse, error) {
 	return &pb.SearchResponse{}, nil
 }
 
-func (s *server) StreamingSearch(stream pb.SearchService_StreamingSearchServer) error {
+func (s *server) StreamingSearch(pb.SearchService_StreamingSearchServer) error {
 	return nil
 }
 
 type serverV3 struct{}
 
-func (s *serverV3) Search(ctx context.Context, in *pbv3.SearchRequestV3) (*pbv3.SearchResponseV3, error) {
+func (s *serverV3) Search(context.Context, *pbv3.SearchRequestV3) (*pbv3.SearchResponseV3, error) {
 	return &pbv3.SearchResponseV3{}, nil
 }
 
-func (s *serverV3) StreamingSearch(stream pbv3.SearchServiceV3_StreamingSearchServer) error {
+func (s *serverV3) StreamingSearch(pbv3.SearchServiceV3_StreamingSearchServer) error {
 	return nil
 }
 

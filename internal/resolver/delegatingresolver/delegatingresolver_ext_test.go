@@ -73,7 +73,7 @@ func createTestResolverClientConn(t *testing.T) (*testutils.ResolverClientConn, 
 // addresses returned by the delegating resolver exactly match those returned
 // by the target resolver.
 func (s) TestDelegatingResolverNoProxyEnvVarsSet(t *testing.T) {
-	hpfe := func(req *http.Request) (*url.URL, error) { return nil, nil }
+	hpfe := func(*http.Request) (*url.URL, error) { return nil, nil }
 	originalhpfe := delegatingresolver.HTTPSProxyFromEnvironment
 	delegatingresolver.HTTPSProxyFromEnvironment = hpfe
 	defer func() {
@@ -166,7 +166,7 @@ func proxyAddressWithTargetAttribute(proxyAddr string, targetAddr string) resolv
 
 func overrideTestHTTPSProxy(t *testing.T, proxyAddr string) {
 	t.Helper()
-	hpfe := func(req *http.Request) (*url.URL, error) {
+	hpfe := func(*http.Request) (*url.URL, error) {
 		return &url.URL{
 			Scheme: "https",
 			Host:   proxyAddr,

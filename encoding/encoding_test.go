@@ -334,7 +334,7 @@ func (s) TestForceCodecName(t *testing.T) {
 	// Create a test service backend that pushes the received content-type on a
 	// channel for the test to inspect.
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "no metadata in context")

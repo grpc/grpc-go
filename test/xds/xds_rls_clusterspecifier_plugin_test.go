@@ -137,7 +137,7 @@ func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
 
 	// Configure the fake RLS Server to set the RLS Balancers child CDS
 	// Cluster's name as the target for the RPC to use.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rls.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rls.RouteLookupResponse {
 		return &rls.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{"cluster-" + serviceName}}}
 	})
 

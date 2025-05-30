@@ -401,7 +401,7 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	// Provide a convenient way to expect backoff calls and return a minimal
 	// value.
 	oldBackoff := internal.DefaultBackoffFunc
-	internal.DefaultBackoffFunc = func(got int) time.Duration {
+	internal.DefaultBackoffFunc = func(int) time.Duration {
 		return time.Millisecond
 	}
 	defer func() { internal.DefaultBackoffFunc = oldBackoff }()

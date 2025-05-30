@@ -850,7 +850,7 @@ func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 
 	// Initialize a test gRPC server, assign it to the stub server, and start
 	// the test service.
-	opt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
 		if args.Mode == connectivity.ServingModeServing {
 			close(servingCh)
 		}
@@ -942,7 +942,7 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	}
 }
 
-func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+func (*loggerBuilder) ParseLoggerConfig(json.RawMessage) (audit.LoggerConfig, error) {
 	return nil, nil
 }
 

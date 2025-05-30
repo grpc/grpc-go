@@ -1510,7 +1510,7 @@ func (s) TestRPCSpanErrorStatus(t *testing.T) {
 	to, exporter := defaultTraceOptions(t)
 	const rpcErrorMsg = "unary call: internal server error"
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(_ context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return nil, fmt.Errorf("%v", rpcErrorMsg)
 		},
 	}
@@ -1559,7 +1559,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			name: "unary",
 			setupStub: func() *stubserver.StubServer {
 				return &stubserver.StubServer{
-					UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+					UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 						md, _ := metadata.FromIncomingContext(ctx)
 						headerAttempts := 0
 						if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {

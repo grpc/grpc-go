@@ -72,7 +72,7 @@ func (s) TestProducerStopsBeforeStateChange(t *testing.T) {
 	stub.Register(name, bf)
 
 	ss := stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			return nil
 		},
 	}
@@ -106,7 +106,7 @@ type testProducer struct {
 }
 
 // Build constructs and returns a producer and its cleanup function
-func (*producerBuilder) Build(cci any) (balancer.Producer, func()) {
+func (*producerBuilder) Build(any) (balancer.Producer, func()) {
 	p := &testProducer{}
 	return p, func() {
 		p.stopped.Store(true)

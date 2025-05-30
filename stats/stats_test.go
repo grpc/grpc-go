@@ -593,7 +593,7 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkInTrailer(t *testing.T, d *gotData, e *expectedData) {
+func checkInTrailer(t *testing.T, d *gotData, _ *expectedData) {
 	var (
 		ok bool
 		st *stats.InTrailer
@@ -701,7 +701,7 @@ func checkOutPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkOutTrailer(t *testing.T, d *gotData, e *expectedData) {
+func checkOutTrailer(t *testing.T, d *gotData, _ *expectedData) {
 	var (
 		ok bool
 		st *stats.OutTrailer
@@ -1504,7 +1504,7 @@ func (s) TestStatsHandlerCallsServerIsRegisteredMethod(t *testing.T) {
 		},
 	}
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}

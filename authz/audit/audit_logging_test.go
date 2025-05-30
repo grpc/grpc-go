@@ -78,7 +78,7 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	}
 }
 
-func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+func (*loggerBuilder) ParseLoggerConfig(json.RawMessage) (audit.LoggerConfig, error) {
 	return nil, nil
 }
 
@@ -246,7 +246,7 @@ func (s) TestAuditLogger(t *testing.T) {
 			serverCreds := loadServerCreds(t)
 			clientCreds := loadClientCreds(t)
 			ss := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{}, nil
 				},
 				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {

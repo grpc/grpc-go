@@ -488,7 +488,7 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 
 	// Override the xDS channel dialer with one that always fails.
 	origDialer := xdsclientinternal.GRPCNewClient
-	xdsclientinternal.GRPCNewClient = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	xdsclientinternal.GRPCNewClient = func(string, ...grpc.DialOption) (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("failed to create channel")
 	}
 	defer func() { xdsclientinternal.GRPCNewClient = origDialer }()

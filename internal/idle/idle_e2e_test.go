@@ -277,11 +277,11 @@ func (s) TestChannelIdleness_Enabled_OngoingCall(t *testing.T) {
 			// on a channel that is closed by the test later on.
 			blockCh := make(chan struct{})
 			backend := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					<-blockCh
 					return &testpb.Empty{}, nil
 				},
-				FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+				FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 					<-blockCh
 					return nil
 				},
