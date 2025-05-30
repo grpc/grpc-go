@@ -138,8 +138,7 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 			bal.ResolverError(err)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 			close(exitIdleCh)
 		},
 		Close: func(bd *stub.BalancerData) {
@@ -1110,7 +1109,7 @@ func (s) TestExitIdle(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for cds LB policy to be created")
 	}
-	cdsBal.(balancer.ExitIdler).ExitIdle()
+	cdsBal.ExitIdle()
 
 	// Wait for ExitIdle to be called on the child policy.
 	select {

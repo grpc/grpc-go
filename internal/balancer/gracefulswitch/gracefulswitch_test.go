@@ -795,9 +795,7 @@ func (s) TestInlineCallbackInBuild(t *testing.T) {
 	}
 }
 
-// TestExitIdle tests the ExitIdle operation on the Graceful Switch Balancer for
-// both possible codepaths, one where the child implements ExitIdler interface
-// and one where the child doesn't implement ExitIdler interface.
+// TestExitIdle tests the ExitIdle operation on the Graceful Switch Balancer.
 func (s) TestExitIdle(t *testing.T) {
 	_, gsb := setup(t)
 	// switch to a balancer that implements ExitIdle{} (will populate current).
@@ -811,22 +809,6 @@ func (s) TestExitIdle(t *testing.T) {
 	if err := currBal.waitForExitIdle(ctx); err != nil {
 		t.Fatal(err)
 	}
-
-	// switch to a balancer that doesn't implement ExitIdle{} (will populate
-	// pending).
-	gsb.SwitchTo(verifyBalancerBuilder{})
-	// call exitIdle concurrently with newSubConn to make sure there is not a
-	// data race.
-	done := make(chan struct{})
-	go func() {
-		gsb.ExitIdle()
-		close(done)
-	}()
-	pendBal := gsb.balancerPending.Balancer.(*verifyBalancer)
-	for i := 0; i < 10; i++ {
-		pendBal.newSubConn([]resolver.Address{}, balancer.NewSubConnOptions{})
-	}
-	<-done
 }
 
 const balancerName1 = "mock_balancer_1"
@@ -1010,6 +992,8 @@ func (vb *verifyBalancer) UpdateClientConnState(balancer.ClientConnState) error 
 	return nil
 }
 
+func (vb *verifyBalancer) ExitIdle() {}
+
 func (vb *verifyBalancer) ResolverError(error) {}
 
 func (vb *verifyBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -1067,6 +1051,8 @@ func (bcb *buildCallbackBal) UpdateClientConnState(balancer.ClientConnState) err
 }
 
 func (bcb *buildCallbackBal) ResolverError(error) {}
+
+func (bcb *buildCallbackBal) ExitIdle() {}
 
 func (bcb *buildCallbackBal) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	panic(fmt.Sprintf("UpdateSubConnState(%v, %+v) called unexpectedly", sc, state))

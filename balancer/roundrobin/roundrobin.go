@@ -72,8 +72,5 @@ func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 }
 
 func (b *rrBalancer) ExitIdle() {
-	// Should always be ok, as child is endpoint sharding.
-	if ei, ok := b.Balancer.(balancer.ExitIdler); ok {
-		ei.ExitIdle()
-	}
+	b.Balancer.ExitIdle()
 }
