@@ -130,10 +130,6 @@ func getConfigKey(attr *attributes.Attributes) (string, bool) {
 	return name, ok
 }
 
-func (b *testConfigBalancer) ExitIdle() {
-	b.Balancer.ExitIdle()
-}
-
 func (b *testConfigBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	c, ok := s.BalancerConfig.(stringBalancerConfig)
 	if !ok {

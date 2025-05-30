@@ -1592,10 +1592,6 @@ func (b *stateStoringBalancer) Close() {
 	b.Balancer.Close()
 }
 
-func (b *stateStoringBalancer) ExitIdle() {
-	b.Balancer.ExitIdle()
-}
-
 type stateStoringBalancerBuilder struct {
 	balancer chan *stateStoringBalancer
 }

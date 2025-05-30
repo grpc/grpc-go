@@ -217,10 +217,6 @@ func (es *endpointSharding) ExitIdle() {
 	es.childMu.Lock()
 	defer es.childMu.Unlock()
 	for _, bw := range es.children.Load().Values() {
-		// this implementation assumes the child balancer supports
-		// exitidle (but still checks for the interface's existence to
-		// avoid a panic if not). If the child does not, no subconns
-		// will be connected.
 		if !bw.isClosed {
 			bw.child.ExitIdle()
 		}

@@ -223,7 +223,7 @@ func (gsb *Balancer) ExitIdle() {
 	// There is no need to protect this read with a mutex, as the write to the
 	// Balancer field happens in SwitchTo, which completes before this can be
 	// called.
-	balToUpdate.Balancer.ExitIdle()
+	balToUpdate.ExitIdle()
 }
 
 // updateSubConnState forwards the update to the appropriate child.
