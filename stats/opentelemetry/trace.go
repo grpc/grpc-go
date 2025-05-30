@@ -51,9 +51,9 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// Increment retry count for the next attempt if not a transparent
 		// retry.
 		if !rs.IsTransparentRetryAttempt {
-			if ci, ok := retryCount(ai.ctx); ok {
+			if ci := getCallInfo(ai.ctx); ci != nil {
 				ci.previousRPCAttempts.Add(1)
-				ai.ctx = setRetryCount(ai.ctx, ci)
+				ai.ctx = setCallInfo(ai.ctx, ci)
 			}
 		}
 	case *stats.PickerUpdated:

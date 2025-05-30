@@ -179,7 +179,8 @@ type callInfo struct {
 	// nameResolutionEventAdded is set when the resolver delay trace event
 	// is added. Prevents duplicate events, since it is reported per-attempt.
 	nameResolutionEventAdded atomic.Bool
-	// previousRPCAttempts holds the count of non-transparent retry attempts.
+	// previousRPCAttempts holds the count of RPC attempts that have happened
+	// before current attempt. Transparent retries are excluded.
 	previousRPCAttempts atomic.Int32
 }
 
@@ -213,15 +214,6 @@ func setRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
 func getRPCInfo(ctx context.Context) *rpcInfo {
 	ri, _ := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	return ri
-}
-
-func setRetryCount(ctx context.Context, ci *callInfo) context.Context {
-	return context.WithValue(ctx, retryCountKey{}, ci)
-}
-
-func retryCount(ctx context.Context) (*callInfo, bool) {
-	ci, ok := ctx.Value(retryCountKey{}).(*callInfo)
-	return ci, ok
 }
 
 func removeLeadingSlash(mn string) string {
