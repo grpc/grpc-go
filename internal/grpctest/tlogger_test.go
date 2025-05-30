@@ -68,6 +68,7 @@ func (s) TestWarningDepth(*testing.T) {
 }
 
 func (s) TestError(t *testing.T) {
+	Update(t)
 	const numErrors = 10
 	ExpectError("Expected error")
 	ExpectError("Expected ln error")
