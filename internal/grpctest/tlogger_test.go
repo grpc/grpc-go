@@ -69,7 +69,6 @@ func (s) TestWarningDepth(*testing.T) {
 
 func (s) TestError(t *testing.T) {
 	const numErrors = 10
-	Update(t)
 	ExpectError("Expected error")
 	ExpectError("Expected ln error")
 	ExpectError("Expected formatted error")
@@ -85,7 +84,7 @@ func (s) TestError(t *testing.T) {
 func (s) TestInit(t *testing.T) {
 	// Reset the atomic value
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
-	
+
 	// Test initial state
 	logger := getLogger()
 	if logger == nil {
@@ -117,7 +116,7 @@ func (s) TestInitVerbosityLevel(t *testing.T) {
 	// Test with valid verbosity level
 	testLevel := "2"
 	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
-	
+
 	// Initialize logger with verbosity level
 	logger := getLogger()
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
@@ -132,7 +131,7 @@ func (s) TestInitVerbosityLevel(t *testing.T) {
 
 	// Test with invalid verbosity level
 	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
-	
+
 	// Reset atomic value and initialize new logger
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
 	logger = getLogger()
@@ -151,20 +150,20 @@ func (s) TestAtomicValue(t *testing.T) {
 	// Save original logger
 	origLogger := getLogger()
 	defer tLoggerAtomic.Store(origLogger)
-	
+
 	// Create new logger
 	newLogger := &tLogger{errors: map[*regexp.Regexp]int{}}
 	tLoggerAtomic.Store(newLogger)
-	
+
 	// Verify new logger is retrieved
 	retrievedLogger := getLogger()
 	if retrievedLogger != newLogger {
 		t.Error("getLogger() did not return the newly stored logger")
 	}
-	
+
 	// Restore original logger
 	tLoggerAtomic.Store(origLogger)
-	
+
 	// Verify original logger is retrieved
 	retrievedLogger = getLogger()
 	if retrievedLogger != origLogger {
