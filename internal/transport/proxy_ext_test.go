@@ -73,7 +73,7 @@ func isIPAddr(addr string) bool {
 
 func overrideTestHTTPSProxy(t *testing.T, proxyAddr string) {
 	t.Helper()
-	hpfe := func(req *http.Request) (*url.URL, error) {
+	hpfe := func(*http.Request) (*url.URL, error) {
 		return &url.URL{
 			Scheme: "https",
 			Host:   proxyAddr,
