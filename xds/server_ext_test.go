@@ -325,12 +325,12 @@ func (s) TestServer_Basic(t *testing.T) {
 
 	// Wait for the server to be ready to accept connections
 	select {
-	case mode := <-modeChangeHandler.modeCh:
-		if mode != connectivity.ServingModeServing {
-			t.Fatalf("Server not in SERVING mode, got: %v", mode)
-		}
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the server to start serving RPCs")
+	case gotMode := <-modeChangeHandler.modeCh:
+		if gotMode != connectivity.ServingModeServing {
+			t.Fatalf("Mode changed to %v, want %v", gotMode, connectivity.ServingModeServing)
+		}
 	}
 
 	// Ensure that the server is serving RPCs successfully.
