@@ -294,6 +294,28 @@ func (s) TestServer_Basic(t *testing.T) {
 		}
 	}
 
+	// Ensure that the server is not serving RPCs yet.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case <-modeChangeHandler.modeCh:
+		t.Fatal("Server started serving RPCs before the route config was received")
+	}
+
+	// Create a gRPC channel to the xDS enabled server.
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed: %v", lis.Addr(), err)
+	}
+	defer cc.Close()
+
+	// Ensure that the server isnt't serving RPCs successfully.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil || status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() returned %v, want %v", err, codes.Unavailable)
+	}
+
 	// Configure the management server with the expected route config resource,
 	// and expect RPCs to succeed.
 	resources.Routes = []*v3routepb.RouteConfiguration{e2e.RouteConfigNonForwardingAction(routeConfigName)}
@@ -310,13 +332,6 @@ func (s) TestServer_Basic(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for the server to start serving RPCs")
 	}
-
-	// Create a gRPC channel to the xDS enabled server.
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed: %v", lis.Addr(), err)
-	}
-	defer cc.Close()
 
 	// Ensure that the server is serving RPCs successfully.
 	waitForSuccessfulRPC(ctx, t, cc)
