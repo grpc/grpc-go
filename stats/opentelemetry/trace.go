@@ -17,8 +17,6 @@
 package opentelemetry
 
 import (
-	"sync/atomic"
-
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -50,8 +48,14 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
 			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 		)
-		// increment previous rpc attempts applicable for next attempt
-		atomic.AddUint32(&ai.previousRPCAttempts, 1)
+		// Increment retry count for the next attempt if not a transparent
+		// retry.
+		if !rs.IsTransparentRetryAttempt {
+			if ci := getCallInfo(ai.ctx); ci != nil {
+				ci.previousRPCAttempts.Add(1)
+				ai.ctx = setCallInfo(ai.ctx, ci)
+			}
+		}
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:

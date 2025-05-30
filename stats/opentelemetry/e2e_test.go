@@ -1789,3 +1789,163 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 	}
 	validateTraces(t, spans, wantSpanInfos)
 }
+
+// TestRetrySpans_UnaryCallAttributes checks that OpenTelemetry spans
+// correctly record retry attempts during a retried unary RPC call.
+func (s) TestRetrySpans_UnaryCallAttributes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			md, _ := metadata.FromIncomingContext(ctx)
+			headerAttempts := 0
+			if h := md["grpc-previous-rpc-attempts"]; len(h) > 0 {
+				headerAttempts, _ = strconv.Atoi(h[0])
+			}
+			if headerAttempts < 2 {
+				return nil, status.Errorf(codes.Unavailable, "retry (%d)", headerAttempts)
+			}
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+
+	retryPolicy := `{
+		"methodConfig": [{
+			"name": [{"service": "grpc.testing.TestService"}],
+			"retryPolicy": {
+				"maxAttempts": 3,
+				"initialBackoff": "0.05s",
+				"maxBackoff": "0.2s",
+				"backoffMultiplier": 1.0,
+				"retryableStatusCodes": ["UNAVAILABLE"]
+			}
+		}]
+	}`
+
+	mo, _ := defaultMetricsOptions(t, nil)
+	to, exporter := defaultTraceOptions(t)
+	opts := opentelemetry.Options{MetricsOptions: *mo, TraceOptions: *to}
+
+	if err := ss.Start([]grpc.ServerOption{opentelemetry.ServerOption(opts)}); err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Stop()
+
+	rb := manual.NewBuilderWithScheme("retry-test")
+	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+
+	cc, err := grpc.NewClient(
+		rb.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(rb),
+		opentelemetry.DialOption(opts),
+		grpc.WithDefaultServiceConfig(retryPolicy),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cc.Close()
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall failed: %v", err)
+	}
+
+	wantSpanInfos := []traceSpanInfo{
+		{
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", false),
+				attribute.Bool("FailFast", false),
+				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: nil,
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", true),
+				attribute.Bool("FailFast", true),
+				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: nil,
+		},
+		{
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", false),
+				attribute.Bool("FailFast", false),
+				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: nil,
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", true),
+				attribute.Bool("FailFast", true),
+				attribute.Int("previous-rpc-attempts", 1),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: nil,
+		},
+		{
+			name:     "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindServer.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", false),
+				attribute.Bool("FailFast", false),
+				attribute.Int("previous-rpc-attempts", 0),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: nil,
+		},
+		{
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
+			spanKind: oteltrace.SpanKindInternal.String(),
+			attributes: []attribute.KeyValue{
+				attribute.Bool("Client", true),
+				attribute.Bool("FailFast", true),
+				attribute.Int("previous-rpc-attempts", 2),
+				attribute.Bool("transparent-retry", false),
+			},
+			events: nil,
+		},
+		{
+			name:       "Sent.grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindClient.String(),
+			attributes: nil,
+			events:     nil,
+		},
+	}
+
+	spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
+	if err != nil {
+		t.Fatalf("Span collection failed: %v", err)
+	}
+
+	wantSpanInfosMap := make(map[traceSpanInfoMapKey]traceSpanInfo)
+	for _, info := range wantSpanInfos {
+		key := traceSpanInfoMapKey{spanName: info.name, spanKind: info.spanKind}
+		wantSpanInfosMap[key] = info
+	}
+	compareAttr := cmp.Comparer(func(a, b attribute.KeyValue) bool {
+		return a.Key == b.Key && a.Value.Emit() == b.Value.Emit()
+	})
+	sortAttr := cmpopts.SortSlices(func(a, b attribute.KeyValue) bool {
+		return a.Key < b.Key
+	})
+	for i, span := range spans {
+		want := wantSpanInfos[i]
+		if diff := cmp.Diff(want.attributes, span.Attributes, sortAttr, compareAttr); diff != "" {
+			t.Errorf("Attributes mismatch for span[%d] %q (-want +got):\n%s", i, span.Name, diff)
+		}
+	}
+}
