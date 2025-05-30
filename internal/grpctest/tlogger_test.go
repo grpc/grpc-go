@@ -19,6 +19,9 @@
 package grpctest
 
 import (
+	"os"
+	"regexp"
+	"strconv"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
@@ -76,5 +79,95 @@ func (s) TestError(t *testing.T) {
 	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")
 	for i := 0; i < numErrors; i++ {
 		grpclog.Error("Expected repeated error")
+	}
+}
+
+func (s) TestInit(t *testing.T) {
+	// Test initial state
+	logger := getLogger()
+	if logger == nil {
+		t.Fatal("getLogger() returned nil")
+	}
+	if logger.errors == nil {
+		t.Error("logger.errors is nil")
+	}
+	if len(logger.errors) != 0 {
+		t.Errorf("logger.errors = %v; want empty map", logger.errors)
+	}
+	if logger.initialized {
+		t.Error("logger.initialized = true; want false")
+	}
+	if logger.t != nil {
+		t.Error("logger.t is not nil")
+	}
+	if !logger.start.IsZero() {
+		t.Error("logger.start is not zero")
+	}
+}
+
+func (s) TestInitVerbosityLevel(t *testing.T) {
+	// Save original env var
+	origLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	defer os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", origLevel)
+
+	// Test with valid verbosity level
+	testLevel := "2"
+	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
+	
+	// Create new logger to trigger init
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	if vl, err := strconv.Atoi(vLevel); err == nil {
+		if logger, ok := tLoggerAtomic.Load().(*tLogger); ok {
+			logger.v = vl
+		}
+	}
+
+	// Verify verbosity level
+	logger := getLogger()
+	if logger.v != 2 {
+		t.Errorf("logger.v = %d; want 2", logger.v)
+	}
+
+	// Test with invalid verbosity level
+	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
+	
+	// Create new logger to trigger init
+	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	vLevel = os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
+	if vl, err := strconv.Atoi(vLevel); err == nil {
+		if logger, ok := tLoggerAtomic.Load().(*tLogger); ok {
+			logger.v = vl
+		}
+	}
+
+	// Verify verbosity level remains unchanged
+	logger = getLogger()
+	if logger.v != 2 {
+		t.Errorf("logger.v = %d; want 2", logger.v)
+	}
+}
+
+func (s) TestAtomicValue(t *testing.T) {
+	// Test atomic value storage and retrieval
+	origLogger := getLogger()
+	
+	// Create new logger
+	newLogger := &tLogger{errors: map[*regexp.Regexp]int{}}
+	tLoggerAtomic.Store(newLogger)
+	
+	// Verify new logger is retrieved
+	retrievedLogger := getLogger()
+	if retrievedLogger != newLogger {
+		t.Error("getLogger() did not return the newly stored logger")
+	}
+	
+	// Restore original logger
+	tLoggerAtomic.Store(origLogger)
+	
+	// Verify original logger is retrieved
+	retrievedLogger = getLogger()
+	if retrievedLogger != origLogger {
+		t.Error("getLogger() did not return the original logger after restore")
 	}
 }
