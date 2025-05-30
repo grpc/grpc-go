@@ -86,24 +86,24 @@ func (s) TestInit(t *testing.T) {
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
 
 	// Test initial state
-	logger := getLogger()
-	if logger == nil {
+	tl := getLogger()
+	if tl == nil {
 		t.Fatal("getLogger() returned nil")
 	}
-	if logger.errors == nil {
-		t.Error("logger.errors is nil")
+	if tl.errors == nil {
+		t.Error("tl.errors is nil")
 	}
-	if len(logger.errors) != 0 {
-		t.Errorf("logger.errors = %v; want empty map", logger.errors)
+	if len(tl.errors) != 0 {
+		t.Errorf("tl.errors = %v; want empty map", tl.errors)
 	}
-	if logger.initialized {
-		t.Error("logger.initialized = true; want false")
+	if tl.initialized {
+		t.Error("tl.initialized = true; want false")
 	}
-	if logger.t != nil {
-		t.Error("logger.t is not nil")
+	if tl.t != nil {
+		t.Error("tl.t is not nil")
 	}
-	if !logger.start.IsZero() {
-		t.Error("logger.start is not zero")
+	if !tl.start.IsZero() {
+		t.Error("tl.start is not zero")
 	}
 }
 
@@ -117,32 +117,32 @@ func (s) TestInitVerbosityLevel(t *testing.T) {
 	testLevel := "2"
 	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
 
-	// Initialize logger with verbosity level
-	logger := getLogger()
+	// Initialize tl with verbosity level
+	tl := getLogger()
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
-		logger.v = vl
+		tl.v = vl
 	}
 
 	// Verify verbosity level
-	if logger.v != 2 {
-		t.Errorf("logger.v = %d; want 2", logger.v)
+	if tl.v != 2 {
+		t.Errorf("tl.v = %d; want 2", tl.v)
 	}
 
 	// Test with invalid verbosity level
 	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
 
-	// Reset atomic value and initialize new logger
+	// Reset atomic value and initialize new tl
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
-	logger = getLogger()
+	tl = getLogger()
 	vLevel = os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
-		logger.v = vl
+		tl.v = vl
 	}
 
 	// Verify verbosity level remains at default (0) for invalid input
-	if logger.v != 0 {
-		t.Errorf("logger.v = %d; want 0", logger.v)
+	if tl.v != 0 {
+		t.Errorf("tl.v = %d; want 0", tl.v)
 	}
 }
 
