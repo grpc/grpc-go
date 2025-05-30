@@ -28,7 +28,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -234,5 +233,5 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 func (c *byteCodec) Name() string {
 	// Return "proto" to ensure the Content-Type header is "application/grpc",
 	// which is expected by standard gRPC servers for protobuf messages.
-	return proto.Name
+	return "proto"
 }
