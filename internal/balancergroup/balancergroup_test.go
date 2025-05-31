@@ -514,6 +514,58 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 	}
 }
 
+func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-exit-idle-one-after-close"
+	called := false
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			called = true
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+	bg.ExitIdleOne(testBalancerIDs[0])
+
+	if called {
+		t.Fatalf("ExitIdleOne called ExitIdle on sub-balancer after BalancerGroup was closed")
+	}
+}
+
+func (s) TestBalancerGroup_ExitIdleOne_NonExistentID(t *testing.T) {
+	balancerName := "stub-balancer-test-exit-idle-one-missing-id"
+	called := false
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			called = true
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+	defer bg.Close()
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.ExitIdleOne("non-existent-id")
+
+	if called {
+		t.Fatalf("ExitIdleOne called ExitIdle on wrong sub-balancer ID")
+	}
+}
+
 // TestBalancerGracefulSwitch tests the graceful switch functionality for a
 // child of the balancer group. At first, the child is configured as a round
 // robin load balancer, and thus should behave accordingly. The test then
@@ -642,9 +694,9 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 }
 
 func (s) TestBalancerExitIdle_All(t *testing.T) {
-	const balancerOne = "stub-balancer-test-balancer-group-exit-idle-one"
-	const balancerTwo = "stub-balancer-test-balancer-group-exit-idle-two"
-	const balancerThree = "stub-balancer-test-balancer-group-exit-idle-three"
+	balancerOne := "stub-balancer-test-balancer-group-exit-idle-one"
+	balancerTwo := "stub-balancer-test-balancer-group-exit-idle-two"
+	balancerThree := "stub-balancer-test-balancer-group-exit-idle-three"
 
 	balancerNames := []string{balancerOne, balancerTwo, balancerThree}
 	testIDs := []string{testBalancerIDs[0], testBalancerIDs[1], testBalancerIDs[2]}
@@ -692,8 +744,7 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
-	const balancerName = "stub-balancer-test-balancer-group-exit-idle-after-close"
-
+	balancerName := "stub-balancer-test-balancer-group-exit-idle-after-close"
 	called := false
 
 	stub.Register(balancerName, stub.BalancerFuncs{
@@ -702,18 +753,15 @@ func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 		},
 	})
 
-	cc := testutils.NewBalancerClientConn(t)
 	bg := New(Options{
-		CC:              cc,
+		CC:              testutils.NewBalancerClientConn(t),
 		BuildOpts:       balancer.BuildOptions{},
 		StateAggregator: nil,
 		Logger:          nil,
 	})
 
 	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
-
 	bg.Close()
-
 	bg.ExitIdle()
 
 	if called {
