@@ -484,6 +484,63 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 	}
 }
 
+func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-update-client-state-after-close"
+	called := false
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
+			called = true
+			return nil
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+
+	err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{})
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+	if called {
+		t.Fatalf("UpdateClientConnState was called after BalancerGroup was closed")
+	}
+}
+
+func (s) TestBalancerGroup_ResolverError_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-resolver-error-after-close"
+	called := false
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ResolverError: func(_ *stub.BalancerData, _ error) {
+			called = true
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+
+	bg.ResolverError(errors.New("test error"))
+
+	if called {
+		t.Fatalf("ResolverError was called on sub-balancer after BalancerGroup was closed")
+	}
+}
+
 func (s) TestBalancerExitIdleOne(t *testing.T) {
 	const balancerName = "stub-balancer-test-balancergroup-exit-idle-one"
 	exitIdleCh := make(chan struct{}, 1)
