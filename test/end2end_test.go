@@ -4269,10 +4269,6 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 	// checking.
 	handlerDone := make(chan struct{})
 	te := newTest(t, e)
-	te.customServerOptions = append(te.customServerOptions,
-		grpc.StaticStreamWindowSize(64000),
-		grpc.StaticConnWindowSize(10000),
-	)
 	ts := &funcServer{streamingInputCall: func(stream testgrpc.TestService_StreamingInputCallServer) error {
 		defer close(handlerDone)
 		// Block on serverTester receiving RST_STREAM. This ensures server has closed
