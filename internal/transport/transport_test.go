@@ -787,10 +787,12 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	sc := &ServerConfig{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:      true,
 	}
 	co := ConnectOptions{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:      true,
 	}
 	server, ct, cancel := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer cancel()
