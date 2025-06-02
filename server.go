@@ -300,7 +300,7 @@ func InitialConnWindowSize(s int32) ServerOption {
 func StaticStreamWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialWindowSize = s
-		o.staticWindowSize = false
+		o.staticWindowSize = true
 	})
 }
 
@@ -311,7 +311,7 @@ func StaticStreamWindowSize(s int32) ServerOption {
 func StaticConnWindowSize(s int32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.initialConnWindowSize = s
-		o.staticWindowSize = false
+		o.staticWindowSize = true
 	})
 }
 
