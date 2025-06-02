@@ -179,12 +179,10 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	iwz := int32(initialWindowSize)
 	if config.InitialWindowSize >= defaultWindowSize {
 		iwz = config.InitialWindowSize
-		config.StaticWindowSize = false
 	}
 	icwz := int32(initialWindowSize)
 	if config.InitialConnWindowSize >= defaultWindowSize {
 		icwz = config.InitialConnWindowSize
-		config.StaticWindowSize = false
 	}
 	if iwz != defaultWindowSize {
 		isettings = append(isettings, http2.Setting{
@@ -284,7 +282,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	t.logger = prefixLoggerForServerTransport(t)
 
 	t.controlBuf = newControlBuffer(t.done)
-	if config.StaticWindowSize {
+	if !config.StaticWindowSize {
 		t.bdpEst = &bdpEstimator{
 			bdp:               initialWindowSize,
 			updateFlowControl: t.updateFlowControl,

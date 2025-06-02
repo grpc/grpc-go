@@ -213,7 +213,7 @@ func WithReadBufferSize(s int) DialOption {
 func WithInitialWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.InitialWindowSize = s
-		o.copts.StaticWindowSize = false
+		o.copts.StaticWindowSize = true
 	})
 }
 
@@ -223,7 +223,7 @@ func WithInitialWindowSize(s int32) DialOption {
 func WithInitialConnWindowSize(s int32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.InitialConnWindowSize = s
-		o.copts.StaticWindowSize = false
+		o.copts.StaticWindowSize = true
 	})
 }
 
