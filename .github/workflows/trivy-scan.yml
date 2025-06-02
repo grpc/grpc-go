@@ -1,0 +1,35 @@
+name: trivy-scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        id: trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          exit-code: '1'
+          severity: CRITICAL
+          format: table
+          ignore-unfixed: false
+
+      - name: Show Trivy report
+        if: always()
+        run: echo "${{ steps.trivy.outputs.report }}"
+
+      - name: Fail if vulnerabilities found
+        if: steps.trivy.outputs.exitcode != '0'
+        run: |
+          echo "Critical vulnerabilities detected! Failing the workflow."
+          exit 1
