@@ -82,7 +82,7 @@ func (s) TestExitIdle(t *testing.T) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			bd.Data.(balancer.Balancer).ResolverError(err)
@@ -410,7 +410,7 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			bd.Data.(balancer.Balancer).ResolverError(err)
