@@ -42,12 +42,17 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// Note: Go always added Client and FailFast attributes even though they are not
 		// defined by the OpenCensus gRPC spec. Thus, they are unimportant for
 		// correctness.
-		span.SetAttributes(
+		attrs := []attribute.KeyValue{
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.FailFast),
-			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
-			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
-		)
+		}
+		if rs.Client {
+			attrs = append(attrs,
+				attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
+				attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
+			)
+		}
+		span.SetAttributes(attrs...)
 		// Increment retry count for the next attempt if not a transparent
 		// retry.
 		if !rs.IsTransparentRetryAttempt {

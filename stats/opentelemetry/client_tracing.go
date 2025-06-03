@@ -124,9 +124,7 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	if ci := getCallInfo(ctx); ci != nil {
 		ai.previousRPCAttempts = uint32(ci.previousRPCAttempts.Load())
 	}
-	if ai.ctx == nil {
-		ai.ctx = ctx
-	}
+	ai.ctx = ctx
 	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
