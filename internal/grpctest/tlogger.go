@@ -77,9 +77,8 @@ func init() {
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
-		if logger, ok := tLoggerAtomic.Load().(*tLogger); ok {
-			logger.v = vl
-		}
+		lgr := getLogger()
+		lgr.v = vl
 	}
 }
 

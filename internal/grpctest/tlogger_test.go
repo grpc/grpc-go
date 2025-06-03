@@ -109,13 +109,11 @@ func (s) TestInit(t *testing.T) {
 
 func (s) TestInitVerbosityLevel(t *testing.T) {
 	// Save original env var and reset atomic value
-	origLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	defer os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", origLevel)
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
 
 	// Test with valid verbosity level
 	testLevel := "2"
-	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
+	t.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
 
 	// Initialize tl with verbosity level
 	tl := getLogger()
@@ -130,7 +128,7 @@ func (s) TestInitVerbosityLevel(t *testing.T) {
 	}
 
 	// Test with invalid verbosity level
-	os.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
+	t.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
 
 	// Reset atomic value and initialize new tl
 	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
