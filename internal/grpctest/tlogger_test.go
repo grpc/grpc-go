@@ -19,9 +19,7 @@
 package grpctest
 
 import (
-	"os"
 	"regexp"
-	"strconv"
 	"testing"
 
 	"google.golang.org/grpc/grpclog"
@@ -107,44 +105,7 @@ func (s) TestInit(t *testing.T) {
 	}
 }
 
-func (s) TestInitVerbosityLevel(t *testing.T) {
-	// Save original env var and reset atomic value
-	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
-
-	// Test with valid verbosity level
-	testLevel := "2"
-	t.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", testLevel)
-
-	// Initialize tl with verbosity level
-	tl := getLogger()
-	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	if vl, err := strconv.Atoi(vLevel); err == nil {
-		tl.v = vl
-	}
-
-	// Verify verbosity level
-	if tl.v != 2 {
-		t.Errorf("tl.v = %d; want 2", tl.v)
-	}
-
-	// Test with invalid verbosity level
-	t.Setenv("GRPC_GO_LOG_VERBOSITY_LEVEL", "invalid")
-
-	// Reset atomic value and initialize new tl
-	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
-	tl = getLogger()
-	vLevel = os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	if vl, err := strconv.Atoi(vLevel); err == nil {
-		tl.v = vl
-	}
-
-	// Verify verbosity level remains at default (0) for invalid input
-	if tl.v != 0 {
-		t.Errorf("tl.v = %d; want 0", tl.v)
-	}
-}
-
-func (s) TestAtomicValue(t *testing.T) {
+func (s) TestGetLogger(t *testing.T) {
 	// Save original logger
 	origLogger := getLogger()
 	defer tLoggerAtomic.Store(origLogger)
