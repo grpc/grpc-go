@@ -60,7 +60,7 @@ func newBLockingListenerWatcher() *blockingListenerWatcher {
 	}
 }
 
-func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, done func()) {
+func (lw *blockingListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, done func()) {
 	// Notify receipt of the update.
 	select {
 	case lw.updateCh <- struct{}{}:
@@ -73,7 +73,7 @@ func (lw *blockingListenerWatcher) ResourceChanged(update *xdsresource.ListenerR
 	}
 }
 
-func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
+func (lw *blockingListenerWatcher) ResourceError(_ error, done func()) {
 	// Notify receipt of an error.
 	select {
 	case lw.resourceErrCh <- struct{}{}:
@@ -86,7 +86,7 @@ func (lw *blockingListenerWatcher) ResourceError(err error, done func()) {
 	}
 }
 
-func (lw *blockingListenerWatcher) AmbientError(err error, done func()) {
+func (lw *blockingListenerWatcher) AmbientError(_ error, done func()) {
 	// Notify receipt of an error.
 	select {
 	case lw.ambientErrCh <- struct{}{}:
@@ -316,7 +316,7 @@ func (s) TestADSFlowControl_ResourceUpdates_MultipleResources(t *testing.T) {
 	wantResourceNames := []string{listenerResourceName1, listenerResourceName2}
 	requestCh := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() != version.V3ListenerURL {
 				return nil
 			}

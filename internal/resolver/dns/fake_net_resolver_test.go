@@ -67,7 +67,7 @@ func (tr *testNetResolver) UpdateHostLookupTable(table map[string][]string) {
 	tr.mu.Unlock()
 }
 
-func (tr *testNetResolver) LookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+func (tr *testNetResolver) LookupSRV(_ context.Context, service, proto, name string) (string, []*net.SRV, error) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 
@@ -83,7 +83,7 @@ func (tr *testNetResolver) LookupSRV(ctx context.Context, service, proto, name s
 	}
 }
 
-func (tr *testNetResolver) LookupTXT(ctx context.Context, host string) ([]string, error) {
+func (tr *testNetResolver) LookupTXT(_ context.Context, host string) ([]string, error) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 

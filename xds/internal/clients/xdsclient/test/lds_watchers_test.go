@@ -45,13 +45,13 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
+func (noopListenerWatcher) ResourceChanged(_ xdsclient.ResourceData, onDone func()) {
 	onDone()
 }
-func (noopListenerWatcher) ResourceError(err error, onDone func()) {
+func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
 	onDone()
 }
-func (noopListenerWatcher) AmbientError(err error, onDone func()) {
+func (noopListenerWatcher) AmbientError(_ error, onDone func()) {
 	onDone()
 }
 
@@ -184,7 +184,7 @@ func verifyListenerResourceError(ctx context.Context, updateCh *testutils.Channe
 	return verifyListenerError(ctx, gotErr, wantErr, wantNodeID)
 }
 
-func verifyListenerError(ctx context.Context, gotErr error, wantErr, wantNodeID string) error {
+func verifyListenerError(_ context.Context, gotErr error, wantErr, wantNodeID string) error {
 	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
 		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
 	}
@@ -613,7 +613,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	secondRequestReceived := syncutil.NewEvent()
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
 				firstRequestReceived = true
