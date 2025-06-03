@@ -101,10 +101,10 @@ type ProfilingServer interface {
 type UnimplementedProfilingServer struct{}
 
 func (UnimplementedProfilingServer) Enable(context.Context, *EnableRequest) (*EnableResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Enable not implemented")
+	return nil, status.Error(codes.Unimplemented, "method Enable not implemented")
 }
 func (UnimplementedProfilingServer) GetStreamStats(context.Context, *GetStreamStatsRequest) (*GetStreamStatsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStats not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetStreamStats not implemented")
 }
 func (UnimplementedProfilingServer) testEmbeddedByValue() {}
 

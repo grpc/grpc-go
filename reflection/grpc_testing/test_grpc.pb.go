@@ -93,10 +93,10 @@ type SearchServiceServer interface {
 type UnimplementedSearchServiceServer struct{}
 
 func (UnimplementedSearchServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
 }
 func (UnimplementedSearchServiceServer) StreamingSearch(grpc.BidiStreamingServer[SearchRequest, SearchResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingSearch not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingSearch not implemented")
 }
 func (UnimplementedSearchServiceServer) mustEmbedUnimplementedSearchServiceServer() {}
 func (UnimplementedSearchServiceServer) testEmbeddedByValue()                       {}
