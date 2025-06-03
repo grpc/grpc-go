@@ -469,10 +469,8 @@ func (s) TestADS_ACK_NACK_ResourceIsNotRequestedAnymore(t *testing.T) {
 	}
 
 	// Cancel the watch on the listener resource. This should result in the
-	// existing connection to be management server getting closed after the
-	// unsubscription discovery request is sent.
+	// existing connection to be management server getting closed.
 	ldsCancel()
-	// Verify that the connection to the management server is closed.
 	if _, err := streamCloseCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when expecting existing connection to be closed: %v", err)
 	}
