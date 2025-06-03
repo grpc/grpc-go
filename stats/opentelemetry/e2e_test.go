@@ -20,8 +20,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -285,10 +287,27 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		key := traceSpanInfoMapKey{spanName: info.name, spanKind: info.spanKind}
 		wantSpanInfosMap[key] = info
 	}
-
+	used := make([]bool, len(wantSpanInfos))
 	// Compare retrieved spans with expected spans.
-	for i, span := range spans {
-		want := wantSpanInfos[i]
+	for _, span := range spans {
+		var matchedIndex = -1
+		for i, want := range wantSpanInfos {
+			if used[i] {
+				continue
+			}
+			if want.name == span.Name && want.spanKind == span.SpanKind.String() {
+				matchedIndex = i
+				used[i] = true
+				break
+			}
+		}
+
+		if matchedIndex == -1 {
+			t.Errorf("Unexpected span: %q (%s)", span.Name, span.SpanKind)
+			continue
+		}
+
+		want := wantSpanInfos[matchedIndex]
 		// Check that the attempt span has the correct status.
 		if want.status != otelcodes.Unset {
 			got, want := span.Status.Code, want.status
@@ -306,7 +325,13 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 			return a.Key < b.Key
 		})
 		attributesValueComparable := cmpopts.EquateComparable(attribute.KeyValue{}.Value)
-		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
+		eventsTimeIgnore := cmp.FilterPath(
+			func(p cmp.Path) bool {
+				return p.Last().Type() == reflect.TypeOf(time.Time{}) &&
+					strings.HasSuffix(p.GoString(), ".Time")
+			},
+			cmp.Ignore(),
+		)
 
 		// attributes
 		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
@@ -1506,8 +1531,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 		name            string
 		setupStub       func() *stubserver.StubServer
 		doCall          func(context.Context, testgrpc.TestServiceClient) error
-		spanName        string
-		wantSpanInfosFn func(spanName string) []traceSpanInfo
+		wantSpanInfosFn func() []traceSpanInfo
 	}{
 		{
 			name: "unary",
@@ -1530,8 +1554,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
 				return err
 			},
-			spanName: "Sent.grpc.testing.TestService.UnaryCall",
-			wantSpanInfosFn: func(spanName string) []traceSpanInfo {
+			wantSpanInfosFn: func() []traceSpanInfo {
 				return []traceSpanInfo{
 					{
 						name:     "Recv.grpc.testing.TestService.UnaryCall",
@@ -1719,8 +1742,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				}
 				return nil
 			},
-			spanName: "Sent.grpc.testing.TestService.FullDuplexCall",
-			wantSpanInfosFn: func(spanName string) []traceSpanInfo {
+			wantSpanInfosFn: func() []traceSpanInfo {
 				return []traceSpanInfo{
 					{
 						name:     "Recv.grpc.testing.TestService.FullDuplexCall",
@@ -1890,7 +1912,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
 
-			wantSpanInfos := tt.wantSpanInfosFn(tt.spanName)
+			wantSpanInfos := tt.wantSpanInfosFn()
 			spans, err := waitForTraceSpans(ctx, exporter, wantSpanInfos)
 			if err != nil {
 				t.Fatal(err)
