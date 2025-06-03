@@ -527,3 +527,139 @@ func (s) TestWatchErrorsContainNodeID_ChannelCreationFailure(t *testing.T) {
 		}
 	}
 }
+
+// TestUnsubscribeAndResubscribe tests the scenario where the client is busy
+// processing a response (simulating a pending ACK at a higher level by holding
+// the onDone callback from watchers). During this busy state, a resource is
+// unsubscribed and then immediately resubscribed which causes the
+// unsubscription and new subscription requests to be buffered due to flow
+// control.
+//
+// The test verifies the following:
+//   - The resubscribed resource is served from the cache.
+//   - No "resource does not exist" error is generated for the resubscribed
+//     resource.
+func (s) TestRaceUnsubscribeResubscribe(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	nodeID := uuid.New().String()
+
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+	}
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	ldsResourceName1 := "test-listener-resource1"
+	ldsResourceName2 := "test-route-configuration-resource1"
+	rdsName1 := "test-listener-resource2"
+	rdsName2 := "test-route-configuration-resource2"
+	listenerResource1 := e2e.DefaultClientListener(ldsResourceName1, rdsName1)
+	listenerResource2 := e2e.DefaultClientListener(ldsResourceName2, rdsName2)
+
+	// Watch ldsResourceName1 with a regular watcher to ensure it's in cache
+	// and ACKed.
+	watcherInitial := newListenerWatcher()
+	cancelInitial := client.WatchResource(xdsresource.V3ListenerURL, ldsResourceName1, watcherInitial)
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{NodeID: nodeID, Listeners: []*v3listenerpb.Listener{listenerResource1}, SkipValidation: true}); err != nil {
+		t.Fatalf("mgmtServer.Update() for %s failed: %v", ldsResourceName1, err)
+	}
+	if err := verifyListenerUpdate(ctx, watcherInitial.updateCh, listenerUpdateErrTuple{update: listenerUpdate{RouteConfigName: rdsName1}}); err != nil {
+		t.Fatalf("watcherR1Initial did not receive update for %s: %v", ldsResourceName1, err)
+	}
+	cancelInitial()
+
+	// Watch ldsResourceName1 and ldsResourceName2 using blocking watchers.
+	// - Server sends {ldsResourceName1, ldsResourceName2}.
+	// - Watchers for both resources get the update but we HOLD on to their
+	//   onDone callbacks.
+	blockingWatcherR1 := newBLockingListenerWatcher()
+	cancelR1 := client.WatchResource(xdsresource.V3ListenerURL, ldsResourceName1, blockingWatcherR1)
+	// defer cancelR1 later to create the race
+
+	blockingWatcherR2 := newBLockingListenerWatcher()
+	cancelR2 := client.WatchResource(xdsresource.V3ListenerURL, ldsResourceName2, blockingWatcherR2)
+	defer cancelR2()
+
+	// Configure the listener resources on the management server.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{listenerResource1, listenerResource2},
+		SkipValidation: true}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("mgmtServer.Update() for %s and %s failed: %v", ldsResourceName1, ldsResourceName2, err)
+	}
+
+	var onDoneR1, onDoneR2 func()
+	select {
+	case <-blockingWatcherR1.updateCh:
+		onDoneR1 = <-blockingWatcherR1.doneNotifierCh
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for update for %s on blockingWatcherR1: %v", ldsResourceName1, ctx.Err())
+	}
+	select {
+	case <-blockingWatcherR2.updateCh:
+		onDoneR2 = <-blockingWatcherR2.doneNotifierCh
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for update for %s on blockingWatcherR2: %v", ldsResourceName2, ctx.Err())
+	}
+
+	// At this point, ACK for {listenerResource1,listenerResource2} has been
+	// sent by the client but s.fc.pending.Load() is true because onDoneR1 and
+	// onDoneR2 are held.
+	//
+	// Unsubscribe listenerResource1. This request should be buffered by
+	// adsStreamImpl because s.fc.pending.Load() is true.
+	cancelR1()
+
+	// Resubscribe listenerResource1 with a new regular watcher, which should
+	// be served from cache.
+	watcherR1New := newListenerWatcher()
+	cancelR1New := client.WatchResource(xdsresource.V3ListenerURL, ldsResourceName1, watcherR1New)
+	defer cancelR1New()
+
+	if err := verifyListenerUpdate(ctx, watcherR1New.updateCh, listenerUpdateErrTuple{update: listenerUpdate{RouteConfigName: rdsName1}}); err != nil {
+		t.Fatalf("watcherR1New did not receive cached update for %s: %v", ldsResourceName1, err)
+	}
+
+	// Release the onDone callbacks.
+	if onDoneR1 != nil { // onDoneR1 might be nil if cancelR1() completed very fast.
+		onDoneR1()
+	}
+	onDoneR2()
+
+	// Verify watcherR1New does not get a "resource does not exist" error.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout*10) // Slightly longer to catch delayed errors
+	defer sCancel()
+	if err := verifyNoListenerUpdate(sCtx, watcherR1New.resourceErrCh); err != nil {
+		t.Fatalf("watcherR1New received unexpected resource error for %s: %v", ldsResourceName1, err)
+	}
+	if err := verifyNoListenerUpdate(sCtx, watcherR1New.ambientErrCh); err != nil {
+		t.Fatalf("watcherR1New received unexpected ambient error for %s: %v", ldsResourceName1, err)
+	}
+}
