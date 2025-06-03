@@ -3778,7 +3778,7 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-  }
+	}
 }
 
 // Tests that a client receives a cardinality violation error for client-streaming
