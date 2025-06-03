@@ -3781,7 +3781,7 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	}
 }
 
-// Tests for a successful unary RPC, client will receive cardinality violaiton for second call to RecvMsg().
+// Tests that client will receive cardinality violation in subsequent calls to RecvMsg().
 func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 	e := tcpTLSEnv
 	te := newTest(t, e)
@@ -3817,7 +3817,7 @@ func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 	}
 }
 
-// Tests for a successful RPC, client will receive io.EOF for second call to RecvMsg().
+// Tests that client will receive cardinality violation in the subsequent calls to RecvMsg().
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
