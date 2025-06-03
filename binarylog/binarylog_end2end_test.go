@@ -1072,7 +1072,7 @@ func (s) TestCanceledStatus(t *testing.T) {
 
 	const statusMsgWant = "server returned Canceled"
 	ss := &stubserver.StubServer{
-		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			grpc.SetTrailer(ctx, metadata.Pairs("key", "value"))
 			return nil, status.Error(codes.Canceled, statusMsgWant)
 		},

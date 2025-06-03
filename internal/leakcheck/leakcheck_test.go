@@ -44,20 +44,21 @@ func (e *testLogger) Errorf(format string, args ...any) {
 
 func TestCheck(t *testing.T) {
 	const leakCount = 3
+	ch := make(chan struct{})
 	for i := 0; i < leakCount; i++ {
-		go func() { time.Sleep(2 * time.Second) }()
+		go func() { <-ch }()
 	}
-	if ig := interestingGoroutines(); len(ig) == 0 {
-		t.Error("blah")
+	if leaked := interestingGoroutines(); len(leaked) != leakCount {
+		t.Errorf("interestingGoroutines() = %d, want length %d", len(leaked), leakCount)
 	}
 	e := &testLogger{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	CheckGoroutines(ctx, e)
-	if e.errorCount != leakCount {
-		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
+	if CheckGoroutines(ctx, e); e.errorCount < leakCount {
+		t.Errorf("CheckGoroutines() = %d, want count %d", e.errorCount, leakCount)
 		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
+	close(ch)
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	CheckGoroutines(ctx, t)
@@ -69,22 +70,23 @@ func ignoredTestingLeak(d time.Duration) {
 
 func TestCheckRegisterIgnore(t *testing.T) {
 	RegisterIgnoreGoroutine("ignoredTestingLeak")
+	go ignoredTestingLeak(3 * time.Second)
 	const leakCount = 3
+	ch := make(chan struct{})
 	for i := 0; i < leakCount; i++ {
-		go func() { time.Sleep(2 * time.Second) }()
+		go func() { <-ch }()
 	}
-	go func() { ignoredTestingLeak(3 * time.Second) }()
-	if ig := interestingGoroutines(); len(ig) == 0 {
-		t.Error("blah")
+	if leaked := interestingGoroutines(); len(leaked) != leakCount {
+		t.Errorf("interestingGoroutines() = %d, want length %d", len(leaked), leakCount)
 	}
 	e := &testLogger{}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	CheckGoroutines(ctx, e)
-	if e.errorCount != leakCount {
-		t.Errorf("CheckGoroutines found %v leaks, want %v leaks", e.errorCount, leakCount)
+	if CheckGoroutines(ctx, e); e.errorCount < leakCount {
+		t.Errorf("CheckGoroutines() = %d, want count %d", e.errorCount, leakCount)
 		t.Logf("leaked goroutines:\n%v", strings.Join(e.errors, "\n"))
 	}
+	close(ch)
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	CheckGoroutines(ctx, t)

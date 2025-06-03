@@ -854,10 +854,11 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	var scheme string
 	opts, scheme = te.configDial(opts...)
 	var err error
-	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
+	te.cc, err = grpc.NewClient(scheme+te.srvAddr, opts...)
 	if err != nil {
-		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
+		te.t.Fatalf("grpc.NewClient(%q) failed: %v", scheme+te.srvAddr, err)
 	}
+	te.cc.Connect()
 	return te.cc
 }
 
@@ -3777,6 +3778,39 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+  }
+}
+
+// Tests that a client receives a cardinality violation error for client-streaming
+// RPCs if the server call SendMsg multiple times.
+func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.SendMsg(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendMsg(_) = %v, want <nil>", err)
+			}
+			if err := stream.SendMsg(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendMsg(_) = %v, want <nil>", err)
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
+	}
+	if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error with status code %s", err, codes.Internal)
 	}
 }
 
@@ -5388,6 +5422,31 @@ func testRPCTimeout(t *testing.T, e env) {
 			t.Fatalf("TestService/UnaryCallv(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
 		}
 		cancel()
+	}
+}
+
+// Tests that the client doesn't send a negative timeout to the server. If the
+// server receives a negative timeout, it would return an internal status. The
+// client checks the context error before starting a stream, however the context
+// may expire after this check and before the timeout is calculated.
+func (s) TestNegativeRPCTimeout(t *testing.T) {
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	if err := server.StartClient(); err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	// Try increasingly larger timeout values to trigger the condition when the
+	// context has expired while creating the grpc-timeout header.
+	for i := range 10 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i*100)*time.Nanosecond)
+		defer cancel()
+
+		client := server.Client
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.DeadlineExceeded {
+			t.Fatalf("TestService/EmptyCall(_, _) = _, %v; want <nil>, error code: %s", err, codes.DeadlineExceeded)
+		}
 	}
 }
 

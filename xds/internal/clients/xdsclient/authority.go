@@ -26,8 +26,10 @@ import (
 
 	"google.golang.org/grpc/grpclog"
 	igrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -87,6 +89,7 @@ type authority struct {
 	xdsClientSerializerClose  func()                       // Function to close the above serializer.
 	logger                    *igrpclog.PrefixLogger       // Logger for this authority.
 	target                    string                       // The gRPC Channel target.
+	metricsReporter           clients.MetricsReporter
 
 	// The below defined fields must only be accessed in the context of the
 	// serializer callback, owned by this authority.
@@ -121,6 +124,7 @@ type authorityBuildOptions struct {
 	getChannelForADS xdsChannelForADS             // Function to acquire a reference to an xdsChannel
 	logPrefix        string                       // Prefix for logging
 	target           string                       // Target for the gRPC Channel that owns xDS Client/Authority
+	metricsReporter  clients.MetricsReporter      // Metrics reporter for the authority
 }
 
 // newAuthority creates a new authority instance with the provided
@@ -145,6 +149,7 @@ func newAuthority(args authorityBuildOptions) *authority {
 		logger:                    igrpclog.NewPrefixLogger(l, logPrefix),
 		resources:                 make(map[ResourceType]map[string]*resourceState),
 		target:                    args.target,
+		metricsReporter:           args.metricsReporter,
 	}
 
 	// Create an ordered list of xdsChannels with their server configs. The
@@ -363,6 +368,11 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		// On error, keep previous version of the resource. But update status
 		// and error.
 		if uErr.Err != nil {
+			if a.metricsReporter != nil {
+				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
+					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
+				})
+			}
 			state.md.ErrState = md.ErrState
 			state.md.Status = md.Status
 			for watcher := range state.watchers {
@@ -376,6 +386,12 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 				}
 			}
 			continue
+		}
+
+		if a.metricsReporter != nil {
+			a.metricsReporter.ReportMetric(&metrics.ResourceUpdateValid{
+				ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
+			})
 		}
 
 		if state.deletionIgnored {

@@ -593,7 +593,7 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 			// Set the test clientconn to return error back to the resolver when
 			// it pushes an update on the channel.
 			var returnNilErr atomic.Bool
-			updateStateF := func(s resolver.State) error {
+			updateStateF := func(resolver.State) error {
 				if returnNilErr.Load() {
 					return nil
 				}
@@ -1077,7 +1077,7 @@ func (s) TestCustomAuthority(t *testing.T) {
 				} else {
 					errChan <- nil
 				}
-				return func(ctx context.Context, network, address string) (net.Conn, error) {
+				return func(context.Context, string, string) (net.Conn, error) {
 					return nil, errors.New("no need to dial")
 				}
 			}

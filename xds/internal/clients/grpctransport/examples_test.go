@@ -30,10 +30,10 @@ import (
 // its extensions.
 //
 // This example is creating clients.ServerIdentifier to connect to server at
-// localhost:5678 using the credentials named "local". Note that "local" must
-// exist as an entry in the provided credentials to grpctransport.Builder.
+// localhost:5678 using the config named "local". Note that "local" must
+// exist as an entry in the provided configs to grpctransport.Builder.
 func ExampleServerIdentifierExtension() {
 	// Note the Extensions field is set by value and not by pointer.
-	fmt.Printf("%+v", clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{Credentials: "local"}})
-	// Output: {ServerURI:localhost:5678 Extensions:{Credentials:local}}
+	fmt.Printf("%+v", clients.ServerIdentifier{ServerURI: "localhost:5678", Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "local"}})
+	// Output: {ServerURI:localhost:5678 Extensions:{ConfigName:local}}
 }

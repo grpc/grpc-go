@@ -137,15 +137,15 @@ func (tc *testCredentials) PerRPCCredentials() credentials.PerRPCCredentials {
 // Transport in both cases when provided clients.ServerIdentifer is same
 // one of the existing transport or a new one.
 func (s) TestBuild_Success(t *testing.T) {
-	credentials := map[string]credentials.Bundle{
-		"local":    &testCredentials{transportCredentials: local.NewCredentials()},
-		"insecure": insecure.NewBundle(),
+	configs := map[string]Config{
+		"local":    {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+		"insecure": {Credentials: insecure.NewBundle()},
 	}
-	b := NewBuilder(credentials)
+	b := NewBuilder(configs)
 
 	serverID1 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
 	tr1, err := b.Build(serverID1)
 	if err != nil {
@@ -155,7 +155,7 @@ func (s) TestBuild_Success(t *testing.T) {
 
 	serverID2 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
 	tr2, err := b.Build(serverID2)
 	if err != nil {
@@ -165,7 +165,7 @@ func (s) TestBuild_Success(t *testing.T) {
 
 	serverID3 := clients.ServerIdentifier{
 		ServerURI:  "server-address",
-		Extensions: ServerIdentifierExtension{Credentials: "insecure"},
+		Extensions: ServerIdentifierExtension{ConfigName: "insecure"},
 	}
 	tr3, err := b.Build(serverID3)
 	if err != nil {
@@ -191,7 +191,7 @@ func (s) TestBuild_Failure(t *testing.T) {
 			name: "ServerURI is empty",
 			serverID: clients.ServerIdentifier{
 				ServerURI:  "",
-				Extensions: ServerIdentifierExtension{Credentials: "local"},
+				Extensions: ServerIdentifierExtension{ConfigName: "local"},
 			},
 		},
 		{
@@ -206,26 +206,41 @@ func (s) TestBuild_Failure(t *testing.T) {
 			},
 		},
 		{
-			name: "ServerIdentifierExtension Credentials is nil",
+			name: "ServerIdentifierExtension without ConfigName",
 			serverID: clients.ServerIdentifier{
 				ServerURI:  "server-address",
 				Extensions: ServerIdentifierExtension{},
 			},
 		},
 		{
+			name: "ServerIdentifierExtension ConfigName is not present",
+			serverID: clients.ServerIdentifier{
+				ServerURI:  "server-address",
+				Extensions: ServerIdentifierExtension{ConfigName: "unknown"},
+			},
+		},
+		{
+			name: "ServerIdentifierExtension ConfigName maps to nil credentials",
+			serverID: clients.ServerIdentifier{
+				ServerURI:  "server-address",
+				Extensions: ServerIdentifierExtension{ConfigName: "nil-credentials"},
+			},
+		},
+		{
 			name: "ServerIdentifierExtension is added as pointer",
 			serverID: clients.ServerIdentifier{
 				ServerURI:  "server-address",
-				Extensions: &ServerIdentifierExtension{Credentials: "local"},
+				Extensions: &ServerIdentifierExtension{ConfigName: "local"},
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			credentials := map[string]credentials.Bundle{
-				"local": &testCredentials{transportCredentials: local.NewCredentials()},
+			configs := map[string]Config{
+				"local":           {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
+				"nil-credentials": {Credentials: nil},
 			}
-			b := NewBuilder(credentials)
+			b := NewBuilder(configs)
 			tr, err := b.Build(test.serverID)
 			if err == nil {
 				t.Fatalf("Build() succeeded, want error")
@@ -238,18 +253,19 @@ func (s) TestBuild_Failure(t *testing.T) {
 }
 
 // TestNewStream_Success verifies that NewStream() successfully creates a new
-// client stream for the server when provided a valid server URI.
+// client stream for the server when provided a valid server URI and a config
+// with valid credentials.
 func (s) TestNewStream_Success(t *testing.T) {
 	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
 
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
-	credentials := map[string]credentials.Bundle{
-		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	configs := map[string]Config{
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
-	builder := NewBuilder(credentials)
+	builder := NewBuilder(configs)
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -263,17 +279,65 @@ func (s) TestNewStream_Success(t *testing.T) {
 	}
 }
 
+// TestNewStream_Success_WithCustomGRPCNewClient verifies that NewStream()
+// successfully creates a new client stream for the server when provided a
+// valid server URI and a config with valid credentials and a custom gRPC
+// NewClient function.
+func (s) TestNewStream_Success_WithCustomGRPCNewClient(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	ts := setupTestServer(t, &v3discoverypb.DiscoveryResponse{VersionInfo: "1"})
+
+	// Create a custom dialer function that will be used by the gRPC client.
+	customDialerCalled := make(chan struct{}, 1)
+	customGRPCNewClient := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		customDialerCalled <- struct{}{}
+		return grpc.NewClient(target, opts...)
+	}
+
+	configs := map[string]Config{
+		"custom-dialer-config": {
+			Credentials:   &testCredentials{transportCredentials: local.NewCredentials()},
+			GRPCNewClient: customGRPCNewClient,
+		},
+	}
+	builder := NewBuilder(configs)
+
+	serverID := clients.ServerIdentifier{
+		ServerURI:  ts.address,
+		Extensions: ServerIdentifierExtension{ConfigName: "custom-dialer-config"},
+	}
+
+	transport, err := builder.Build(serverID)
+	if err != nil {
+		t.Fatalf("builder.Build(%+v) failed: %v", serverID, err)
+	}
+	defer transport.Close()
+
+	select {
+	case <-customDialerCalled:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for custom dialer to be called: %v", ctx.Err())
+	}
+
+	// Verify that the transport works by creating a stream.
+	if _, err = transport.NewStream(ctx, "/envoy.service.discovery.v3.AggregatedDiscoveryService/StreamAggregatedResources"); err != nil {
+		t.Fatalf("transport.NewStream() failed with custom dialer: %v", err)
+	}
+}
+
 // TestNewStream_Error verifies that NewStream() returns an error
 // when attempting to create a stream with an invalid server URI.
 func (s) TestNewStream_Error(t *testing.T) {
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  "invalid-server-uri",
-		Extensions: ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
-	credentials := map[string]credentials.Bundle{
-		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	configs := map[string]Config{
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
-	builder := NewBuilder(credentials)
+	builder := NewBuilder(configs)
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
@@ -304,12 +368,12 @@ func (s) TestStream_SendAndRecv(t *testing.T) {
 	// Build a grpc-based transport to the above server.
 	serverCfg := clients.ServerIdentifier{
 		ServerURI:  ts.address,
-		Extensions: ServerIdentifierExtension{Credentials: "local"},
+		Extensions: ServerIdentifierExtension{ConfigName: "local"},
 	}
-	credentials := map[string]credentials.Bundle{
-		"local": &testCredentials{transportCredentials: local.NewCredentials()},
+	configs := map[string]Config{
+		"local": {Credentials: &testCredentials{transportCredentials: local.NewCredentials()}},
 	}
-	builder := NewBuilder(credentials)
+	builder := NewBuilder(configs)
 	transport, err := builder.Build(serverCfg)
 	if err != nil {
 		t.Fatalf("Failed to build transport: %v", err)
