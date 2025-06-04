@@ -442,7 +442,6 @@ func (s) Test_MTLS_SPIFFE_FlagDisabled(t *testing.T) {
 	}
 }
 
-
 func (s) Test_MTLS_SPIFFE_Failure(t *testing.T) {
 	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {

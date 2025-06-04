@@ -28,10 +28,10 @@ import (
 
 func TestParseConfig(t *testing.T) {
 	tests := []struct {
-		desc       string
-		input      any
-		wantOutput string
-		wantErr    bool
+		desc          string
+		input         any
+		wantOutput    string
+		wantErr       bool
 		enabledSpiffe bool
 	}{
 		{
@@ -133,7 +133,7 @@ func TestParseConfig(t *testing.T) {
 				"spiffe_trust_bundle_map_file": "/a/b/spiffe_bundle.json",
 				"refresh_interval":   "200s"
 			}`),
-			wantOutput: "file_watcher:/a/b/cert.pem:/a/b/key.pem:/a/b/ca.pem:/a/b/spiffe_bundle.json:3m20s",
+			wantOutput:    "file_watcher:/a/b/cert.pem:/a/b/key.pem:/a/b/ca.pem:/a/b/spiffe_bundle.json:3m20s",
 			enabledSpiffe: true,
 		},
 	}
