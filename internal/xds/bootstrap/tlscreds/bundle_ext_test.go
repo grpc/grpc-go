@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -237,6 +238,7 @@ func (s) TestCaReloading(t *testing.T) {
 // is performed and checked for failure, ensuring that gRPC is correctly using
 // the changed-on-disk bundle map.
 func (s) Test_SPIFFE_Reloading(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Failed to read test SPIFFE bundle: %v", err)
@@ -357,6 +359,7 @@ func (s) TestMTLS(t *testing.T) {
 // chain that is compatible with the client's configured SPIFFE bundle map. An
 // MTLS connection is attempted between the two and checked for success.
 func (s) Test_MTLS_SPIFFE(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		name         string
 		serverOption grpc.ServerOption
@@ -372,7 +375,7 @@ func (s) Test_MTLS_SPIFFE(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.RequireAndVerifyClientCert)))
+			s := stubserver.StartTestService(t, nil, tc.serverOption)
 			defer s.Stop()
 
 			cfg := fmt.Sprintf(`{
@@ -403,7 +406,44 @@ func (s) Test_MTLS_SPIFFE(t *testing.T) {
 	}
 }
 
+// Test_MTLS_SPIFFE_FlagDisabled configures a client and server. The server has
+// a certificate chain that is compatible with the client's configured SPIFFE
+// bundle map. However, the XDS flag that enabled SPIFFE usage is disabled. An
+// MTLS connection is attempted between the two and checked for failure.
+func (s) Test_MTLS_SPIFFE_FlagDisabled(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, false)
+	serverOption := grpc.Creds(testutils.CreateServerTLSCredentialsCompatibleWithSPIFFE(t, tls.RequireAndVerifyClientCert))
+	s := stubserver.StartTestService(t, nil, serverOption)
+	defer s.Stop()
+
+	cfg := fmt.Sprintf(`{
+"certificate_file": "%s",
+"private_key_file": "%s",
+"spiffe_trust_bundle_map_file": "%s"
+}`,
+		testdata.Path("spiffe_end2end/client_spiffe.pem"),
+		testdata.Path("spiffe_end2end/client.key"),
+		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Errorf("EmptyCall(): got success want failure")
+	}
+}
+
 func (s) Test_MTLS_SPIFFE_Failure(t *testing.T) {
+	testutils.SetEnvConfig(t, &envconfig.XDSSPIFFEEnabled, true)
 	tests := []struct {
 		name             string
 		certFile         string
