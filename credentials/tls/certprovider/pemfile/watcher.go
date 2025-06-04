@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/credentials/spiffe"
-	"google.golang.org/grpc/internal/envconfig"
 )
 
 const defaultCertRefreshDuration = 1 * time.Hour
@@ -78,11 +77,7 @@ func (o Options) canonical() []byte {
 	return []byte(fmt.Sprintf("%s:%s:%s:%s:%s", o.CertFile, o.KeyFile, o.RootFile, o.SPIFFEBundleMapFile, o.RefreshDuration))
 }
 
-func (o *Options) validate() error {
-	// Guard against SPIFFE bundle map usage
-	if !envconfig.XDSSPIFFEEnabled {
-		o.SPIFFEBundleMapFile = ""
-	}
+func (o Options) validate() error {
 	if o.CertFile == "" && o.KeyFile == "" && o.RootFile == "" && o.SPIFFEBundleMapFile == "" {
 		return fmt.Errorf("pemfile: at least one credential file needs to be specified")
 	}
