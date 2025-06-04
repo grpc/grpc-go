@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -301,12 +299,10 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 				break
 			}
 		}
-
 		if matchedIndex == -1 {
 			t.Errorf("Unexpected span: %q (%s)", span.Name, span.SpanKind)
 			continue
 		}
-
 		want := wantSpanInfos[matchedIndex]
 		// Check that the attempt span has the correct status.
 		if want.status != otelcodes.Unset {
@@ -328,14 +324,7 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		eventsSort := cmpopts.SortSlices(func(a, b trace.Event) bool {
 			return a.Name < b.Name
 		})
-		eventsTimeIgnore := cmp.FilterPath(
-			func(p cmp.Path) bool {
-				return p.Last().Type() == reflect.TypeOf(time.Time{}) &&
-					strings.HasSuffix(p.GoString(), ".Time")
-			},
-			cmp.Ignore(),
-		)
-
+		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 		// attributes
 		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
 			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", span.Name, diff)
