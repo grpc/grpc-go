@@ -95,6 +95,7 @@ func (orcaLBBuilder) Build(cc balancer.ClientConn, _ balancer.BuildOptions) bala
 // designed to run within.
 type orcaLB struct {
 	cc balancer.ClientConn
+	sc balancer.SubConn
 }
 
 func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
@@ -112,6 +113,7 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 		return fmt.Errorf("orcaLB: error creating SubConn: %v", err)
 	}
 	sc.Connect()
+	o.sc = sc
 
 	// Register a simple ORCA OOB listener on the SubConn.  We request a 1
 	// second report interval, but in this example the server indicated the
@@ -123,6 +125,12 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 }
 
 func (o *orcaLB) ResolverError(error) {}
+
+func (o *orcaLB) ExitIdle() {
+	if o.sc != nil {
+		o.sc.Connect()
+	}
+}
 
 // TODO: unused; remove when no longer required.
 func (o *orcaLB) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {}

@@ -50,7 +50,7 @@ func init() {
 // testClusterSpecifierPlugin.
 type cspBalancerBuilder struct{}
 
-func (cspBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (cspBalancerBuilder) Build(balancer.ClientConn, balancer.BuildOptions) balancer.Balancer {
 	return nil
 }
 

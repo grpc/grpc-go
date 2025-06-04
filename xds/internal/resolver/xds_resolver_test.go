@@ -1151,7 +1151,7 @@ type filterInterceptor struct {
 	err     error
 }
 
-func (fi *filterInterceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (fi *filterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	fi.parent.paths = append(fi.parent.paths, "newstream:"+fi.cfgPath)
 	if fi.err != nil {
 		return nil, fi.err
@@ -1499,7 +1499,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 					}
 
 					var doneFunc func()
-					_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{}, func() {}, func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+					_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{}, func() {}, func(_ context.Context, done func()) (iresolver.ClientStream, error) {
 						doneFunc = done
 						return nil, nil
 					})

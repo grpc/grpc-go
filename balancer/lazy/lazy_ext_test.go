@@ -82,7 +82,7 @@ func (s) TestExitIdle(t *testing.T) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			bd.Data.(balancer.Balancer).ResolverError(err)
@@ -146,7 +146,7 @@ func (s) TestPicker(t *testing.T) {
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
-		ExitIdle: func(bd *stub.BalancerData) {
+		ExitIdle: func(*stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle, calling the picker should make the lazy balancer exit IDLE state.")
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
@@ -229,7 +229,7 @@ func (s) TestGoodUpdateThenResolverError(t *testing.T) {
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName).Build)
 		},
-		ExitIdle: func(bd *stub.BalancerData) {
+		ExitIdle: func(*stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
@@ -327,7 +327,7 @@ func (s) TestResolverErrorThenGoodUpdate(t *testing.T) {
 		Init: func(bd *stub.BalancerData) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(childBalName).Build)
 		},
-		ExitIdle: func(bd *stub.BalancerData) {
+		ExitIdle: func(*stub.BalancerData) {
 			t.Log("Ignoring call to ExitIdle to delay lazy child creation until RPC time.")
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
@@ -410,7 +410,7 @@ func (s) TestExitIdlePassthrough(t *testing.T) {
 			bd.Data = lazy.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.ExitIdler).ExitIdle()
+			bd.Data.(balancer.Balancer).ExitIdle()
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			bd.Data.(balancer.Balancer).ResolverError(err)

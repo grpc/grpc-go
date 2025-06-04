@@ -63,8 +63,7 @@ func (s) TestADS_ResourcesAreRequestedAfterStreamRestart(t *testing.T) {
 			// Drain the resource name channels before writing to them to ensure
 			// that the most recently requested names are made available to the
 			// test.
-			switch req.GetTypeUrl() {
-			case version.V3ListenerURL:
+			if req.GetTypeUrl() == version.V3ListenerURL {
 				select {
 				case <-ldsResourcesCh:
 				default:

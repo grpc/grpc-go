@@ -613,7 +613,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	secondRequestReceived := grpcsync.NewEvent()
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
 				firstRequestReceived = true

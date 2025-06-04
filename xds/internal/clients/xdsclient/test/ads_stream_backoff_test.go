@@ -100,7 +100,7 @@ func (s) TestADS_BackoffAfterStreamFailure(t *testing.T) {
 	// Override the backoff implementation to push on a channel that is read by
 	// the test goroutine.
 	backoffCtx, backoffCancel := context.WithCancel(ctx)
-	streamBackoff := func(v int) time.Duration {
+	streamBackoff := func(int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
 		case <-backoffCtx.Done():
@@ -212,7 +212,7 @@ func (s) TestADS_RetriesAfterBrokenStream(t *testing.T) {
 	// run time. Instead control when the backoff returns by blocking on a
 	// channel, that the test closes.
 	backoffCh := make(chan struct{})
-	streamBackoff := func(v int) time.Duration {
+	streamBackoff := func(int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
 		case <-ctx.Done():
@@ -349,7 +349,7 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 		// Return an error everytime a request is sent on the stream. This
 		// should cause the transport to backoff before attempting to recreate
 		// the stream.
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			select {
 			case streamRequestCh <- req:
 			default:
@@ -368,7 +368,7 @@ func (s) TestADS_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// channel, that the test closes.
 	backoffCh := make(chan struct{}, 1)
 	unblockBackoffCh := make(chan struct{})
-	streamBackoff := func(v int) time.Duration {
+	streamBackoff := func(int) time.Duration {
 		select {
 		case backoffCh <- struct{}{}:
 		default:

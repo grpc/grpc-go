@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,31 +13,14 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package health_test
+// Package internal contains functionality internal to the lrsclient package.
+package internal
 
-import (
-	"testing"
+import "time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/internal/grpctest"
+var (
+	// TimeNow is used to get the current time. It can be overridden in tests.
+	TimeNow func() time.Time
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-// Make sure the service implementation complies with the proto definition.
-func (s) TestRegister(*testing.T) {
-	s := grpc.NewServer()
-	healthgrpc.RegisterHealthServer(s, health.NewServer())
-	s.Stop()
-}
