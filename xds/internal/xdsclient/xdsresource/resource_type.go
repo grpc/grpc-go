@@ -173,6 +173,9 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 
 // genericResourceTypeDecoder wraps an xdsresource.Type and implements
 // xdsclient.Decoder.
+//
+// TODO: #8313 - Delete this once the internal xdsclient usages are updated
+// to use the generic xdsclient.ResourceType interface directly.
 type genericResourceTypeDecoder struct {
 	resourceType     Type
 	bootstrapConfig  *bootstrap.Config
@@ -201,6 +204,9 @@ func (gd *genericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts xdsclie
 
 // genericResourceData embed an xdsresource.ResourceData and implements
 // xdsclient.ResourceData.
+//
+// TODO: #8313 - Delete this once the internal xdsclient usages are updated
+// to use the generic xdsclient.ResourceData interface directly.
 type genericResourceData struct {
 	resourceData ResourceData
 }
@@ -229,6 +235,9 @@ func (grd *genericResourceData) Bytes() []byte {
 
 // genericResourceWatcher wraps xdsresource.ResourceWatcher and implements
 // xdsclient.ResourceWatcher.
+//
+// TODO: #8313 - Delete this once the internal xdsclient usages are updated
+// to use the generic xdsclient.ResourceWatcher interface directly.
 type genericResourceWatcher struct {
 	xdsResourceWatcher ResourceWatcher
 }
