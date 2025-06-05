@@ -38,7 +38,6 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 
@@ -47,6 +46,9 @@ const (
 	// should be gated at this verbosity level. Other per-RPC level logs which print
 	// terse output should be at `INFO` and verbosity 2.
 	perRPCVerbosityLevel = 9
+
+	// Status code to use when NACKing a DiscoveryResponse.
+	codeNackError = 3
 )
 
 // response represents a response received on the ADS stream. It contains the
@@ -440,7 +442,7 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 
 	if nackErr != nil {
 		req.ErrorDetail = &statuspb.Status{
-			Code: int32(cpb.Code_INVALID_ARGUMENT), Message: nackErr.Error(),
+			Code: codeNackError, Message: nackErr.Error(),
 		}
 	}
 
