@@ -27,7 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer/leastrequest"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	iringhash "google.golang.org/grpc/internal/ringhash"
 	iserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -105,8 +104,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
 
-	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
-	envconfig.LeastRequestLB = true
 	tests := []struct {
 		name         string
 		cluster      *v3clusterpb.Cluster
