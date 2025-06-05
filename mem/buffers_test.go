@@ -247,7 +247,7 @@ func (s) TestBuffer_SplitAfterFree(t *testing.T) {
 
 type poolFunc func(*[]byte)
 
-func (p poolFunc) Get(length int) *[]byte {
+func (p poolFunc) Get(int) *[]byte {
 	panic("Get should never be called")
 }
 
@@ -259,7 +259,7 @@ func (s) TestBuffer_Split(t *testing.T) {
 	ready := false
 	freed := false
 	data := []byte{1, 2, 3, 4}
-	buf := mem.NewBuffer(&data, poolFunc(func(bytes *[]byte) {
+	buf := mem.NewBuffer(&data, poolFunc(func(*[]byte) {
 		if !ready {
 			t.Fatalf("Freed too early")
 		}

@@ -46,7 +46,7 @@ func (s) TestServer_MaxHandlers(t *testing.T) {
 	// This stub server does not properly respect the stream context, so it will
 	// not exit when the context is canceled.
 	ss := stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			started <- struct{}{}
 			<-blockCalls.Done()
 			return nil
@@ -195,7 +195,7 @@ func (s) TestServer_WaitForHandlers(t *testing.T) {
 	// This stub server does not properly respect the stream context, so it will
 	// not exit when the context is canceled.
 	ss := stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			started.Fire()
 			<-blockCalls.Done()
 			return nil
@@ -268,7 +268,7 @@ func (s) TestServer_GracefulStopWaits(t *testing.T) {
 	// This stub server does not properly respect the stream context, so it will
 	// not exit when the context is canceled.
 	ss := stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			started.Fire()
 			<-blockCalls.Done()
 			return nil

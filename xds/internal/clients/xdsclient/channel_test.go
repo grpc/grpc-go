@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
@@ -43,7 +42,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
@@ -56,9 +54,10 @@ func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeou
 	// Create a grpc transport to the above management server.
 	si := clients.ServerIdentifier{
 		ServerURI:  serverURI,
-		Extensions: grpctransport.ServerIdentifierExtension{Credentials: insecure.NewBundle()},
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
 	}
-	tr, err := (&grpctransport.Builder{}).Build(si)
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	tr, err := (grpctransport.NewBuilder(configs)).Build(si)
 	if err != nil {
 		t.Fatalf("Failed to create a transport for server config %v: %v", si, err)
 	}
@@ -547,18 +546,10 @@ func (s) TestChannel_ADS_StreamFailure(t *testing.T) {
 			},
 			RouteConfigName: routeConfigurationName,
 		}},
-		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
 	listenerResource, err := anypb.New(&v3listenerpb.Listener{
 		Name:        listenerResourceName,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
-		FilterChains: []*v3listenerpb.FilterChain{{
-			Name: "filter-chain-name",
-			Filters: []*v3listenerpb.Filter{{
-				Name:       wellknown.HTTPConnectionManager,
-				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: hcm},
-			}},
-		}},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create listener resource: %v", err)

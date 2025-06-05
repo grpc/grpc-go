@@ -101,9 +101,9 @@ type ClientStream interface {
 	// It must only be called after stream.CloseAndRecv has returned, or
 	// stream.Recv has returned a non-nil error (including io.EOF).
 	Trailer() metadata.MD
-	// CloseSend closes the send direction of the stream. It closes the stream
-	// when non-nil error is met. It is also not safe to call CloseSend
-	// concurrently with SendMsg.
+	// CloseSend closes the send direction of the stream. This method always
+	// returns a nil error. The status of the stream may be discovered using
+	// RecvMsg. It is also not safe to call CloseSend concurrently with SendMsg.
 	CloseSend() error
 	// Context returns the context for this stream.
 	//
@@ -297,6 +297,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		Method:         method,
 		ContentSubtype: callInfo.contentSubtype,
 		DoneFunc:       doneFunc,
+		Authority:      callInfo.authority,
 	}
 
 	// Set our outgoing compression according to the UseCompressor CallOption, if
@@ -992,7 +993,7 @@ func (cs *clientStream) RecvMsg(m any) error {
 
 func (cs *clientStream) CloseSend() error {
 	if cs.sentLast {
-		// TODO: return an error and finish the stream instead, due to API misuse?
+		// Return a nil error on repeated calls to this method.
 		return nil
 	}
 	cs.sentLast = true
@@ -1013,7 +1014,10 @@ func (cs *clientStream) CloseSend() error {
 			binlog.Log(cs.ctx, chc)
 		}
 	}
-	// We never returned an error here for reasons.
+	// We don't return an error here as we expect users to read all messages
+	// from the stream and get the RPC status from RecvMsg().  Note that
+	// SendMsg() must return an error when one occurs so the application
+	// knows to stop sending messages, but that does not apply here.
 	return nil
 }
 
@@ -1167,7 +1171,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	} else if err != nil {
 		return toRPCErr(err)
 	}
-	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
+	return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 }
 
 func (a *csAttempt) finish(err error) {
@@ -1377,7 +1381,7 @@ func (as *addrConnStream) Trailer() metadata.MD {
 
 func (as *addrConnStream) CloseSend() error {
 	if as.sentLast {
-		// TODO: return an error and finish the stream instead, due to API misuse?
+		// Return a nil error on repeated calls to this method.
 		return nil
 	}
 	as.sentLast = true
@@ -1491,7 +1495,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 	} else if err != nil {
 		return toRPCErr(err)
 	}
-	return toRPCErr(errors.New("grpc: client streaming protocol violation: get <nil>, want <EOF>"))
+	return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 }
 
 func (as *addrConnStream) finish(err error) {

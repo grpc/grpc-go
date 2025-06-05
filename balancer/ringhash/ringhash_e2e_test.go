@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -50,7 +51,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -134,7 +134,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	ctx = ringhash.SetXDSRequestHash(ctx, 0)
+	ctx = iringhash.SetXDSRequestHash(ctx, 0)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -1425,7 +1425,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	backend := stubserver.StartTestService(t, &stubserver.StubServer{
 		// We expect the server EmptyCall to not be call here because the
 		// aggregated channel state is never READY when the call is pending.
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			t.Errorf("EmptyCall() should not have been called")
 			return &testpb.Empty{}, nil
 		},
@@ -1600,7 +1600,7 @@ func (s) TestRingHash_ReattemptWhenGoingFromTransientFailureToIdle(t *testing.T)
 // Tests that when all backends are down and then up, we may pick a TF backend
 // and we will then jump to ready backend.
 func (s) TestRingHash_TransientFailureSkipToAvailableReady(t *testing.T) {
-	emptyCallF := func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	emptyCallF := func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 		return &testpb.Empty{}, nil
 	}
 	lis, err := testutils.LocalTCPListener()
@@ -1722,7 +1722,7 @@ func (s) TestRingHash_ReattemptWhenAllEndpointsUnreachable(t *testing.T) {
 	restartableListener := testutils.NewRestartableListener(lis)
 	restartableServer := stubserver.StartTestService(t, &stubserver.StubServer{
 		Listener: restartableListener,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	})
@@ -1788,7 +1788,7 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 	restartableListener := testutils.NewRestartableListener(lis)
 	restartableServer := stubserver.StartTestService(t, &stubserver.StubServer{
 		Listener: restartableListener,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	})

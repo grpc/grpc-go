@@ -22,28 +22,49 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"reflect"
 	"testing"
 	"time"
 )
 
-func (s) TestTimeoutDecode(t *testing.T) {
+func (s) TestDecodeTimeout(t *testing.T) {
 	for _, test := range []struct {
 		// input
 		s string
 		// output
-		d   time.Duration
-		err error
+		d       time.Duration
+		wantErr bool
 	}{
-		{"1234S", time.Second * 1234, nil},
-		{"1234x", 0, fmt.Errorf("transport: timeout unit is not recognized: %q", "1234x")},
-		{"1", 0, fmt.Errorf("transport: timeout string is too short: %q", "1")},
-		{"", 0, fmt.Errorf("transport: timeout string is too short: %q", "")},
+
+		{"00000001n", time.Nanosecond, false},
+		{"10u", time.Microsecond * 10, false},
+		{"00000010m", time.Millisecond * 10, false},
+		{"1234S", time.Second * 1234, false},
+		{"00000001M", time.Minute, false},
+		{"09999999S", time.Second * 9999999, false},
+		{"99999999S", time.Second * 99999999, false},
+		{"99999999M", time.Minute * 99999999, false},
+		{"2562047H", time.Hour * 2562047, false},
+		{"2562048H", time.Duration(math.MaxInt64), false},
+		{"99999999H", time.Duration(math.MaxInt64), false},
+		{"-1S", 0, true},
+		{"1234x", 0, true},
+		{"1234s", 0, true},
+		{"1234", 0, true},
+		{"1", 0, true},
+		{"", 0, true},
+		{"9a1S", 0, true},
+		{"0S", 0, true}, // PROTOCOL-HTTP2.md requires positive integers
+		{"00000000S", 0, true},
+		{"000000000S", 0, true},
 	} {
 		d, err := decodeTimeout(test.s)
-		if d != test.d || fmt.Sprint(err) != fmt.Sprint(test.err) {
-			t.Fatalf("timeoutDecode(%q) = %d, %v, want %d, %v", test.s, int64(d), err, int64(test.d), test.err)
+		gotErr := err != nil
+		if d != test.d || gotErr != test.wantErr {
+			t.Errorf("timeoutDecode(%q) = %d, %v, want %d, wantErr=%v",
+				test.s, int64(d), err, int64(test.d), test.wantErr)
 		}
 	}
 }
@@ -211,9 +232,9 @@ func (s) TestParseDialTarget(t *testing.T) {
 		{"dns:///google.com", "tcp", "dns:///google.com"},
 		{"/unix/socket/address", "tcp", "/unix/socket/address"},
 	} {
-		gotNet, gotAddr := parseDialTarget(test.target)
+		gotNet, gotAddr := ParseDialTarget(test.target)
 		if gotNet != test.wantNet || gotAddr != test.wantAddr {
-			t.Errorf("parseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
+			t.Errorf("ParseDialTarget(%q) = %s, %s want %s, %s", test.target, gotNet, gotAddr, test.wantNet, test.wantAddr)
 		}
 	}
 }

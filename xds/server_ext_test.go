@@ -84,11 +84,12 @@ type servingModeChangeHandler struct {
 	logger interface {
 		Logf(format string, args ...any)
 	}
-	currentMode connectivity.ServingMode
-	currentErr  error
+	// Access to the below fields are guarded by this mutex.
 	mu          sync.Mutex
 	modeCh      chan connectivity.ServingMode
 	errCh       chan error
+	currentMode connectivity.ServingMode
+	currentErr  error
 }
 
 func newServingModeChangeHandler(t *testing.T) *servingModeChangeHandler {
@@ -126,7 +127,7 @@ func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.Se
 func createStubServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOption) *stubserver.StubServer {
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {

@@ -65,7 +65,7 @@ type testCredsBuilder struct {
 	testDialOptNames []string
 }
 
-func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, func(), error) {
+func (t *testCredsBuilder) Build(json.RawMessage) (credentials.Bundle, func(), error) {
 	return &testCredsBundle{
 		Bundle:           insecure.NewBundle(),
 		testDialOptNames: t.testDialOptNames,

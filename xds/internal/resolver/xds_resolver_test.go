@@ -35,6 +35,7 @@ import (
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	iringhash "google.golang.org/grpc/internal/ringhash"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -42,7 +43,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
-	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	rinternal "google.golang.org/grpc/xds/internal/resolver/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -543,7 +543,7 @@ func (s) TestResolverRequestHash(t *testing.T) {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
 	wantHash := xxhash.Sum64String("/products")
-	gotHash, ok := ringhash.XDSRequestHash(res.Context)
+	gotHash, ok := iringhash.XDSRequestHash(res.Context)
 	if !ok {
 		t.Fatalf("Got no request hash, want: %v", wantHash)
 	}
@@ -1151,7 +1151,7 @@ type filterInterceptor struct {
 	err     error
 }
 
-func (fi *filterInterceptor) NewStream(ctx context.Context, ri iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
+func (fi *filterInterceptor) NewStream(ctx context.Context, _ iresolver.RPCInfo, done func(), newStream func(ctx context.Context, done func()) (iresolver.ClientStream, error)) (iresolver.ClientStream, error) {
 	fi.parent.paths = append(fi.parent.paths, "newstream:"+fi.cfgPath)
 	if fi.err != nil {
 		return nil, fi.err
@@ -1499,7 +1499,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 					}
 
 					var doneFunc func()
-					_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{}, func() {}, func(ctx context.Context, done func()) (iresolver.ClientStream, error) {
+					_, err = res.Interceptor.NewStream(ctx, iresolver.RPCInfo{}, func() {}, func(_ context.Context, done func()) (iresolver.ClientStream, error) {
 						doneFunc = done
 						return nil, nil
 					})

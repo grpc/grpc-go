@@ -255,7 +255,7 @@ func TestDefaultCredentialsWithOptions(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			bundle := NewDefaultCredentialsWithOptions(tc.defaultCredsOpts)
 			ri := credentials.RequestInfo{AuthInfo: tc.authInfo}
-			ctx := icredentials.NewRequestInfoContext(ctx, ri)
+			ctx := credentials.NewContextWithRequestInfo(ctx, ri)
 			got, err := bundle.PerRPCCredentials().GetRequestMetadata(ctx, "uri")
 			if err != nil {
 				t.Fatalf("Bundle's PerRPCCredentials().GetRequestMetadata() unexpected error = %v", err)

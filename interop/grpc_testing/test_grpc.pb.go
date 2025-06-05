@@ -231,28 +231,28 @@ type TestServiceServer interface {
 type UnimplementedTestServiceServer struct{}
 
 func (UnimplementedTestServiceServer) EmptyCall(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method EmptyCall not implemented")
+	return nil, status.Error(codes.Unimplemented, "method EmptyCall not implemented")
 }
 func (UnimplementedTestServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+	return nil, status.Error(codes.Unimplemented, "method UnaryCall not implemented")
 }
 func (UnimplementedTestServiceServer) CacheableUnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CacheableUnaryCall not implemented")
+	return nil, status.Error(codes.Unimplemented, "method CacheableUnaryCall not implemented")
 }
 func (UnimplementedTestServiceServer) StreamingOutputCall(*StreamingOutputCallRequest, grpc.ServerStreamingServer[StreamingOutputCallResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingOutputCall not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingOutputCall not implemented")
 }
 func (UnimplementedTestServiceServer) StreamingInputCall(grpc.ClientStreamingServer[StreamingInputCallRequest, StreamingInputCallResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingInputCall not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingInputCall not implemented")
 }
 func (UnimplementedTestServiceServer) FullDuplexCall(grpc.BidiStreamingServer[StreamingOutputCallRequest, StreamingOutputCallResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method FullDuplexCall not implemented")
+	return status.Error(codes.Unimplemented, "method FullDuplexCall not implemented")
 }
 func (UnimplementedTestServiceServer) HalfDuplexCall(grpc.BidiStreamingServer[StreamingOutputCallRequest, StreamingOutputCallResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method HalfDuplexCall not implemented")
+	return status.Error(codes.Unimplemented, "method HalfDuplexCall not implemented")
 }
 func (UnimplementedTestServiceServer) UnimplementedCall(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnimplementedCall not implemented")
+	return nil, status.Error(codes.Unimplemented, "method UnimplementedCall not implemented")
 }
 func (UnimplementedTestServiceServer) mustEmbedUnimplementedTestServiceServer() {}
 func (UnimplementedTestServiceServer) testEmbeddedByValue()                     {}
@@ -483,7 +483,7 @@ type UnimplementedServiceServer interface {
 type UnimplementedUnimplementedServiceServer struct{}
 
 func (UnimplementedUnimplementedServiceServer) UnimplementedCall(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnimplementedCall not implemented")
+	return nil, status.Error(codes.Unimplemented, "method UnimplementedCall not implemented")
 }
 func (UnimplementedUnimplementedServiceServer) mustEmbedUnimplementedUnimplementedServiceServer() {}
 func (UnimplementedUnimplementedServiceServer) testEmbeddedByValue()                              {}
@@ -602,10 +602,10 @@ type ReconnectServiceServer interface {
 type UnimplementedReconnectServiceServer struct{}
 
 func (UnimplementedReconnectServiceServer) Start(context.Context, *ReconnectParams) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
+	return nil, status.Error(codes.Unimplemented, "method Start not implemented")
 }
 func (UnimplementedReconnectServiceServer) Stop(context.Context, *Empty) (*ReconnectInfo, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+	return nil, status.Error(codes.Unimplemented, "method Stop not implemented")
 }
 func (UnimplementedReconnectServiceServer) mustEmbedUnimplementedReconnectServiceServer() {}
 func (UnimplementedReconnectServiceServer) testEmbeddedByValue()                          {}
@@ -750,10 +750,10 @@ type LoadBalancerStatsServiceServer interface {
 type UnimplementedLoadBalancerStatsServiceServer struct{}
 
 func (UnimplementedLoadBalancerStatsServiceServer) GetClientStats(context.Context, *LoadBalancerStatsRequest) (*LoadBalancerStatsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetClientStats not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetClientStats not implemented")
 }
 func (UnimplementedLoadBalancerStatsServiceServer) GetClientAccumulatedStats(context.Context, *LoadBalancerAccumulatedStatsRequest) (*LoadBalancerAccumulatedStatsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetClientAccumulatedStats not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetClientAccumulatedStats not implemented")
 }
 func (UnimplementedLoadBalancerStatsServiceServer) mustEmbedUnimplementedLoadBalancerStatsServiceServer() {
 }
@@ -916,13 +916,13 @@ type HookServiceServer interface {
 type UnimplementedHookServiceServer struct{}
 
 func (UnimplementedHookServiceServer) Hook(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Hook not implemented")
+	return nil, status.Error(codes.Unimplemented, "method Hook not implemented")
 }
 func (UnimplementedHookServiceServer) SetReturnStatus(context.Context, *SetReturnStatusRequest) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetReturnStatus not implemented")
+	return nil, status.Error(codes.Unimplemented, "method SetReturnStatus not implemented")
 }
 func (UnimplementedHookServiceServer) ClearReturnStatus(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ClearReturnStatus not implemented")
+	return nil, status.Error(codes.Unimplemented, "method ClearReturnStatus not implemented")
 }
 func (UnimplementedHookServiceServer) mustEmbedUnimplementedHookServiceServer() {}
 func (UnimplementedHookServiceServer) testEmbeddedByValue()                     {}
@@ -1098,13 +1098,13 @@ type XdsUpdateHealthServiceServer interface {
 type UnimplementedXdsUpdateHealthServiceServer struct{}
 
 func (UnimplementedXdsUpdateHealthServiceServer) SetServing(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetServing not implemented")
+	return nil, status.Error(codes.Unimplemented, "method SetServing not implemented")
 }
 func (UnimplementedXdsUpdateHealthServiceServer) SetNotServing(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetNotServing not implemented")
+	return nil, status.Error(codes.Unimplemented, "method SetNotServing not implemented")
 }
 func (UnimplementedXdsUpdateHealthServiceServer) SendHookRequest(context.Context, *HookRequest) (*HookResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendHookRequest not implemented")
+	return nil, status.Error(codes.Unimplemented, "method SendHookRequest not implemented")
 }
 func (UnimplementedXdsUpdateHealthServiceServer) mustEmbedUnimplementedXdsUpdateHealthServiceServer() {
 }
@@ -1257,7 +1257,7 @@ type XdsUpdateClientConfigureServiceServer interface {
 type UnimplementedXdsUpdateClientConfigureServiceServer struct{}
 
 func (UnimplementedXdsUpdateClientConfigureServiceServer) Configure(context.Context, *ClientConfigureRequest) (*ClientConfigureResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Configure not implemented")
+	return nil, status.Error(codes.Unimplemented, "method Configure not implemented")
 }
 func (UnimplementedXdsUpdateClientConfigureServiceServer) mustEmbedUnimplementedXdsUpdateClientConfigureServiceServer() {
 }
