@@ -324,7 +324,6 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 		t.Fatal("Timeout when waiting for the connection error to be propagated to the watcher")
 	case <-watcher.AmbientErrorCh:
 	}
-
 	// Restart the management server.
 	lis.Restart()
 

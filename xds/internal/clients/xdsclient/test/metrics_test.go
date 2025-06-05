@@ -193,9 +193,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	// cause a server failure metric to emit eventually.
 	lis.Stop()
 
-	// Restart to prevent the attempt to create a new ADS stream after back off.
-	lis.Restart()
-
+	// Server failure should have emitted.
 	if err := tmr.waitForMetric(ctx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -267,13 +265,12 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	}
 
 	// Close the listener and ensure that the ADS stream breaks. This should
-	// cause a server failure metric to emit eventually.
+	// not cause a server failure count to emit because the stream was closed
+	// after having received a response on the stream.
 	lis.Stop()
 	if ctx.Err() != nil {
 		t.Fatalf("Timeout when waiting for ADS stream to close")
 	}
-	// Restart to prevent the attempt to create a new ADS stream after back off.
-	lis.Restart()
 
 	// Server failure should not have emitted.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
