@@ -172,19 +172,19 @@ type BenchmarkServiceServer interface {
 type UnimplementedBenchmarkServiceServer struct{}
 
 func (UnimplementedBenchmarkServiceServer) UnaryCall(context.Context, *SimpleRequest) (*SimpleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnaryCall not implemented")
+	return nil, status.Error(codes.Unimplemented, "method UnaryCall not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) StreamingCall(grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingCall not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingCall not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) StreamingFromClient(grpc.ClientStreamingServer[SimpleRequest, SimpleResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingFromClient not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingFromClient not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) StreamingFromServer(*SimpleRequest, grpc.ServerStreamingServer[SimpleResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingFromServer not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingFromServer not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) StreamingBothWays(grpc.BidiStreamingServer[SimpleRequest, SimpleResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamingBothWays not implemented")
+	return status.Error(codes.Unimplemented, "method StreamingBothWays not implemented")
 }
 func (UnimplementedBenchmarkServiceServer) mustEmbedUnimplementedBenchmarkServiceServer() {}
 func (UnimplementedBenchmarkServiceServer) testEmbeddedByValue()                          {}

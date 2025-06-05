@@ -183,25 +183,25 @@ type ChannelzServer interface {
 type UnimplementedChannelzServer struct{}
 
 func (UnimplementedChannelzServer) GetTopChannels(context.Context, *GetTopChannelsRequest) (*GetTopChannelsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetTopChannels not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetTopChannels not implemented")
 }
 func (UnimplementedChannelzServer) GetServers(context.Context, *GetServersRequest) (*GetServersResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServers not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetServers not implemented")
 }
 func (UnimplementedChannelzServer) GetServer(context.Context, *GetServerRequest) (*GetServerResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServer not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetServer not implemented")
 }
 func (UnimplementedChannelzServer) GetServerSockets(context.Context, *GetServerSocketsRequest) (*GetServerSocketsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServerSockets not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetServerSockets not implemented")
 }
 func (UnimplementedChannelzServer) GetChannel(context.Context, *GetChannelRequest) (*GetChannelResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetChannel not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetChannel not implemented")
 }
 func (UnimplementedChannelzServer) GetSubchannel(context.Context, *GetSubchannelRequest) (*GetSubchannelResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetSubchannel not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetSubchannel not implemented")
 }
 func (UnimplementedChannelzServer) GetSocket(context.Context, *GetSocketRequest) (*GetSocketResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetSocket not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetSocket not implemented")
 }
 func (UnimplementedChannelzServer) testEmbeddedByValue() {}
 

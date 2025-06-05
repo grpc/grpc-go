@@ -82,7 +82,7 @@ type ReportQpsScenarioServiceServer interface {
 type UnimplementedReportQpsScenarioServiceServer struct{}
 
 func (UnimplementedReportQpsScenarioServiceServer) ReportScenario(context.Context, *ScenarioResult) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReportScenario not implemented")
+	return nil, status.Error(codes.Unimplemented, "method ReportScenario not implemented")
 }
 func (UnimplementedReportQpsScenarioServiceServer) mustEmbedUnimplementedReportQpsScenarioServiceServer() {
 }
