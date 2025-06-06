@@ -1580,6 +1580,7 @@ type serverStream struct {
 	s     *transport.ServerStream
 	p     *parser
 	codec baseCodec
+	desc  *StreamDesc
 
 	compressorV0   Compressor
 	compressorV1   encoding.Compressor
@@ -1773,6 +1774,9 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 				for _, binlog := range ss.binlogs {
 					binlog.Log(ss.ctx, chc)
 				}
+			}
+			if !ss.desc.ClientStreams {
+				return status.Errorf(codes.Internal, "RecvMsg is called twice")
 			}
 			return err
 		}
