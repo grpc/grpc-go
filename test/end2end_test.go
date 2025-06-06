@@ -3817,24 +3817,11 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	}
 	defer lis.Close()
 
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "FullDuplexCall",
-				Handler: func(srv interface{}, stream grpc.ServerStream) error {
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: true,
-			},
-		},
-		Metadata: "grpc/testing/test.proto",
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
+	ss := grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
+		return nil
+	})
+
+	s := grpc.NewServer(ss)
 	go s.Serve(lis)
 	defer s.Stop()
 
@@ -3943,24 +3930,11 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 	}
 	defer lis.Close()
 
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "UnaryCall",
-				Handler: func(srv interface{}, stream grpc.ServerStream) error {
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: false,
-			},
-		},
-		Metadata: "grpc/testing/test.proto",
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
+	ss := grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
+		return nil
+	})
+
+	s := grpc.NewServer(ss)
 	go s.Serve(lis)
 	defer s.Stop()
 
