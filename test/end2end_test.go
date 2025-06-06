@@ -3739,31 +3739,18 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 
 // Tests that a client receives a cardinality violation error for unary
 // RPCs if the server doesn't send a message before returning status OK.
-func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
+func TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer lis.Close()
 
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "EmptyCall",
-				Handler: func(any, grpc.ServerStream) error {
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: false,
-			},
-		},
-		Metadata: "grpc/testing/test.proto",
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
+	ss := grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
+		return nil
+	})
+
+	s := grpc.NewServer(ss)
 	go s.Serve(lis)
 	defer s.Stop()
 
