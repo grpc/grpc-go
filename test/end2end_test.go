@@ -3999,7 +3999,7 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 
 	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.SendMsg() = %v, want error %v", status.Code(err), codes.Internal)
-  }
+	}
 }
 
 // Tests that a client receives a cardinality violation error for client-streaming
