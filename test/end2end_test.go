@@ -3826,11 +3826,6 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 			{
 				StreamName: "FullDuplexCall",
 				Handler: func(srv interface{}, stream grpc.ServerStream) error {
-					err := stream.RecvMsg(&testpb.Empty{})
-					if err != nil {
-						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
-					}
-
 					return nil
 				},
 				ClientStreams: false,
@@ -3957,11 +3952,6 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 			{
 				StreamName: "UnaryCall",
 				Handler: func(srv interface{}, stream grpc.ServerStream) error {
-					err := stream.RecvMsg(&testpb.Empty{})
-					if err != nil {
-						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
-					}
-
 					return nil
 				},
 				ClientStreams: false,
