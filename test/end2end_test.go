@@ -3999,6 +3999,39 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 
 	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.SendMsg() = %v, want error %v", status.Code(err), codes.Internal)
+  }
+}
+
+// Tests that a client receives a cardinality violation error for client-streaming
+// RPCs if the server call SendMsg multiple times.
+func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
+	ss := stubserver.StubServer{
+		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
+			if err := stream.SendMsg(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendMsg(_) = %v, want <nil>", err)
+			}
+			if err := stream.SendMsg(&testpb.StreamingInputCallResponse{}); err != nil {
+				t.Errorf("stream.SendMsg(_) = %v, want <nil>", err)
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := ss.Client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
+	}
+	if _, err := stream.CloseAndRecv(); status.Code(err) != codes.Internal {
+		t.Fatalf("stream.CloseAndRecv() = %v, want error with status code %s", err, codes.Internal)
 	}
 }
 

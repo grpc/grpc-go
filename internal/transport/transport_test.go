@@ -203,10 +203,11 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *ServerStream)
 			}
 		}
 		data := newBufferSlice(p)
+		data.Ref()
 		conn.controlBuf.put(&dataFrame{
 			streamID:    s.id,
 			h:           nil,
-			reader:      data.Reader(),
+			data:        data,
 			onEachWrite: func() {},
 		})
 		sent += len(p)
@@ -787,10 +788,12 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	sc := &ServerConfig{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:      true,
 	}
 	co := ConnectOptions{
 		InitialWindowSize:     defaultWindowSize,
 		InitialConnWindowSize: defaultWindowSize,
+		StaticWindowSize:      true,
 	}
 	server, ct, cancel := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer cancel()
@@ -1092,11 +1095,12 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
 	d := newBufferSlice(make([]byte, http2MaxFrameLen))
+	d.Ref()
 	ct.controlBuf.put(&dataFrame{
 		streamID:    s.id,
 		endStream:   false,
 		h:           nil,
-		reader:      d.Reader(),
+		data:        d,
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.
@@ -1696,10 +1700,12 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	sc := &ServerConfig{
 		InitialWindowSize:     wc.serverStream,
 		InitialConnWindowSize: wc.serverConn,
+		StaticWindowSize:      true,
 	}
 	co := ConnectOptions{
 		InitialWindowSize:     wc.clientStream,
 		InitialConnWindowSize: wc.clientConn,
+		StaticWindowSize:      true,
 	}
 	server, client, cancel := setUpWithOptions(t, 0, sc, pingpong, co)
 	defer cancel()

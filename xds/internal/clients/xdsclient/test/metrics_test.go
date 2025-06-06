@@ -40,7 +40,7 @@ import (
 // to send valid and invalid LDS updates, and verifies that the expected metrics
 // for both good and bad updates are emitted.
 func (s) TestResourceUpdateMetrics(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	tmr := newTestMetricsReporter()

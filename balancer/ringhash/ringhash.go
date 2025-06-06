@@ -21,6 +21,11 @@
 // - https://github.com/grpc/proposal/blob/master/A42-xds-ring-hash-lb-policy.md
 // - https://github.com/grpc/proposal/blob/master/A61-IPv4-IPv6-dualstack-backends.md#ring-hash
 // - https://github.com/grpc/proposal/blob/master/A76-ring-hash-improvements.md
+//
+// # Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
+// later release.
 package ringhash
 
 import (
@@ -263,7 +268,7 @@ func (b *ringhashBalancer) updatePickerLocked() {
 		sort.Slice(endpointStates, func(i, j int) bool {
 			return endpointStates[i].hashKey < endpointStates[j].hashKey
 		})
-		var idleBalancer balancer.ExitIdler
+		var idleBalancer endpointsharding.ExitIdler
 		for _, es := range endpointStates {
 			connState := es.state.ConnectivityState
 			if connState == connectivity.Connecting {
@@ -394,7 +399,7 @@ type endpointState struct {
 	// overridden, for example based on EDS endpoint metadata.
 	hashKey  string
 	weight   uint32
-	balancer balancer.ExitIdler
+	balancer endpointsharding.ExitIdler
 
 	// state is updated by the balancer while receiving resolver updates from
 	// the channel and picker updates from its children. Access to it is guarded

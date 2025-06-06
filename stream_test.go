@@ -43,7 +43,7 @@ func Test(t *testing.T) {
 
 func (s) TestStream_Header_TrailersOnly(t *testing.T) {
 	ss := stubserver.StubServer{
-		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+		FullDuplexCallF: func(testgrpc.TestService_FullDuplexCallServer) error {
 			return status.Errorf(codes.NotFound, "a test error")
 		},
 	}

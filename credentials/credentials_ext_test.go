@@ -88,7 +88,7 @@ func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
 	}{
 		{
 			name: "Insecure",
-			creds: func(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
+			creds: func(*testing.T) (grpc.ServerOption, grpc.DialOption) {
 				c := insecure.NewCredentials()
 				return grpc.Creds(c), grpc.WithTransportCredentials(c)
 			},
@@ -96,7 +96,7 @@ func (s) TestCorrectAuthorityWithCreds(t *testing.T) {
 		},
 		{
 			name: "Local",
-			creds: func(t *testing.T) (grpc.ServerOption, grpc.DialOption) {
+			creds: func(*testing.T) (grpc.ServerOption, grpc.DialOption) {
 				c := local.NewCredentials()
 				return grpc.Creds(c), grpc.WithTransportCredentials(c)
 			},
@@ -157,7 +157,7 @@ func (s) TestIncorrectAuthorityWithTLS(t *testing.T) {
 
 	serverCalled := make(chan struct{})
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			close(serverCalled)
 			return nil, nil
 		},
@@ -222,7 +222,7 @@ type testCreds struct {
 }
 
 // ClientHandshake performs the client-side handshake.
-func (c *testCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (c *testCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	if c.authority != "" {
 		return rawConn, testAuthInfoWithValidator{validAuthority: c.authority}, nil
 	}
@@ -248,7 +248,7 @@ func (c *testCreds) Info() credentials.ProtocolInfo {
 }
 
 // OverrideServerName overrides the server name used for verification.
-func (c *testCreds) OverrideServerName(serverName string) error {
+func (c *testCreds) OverrideServerName(string) error {
 	return nil
 }
 
@@ -280,7 +280,7 @@ func (s) TestAuthorityValidationFailureWithCustomCreds(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			serverCalled := make(chan struct{})
 			ss := stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+				EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 					close(serverCalled)
 					return nil, nil
 				},

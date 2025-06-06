@@ -272,7 +272,7 @@ func (s) TestFallback_MidUpdate(t *testing.T) {
 	// listeners.
 	primaryManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: primaryLis,
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if closeConnOnMidUpdateClusterResource.Load() == false {
 				return nil
 			}
@@ -465,7 +465,7 @@ func (s) TestFallback_MidStartup(t *testing.T) {
 	// listeners.
 	primaryManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: primaryLis,
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if closeConnOnClusterResource.Load() == false {
 				return nil
 			}
