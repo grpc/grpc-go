@@ -1138,6 +1138,10 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 			if statusErr := a.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
 			}
+			// received no msg and status ok for non-server streaming rpcs.
+			if !cs.desc.ServerStreams {
+				return status.Errorf(codes.Internal, "cardinality violation: received no response message from non-streaming RPC")
+			}
 			return io.EOF // indicates successful end of stream.
 		}
 
@@ -1477,6 +1481,10 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 		if err == io.EOF {
 			if statusErr := as.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
+			}
+			// received no msg and status ok for non-server streaming rpcs.
+			if !as.desc.ServerStreams {
+				return status.Errorf(codes.Internal, "cardinality violation: received no response message from non-streaming RPC")
 			}
 			return io.EOF // indicates successful end of stream.
 		}
