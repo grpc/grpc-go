@@ -1839,15 +1839,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 							},
 						},
 					},
-					{
-						name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-						spanKind:   oteltrace.SpanKindClient.String(),
-						status:     otelcodes.Ok,
-						attributes: nil,
-						events: []trace.Event{
-							{Name: delayedResolutionEventName},
-						},
-					},
 					// RPC attempt #3
 					{
 						name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
@@ -1892,6 +1883,15 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 									attribute.Int("message-size", 0),
 								},
 							},
+						},
+					},
+					{
+						name:       "Sent.grpc.testing.TestService.FullDuplexCall",
+						spanKind:   oteltrace.SpanKindClient.String(),
+						status:     otelcodes.Ok,
+						attributes: nil,
+						events: []trace.Event{
+							{Name: delayedResolutionEventName},
 						},
 					},
 				}
