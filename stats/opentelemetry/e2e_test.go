@@ -303,10 +303,8 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 			t.Errorf("Unexpected span: %q (%s)", span.Name, span.SpanKind)
 			continue
 		}
-		want := wantSpanInfos[matchedIndex]
 		// Check that the attempt span has the correct status.
-		if want.status != otelcodes.Unset {
-			got, want := span.Status.Code, want.status
+		if got, want := span.Status.Code, wantSpanInfos[matchedIndex].status; want != otelcodes.Unset {
 			if got != want {
 				t.Errorf("Status code mismatch for span %q: got %v, want %v", span.Name, got, want)
 			}
@@ -327,11 +325,11 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 
 		// attributes
-		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
+		if diff := cmp.Diff(wantSpanInfos[matchedIndex].attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
 			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 		// events
-		if diff := cmp.Diff(want.events, span.Events, eventsSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
+		if diff := cmp.Diff(wantSpanInfos[matchedIndex].events, span.Events, eventsSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
 			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 	}
@@ -1681,6 +1679,31 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 						},
 					},
 					{
+						name:     "Recv.grpc.testing.TestService.UnaryCall",
+						spanKind: oteltrace.SpanKindServer.String(),
+						status:   otelcodes.Ok,
+						attributes: []attribute.KeyValue{
+							attribute.Bool("Client", false),
+							attribute.Bool("FailFast", false),
+						},
+						events: []trace.Event{
+							{
+								Name: "Inbound message",
+								Attributes: []attribute.KeyValue{
+									attribute.Int("sequence-number", 0),
+									attribute.Int("message-size", 0),
+								},
+							},
+							{
+								Name: "Outbound message",
+								Attributes: []attribute.KeyValue{
+									attribute.Int("sequence-number", 0),
+									attribute.Int("message-size", 0),
+								},
+							},
+						},
+					},
+					{
 						name:       "Sent.grpc.testing.TestService.UnaryCall",
 						spanKind:   oteltrace.SpanKindClient.String(),
 						status:     otelcodes.Ok,
@@ -1845,7 +1868,33 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 								},
 							},
 						},
-					}}
+					},
+					{
+						name:     "Recv.grpc.testing.TestService.FullDuplexCall",
+						spanKind: oteltrace.SpanKindServer.String(),
+						status:   otelcodes.Ok,
+						attributes: []attribute.KeyValue{
+							attribute.Bool("Client", false),
+							attribute.Bool("FailFast", false),
+						},
+						events: []trace.Event{
+							{
+								Name: "Inbound message",
+								Attributes: []attribute.KeyValue{
+									attribute.Int("sequence-number", 0),
+									attribute.Int("message-size", 0),
+								},
+							},
+							{
+								Name: "Outbound message",
+								Attributes: []attribute.KeyValue{
+									attribute.Int("sequence-number", 0),
+									attribute.Int("message-size", 0),
+								},
+							},
+						},
+					},
+				}
 			},
 		},
 	}
