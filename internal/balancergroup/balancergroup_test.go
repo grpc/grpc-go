@@ -789,15 +789,12 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 	for i := 0; i < len(balancerNames); i++ {
 		select {
 		case name := <-exitIdleCh:
+			if called[name] {
+				t.Fatalf("ExitIdle was called multiple times for sub-balancer %q", name)
+			}
 			called[name] = true
 		case <-time.After(time.Second):
 			t.Fatalf("Timeout: ExitIdle not called for all sub-balancers, got %d/%d", len(called), len(balancerNames))
-		}
-	}
-
-	for _, expected := range balancerNames {
-		if !called[expected] {
-			t.Errorf("ExitIdle was not called for sub-balancer registered as %q", expected)
 		}
 	}
 }
