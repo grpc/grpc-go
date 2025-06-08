@@ -573,11 +573,11 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 
 func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
 	balancerName := "stub-balancer-test-exit-idle-one-after-close"
-	called := false
+	exitIdleCh := make(chan struct{})
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		ExitIdle: func(_ *stub.BalancerData) {
-			called = true
+			close(exitIdleCh)
 		},
 	})
 
@@ -592,7 +592,9 @@ func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
 	bg.Close()
 	bg.ExitIdleOne(testBalancerIDs[0])
 
-	if called {
+	select {
+	case <-time.After(time.Second):
+	case <-exitIdleCh:
 		t.Fatalf("ExitIdleOne called ExitIdle on sub-balancer after BalancerGroup was closed")
 	}
 }
@@ -802,11 +804,11 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 
 func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 	balancerName := "stub-balancer-test-balancer-group-exit-idle-after-close"
-	called := false
+	exitIdleCh := make(chan struct{})
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		ExitIdle: func(_ *stub.BalancerData) {
-			called = true
+			close(exitIdleCh)
 		},
 	})
 
@@ -821,7 +823,9 @@ func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 	bg.Close()
 	bg.ExitIdle()
 
-	if called {
+	select {
+	case <-exitIdleCh:
 		t.Fatalf("ExitIdle was called on sub-balancer even after BalancerGroup was closed")
+	case <-time.After(defaultTestTimeout):
 	}
 }
