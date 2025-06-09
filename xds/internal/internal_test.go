@@ -26,7 +26,6 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/xds/internal/clients"
 )
 
 const ignorePrefix = "XXX_"
@@ -50,7 +49,7 @@ func ignore(name string) bool {
 // fields (expect for XXX_) from the proto message.
 func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 	want1 := make(map[string]string)
-	for ty, i := reflect.TypeOf(clients.Locality{}), 0; i < ty.NumField(); i++ {
+	for ty, i := reflect.TypeOf(LocalityID{}), 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
 		if ignore(f.Name) {
 			continue
@@ -75,40 +74,40 @@ func (s) TestLocalityMatchProtoMessage(t *testing.T) {
 func TestLocalityToAndFromString(t *testing.T) {
 	tests := []struct {
 		name       string
-		localityID clients.Locality
+		localityID LocalityID
 		str        string
 		wantErr    bool
 	}{
 		{
 			name:       "3 fields",
-			localityID: clients.Locality{Region: "r:r", Zone: "z#z", SubZone: "s^s"},
+			localityID: LocalityID{Region: "r:r", Zone: "z#z", SubZone: "s^s"},
 			str:        `{region="r:r", zone="z#z", sub_zone="s^s"}`,
 		},
 		{
 			name:       "2 fields",
-			localityID: clients.Locality{Region: "r:r", Zone: "z#z"},
+			localityID: LocalityID{Region: "r:r", Zone: "z#z"},
 			str:        `{region="r:r", zone="z#z", sub_zone=""}`,
 		},
 		{
 			name:       "1 field",
-			localityID: clients.Locality{Region: "r:r"},
+			localityID: LocalityID{Region: "r:r"},
 			str:        `{region="r:r", zone="", sub_zone=""}`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStr := LocalityString(tt.localityID)
+			gotStr := tt.localityID.ToString()
 			if gotStr != tt.str {
 				t.Errorf("%#v.String() = %q, want %q", tt.localityID, gotStr, tt.str)
 			}
 
-			gotID, err := LocalityFromString(tt.str)
+			gotID, err := LocalityIDFromString(tt.str)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("clients.LocalityFromString(%q) error = %v, wantErr %v", tt.str, err, tt.wantErr)
+				t.Errorf("LocalityIDFromString(%q) error = %v, wantErr %v", tt.str, err, tt.wantErr)
 				return
 			}
 			if diff := cmp.Diff(gotID, tt.localityID); diff != "" {
-				t.Errorf("clients.LocalityFromString() got = %v, want %v, diff: %s", gotID, tt.localityID, diff)
+				t.Errorf("LocalityIDFromString() got = %v, want %v, diff: %s", gotID, tt.localityID, diff)
 			}
 		})
 	}

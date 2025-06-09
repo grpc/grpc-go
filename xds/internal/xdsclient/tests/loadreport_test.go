@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -45,13 +44,13 @@ import (
 )
 
 const (
-	testKey1 = "test-key1"
-	testKey2 = "test-key2"
+	testLocality1 = `{region="test-region1", zone="", sub_zone=""}`
+	testLocality2 = `{region="test-region2", zone="", sub_zone=""}`
+	testKey1      = "test-key1"
+	testKey2      = "test-key2"
 )
 
 var (
-	testLocality1     = clients.Locality{Region: "test-region1"}
-	testLocality2     = clients.Locality{Region: "test-region2"}
 	toleranceCmpOpt   = cmpopts.EquateApprox(0, 1e-5)
 	ignoreOrderCmpOpt = protocmp.FilterField(&v3endpointpb.ClusterStats{}, "upstream_locality_stats",
 		cmpopts.SortSlices(func(a, b protocmp.Message) bool {
@@ -144,9 +143,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	// Call the load reporting API to report load to the first management
 	// server, and ensure that a connection to the server is created.
 	store1, lrsCancel1 := client.ReportLoad(serverCfg1)
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	defer lrsCancel1(sCtx)
+	defer lrsCancel1()
 	if _, err := newConnChan1.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for a connection to the first management server, after starting load reporting")
 	}
@@ -161,9 +158,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	// Call the load reporting API to report load to the second management
 	// server, and ensure that a connection to the server is created.
 	store2, lrsCancel2 := client.ReportLoad(serverCfg2)
-	sCtx2, sCancel2 := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel2()
-	defer lrsCancel2(sCtx2)
+	defer lrsCancel2()
 	if _, err := newConnChan2.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for a connection to the second management server, after starting load reporting")
 	}
@@ -176,7 +171,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Push some loads on the received store.
-	store2.ReporterForCluster("cluster", "eds").CallDropped("test")
+	store2.PerCluster("cluster", "eds").CallDropped("test")
 
 	// Ensure the initial load reporting request is received at the server.
 	lrsServer := mgmtServer2.LRSServer
@@ -231,9 +226,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Cancel this load reporting stream, server should see error canceled.
-	sCtx2, sCancel2 = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel2()
-	lrsCancel2(sCtx2)
+	lrsCancel2()
 
 	// Server should receive a stream canceled error. There may be additional
 	// load reports from the client in the channel.
@@ -287,14 +280,14 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Push some loads on the received store.
-	store1.ReporterForCluster("cluster1", "eds1").CallDropped("test")
-	store1.ReporterForCluster("cluster1", "eds1").CallStarted(testLocality1)
-	store1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 3.14)
-	store1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 2.718)
-	store1.ReporterForCluster("cluster1", "eds1").CallFinished(testLocality1, nil)
-	store1.ReporterForCluster("cluster1", "eds1").CallStarted(testLocality2)
-	store1.ReporterForCluster("cluster1", "eds1").CallServerLoad(testLocality2, testKey2, 1.618)
-	store1.ReporterForCluster("cluster1", "eds1").CallFinished(testLocality2, nil)
+	store1.PerCluster("cluster1", "eds1").CallDropped("test")
+	store1.PerCluster("cluster1", "eds1").CallStarted(testLocality1)
+	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 3.14)
+	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality1, testKey1, 2.718)
+	store1.PerCluster("cluster1", "eds1").CallFinished(testLocality1, nil)
+	store1.PerCluster("cluster1", "eds1").CallStarted(testLocality2)
+	store1.PerCluster("cluster1", "eds1").CallServerLoad(testLocality2, testKey2, 1.618)
+	store1.PerCluster("cluster1", "eds1").CallFinished(testLocality2, nil)
 
 	// Ensure the initial load reporting request is received at the server.
 	req, err := lrsServer.LRSRequestChan.Receive(ctx)
@@ -374,7 +367,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Push more loads.
-	store2.ReporterForCluster("cluster2", "eds2").CallDropped("test")
+	store2.PerCluster("cluster2", "eds2").CallDropped("test")
 
 	// Ensure that loads are seen on the server. We need a loop here because
 	// there could have been some requests from the client in the time between
@@ -409,9 +402,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	// Cancel the first load reporting call, and ensure that the stream does not
 	// close (because we have another call open).
-	sCtx1, sCancel1 := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel1()
-	cancel1(sCtx1)
+	cancel1()
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(sCtx); err != context.DeadlineExceeded {
@@ -419,9 +410,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Cancel the second load reporting call, and ensure the stream is closed.
-	sCtx2, sCancel2 := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel2()
-	cancel2(sCtx2)
+	cancel2()
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
@@ -433,7 +422,5 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
-	sCtx3, sCancel3 := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel3()
-	cancel3(sCtx3)
+	cancel3()
 }

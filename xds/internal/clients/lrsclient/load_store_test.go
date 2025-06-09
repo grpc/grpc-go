@@ -26,13 +26,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/xds/internal/clients"
 	lrsclientinternal "google.golang.org/grpc/xds/internal/clients/lrsclient/internal"
 )
 
 var (
 	dropCategories = []string{"drop_for_real", "drop_for_fun"}
-	localities     = []clients.Locality{{Region: "locality-A"}, {Region: "locality-B"}}
+	localities     = []string{"locality-A", "locality-B"}
 	errTest        = fmt.Errorf("test error")
 )
 
@@ -92,7 +91,7 @@ func TestDrops(t *testing.T) {
 // Store and makes sure they are as expected.
 func TestLocalityStats(t *testing.T) {
 	var (
-		ld = map[clients.Locality]rpcData{
+		ld = map[string]rpcData{
 			localities[0]: {
 				start:      40,
 				success:    20,
@@ -107,7 +106,7 @@ func TestLocalityStats(t *testing.T) {
 			},
 		}
 		wantStoreData = &loadData{
-			localityStats: map[clients.Locality]localityData{
+			localityStats: map[string]localityData{
 				localities[0]: {
 					requestStats: requestData{
 						succeeded:  20,
@@ -145,7 +144,7 @@ func TestLocalityStats(t *testing.T) {
 	for locality, data := range ld {
 		wg.Add(data.start)
 		for i := 0; i < data.start; i++ {
-			go func(l clients.Locality) {
+			go func(l string) {
 				ls.CallStarted(l)
 				wg.Done()
 			}(locality)
@@ -156,7 +155,7 @@ func TestLocalityStats(t *testing.T) {
 
 		wg.Add(data.success)
 		for i := 0; i < data.success; i++ {
-			go func(l clients.Locality, serverData map[string]float64) {
+			go func(l string, serverData map[string]float64) {
 				ls.CallFinished(l, nil)
 				for n, d := range serverData {
 					ls.CallServerLoad(l, n, d)
@@ -166,7 +165,7 @@ func TestLocalityStats(t *testing.T) {
 		}
 		wg.Add(data.failure)
 		for i := 0; i < data.failure; i++ {
-			go func(l clients.Locality) {
+			go func(l string) {
 				ls.CallFinished(l, errTest)
 				wg.Done()
 			}(locality)
@@ -190,7 +189,7 @@ func TestResetAfterStats(t *testing.T) {
 			dropCategories[0]: 30,
 			dropCategories[1]: 40,
 		}
-		ld = map[clients.Locality]rpcData{
+		ld = map[string]rpcData{
 			localities[0]: {
 				start:      40,
 				success:    20,
@@ -210,7 +209,7 @@ func TestResetAfterStats(t *testing.T) {
 				dropCategories[0]: 30,
 				dropCategories[1]: 40,
 			},
-			localityStats: map[clients.Locality]localityData{
+			localityStats: map[string]localityData{
 				localities[0]: {
 					requestStats: requestData{
 						succeeded:  20,
@@ -311,7 +310,7 @@ func TestStoreStats(t *testing.T) {
 	var (
 		testClusters = []string{"c0", "c1", "c2"}
 		testServices = []string{"s0", "s1"}
-		testLocality = clients.Locality{Region: "test-locality"}
+		testLocality = "test-locality"
 	)
 
 	store := newLoadStore()
@@ -328,8 +327,8 @@ func TestStoreStats(t *testing.T) {
 		{
 			cluster: "c0", service: "s0",
 			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {
+			localityStats: map[string]localityData{
+				"test-locality": {
 					requestStats: requestData{succeeded: 1, issued: 1},
 					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
@@ -338,8 +337,8 @@ func TestStoreStats(t *testing.T) {
 		{
 			cluster: "c0", service: "s1",
 			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {
+			localityStats: map[string]localityData{
+				"test-locality": {
 					requestStats: requestData{succeeded: 1, issued: 1},
 					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
@@ -355,8 +354,8 @@ func TestStoreStats(t *testing.T) {
 		{
 			cluster: "c1", service: "s0",
 			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {
+			localityStats: map[string]localityData{
+				"test-locality": {
 					requestStats: requestData{succeeded: 1, issued: 1},
 					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
@@ -365,8 +364,8 @@ func TestStoreStats(t *testing.T) {
 		{
 			cluster: "c1", service: "s1",
 			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {
+			localityStats: map[string]localityData{
+				"test-locality": {
 					requestStats: requestData{succeeded: 1, issued: 1},
 					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
@@ -375,8 +374,8 @@ func TestStoreStats(t *testing.T) {
 		{
 			cluster: "c2", service: "s0",
 			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {
+			localityStats: map[string]localityData{
+				"test-locality": {
 					requestStats: requestData{succeeded: 1, issued: 1},
 					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
@@ -385,8 +384,8 @@ func TestStoreStats(t *testing.T) {
 		{
 			cluster: "c2", service: "s1",
 			totalDrops: 1, drops: map[string]uint64{"dropped": 1},
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {
+			localityStats: map[string]localityData{
+				"test-locality": {
 					requestStats: requestData{succeeded: 1, issued: 1},
 					loadStats:    map[string]serverLoadData{"abc": {count: 1, sum: 123}},
 				},
@@ -406,7 +405,7 @@ func TestStoreStats(t *testing.T) {
 func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	var (
 		testServices = []string{"s0", "s1"}
-		testLocality = clients.Locality{Region: "test-locality"}
+		testLocality = "test-locality"
 	)
 
 	store := newLoadStore()
@@ -423,26 +422,26 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	want0 := []*loadData{
 		{
 			cluster: "c0", service: "s0",
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {requestStats: requestData{succeeded: 1, issued: 1}},
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{succeeded: 1, issued: 1}},
 			},
 		},
 		{
 			cluster: "c0", service: "s1",
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {requestStats: requestData{succeeded: 1, issued: 1}},
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{succeeded: 1, issued: 1}},
 			},
 		},
 		{
 			cluster: "c1", service: "s0",
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {requestStats: requestData{inProgress: 1, issued: 1}},
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1, issued: 1}},
 			},
 		},
 		{
 			cluster: "c1", service: "s1",
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {requestStats: requestData{inProgress: 1, issued: 1}},
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1, issued: 1}},
 			},
 		},
 	}
@@ -456,14 +455,14 @@ func TestStoreStatsEmptyDataNotReported(t *testing.T) {
 	want1 := []*loadData{
 		{
 			cluster: "c1", service: "s0",
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {requestStats: requestData{inProgress: 1}},
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1}},
 			},
 		},
 		{
 			cluster: "c1", service: "s1",
-			localityStats: map[clients.Locality]localityData{
-				testLocality: {requestStats: requestData{inProgress: 1}},
+			localityStats: map[string]localityData{
+				"test-locality": {requestStats: requestData{inProgress: 1}},
 			},
 		},
 	}

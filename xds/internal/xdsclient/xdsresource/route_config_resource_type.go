@@ -19,7 +19,6 @@ package xdsresource
 
 import (
 	"google.golang.org/grpc/internal/pretty"
-	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -148,10 +147,4 @@ func (d *delegatingRouteConfigWatcher) AmbientError(err error, onDone func()) {
 func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
 	delegator := &delegatingRouteConfigWatcher{watcher: w}
 	return p.WatchResource(routeConfigType, name, delegator)
-}
-
-// NewGenericRouteConfigResourceTypeDecoder returns a xdsclient.Decoder that
-// wraps the xdsresource.routeConfigType.
-func NewGenericRouteConfigResourceTypeDecoder() xdsclient.Decoder {
-	return &genericResourceTypeDecoder{resourceType: routeConfigType}
 }

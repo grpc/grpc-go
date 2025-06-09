@@ -24,9 +24,8 @@ import (
 
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
@@ -40,7 +39,7 @@ type Client struct {
 	name         string
 	loadReportCh *testutils.Channel
 	lrsCancelCh  *testutils.Channel
-	loadStore    *lrsclient.LoadStore
+	loadStore    *load.Store
 	bootstrapCfg *bootstrap.Config
 }
 
@@ -50,44 +49,10 @@ type ReportLoadArgs struct {
 	Server *bootstrap.ServerConfig
 }
 
-type transportBuilder struct {
-}
-
-func (*transportBuilder) Build(clients.ServerIdentifier) (clients.Transport, error) {
-	return &transport{}, nil
-}
-
-type transport struct {
-}
-
-func (*transport) NewStream(context.Context, string) (clients.Stream, error) {
-	return &stream{}, nil
-}
-
-func (*transport) Close() {
-}
-
-type stream struct {
-}
-
-func (*stream) Send([]byte) error {
-	return nil
-}
-
-func (*stream) Recv() ([]byte, error) {
-	return nil, nil
-
-}
-
 // ReportLoad starts reporting load about clusterName to server.
-func (xdsC *Client) ReportLoad(server *bootstrap.ServerConfig) (loadStore *lrsclient.LoadStore, cancel func(context.Context)) {
-	lrsClient, _ := lrsclient.New(lrsclient.Config{Node: clients.Node{ID: "fake-node-id"}, TransportBuilder: &transportBuilder{}})
-	xdsC.loadStore, _ = lrsClient.ReportLoad(clients.ServerIdentifier{ServerURI: server.ServerURI()})
-
+func (xdsC *Client) ReportLoad(server *bootstrap.ServerConfig) (loadStore *load.Store, cancel func()) {
 	xdsC.loadReportCh.Send(ReportLoadArgs{Server: server})
-
-	return xdsC.loadStore, func(ctx context.Context) {
-		xdsC.loadStore.Stop(ctx)
+	return xdsC.loadStore, func() {
 		xdsC.lrsCancelCh.Send(nil)
 	}
 }
@@ -100,7 +65,7 @@ func (xdsC *Client) WaitForCancelReportLoad(ctx context.Context) error {
 }
 
 // LoadStore returns the underlying load data store.
-func (xdsC *Client) LoadStore() *lrsclient.LoadStore {
+func (xdsC *Client) LoadStore() *load.Store {
 	return xdsC.loadStore
 }
 
@@ -142,6 +107,7 @@ func NewClientWithName(name string) *Client {
 		name:         name,
 		loadReportCh: testutils.NewChannel(),
 		lrsCancelCh:  testutils.NewChannel(),
+		loadStore:    load.NewStore(),
 		bootstrapCfg: &bootstrap.Config{},
 	}
 }
