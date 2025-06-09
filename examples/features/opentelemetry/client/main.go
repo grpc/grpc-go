@@ -63,8 +63,24 @@ func main() {
 	// Configure W3C Trace Context Propagator for traces
 	textMapPropagator := otelpropagation.TraceContext{}
 	do := opentelemetry.DialOption(opentelemetry.Options{
-		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: meterProvider},
-		TraceOptions:   oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator},
+		MetricsOptions: opentelemetry.MetricsOptions{
+			MeterProvider: meterProvider,
+			Metrics: opentelemetry.DefaultMetrics().Add(
+				"grpc.lb.wrr.rr_fallback",
+				"grpc.lb.wrr.endpoint_weight_not_yet_usable",
+				"grpc.lb.wrr.endpoint_weight_stale",
+				"grpc.lb.wrr.endpoint_weights",
+				"grpc.lb.pick_first.disconnections",
+				"grpc.lb.pick_first.connection_attempts_succeeded",
+				"grpc.lb.pick_first.connection_attempts_failed",
+				"grpc.xds_client.connected",
+				"grpc.xds_client.server_failure",
+				"grpc.xds_client.resource_updates_valid",
+				"grpc.xds_client.resource_updates_invalid",
+				"grpc.xds_client.resources",
+			),
+		},
+		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator},
 	})
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
