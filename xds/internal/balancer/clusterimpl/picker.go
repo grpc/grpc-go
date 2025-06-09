@@ -28,8 +28,6 @@ import (
 	"google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/clients"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -73,10 +71,10 @@ func (d *dropper) drop() (ret bool) {
 
 // loadReporter wraps the methods from the loadStore that are used here.
 type loadReporter interface {
-	CallStarted(locality clients.Locality)
-	CallFinished(locality clients.Locality, err error)
-	CallServerLoad(locality clients.Locality, name string, val float64)
-	CallDropped(category string)
+	CallStarted(locality string)
+	CallFinished(locality string, err error)
+	CallServerLoad(locality, name string, val float64)
+	CallDropped(locality string)
 }
 
 // Picker implements RPC drop, circuit breaking drop and load reporting.
@@ -135,7 +133,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 	}
 
-	var lID clients.Locality
+	var lIDStr string
 	pr, err := d.s.Picker.Pick(info)
 	if scw, ok := pr.SubConn.(*scWrapper); ok {
 		// This OK check also covers the case err!=nil, because SubConn will be
@@ -143,7 +141,7 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		pr.SubConn = scw.SubConn
 		// If locality ID isn't found in the wrapper, an empty locality ID will
 		// be used.
-		lID = scw.localityID()
+		lIDStr = scw.localityID().ToString()
 	}
 
 	if err != nil {
@@ -155,25 +153,24 @@ func (d *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 
 	if labels := telemetryLabels(info.Ctx); labels != nil {
-		labels["grpc.lb.locality"] = internal.LocalityString(lID)
+		labels["grpc.lb.locality"] = lIDStr
 	}
 
 	if d.loadStore != nil {
-		locality := clients.Locality{Region: lID.Region, Zone: lID.Zone, SubZone: lID.SubZone}
-		d.loadStore.CallStarted(locality)
+		d.loadStore.CallStarted(lIDStr)
 		oldDone := pr.Done
 		pr.Done = func(info balancer.DoneInfo) {
 			if oldDone != nil {
 				oldDone(info)
 			}
-			d.loadStore.CallFinished(locality, info.Err)
+			d.loadStore.CallFinished(lIDStr, info.Err)
 
 			load, ok := info.ServerLoad.(*v3orcapb.OrcaLoadReport)
 			if !ok || load == nil {
 				return
 			}
 			for n, c := range load.NamedMetrics {
-				d.loadStore.CallServerLoad(locality, n, c)
+				d.loadStore.CallServerLoad(lIDStr, n, c)
 			}
 		}
 	}
