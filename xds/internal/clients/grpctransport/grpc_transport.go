@@ -231,7 +231,7 @@ func (c *byteCodec) Unmarshal(data []byte, v any) error {
 }
 
 func (c *byteCodec) Name() string {
-	// Return "proto" to ensure the Content-Type header is "application/grpc",
+	// Return "" to ensure the Content-Type header is "application/grpc",
 	// which is expected by standard gRPC servers for protobuf messages.
-	return "proto"
+	return ""
 }
