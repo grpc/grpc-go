@@ -3739,7 +3739,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 
 // Tests that a client receives a cardinality violation error for unary
 // RPCs if the server doesn't send a message before returning status OK.
-func TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
+func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3768,7 +3768,8 @@ func TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	}
 }
 
-// Tests that client will receive cardinality violation in subsequent calls to RecvMsg().
+// Tests that client will receive cardinality violations when calling
+// RecvMsg() multiple times for non-streaming response streams.
 func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 	e := tcpTLSEnv
 	te := newTest(t, e)
@@ -3804,7 +3805,8 @@ func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 	}
 }
 
-// Tests that client will receive cardinality violation in the subsequent calls to RecvMsg().
+// Tests that client will receive cardinality violations when calling
+// RecvMsg() multiple times for non-streaming response streams.
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
@@ -3841,7 +3843,7 @@ func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 }
 
 // Tests that a client receives a cardinality violation error for client-streaming
-// RPCs if the server call SendMsg multiple times.
+// RPCs if the server call SendMsg() multiple times.
 func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
