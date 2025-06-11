@@ -439,6 +439,21 @@ func (cs *channelState) adsResourceDoesNotExist(typ ResourceType, resourceName s
 	}
 }
 
+func (cs *channelState) requiredToRemoveUnsubscribedCacheEntries(rType ResourceType) {
+	if cs.parent.done.HasFired() {
+		return
+	}
+
+	cs.parent.channelsMu.Lock()
+	defer cs.parent.channelsMu.Unlock()
+
+	for authority := range cs.interestedAuthorities {
+		authority.xdsClientSerializer.TrySchedule(func(context.Context) {
+			authority.removeUnsubscribedCacheEntries(rType)
+		})
+	}
+}
+
 func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
 	c.channelsMu.Lock()
 	defer c.channelsMu.Unlock()
