@@ -1626,15 +1626,15 @@ func (s) TestPickFirstHealthListenerDisabled(t *testing.T) {
 	lbChan := make(chan *outlierDetectionBalancer, 1)
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
-			lbChan <- bd.Data.(*outlierDetectionBalancer)
+			bd.ChildBalancer = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
+			lbChan <- bd.ChildBalancer.(*outlierDetectionBalancer)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.BalancerConfig = odCfg
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1729,15 +1729,15 @@ func (s) TestMultipleAddressesPerEndpoint(t *testing.T) {
 	lbChan := make(chan *outlierDetectionBalancer, 1)
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
-			lbChan <- bd.Data.(*outlierDetectionBalancer)
+			bd.ChildBalancer = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
+			lbChan <- bd.ChildBalancer.(*outlierDetectionBalancer)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.BalancerConfig = odCfg
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1905,15 +1905,15 @@ func (s) TestEjectionStateResetsWhenEndpointAddressesChange(t *testing.T) {
 	lbChan := make(chan *outlierDetectionBalancer, 1)
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
-			lbChan <- bd.Data.(*outlierDetectionBalancer)
+			bd.ChildBalancer = balancer.Get(Name).Build(bd.ClientConn, bd.BuildOptions)
+			lbChan <- bd.ChildBalancer.(*outlierDetectionBalancer)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.BalancerConfig = odCfg
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 

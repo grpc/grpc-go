@@ -222,13 +222,13 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
-			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
+			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 	}
 	stub.Register(name, bf)
@@ -303,16 +303,16 @@ func (s) TestEndpointShardingExitIdle(t *testing.T) {
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
-			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
+			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).ExitIdle()
+			bd.ChildBalancer.ExitIdle()
 		},
 	}
 	stub.Register(name, bf)

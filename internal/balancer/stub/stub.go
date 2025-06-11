@@ -51,6 +51,9 @@ type BalancerData struct {
 	BuildOptions balancer.BuildOptions
 	// Data may be used to store arbitrary user data.
 	Data any
+	// ChildBalancer holds the child balancer directly, avoiding the need
+	// to type-assert from Data.
+	ChildBalancer balancer.Balancer
 }
 
 type bal struct {
