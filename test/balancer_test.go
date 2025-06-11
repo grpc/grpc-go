@@ -859,14 +859,13 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			cc := &testCCWrapper{ClientConn: bd.ClientConn}
-			bd.Data = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(cc, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	})
 
@@ -1025,16 +1024,16 @@ func (s) TestSubConn_RegisterHealthListener(t *testing.T) {
 				ClientConn: cc,
 				scChan:     scChan,
 			}
-			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).ExitIdle()
+			bd.ChildBalancer.ExitIdle()
 		},
 	}
 
@@ -1136,13 +1135,13 @@ func (s) TestSubConn_RegisterHealthListener_RegisterTwice(t *testing.T) {
 					}
 				},
 			}
-			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1232,13 +1231,13 @@ func (s) TestSubConn_RegisterHealthListener_NilListener(t *testing.T) {
 					}
 				},
 			}
-			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 

@@ -651,14 +651,13 @@ func TestClusterGracefulSwitch(t *testing.T) {
 	childPolicyName := t.Name()
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	})
 	// Same cluster, different balancer type.

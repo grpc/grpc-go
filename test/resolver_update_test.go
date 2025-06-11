@@ -161,10 +161,10 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			pf := balancer.Get(pickfirst.Name)
-			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = pf.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &wrappingBalancerConfig{}
@@ -177,10 +177,9 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 			if _, ok := ccs.BalancerConfig.(*wrappingBalancerConfig); !ok {
 				return fmt.Errorf("received balancer config of unsupported type %T", ccs.BalancerConfig)
 			}
-			bal := bd.Data.(balancer.Balancer)
 			ccUpdateCh.Send(ccs)
 			ccs.BalancerConfig = nil
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	})
 

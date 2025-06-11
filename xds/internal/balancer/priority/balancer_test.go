@@ -1718,11 +1718,10 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			ccCh.Send(bd.ClientConn)
-			bd.Data = balancer.Get(roundrobin.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(roundrobin.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	})
 

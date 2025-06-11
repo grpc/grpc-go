@@ -98,19 +98,17 @@ func registerWrappedRoundRobinPolicy(t *testing.T) chan struct{} {
 	closeCh := make(chan struct{}, 1)
 	stub.Register(roundrobin.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = rrBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = rrBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
 			select {
 			case closeCh <- struct{}{}:
 			default:
 			}
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 	t.Cleanup(func() { balancer.Register(rrBuilder) })

@@ -1241,14 +1241,14 @@ func (s) TestPickFirstLeaf_HealthListenerEnabled(t *testing.T) {
 	defer cancel()
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1289,15 +1289,15 @@ func (s) TestPickFirstLeaf_HealthListenerNotEnabled(t *testing.T) {
 				healthListenerCh: healthListenerCh,
 				subConnStateCh:   make(chan balancer.SubConnState, 5),
 			}
-			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			// Functions like a non-petiole policy by not configuring the use
 			// of health listeners.
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 
@@ -1345,14 +1345,14 @@ func (s) TestPickFirstLeaf_HealthUpdates(t *testing.T) {
 				healthListenerCh: healthListenerCh,
 				subConnStateCh:   scConnectivityStateCh,
 			}
-			bd.Data = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirstleaf.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			ccs.ResolverState = pickfirstleaf.EnableHealthListener(ccs.ResolverState)
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 
