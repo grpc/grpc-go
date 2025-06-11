@@ -3,6 +3,10 @@
 This example shows how to configure OpenTelemetry on a client and server, and
 shows what type of telemetry data it can produce for certain RPCs.
 
+## Experimental Metrics
+
+This example now includes **experimental gRPC metrics** such as Weighted Round Robin (WRR), Pick First, and XDSClient metrics. These metrics are not enabled by default and must be explicitly added to both the client and server configurations.
+
 ## Try it
 
 ```

@@ -25,7 +25,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
-func Example_dialOption() {
+func ExampleDialOption_basic() {
 	// This is setting default bounds for a view. Setting these bounds through
 	// meter provider from SDK is recommended, as API calls in this module
 	// provide default bounds, but these calls are not guaranteed to be stable
@@ -64,7 +64,7 @@ func Example_dialOption() {
 	defer cc.Close()
 }
 
-func Example_serverOption() {
+func ExampleServerOption_filterMethod() {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	opts := opentelemetry.Options{
@@ -84,7 +84,7 @@ func Example_serverOption() {
 	defer cc.Close()
 }
 
-func ExampleMetrics_excludeSome() {
+func ExampleOptions_excludeSomeMetrics() {
 	// To exclude specific metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
@@ -99,7 +99,7 @@ func ExampleMetrics_excludeSome() {
 	defer cc.Close()
 }
 
-func ExampleMetrics_disableAll() {
+func ExampleOptions_disableAllMetrics() {
 	// To disable all metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
@@ -114,7 +114,7 @@ func ExampleMetrics_disableAll() {
 	defer cc.Close()
 }
 
-func ExampleMetrics_enableSome() {
+func ExampleOptions_enableSomeMetrics() {
 	// To only create specific metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
@@ -125,6 +125,30 @@ func ExampleMetrics_enableSome() {
 	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil { // might fail vet
 		// Handle err.
+	}
+	defer cc.Close()
+}
+
+func ExampleOptions_addMetrics() {
+	opts := opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{
+			Metrics: opentelemetry.DefaultMetrics().Add(
+				"grpc.lb.wrr.rr_fallback",
+				"grpc.lb.wrr.endpoint_weight_not_yet_usable",
+				"grpc.lb.wrr.endpoint_weight_stale",
+				"grpc.lb.wrr.endpoint_weights",
+				"grpc.xds_client.connected",
+				"grpc.xds_client.server_failure",
+				"grpc.xds_client.resource_updates_valid",
+				"grpc.xds_client.resource_updates_invalid",
+				"grpc.xds_client.resources",
+			),
+		},
+	}
+	do := opentelemetry.DialOption(opts)
+	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		// Handle error.
 	}
 	defer cc.Close()
 }
