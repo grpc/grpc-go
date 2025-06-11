@@ -121,7 +121,7 @@ func (s) TestDetailedGoAwayErrorOnGracefulClosePropagatesToRPCError(t *testing.T
 }
 
 func (s) TestDetailedGoAwayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) {
-	grpctest.TLogger.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
+	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 	// set the min keepalive time very low so that this test can take
 	// a reasonable amount of time
 	prev := internal.KeepaliveMinPingTime
