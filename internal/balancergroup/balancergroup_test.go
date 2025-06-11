@@ -450,7 +450,7 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		userAgent    = "ua"
 	)
 
-	// Setup the stub balancer such that we can read the build options passed to
+	// Set up the stub balancer such that we can read the build options passed to
 	// it in the UpdateClientConnState method.
 	bOpts := balancer.BuildOptions{
 		DialCreds:       insecure.NewCredentials(),
@@ -484,6 +484,67 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 	}
 }
 
+func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-update-client-state-after-close"
+	exitIdleCh := make(chan struct{})
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
+			close(exitIdleCh)
+			return nil
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+
+	err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{})
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("UpdateClientConnState was called after BalancerGroup was closed")
+	case <-exitIdleCh:
+	}
+}
+
+func (s) TestBalancerGroup_ResolverError_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-resolver-error-after-close"
+	exitIdleCh := make(chan struct{})
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ResolverError: func(_ *stub.BalancerData, _ error) {
+			close(exitIdleCh)
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+
+	bg.ResolverError(errors.New("test error"))
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("ResolverError was called after BalancerGroup was closed")
+	case <-exitIdleCh:
+	}
+}
+
 func (s) TestBalancerExitIdleOne(t *testing.T) {
 	const balancerName = "stub-balancer-test-balancergroup-exit-idle-one"
 	exitIdleCh := make(chan struct{}, 1)
@@ -505,12 +566,66 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 	builder := balancer.Get(balancerName)
 	bg.Add(testBalancerIDs[0], builder)
 
-	// Call ExitIdle on the child policy.
+	// Call ExitIdleOne on the child policy.
 	bg.ExitIdleOne(testBalancerIDs[0])
 	select {
-	case <-time.After(time.Second):
+	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for ExitIdle to be invoked on child policy")
 	case <-exitIdleCh:
+	}
+}
+
+func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-exit-idle-one-after-close"
+	exitIdleCh := make(chan struct{})
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			close(exitIdleCh)
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+	bg.ExitIdleOne(testBalancerIDs[0])
+
+	select {
+	case <-time.After(defaultTestShortTimeout):
+	case <-exitIdleCh:
+		t.Fatalf("ExitIdleOne called ExitIdle on sub-balancer after BalancerGroup was closed")
+	}
+}
+
+func (s) TestBalancerGroup_ExitIdleOne_NonExistentID(t *testing.T) {
+	balancerName := "stub-balancer-test-exit-idle-one-missing-id"
+	called := false
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			called = true
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+	defer bg.Close()
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.ExitIdleOne("non-existent-id")
+
+	if called {
+		t.Fatalf("ExitIdleOne called ExitIdle on wrong sub-balancer ID")
 	}
 }
 
@@ -638,5 +753,80 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 				t.Fatalf("Shutdown called for wrong SubConn %v, want in %v", sc, scs)
 			}
 		}
+	}
+}
+
+func (s) TestBalancerExitIdle_All(t *testing.T) {
+	balancerOne := "stub-balancer-test-balancer-group-exit-idle-one"
+	balancerTwo := "stub-balancer-test-balancer-group-exit-idle-two"
+	balancerThree := "stub-balancer-test-balancer-group-exit-idle-three"
+
+	balancerNames := []string{balancerOne, balancerTwo, balancerThree}
+	testIDs := []string{testBalancerIDs[0], testBalancerIDs[1], testBalancerIDs[2]}
+
+	exitIdleCh := make(chan string, len(balancerNames))
+
+	for _, name := range balancerNames {
+		stub.Register(name, stub.BalancerFuncs{
+			ExitIdle: func(_ *stub.BalancerData) {
+				exitIdleCh <- name
+			},
+		})
+	}
+
+	cc := testutils.NewBalancerClientConn(t)
+	bg := New(Options{
+		CC:              cc,
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+	defer bg.Close()
+
+	bg.Add(testIDs[0], balancer.Get(balancerOne))
+	bg.Add(testIDs[1], balancer.Get(balancerTwo))
+	bg.Add(testIDs[2], balancer.Get(balancerThree))
+
+	bg.ExitIdle()
+
+	called := make(map[string]bool)
+	for i := 0; i < len(balancerNames); i++ {
+		select {
+		case name := <-exitIdleCh:
+			if called[name] {
+				t.Fatalf("ExitIdle was called multiple times for sub-balancer %q", name)
+			}
+			called[name] = true
+		case <-time.After(defaultTestTimeout):
+			t.Fatalf("Timeout: ExitIdle not called for all sub-balancers, got %d/%d", len(called), len(balancerNames))
+		}
+	}
+}
+
+func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
+	balancerName := "stub-balancer-test-balancer-group-exit-idle-after-close"
+	exitIdleCh := make(chan struct{})
+
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			close(exitIdleCh)
+		},
+	})
+
+	bg := New(Options{
+		CC:              testutils.NewBalancerClientConn(t),
+		BuildOpts:       balancer.BuildOptions{},
+		StateAggregator: nil,
+		Logger:          nil,
+	})
+
+	bg.Add(testBalancerIDs[0], balancer.Get(balancerName))
+	bg.Close()
+	bg.ExitIdle()
+
+	select {
+	case <-exitIdleCh:
+		t.Fatalf("ExitIdle was called on sub-balancer even after BalancerGroup was closed")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
