@@ -62,7 +62,6 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 				return
 			}
 			ci.previousRPCAttempts.Add(1)
-			ai.ctx = setCallInfo(ai.ctx, ci)
 		}
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")

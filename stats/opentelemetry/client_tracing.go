@@ -83,7 +83,10 @@ func (h *clientTracingHandler) finishTrace(err error, ts trace.Span) {
 // It creates a new outgoing carrier which serializes information about this
 // span into gRPC Metadata, if TextMapPropagator is provided in the trace
 // options. if TextMapPropagator is not provided, it returns the context as is.
-func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) (context.Context, *attemptInfo) {
+//
+// Note: The passed attemptInfo pointer (ai) is mutated in-place. Fields such as
+// ai.traceSpan are updated directly. No new attemptInfo is returned.
+func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo, nameResolutionDelayed bool) context.Context {
 	// Add a "Delayed name resolution complete" event to the call span
 	// if there was name resolution delay. In case of multiple retry attempts,
 	// ensure that event is added only once.
@@ -98,7 +101,7 @@ func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo,
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
 	h.options.TraceOptions.TextMapPropagator.Inject(ctx, carrier)
 	ai.traceSpan = span
-	return carrier.Context(), ai
+	return carrier.Context()
 }
 
 // createCallTraceSpan creates a call span to put in the provided context using
@@ -128,7 +131,7 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 	}
 	ai.previousRPCAttempts = uint32(ci.previousRPCAttempts.Load())
 	ai.ctx = ctx
-	ctx, ai = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
+	ctx = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
