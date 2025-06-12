@@ -17,8 +17,6 @@
 package opentelemetry
 
 import (
-	"sync/atomic"
-
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -44,14 +42,27 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// Note: Go always added Client and FailFast attributes even though they are not
 		// defined by the OpenCensus gRPC spec. Thus, they are unimportant for
 		// correctness.
-		span.SetAttributes(
+		attrs := []attribute.KeyValue{
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.FailFast),
-			attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
-			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
-		)
-		// increment previous rpc attempts applicable for next attempt
-		atomic.AddUint32(&ai.previousRPCAttempts, 1)
+		}
+		if rs.Client {
+			attrs = append(attrs,
+				attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
+				attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
+			)
+		}
+		span.SetAttributes(attrs...)
+		// Increment retry count for the next attempt if not a transparent
+		// retry.
+		if !rs.IsTransparentRetryAttempt && rs.Client {
+			ci := getCallInfo(ai.ctx)
+			if ci == nil {
+				logger.Error("context passed into client side stats handler (TagRPC) has no call info")
+				return
+			}
+			ci.previousRPCAttempts.Add(1)
+		}
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:
