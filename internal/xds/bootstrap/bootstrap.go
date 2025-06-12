@@ -217,10 +217,16 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 	return false
 }
 
+// SelectedCreds returns the selected credentials configuration for
+// communicating with this server.
+func (sc *ServerConfig) SelectedCreds() ChannelCreds {
+	return sc.selectedCreds
+}
+
 // DialOptions returns a slice of all the configured dial options for this
-// server.
+// server except grpc.WithCredentialsBundle().
 func (sc *ServerConfig) DialOptions() []grpc.DialOption {
-	dopts := []grpc.DialOption{sc.credsDialOption}
+	var dopts []grpc.DialOption
 	if sc.extraDialOptions != nil {
 		dopts = append(dopts, sc.extraDialOptions...)
 	}

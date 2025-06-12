@@ -55,8 +55,6 @@ func Test(t *testing.T) {
 }
 
 const (
-	testLocality1                 = `{"region":"test-region1"}`
-	testLocality2                 = `{"region":"test-region2"}`
 	testKey1                      = "test-key1"
 	testKey2                      = "test-key2"
 	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
@@ -65,6 +63,8 @@ const (
 )
 
 var (
+	testLocality1     = clients.Locality{Region: "test-region1"}
+	testLocality2     = clients.Locality{Region: "test-region2"}
 	toleranceCmpOpt   = cmpopts.EquateApprox(0, 1e-5)
 	ignoreOrderCmpOpt = protocmp.FilterField(&v3endpointpb.ClusterStats{}, "upstream_locality_stats",
 		cmpopts.SortSlices(func(a, b protocmp.Message) bool {
@@ -147,7 +147,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
 	}
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	defer loadStore1.Stop(ssCtx)
 
@@ -234,7 +234,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Stop this load reporting stream, server should see error canceled.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore2.Stop(ssCtx)
 
@@ -423,7 +423,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	// Cancel the first load reporting call, and ensure that the stream does not
 	// close (because we have another call open).
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore1.Stop(ssCtx)
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -433,7 +433,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Stop the second load reporting call, and ensure the stream is closed.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore2.Stop(ssCtx)
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
@@ -450,7 +450,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore3.Stop(ssCtx)
 }
@@ -574,7 +574,7 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		}
 
 		req, err = lrsServer.LRSRequestChan.Receive(ctx)
-		if err != nil {
+		if err != nil || req.(*fakeserver.Request).Err != nil {
 			continue
 		}
 		if req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest) == nil {
