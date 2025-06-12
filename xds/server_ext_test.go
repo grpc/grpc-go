@@ -220,6 +220,11 @@ func (s) TestServer_Basic(t *testing.T) {
 	routeNamesCh := make(chan []string, 1)
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			// The test needs to only verify the name of resources being
+			// subscribed to, we can skip ACKs.
+			if req.GetVersionInfo() != "" {
+				return nil
+			}
 			switch req.GetTypeUrl() {
 			case "type.googleapis.com/envoy.config.listener.v3.Listener":
 				select {
