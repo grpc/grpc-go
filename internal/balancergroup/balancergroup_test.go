@@ -486,11 +486,11 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 
 func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
 	balancerName := "stub-balancer-test-update-client-state-after-close"
-	called := false
+	exitIdleCh := make(chan struct{})
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(_ *stub.BalancerData, _ balancer.ClientConnState) error {
-			called = true
+			exitIdleCh <- struct{}{}
 			return nil
 		},
 	})
@@ -509,8 +509,10 @@ func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
-	if called {
+	select {
+	case <-exitIdleCh:
 		t.Fatalf("UpdateClientConnState was called after BalancerGroup was closed")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
