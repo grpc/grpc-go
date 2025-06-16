@@ -25,15 +25,16 @@ import (
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/internal/backoff"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
 	// DefaultPool is the default pool for xDS clients. It is created at init
-	// time by reading bootstrap configuration from env vars.
-	DefaultPool *Pool
+	// time and reads bootstrap configuration from env vars to create the xDS
+	// client.
+	DefaultPool = &Pool{clients: make(map[string]*clientImpl)}
 )
 
 // Pool represents a pool of xDS clients that share the same bootstrap
@@ -43,7 +44,7 @@ type Pool struct {
 	// it to guard config as well since SetFallbackBootstrapConfig writes to
 	// config.
 	mu      sync.Mutex
-	clients map[string]*clientRefCounted
+	clients map[string]*clientImpl
 	config  *bootstrap.Config
 }
 
@@ -76,7 +77,7 @@ type OptionsForTesting struct {
 // bootstrap configuration), xDS client creation will fail.
 func NewPool(config *bootstrap.Config) *Pool {
 	return &Pool{
-		clients: make(map[string]*clientRefCounted),
+		clients: make(map[string]*clientImpl),
 		config:  config,
 	}
 }
@@ -89,7 +90,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCounted(name, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff, metricsRecorder)
+	return p.newRefCounted(name, metricsRecorder)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -116,7 +117,12 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure, opts.MetricsRecorder)
+	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder)
+	if err != nil {
+		return nil, nil, err
+	}
+	c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
+	return c, cancel, nil
 }
 
 // GetClientForTesting returns an xDS client created earlier using the given
@@ -163,7 +169,15 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 
 	resp := &v3statuspb.ClientStatusResponse{}
 	for key, client := range p.clients {
-		cfg := client.dumpResources()
+		b, err := client.DumpResources()
+		if err != nil {
+			return nil
+		}
+		r := &v3statuspb.ClientStatusResponse{}
+		if err := proto.Unmarshal(b, r); err != nil {
+			return nil
+		}
+		cfg := r.Config[0]
 		cfg.ClientScope = key
 		resp.Config = append(resp.Config, cfg)
 	}
@@ -203,19 +217,29 @@ func (p *Pool) clientRefCountedClose(name string) {
 		return
 	}
 	delete(p.clients, name)
+
+	client.Close()
+	for _, s := range client.bootstrapConfig.XDSServers() {
+		for _, f := range s.Cleanups() {
+			f()
+		}
+	}
+	for _, a := range client.bootstrapConfig.Authorities() {
+		for _, s := range a.XDSServers {
+			for _, f := range s.Cleanups() {
+				f()
+			}
+		}
+	}
 	p.mu.Unlock()
 
-	// This attempts to close the transport to the management server and could
-	// theoretically call back into the xdsclient package again and deadlock.
-	// Hence, this needs to be called without holding the lock.
-	client.clientImpl.close()
 	xdsClientImplCloseHook(name)
 }
 
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -246,17 +270,16 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff, metricsRecorder, name)
+	c, err := newClientImpl(p.config, metricsRecorder, name)
 	if err != nil {
 		return nil, nil, err
 	}
 	if logger.V(2) {
 		c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
 	}
-	client := &clientRefCounted{clientImpl: c, refCount: 1}
-	p.clients[name] = client
+	p.clients[name] = c
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
-	return client, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
