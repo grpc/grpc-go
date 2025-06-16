@@ -253,6 +253,15 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
 	for _, r := range resp.resources {
+		r, err := xdsresource.UnwrapResource(r)
+		if err != nil {
+			topLevelErrors = append(topLevelErrors, err)
+			continue
+		}
+		if _, ok := opts.Config.ResourceTypes[r.TypeUrl]; !ok || r.TypeUrl != resp.typeURL {
+			topLevelErrors = append(topLevelErrors, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceTypeUnsupported, "unexpected resource type: %q ", r.GetTypeUrl()))
+			continue
+		}
 		result, err := rType.Decoder.Decode(r.GetValue(), *opts)
 
 		// Name field of the result is left unpopulated only when resource
