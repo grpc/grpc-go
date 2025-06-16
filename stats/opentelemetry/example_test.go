@@ -64,7 +64,7 @@ func ExampleDialOption_basic() {
 	defer cc.Close()
 }
 
-func ExampleServerOption_filterMethod() {
+func ExampleServerOption_methodFilter() {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	opts := opentelemetry.Options{
@@ -84,7 +84,7 @@ func ExampleServerOption_filterMethod() {
 	defer cc.Close()
 }
 
-func ExampleOptions_excludeSomeMetrics() {
+func ExampleMetrics_excludeSome() {
 	// To exclude specific metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
@@ -99,7 +99,7 @@ func ExampleOptions_excludeSomeMetrics() {
 	defer cc.Close()
 }
 
-func ExampleOptions_disableAllMetrics() {
+func ExampleMetrics_disableAll() {
 	// To disable all metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
@@ -114,7 +114,7 @@ func ExampleOptions_disableAllMetrics() {
 	defer cc.Close()
 }
 
-func ExampleOptions_enableSomeMetrics() {
+func ExampleMetrics_enableSome() {
 	// To only create specific metrics, initialize Options as follows:
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
@@ -129,7 +129,7 @@ func ExampleOptions_enableSomeMetrics() {
 	defer cc.Close()
 }
 
-func ExampleOptions_addMetrics() {
+func ExampleOptions_addExperimentalMetrics() {
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			Metrics: opentelemetry.DefaultMetrics().Add(

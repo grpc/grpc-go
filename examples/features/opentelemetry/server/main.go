@@ -70,22 +70,15 @@ func main() {
 	traceProvider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName("grpc-server"))))
 	// Configure W3C Trace Context Propagator for traces
 	textMapPropagator := otelpropagation.TraceContext{}
+	// These are example experimental gRPC metrics, which are disabled by default
+	// and must be explicitly enabled. For the full, up-to-date list of metrics,
+	// see: https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 	so := opentelemetry.ServerOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: meterProvider,
 			Metrics: opentelemetry.DefaultMetrics().Add(
 				"grpc.lb.wrr.rr_fallback",
-				"grpc.lb.wrr.endpoint_weight_not_yet_usable",
-				"grpc.lb.wrr.endpoint_weight_stale",
-				"grpc.lb.wrr.endpoint_weights",
-				"grpc.lb.pick_first.disconnections",
-				"grpc.lb.pick_first.connection_attempts_succeeded",
-				"grpc.lb.pick_first.connection_attempts_failed",
 				"grpc.xds_client.connected",
-				"grpc.xds_client.server_failure",
-				"grpc.xds_client.resource_updates_valid",
-				"grpc.xds_client.resource_updates_invalid",
-				"grpc.xds_client.resources",
 			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator}})
