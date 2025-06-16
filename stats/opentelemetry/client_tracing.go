@@ -129,7 +129,7 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		logger.Error("context passed into client side stats handler (TagRPC) has no call info")
 		return ctx
 	}
-	ai.previousRPCAttempts = uint32(ci.previousRPCAttempts.Load())
+	ai.previousRPCAttempts = ci.previousRPCAttempts
 	ai.ctx = ctx
 	ctx = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})

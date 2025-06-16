@@ -244,7 +244,7 @@ type attemptInfo struct {
 	// associated call.
 	countSentMsg        uint32
 	countRecvMsg        uint32
-	previousRPCAttempts uint32
+	previousRPCAttempts *atomic.Int32
 	ctx                 context.Context
 }
 

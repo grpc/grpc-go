@@ -48,7 +48,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		}
 		if rs.Client {
 			attrs = append(attrs,
-				attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts)),
+				attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts.Load())),
 				attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
 			)
 		}
