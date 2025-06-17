@@ -2,7 +2,7 @@
 
 This example shows how to configure OpenTelemetry on a client and server, and
 shows what type of telemetry data it can produce for certain RPCs,
-and demonstrates how to enable experimental gRPC metrics, which are disabled
+and shows how to enable experimental gRPC metrics, which are disabled
 by default and must be explicitly configured on the client and/or server.
 
 ## Try it

@@ -69,8 +69,8 @@ func main() {
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: meterProvider,
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.lb.wrr.rr_fallback",
-				"grpc.xds_client.connected",
+				"grpc.client.attempt.started",
+				"grpc.client.attempt.duration",
 			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator},
