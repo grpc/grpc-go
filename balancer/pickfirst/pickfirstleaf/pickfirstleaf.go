@@ -149,17 +149,6 @@ func EnableHealthListener(state resolver.State) resolver.State {
 	return state
 }
 
-// IsManagedByPickfirst returns whether an address belongs to a SubConn
-// managed by the pickfirst LB policy.
-// TODO: https://github.com/grpc/grpc-go/issues/7915 - This is a hack to disable
-// outlier_detection via the with connectivity listener when using pick_first.
-// Once Dualstack changes are complete, all SubConns will be created by
-// pick_first and outlier detection will only use the health listener for
-// ejection. This hack can then be removed.
-func IsManagedByPickfirst(addr resolver.Address) bool {
-	return addr.BalancerAttributes.Value(managedByPickfirstKeyType{}) != nil
-}
-
 type pfConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 
