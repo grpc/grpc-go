@@ -258,22 +258,24 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	lis := testutils.NewRestartableListener(l)
 	streamCreationQuota := make(chan struct{}, 1)
 	streamCreationQuota <- struct{}{}
-	isResponseSent := false
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamOpen: func(context.Context, int64, string) error {
+			// The following select block is used to block stream creation after
+			// the first stream has failed, but while we are waiting to verify
+			// that the failure metric is not reported.
 			select {
 			case <-streamCreationQuota:
 			case <-ctx.Done():
 			}
 			return nil
 		},
-		OnStreamResponse: func(context.Context, int64, *v3discoverypb.DiscoveryRequest, *v3discoverypb.DiscoveryResponse) {
-			isResponseSent = true
-		},
-		OnStreamRequest: func(streamID int64, _ *v3discoverypb.DiscoveryRequest) error {
-			if streamID == 1 && isResponseSent {
+		OnStreamRequest: func(streamID int64, req *v3discoverypb.DiscoveryRequest) error {
+			// We only want the ACK on the first stream to return an error
+			// (leading to stream closure), without effecting subsequent stream
+			// attempts.
+			if streamID == 1 && req.GetVersionInfo() != "" {
 				return errors.New("test configured error")
 			}
 			return nil
