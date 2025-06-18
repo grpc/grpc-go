@@ -130,18 +130,14 @@ func ExampleMetrics_enableSome() {
 }
 
 func ExampleOptions_addExperimentalMetrics() {
+	// These are example experimental gRPC metrics, which are disabled by default
+	// and must be explicitly enabled. For the full, up-to-date list of metrics,
+	// see: https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.lb.wrr.rr_fallback",
-				"grpc.lb.wrr.endpoint_weight_not_yet_usable",
-				"grpc.lb.wrr.endpoint_weight_stale",
-				"grpc.lb.wrr.endpoint_weights",
-				"grpc.xds_client.connected",
-				"grpc.xds_client.server_failure",
-				"grpc.xds_client.resource_updates_valid",
-				"grpc.xds_client.resource_updates_invalid",
-				"grpc.xds_client.resources",
+				"grpc.client.attempt.started",
+				"grpc.client.attempt.duration",
 			),
 		},
 	}
