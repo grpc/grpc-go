@@ -293,16 +293,18 @@ func (a *authority) fallbackToServer(xc *xdsChannelWithConfig) bool {
 	// Subscribe to all existing resources from the new management server.
 	for typ, resources := range a.resources {
 		for name, state := range resources {
-			if a.logger.V(2) {
-				a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName, name)
-			}
-			xc.channel.subscribe(typ, name)
+			if len(state.watchers) > 0 {
+				if a.logger.V(2) {
+					a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName, name)
+				}
+				xc.channel.subscribe(typ, name)
 
-			// Add the new channel to the list of xdsChannels from which this
-			// resource has been requested from. Retain the cached resource and
-			// the set of existing watchers (and other metadata fields) in the
-			// resource state.
-			state.xdsChannelConfigs[xc] = true
+				// Add the new channel to the list of xdsChannels from which this
+				// resource has been requested from. Retain the cached resource and
+				// the set of existing watchers (and other metadata fields) in the
+				// resource state.
+				state.xdsChannelConfigs[xc] = true
+			}
 		}
 	}
 	return true
@@ -731,10 +733,6 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 			// there when the watch was registered.
 			resources := a.resources[rType]
 			state := resources[resourceName]
-			if state == nil {
-				a.logger.Warningf("Attempting to unwatch resource %q of type %q which is not currently watched", resourceName, rType.TypeName)
-				return
-			}
 
 			// Delete this particular watcher from the list of watchers, so that its
 			// callback will not be invoked in the future.
@@ -808,7 +806,7 @@ func (a *authority) closeXDSChannels() {
 func (a *authority) watcherExistsForUncachedResource() bool {
 	for _, resourceStates := range a.resources {
 		for _, state := range resourceStates {
-			if state.md.Status == xdsresource.ServiceStatusRequested {
+			if len(state.watchers) > 0 && state.md.Status == xdsresource.ServiceStatusRequested {
 				return true
 			}
 		}
@@ -840,6 +838,9 @@ func (a *authority) resourceConfig() []*v3statuspb.ClientConfig_GenericXdsConfig
 	for rType, resourceStates := range a.resources {
 		typeURL := rType.TypeURL
 		for name, state := range resourceStates {
+			if len(state.watchers) == 0 {
+				continue
+			}
 			var raw *anypb.Any
 			if state.cache != nil {
 				raw = &anypb.Any{TypeUrl: typeURL, Value: state.cache.Bytes()}
@@ -878,6 +879,8 @@ func (a *authority) close() {
 // after sending a discovery request to ensure that resources that were
 // unsubscribed (and thus have no watchers) are eventually removed from the
 // authority's cache.
+//
+// This method is only executed in the context of a serializer callback.
 func (a *authority) removeUnsubscribedCacheEntries(rType ResourceType) {
 	resources := a.resources[rType]
 	if resources == nil {
@@ -887,7 +890,7 @@ func (a *authority) removeUnsubscribedCacheEntries(rType ResourceType) {
 	for name, state := range resources {
 		if len(state.watchers) == 0 {
 			if a.logger.V(2) {
-				a.logger.Infof("Removing resource state for %q of type %q as it has no watchers after an update cycle", name, rType.TypeName)
+				a.logger.Infof("Removing resource state for %q of type %q as it has no watchers", name, rType.TypeName)
 			}
 			delete(resources, name)
 		}

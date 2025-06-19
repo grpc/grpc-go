@@ -439,7 +439,7 @@ func (cs *channelState) adsResourceDoesNotExist(typ ResourceType, resourceName s
 	}
 }
 
-func (cs *channelState) requiredToRemoveUnsubscribedCacheEntries(rType ResourceType) {
+func (cs *channelState) adsResourceRemoveUnsubscribedCacheEntries(rType ResourceType) {
 	if cs.parent.done.HasFired() {
 		return
 	}
