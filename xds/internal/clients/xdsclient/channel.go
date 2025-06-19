@@ -60,9 +60,9 @@ type xdsChannelEventHandler interface {
 	// requested ADS resource does not exist.
 	adsResourceDoesNotExist(ResourceType, string)
 
-	// requiredToRemoveUnsubscribedCacheEntries is called when the xdsChannel
+	// adsResourceRemoveUnsubscribedCacheEntries is called when the xdsChannel
 	// needs to remove unsubscribed cache entries.
-	requiredToRemoveUnsubscribedCacheEntries(ResourceType)
+	adsResourceRemoveUnsubscribedCacheEntries(ResourceType)
 }
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
@@ -160,7 +160,7 @@ func (xc *xdsChannel) close() {
 	// on all authorities that were interested in this channel.
 	if _, ok := xc.eventHandler.(*channelState); ok {
 		for _, typ := range typesHandledByStream {
-			xc.eventHandler.requiredToRemoveUnsubscribedCacheEntries(typ)
+			xc.eventHandler.adsResourceRemoveUnsubscribedCacheEntries(typ)
 		}
 	}
 
@@ -254,7 +254,9 @@ func (xc *xdsChannel) onResponse(resp response, onDone func()) ([]string, error)
 	return names, err
 }
 
-func (xc *xdsChannel) onRequiredToRemoveUnsubscribedCacheEntries(typeURL string) {
+// onRequest invoked when a request is about to be sent on the ADS stream. It
+// removes the cache entries for the resource type that are no longer subscribed to.
+func (xc *xdsChannel) onRequest(typeURL string) {
 	if xc.closed.HasFired() {
 		if xc.logger.V(2) {
 			xc.logger.Infof("Received an update from the ADS stream on closed ADS stream")
@@ -269,7 +271,7 @@ func (xc *xdsChannel) onRequiredToRemoveUnsubscribedCacheEntries(typeURL string)
 		return
 	}
 
-	xc.eventHandler.requiredToRemoveUnsubscribedCacheEntries(rType)
+	xc.eventHandler.adsResourceRemoveUnsubscribedCacheEntries(rType)
 }
 
 // decodeResponse decodes the resources in the given ADS response.
