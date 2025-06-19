@@ -398,7 +398,7 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 // explicitly makes sure the fix works and the client sends a ping every [Time]
 // period.
 func (s) TestKeepaliveClientFrequency(t *testing.T) {
-	grpctest.TLogger.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
+	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
@@ -430,7 +430,7 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 // (when there are no active streams), based on the configured
 // EnforcementPolicy.
 func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
-	grpctest.TLogger.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
+	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
@@ -461,7 +461,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 // (even when there is an active stream), based on the configured
 // EnforcementPolicy.
 func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
-	grpctest.TLogger.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
+	grpctest.ExpectError("Client received GoAway with error code ENHANCE_YOUR_CALM and debug data equal to ASCII \"too_many_pings\"")
 
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{

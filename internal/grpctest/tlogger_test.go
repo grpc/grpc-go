@@ -66,10 +66,10 @@ func (s) TestWarningDepth(*testing.T) {
 
 func (s) TestError(*testing.T) {
 	const numErrors = 10
-	TLogger.ExpectError("Expected error")
-	TLogger.ExpectError("Expected ln error")
-	TLogger.ExpectError("Expected formatted error")
-	TLogger.ExpectErrorN("Expected repeated error", numErrors)
+	ExpectError("Expected error")
+	ExpectError("Expected ln error")
+	ExpectError("Expected formatted error")
+	ExpectErrorN("Expected repeated error", numErrors)
 	grpclog.Error("Expected", "error")
 	grpclog.Errorln("Expected", "ln", "error")
 	grpclog.Errorf("%v %v %v", "Expected", "formatted", "error")
