@@ -27,16 +27,15 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc/grpclog"
 )
 
-// tLoggerAtomic serves as the grpclog logger and is the interface through which
+// tLogr serves as the grpclog logger and is the interface through which
 // expected errors are declared in tests.
-var tLoggerAtomic atomic.Value
+var tLogr *tLogger
 
 const callingFrame = 4
 
@@ -74,17 +73,11 @@ type tLogger struct {
 }
 
 func init() {
-	tLoggerAtomic.Store(&tLogger{errors: map[*regexp.Regexp]int{}})
+	tLogr = &tLogger{errors: map[*regexp.Regexp]int{}}
 	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
 	if vl, err := strconv.Atoi(vLevel); err == nil {
-		lgr := getLogger()
-		lgr.v = vl
+		tLogr.v = vl
 	}
-}
-
-// getLogger returns the current logger instance.
-func getLogger() *tLogger {
-	return tLoggerAtomic.Load().(*tLogger)
 }
 
 // getCallingPrefix returns the <file:line> at the given depth from the stack.
@@ -142,8 +135,7 @@ func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
 
 // Update updates the testing.T that the testing logger logs to. Should be done
 // before every test. It also initializes the tLogger if it has not already.
-func Update(t *testing.T) {
-	tl := getLogger()
+func (tl *tLogger) Update(t *testing.T) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 	if !tl.initialized {
@@ -160,13 +152,12 @@ func Update(t *testing.T) {
 // to fail. "For the next test" includes all the time until the next call to
 // Update(). Note that if an expected error is not encountered, this will cause
 // the test to fail.
-func ExpectError(expr string) {
-	ExpectErrorN(expr, 1)
+func (tl *tLogger) ExpectError(expr string) {
+	tl.ExpectErrorN(expr, 1)
 }
 
 // ExpectErrorN declares an error to be expected n times.
-func ExpectErrorN(expr string, n int) {
-	tl := getLogger()
+func (tl *tLogger) ExpectErrorN(expr string, n int) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 	re, err := regexp.Compile(expr)
@@ -178,8 +169,7 @@ func ExpectErrorN(expr string, n int) {
 }
 
 // EndTest checks if expected errors were not encountered.
-func EndTest(t *testing.T) {
-	tl := getLogger()
+func (tl *tLogger) EndTest(t *testing.T) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 	for re, count := range tl.errors {
