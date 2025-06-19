@@ -49,10 +49,7 @@ type BalancerData struct {
 	ClientConn balancer.ClientConn
 	// BuildOptions is set by the builder.
 	BuildOptions balancer.BuildOptions
-	// Data may be used to store arbitrary user data.
-	Data any
-	// ChildBalancer holds the child balancer directly, avoiding the need
-	// to type-assert from Data.
+	// ChildBalancer holds a child balancer.
 	ChildBalancer balancer.Balancer
 }
 
