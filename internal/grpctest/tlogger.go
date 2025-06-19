@@ -80,6 +80,10 @@ func init() {
 	}
 }
 
+func getLogger() *tLogger {
+	return tLogr
+}
+
 // getCallingPrefix returns the <file:line> at the given depth from the stack.
 func getCallingPrefix(depth int) (string, error) {
 	_, file, line, ok := runtime.Caller(depth)
@@ -152,12 +156,13 @@ func (tl *tLogger) Update(t *testing.T) {
 // to fail. "For the next test" includes all the time until the next call to
 // Update(). Note that if an expected error is not encountered, this will cause
 // the test to fail.
-func (tl *tLogger) ExpectError(expr string) {
-	tl.ExpectErrorN(expr, 1)
+func ExpectError(expr string) {
+	ExpectErrorN(expr, 1)
 }
 
 // ExpectErrorN declares an error to be expected n times.
-func (tl *tLogger) ExpectErrorN(expr string, n int) {
+func ExpectErrorN(expr string, n int) {
+	tl := getLogger()
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 	re, err := regexp.Compile(expr)

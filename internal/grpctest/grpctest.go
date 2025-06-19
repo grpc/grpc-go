@@ -53,7 +53,7 @@ type Tester struct{}
 
 // Setup updates the tlogger.
 func (Tester) Setup(t *testing.T) {
-	Update(t)
+	tLogr.Update(t)
 	// TODO: There is one final leak around closing connections without completely
 	//  draining the recvBuffer that has yet to be resolved. All other leaks have been
 	//  completely addressed, and this can be turned back on as soon as this issue is
@@ -75,7 +75,7 @@ func (Tester) Teardown(t *testing.T) {
 	if atomic.LoadUint32(&lcFailed) == 1 {
 		t.Log("Goroutine leak check disabled for future tests")
 	}
-	EndTest(t)
+	tLogr.EndTest(t)
 }
 
 // Interface defines Tester's methods for use in this package.
