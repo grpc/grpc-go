@@ -1256,14 +1256,14 @@ func (s) TestEDS_EndpointWithMultipleAddresses(t *testing.T) {
 			resolverState.Store(&resolver.State{})
 			stub.Register(roundrobin.Name, stub.BalancerFuncs{
 				Init: func(bd *stub.BalancerData) {
-					bd.Data = originalRRBuilder.Build(bd.ClientConn, bd.BuildOptions)
+					bd.ChildBalancer = originalRRBuilder.Build(bd.ClientConn, bd.BuildOptions)
 				},
 				Close: func(bd *stub.BalancerData) {
-					bd.Data.(balancer.Balancer).Close()
+					bd.ChildBalancer.Close()
 				},
 				UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 					resolverState.Store(&ccs.ResolverState)
-					return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+					return bd.ChildBalancer.UpdateClientConnState(ccs)
 				},
 			})
 

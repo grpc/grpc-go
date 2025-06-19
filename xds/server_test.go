@@ -606,8 +606,11 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// configuration to be used during xDS client creation.
 	modeChangeCh := testutils.NewChannel()
 	modeChangeOption := ServingModeCallback(func(addr net.Addr, args ServingModeChangeArgs) {
+		// The serving mode callback may be invoked multiple times as the xDS
+		// client NACKs the updates and the management server responds back with
+		// the same version of the LDS resource.
 		t.Logf("Server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), args.Mode, args.Err)
-		modeChangeCh.Send(args.Mode)
+		modeChangeCh.Replace(args.Mode)
 	})
 	server, err := NewGRPCServer(modeChangeOption, BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
@@ -658,10 +661,12 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	// Also make sure that serving mode updates are received. The serving
 	// mode changes to NOT_SERVING. This happens because watcher received a
 	// resource error for the invalid resource from the server.
-	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := modeChangeCh.Receive(sCtx); err == context.DeadlineExceeded {
+	mode, err := modeChangeCh.Receive(ctx)
+	if err == context.DeadlineExceeded {
 		t.Fatal("Serving mode did not change when expected to change")
+	}
+	if mode != connectivity.ServingModeNotServing {
+		t.Fatalf("Serving mode = %q, want %q", mode, connectivity.ServingModeNotServing)
 	}
 }
 

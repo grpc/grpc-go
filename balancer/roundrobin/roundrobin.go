@@ -70,7 +70,3 @@ func (b *rrBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 		ResolverState: pickfirstleaf.EnableHealthListener(ccs.ResolverState),
 	})
 }
-
-func (b *rrBalancer) ExitIdle() {
-	b.Balancer.ExitIdle()
-}

@@ -689,19 +689,17 @@ func (s) TestPickerUpdateOnDataCacheSizeDecrease(t *testing.T) {
 	stub.Register(topLevelBalancerName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			ccWrapper = &testCCWrapper{ClientConn: bd.ClientConn}
-			bd.Data = balancer.Get(Name).Build(ccWrapper, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(Name).Build(ccWrapper, bd.BuildOptions)
 		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			parser := balancer.Get(Name).(balancer.ConfigParser)
 			return parser.ParseConfig(sc)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 
@@ -1070,19 +1068,17 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	stub.Register(topLevelBalancerName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			ccWrapper = &testCCWrapper{ClientConn: bd.ClientConn}
-			bd.Data = balancer.Get(Name).Build(ccWrapper, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(Name).Build(ccWrapper, bd.BuildOptions)
 		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			parser := balancer.Get(Name).(balancer.ConfigParser)
 			return parser.ParseConfig(sc)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 
@@ -1098,10 +1094,10 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	}
 	stub.Register(childPolicyName, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		ParseConfig: func(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			cfg := &childPolicyConfig{}
@@ -1111,7 +1107,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 			return cfg, nil
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
+			bal := bd.ChildBalancer
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable}})
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable}})
 

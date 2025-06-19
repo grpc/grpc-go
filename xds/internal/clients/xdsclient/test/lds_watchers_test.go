@@ -709,7 +709,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 // does not receive an LDS response for the request that it sends. The test
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
-func TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
+func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
 	nodeID := uuid.New().String()

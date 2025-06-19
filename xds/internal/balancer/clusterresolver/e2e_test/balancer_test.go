@@ -342,7 +342,7 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
 	stub.Register(priority.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = priorityBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = priorityBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return priorityBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
@@ -352,12 +352,10 @@ func (s) TestOutlierDetectionConfigPropagationToChildPolicy(t *testing.T) {
 			case lbCfgCh <- ccs.BalancerConfig:
 			default:
 			}
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 	defer balancer.Register(priorityBuilder)
