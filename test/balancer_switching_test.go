@@ -488,17 +488,16 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			pf := balancer.Get(pickfirst.Name)
-			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = pf.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
 			close(ccUpdateCh)
 			go func() {
 				<-waitToProceed
-				bal.UpdateClientConnState(ccs)
+				bd.ChildBalancer.UpdateClientConnState(ccs)
 			}()
 			return nil
 		},

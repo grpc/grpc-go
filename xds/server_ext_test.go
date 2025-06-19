@@ -127,7 +127,7 @@ func (m *servingModeChangeHandler) modeChangeCallback(addr net.Addr, args xds.Se
 func createStubServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOption) *stubserver.StubServer {
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
@@ -220,6 +220,11 @@ func (s) TestServer_Basic(t *testing.T) {
 	routeNamesCh := make(chan []string, 1)
 	managementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			// The test needs to only verify the names of resources being
+			// subscribed to, we can skip ACKs.
+			if req.GetVersionInfo() != "" {
+				return nil
+			}
 			switch req.GetTypeUrl() {
 			case "type.googleapis.com/envoy.config.listener.v3.Listener":
 				select {

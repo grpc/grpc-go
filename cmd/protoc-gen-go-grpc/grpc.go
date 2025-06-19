@@ -97,7 +97,7 @@ func (serviceGenerateHelper) generateUnimplementedServerType(_ *protogen.Plugin,
 			nilArg = "nil,"
 		}
 		g.P("func (Unimplemented", serverType, ") ", serverSignature(g, method), "{")
-		g.P("return ", nilArg, statusPackage.Ident("Errorf"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
+		g.P("return ", nilArg, statusPackage.Ident("Error"), "(", codesPackage.Ident("Unimplemented"), `, "method `, method.GoName, ` not implemented")`)
 		g.P("}")
 	}
 	if *requireUnimplemented {

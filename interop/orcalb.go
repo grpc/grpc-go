@@ -53,6 +53,12 @@ type orcab struct {
 	report   *v3orcapb.OrcaLoadReport
 }
 
+func (o *orcab) ExitIdle() {
+	if o.sc != nil {
+		o.sc.Connect()
+	}
+}
+
 func (o *orcab) UpdateClientConnState(s balancer.ClientConnState) error {
 	if o.sc != nil {
 		o.sc.UpdateAddresses(s.ResolverState.Addresses)

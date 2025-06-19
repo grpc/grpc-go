@@ -222,13 +222,13 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
-			bd.Data = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
+			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 	}
 	stub.Register(name, bf)
@@ -284,4 +284,70 @@ func (s) TestEndpointShardingReconnectDisabled(t *testing.T) {
 			t.Fatalf("EmptyCall() went to unexpected backend: got %q, want %q", got, want)
 		}
 	}
+}
+
+// Tests that endpointsharding doesn't automatically re-connect IDLE children
+// until cc.Connect() is called. The test creates an endpoint with a single
+// address. The client is connected and the active server is closed to make the
+// child pickfirst enter IDLE state. The test verifies that the child pickfirst
+// doesn't re-connect automatically. The test calls cc.Connect() and verified
+// that the balancer connects causing the channel to enter TransientFailure.
+func (s) TestEndpointShardingExitIdle(t *testing.T) {
+	backend := stubserver.StartTestService(t, nil)
+	defer backend.Stop()
+
+	mr := manual.NewBuilderWithScheme("e2e-test")
+	defer mr.Close()
+
+	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
+	bf := stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			epOpts := endpointsharding.Options{DisableAutoReconnect: true}
+			bd.ChildBalancer = endpointsharding.NewBalancer(bd.ClientConn, bd.BuildOptions, balancer.Get(pickfirstleaf.Name).Build, epOpts)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+		ExitIdle: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.ExitIdle()
+		},
+	}
+	stub.Register(name, bf)
+
+	json := fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, name)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(json)
+	mr.InitialState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: backend.Address}}},
+		},
+		ServiceConfig: sc,
+	})
+
+	cc, err := grpc.NewClient(mr.Scheme()+":///", grpc.WithResolvers(mr), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create new client: %v", err)
+	}
+	defer cc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("client.EmptyCall() returned unexpected error: %v", err)
+	}
+
+	// On closing the first server, the first child balancer should enter
+	// IDLE. Since endpointsharding is configured not to auto-reconnect, it will
+	// remain IDLE and will not try to re-connect
+	backend.Stop()
+	testutils.AwaitState(ctx, t, cc, connectivity.Idle)
+	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	testutils.AwaitNoStateChange(shortCtx, t, cc, connectivity.Idle)
+
+	// The balancer should try to re-connect and fail.
+	cc.Connect()
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 }

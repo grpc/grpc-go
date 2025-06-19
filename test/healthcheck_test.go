@@ -1193,13 +1193,13 @@ func (s) TestHealthCheckUnregisterHealthListener(t *testing.T) {
 					close(readyUpdateReceivedCh)
 				},
 			}
-			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 

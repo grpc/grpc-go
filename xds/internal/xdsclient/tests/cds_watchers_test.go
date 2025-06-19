@@ -111,8 +111,8 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	got := u.(clusterUpdateErrTuple)
 	if wantUpdate.err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
+		if got.err == nil || !strings.Contains(got.err.Error(), wantUpdate.err.Error()) {
+			return fmt.Errorf("update received with error: %v, want %q", got.err, wantUpdate.err)
 		}
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels")}
@@ -547,7 +547,7 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	secondRequestReceived := grpcsync.NewEvent()
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
 				firstRequestReceived = true

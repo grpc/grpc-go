@@ -146,16 +146,16 @@ type EchoServer interface {
 type UnimplementedEchoServer struct{}
 
 func (UnimplementedEchoServer) UnaryEcho(context.Context, *EchoRequest) (*EchoResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnaryEcho not implemented")
+	return nil, status.Error(codes.Unimplemented, "method UnaryEcho not implemented")
 }
 func (UnimplementedEchoServer) ServerStreamingEcho(*EchoRequest, grpc.ServerStreamingServer[EchoResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method ServerStreamingEcho not implemented")
+	return status.Error(codes.Unimplemented, "method ServerStreamingEcho not implemented")
 }
 func (UnimplementedEchoServer) ClientStreamingEcho(grpc.ClientStreamingServer[EchoRequest, EchoResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method ClientStreamingEcho not implemented")
+	return status.Error(codes.Unimplemented, "method ClientStreamingEcho not implemented")
 }
 func (UnimplementedEchoServer) BidirectionalStreamingEcho(grpc.BidiStreamingServer[EchoRequest, EchoResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
+	return status.Error(codes.Unimplemented, "method BidirectionalStreamingEcho not implemented")
 }
 func (UnimplementedEchoServer) mustEmbedUnimplementedEchoServer() {}
 func (UnimplementedEchoServer) testEmbeddedByValue()              {}

@@ -109,18 +109,16 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 				ClientConn:      bd.ClientConn,
 				handshakeInfoCh: ch,
 			}
-			bd.Data = cdsBuilder.Build(ccWrapper, bd.BuildOptions)
+			bd.ChildBalancer = cdsBuilder.Build(ccWrapper, bd.BuildOptions)
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return cdsBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 	t.Cleanup(func() { balancer.Register(cdsBuilder) })

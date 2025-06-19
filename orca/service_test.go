@@ -67,7 +67,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	stub := &stubserver.StubServer{
 		Listener: lis,
-		UnaryCallF: func(ctx context.Context, req *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			newRequests := requests.Add(1)
 
 			smr.SetNamedUtilization(requestsMetricKey, float64(newRequests)*0.01)
@@ -76,7 +76,7 @@ func (s) TestE2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 			smr.SetApplicationUtilization(1.2)
 			return &testpb.SimpleResponse{}, nil
 		},
-		EmptyCallF: func(ctx context.Context, req *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			smr.DeleteNamedUtilization(requestsMetricKey)
 			smr.SetCPUUtilization(0)
 			smr.SetMemoryUtilization(0)
