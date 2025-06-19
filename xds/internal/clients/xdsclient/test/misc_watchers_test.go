@@ -575,10 +575,10 @@ func (s) TestRaceUnsubscribeResubscribe(t *testing.T) {
 	}
 	defer client.Close()
 
-	ldsResourceName1 := "test-listener-resource1"
-	ldsResourceName2 := "test-route-configuration-resource1"
-	rdsName1 := "test-listener-resource2"
-	rdsName2 := "test-route-configuration-resource2"
+	const ldsResourceName1 = "test-listener-resource1"
+	const ldsResourceName2 = "test-listener-resource2"
+	const rdsName1 = "test-route-configuration-resource1"
+	const rdsName2 = "test-route-configuration-resource2"
 	listenerResource1 := e2e.DefaultClientListener(ldsResourceName1, rdsName1)
 	listenerResource2 := e2e.DefaultClientListener(ldsResourceName2, rdsName2)
 
