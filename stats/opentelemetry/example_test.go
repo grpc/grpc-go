@@ -25,7 +25,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
-func Example_dialOption() {
+func ExampleDialOption_basic() {
 	// This is setting default bounds for a view. Setting these bounds through
 	// meter provider from SDK is recommended, as API calls in this module
 	// provide default bounds, but these calls are not guaranteed to be stable
@@ -64,7 +64,7 @@ func Example_dialOption() {
 	defer cc.Close()
 }
 
-func Example_serverOption() {
+func ExampleServerOption_methodFilter() {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
 	opts := opentelemetry.Options{
@@ -125,6 +125,27 @@ func ExampleMetrics_enableSome() {
 	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil { // might fail vet
 		// Handle err.
+	}
+	defer cc.Close()
+}
+
+func ExampleOptions_addExperimentalMetrics() {
+	opts := opentelemetry.Options{
+		MetricsOptions: opentelemetry.MetricsOptions{
+			// These are example experimental gRPC metrics, which are disabled
+			// by default and must be explicitly enabled. For the full,
+			// up-to-date list of metrics, see:
+			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
+			Metrics: opentelemetry.DefaultMetrics().Add(
+				"grpc.client.attempt.started",
+				"grpc.client.attempt.duration",
+			),
+		},
+	}
+	do := opentelemetry.DialOption(opts)
+	cc, err := grpc.NewClient("<target string>", do, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		// Handle error.
 	}
 	defer cc.Close()
 }
