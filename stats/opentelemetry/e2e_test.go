@@ -1957,12 +1957,11 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
 			const delayedLBPickComplete = "Delayed LB pick complete"
-			// Removes events named "Delayed LB pick complete" from the
-			// slice. This is a temporary workaround to ignore this event during tests
-			// because the new Load Balancer (LB) policy and picker cause it to appear
-			// inconsistently or unexpectedly.
+			// Removes events named "Delayed LB pick complete" from the slice.
+			// This is a temporary workaround to ignore this event during tests
+			// as the new Load Balancer (LB) policy and picker may cause it to
+			// appear inconsistently or unexpectedly.
 			for i := range spans {
 				var filtered []trace.Event
 				for _, e := range spans[i].Events {
