@@ -130,11 +130,12 @@ func ExampleMetrics_enableSome() {
 }
 
 func ExampleOptions_addExperimentalMetrics() {
-	// These are example experimental gRPC metrics, which are disabled by default
-	// and must be explicitly enabled. For the full, up-to-date list of metrics,
-	// see: https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 	opts := opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
+			// These are example experimental gRPC metrics, which are disabled
+			// by default and must be explicitly enabled. For the full,
+			// up-to-date list of metrics, see:
+			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 			Metrics: opentelemetry.DefaultMetrics().Add(
 				"grpc.client.attempt.started",
 				"grpc.client.attempt.duration",
