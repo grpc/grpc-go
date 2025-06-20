@@ -112,10 +112,10 @@ type MetricsServiceServer interface {
 type UnimplementedMetricsServiceServer struct{}
 
 func (UnimplementedMetricsServiceServer) GetAllGauges(*EmptyMessage, grpc.ServerStreamingServer[GaugeResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method GetAllGauges not implemented")
+	return status.Error(codes.Unimplemented, "method GetAllGauges not implemented")
 }
 func (UnimplementedMetricsServiceServer) GetGauge(context.Context, *GaugeRequest) (*GaugeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetGauge not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetGauge not implemented")
 }
 func (UnimplementedMetricsServiceServer) mustEmbedUnimplementedMetricsServiceServer() {}
 func (UnimplementedMetricsServiceServer) testEmbeddedByValue()                        {}

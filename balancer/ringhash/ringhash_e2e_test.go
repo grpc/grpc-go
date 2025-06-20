@@ -1425,7 +1425,7 @@ func (s) TestRingHash_ContinuesConnectingWithoutPicks(t *testing.T) {
 	backend := stubserver.StartTestService(t, &stubserver.StubServer{
 		// We expect the server EmptyCall to not be call here because the
 		// aggregated channel state is never READY when the call is pending.
-		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			t.Errorf("EmptyCall() should not have been called")
 			return &testpb.Empty{}, nil
 		},
@@ -1600,7 +1600,7 @@ func (s) TestRingHash_ReattemptWhenGoingFromTransientFailureToIdle(t *testing.T)
 // Tests that when all backends are down and then up, we may pick a TF backend
 // and we will then jump to ready backend.
 func (s) TestRingHash_TransientFailureSkipToAvailableReady(t *testing.T) {
-	emptyCallF := func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	emptyCallF := func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 		return &testpb.Empty{}, nil
 	}
 	lis, err := testutils.LocalTCPListener()
@@ -1722,7 +1722,7 @@ func (s) TestRingHash_ReattemptWhenAllEndpointsUnreachable(t *testing.T) {
 	restartableListener := testutils.NewRestartableListener(lis)
 	restartableServer := stubserver.StartTestService(t, &stubserver.StubServer{
 		Listener: restartableListener,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	})
@@ -1788,7 +1788,7 @@ func (s) TestRingHash_SwitchToLowerPriorityAndThenBack(t *testing.T) {
 	restartableListener := testutils.NewRestartableListener(lis)
 	restartableServer := stubserver.StartTestService(t, &stubserver.StubServer{
 		Listener: restartableListener,
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	})

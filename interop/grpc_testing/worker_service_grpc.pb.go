@@ -153,16 +153,16 @@ type WorkerServiceServer interface {
 type UnimplementedWorkerServiceServer struct{}
 
 func (UnimplementedWorkerServiceServer) RunServer(grpc.BidiStreamingServer[ServerArgs, ServerStatus]) error {
-	return status.Errorf(codes.Unimplemented, "method RunServer not implemented")
+	return status.Error(codes.Unimplemented, "method RunServer not implemented")
 }
 func (UnimplementedWorkerServiceServer) RunClient(grpc.BidiStreamingServer[ClientArgs, ClientStatus]) error {
-	return status.Errorf(codes.Unimplemented, "method RunClient not implemented")
+	return status.Error(codes.Unimplemented, "method RunClient not implemented")
 }
 func (UnimplementedWorkerServiceServer) CoreCount(context.Context, *CoreRequest) (*CoreResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CoreCount not implemented")
+	return nil, status.Error(codes.Unimplemented, "method CoreCount not implemented")
 }
 func (UnimplementedWorkerServiceServer) QuitWorker(context.Context, *Void) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QuitWorker not implemented")
+	return nil, status.Error(codes.Unimplemented, "method QuitWorker not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}

@@ -154,7 +154,7 @@ func (s) TestRecvBufferPoolUnary(t *testing.T) {
 			const largeSize = 1024
 
 			ss := &stubserver.StubServer{
-				UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 					return &testpb.SimpleResponse{
 						Payload: &testpb.Payload{
 							Body: make([]byte, largeSize),

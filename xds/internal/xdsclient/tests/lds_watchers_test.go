@@ -161,8 +161,8 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	got := u.(listenerUpdateErrTuple)
 	if wantUpdate.err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
+		if got.err == nil || !strings.Contains(got.err.Error(), wantUpdate.err.Error()) {
+			return fmt.Errorf("update received with error: %v, want %q", got.err, wantUpdate.err)
 		}
 	}
 	cmpOpts := []cmp.Option{
@@ -172,21 +172,6 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unexpected diff in the listener resource update: (-want, got):\n%s", diff)
-	}
-	return nil
-}
-
-func verifyListenerError(ctx context.Context, updateCh *testutils.Channel, wantErr, wantNodeID string) error {
-	u, err := updateCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("timeout when waiting for a listener error from the management server: %v", err)
-	}
-	gotErr := u.(listenerUpdateErrTuple).err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantErr) {
-		return fmt.Errorf("update received with error: %v, want %q", gotErr, wantErr)
-	}
-	if !strings.Contains(gotErr.Error(), wantNodeID) {
-		return fmt.Errorf("update received with error: %v, want error with node ID: %q", gotErr, wantNodeID)
 	}
 	return nil
 }
@@ -613,7 +598,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	secondRequestReceived := grpcsync.NewEvent()
 
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
 				firstRequestReceived = true
@@ -1072,7 +1057,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1080,7 +1065,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	lw2 := newListenerWatcher()
 	ldsCancel2 := xdsresource.WatchListener(client, ldsName, lw2)
 	defer ldsCancel2()
-	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1152,7 +1137,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 	}
 
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1165,7 +1150,7 @@ func (s) TestLDSWatch_ResourceCaching_NACKError(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw2.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1243,7 +1228,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// Verify that the expected error is propagated to the watcher which
 	// requested for the bad resource.
 	// Verify that the expected error is propagated to the existing watcher.
-	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeNACKed, nodeID); err != nil {
+	if err := verifyErrorType(ctx, lw1.updateCh, xdsresource.ErrorTypeUnknown, nodeID); err != nil {
 		t.Fatal(err)
 	}
 

@@ -36,7 +36,7 @@ func Test(t *testing.T) {
 }
 
 // Make sure the service implementation complies with the proto definition.
-func (s) TestRegister(t *testing.T) {
+func (s) TestRegister(*testing.T) {
 	s := grpc.NewServer()
 	healthgrpc.RegisterHealthServer(s, health.NewServer())
 	s.Stop()

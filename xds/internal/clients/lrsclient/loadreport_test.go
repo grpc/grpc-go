@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/clients/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/clients/lrsclient"
+	lrsclientinternal "google.golang.org/grpc/xds/internal/clients/lrsclient/internal"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -54,8 +55,6 @@ func Test(t *testing.T) {
 }
 
 const (
-	testLocality1                 = `{"region":"test-region1"}`
-	testLocality2                 = `{"region":"test-region2"}`
 	testKey1                      = "test-key1"
 	testKey2                      = "test-key2"
 	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
@@ -64,6 +63,8 @@ const (
 )
 
 var (
+	testLocality1     = clients.Locality{Region: "test-region1"}
+	testLocality2     = clients.Locality{Region: "test-region2"}
 	toleranceCmpOpt   = cmpopts.EquateApprox(0, 1e-5)
 	ignoreOrderCmpOpt = protocmp.FilterField(&v3endpointpb.ClusterStats{}, "upstream_locality_stats",
 		cmpopts.SortSlices(func(a, b protocmp.Message) bool {
@@ -146,7 +147,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client.ReportLoad() failed: %v", err)
 	}
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	defer loadStore1.Stop(ssCtx)
 
@@ -233,7 +234,7 @@ func (s) TestReportLoad_ConnectionCreation(t *testing.T) {
 	}
 
 	// Stop this load reporting stream, server should see error canceled.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore2.Stop(ssCtx)
 
@@ -422,7 +423,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 
 	// Cancel the first load reporting call, and ensure that the stream does not
 	// close (because we have another call open).
-	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore1.Stop(ssCtx)
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -432,7 +433,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	}
 
 	// Stop the second load reporting call, and ensure the stream is closed.
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore2.Stop(ssCtx)
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
@@ -449,7 +450,7 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
 	}
-	ssCtx, ssCancel = context.WithTimeout(context.Background(), time.Millisecond)
+	ssCtx, ssCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer ssCancel()
 	loadStore3.Stop(ssCtx)
 }
@@ -573,7 +574,7 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 		}
 
 		req, err = lrsServer.LRSRequestChan.Receive(ctx)
-		if err != nil {
+		if err != nil || req.(*fakeserver.Request).Err != nil {
 			continue
 		}
 		if req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest) == nil {
@@ -609,4 +610,100 @@ func (s) TestReportLoad_StopWithContext(t *testing.T) {
 	if _, err := lrsServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
+}
+
+// TestReportLoad_LoadReportInterval tests verify that the load report interval
+// received by the LRS server is the duration between start of last load
+// reporting by the client and the time when the load is reported to the LRS
+// server.
+func (s) TestReportLoad_LoadReportInterval(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	originalTimeNow := lrsclientinternal.TimeNow
+	t.Cleanup(func() { lrsclientinternal.TimeNow = originalTimeNow })
+
+	// Create a management server that serves LRS.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+	// Create an LRS client with configuration pointing to the above server.
+	nodeID := uuid.New().String()
+
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	config := lrsclient.Config{
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+	}
+	client, err := lrsclient.New(config)
+	if err != nil {
+		t.Fatalf("lrsclient.New() failed: %v", err)
+	}
+
+	// Call the load reporting API, and ensure that an LRS stream is created.
+	serverIdentifier := clients.ServerIdentifier{ServerURI: mgmtServer.Address, Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}
+	loadStore1, err := client.ReportLoad(serverIdentifier)
+	if err != nil {
+		t.Fatalf("client.ReportLoad() failed: %v", err)
+	}
+	lrsServer := mgmtServer.LRSServer
+	if _, err := lrsServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
+	}
+
+	// Initial time for reporter creation
+	currentTime := time.Now()
+	lrsclientinternal.TimeNow = func() time.Time {
+		return currentTime
+	}
+
+	// Report dummy drop to ensure stats is not nil.
+	loadStore1.ReporterForCluster("cluster1", "eds1").CallDropped("test")
+
+	// Update currentTime to simulate the passage of time between the reporter
+	// creation and first stats() call.
+	currentTime = currentTime.Add(5 * time.Second)
+
+	// Ensure the initial load reporting request is received at the server.
+	req, err := lrsServer.LRSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timeout when waiting for initial LRS request: %v", err)
+	}
+	gotInitialReq := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+	nodeProto := &v3corepb.Node{
+		Id:                   nodeID,
+		UserAgentName:        "user-agent",
+		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: "0.0.0.0"},
+		ClientFeatures:       []string{"envoy.lb.does_not_support_overprovisioning", "xds.config.resource-in-sotw", "envoy.lrs.supports_send_all_clusters"},
+	}
+	wantInitialReq := &v3lrspb.LoadStatsRequest{Node: nodeProto}
+	if diff := cmp.Diff(gotInitialReq, wantInitialReq, protocmp.Transform()); diff != "" {
+		t.Fatalf("Unexpected diff in initial LRS request (-got, +want):\n%s", diff)
+	}
+
+	// Send a response from the server with a small deadline.
+	lrsServer.LRSResponseChan <- &fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: &durationpb.Duration{Nanos: 50000000}, // 50ms
+		},
+	}
+
+	// Ensure that loads are seen on the server.
+	req, err = lrsServer.LRSRequestChan.Receive(ctx)
+	if err != nil {
+		t.Fatal("Timeout when waiting for LRS request with loads")
+	}
+	gotLoad := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
+	if l := len(gotLoad); l != 1 {
+		t.Fatalf("Received load for %d clusters, want 1", l)
+	}
+	// Verify load received at LRS server has load report interval calculated
+	// from the time of reporter creation.
+	if got, want := gotLoad[0].GetLoadReportInterval().AsDuration(), 5*time.Second; got != want {
+		t.Errorf("Got load report interval %v, want %v", got, want)
+	}
+
+	ssCtx, ssCancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer ssCancel()
+	loadStore1.Stop(ssCtx)
 }

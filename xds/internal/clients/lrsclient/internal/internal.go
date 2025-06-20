@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2025 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,14 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package load
+// Package internal contains functionality internal to the lrsclient package.
+package internal
 
-// PerClusterReporter wraps the methods from the loadStore that are used here.
-type PerClusterReporter interface {
-	CallStarted(locality string)
-	CallFinished(locality string, err error)
-	CallServerLoad(locality, name string, val float64)
-	CallDropped(category string)
-}
+import "time"
+
+var (
+	// TimeNow is used to get the current time. It can be overridden in tests.
+	TimeNow func() time.Time
+)

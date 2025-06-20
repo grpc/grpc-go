@@ -175,16 +175,16 @@ type RouteGuideServer interface {
 type UnimplementedRouteGuideServer struct{}
 
 func (UnimplementedRouteGuideServer) GetFeature(context.Context, *Point) (*Feature, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetFeature not implemented")
+	return nil, status.Error(codes.Unimplemented, "method GetFeature not implemented")
 }
 func (UnimplementedRouteGuideServer) ListFeatures(*Rectangle, grpc.ServerStreamingServer[Feature]) error {
-	return status.Errorf(codes.Unimplemented, "method ListFeatures not implemented")
+	return status.Error(codes.Unimplemented, "method ListFeatures not implemented")
 }
 func (UnimplementedRouteGuideServer) RecordRoute(grpc.ClientStreamingServer[Point, RouteSummary]) error {
-	return status.Errorf(codes.Unimplemented, "method RecordRoute not implemented")
+	return status.Error(codes.Unimplemented, "method RecordRoute not implemented")
 }
 func (UnimplementedRouteGuideServer) RouteChat(grpc.BidiStreamingServer[RouteNote, RouteNote]) error {
-	return status.Errorf(codes.Unimplemented, "method RouteChat not implemented")
+	return status.Error(codes.Unimplemented, "method RouteChat not implemented")
 }
 func (UnimplementedRouteGuideServer) mustEmbedUnimplementedRouteGuideServer() {}
 func (UnimplementedRouteGuideServer) testEmbeddedByValue()                    {}

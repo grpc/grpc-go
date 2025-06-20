@@ -83,7 +83,7 @@ type GreeterServer interface {
 type UnimplementedGreeterServer struct{}
 
 func (UnimplementedGreeterServer) SayHello(context.Context, *HelloRequest) (*HelloReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SayHello not implemented")
+	return nil, status.Error(codes.Unimplemented, "method SayHello not implemented")
 }
 func (UnimplementedGreeterServer) mustEmbedUnimplementedGreeterServer() {}
 func (UnimplementedGreeterServer) testEmbeddedByValue()                 {}

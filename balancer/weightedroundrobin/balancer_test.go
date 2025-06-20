@@ -115,7 +115,7 @@ func startServer(t *testing.T, r reportType) *testServer {
 	cmr := orca.NewServerMetricsRecorder().(orca.CallMetricsRecorder)
 
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			if r := orca.CallMetricsRecorderFromContext(ctx); r != nil {
 				// Copy metrics from what the test set in cmr into r.
 				sm := cmr.(orca.ServerMetricsProvider).ServerMetrics()

@@ -20,6 +20,7 @@ package xdsclient_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 
@@ -34,13 +35,14 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
 // TestResourceUpdateMetrics configures an xDS client, and a management server
 // to send valid and invalid LDS updates, and verifies that the expected metrics
 // for both good and bad updates are emitted.
 func (s) TestResourceUpdateMetrics(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*1000)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	tmr := newTestMetricsReporter()
@@ -201,24 +203,49 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	}
 }
 
-// TestServerFailureMetrics_AfterResponseRecv configures an xDS client, and a
-// management server to send a valid LDS updates, and verifies that the
-// resource update valid metric is emitted. It then closes the management server
-// listener to close the ADS stream and verifies that the server failure metric
-// is not emitted because the ADS stream was closed after having received a
-// response on the stream.
+// TestServerFailureMetrics_AfterResponseRecv configures an xDS client and a
+// management server to send a valid LDS update, and verifies that the
+// successful update metric is emitted. When the client ACKs the update, the
+// server returns an error, breaking the stream. The test then verifies that the
+// server failure metric is not emitted, because the ADS stream was closed after
+// a response was received on the stream. Finally, the test waits for the client
+// to establish a new stream and verifies that the client emits a metric after
+// receiving a successful update.
 func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	tmr := newTestMetricsReporter()
-	l, err := net.Listen("tcp", "localhost:0")
+	l, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("net.Listen() failed: %v", err)
 	}
-
 	lis := testutils.NewRestartableListener(l)
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: lis})
+	streamCreationQuota := make(chan struct{}, 1)
+	streamCreationQuota <- struct{}{}
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		Listener: lis,
+		OnStreamOpen: func(context.Context, int64, string) error {
+			// The following select block is used to block stream creation after
+			// the first stream has failed, but while we are waiting to verify
+			// that the failure metric is not reported.
+			select {
+			case <-streamCreationQuota:
+			case <-ctx.Done():
+			}
+			return nil
+		},
+		OnStreamRequest: func(streamID int64, req *v3discoverypb.DiscoveryRequest) error {
+			// We only want the ACK on the first stream to return an error
+			// (leading to stream closure), without effecting subsequent stream
+			// attempts.
+			if streamID == 1 && req.GetVersionInfo() != "" {
+				return errors.New("test configured error")
+			}
+			return nil
+		}},
+	)
 	const listenerResourceName = "test-listener-resource"
 	const routeConfigurationName = "test-route-configuration-resource"
 	nodeID := uuid.New().String()
@@ -260,25 +287,27 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 	defer client.Close()
 
 	// Watch the valid listener configured on the management server. This should
-	// cause a resource updates valid count to emit eventually.
+	// cause a resource update valid metric to emit eventually.
 	client.WatchResource(listenerType.TypeURL, listenerResourceName, noopListenerWatcher{})
 	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
 		t.Fatal(err.Error())
 	}
 
-	// Close the listener and ensure that the ADS stream breaks. This should
-	// cause a server failure metric to emit eventually.
-	lis.Stop()
-	if ctx.Err() != nil {
-		t.Fatalf("Timeout when waiting for ADS stream to close")
-	}
-	// Restart to prevent the attempt to create a new ADS stream after back off.
-	lis.Restart()
-
-	// Server failure should not have emitted.
+	// When the client sends an ACK, the management server would reply with an
+	// error, breaking the stream.
+	// Server failure should still have no recording point.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if err := tmr.waitForMetric(sCtx, &metrics.ServerFailure{ServerURI: mgmtServer.Address}); err == nil {
-		t.Fatal("tmr.WaitForInt64Count(ctx, mdWant) succeeded when expected to timeout.")
+	failureMetric := &metrics.ServerFailure{ServerURI: mgmtServer.Address}
+	if err := tmr.waitForMetric(sCtx, failureMetric); err == nil {
+		t.Fatalf("tmr.waitForMetric(%v) succeeded when expected to timeout.", failureMetric)
+	} else if sCtx.Err() == nil {
+		t.Fatalf("tmr.WaitForInt64Count(%v) = %v, want context deadline exceeded", failureMetric, err)
+	}
+	// Unblock stream creation and verify that an update is received
+	// successfully.
+	close(streamCreationQuota)
+	if err := tmr.waitForMetric(ctx, &metrics.ResourceUpdateValid{ServerURI: mgmtServer.Address, ResourceType: "ListenerResource"}); err != nil {
+		t.Fatal(err.Error())
 	}
 }
