@@ -147,6 +147,8 @@ func (xc *xdsChannel) close() {
 
 	// Get the resource types that this specific ADS stream was handling
 	// before stopping it.
+	//
+	// TODO: Revisit if we can avoid acquiring the lock of ads (another type).
 	xc.ads.mu.Lock()
 	typesHandledByStream := make([]ResourceType, 0, len(xc.ads.resourceTypeState))
 	for typ := range xc.ads.resourceTypeState {

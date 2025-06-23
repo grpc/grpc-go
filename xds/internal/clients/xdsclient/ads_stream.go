@@ -445,7 +445,9 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 		}
 	}
 
-	// Call the event handler to remove unsubscribed cache entries.
+	// Call the event handler to remove unsubscribed cache entries. It is to
+	// ensure the cache entries are deleted even if discovery request fails. In
+	// case of failure when the stream restarts, nonce is reset anyways.
 	s.eventHandler.onRequest(url)
 
 	msg, err := proto.Marshal(req)

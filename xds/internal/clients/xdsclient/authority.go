@@ -293,18 +293,19 @@ func (a *authority) fallbackToServer(xc *xdsChannelWithConfig) bool {
 	// Subscribe to all existing resources from the new management server.
 	for typ, resources := range a.resources {
 		for name, state := range resources {
-			if len(state.watchers) > 0 {
-				if a.logger.V(2) {
-					a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName, name)
-				}
-				xc.channel.subscribe(typ, name)
-
-				// Add the new channel to the list of xdsChannels from which this
-				// resource has been requested from. Retain the cached resource and
-				// the set of existing watchers (and other metadata fields) in the
-				// resource state.
-				state.xdsChannelConfigs[xc] = true
+			if len(state.watchers) == 0 {
+				continue
 			}
+			if a.logger.V(2) {
+				a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName, name)
+			}
+			xc.channel.subscribe(typ, name)
+
+			// Add the new channel to the list of xdsChannels from which this
+			// resource has been requested from. Retain the cached resource and
+			// the set of existing watchers (and other metadata fields) in the
+			// resource state.
+			state.xdsChannelConfigs[xc] = true
 		}
 	}
 	return true
