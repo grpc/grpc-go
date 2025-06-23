@@ -3758,7 +3758,7 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "FullDuplexCall",
-				Handler: func(srv any, stream grpc.ServerStream) error {
+				Handler: func(_ any, stream grpc.ServerStream) error {
 					err := stream.RecvMsg(&testpb.Empty{})
 					if err != nil {
 						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
@@ -3871,7 +3871,7 @@ func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "UnaryCall",
-				Handler: func(srv any, stream grpc.ServerStream) error {
+				Handler: func(_ any, stream grpc.ServerStream) error {
 					err := stream.RecvMsg(&testpb.Empty{})
 					if err != nil {
 						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
@@ -3981,7 +3981,7 @@ func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "UnaryCall",
-				Handler: func(srv any, stream grpc.ServerStream) error {
+				Handler: func(_ any, stream grpc.ServerStream) error {
 					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
 					}
