@@ -3863,7 +3863,7 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "FullDuplexCall",
-				Handler: func(srv interface{}, stream grpc.ServerStream) error {
+				Handler: func(srv any, stream grpc.ServerStream) error {
 					err := stream.RecvMsg(&testpb.Empty{})
 					if err != nil {
 						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
@@ -3976,7 +3976,7 @@ func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "UnaryCall",
-				Handler: func(srv interface{}, stream grpc.ServerStream) error {
+				Handler: func(srv any, stream grpc.ServerStream) error {
 					err := stream.RecvMsg(&testpb.Empty{})
 					if err != nil {
 						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
@@ -4068,6 +4068,73 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 
 	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.SendMsg() = %v, want error %v", status.Code(err), codes.Internal)
+	}
+}
+
+func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "UnaryCall",
+				Handler: func(srv any, stream grpc.ServerStream) error {
+					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+					}
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: true,
+			},
+		},
+		Metadata: "grpc/testing/test.proto",
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	// s := grpc.NewServer(ss)
+	go s.Serve(lis)
+	defer s.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+	}
+	defer cc.Close()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "UnaryCall",
+		ServerStreams: true,
+		ClientStreams: true,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/UnaryCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
 	}
 }
 

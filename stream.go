@@ -1812,6 +1812,12 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 			binlog.Log(ss.ctx, cm)
 		}
 	}
+	// Special handling for non-client-stream rpcs.
+	if !ss.desc.ClientStreams {
+		if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true); err != io.EOF {
+			return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non client-streaming RPCs, but received another message")
+		}
+	}
 	return nil
 }
 
