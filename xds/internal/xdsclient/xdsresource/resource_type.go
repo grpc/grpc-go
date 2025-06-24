@@ -171,27 +171,27 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 	return r.allResourcesRequiredInSotW
 }
 
-// genericResourceTypeDecoder wraps an xdsresource.Type and implements
+// GenericResourceTypeDecoder wraps an xdsresource.Type and implements
 // xdsclient.Decoder.
 //
 // TODO: #8313 - Delete this once the internal xdsclient usages are updated
 // to use the generic xdsclient.ResourceType interface directly.
-type genericResourceTypeDecoder struct {
-	resourceType     Type
-	bootstrapConfig  *bootstrap.Config
-	gServerConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
+type GenericResourceTypeDecoder struct {
+	ResourceType    Type
+	BootstrapConfig *bootstrap.Config
+	ServerConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
 // Decode deserialize and validate resource bytes of an xDS resource received
 // from the xDS management server.
-func (gd *genericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	raw := &anypb.Any{TypeUrl: gd.resourceType.TypeURL(), Value: resourceBytes}
-	opts := &DecodeOptions{BootstrapConfig: gd.bootstrapConfig}
+func (gd *GenericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	raw := &anypb.Any{TypeUrl: gd.ResourceType.TypeURL(), Value: resourceBytes}
+	opts := &DecodeOptions{BootstrapConfig: gd.BootstrapConfig}
 	if gOpts.ServerConfig != nil {
-		opts.ServerConfig = gd.gServerConfigMap[*gOpts.ServerConfig]
+		opts.ServerConfig = gd.ServerConfigMap[*gOpts.ServerConfig]
 	}
 
-	result, err := gd.resourceType.Decode(opts, raw)
+	result, err := gd.ResourceType.Decode(opts, raw)
 	if result == nil {
 		return nil, err
 	}

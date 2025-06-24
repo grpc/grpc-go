@@ -153,5 +153,5 @@ func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel fun
 // NewGenericRouteConfigResourceTypeDecoder returns a xdsclient.Decoder that
 // wraps the xdsresource.routeConfigType.
 func NewGenericRouteConfigResourceTypeDecoder() xdsclient.Decoder {
-	return &genericResourceTypeDecoder{resourceType: routeConfigType}
+	return &GenericResourceTypeDecoder{ResourceType: routeConfigType}
 }

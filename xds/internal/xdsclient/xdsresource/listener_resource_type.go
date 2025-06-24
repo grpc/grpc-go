@@ -185,5 +185,5 @@ func WatchListener(p Producer, name string, w ListenerWatcher) (cancel func()) {
 // NewGenericListenerResourceTypeDecoder returns a xdsclient.Decoder that wraps
 // the xdsresource.listenerType.
 func NewGenericListenerResourceTypeDecoder(bc *bootstrap.Config) xdsclient.Decoder {
-	return &genericResourceTypeDecoder{resourceType: listenerType, bootstrapConfig: bc}
+	return &GenericResourceTypeDecoder{ResourceType: listenerType, BootstrapConfig: bc}
 }

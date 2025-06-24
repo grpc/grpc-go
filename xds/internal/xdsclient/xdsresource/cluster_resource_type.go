@@ -156,5 +156,5 @@ func WatchCluster(p Producer, name string, w ClusterWatcher) (cancel func()) {
 // NewGenericClusterResourceTypeDecoder returns a xdsclient.Decoder that
 // wraps the xdsresource.clusterType.
 func NewGenericClusterResourceTypeDecoder(bc *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) xdsclient.Decoder {
-	return &genericResourceTypeDecoder{resourceType: clusterType, bootstrapConfig: bc, gServerConfigMap: gServerCfgMap}
+	return &GenericResourceTypeDecoder{ResourceType: clusterType, BootstrapConfig: bc, ServerConfigMap: gServerCfgMap}
 }
