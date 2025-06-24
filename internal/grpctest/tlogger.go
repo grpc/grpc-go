@@ -73,15 +73,21 @@ type tLogger struct {
 }
 
 func init() {
-	tLogr = &tLogger{errors: map[*regexp.Regexp]int{}}
-	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	if vl, err := strconv.Atoi(vLevel); err == nil {
-		tLogr.v = vl
-	}
-}
+	vLevel := 0 // Default verbosity level
 
-func getLogger() *tLogger {
-	return tLogr
+	if vLevelEnv, found := os.LookupEnv("GRPC_GO_LOG_VERBOSITY_LEVEL"); found {
+		// If found, attempt to convert. If conversion is successful, update vLevel.
+		// If conversion fails, log a warning, but vLevel remains its default of 0.
+		if val, err := strconv.Atoi(vLevelEnv); err == nil {
+			vLevel = val
+		} else {
+			// Log the error if the environment variable is not a valid integer.
+			fmt.Printf("Warning: GRPC_GO_LOG_VERBOSITY_LEVEL environment variable '%s' is not a valid integer. "+
+				"Using default verbosity level 0. Error: %v\n", vLevelEnv, err)
+		}
+	}
+	// Initialize tLogr with the determined verbosity level.
+	tLogr = &tLogger{errors: make(map[*regexp.Regexp]int), v: vLevel}
 }
 
 // getCallingPrefix returns the <file:line> at the given depth from the stack.
@@ -137,9 +143,9 @@ func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
 	}
 }
 
-// Update updates the testing.T that the testing logger logs to. Should be done
+// update updates the testing.T that the testing logger logs to. Should be done
 // before every test. It also initializes the tLogger if it has not already.
-func (tl *tLogger) Update(t *testing.T) {
+func (tl *tLogger) update(t *testing.T) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 	if !tl.initialized {
@@ -162,19 +168,18 @@ func ExpectError(expr string) {
 
 // ExpectErrorN declares an error to be expected n times.
 func ExpectErrorN(expr string, n int) {
-	tl := getLogger()
-	tl.mu.Lock()
-	defer tl.mu.Unlock()
+	tLogr.mu.Lock()
+	defer tLogr.mu.Unlock()
 	re, err := regexp.Compile(expr)
 	if err != nil {
-		tl.t.Error(err)
+		tLogr.t.Error(err)
 		return
 	}
-	tl.errors[re] += n
+	tLogr.errors[re] += n
 }
 
-// EndTest checks if expected errors were not encountered.
-func (tl *tLogger) EndTest(t *testing.T) {
+// endTest checks if expected errors were not encountered.
+func (tl *tLogger) endTest(t *testing.T) {
 	tl.mu.Lock()
 	defer tl.mu.Unlock()
 	for re, count := range tl.errors {
