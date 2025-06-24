@@ -28,8 +28,6 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -205,44 +203,13 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 		}
 	}
 
-	gTransportBuilder := grpctransport.NewBuilder(grpcTransportConfigs)
-
-	resourceTypes := map[string]xdsclient.ResourceType{
-		version.V3ListenerURL: {
-			TypeURL:                    version.V3ListenerURL,
-			TypeName:                   xdsresource.ListenerResourceTypeName,
-			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewGenericListenerResourceTypeDecoder(config),
-		},
-		version.V3RouteConfigURL: {
-			TypeURL:                    version.V3RouteConfigURL,
-			TypeName:                   xdsresource.RouteConfigTypeName,
-			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.NewGenericRouteConfigResourceTypeDecoder(),
-		},
-		version.V3ClusterURL: {
-			TypeURL:                    version.V3ClusterURL,
-			TypeName:                   xdsresource.ClusterResourceTypeName,
-			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewGenericClusterResourceTypeDecoder(config, gServerCfgMap),
-		},
-		version.V3EndpointsURL: {
-			TypeURL:                    version.V3EndpointsURL,
-			TypeName:                   xdsresource.EndpointsResourceTypeName,
-			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.NewGenericEndpointsResourceTypeDecoder(),
-		},
-	}
-
-	mr := &metricsReporter{recorder: metricsRecorder, target: target}
-
 	return xdsclient.Config{
 		Authorities:      gAuthorities,
 		Servers:          gServerCfgs,
 		Node:             gNode,
-		TransportBuilder: gTransportBuilder,
-		ResourceTypes:    resourceTypes,
-		MetricsReporter:  mr,
+		TransportBuilder: grpctransport.NewBuilder(grpcTransportConfigs),
+		ResourceTypes:    supportedResourceTypes(config, gServerCfgMap),
+		MetricsReporter:  &metricsReporter{recorder: metricsRecorder, target: target},
 	}, nil
 }
 
