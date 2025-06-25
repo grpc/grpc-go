@@ -56,12 +56,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// Increment retry count for the next attempt if not a transparent
 		// retry.
 		if !rs.IsTransparentRetryAttempt && rs.Client {
-			ci := getCallInfo(ai.ctx)
-			if ci == nil {
-				logger.Error("context passed into client side stats handler (TagRPC) has no call info")
-				return
-			}
-			ci.previousRPCAttempts.Add(1)
+			ai.previousRPCAttempts.Add(1)
 		}
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
