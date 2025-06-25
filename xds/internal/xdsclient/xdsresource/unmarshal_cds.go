@@ -287,7 +287,10 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
 	}
 	tc := ts.GetTypedConfig()
-	if tc == nil || tc.TypeUrl != version.V3UpstreamTLSContextURL {
+	if tc == nil {
+		return nil, fmt.Errorf("missing required field: TypedConfig")
+	}
+	if tc.TypeUrl != version.V3UpstreamTLSContextURL {
 		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", tc.TypeUrl)
 	}
 	upstreamCtx := &v3tlspb.UpstreamTlsContext{}
