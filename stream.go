@@ -1580,6 +1580,7 @@ type serverStream struct {
 	s     *transport.ServerStream
 	p     *parser
 	codec baseCodec
+	desc  *StreamDesc
 
 	compressorV0   Compressor
 	compressorV1   encoding.Compressor
@@ -1774,6 +1775,9 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 					binlog.Log(ss.ctx, chc)
 				}
 			}
+			if !ss.desc.ClientStreams {
+				return status.Errorf(codes.Internal, "RecvMsg is called twice")
+			}
 			return err
 		}
 		if err == io.ErrUnexpectedEOF {
@@ -1798,6 +1802,12 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 		for _, binlog := range ss.binlogs {
 			binlog.Log(ss.ctx, cm)
+		}
+	}
+	// Special handling for non-client-stream rpcs.
+	if !ss.desc.ClientStreams {
+		if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true); err != io.EOF {
+			return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non client-streaming RPCs, but received another message")
 		}
 	}
 	return nil
