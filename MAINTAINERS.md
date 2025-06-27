@@ -15,7 +15,6 @@ for general contribution guidelines.
 - [atollena](https://github.com/atollena), Datadog, Inc.
 - [dfawley](https://github.com/dfawley), Google LLC
 - [easwars](https://github.com/easwars), Google LLC
-- [erm-g](https://github.com/erm-g), Google LLC
 - [gtcooke94](https://github.com/gtcooke94), Google LLC
 - [purnesh42h](https://github.com/purnesh42h), Google LLC
 - [zasweq](https://github.com/zasweq), Google LLC
@@ -24,6 +23,7 @@ for general contribution guidelines.
 - [adelez](https://github.com/adelez)
 - [canguler](https://github.com/canguler)
 - [cesarghali](https://github.com/cesarghali)
+- [erm-g](https://github.com/erm-g)
 - [iamqizhao](https://github.com/iamqizhao)
 - [jeanbza](https://github.com/jeanbza)
 - [jtattermusch](https://github.com/jtattermusch)
