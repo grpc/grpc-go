@@ -545,7 +545,7 @@ func (fcm *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if tc == nil {
 		return nil, fmt.Errorf("missing required field: TypedConfig")
 	}
-	if tc.TypeUrl != version.V3UpstreamTLSContextURL {
+	if tc.TypeUrl != version.V3DownstreamTLSContextURL {
 		return nil, fmt.Errorf("transport_socket field has unexpected typeURL: %s", tc.TypeUrl)
 	}
 	downstreamCtx := &v3tlspb.DownstreamTlsContext{}
