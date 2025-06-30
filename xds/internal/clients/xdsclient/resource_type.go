@@ -51,8 +51,13 @@ type Decoder interface {
 	// Decode deserializes and validates an xDS resource as received from the
 	// xDS management server.
 	//
-	// If deserialization fails or resource validation fails, it returns a
-	// non-nil error. Otherwise, returns a fully populated DecodeResult.
+	// The `resource` parameter contains the marshalled bytes of an `anypb.Any`
+	// proto. Implementations are responsible for unmarshalling these bytes and
+	// then unwrapping the underlying resource if it is wrapped (with type URL
+	// `type.googleapis.com/envoy.service.discovery.v3.Resource`).
+	//
+	// If unmarshalling or validation fails, it returns a non-nil error.
+	// Otherwise, returns a fully populated DecodeResult.
 	Decode(resource []byte, options DecodeOptions) (*DecodeResult, error)
 }
 

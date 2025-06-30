@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -253,20 +254,12 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
 	for _, r := range resp.resources {
-		// Unwrap and validate the resource, but preserve the original bytes for
-		// decoding. This is required for resource types that don't have a name
-		// field in the resource itself, but only have one in the wrapped
-		// resource.
-		inner, err := xdsresource.UnwrapResource(r)
+		rBytes, err := proto.Marshal(r)
 		if err != nil {
 			topLevelErrors = append(topLevelErrors, err)
 			continue
 		}
-		if _, ok := opts.Config.ResourceTypes[inner.GetTypeUrl()]; !ok || inner.GetTypeUrl() != resp.typeURL {
-			topLevelErrors = append(topLevelErrors, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceTypeUnsupported, "unexpected resource type: %q ", inner.GetTypeUrl()))
-			continue
-		}
-		result, err := rType.Decoder.Decode(r.GetValue(), *opts)
+		result, err := rType.Decoder.Decode(rBytes, *opts)
 
 		// Name field of the result is left unpopulated only when resource
 		// deserialization fails.
