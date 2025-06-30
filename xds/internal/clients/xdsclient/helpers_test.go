@@ -63,12 +63,7 @@ var (
 	}
 )
 
-func unmarshalListenerResource(r []byte) (string, listenerUpdate, error) {
-	rProto := &anypb.Any{}
-	if err := proto.Unmarshal(r, rProto); err != nil {
-		return "", listenerUpdate{}, fmt.Errorf("failed to unmarshal resource bytes: %w", err)
-	}
-
+func unmarshalListenerResource(rProto *anypb.Any) (string, listenerUpdate, error) {
 	rProto, err := xdsresource.UnwrapResource(rProto)
 	if err != nil {
 		return "", listenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -167,8 +162,12 @@ type listenerDecoder struct{}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, error) {
-	name, listener, err := unmarshalListenerResource(resource)
+func (listenerDecoder) Decode(resource AnyProto, _ DecodeOptions) (*DecodeResult, error) {
+	rProto := &anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}
+	name, listener, err := unmarshalListenerResource(rProto)
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.

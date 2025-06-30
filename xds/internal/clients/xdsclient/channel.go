@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/backoff"
 	"google.golang.org/grpc/xds/internal/clients/internal/syncutil"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -254,12 +253,10 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
 	for _, r := range resp.resources {
-		rBytes, err := proto.Marshal(r)
-		if err != nil {
-			topLevelErrors = append(topLevelErrors, err)
-			continue
-		}
-		result, err := rType.Decoder.Decode(rBytes, *opts)
+		result, err := rType.Decoder.Decode(AnyProto{
+			TypeURL: r.GetTypeUrl(),
+			Value:   r.GetValue(),
+		}, *opts)
 
 		// Name field of the result is left unpopulated only when resource
 		// deserialization fails.

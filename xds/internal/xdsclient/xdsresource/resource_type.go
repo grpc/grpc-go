@@ -31,7 +31,6 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -185,10 +184,10 @@ type GenericResourceTypeDecoder struct {
 
 // Decode deserialize and validate resource bytes of an xDS resource received
 // from the xDS management server.
-func (gd *GenericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	rProto := &anypb.Any{}
-	if err := proto.Unmarshal(resourceBytes, rProto); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal resource bytes: %w", err)
+func (gd *GenericResourceTypeDecoder) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	rProto := &anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
 	}
 	opts := &DecodeOptions{BootstrapConfig: gd.BootstrapConfig}
 	if gOpts.ServerConfig != nil {
