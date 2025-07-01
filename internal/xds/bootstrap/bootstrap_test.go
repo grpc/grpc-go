@@ -389,7 +389,7 @@ func (s) TestGetConfiguration_Failure(t *testing.T) {
 			testGetConfigurationWithFileContentEnv(t, name, true, nil)
 		})
 	}
-	name := "empty"
+	const name = "empty"
 	t.Run(name, func(t *testing.T) {
 		testGetConfigurationWithFileNameEnv(t, name, true, nil)
 		// If both the env vars are empty, a nil config with a nil error must be
