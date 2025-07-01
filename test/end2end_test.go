@@ -3740,10 +3740,9 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming when server call
-// RecvMsg twice. Second call to RecvMsg should fail with Internal
-// error.
-func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
+// Tests the behavior for server-side streaming when server calls RecvMsg twice.
+// Second call to RecvMsg should fail with Internal error.
+func TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3757,7 +3756,7 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 		Methods:     []grpc.MethodDesc{},
 		Streams: []grpc.StreamDesc{
 			{
-				StreamName: "FullDuplexCall",
+				StreamName: "ServerStreaming",
 				Handler: func(_ any, stream grpc.ServerStream) error {
 					err := stream.RecvMsg(&testpb.Empty{})
 					if err != nil {
@@ -3773,7 +3772,6 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 				ServerStreams: true,
 			},
 		},
-		Metadata: "grpc/testing/test.proto",
 	}
 	s.RegisterService(&serviceDesc, &testServer{})
 	go s.Serve(lis)
@@ -3788,12 +3786,12 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	defer cc.Close()
 
 	desc := &grpc.StreamDesc{
-		StreamName:    "FullDuplexCall",
+		StreamName:    "ServerStreaming",
 		ServerStreams: true,
-		ClientStreams: false, // This is the test case: client is *not* allowed to stream
+		ClientStreams: false,
 	}
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/FullDuplexCall")
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
 	if err != nil {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
@@ -3807,10 +3805,9 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming when client call
-// SendMsg twice. Second call to SendMsg should fail with Internal
-// error.
-func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
+// Tests the behavior for server-side streaming when client calls SendMsg twice.
+// Second call to SendMsg should fail with Internal error.
+func TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3834,12 +3831,12 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	defer cc.Close()
 
 	desc := &grpc.StreamDesc{
-		StreamName:    "FullDuplexCall",
+		StreamName:    "ServerStreaming",
 		ServerStreams: true,
 		ClientStreams: false,
 	}
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/FullDuplexCall")
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
 	if err != nil {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
@@ -3853,10 +3850,9 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	}
 }
 
-// Tests the behavior for unary RPC when server call
-// RecvMsg twice. Second call to RecvMsg should fail with Internal
-// error.
-func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
+// Tests the behavior for unary RPC when server calls RecvMsg twice. Second call
+// to RecvMsg should fail with Internal error.
+func TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3886,7 +3882,6 @@ func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 				ServerStreams: false,
 			},
 		},
-		Metadata: "grpc/testing/test.proto",
 	}
 	s.RegisterService(&serviceDesc, &testServer{})
 	go s.Serve(lis)
@@ -3920,10 +3915,9 @@ func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 	}
 }
 
-// Tests the behavior for unary RPC when client call
-// SendMsg twice. Second call to SendMsg should fail with Internal
-// error.
-func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
+// Tests the behavior for unary RPC when client calls SendMsg twice. Second call
+// to SendMsg should fail with Internal error.
+func TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3966,7 +3960,9 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 	}
 }
 
-func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
+// Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
+// and calls SendMsg twice.
+func TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3980,7 +3976,7 @@ func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 		Methods:     []grpc.MethodDesc{},
 		Streams: []grpc.StreamDesc{
 			{
-				StreamName: "UnaryCall",
+				StreamName: "ServerStreaming",
 				Handler: func(_ any, stream grpc.ServerStream) error {
 					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
@@ -3991,7 +3987,69 @@ func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 				ServerStreams: true,
 			},
 		},
-		Metadata: "grpc/testing/test.proto",
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+	}
+	defer cc.Close()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "ServerStreaming",
+		ServerStreams: true,
+		ClientStreams: true,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+	}
+}
+
+// Tests the behavior for server-side streaming RPC when client sends zero request message.
+func TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "ServerStreaming",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+					}
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: true,
+			},
+		},
 	}
 	s.RegisterService(&serviceDesc, &testServer{})
 	go s.Serve(lis)
@@ -4010,24 +4068,19 @@ func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 	defer cc.Close()
 
 	desc := &grpc.StreamDesc{
-		StreamName:    "UnaryCall",
+		StreamName:    "ServerStreaming",
 		ServerStreams: true,
-		ClientStreams: true,
+		ClientStreams: false,
 	}
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/UnaryCall")
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
 	if err != nil {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
 
-	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
-		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	if err := stream.CloseSend(); err != nil {
+		t.Errorf("stream.CloseSend() = %v, want <nil>", err)
 	}
-
-	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
-		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
-	}
-
 	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
 	}

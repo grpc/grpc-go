@@ -1776,7 +1776,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 				}
 			}
 			if !ss.desc.ClientStreams {
-				return status.Errorf(codes.Internal, "RecvMsg is called twice")
+				return status.Error(codes.Internal, "cardinality violation: received no request message from non-client-stream RPC")
 			}
 			return err
 		}
@@ -1804,13 +1804,19 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 			binlog.Log(ss.ctx, cm)
 		}
 	}
-	// Special handling for non-client-stream rpcs.
-	if !ss.desc.ClientStreams {
-		if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, payInfo, ss.decompressorV1, true); err != io.EOF {
-			return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non client-streaming RPCs, but received another message")
-		}
+
+	if ss.desc.ClientStreams {
+		// Subsequent messages should be received by subsequent RecvMsg calls.
+		return nil
 	}
-	return nil
+	// Special handling for non-client-stream rpcs.
+	// This recv expects EOF or errors, so we don't collect inPayload.
+	if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true); err == io.EOF {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non client-streaming RPCs, but received another message")
 }
 
 // MethodFromServerStream returns the method string for the input stream.
