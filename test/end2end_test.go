@@ -3742,7 +3742,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 
 // Tests the behavior for server-side streaming when server calls RecvMsg twice.
 // Second call to RecvMsg should fail with Internal error.
-func TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
+func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3807,7 +3807,7 @@ func TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 
 // Tests the behavior for server-side streaming when client calls SendMsg twice.
 // Second call to SendMsg should fail with Internal error.
-func TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
+func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3852,7 +3852,7 @@ func TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 
 // Tests the behavior for unary RPC when server calls RecvMsg twice. Second call
 // to RecvMsg should fail with Internal error.
-func TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
+func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3917,7 +3917,7 @@ func TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
 
 // Tests the behavior for unary RPC when client calls SendMsg twice. Second call
 // to SendMsg should fail with Internal error.
-func TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
+func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3962,7 +3962,7 @@ func TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 
 // Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
 // and calls SendMsg twice.
-func TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
+func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -4025,7 +4025,7 @@ func TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 }
 
 // Tests the behavior for server-side streaming RPC when client sends zero request message.
-func TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
+func (s) TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
