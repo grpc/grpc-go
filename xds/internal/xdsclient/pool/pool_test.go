@@ -73,6 +73,10 @@ func (s) TestDefaultPool_LazyLoadBootstrapConfig(t *testing.T) {
 		t.Fatalf("DefaultPool.BootstrapConfigForTesting() = %v, want nil", cfg)
 	}
 
+	// The pool will attempt to read the env vars only once. Reset the pool's
+	// state to make it re-read the env vars during next client creation.
+	xdsclient.DefaultPool.UnsetBootstrapConfigForTesting()
+
 	_, closeFunc, err = xdsclient.DefaultPool.NewClient(t.Name(), &stats.NoopMetricsRecorder{})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
