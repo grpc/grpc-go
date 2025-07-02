@@ -1580,6 +1580,7 @@ type serverStream struct {
 	s     *transport.ServerStream
 	p     *parser
 	codec baseCodec
+	desc  *StreamDesc
 
 	compressorV0   Compressor
 	compressorV1   encoding.Compressor
@@ -1774,6 +1775,9 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 					binlog.Log(ss.ctx, chc)
 				}
 			}
+			if !ss.desc.ClientStreams {
+				return status.Error(codes.Internal, "cardinality violation: received no request message from non-client-stream RPC")
+			}
 			return err
 		}
 		if err == io.ErrUnexpectedEOF {
@@ -1800,7 +1804,19 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 			binlog.Log(ss.ctx, cm)
 		}
 	}
-	return nil
+
+	if ss.desc.ClientStreams {
+		// Subsequent messages should be received by subsequent RecvMsg calls.
+		return nil
+	}
+	// Special handling for non-client-stream rpcs.
+	// This recv expects EOF or errors, so we don't collect inPayload.
+	if err := recv(ss.p, ss.codec, ss.s, ss.decompressorV0, m, ss.maxReceiveMessageSize, nil, ss.decompressorV1, true); err == io.EOF {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non client-streaming RPCs, but received another message")
 }
 
 // MethodFromServerStream returns the method string for the input stream.
