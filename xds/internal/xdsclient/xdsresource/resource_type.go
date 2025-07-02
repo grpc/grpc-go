@@ -184,14 +184,17 @@ type GenericResourceTypeDecoder struct {
 
 // Decode deserialize and validate resource bytes of an xDS resource received
 // from the xDS management server.
-func (gd *GenericResourceTypeDecoder) Decode(resourceBytes []byte, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	raw := &anypb.Any{TypeUrl: gd.ResourceType.TypeURL(), Value: resourceBytes}
+func (gd *GenericResourceTypeDecoder) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	rProto := &anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}
 	opts := &DecodeOptions{BootstrapConfig: gd.BootstrapConfig}
 	if gOpts.ServerConfig != nil {
 		opts.ServerConfig = gd.ServerConfigMap[*gOpts.ServerConfig]
 	}
 
-	result, err := gd.ResourceType.Decode(opts, raw)
+	result, err := gd.ResourceType.Decode(opts, rProto)
 	if result == nil {
 		return nil, err
 	}
