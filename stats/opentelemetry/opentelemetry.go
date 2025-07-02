@@ -245,7 +245,6 @@ type attemptInfo struct {
 	countSentMsg        uint32
 	countRecvMsg        uint32
 	previousRPCAttempts *atomic.Int32
-	ctx                 context.Context
 }
 
 type clientMetrics struct {

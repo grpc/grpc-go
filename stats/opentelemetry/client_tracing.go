@@ -130,7 +130,6 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		return ctx
 	}
 	ai.previousRPCAttempts = ci.previousRPCAttempts
-	ai.ctx = ctx
 	ctx = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }

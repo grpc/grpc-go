@@ -42,7 +42,6 @@ func (h *serverTracingHandler) initializeTraces() {
 func (h *serverTracingHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	ctx, ai := getOrCreateRPCAttemptInfo(ctx)
 	ctx, ai = h.traceTagRPC(ctx, ai)
-	ai.ctx = ctx
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
 
