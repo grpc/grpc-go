@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
@@ -62,9 +63,16 @@ var (
 	}
 )
 
-func unmarshalListenerResource(r []byte) (string, listenerUpdate, error) {
+func unmarshalListenerResource(rProto *anypb.Any) (string, listenerUpdate, error) {
+	rProto, err := xdsresource.UnwrapResource(rProto)
+	if err != nil {
+		return "", listenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
+	}
+	if !xdsresource.IsListenerResource(rProto.GetTypeUrl()) {
+		return "", listenerUpdate{}, fmt.Errorf("unexpected listener resource type: %q", rProto.GetTypeUrl())
+	}
 	lis := &v3listenerpb.Listener{}
-	if err := proto.Unmarshal(r, lis); err != nil {
+	if err := proto.Unmarshal(rProto.GetValue(), lis); err != nil {
 		return "", listenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
@@ -72,7 +80,7 @@ func unmarshalListenerResource(r []byte) (string, listenerUpdate, error) {
 	if err != nil {
 		return lis.GetName(), listenerUpdate{}, err
 	}
-	lu.Raw = r
+	lu.Raw = rProto.GetValue()
 	return lis.GetName(), *lu, nil
 }
 
@@ -154,8 +162,12 @@ type listenerDecoder struct{}
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (listenerDecoder) Decode(resource []byte, _ DecodeOptions) (*DecodeResult, error) {
-	name, listener, err := unmarshalListenerResource(resource)
+func (listenerDecoder) Decode(resource AnyProto, _ DecodeOptions) (*DecodeResult, error) {
+	rProto := &anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}
+	name, listener, err := unmarshalListenerResource(rProto)
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.
