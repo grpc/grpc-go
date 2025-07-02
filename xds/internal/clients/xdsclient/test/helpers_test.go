@@ -80,7 +80,7 @@ func unmarshalListenerResource(rProto *anypb.Any) (string, listenerUpdate, error
 		return "", listenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
 	}
 	if !xdsresource.IsListenerResource(rProto.GetTypeUrl()) {
-		return "", listenerUpdate{}, fmt.Errorf("unexpected listener resource type: %q ", rProto.GetTypeUrl())
+		return "", listenerUpdate{}, fmt.Errorf("unexpected listener resource type: %q", rProto.GetTypeUrl())
 	}
 	lis := &v3listenerpb.Listener{}
 	if err := proto.Unmarshal(rProto.GetValue(), lis); err != nil {
