@@ -443,6 +443,11 @@ func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
 }
 
+var onwatcherUpdated = func() {
+	// This function is a no-op, but can be overridden in tests to signal that
+	// the watchers map has been updated.
+}
+
 // Handles a good Cluster update from the xDS client. Kicks off the discovery
 // mechanism generation process from the top-level cluster and if the cluster
 // graph is resolved, generates child policy config and pushes it down.
@@ -530,14 +535,13 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 	}
 	// We no longer need the clusters that we did not see in this iteration of
 	// generateDMsForCluster().
-	for cluster := range clustersSeen {
-		state, ok := b.watchers[cluster]
-		if ok {
-			continue
+	for cluster, state := range b.watchers {
+		if !clustersSeen[cluster] {
+			state.cancelWatch()
+			delete(b.watchers, cluster)
 		}
-		state.cancelWatch()
-		delete(b.watchers, cluster)
 	}
+	onwatcherUpdated()
 }
 
 // Handles an ambient error Cluster update from the xDS client to not stop

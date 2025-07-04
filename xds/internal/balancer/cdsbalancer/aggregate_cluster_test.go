@@ -866,3 +866,119 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
+
+// assertWatchers verifies that the got map contains exactly the watchers in want.
+func assertWatchers(t *testing.T, want map[string]bool, got map[string]*watcherState) {
+	t.Helper()
+
+	var missing, unexpected []string
+	for w := range want {
+		if _, ok := got[w]; !ok {
+			missing = append(missing, w)
+		}
+	}
+	for g := range got {
+		if !want[g] {
+			unexpected = append(unexpected, g)
+		}
+	}
+
+	if len(missing) > 0 || len(unexpected) > 0 {
+		t.Fatalf("Watcher mismatch:\n  Missing:    %v\n  Unexpected: %v", missing, unexpected)
+	}
+}
+
+// TestWatchers verifies that cds watchers are updated when the cluster tree changes.
+func (s) TestWatchers(t *testing.T) {
+	watchCh := make(chan struct{}, 1)
+
+	origOnWatcherUpdated := onwatcherUpdated
+	onwatcherUpdated = func() {
+		select {
+		case watchCh <- struct{}{}:
+		default:
+		}
+	}
+	defer func() { onwatcherUpdated = origOnWatcherUpdated }()
+
+	cdsBalancerCh := registerWrappedCDSPolicy(t)
+	registerWrappedClusterResolverPolicy(t)
+
+	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	const (
+		clusterA = clusterName
+		clusterB = clusterName + "-B"
+		clusterC = clusterName + "-C"
+		clusterD = clusterName + "-D"
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Initial CDS resources: A -> B, C
+	initialResources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterA, []string{clusterB, clusterC}),
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)}),
+		},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, initialResources); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	var cdsBal *cdsBalancer
+	select {
+	case cdsBal = <-cdsBalancerCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for cdsBalancer to be created")
+	}
+
+	select {
+	case <-watchCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for watchers to be updated")
+	}
+
+	assertWatchers(t, map[string]bool{
+		clusterA: true,
+		clusterB: true,
+		clusterC: true,
+	}, cdsBal.watchers)
+
+	// Updated CDS resources: A -> B, D (C should be removed)
+	updatedResources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterA, []string{clusterB, clusterD}),
+			e2e.DefaultCluster(clusterC, serviceName, e2e.SecurityLevelNone), // present, but unused
+		},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
+			e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)}),
+		},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, updatedResources); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	select {
+	case <-watchCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for watchers to be updated after cluster tree change")
+	}
+
+	assertWatchers(t, map[string]bool{
+		clusterA: true,
+		clusterB: true,
+		clusterD: true,
+	}, cdsBal.watchers)
+}
