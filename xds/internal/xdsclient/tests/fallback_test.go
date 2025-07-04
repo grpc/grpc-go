@@ -730,12 +730,15 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 }
 
 // TestXDSFallback_ThreeServerPromotion verifies fallback and promotion
-// behavior with three xDS servers in the following scenarios:
-// Primary returns partial config → fallback to secondary1.
-// Secondary1 returns partial config → fallback to secondary2.
-// Secondary2 returns full config → RPCs succeed to backend3.
-// Secondary1 recovers with full config → client promotes → backend2.
-// Primary recovers with full config → client promotes → backend1.
+// behavior across three xDS servers in the following sequence:
+//
+//  1. The primary server returns a partial config, triggering fallback to
+//     secondary1.
+//  2. Secondary1 also returns a partial config, triggering fallback to
+//     secondary2.
+//  3. Secondary2 returns a full config, so RPCs succeed to backend3.
+//  4. Secondary1 recovers with a full config, promoting RPCs to backend2.
+//  5. Primary finally recovers with a full config, promoting RPCs to backend1.
 func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
