@@ -443,11 +443,6 @@ func (b *cdsBalancer) annotateErrorWithNodeID(err error) error {
 	return fmt.Errorf("[xDS node id: %v]: %w", nodeID, err)
 }
 
-var onwatcherUpdated = func() {
-	// This function is a no-op, but can be overridden in tests to signal that
-	// the watchers map has been updated.
-}
-
 // Handles a good Cluster update from the xDS client. Kicks off the discovery
 // mechanism generation process from the top-level cluster and if the cluster
 // graph is resolved, generates child policy config and pushes it down.
