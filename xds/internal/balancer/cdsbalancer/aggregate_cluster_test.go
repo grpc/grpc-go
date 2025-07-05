@@ -876,9 +876,6 @@ func (s) TestWatchers(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// Start a test service backend.
-	server := stubserver.StartTestService(t, nil)
-	t.Cleanup(server.Stop)
 
 	const (
 		clusterA = clusterName
