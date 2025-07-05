@@ -867,45 +867,15 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	}
 }
 
-// assertWatchers verifies that the got map contains exactly the watchers in want.
-func assertWatchers(t *testing.T, want map[string]bool, got map[string]*watcherState) {
-	t.Helper()
-
-	var missing, unexpected []string
-	for w := range want {
-		if _, ok := got[w]; !ok {
-			missing = append(missing, w)
-		}
-	}
-	for g := range got {
-		if !want[g] {
-			unexpected = append(unexpected, g)
-		}
-	}
-
-	if len(missing) > 0 || len(unexpected) > 0 {
-		t.Fatalf("Watcher mismatch:\n  Missing:    %v\n  Unexpected: %v", missing, unexpected)
-	}
-}
-
-// TestWatchers verifies that cds watchers are updated when the cluster tree changes.
+// Tests the scenario where the cluster tree changes, and verifies that the
+// watchers for the cds balancer are updated accordingly. That is the cluster
+// removed from the tree no longer has a watcher and the new cluster added has a
+// new watcher.
 func (s) TestWatchers(t *testing.T) {
-	watchCh := make(chan struct{}, 1)
+	mgmtServer, nodeID, _, _, _, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
 
-	origOnWatcherUpdated := onwatcherUpdated
-	onwatcherUpdated = func() {
-		select {
-		case watchCh <- struct{}{}:
-		default:
-		}
-	}
-	defer func() { onwatcherUpdated = origOnWatcherUpdated }()
-
-	cdsBalancerCh := registerWrappedCDSPolicy(t)
-	registerWrappedClusterResolverPolicy(t)
-
-	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
-
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
 	t.Cleanup(server.Stop)
@@ -917,68 +887,34 @@ func (s) TestWatchers(t *testing.T) {
 		clusterD = clusterName + "-D"
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	// Initial CDS resources: A -> B, C
 	initialResources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterA, []string{clusterB, clusterC}),
 		},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
-			e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)}),
-		},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, initialResources); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
-
-	var cdsBal *cdsBalancer
-	select {
-	case cdsBal = <-cdsBalancerCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for cdsBalancer to be created")
+	wantNames := []string{clusterA, clusterB, clusterC}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
 	}
-
-	select {
-	case <-watchCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for watchers to be updated")
-	}
-
-	assertWatchers(t, map[string]bool{
-		clusterA: true,
-		clusterB: true,
-		clusterC: true,
-	}, cdsBal.watchers)
-
-	// Updated CDS resources: A -> B, D (C should be removed)
 	updatedResources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterA, []string{clusterB, clusterD}),
-			e2e.DefaultCluster(clusterC, serviceName, e2e.SecurityLevelNone), // present, but unused
-		},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
-			e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)}),
+			// e2e.DefaultCluster(clusterC, serviceName, e2e.SecurityLevelNone),
 		},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, updatedResources); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
-
-	select {
-	case <-watchCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for watchers to be updated after cluster tree change")
+	wantNames = []string{clusterA, clusterB, clusterD}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
 	}
-
-	assertWatchers(t, map[string]bool{
-		clusterA: true,
-		clusterB: true,
-		clusterD: true,
-	}, cdsBal.watchers)
 }

@@ -541,7 +541,6 @@ func (b *cdsBalancer) onClusterUpdate(name string, update xdsresource.ClusterUpd
 			delete(b.watchers, cluster)
 		}
 	}
-	onwatcherUpdated()
 }
 
 // Handles an ambient error Cluster update from the xDS client to not stop
