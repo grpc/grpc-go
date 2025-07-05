@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -85,7 +86,9 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 		select {
 		case <-ctx.Done():
 		case gotNames := <-resourceNamesCh:
-			if cmp.Equal(gotNames, wantNames) {
+			// Sort both slices before comparing them, as the order of clusters
+			// does not matter.
+			if cmp.Equal(gotNames, wantNames, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				return nil
 			}
 		}
