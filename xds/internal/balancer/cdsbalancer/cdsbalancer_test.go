@@ -157,15 +157,15 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 // built policy available to the test to directly invoke any balancer methods.
 //
 // Returns a channel on which the newly built cds LB policy is written to.
-func registerWrappedCDSPolicy(t *testing.T) chan *cdsBalancer {
+func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 	cdsBuilder := balancer.Get(cdsName)
 	internal.BalancerUnregister(cdsBuilder.Name())
-	cdsBalancerCh := make(chan *cdsBalancer, 1)
+	cdsBalancerCh := make(chan balancer.Balancer, 1)
 	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bal := cdsBuilder.Build(bd.ClientConn, bd.BuildOptions)
 			bd.ChildBalancer = bal
-			cdsBalancerCh <- bal.(*cdsBalancer)
+			cdsBalancerCh <- bal
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return cdsBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
@@ -1073,8 +1073,7 @@ func (s) TestClose(t *testing.T) {
 // Tests that calling ExitIdle on the cds LB policy results in the call being
 // propagated to the child policy.
 func (s) TestExitIdle(t *testing.T) {
-	cdsBalancerCh :=
-		registerWrappedCDSPolicy(t)
+	cdsBalancerCh := registerWrappedCDSPolicy(t)
 	_, _, exitIdleCh, _ := registerWrappedClusterResolverPolicy(t)
 	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
 

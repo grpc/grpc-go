@@ -902,11 +902,12 @@ func (s) TestWatchers(t *testing.T) {
 	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
 	}
+
+	// Update the CDS resources to remove cluster C and add cluster D.
 	updatedResources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterA, []string{clusterB, clusterD}),
-			// e2e.DefaultCluster(clusterC, serviceName, e2e.SecurityLevelNone),
 		},
 		SkipValidation: true,
 	}
