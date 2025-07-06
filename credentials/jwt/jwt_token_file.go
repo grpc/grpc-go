@@ -80,10 +80,10 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 // GetRequestMetadata gets the current request metadata, refreshing tokens
 // if required. This implementation follows the PerRPCCredentials interface.
 // The tokens will get automatically refreshed if they are about to expire or if
-// they haven't been loaded successfully yet. In the latter case, a backoff is
-// applied before retrying.
+// they haven't been loaded successfully yet.
 // If it's not possible to extract a token from the file, UNAVAILABLE is returned.
 // If the token is extracted but invalid, then UNAUTHENTICATED is returned.
+// If errors are encoutered, a backoff is applied before retrying.
 func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
