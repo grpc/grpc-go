@@ -112,7 +112,7 @@ func (c *errProtoCodec) Name() string {
 // Tests the case where encoding fails on the server. Verifies that there is
 // no panic and that the encoding error is propagated to the client.
 func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
-	grpctest.TLogger.ExpectError("grpc: server failed to encode response")
+	grpctest.ExpectError("grpc: server failed to encode response")
 
 	// Create a codec that errors when encoding messages.
 	encodingErr := errors.New("encoding failed")

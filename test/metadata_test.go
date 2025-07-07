@@ -37,7 +37,7 @@ import (
 )
 
 func (s) TestInvalidMetadata(t *testing.T) {
-	grpctest.TLogger.ExpectErrorN("stream: failed to validate md when setting trailer", 5)
+	grpctest.ExpectErrorN("stream: failed to validate md when setting trailer", 5)
 
 	tests := []struct {
 		name     string
