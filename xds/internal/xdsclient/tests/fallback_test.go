@@ -730,8 +730,7 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 }
 
 // TestXDSFallback_ThreeServerPromotion verifies fallback and promotion
-// behavior across three xDS servers in the following sequence:
-//
+// behavior across three xDS servers in the following scenarios.
 //  1. The primary server returns a partial config, triggering fallback to
 //     secondary1.
 //  2. Secondary1 also returns a partial config, triggering fallback to
@@ -766,27 +765,27 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	backend3 := stubserver.StartTestService(t, nil)
 	defer backend3.Stop()
 
-	svc, node := "svc-fallback", uuid.New().String()
-
+	nodeID := uuid.New().String()
+	const serviceName = "my-service-fallback-xds"
 	// Configure partial resources on the primary management server.
 	primaryManagementServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    node,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(svc, "route-p")},
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-p")},
 	})
 
 	// Configure incomplete (no endpoint) resources on secondary1.
 	secondary1ManagementServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    node,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(svc, "route-s1")},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", svc, "cluster-s1")},
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", serviceName, "cluster-s1")},
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s1", "endpoints-s1", e2e.SecurityLevelNone)},
 	})
 
 	// Configure full resources on secondary2.
 	secondary2ManagementServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    node,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(svc, "route-s2")},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s2", svc, "cluster-s2")},
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s2")},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s2", serviceName, "cluster-s2")},
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s2", "endpoints-s2", e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
 			e2e.DefaultEndpoint("endpoints-s2", "localhost", []uint32{testutils.ParsePort(t, backend3.Address)}),
@@ -805,17 +804,17 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
             {"server_uri": %q, "channel_creds":[{"type":"insecure"}]},
             {"server_uri": %q, "channel_creds":[{"type":"insecure"}]}
         ]`, primaryManagementServer.Address, secondary1ManagementServer.Address, secondary2ManagementServer.Address)),
-		Node: []byte(fmt.Sprintf(`{"id":%q}`, node)),
+		Node: []byte(fmt.Sprintf(`{"id":%q}`, nodeID)),
 	})
 	if err != nil {
-		t.Fatalf("Failed to create bootstrap configuration: %v", err)
+		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
+	// Create an xDS client with the above bootstrap configuration.
 	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %v", err)
 	}
-
 	pool := xdsclient.NewPool(config)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -829,13 +828,12 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	}
 
 	// Start a gRPC client that uses the above xDS resolver.
-	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", svc), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
 	cc.Connect()
-
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Secondary2 fallback, RPCs reach backend3.
@@ -847,9 +845,9 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	// Secondary1 becomes available, RPCs go to backend2.
 	secondary1Lis.Restart()
 	secondary1ManagementServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    node,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(svc, "route-s1")},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", svc, "cluster-s1")},
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", serviceName, "cluster-s1")},
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s1", "endpoints-s1", e2e.SecurityLevelNone)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
 			e2e.DefaultEndpoint("endpoints-s1", "localhost", []uint32{testutils.ParsePort(t, backend2.Address)}),
@@ -869,8 +867,8 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	// Primary becomes available, RPCs go to backend1.
 	primaryLis.Restart()
 	primaryManagementServer.Update(ctx, e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: svc,
-		NodeID:     node,
+		DialTarget: serviceName,
+		NodeID:     nodeID,
 		Host:       "localhost",
 		Port:       testutils.ParsePort(t, backend1.Address),
 		SecLevel:   e2e.SecurityLevelNone,
