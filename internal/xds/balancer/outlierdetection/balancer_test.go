@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/roundrobin"
+	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/xds/balancer/clusterimpl"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -761,7 +762,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 	defer cancel()
 
 	// Transition SubConns to READY so that they can register a health listener.
-	for range 2 {
+	for i := 0; i < 2; i++ {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timed out waiting for creation of new SubConn.")
@@ -1113,7 +1114,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 	// Transition the SubConns to READY so that they can register health
 	// listeners.
-	for range 3 {
+	for i := 0; i < 3; i++ {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timed out waiting for creation of new SubConn.")
@@ -1159,6 +1160,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 			}
 		}
 
+		// Create test metrics recorder
+		tmr := stats.NewTestMetricsRecorder()
+		od.metricsRecorder = tmr
 		od.intervalTimerAlgorithm()
 
 		// verify no StateListener() call on the child, as no addresses got
@@ -1167,6 +1171,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
 			t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
 		}
 
 		// Since no addresses are ejected, a SubConn update should forward down
@@ -1233,6 +1240,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
 			t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
 		}
 
 		// Now that an address is ejected, SubConn updates for SubConns using
@@ -1370,7 +1380,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 
 	// Transition the SubConns to READY so that they can register health
 	// listeners.
-	for range 3 {
+	for i := 0; i < 3; i++ {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timed out waiting for creation of new SubConn.")
@@ -1414,12 +1424,20 @@ func (s) TestEjectFailureRate(t *testing.T) {
 				pi.Done(balancer.DoneInfo{})
 			}
 		}
+		tmr := stats.NewTestMetricsRecorder()
+		od.metricsRecorder = tmr
 
 		od.intervalTimerAlgorithm()
 		sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
 			t.Fatalf("no SubConn update should have been sent (no SubConn got ejected)")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
 		// Set two upstream addresses to have five successes each, and one
@@ -1464,6 +1482,12 @@ func (s) TestEjectFailureRate(t *testing.T) {
 		defer cancel()
 		if _, err := scsCh.Receive(sCtx); err == nil {
 			t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
 		// upon the Outlier Detection balancer being reconfigured with a noop
