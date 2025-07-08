@@ -1175,6 +1175,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 0 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 0", got)
 		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
+		}
 
 		// Since no addresses are ejected, a SubConn update should forward down
 		// to the child.
@@ -1243,6 +1246,9 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		}
 		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_enforced"); got != 1 {
 			t.Errorf("Metric grpc.lb.outlier_detection.ejections_enforced: got %v, want 1", got)
+		}
+		if got, _ := tmr.Metric("grpc.lb.outlier_detection.ejections_unenforced"); got != 0 {
+			t.Errorf("Metric grpc.lb.outlier_detection.ejections_unenforced: got %v, want 0", got)
 		}
 
 		// Now that an address is ejected, SubConn updates for SubConns using
