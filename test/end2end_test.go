@@ -3793,7 +3793,7 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "ServerStreaming",
-				Handler: func(_ any, stream grpc.ServerStream) error {
+				Handler: func(_ any, _ grpc.ServerStream) error {
 					return nil
 				},
 				ClientStreams: false,
@@ -3915,7 +3915,7 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 		Streams: []grpc.StreamDesc{
 			{
 				StreamName: "UnaryCall",
-				Handler: func(_ any, stream grpc.ServerStream) error {
+				Handler: func(_ any, _ grpc.ServerStream) error {
 					return nil
 				},
 				ClientStreams: false,
