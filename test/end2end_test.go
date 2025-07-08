@@ -6459,7 +6459,7 @@ func streamingInterceptorVerifyConn(_ any, ss grpc.ServerStream, _ *grpc.StreamS
 
 // TestStreamingServerInterceptorGetsConnection tests whether the accepted conn on
 // the server gets to any streaming interceptors on the server side.
-func TestStreamingServerInterceptorGetsConnection(t *testing.T) {
+func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 	ss := &stubserver.StubServer{}
 	if err := ss.Start([]grpc.ServerOption{grpc.StreamInterceptor(streamingInterceptorVerifyConn)}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
