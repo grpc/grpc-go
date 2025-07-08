@@ -762,7 +762,7 @@ func (s) TestUpdateAddresses(t *testing.T) {
 	defer cancel()
 
 	// Transition SubConns to READY so that they can register a health listener.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timed out waiting for creation of new SubConn.")
@@ -1114,7 +1114,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 
 	// Transition the SubConns to READY so that they can register health
 	// listeners.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("Timed out waiting for creation of new SubConn.")
@@ -1380,7 +1380,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 
 	// Transition the SubConns to READY so that they can register health
 	// listeners.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case <-ctx.Done():
 			t.Fatal("Timed out waiting for creation of new SubConn.")
