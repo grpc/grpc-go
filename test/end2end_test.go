@@ -3749,55 +3749,26 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	}
 	defer lis.Close()
 
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "ServerStreaming",
-				Handler: func(_ any, stream grpc.ServerStream) error {
-					err := stream.RecvMsg(&testpb.Empty{})
-					if err != nil {
-						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
-					}
-
-					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-					}
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: true,
-			},
+	ss := stubserver.StubServer{
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+			// This is second call to RecvMsg(), the initial call having been performed by the server handler.
+			if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+				t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+			}
+			return nil
 		},
 	}
-	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	stream, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
-	}
-	defer cc.Close()
-
-	desc := &grpc.StreamDesc{
-		StreamName:    "ServerStreaming",
-		ServerStreams: true,
-		ClientStreams: false,
-	}
-
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
-	if err != nil {
-		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
-	}
-
-	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
-		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
 
 	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
@@ -3814,11 +3785,23 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	}
 	defer lis.Close()
 
-	ss := grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
-		return nil
-	})
-
-	s := grpc.NewServer(ss)
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "ServerStreaming",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: true,
+			},
+		},
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
 
@@ -3924,11 +3907,23 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 	}
 	defer lis.Close()
 
-	ss := grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
-		return nil
-	})
-
-	s := grpc.NewServer(ss)
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "UnaryCall",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: false,
+			},
+		},
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
 
@@ -3961,8 +3956,8 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 }
 
 // Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
-// and calls SendMsg twice.
-func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
+// and sends multiple nessages.
+func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -4000,6 +3995,8 @@ func (s) TestServerStreaming_ClientBehaveAsBidiStreaming(t *testing.T) {
 	}
 	defer cc.Close()
 
+	// Making the client bi-di to bypass the client side checks that stop a non-streaming client
+	// from sending multiple messages.
 	desc := &grpc.StreamDesc{
 		StreamName:    "ServerStreaming",
 		ServerStreams: true,
@@ -4052,10 +4049,6 @@ func (s) TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
 		},
 	}
 	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
-
-	// s := grpc.NewServer(ss)
 	go s.Serve(lis)
 	defer s.Stop()
 
@@ -6466,7 +6459,7 @@ func streamingInterceptorVerifyConn(_ any, ss grpc.ServerStream, _ *grpc.StreamS
 
 // TestStreamingServerInterceptorGetsConnection tests whether the accepted conn on
 // the server gets to any streaming interceptors on the server side.
-func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
+func TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 	ss := &stubserver.StubServer{}
 	if err := ss.Start([]grpc.ServerOption{grpc.StreamInterceptor(streamingInterceptorVerifyConn)}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
