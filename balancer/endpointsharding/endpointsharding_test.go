@@ -71,7 +71,7 @@ func (s) TestRotateEndpoints(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprint(tc.rval), func(t *testing.T) {
-			randIntN = func(n int) int {
+			randIntN = func(int) int {
 				return tc.rval
 			}
 			got := rotateEndpoints(endpoints)
