@@ -56,9 +56,9 @@ func (s) TestDecodeTimeout(t *testing.T) {
 		{"1", 0, true},
 		{"", 0, true},
 		{"9a1S", 0, true},
-		{"0S", 0, true}, // PROTOCOL-HTTP2.md requires positive integers
-		{"00000000S", 0, true},
-		{"000000000S", 0, true},
+		{"0S", 0, false}, // PROTOCOL-HTTP2.md requires positive integers, but we allow it to timeout instead
+		{"00000000S", 0, false},
+		{"000000000S", 0, true}, // PROTOCOL-HTTP2.md allows at most 8 digits
 	} {
 		d, err := decodeTimeout(test.s)
 		gotErr := err != nil
