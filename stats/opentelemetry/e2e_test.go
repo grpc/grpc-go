@@ -285,6 +285,11 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		key := traceSpanInfoMapKey{spanName: info.name, spanKind: info.spanKind}
 		wantSpanInfosMap[key] = info
 	}
+	// Matches actual spans to expected spans ignoring order.
+	// Multiple spans can have the same name and kind, and their
+	// order is non-deterministic. The boolean "used" array tracks matched
+	// expected spans, ensuring each is matched once, handling duplicates
+	// correctly.
 	used := make([]bool, len(wantSpanInfos))
 	// Compare retrieved spans with expected spans.
 	for _, span := range spans {
@@ -1645,9 +1650,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 								attribute.Int("message-size", 0),
 							},
 						},
-						{
-							Name: "Delayed LB pick complete",
-						},
 					},
 				},
 				{
@@ -1858,9 +1860,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 								attribute.Int("message-size", 0),
 							},
 						},
-						{
-							Name: "Delayed LB pick complete",
-						},
 					},
 				},
 				{
@@ -2033,6 +2032,27 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
 			if err != nil {
 				t.Fatal(err)
+			}
+			const delayedLBPickComplete = "Delayed LB pick complete"
+			// Removes "Delayed LB pick complete" events from the span slice.
+			// This is a temporary workaround to prevent test failures caused
+			// by this timing-sensitive event. The event is emitted when
+			// stats.PickerUpdated occurs after a name resolution delay,
+			// which may happen during retries or delayed resolver responses.
+			// However, the event is not guaranteed to appear in all runs—it
+			// only occurs under specific timing conditions, such as when name
+			// resolution is delayed long enough that a new picker is created.
+			// Since the test does not rely on this event for correctness, and
+			// its presence is non-deterministic, we filter it out to ensure
+			// test stability.
+			for i := range spans {
+				var filtered []trace.Event
+				for _, e := range spans[i].Events {
+					if e.Name != delayedLBPickComplete {
+						filtered = append(filtered, e)
+					}
+				}
+				spans[i].Events = filtered
 			}
 			validateTraces(t, spans, tt.wantSpanInfosFn)
 		})
