@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -541,5 +542,59 @@ func (s) TestServerCredsDispatch(t *testing.T) {
 	// Check rawConn is not closed.
 	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
 		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
+	}
+}
+
+type audienceTestCreds struct{}
+
+func (a *audienceTestCreds) GetRequestMetadata(_ context.Context, uri ...string) (map[string]string, error) {
+	endpoint := ""
+	if len(uri) > 0 {
+		endpoint = uri[0]
+	}
+	return nil, status.Error(codes.Unknown, endpoint)
+}
+
+func (a *audienceTestCreds) RequireTransportSecurity() bool { return false }
+
+func (s) TestGRPCMethodInAudienceWhenEnvironmentSet(t *testing.T) {
+	oldAudienceIsFullPath := envconfig.AudienceIsFullPath
+	defer func() {
+		envconfig.AudienceIsFullPath = oldAudienceIsFullPath
+	}()
+	envconfig.AudienceIsFullPath = true
+
+	te := newTest(t, env{name: "context-request-info", network: "tcp"})
+	te.userAgent = testAppUA
+	te.startServer(&testServer{security: te.e.security})
+	defer te.tearDown()
+
+	wantMethod := fmt.Sprintf("https://%s/grpc.testing.TestService/EmptyCall", te.srvAddr)
+
+	cc := te.clientConn(grpc.WithPerRPCCredentials(&audienceTestCreds{}))
+	tc := testgrpc.NewTestServiceClient(cc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMethod {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
+	}
+
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Convert(err).Message() != wantMethod {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
+	}
+
+	envconfig.AudienceIsFullPath = false
+	pos := strings.LastIndex(wantMethod, "/")
+	wantMethod = wantMethod[:pos]
+
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != wantMethod {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
+	}
+
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Convert(err).Message() != wantMethod {
+		t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, wantMethod)
 	}
 }
