@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
@@ -645,6 +646,10 @@ func (t *http2Client) createAudience(callHdr *CallHdr) string {
 	// Construct URI required to get auth request metadata.
 	// Omit port if it is the default one.
 	host := strings.TrimSuffix(callHdr.Host, ":443")
+	if envconfig.AudienceIsFullPath {
+		return "https://" + host + callHdr.Method
+	}
+
 	pos := strings.LastIndex(callHdr.Method, "/")
 	if pos == -1 {
 		pos = len(callHdr.Method)
