@@ -227,7 +227,6 @@ func (p *Pool) clientRefCountedClose(name string) {
 	}
 	delete(p.clients, name)
 
-	client.Close()
 	for _, s := range client.bootstrapConfig.XDSServers() {
 		for _, f := range s.Cleanups() {
 			f()
@@ -241,6 +240,8 @@ func (p *Pool) clientRefCountedClose(name string) {
 		}
 	}
 	p.mu.Unlock()
+
+	client.Close()
 
 	xdsClientImplCloseHook(name)
 }
