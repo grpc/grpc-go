@@ -241,6 +241,9 @@ func (p *Pool) clientRefCountedClose(name string) {
 	}
 	p.mu.Unlock()
 
+	// This attempts to close the transport to the management server and could
+	// theoretically call back into the xdsclient package again and deadlock.
+	// Hence, this needs to be called without holding the lock.
 	client.Close()
 
 	xdsClientImplCloseHook(name)
