@@ -14,7 +14,6 @@ for general contribution guidelines.
 - [atollena](https://github.com/atollena), Datadog, Inc.
 - [dfawley](https://github.com/dfawley), Google LLC
 - [easwars](https://github.com/easwars), Google LLC
-- [erm-g](https://github.com/erm-g), Google LLC
 - [gtcooke94](https://github.com/gtcooke94), Google LLC
 
 ## Emeritus Maintainers (in alphabetical order)
@@ -22,6 +21,7 @@ for general contribution guidelines.
 - [aranjans](https://github.com/aranjans)
 - [canguler](https://github.com/canguler)
 - [cesarghali](https://github.com/cesarghali)
+- [erm-g](https://github.com/erm-g)
 - [iamqizhao](https://github.com/iamqizhao)
 - [jeanbza](https://github.com/jeanbza)
 - [jtattermusch](https://github.com/jtattermusch)
