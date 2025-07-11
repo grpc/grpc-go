@@ -70,8 +70,8 @@ func main() {
 			// up-to-date list of metrics, see:
 			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.client.attempt.started",
-				"grpc.client.attempt.duration",
+				"grpc.xds_client.resource_updates_valid",
+				"grpc.xds_client.resource_updates_invalid",
 			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator},
