@@ -93,13 +93,6 @@ type traceSpanInfo struct {
 	status     otelcodes.Code
 }
 
-// traceSpanInfoMapKey is the key struct for constructing a map of trace spans
-// retrievable by span name and span kind
-type traceSpanInfoMapKey struct {
-	spanName string
-	spanKind string
-}
-
 // defaultMetricsOptions creates default metrics options
 func defaultMetricsOptions(_ *testing.T, methodAttributeFilter func(string) bool) (*opentelemetry.MetricsOptions, *metric.ManualReader) {
 	reader := metric.NewManualReader()
