@@ -289,25 +289,18 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		return actualSpans[i].Name < actualSpans[j].Name
 	})
 
-	if len(actualSpans) != len(wantSpanInfos) {
-		t.Fatalf("Span count mismatch: got %d, want %d", len(actualSpans), len(wantSpanInfos))
-	}
-
 	// Compare retrieved spans with expected spans.
 	for i := range actualSpans {
-		span := actualSpans[i]
-		want := wantSpanInfos[i]
-
 		// Retrieve the corresponding expected span info based on span name and
 		// span kind to compare.
-		if span.Name != want.name || span.SpanKind.String() != want.spanKind {
-			t.Errorf("Unexpected span: %v", span)
+		if actualSpans[i].Name != wantSpanInfos[i].name || actualSpans[i].SpanKind.String() != wantSpanInfos[i].spanKind {
+			t.Errorf("Unexpected span: %v", actualSpans[i])
 			continue
 		}
 
 		// Check that the attempt span has the correct status.
-		if span.Status.Code != want.status {
-			t.Errorf("Got status code %v, want %v", span, want)
+		if actualSpans[i].Status.Code != wantSpanInfos[i].status {
+			t.Errorf("Got status code %v, want %v", actualSpans[i], wantSpanInfos[i])
 		}
 
 		// comparers
@@ -318,12 +311,12 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 
 		// attributes
-		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
-			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", span.Name, diff)
+		if diff := cmp.Diff(wantSpanInfos[i].attributes, actualSpans[i].Attributes, attributesSort, attributesValueComparable); diff != "" {
+			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", actualSpans[i].Name, diff)
 		}
 		// events
-		if diff := cmp.Diff(want.events, span.Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
-			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
+		if diff := cmp.Diff(wantSpanInfos[i].events, actualSpans[i].Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
+			t.Errorf("Events mismatch for span %s (-want +got):\n%s", actualSpans[i].Name, diff)
 		}
 	}
 }
