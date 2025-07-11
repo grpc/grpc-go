@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -277,40 +278,43 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		}
 	}
 
-	// Constructs a map from a slice of traceSpanInfo to retrieve the
-	// corresponding expected span info based on span name and span kind
-	// for comparison.
-	wantSpanInfosMap := make(map[traceSpanInfoMapKey]traceSpanInfo)
-	for _, info := range wantSpanInfos {
-		key := traceSpanInfoMapKey{spanName: info.name, spanKind: info.spanKind}
-		wantSpanInfosMap[key] = info
-	}
-	// Matches actual spans to expected spans ignoring order.
-	// Multiple spans can have the same name and kind, and their
-	// order is non-deterministic. The boolean "used" array tracks matched
-	// expected spans, ensuring each is matched once, handling duplicates
-	// correctly.
-	used := make([]bool, len(wantSpanInfos))
-	// Compare retrieved spans with expected spans.
-	for _, span := range spans {
-		var matchedIndex = -1
-		for i, want := range wantSpanInfos {
-			if used[i] {
-				continue
-			}
-			if want.name == span.Name && want.spanKind == span.SpanKind.String() {
-				matchedIndex = i
-				used[i] = true
-				break
-			}
+	// Sort expected spans by name, then by kind (if names are equal).
+	sort.Slice(wantSpanInfos, func(i, j int) bool {
+		if wantSpanInfos[i].name == wantSpanInfos[j].name {
+			return wantSpanInfos[i].spanKind < wantSpanInfos[j].spanKind
 		}
-		if matchedIndex == -1 {
-			t.Errorf("Unexpected span: %q (%s)", span.Name, span.SpanKind)
+		return wantSpanInfos[i].name < wantSpanInfos[j].name
+	})
+
+	// Make a copy of actual spans and sort them by name, then by kind.
+	actualSpans := make([]tracetest.SpanStub, len(spans))
+	copy(actualSpans, spans)
+	sort.Slice(actualSpans, func(i, j int) bool {
+		if actualSpans[i].Name == actualSpans[j].Name {
+			return actualSpans[i].SpanKind.String() < actualSpans[j].SpanKind.String()
+		}
+		return actualSpans[i].Name < actualSpans[j].Name
+	})
+
+	if len(actualSpans) != len(wantSpanInfos) {
+		t.Fatalf("Span count mismatch: got %d, want %d", len(actualSpans), len(wantSpanInfos))
+	}
+
+	// Compare retrieved spans with expected spans.
+	for i := range actualSpans {
+		span := actualSpans[i]
+		want := wantSpanInfos[i]
+
+		// Retrieve the corresponding expected span info based on span name and
+		// span kind to compare.
+		if span.Name != want.name || span.SpanKind.String() != want.spanKind {
+			t.Errorf("Unexpected span: %v", span)
 			continue
 		}
+
 		// Check that the attempt span has the correct status.
-		if got, want := span.Status.Code, wantSpanInfos[matchedIndex].status; got != want {
-			t.Errorf("Status code mismatch for span %q: got %v, want %v", span.Name, got, want)
+		if span.Status.Code != want.status {
+			t.Errorf("Got status code %v, want %v", span, want)
 		}
 
 		// comparers
@@ -318,17 +322,14 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 			return a.Key < b.Key
 		})
 		attributesValueComparable := cmpopts.EquateComparable(attribute.KeyValue{}.Value)
-		eventsSort := cmpopts.SortSlices(func(a, b trace.Event) bool {
-			return a.Name < b.Name
-		})
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 
 		// attributes
-		if diff := cmp.Diff(wantSpanInfos[matchedIndex].attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
+		if diff := cmp.Diff(want.attributes, span.Attributes, attributesSort, attributesValueComparable); diff != "" {
 			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 		// events
-		if diff := cmp.Diff(wantSpanInfos[matchedIndex].events, span.Events, eventsSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
+		if diff := cmp.Diff(want.events, span.Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
 			t.Errorf("Events mismatch for span %s (-want +got):\n%s", span.Name, diff)
 		}
 	}
@@ -1749,33 +1750,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 				},
 				{
-					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Ok,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-						attribute.Int("previous-rpc-attempts", 0),
-						attribute.Bool("transparent-retry", false),
-					},
-					events: []trace.Event{
-						{
-							Name: "Inbound message",
-							Attributes: []attribute.KeyValue{
-								attribute.Int("sequence-number", 0),
-								attribute.Int("message-size", 0),
-							},
-						},
-						{
-							Name: "Outbound message",
-							Attributes: []attribute.KeyValue{
-								attribute.Int("sequence-number", 0),
-								attribute.Int("message-size", 0),
-							},
-						},
-					},
-				},
-				{
 					name:       "Sent.grpc.testing.TestService.UnaryCall",
 					spanKind:   oteltrace.SpanKindClient.String(),
 					status:     otelcodes.Ok,
@@ -1937,33 +1911,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 				},
 				{
-					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Ok,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-						attribute.Int("previous-rpc-attempts", 0),
-						attribute.Bool("transparent-retry", false),
-					},
-					events: []trace.Event{
-						{
-							Name: "Inbound message",
-							Attributes: []attribute.KeyValue{
-								attribute.Int("sequence-number", 0),
-								attribute.Int("message-size", 0),
-							},
-						},
-						{
-							Name: "Outbound message",
-							Attributes: []attribute.KeyValue{
-								attribute.Int("sequence-number", 0),
-								attribute.Int("message-size", 0),
-							},
-						},
-					},
-				},
-				{
 					name:       "Sent.grpc.testing.TestService.FullDuplexCall",
 					spanKind:   oteltrace.SpanKindClient.String(),
 					status:     otelcodes.Ok,
@@ -2042,9 +1989,8 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			// However, the event is not guaranteed to appear in all runs—it
 			// only occurs under specific timing conditions, such as when name
 			// resolution is delayed long enough that a new picker is created.
-			// Since the test does not rely on this event for correctness, and
-			// its presence is non-deterministic, we filter it out to ensure
-			// test stability.
+			// Since the test does not rely on this event for correctness, we
+			// filter it out to ensure test stability.
 			for i := range spans {
 				var filtered []trace.Event
 				for _, e := range spans[i].Events {
