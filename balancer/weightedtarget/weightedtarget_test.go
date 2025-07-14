@@ -681,9 +681,6 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// The sc# corresponding to addr3 is not known due to possible randomization
-	// in connection order in RR.  Check the address instead of sc and set
-	// scAddr4 to the sc corresponding to addr4.
 	scShutdown := <-cc.ShutdownSubConnCh
 	if scShutdown != sc3 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc3, scShutdown)
