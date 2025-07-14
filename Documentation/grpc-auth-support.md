@@ -58,6 +58,11 @@ Note, the OAuth2 implementation of `grpc.PerRPCCredentials` requires a client to
 [grpc.WithTransportCredentials](https://godoc.org/google.golang.org/grpc#WithTransportCredentials)
 to prevent any insecure transmission of tokens.
 
+The default behaviour is to strip the gRPC method from the endpoint that is passed to the
+`GetRequestMetadata` method of `PerRPCCredentials`.  However, this can be overridden to pass
+the entire endpoint as required for some JWT implementations by setting the
+`GRPC_AUDIENCE_IS_FULL_PATH` environment variable to `"true"`.
+
 # Authenticating with Google
 
 ## Google Compute Engine (GCE)
