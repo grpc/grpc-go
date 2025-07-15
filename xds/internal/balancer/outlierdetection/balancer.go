@@ -161,7 +161,7 @@ func (bb) Name() string {
 // extractBackendService extracts the backend service from resolver state attributes.
 // This is a placeholder implementation - the actual extraction logic should be
 // implemented based on the specific resolver attributes available.
-func extractBackendService(state resolver.State) string {
+func extractBackendService(resolver.State) string {
 	// TODO: Implement backend service extraction from resolver attributes per A89 and A75
 	// For now, return empty string as this is optional
 	return ""
