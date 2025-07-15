@@ -3742,7 +3742,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 
 // Tests the behavior for server-side streaming when server calls RecvMsg twice.
 // Second call to RecvMsg should fail with Internal error.
-func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
+func TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
@@ -3752,7 +3752,7 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 			// This is second call to RecvMsg(), the initial call having been performed by the server handler.
-			if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+			if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 				t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
 			}
 			return nil
@@ -3768,7 +3768,7 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 
 	stream, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
 	if err != nil {
-		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
+		t.Fatalf(".StreamingOutputCall(_) = _, %v, want <nil>", err)
 	}
 
 	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
