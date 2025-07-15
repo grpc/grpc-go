@@ -56,7 +56,7 @@ const Name = "outlier_detection_experimental"
 var (
 	ejectionsEnforcedMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "grpc.lb.outlier_detection.ejections_enforced",
-		Description:    "EXPERIMENTAL. Enforced outlier ejections by detection method",
+		Description:    "EXPERIMENTAL. Number of outlier ejections enforced by detection method",
 		Unit:           "ejection",
 		Labels:         []string{"grpc.target", "grpc.lb.outlier_detection.detection_method"},
 		OptionalLabels: []string{"grpc.lb.backend_service"},
