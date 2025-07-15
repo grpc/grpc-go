@@ -65,7 +65,7 @@ var (
 
 	ejectionsUnenforcedMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:           "grpc.lb.outlier_detection.ejections_unenforced",
-		Description:    "EXPERIMENTAL. Unenforced outlier ejections due to either max ejection percentage or enforcement_percentage",
+		Description:    "EXPERIMENTAL. Number of unenforced outlier ejections due to either max ejection percentage or enforcement_percentage",
 		Unit:           "ejection",
 		Labels:         []string{"grpc.target", "grpc.lb.outlier_detection.detection_method", "grpc.lb.outlier_detection.unenforced_reason"},
 		OptionalLabels: []string{"grpc.lb.backend_service"},
