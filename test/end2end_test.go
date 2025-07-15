@@ -4124,6 +4124,55 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	}
 }
 
+// Tests that a gRPC server transport does not deadlock when it receives a zero
+// second deadline, and properly returns a deadline exceeded error immediately.
+func (s) TestZeroSecondTimeout(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/StreamingInputCall",
+			"content-type", "application/grpc",
+			"te", "trailers",
+			"grpc-timeout", "0n",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+	f := st.wantAnyFrame()
+	hf, ok := f.(*http2.MetaHeadersFrame)
+	if !ok {
+		t.Fatalf("Received frame of type %T; want *http2.MetaHeadersFrame", f)
+	}
+	if hf.StreamID != 1 || !hf.StreamEnded() {
+		t.Fatalf("Headers frame was wrong streamID or not end_stream: %v", hf)
+	}
+	for _, h := range hf.Fields {
+		if h.Name == "grpc-status" {
+			if got, want := h.Value, fmt.Sprintf("%d", codes.DeadlineExceeded); got != want {
+				t.Fatalf("Got status %v; want %v", got, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("Headers frame missing grpc-status: %v", hf)
+}
+
 // TestInvalidStreamIDSmallerThanPrevious tests the server sends a GOAWAY frame
 // with error code: PROTOCOL_ERROR when the streamID of the current frame is
 // lower than the previous frames.
