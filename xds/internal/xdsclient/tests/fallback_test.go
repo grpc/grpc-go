@@ -842,6 +842,16 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Verify that connection attempts were made to primaryWrappedLis and
+	// secondary1WrappedLis, even though the fallback succeeded using
+	// secondary2WrappedLis and RPCs reached backend3.
+	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
+	}
+	if _, err := secondary1WrappedLis.NewConnCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected connection attempt to secondary1 but got error: %v", err)
+	}
+
 	// Secondary1 becomes available, RPCs go to backend2.
 	secondary1Lis.Restart()
 	secondary1ManagementServer.Update(ctx, e2e.UpdateOptions{
@@ -853,11 +863,12 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 			e2e.DefaultEndpoint("endpoints-s1", "localhost", []uint32{testutils.ParsePort(t, backend2.Address)}),
 		},
 	})
+
 	// Wait for switch from secondary2 to secondary1.
 	if conn, err := secondary2WrappedLis.NewConnCh.Receive(ctx); err == nil {
 		cw := conn.(*testutils.ConnWrapper)
 		if _, err := cw.CloseCh.Receive(ctx); err != nil {
-			t.Fatalf("Failed to get connection to secondary2: %v", err)
+			t.Fatalf("Expected secondary2 connection to close after promotion to secondary1, got error: %v", err)
 		}
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend2.Address); err != nil {
@@ -875,7 +886,9 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	}))
 	if conn, err := secondary1WrappedLis.NewConnCh.Receive(ctx); err == nil {
 		cw := conn.(*testutils.ConnWrapper)
-		cw.CloseCh.Receive(ctx)
+		if _, err := cw.CloseCh.Receive(ctx); err != nil {
+			t.Fatalf("Expected secondary1 connection to close after promotion to primary, got error: %v", err)
+		}
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend1.Address); err != nil {
 		t.Fatal(err)
