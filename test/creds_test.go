@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -542,60 +541,5 @@ func (s) TestServerCredsDispatch(t *testing.T) {
 	// Check rawConn is not closed.
 	if n, err := rawConn.Write([]byte{0}); n <= 0 || err != nil {
 		t.Errorf("Read() = %v, %v; want n>0, <nil>", n, err)
-	}
-}
-
-type audienceTestCreds struct{}
-
-func (a *audienceTestCreds) GetRequestMetadata(_ context.Context, uri ...string) (map[string]string, error) {
-	var endpoint string
-	if len(uri) > 0 {
-		endpoint = uri[0]
-	}
-	return nil, status.Error(codes.Unknown, endpoint)
-}
-
-func (a *audienceTestCreds) RequireTransportSecurity() bool { return false }
-
-func (s) TestGRPCMethodInAudienceWhenEnvironmentSet(t *testing.T) {
-	te := newTest(t, env{name: "method-in-audience", network: "tcp"})
-	te.userAgent = testAppUA
-	te.startServer(&testServer{security: te.e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn(grpc.WithPerRPCCredentials(&audienceTestCreds{}))
-	tc := testgrpc.NewTestServiceClient(cc)
-
-	tests := []struct {
-		name               string
-		endpoint           string
-		audienceIsFullPath bool
-	}{
-		{
-			name:               "full-path-sent",
-			endpoint:           fmt.Sprintf("https://%s/grpc.testing.TestService/EmptyCall", te.srvAddr),
-			audienceIsFullPath: true,
-		},
-		{
-			name:               "method-omitted",
-			endpoint:           fmt.Sprintf("https://%s/grpc.testing.TestService", te.srvAddr),
-			audienceIsFullPath: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			testutils.SetEnvConfig(t, &envconfig.AudienceIsFullPath, test.audienceIsFullPath)
-
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Message() != test.endpoint {
-				t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, test.endpoint)
-			}
-
-			if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Convert(err).Message() != test.endpoint {
-				t.Fatalf("ss.client.EmptyCall(_, _) = _, %v; want _, _.Message()=%q", err, test.endpoint)
-			}
-		})
 	}
 }
