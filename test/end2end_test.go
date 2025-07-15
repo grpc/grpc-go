@@ -3742,7 +3742,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 
 // Tests the behavior for server-side streaming when server calls RecvMsg twice.
 // Second call to RecvMsg should fail with Internal error.
-func TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
+func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatal(err)
