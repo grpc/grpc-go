@@ -16,7 +16,7 @@
  *
  */
 
-package pool_test
+package pool_ext_test
 
 import (
 	"context"
