@@ -91,7 +91,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		endpoints:       resolver.NewEndpointMap[*endpointInfo](),
 		metricsRecorder: cc.MetricsRecorder(),
 		target:          bOpts.Target.String(),
-		backendService:  "", // Will be set in UpdateClientConnState
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
