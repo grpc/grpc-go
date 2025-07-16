@@ -1964,19 +1964,24 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			go func() {
 				<-resolutionWait.Done()
 				rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
-				// Add a small delay to allow the legacy pick_first to process the update
-				time.Sleep(2 * time.Millisecond)
 			}()
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
-			fmt.Println("envconfig.NewPickFirstEnabled ", envconfig.NewPickFirstEnabled)
 			// The old pick_first LB policy emits a duplicate
 			// "Delayed LB pick complete" event.
 			// TODO: Remove the extra event in the test referencing this issue.
 			// See: https://github.com/grpc/grpc-go/issues/8453
 			if !envconfig.NewPickFirstEnabled {
-				tt.wantSpanInfosFn = addExtraDelayedLBEvent(tt.wantSpanInfosFn)
+				for i := range tt.wantSpanInfosFn {
+					if tt.wantSpanInfosFn[i].name == "Attempt.grpc.testing.TestService.UnaryCall" ||
+						tt.wantSpanInfosFn[i].name == "Attempt.grpc.testing.TestService.FullDuplexCall" {
+						events := tt.wantSpanInfosFn[i].events
+						newEvent := trace.Event{Name: "Delayed LB pick complete"}
+						tt.wantSpanInfosFn[i].events = append([]trace.Event{newEvent}, events...)
+						break
+					}
+				}
 			}
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
 			if err != nil {
@@ -1985,24 +1990,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			validateTraces(t, spans, tt.wantSpanInfosFn)
 		})
 	}
-}
-
-func addExtraDelayedLBEvent(spans []traceSpanInfo) []traceSpanInfo {
-	fmt.Println("envconfig.NewPickFirstEnabled addExtraDelayedLBEvent", envconfig.NewPickFirstEnabled)
-	const eventName = "Delayed LB pick complete"
-	duplicateEvent := trace.Event{Name: eventName}
-	for i, s := range spans {
-		if s.name == "Attempt.grpc.testing.TestService.UnaryCall" || s.name == "Attempt.grpc.testing.TestService.FullDuplexCall" {
-			for _, e := range s.events {
-				if e.Name == eventName {
-					newEvents := append([]trace.Event{duplicateEvent}, s.events...)
-					spans[i].events = newEvents
-					break
-				}
-			}
-		}
-	}
-	return spans
 }
 
 // TestStreamingRPC_TraceSequenceNumbers verifies that sequence numbers
