@@ -23,7 +23,6 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -1989,15 +1988,13 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 func addExtraDelayedLBEvent(spans []traceSpanInfo) []traceSpanInfo {
 	const eventName = "Delayed LB pick complete"
 	duplicateEvent := trace.Event{Name: eventName}
-
 	for i, s := range spans {
-		if strings.HasPrefix(s.name, "Attempt.grpc.testing.TestService.") {
+		if s.name == "Attempt.grpc.testing.TestService.UnaryCall" || s.name == "Attempt.grpc.testing.TestService.FullDuplexCall" {
 			for _, e := range s.events {
 				if e.Name == eventName {
-					newSpan := s
-					newSpan.events = append([]trace.Event{duplicateEvent}, s.events...)
-					spans[i] = newSpan
-					return spans
+					newEvents := append([]trace.Event{duplicateEvent}, s.events...)
+					spans[i].events = newEvents
+					break
 				}
 			}
 		}
