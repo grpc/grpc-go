@@ -80,13 +80,6 @@ var (
 	// ALTSHandshakerKeepaliveParams is set if we should add the
 	// KeepaliveParams when dial the ALTS handshaker service.
 	ALTSHandshakerKeepaliveParams = boolFromEnv("GRPC_EXPERIMENTAL_ALTS_HANDSHAKER_KEEPALIVE_PARAMS", false)
-
-	// AudienceIsFullPath is set if the user expects that the endpoint that
-	// is passed to the credential helper called by GetRequestMetadata contains
-	// the full URL rather than excluding the method.  This is required as there
-	// are competing specifications around what endpoint should be specified for
-	// a JWT audience.
-	AudienceIsFullPath = boolFromEnv("GRPC_AUDIENCE_IS_FULL_PATH", false)
 )
 
 func boolFromEnv(envVar string, def bool) bool {
