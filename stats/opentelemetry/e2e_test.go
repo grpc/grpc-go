@@ -1975,8 +1975,9 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// TODO: Remove the extra event in the test code referencing
-			// this issue.
+			// The old pick_first LB policy emits a duplicate
+			// "Delayed LB pick complete" event.
+			// TODO: Remove the extra event in the test referencing this issue.
 			// See: https://github.com/grpc/grpc-go/issues/8453
 			if !envconfig.NewPickFirstEnabled {
 				tt.wantSpanInfosFn = addExtraDelayedLBEvent(tt.wantSpanInfosFn)
