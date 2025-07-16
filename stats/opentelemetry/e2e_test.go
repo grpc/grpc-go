@@ -1970,17 +1970,16 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
 
-			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
-			if err != nil {
-				t.Fatal(err)
-			}
-
 			// The old pick_first LB policy emits a duplicate
 			// "Delayed LB pick complete" event.
 			// TODO: Remove the extra event in the test referencing this issue.
 			// See: https://github.com/grpc/grpc-go/issues/8453
 			if !envconfig.NewPickFirstEnabled {
 				tt.wantSpanInfosFn = addExtraDelayedLBEvent(tt.wantSpanInfosFn)
+			}
+			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
+			if err != nil {
+				t.Fatal(err)
 			}
 			validateTraces(t, spans, tt.wantSpanInfosFn)
 		})
