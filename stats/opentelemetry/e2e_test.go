@@ -1964,6 +1964,8 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			go func() {
 				<-resolutionWait.Done()
 				rb.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+				// Add a small delay to allow the legacy pick_first to process the update
+				time.Sleep(2 * time.Millisecond)
 			}()
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
@@ -1976,19 +1978,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if !envconfig.NewPickFirstEnabled {
 				tt.wantSpanInfosFn = addExtraDelayedLBEvent(tt.wantSpanInfosFn)
 			}
-			for _, span := range tt.wantSpanInfosFn {
-				fmt.Printf("Want Span Name: %s\n", span.name)
-				for _, event := range span.events {
-					fmt.Printf("Want Event Name: %s\n", event.Name)
-				}
-			}
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
-			for _, span := range spans {
-				fmt.Printf("Expected Span Name: %s\n", span.Name)
-				for _, event := range span.Events {
-					fmt.Printf(" Expected Event Name: %s\n", event.Name)
-				}
-			}
 			if err != nil {
 				t.Fatal(err)
 			}
