@@ -1968,7 +1968,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
-
+			fmt.Println("envconfig.NewPickFirstEnabled ", envconfig.NewPickFirstEnabled)
 			// The old pick_first LB policy emits a duplicate
 			// "Delayed LB pick complete" event.
 			// TODO: Remove the extra event in the test referencing this issue.
@@ -1976,7 +1976,19 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if !envconfig.NewPickFirstEnabled {
 				tt.wantSpanInfosFn = addExtraDelayedLBEvent(tt.wantSpanInfosFn)
 			}
+			for _, span := range tt.wantSpanInfosFn {
+				fmt.Printf("Want Span Name: %s\n", span.name)
+				for _, event := range span.events {
+					fmt.Printf("Want Event Name: %s\n", event.Name)
+				}
+			}
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
+			for _, span := range spans {
+				fmt.Printf("Expected Span Name: %s\n", span.Name)
+				for _, event := range span.Events {
+					fmt.Printf(" Expected Event Name: %s\n", event.Name)
+				}
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1986,6 +1998,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 }
 
 func addExtraDelayedLBEvent(spans []traceSpanInfo) []traceSpanInfo {
+	fmt.Println("envconfig.NewPickFirstEnabled addExtraDelayedLBEvent", envconfig.NewPickFirstEnabled)
 	const eventName = "Delayed LB pick complete"
 	duplicateEvent := trace.Event{Name: eventName}
 	for i, s := range spans {
