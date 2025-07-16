@@ -602,6 +602,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 
 	if s.ctx.Err() != nil {
+		t.mu.Unlock()
 		// Early abort in case the timeout was zero or so low it already fired.
 		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     http.StatusOK,
