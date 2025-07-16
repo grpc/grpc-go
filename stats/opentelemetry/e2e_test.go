@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,7 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -1631,6 +1633,9 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 					events: []trace.Event{
 						{
+							Name: "Delayed LB pick complete",
+						},
+						{
 							Name: "Outbound message",
 							Attributes: []attribute.KeyValue{
 								attribute.Int("sequence-number", 0),
@@ -1814,6 +1819,9 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 					events: []trace.Event{
 						{
+							Name: "Delayed LB pick complete",
+						},
+						{
 							Name: "Outbound message",
 							Attributes: []attribute.KeyValue{
 								attribute.Int("sequence-number", 0),
@@ -1966,29 +1974,35 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			const delayedLBPickComplete = "Delayed LB pick complete"
-			// Removes "Delayed LB pick complete" events from the span slice.
-			// This is a temporary workaround to prevent test failures caused
-			// by this timing-sensitive event. The event is emitted when
-			// stats.PickerUpdated occurs after a name resolution delay,
-			// which may happen during retries or delayed resolver responses.
-			// However, the event is not guaranteed to appear in all runs—it
-			// only occurs under specific timing conditions, such as when name
-			// resolution is delayed long enough that a new picker is created.
-			// Since the test does not rely on this event for correctness, we
-			// filter it out to ensure test stability.
-			for i := range spans {
-				var filtered []trace.Event
-				for _, e := range spans[i].Events {
-					if e.Name != delayedLBPickComplete {
-						filtered = append(filtered, e)
-					}
-				}
-				spans[i].Events = filtered
+
+			// TODO: Remove the extra event in the test code referencing
+			// this issue.
+			// See: https://github.com/grpc/grpc-go/issues/8453
+			if !envconfig.NewPickFirstEnabled {
+				tt.wantSpanInfosFn = addExtraDelayedLBEvent(tt.wantSpanInfosFn)
 			}
 			validateTraces(t, spans, tt.wantSpanInfosFn)
 		})
 	}
+}
+
+func addExtraDelayedLBEvent(spans []traceSpanInfo) []traceSpanInfo {
+	const eventName = "Delayed LB pick complete"
+	duplicateEvent := trace.Event{Name: eventName}
+
+	for i, s := range spans {
+		if strings.HasPrefix(s.name, "Attempt.grpc.testing.TestService.") {
+			for _, e := range s.events {
+				if e.Name == eventName {
+					newSpan := s
+					newSpan.events = append([]trace.Event{duplicateEvent}, s.events...)
+					spans[i] = newSpan
+					return spans
+				}
+			}
+		}
+	}
+	return spans
 }
 
 // TestStreamingRPC_TraceSequenceNumbers verifies that sequence numbers
