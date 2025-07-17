@@ -51,9 +51,21 @@ type Decoder interface {
 	// Decode deserializes and validates an xDS resource as received from the
 	// xDS management server.
 	//
-	// If deserialization fails or resource validation fails, it returns a
-	// non-nil error. Otherwise, returns a fully populated DecodeResult.
-	Decode(resource []byte, options DecodeOptions) (*DecodeResult, error)
+	// The `resource` parameter may contain a value of the serialized wrapped
+	// resource (i.e. with the type URL
+	// `type.googleapis.com/envoy.service.discovery.v3.Resource`).
+	// Implementations are responsible for unwrapping the underlying resource if
+	// it is wrapped.
+	//
+	// If unmarshalling or validation fails, it returns a non-nil error.
+	// Otherwise, returns a fully populated DecodeResult.
+	Decode(resource AnyProto, options DecodeOptions) (*DecodeResult, error)
+}
+
+// AnyProto contains the type URL and serialized proto data of an xDS resource.
+type AnyProto struct {
+	TypeURL string
+	Value   []byte
 }
 
 // DecodeOptions wraps the options required by ResourceType implementations for
