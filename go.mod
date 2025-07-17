@@ -42,3 +42,6 @@ require (
 	golang.org/x/text v0.25.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250528174236-200df99c418a // indirect
 )
+
+// v1.74.0 was published prematurely with known issues.
+retract [v1.74.0, v1.74.1]
