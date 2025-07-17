@@ -320,7 +320,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 						"edsServiceName": "%s",
 						"outlierDetection": {}
 					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
+					"xdsLbPolicy":[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]
 				}
 			}]
 		}`, clusterName, edsServiceName)
@@ -388,8 +388,8 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 
 	// Add a backend to one locality, and ensure weighted roundrobin. Since RPCs
-	// are roundrobined across localities, locality2's backend will receive
-	// twice the traffic.
+	// are weighted-roundrobined across localities, locality2's backend will
+	// receive twice the traffic.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName2,
