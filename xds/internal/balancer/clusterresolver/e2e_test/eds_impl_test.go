@@ -288,7 +288,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	// Use a 10 second timeout since validating WRR requires sending 500+ unary
+	// RPCs.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
