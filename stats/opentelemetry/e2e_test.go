@@ -1975,7 +1975,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			// TODO: Remove the extra event in the test referencing this issue.
 			// See: https://github.com/grpc/grpc-go/issues/8453
 			if !envconfig.NewPickFirstEnabled {
-				tt.wantSpanInfosFn = syncDelayedLBPickEventsWithObserved(spans, tt.wantSpanInfosFn)
+				tt.wantSpanInfosFn = normalizeDelayedLBEvents(spans, tt.wantSpanInfosFn)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -1985,7 +1985,11 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	}
 }
 
-func syncDelayedLBPickEventsWithObserved(spans tracetest.SpanStubs, wantSpans []traceSpanInfo) []traceSpanInfo {
+// normalizeDelayedLBEvents adjusts expected span events to align with the
+// observed "Delayed LB pick complete" events emitted by legacy pick_first.
+// Applies only to UnaryCall and FullDuplexCall attempt spans.
+// See: https://github.com/grpc/grpc-go/issues/8453
+func normalizeDelayedLBEvents(spans tracetest.SpanStubs, wantSpans []traceSpanInfo) []traceSpanInfo {
 	actualCounts := make(map[string]int)
 	const delayedLBPickComplete = "Delayed LB pick complete"
 	for _, span := range spans {
@@ -1999,12 +2003,10 @@ func syncDelayedLBPickEventsWithObserved(spans tracetest.SpanStubs, wantSpans []
 	}
 	for i := range wantSpans {
 		name := wantSpans[i].name
-		if name != "Attempt.grpc.testing.TestService.UnaryCall" &&
-			name != "Attempt.grpc.testing.TestService.FullDuplexCall" {
+		if name != "Attempt.grpc.testing.TestService.UnaryCall" && name != "Attempt.grpc.testing.TestService.FullDuplexCall" {
 			continue
 		}
 		actualCount := actualCounts[name]
-		// Use a *new* slice to avoid mutating underlying array
 		var nonDLBEvents []trace.Event
 		wantDLBCount := 0
 		for _, ev := range wantSpans[i].events {
