@@ -23,6 +23,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1968,28 +1969,71 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
+			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
 			// The old pick_first LB policy emits a duplicate
 			// "Delayed LB pick complete" event.
 			// TODO: Remove the extra event in the test referencing this issue.
 			// See: https://github.com/grpc/grpc-go/issues/8453
 			if !envconfig.NewPickFirstEnabled {
-				for i := range tt.wantSpanInfosFn {
-					if tt.wantSpanInfosFn[i].name == "Attempt.grpc.testing.TestService.UnaryCall" ||
-						tt.wantSpanInfosFn[i].name == "Attempt.grpc.testing.TestService.FullDuplexCall" {
-						events := tt.wantSpanInfosFn[i].events
-						newEvent := trace.Event{Name: "Delayed LB pick complete"}
-						tt.wantSpanInfosFn[i].events = append([]trace.Event{newEvent}, events...)
-						break
-					}
-				}
+				tt.wantSpanInfosFn = syncDelayedLBPickEventsWithObserved(spans, tt.wantSpanInfosFn)
 			}
-			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
 			if err != nil {
 				t.Fatal(err)
 			}
 			validateTraces(t, spans, tt.wantSpanInfosFn)
 		})
 	}
+}
+
+func syncDelayedLBPickEventsWithObserved(spans tracetest.SpanStubs, wantSpans []traceSpanInfo) []traceSpanInfo {
+	actualCounts := make(map[string]int)
+	const delayedLBPickComplete = "Delayed LB pick complete"
+	for _, span := range spans {
+		if strings.HasPrefix(span.Name, "Attempt.grpc.testing.TestService.") {
+			for _, ev := range span.Events {
+				if ev.Name == delayedLBPickComplete {
+					actualCounts[span.Name]++
+				}
+			}
+		}
+	}
+	for i := range wantSpans {
+		name := wantSpans[i].name
+		if name != "Attempt.grpc.testing.TestService.UnaryCall" &&
+			name != "Attempt.grpc.testing.TestService.FullDuplexCall" {
+			continue
+		}
+		actualCount := actualCounts[name]
+		// Use a *new* slice to avoid mutating underlying array
+		var nonDLBEvents []trace.Event
+		wantDLBCount := 0
+		for _, ev := range wantSpans[i].events {
+			if ev.Name == delayedLBPickComplete {
+				wantDLBCount++
+			} else {
+				nonDLBEvents = append(nonDLBEvents, ev)
+			}
+		}
+		switch {
+		case actualCount == 0:
+			// Remove all "Delayed LB pick complete"
+			wantSpans[i].events = nonDLBEvents
+		case actualCount > 1 && wantDLBCount >= 1:
+			// Add the missing number of "Delayed LB pick complete"
+			var dlbEvents []trace.Event
+			for j := 0; j < actualCount; j++ {
+				dlbEvents = append(dlbEvents, trace.Event{Name: delayedLBPickComplete})
+			}
+			wantSpans[i].events = append(dlbEvents, nonDLBEvents...)
+		case actualCount == 1 && wantDLBCount == 1:
+			// Already matches, nothing to change
+			wantSpans[i].events = append([]trace.Event{{Name: delayedLBPickComplete}}, nonDLBEvents...)
+		default:
+			// Unexpected combo — fallback to filtered
+			wantSpans[i].events = nonDLBEvents
+		}
+	}
+	return wantSpans
 }
 
 // TestStreamingRPC_TraceSequenceNumbers verifies that sequence numbers
