@@ -600,10 +600,24 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 			return nil
 		}
 	}
+
+	if s.ctx.Err() != nil {
+		// Early abort in case the timeout was zero or so low it already fired.
+		t.controlBuf.put(&earlyAbortStream{
+			httpStatus:     http.StatusOK,
+			streamID:       s.id,
+			contentSubtype: s.contentSubtype,
+			status:         status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error()),
+			rst:            !frame.StreamEnded(),
+		})
+		return nil
+	}
+
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
 	}
+
 	// Start a timer to close the stream on reaching the deadline.
 	if timeoutSet {
 		// We need to wait for s.cancel to be updated before calling
