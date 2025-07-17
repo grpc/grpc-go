@@ -224,7 +224,7 @@ func attemptCounts(wantAddrWeights map[string]int) int {
 	// We want the expected count for the smallest category to be at least 500.
 	// ExpectedCount = TotalAttempts * minRatio
 	// So, 500 <= TotalAttempts * minRatio
-	// which means TotalAttempts >= 15 / minRatio
+	// which means TotalAttempts >= 500 / minRatio
 	const minExpectedPerCategory = 500.0
 	requiredAttempts := minExpectedPerCategory / minRatio
 
