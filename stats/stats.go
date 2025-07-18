@@ -64,6 +64,15 @@ func (s *Begin) IsClient() bool { return s.Client }
 
 func (s *Begin) isRPCStats() {}
 
+// DelayedPickComplete indicates that the RPC is unblocked following a delay in
+// selecting a connection for the call.
+type DelayedPickComplete struct{}
+
+// IsClient indicates DelayedPickComplete is available on the client.
+func (*DelayedPickComplete) IsClient() bool { return true }
+
+func (*DelayedPickComplete) isRPCStats() {}
+
 // PickerUpdated indicates that the LB policy provided a new picker while the
 // RPC was waiting for one.
 type PickerUpdated struct{}
