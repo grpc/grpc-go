@@ -541,7 +541,7 @@ func (s) TestGRPCLB_Weighted(t *testing.T) {
 		tss.ls.sls <- &lbpb.ServerList{Servers: backends}
 
 		testC := testgrpc.NewTestServiceClient(cc)
-		if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, testC, wantAddrs); err != nil {
+		if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, t, testC, wantAddrs); err != nil {
 			t.Fatal(err)
 		}
 	}
