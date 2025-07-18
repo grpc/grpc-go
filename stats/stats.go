@@ -73,6 +73,12 @@ func (*DelayedPickComplete) IsClient() bool { return true }
 
 func (*DelayedPickComplete) isRPCStats() {}
 
+// PickerUpdated indicates that the RPC is unblocked following a delay in
+// selecting a connection for the call.
+//
+// Deprecated: will be removed in a future release.
+type PickerUpdated = DelayedPickComplete
+
 // InPayload contains stats about an incoming payload.
 type InPayload struct {
 	// Client is true if this InPayload is from client side.
