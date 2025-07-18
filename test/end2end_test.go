@@ -6649,13 +6649,13 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
-	var pickerUpdatedCount uint
+	var delayedPickCompleteCount uint
 	for _, stat := range sh.s {
-		if _, ok := stat.(*stats.PickerUpdated); ok {
-			pickerUpdatedCount++
+		if _, ok := stat.(*stats.DelayedPickComplete); ok {
+			delayedPickCompleteCount++
 		}
 	}
-	if pickerUpdatedCount != 1 {
-		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
+	if delayedPickCompleteCount != 1 {
+		t.Fatalf("sh.delayedPickComplete count: %v, want: %v", delayedPickCompleteCount, 2)
 	}
 }

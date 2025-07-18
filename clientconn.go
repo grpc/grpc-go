@@ -1076,13 +1076,6 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	return cc.sc.healthCheckConfig
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, balancer.PickResult, error) {
-	return cc.pickerWrapper.pick(ctx, failfast, balancer.PickInfo{
-		Ctx:            ctx,
-		FullMethodName: method,
-	})
-}
-
 func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector) {
 	if sc == nil {
 		// should never reach here.
