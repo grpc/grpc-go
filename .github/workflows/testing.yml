@@ -36,7 +36,9 @@ jobs:
 
   # Run the main gRPC-Go tests.
   tests:
-    runs-on: ubuntu-latest
+    # Use the matrix variable to set the runner, with 'ubuntu-latest' as the
+    # default.
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -62,6 +64,7 @@ jobs:
           - type: tests
             goversion: '1.24'
             goarch: arm64
+            runner: ubuntu-24.04-arm
 
           - type: tests
             goversion: '1.23'
@@ -76,12 +79,6 @@ jobs:
       - name: Setup GOARCH
         if: matrix.goarch != ''
         run: echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
-
-      - name: Setup qemu emulator
-        if: matrix.goarch == 'arm64'
-        # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
-        # are automatically executed using qemu.
-        run: docker run --rm --privileged multiarch/qemu-user-static:7.2.0-1 --reset --credential yes --persistent yes
 
       - name: Setup GRPC environment
         if: matrix.grpcenv != ''
