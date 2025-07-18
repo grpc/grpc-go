@@ -257,7 +257,7 @@ func pearsonsChiSquareTest(t *testing.T, observedCounts, expectedCounts map[stri
 		chiSquaredStat += (got - want) * (got - want) / want
 	}
 	degreesOfFreedom := len(expectedCounts) - 1
-	alpha := 1e-6
+	const alpha = 1e-6
 	chiSquareDist := distuv.ChiSquared{K: float64(degreesOfFreedom)}
 	pValue := chiSquareDist.Survival(chiSquaredStat)
 	t.Logf("Observed ratio: %v", observedCounts)
