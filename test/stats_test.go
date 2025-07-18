@@ -46,14 +46,14 @@ func (s) TestPeerForClientStatsHandler(t *testing.T) {
 	// * Begin stats lack peer info (RPC starts pre-resolution).
 	// * PickerUpdated: no peer info (picker lacks transport details).
 	expectedCallouts := map[stats.RPCStats]bool{
-		&stats.OutPayload{}:    true,
-		&stats.InHeader{}:      true,
-		&stats.OutHeader{}:     true,
-		&stats.InTrailer{}:     true,
-		&stats.OutTrailer{}:    true,
-		&stats.End{}:           true,
-		&stats.Begin{}:         false,
-		&stats.PickerUpdated{}: false,
+		&stats.OutPayload{}:          true,
+		&stats.InHeader{}:            true,
+		&stats.OutHeader{}:           true,
+		&stats.InTrailer{}:           true,
+		&stats.OutTrailer{}:          true,
+		&stats.End{}:                 true,
+		&stats.Begin{}:               false,
+		&stats.DelayedPickComplete{}: false,
 	}
 
 	// Start server.

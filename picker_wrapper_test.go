@@ -70,7 +70,7 @@ func (s) TestBlockingPickTimeout(t *testing.T) {
 	bp := newPickerWrapper(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	if _, _, err := bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
+	if _, err := bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
 		t.Errorf("bp.pick returned error %v, want DeadlineExceeded", err)
 	}
 }
@@ -85,8 +85,8 @@ func (s) TestBlockingPick(t *testing.T) {
 	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
+			if pick, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || pick.transport != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", pick.transport, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
 			wg.Done()
@@ -112,8 +112,8 @@ func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
 	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
+			if pick, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || pick.transport != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", pick.transport, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
 			wg.Done()
@@ -140,8 +140,8 @@ func (s) TestBlockingPickTransientWaitforready(t *testing.T) {
 	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(ctx, false, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
+			if pick, err := bp.pick(ctx, false, balancer.PickInfo{}); err != nil || pick.transport != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", pick.transport, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
 			wg.Done()
@@ -167,8 +167,8 @@ func (s) TestBlockingPickSCNotReady(t *testing.T) {
 	wg.Add(goroutineCount)
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
-			if tr, _, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || tr != testT {
-				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", tr, err, testT)
+			if pick, err := bp.pick(ctx, true, balancer.PickInfo{}); err != nil || pick.transport != testT {
+				t.Errorf("bp.pick returned transport: %v, error: %v, want transport: %v, error: nil", pick.transport, err, testT)
 			}
 			atomic.AddUint64(&finishedCount, 1)
 			wg.Done()
