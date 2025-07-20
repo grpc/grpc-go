@@ -207,19 +207,17 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
 		},
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
 			select {
 			case lbCfgCh <- ccs.BalancerConfig:
 			default:
 			}
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 

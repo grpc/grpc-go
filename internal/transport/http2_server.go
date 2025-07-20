@@ -180,16 +180,13 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			Val: config.MaxStreams,
 		})
 	}
-	dynamicWindow := true
 	iwz := int32(initialWindowSize)
 	if config.InitialWindowSize >= defaultWindowSize {
 		iwz = config.InitialWindowSize
-		dynamicWindow = false
 	}
 	icwz := int32(initialWindowSize)
 	if config.InitialConnWindowSize >= defaultWindowSize {
 		icwz = config.InitialConnWindowSize
-		dynamicWindow = false
 	}
 	if iwz != defaultWindowSize {
 		isettings = append(isettings, http2.Setting{
@@ -292,7 +289,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	t.logger = prefixLoggerForServerTransport(t)
 
 	t.controlBuf = newControlBuffer(t.done)
-	if dynamicWindow {
+	if !config.StaticWindowSize {
 		t.bdpEst = &bdpEstimator{
 			bdp:               initialWindowSize,
 			updateFlowControl: t.updateFlowControl,
@@ -603,10 +600,25 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 			return nil
 		}
 	}
+
+	if s.ctx.Err() != nil {
+		t.mu.Unlock()
+		// Early abort in case the timeout was zero or so low it already fired.
+		t.controlBuf.put(&earlyAbortStream{
+			httpStatus:     http.StatusOK,
+			streamID:       s.id,
+			contentSubtype: s.contentSubtype,
+			status:         status.New(codes.DeadlineExceeded, context.DeadlineExceeded.Error()),
+			rst:            !frame.StreamEnded(),
+		})
+		return nil
+	}
+
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
 	}
+
 	// Start a timer to close the stream on reaching the deadline.
 	if timeoutSet {
 		// We need to wait for s.cancel to be updated before calling

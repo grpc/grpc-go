@@ -866,3 +866,53 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 }
+
+// Tests the scenario where the cluster tree changes, and verifies that the
+// watchers for the cds balancer are updated accordingly. That is the cluster
+// removed from the tree no longer has a watcher and the new cluster added has a
+// new watcher.
+func (s) TestWatchers(t *testing.T) {
+	mgmtServer, nodeID, _, _, _, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	const (
+		clusterA = clusterName
+		clusterB = clusterName + "-B"
+		clusterC = clusterName + "-C"
+		clusterD = clusterName + "-D"
+	)
+
+	// Initial CDS resources: A -> B, C
+	initialResources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterA, []string{clusterB, clusterC}),
+		},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, initialResources); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+	wantNames := []string{clusterA, clusterB, clusterC}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update the CDS resources to remove cluster C and add cluster D.
+	updatedResources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			makeAggregateClusterResource(clusterA, []string{clusterB, clusterD}),
+		},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, updatedResources); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+	wantNames = []string{clusterA, clusterB, clusterD}
+	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -254,7 +254,7 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 
 // If Watch returns Unimplemented, then the ClientConn should go into READY state.
 func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
-	grpctest.TLogger.ExpectError("Subchannel health check is unimplemented at server side, thus health check is disabled")
+	grpctest.ExpectError("Subchannel health check is unimplemented at server side, thus health check is disabled")
 	s := grpc.NewServer()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -1193,13 +1193,13 @@ func (s) TestHealthCheckUnregisterHealthListener(t *testing.T) {
 					close(readyUpdateReceivedCh)
 				},
 			}
-			bd.Data = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
+			bd.ChildBalancer = balancer.Get(pickfirst.Name).Build(ccw, bd.BuildOptions)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bd.Data.(balancer.Balancer).Close()
+			bd.ChildBalancer.Close()
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.Data.(balancer.Balancer).UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 	}
 

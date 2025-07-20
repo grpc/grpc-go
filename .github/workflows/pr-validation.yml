@@ -1,0 +1,55 @@
+name: PR Validation
+on:
+  pull_request:
+    types: [opened, edited, synchronize, labeled, unlabeled, milestoned, demilestoned]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Label
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(label => label.name);
+            const requiredRegex = new RegExp('^Type:');
+            const hasRequiredLabel = labels.some(label => requiredRegex.test(label));
+            if (!hasRequiredLabel) {
+              core.setFailed("This PR must have a label starting with 'Type:'.");
+            }
+
+      - name: Validate Description
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.pull_request.body;
+            const requiredRegex = new RegExp('^RELEASE NOTES:\\s*([Nn][Oo][Nn][Ee]|[Nn]/[Aa]|\\n(\\*|-)\\s*.+)$', 'm');
+            if (!requiredRegex.test(body)) {
+              core.setFailed(`
+                The PR description must include a RELEASE NOTES section.
+                It should be in one of the following formats:
+                - "RELEASE NOTES: none" (case-insensitive)
+                - "RELEASE NOTES: N/A" (case-insensitive)
+                - A bulleted list under "RELEASE NOTES:", for example:
+                  RELEASE NOTES:
+                  * my_package: Fix bug causing crash...
+              `);
+            }
+
+      - name: Validate Milestone
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const milestone = context.payload.pull_request.milestone;
+            if (!milestone) {
+              core.setFailed("This PR must be associated with a milestone.");
+            } else {
+              const requiredRegex = new RegExp('Release$');
+              if (!requiredRegex.test(milestone.title)) {
+                core.setFailed("The milestone for this PR must end with 'Release'.");
+              }
+            }

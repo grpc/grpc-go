@@ -27,7 +27,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	_ "google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/pretty"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -70,9 +69,6 @@ func wrrLocalityBalancerConfig(childPolicy *internalserviceconfig.BalancerConfig
 }
 
 func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
-	defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
-	envconfig.LeastRequestLB = false
-
 	const customLBPolicyName = "myorg.MyCustomLeastRequestPolicy"
 	stub.Register(customLBPolicyName, stub.BalancerFuncs{})
 
@@ -199,26 +195,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 			wantConfig: `[{"pick_first": { "shuffleAddressList": true }}]`,
 		},
 		{
-			name: "least_request_disabled_pf_rr_use_first_supported",
-			policy: &v3clusterpb.LoadBalancingPolicy{
-				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3leastrequestpb.LeastRequest{
-								ChoiceCount: wrapperspb.UInt32(32),
-							}),
-						},
-					},
-					{
-						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							TypedConfig: testutils.MarshalAny(t, &v3roundrobinpb.RoundRobin{}),
-						},
-					},
-				},
-			},
-			wantConfig: `[{"round_robin": {}}]`,
-		},
-		{
 			name: "custom_lb_type_v3_struct",
 			policy: &v3clusterpb.LoadBalancingPolicy{
 				Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{
@@ -308,10 +284,6 @@ func (s) TestConvertToServiceConfigSuccess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.lrEnabled {
-				defer func(old bool) { envconfig.LeastRequestLB = old }(envconfig.LeastRequestLB)
-				envconfig.LeastRequestLB = true
-			}
 			rawJSON, err := xdslbregistry.ConvertToServiceConfig(test.policy, 0)
 			if err != nil {
 				t.Fatalf("ConvertToServiceConfig(%s) failed: %v", pretty.ToJSON(test.policy), err)
@@ -382,7 +354,7 @@ func (s) TestConvertToServiceConfigFailure(t *testing.T) {
 					},
 					{
 						TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
-							// Not supported by gRPC-Go.
+							// Maglev is not yet supported by gRPC.
 							TypedConfig: testutils.MarshalAny(t, &v3maglevpb.Maglev{}),
 						},
 					},

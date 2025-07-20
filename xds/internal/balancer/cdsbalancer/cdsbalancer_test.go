@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -85,7 +86,9 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 		select {
 		case <-ctx.Done():
 		case gotNames := <-resourceNamesCh:
-			if cmp.Equal(gotNames, wantNames) {
+			// Sort both slices before comparing them, as the order of clusters
+			// does not matter.
+			if cmp.Equal(gotNames, wantNames, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				return nil
 			}
 		}
@@ -116,7 +119,7 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 
 	stub.Register(clusterresolver.Name, stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
-			bd.Data = clusterresolverBuilder.Build(bd.ClientConn, bd.BuildOptions)
+			bd.ChildBalancer = clusterresolverBuilder.Build(bd.ClientConn, bd.BuildOptions)
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return clusterresolverBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
@@ -126,25 +129,21 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 			case lbCfgCh <- ccs.BalancerConfig:
 			default:
 			}
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		ResolverError: func(bd *stub.BalancerData, err error) {
 			select {
 			case resolverErrCh <- err:
 			default:
 			}
-			bal := bd.Data.(balancer.Balancer)
-			bal.ResolverError(err)
+			bd.ChildBalancer.ResolverError(err)
 		},
 		ExitIdle: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.(balancer.ExitIdler).ExitIdle()
+			bd.ChildBalancer.ExitIdle()
 			close(exitIdleCh)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 			close(closeCh)
 		},
 	})
@@ -165,19 +164,17 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
 			bal := cdsBuilder.Build(bd.ClientConn, bd.BuildOptions)
-			bd.Data = bal
+			bd.ChildBalancer = bal
 			cdsBalancerCh <- bal
 		},
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return cdsBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
 		},
 		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			bal := bd.Data.(balancer.Balancer)
-			return bal.UpdateClientConnState(ccs)
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
-			bal := bd.Data.(balancer.Balancer)
-			bal.Close()
+			bd.ChildBalancer.Close()
 		},
 	})
 	t.Cleanup(func() { balancer.Register(cdsBuilder) })
@@ -1110,7 +1107,7 @@ func (s) TestExitIdle(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timeout when waiting for cds LB policy to be created")
 	}
-	cdsBal.(balancer.ExitIdler).ExitIdle()
+	cdsBal.ExitIdle()
 
 	// Wait for ExitIdle to be called on the child policy.
 	select {

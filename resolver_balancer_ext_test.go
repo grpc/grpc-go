@@ -47,7 +47,7 @@ import (
 func (s) TestResolverBalancerInteraction(t *testing.T) {
 	name := strings.ReplaceAll(strings.ToLower(t.Name()), "/", "")
 	bf := stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			bd.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
 			return nil
 		},
@@ -85,7 +85,7 @@ type resolverBuilderWithErr struct {
 	scheme string
 }
 
-func (b *resolverBuilderWithErr) Build(_ resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *resolverBuilderWithErr) Build(_ resolver.Target, _ resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	if err := <-b.errCh; err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (s) TestEnterIdleDuringBalancerUpdateState(t *testing.T) {
 	// Create a balancer that calls UpdateState once asynchronously, attempting
 	// to make the channel appear ready even after entering idle.
 	bf := stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			go func() {
 				bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready})
 			}()
@@ -227,7 +227,7 @@ func (s) TestEnterIdleDuringBalancerNewSubConn(t *testing.T) {
 	// Create a balancer that calls NewSubConn once asynchronously, attempting
 	// to create a subchannel after going idle.
 	bf := stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			go func() {
 				bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "test"}}, balancer.NewSubConnOptions{})
 			}()

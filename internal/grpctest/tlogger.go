@@ -33,9 +33,9 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// TLogger serves as the grpclog logger and is the interface through which
+// tLogr serves as the grpclog logger and is the interface through which
 // expected errors are declared in tests.
-var TLogger *tLogger
+var tLogr *tLogger
 
 const callingFrame = 4
 
@@ -73,11 +73,21 @@ type tLogger struct {
 }
 
 func init() {
-	TLogger = &tLogger{errors: map[*regexp.Regexp]int{}}
-	vLevel := os.Getenv("GRPC_GO_LOG_VERBOSITY_LEVEL")
-	if vl, err := strconv.Atoi(vLevel); err == nil {
-		TLogger.v = vl
+	vLevel := 0 // Default verbosity level
+
+	if vLevelEnv, found := os.LookupEnv("GRPC_GO_LOG_VERBOSITY_LEVEL"); found {
+		// If found, attempt to convert. If conversion is successful, update vLevel.
+		// If conversion fails, log a warning, but vLevel remains its default of 0.
+		if val, err := strconv.Atoi(vLevelEnv); err == nil {
+			vLevel = val
+		} else {
+			// Log the error if the environment variable is not a valid integer.
+			fmt.Printf("Warning: GRPC_GO_LOG_VERBOSITY_LEVEL environment variable '%s' is not a valid integer. "+
+				"Using default verbosity level 0. Error: %v\n", vLevelEnv, err)
+		}
 	}
+	// Initialize tLogr with the determined verbosity level.
+	tLogr = &tLogger{errors: make(map[*regexp.Regexp]int), v: vLevel}
 }
 
 // getCallingPrefix returns the <file:line> at the given depth from the stack.
@@ -90,61 +100,61 @@ func getCallingPrefix(depth int) (string, error) {
 }
 
 // log logs the message with the specified parameters to the tLogger.
-func (g *tLogger) log(ltype logType, depth int, format string, args ...any) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+func (tl *tLogger) log(ltype logType, depth int, format string, args ...any) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
 	prefix, err := getCallingPrefix(callingFrame + depth)
 	if err != nil {
-		g.t.Error(err)
+		tl.t.Error(err)
 		return
 	}
 	args = append([]any{ltype.String() + " " + prefix}, args...)
-	args = append(args, fmt.Sprintf(" (t=+%s)", time.Since(g.start)))
+	args = append(args, fmt.Sprintf(" (t=+%s)", time.Since(tl.start)))
 
 	if format == "" {
 		switch ltype {
 		case errorLog:
-			// fmt.Sprintln is used rather than fmt.Sprint because t.Log uses fmt.Sprintln behavior.
-			if g.expected(fmt.Sprintln(args...)) {
-				g.t.Log(args...)
+			// fmt.Sprintln is used rather than fmt.Sprint because tl.Log uses fmt.Sprintln behavior.
+			if tl.expected(fmt.Sprintln(args...)) {
+				tl.t.Log(args...)
 			} else {
-				g.t.Error(args...)
+				tl.t.Error(args...)
 			}
 		case fatalLog:
 			panic(fmt.Sprint(args...))
 		default:
-			g.t.Log(args...)
+			tl.t.Log(args...)
 		}
 	} else {
 		// Add formatting directives for the callingPrefix and timeSuffix.
 		format = "%v " + format + "%s"
 		switch ltype {
 		case errorLog:
-			if g.expected(fmt.Sprintf(format, args...)) {
-				g.t.Logf(format, args...)
+			if tl.expected(fmt.Sprintf(format, args...)) {
+				tl.t.Logf(format, args...)
 			} else {
-				g.t.Errorf(format, args...)
+				tl.t.Errorf(format, args...)
 			}
 		case fatalLog:
 			panic(fmt.Sprintf(format, args...))
 		default:
-			g.t.Logf(format, args...)
+			tl.t.Logf(format, args...)
 		}
 	}
 }
 
-// Update updates the testing.T that the testing logger logs to. Should be done
+// update updates the testing.T that the testing logger logs to. Should be done
 // before every test. It also initializes the tLogger if it has not already.
-func (g *tLogger) Update(t *testing.T) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if !g.initialized {
-		grpclog.SetLoggerV2(TLogger)
-		g.initialized = true
+func (tl *tLogger) update(t *testing.T) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	if !tl.initialized {
+		grpclog.SetLoggerV2(tl)
+		tl.initialized = true
 	}
-	g.t = t
-	g.start = time.Now()
-	g.errors = map[*regexp.Regexp]int{}
+	tl.t = t
+	tl.start = time.Now()
+	tl.errors = map[*regexp.Regexp]int{}
 }
 
 // ExpectError declares an error to be expected. For the next test, the first
@@ -152,41 +162,41 @@ func (g *tLogger) Update(t *testing.T) {
 // to fail. "For the next test" includes all the time until the next call to
 // Update(). Note that if an expected error is not encountered, this will cause
 // the test to fail.
-func (g *tLogger) ExpectError(expr string) {
-	g.ExpectErrorN(expr, 1)
+func ExpectError(expr string) {
+	ExpectErrorN(expr, 1)
 }
 
 // ExpectErrorN declares an error to be expected n times.
-func (g *tLogger) ExpectErrorN(expr string, n int) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+func ExpectErrorN(expr string, n int) {
+	tLogr.mu.Lock()
+	defer tLogr.mu.Unlock()
 	re, err := regexp.Compile(expr)
 	if err != nil {
-		g.t.Error(err)
+		tLogr.t.Error(err)
 		return
 	}
-	g.errors[re] += n
+	tLogr.errors[re] += n
 }
 
-// EndTest checks if expected errors were not encountered.
-func (g *tLogger) EndTest(t *testing.T) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	for re, count := range g.errors {
+// endTest checks if expected errors were not encountered.
+func (tl *tLogger) endTest(t *testing.T) {
+	tl.mu.Lock()
+	defer tl.mu.Unlock()
+	for re, count := range tl.errors {
 		if count > 0 {
 			t.Errorf("Expected error '%v' not encountered", re.String())
 		}
 	}
-	g.errors = map[*regexp.Regexp]int{}
+	tl.errors = map[*regexp.Regexp]int{}
 }
 
 // expected determines if the error string is protected or not.
-func (g *tLogger) expected(s string) bool {
-	for re, count := range g.errors {
+func (tl *tLogger) expected(s string) bool {
+	for re, count := range tl.errors {
 		if re.FindStringIndex(s) != nil {
-			g.errors[re]--
+			tl.errors[re]--
 			if count <= 1 {
-				delete(g.errors, re)
+				delete(tl.errors, re)
 			}
 			return true
 		}
@@ -194,70 +204,70 @@ func (g *tLogger) expected(s string) bool {
 	return false
 }
 
-func (g *tLogger) Info(args ...any) {
-	g.log(infoLog, 0, "", args...)
+func (tl *tLogger) Info(args ...any) {
+	tl.log(infoLog, 0, "", args...)
 }
 
-func (g *tLogger) Infoln(args ...any) {
-	g.log(infoLog, 0, "", args...)
+func (tl *tLogger) Infoln(args ...any) {
+	tl.log(infoLog, 0, "", args...)
 }
 
-func (g *tLogger) Infof(format string, args ...any) {
-	g.log(infoLog, 0, format, args...)
+func (tl *tLogger) Infof(format string, args ...any) {
+	tl.log(infoLog, 0, format, args...)
 }
 
-func (g *tLogger) InfoDepth(depth int, args ...any) {
-	g.log(infoLog, depth, "", args...)
+func (tl *tLogger) InfoDepth(depth int, args ...any) {
+	tl.log(infoLog, depth, "", args...)
 }
 
-func (g *tLogger) Warning(args ...any) {
-	g.log(warningLog, 0, "", args...)
+func (tl *tLogger) Warning(args ...any) {
+	tl.log(warningLog, 0, "", args...)
 }
 
-func (g *tLogger) Warningln(args ...any) {
-	g.log(warningLog, 0, "", args...)
+func (tl *tLogger) Warningln(args ...any) {
+	tl.log(warningLog, 0, "", args...)
 }
 
-func (g *tLogger) Warningf(format string, args ...any) {
-	g.log(warningLog, 0, format, args...)
+func (tl *tLogger) Warningf(format string, args ...any) {
+	tl.log(warningLog, 0, format, args...)
 }
 
-func (g *tLogger) WarningDepth(depth int, args ...any) {
-	g.log(warningLog, depth, "", args...)
+func (tl *tLogger) WarningDepth(depth int, args ...any) {
+	tl.log(warningLog, depth, "", args...)
 }
 
-func (g *tLogger) Error(args ...any) {
-	g.log(errorLog, 0, "", args...)
+func (tl *tLogger) Error(args ...any) {
+	tl.log(errorLog, 0, "", args...)
 }
 
-func (g *tLogger) Errorln(args ...any) {
-	g.log(errorLog, 0, "", args...)
+func (tl *tLogger) Errorln(args ...any) {
+	tl.log(errorLog, 0, "", args...)
 }
 
-func (g *tLogger) Errorf(format string, args ...any) {
-	g.log(errorLog, 0, format, args...)
+func (tl *tLogger) Errorf(format string, args ...any) {
+	tl.log(errorLog, 0, format, args...)
 }
 
-func (g *tLogger) ErrorDepth(depth int, args ...any) {
-	g.log(errorLog, depth, "", args...)
+func (tl *tLogger) ErrorDepth(depth int, args ...any) {
+	tl.log(errorLog, depth, "", args...)
 }
 
-func (g *tLogger) Fatal(args ...any) {
-	g.log(fatalLog, 0, "", args...)
+func (tl *tLogger) Fatal(args ...any) {
+	tl.log(fatalLog, 0, "", args...)
 }
 
-func (g *tLogger) Fatalln(args ...any) {
-	g.log(fatalLog, 0, "", args...)
+func (tl *tLogger) Fatalln(args ...any) {
+	tl.log(fatalLog, 0, "", args...)
 }
 
-func (g *tLogger) Fatalf(format string, args ...any) {
-	g.log(fatalLog, 0, format, args...)
+func (tl *tLogger) Fatalf(format string, args ...any) {
+	tl.log(fatalLog, 0, format, args...)
 }
 
-func (g *tLogger) FatalDepth(depth int, args ...any) {
-	g.log(fatalLog, depth, "", args...)
+func (tl *tLogger) FatalDepth(depth int, args ...any) {
+	tl.log(fatalLog, depth, "", args...)
 }
 
-func (g *tLogger) V(l int) bool {
-	return l <= g.v
+func (tl *tLogger) V(l int) bool {
+	return l <= tl.v
 }

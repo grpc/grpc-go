@@ -112,7 +112,7 @@ func (c *errProtoCodec) Name() string {
 // Tests the case where encoding fails on the server. Verifies that there is
 // no panic and that the encoding error is propagated to the client.
 func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
-	grpctest.TLogger.ExpectError("grpc: server failed to encode response")
+	grpctest.ExpectError("grpc: server failed to encode response")
 
 	// Create a codec that errors when encoding messages.
 	encodingErr := errors.New("encoding failed")
@@ -334,7 +334,7 @@ func (s) TestForceCodecName(t *testing.T) {
 	// Create a test service backend that pushes the received content-type on a
 	// channel for the test to inspect.
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			md, ok := metadata.FromIncomingContext(ctx)
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "no metadata in context")

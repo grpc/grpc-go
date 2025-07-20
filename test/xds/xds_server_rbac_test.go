@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
@@ -418,8 +417,6 @@ func serverListenerWithRBACHTTPFilters(t *testing.T, host string, port uint32, r
 // as normal and certain RPC's are denied by the RBAC HTTP Filter which gets
 // called by hooked xds interceptors.
 func (s) TestRBACHTTPFilter(t *testing.T) {
-	internal.RegisterRBACHTTPFilterForTesting()
-	defer internal.UnregisterRBACHTTPFilterForTesting()
 	tests := []struct {
 		name                string
 		rbacCfg             *rpb.RBAC
@@ -850,7 +847,7 @@ func (s) TestRBAC_WithBadRouteConfiguration(t *testing.T) {
 
 	// Initialize a test gRPC server, assign it to the stub server, and start
 	// the test service.
-	opt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+	opt := xds.ServingModeCallback(func(_ net.Addr, args xds.ServingModeChangeArgs) {
 		if args.Mode == connectivity.ServingModeServing {
 			close(servingCh)
 		}
@@ -942,7 +939,7 @@ func (lb *loggerBuilder) Build(audit.LoggerConfig) audit.Logger {
 	}
 }
 
-func (*loggerBuilder) ParseLoggerConfig(config json.RawMessage) (audit.LoggerConfig, error) {
+func (*loggerBuilder) ParseLoggerConfig(json.RawMessage) (audit.LoggerConfig, error) {
 	return nil, nil
 }
 

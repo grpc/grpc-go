@@ -593,7 +593,7 @@ func (s) TestDNSResolver_ExponentialBackoff(t *testing.T) {
 			// Set the test clientconn to return error back to the resolver when
 			// it pushes an update on the channel.
 			var returnNilErr atomic.Bool
-			updateStateF := func(s resolver.State) error {
+			updateStateF := func(resolver.State) error {
 				if returnNilErr.Load() {
 					return nil
 				}
@@ -896,36 +896,68 @@ func (s) TestDisableServiceConfig(t *testing.T) {
 		target               string
 		hostLookupTable      map[string][]string
 		txtLookupTable       map[string][]string
+		txtLookupsEnabled    bool
 		disableServiceConfig bool
 		wantAddrs            []resolver.Address
 		wantSC               string
 	}{
 		{
-			name:            "false",
+			name:            "not disabled in BuildOptions; enabled globally",
 			target:          "foo.bar.com",
 			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
 			txtLookupTable: map[string][]string{
 				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
 			},
+			txtLookupsEnabled:    true,
 			disableServiceConfig: false,
 			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			wantSC:               scJSON,
 		},
 		{
-			name:            "true",
+			name:            "disabled in BuildOptions; enabled globally",
 			target:          "foo.bar.com",
 			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
 			txtLookupTable: map[string][]string{
 				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
 			},
+			txtLookupsEnabled:    true,
+			disableServiceConfig: true,
+			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:               "{}",
+		},
+		{
+			name:            "not disabled in BuildOptions; disabled globally",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			txtLookupsEnabled:    false,
+			disableServiceConfig: false,
+			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
+			wantSC:               "{}",
+		},
+		{
+			name:            "disabled in BuildOptions; disabled globally",
+			target:          "foo.bar.com",
+			hostLookupTable: map[string][]string{"foo.bar.com": {"1.2.3.4", "5.6.7.8"}},
+			txtLookupTable: map[string][]string{
+				"_grpc_config.foo.bar.com": txtRecordServiceConfig(txtRecordGood),
+			},
+			txtLookupsEnabled:    false,
 			disableServiceConfig: true,
 			wantAddrs:            []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
 			wantSC:               "{}",
 		},
 	}
 
+	oldEnableTXTServiceConfig := envconfig.EnableTXTServiceConfig
+	defer func() {
+		envconfig.EnableTXTServiceConfig = oldEnableTXTServiceConfig
+	}()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			envconfig.EnableTXTServiceConfig = test.txtLookupsEnabled
 			overrideTimeAfterFunc(t, 2*defaultTestTimeout)
 			overrideNetResolver(t, &testNetResolver{
 				hostLookupTable: test.hostLookupTable,
@@ -1077,7 +1109,7 @@ func (s) TestCustomAuthority(t *testing.T) {
 				} else {
 					errChan <- nil
 				}
-				return func(ctx context.Context, network, address string) (net.Conn, error) {
+				return func(context.Context, string, string) (net.Conn, error) {
 					return nil, errors.New("no need to dial")
 				}
 			}

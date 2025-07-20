@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/rls"
@@ -100,9 +99,6 @@ func (s) TestRLSinxDS(t *testing.T) {
 }
 
 func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
-	internal.RegisterRLSClusterSpecifierPluginForTesting()
-	defer internal.UnregisterRLSClusterSpecifierPluginForTesting()
-
 	// Set up all components and configuration necessary - management server,
 	// xDS resolver, fake RLS Server, and xDS configuration which specifies an
 	// RLS Balancer that communicates to this set up fake RLS Server.
@@ -137,7 +133,7 @@ func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
 
 	// Configure the fake RLS Server to set the RLS Balancers child CDS
 	// Cluster's name as the target for the RPC to use.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rls.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(context.Context, *rlspb.RouteLookupRequest) *rls.RouteLookupResponse {
 		return &rls.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{"cluster-" + serviceName}}}
 	})
 

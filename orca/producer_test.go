@@ -266,7 +266,7 @@ func (f *fakeORCAService) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportR
 // TestProducerBackoff verifies that the ORCA producer applies the proper
 // backoff after stream failures.
 func (s) TestProducerBackoff(t *testing.T) {
-	grpctest.TLogger.ExpectErrorN("injected error", 4)
+	grpctest.ExpectErrorN("injected error", 4)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -401,7 +401,7 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	// Provide a convenient way to expect backoff calls and return a minimal
 	// value.
 	oldBackoff := internal.DefaultBackoffFunc
-	internal.DefaultBackoffFunc = func(got int) time.Duration {
+	internal.DefaultBackoffFunc = func(int) time.Duration {
 		return time.Millisecond
 	}
 	defer func() { internal.DefaultBackoffFunc = oldBackoff }()
