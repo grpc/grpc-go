@@ -520,11 +520,11 @@ func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
 
 func (s) TestBalancerGroup_ResolverError_AfterClose(t *testing.T) {
 	balancerName := "stub-balancer-test-resolver-error-after-close"
-	called := false
+	exitIdleCh := make(chan struct{}, 1)
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		ResolverError: func(_ *stub.BalancerData, _ error) {
-			called = true
+			exitIdleCh <- struct{}{}
 		},
 	})
 
@@ -540,8 +540,10 @@ func (s) TestBalancerGroup_ResolverError_AfterClose(t *testing.T) {
 
 	bg.ResolverError(errors.New("test error"))
 
-	if called {
+	select {
+	case <-exitIdleCh:
 		t.Fatalf("ResolverError was called on sub-balancer after BalancerGroup was closed")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
 
@@ -597,7 +599,7 @@ func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
 	bg.ExitIdleOne(testBalancerIDs[0])
 
 	select {
-	case <-time.After(time.Second):
+	case <-time.After(defaultTestTimeout):
 	case <-exitIdleCh:
 		t.Fatalf("ExitIdleOne called ExitIdle on sub-balancer after BalancerGroup was closed")
 	}
@@ -826,6 +828,6 @@ func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 	select {
 	case <-exitIdleCh:
 		t.Fatalf("ExitIdle was called on sub-balancer even after BalancerGroup was closed")
-	case <-time.After(defaultTestTimeout):
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
