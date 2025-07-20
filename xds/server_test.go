@@ -382,7 +382,7 @@ func (s) TestServeSuccess(t *testing.T) {
 	modeChangeCh := testutils.NewChannel()
 	modeChangeOption := ServingModeCallback(func(addr net.Addr, args ServingModeChangeArgs) {
 		t.Logf("Server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), args.Mode, args.Err)
-		modeChangeCh.Send(args.Mode)
+		modeChangeCh.SendOrFail(args.Mode)
 	})
 	server, err := NewGRPCServer(modeChangeOption, BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
@@ -515,7 +515,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	modeChangeCh := testutils.NewChannel()
 	modeChangeOption := ServingModeCallback(func(addr net.Addr, args ServingModeChangeArgs) {
 		t.Logf("Server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), args.Mode, args.Err)
-		modeChangeCh.Send(args.Mode)
+		modeChangeCh.SendOrFail(args.Mode)
 	})
 	server, err := NewGRPCServer(modeChangeOption, BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
@@ -607,7 +607,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 	modeChangeCh := testutils.NewChannel()
 	modeChangeOption := ServingModeCallback(func(addr net.Addr, args ServingModeChangeArgs) {
 		t.Logf("Server mode change callback invoked for listener %q with mode %q and error %v", addr.String(), args.Mode, args.Err)
-		modeChangeCh.Send(args.Mode)
+		modeChangeCh.SendOrFail(args.Mode)
 	})
 	server, err := NewGRPCServer(modeChangeOption, BootstrapContentsForTesting(bootstrapContents))
 	if err != nil {
