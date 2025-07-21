@@ -76,7 +76,8 @@ func (*DelayedPickComplete) isRPCStats() {}
 // PickerUpdated indicates that the RPC is unblocked following a delay in
 // selecting a connection for the call.
 //
-// Deprecated: will be removed in a future release.
+// Deprecated: will be removed in a future release; use DelayedPickComplete
+// instead.
 type PickerUpdated = DelayedPickComplete
 
 // InPayload contains stats about an incoming payload.
