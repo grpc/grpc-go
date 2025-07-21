@@ -179,6 +179,7 @@ NewSubConn is deprecated:
 OverrideServerName is deprecated:
 RemoveSubConn is deprecated:
 SecurityVersion is deprecated:
+stats.PickerUpdated is deprecated:
 Target is deprecated: Use the Target field in the BuildOptions instead.
 UpdateAddresses is deprecated:
 UpdateSubConnState is deprecated:
