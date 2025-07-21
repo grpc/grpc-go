@@ -208,7 +208,7 @@ func NewClient(target string, opts ...DialOption) (conn *ClientConn, err error) 
 	channelz.Infof(logger, cc.channelz, "Channel authority set to %q", cc.authority)
 
 	cc.csMgr = newConnectivityStateManager(cc.ctx, cc.channelz)
-	cc.pickerWrapper = newPickerWrapper(cc.dopts.copts.StatsHandlers)
+	cc.pickerWrapper = newPickerWrapper()
 
 	cc.metricsRecorderList = stats.NewMetricsRecorderList(cc.dopts.copts.StatsHandlers)
 

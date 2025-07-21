@@ -67,7 +67,7 @@ func (p *testingPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 func (s) TestBlockingPickTimeout(t *testing.T) {
-	bp := newPickerWrapper(nil)
+	bp := newPickerWrapper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	if _, err := bp.pick(ctx, true, balancer.PickInfo{}); status.Code(err) != codes.DeadlineExceeded {
@@ -76,7 +76,7 @@ func (s) TestBlockingPickTimeout(t *testing.T) {
 }
 
 func (s) TestBlockingPick(t *testing.T) {
-	bp := newPickerWrapper(nil)
+	bp := newPickerWrapper()
 	// All goroutines should block because picker is nil in bp.
 	var finishedCount uint64
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -102,7 +102,7 @@ func (s) TestBlockingPick(t *testing.T) {
 }
 
 func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
-	bp := newPickerWrapper(nil)
+	bp := newPickerWrapper()
 	var finishedCount uint64
 	bp.updatePicker(&testingPicker{err: balancer.ErrNoSubConnAvailable, maxCalled: goroutineCount})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -129,7 +129,7 @@ func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
 }
 
 func (s) TestBlockingPickTransientWaitforready(t *testing.T) {
-	bp := newPickerWrapper(nil)
+	bp := newPickerWrapper()
 	bp.updatePicker(&testingPicker{err: balancer.ErrTransientFailure, maxCalled: goroutineCount})
 	var finishedCount uint64
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -157,7 +157,7 @@ func (s) TestBlockingPickTransientWaitforready(t *testing.T) {
 }
 
 func (s) TestBlockingPickSCNotReady(t *testing.T) {
-	bp := newPickerWrapper(nil)
+	bp := newPickerWrapper()
 	bp.updatePicker(&testingPicker{sc: testSCNotReady, maxCalled: goroutineCount})
 	var finishedCount uint64
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

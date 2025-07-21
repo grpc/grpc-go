@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
 
@@ -51,7 +50,7 @@ type pickerWrapper struct {
 	pickerGen atomic.Pointer[pickerGeneration]
 }
 
-func newPickerWrapper(statsHandlers []stats.Handler) *pickerWrapper {
+func newPickerWrapper() *pickerWrapper {
 	pw := &pickerWrapper{}
 	pw.pickerGen.Store(&pickerGeneration{
 		blockingCh: make(chan struct{}),
