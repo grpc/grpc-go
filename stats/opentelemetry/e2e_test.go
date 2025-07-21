@@ -868,14 +868,6 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 					Key:   "FailFast",
 					Value: attribute.BoolValue(false),
 				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
 			},
 			events: []trace.Event{
 				{
@@ -988,14 +980,6 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 				},
 				{
 					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
 			},
@@ -1092,14 +1076,6 @@ func (s) TestSpan(t *testing.T) {
 					Key:   "FailFast",
 					Value: attribute.BoolValue(false),
 				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
 			},
 			events: []trace.Event{
 				{
@@ -1196,14 +1172,6 @@ func (s) TestSpan(t *testing.T) {
 				},
 				{
 					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
 			},
@@ -1302,14 +1270,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 					Key:   "FailFast",
 					Value: attribute.BoolValue(false),
 				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
-					Value: attribute.BoolValue(false),
-				},
 			},
 			events: []trace.Event{
 				{
@@ -1406,14 +1366,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 				},
 				{
 					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "previous-rpc-attempts",
-					Value: attribute.IntValue(0),
-				},
-				{
-					Key:   "transparent-retry",
 					Value: attribute.BoolValue(false),
 				},
 			},
@@ -1766,8 +1718,6 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 			attributes: []attribute.KeyValue{
 				attribute.Bool("Client", false),
 				attribute.Bool("FailFast", false),
-				attribute.Int("previous-rpc-attempts", 0),
-				attribute.Bool("transparent-retry", false),
 			},
 		},
 		{
