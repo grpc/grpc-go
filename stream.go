@@ -1776,7 +1776,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 				}
 			}
 			if !ss.desc.ClientStreams {
-				return status.Error(codes.Internal, "cardinality violation: received no request message from non-client-stream RPC")
+				return status.Error(codes.Internal, "cardinality violation: received no request message from non-client-streaming RPC")
 			}
 			return err
 		}
