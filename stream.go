@@ -469,8 +469,9 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 func (a *csAttempt) getTransport() error {
 	cs := a.cs
 
-	var err error
-	a.transport, a.pickResult, err = cs.cc.getTransport(a.ctx, cs.callInfo.failFast, cs.callHdr.Method)
+	pickInfo := balancer.PickInfo{Ctx: a.ctx, FullMethodName: cs.callHdr.Method}
+	pick, err := cs.cc.pickerWrapper.pick(a.ctx, cs.callInfo.failFast, pickInfo)
+	a.transport, a.pickResult = pick.transport, pick.result
 	if err != nil {
 		if de, ok := err.(dropError); ok {
 			err = de.error
@@ -480,6 +481,11 @@ func (a *csAttempt) getTransport() error {
 	}
 	if a.trInfo != nil {
 		a.trInfo.firstLine.SetRemoteAddr(a.transport.RemoteAddr())
+	}
+	if pick.blocked {
+		for _, sh := range a.statsHandlers {
+			sh.HandleRPC(a.ctx, &stats.DelayedPickComplete{})
+		}
 	}
 	return nil
 }
@@ -1138,10 +1144,6 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 			if statusErr := a.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
 			}
-			// Received no msg and status OK for non-server streaming rpcs.
-			if !cs.desc.ServerStreams {
-				return status.Error(codes.Internal, "cardinality violation: received no response message from non-streaming RPC")
-			}
 			return io.EOF // indicates successful end of stream.
 		}
 
@@ -1175,7 +1177,7 @@ func (a *csAttempt) recvMsg(m any, payInfo *payloadInfo) (err error) {
 	} else if err != nil {
 		return toRPCErr(err)
 	}
-	return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+	return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 }
 
 func (a *csAttempt) finish(err error) {
@@ -1482,10 +1484,6 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 			if statusErr := as.transportStream.Status().Err(); statusErr != nil {
 				return statusErr
 			}
-			// Received no msg and status OK for non-server streaming rpcs.
-			if !as.desc.ServerStreams {
-				return status.Error(codes.Internal, "cardinality violation: received no response message from non-streaming RPC")
-			}
 			return io.EOF // indicates successful end of stream.
 		}
 		return toRPCErr(err)
@@ -1503,7 +1501,7 @@ func (as *addrConnStream) RecvMsg(m any) (err error) {
 	} else if err != nil {
 		return toRPCErr(err)
 	}
-	return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
+	return status.Errorf(codes.Internal, "cardinality violation: expected <EOF> for non server-streaming RPCs, but received another message")
 }
 
 func (as *addrConnStream) finish(err error) {

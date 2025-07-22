@@ -23,7 +23,6 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -56,7 +55,6 @@ import (
 	"google.golang.org/grpc/encoding/gzip"
 	experimental "google.golang.org/grpc/experimental/opentelemetry"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
@@ -282,27 +280,27 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 	})
 
 	// Make a copy of actual spans and sort them by name, then by kind.
-	actualSpans := make([]tracetest.SpanStub, len(spans))
-	copy(actualSpans, spans)
-	sort.Slice(actualSpans, func(i, j int) bool {
-		if actualSpans[i].Name == actualSpans[j].Name {
-			return actualSpans[i].SpanKind.String() < actualSpans[j].SpanKind.String()
+	sortedSpans := make([]tracetest.SpanStub, len(spans))
+	copy(sortedSpans, spans)
+	sort.Slice(sortedSpans, func(i, j int) bool {
+		if sortedSpans[i].Name == sortedSpans[j].Name {
+			return sortedSpans[i].SpanKind.String() < sortedSpans[j].SpanKind.String()
 		}
-		return actualSpans[i].Name < actualSpans[j].Name
+		return sortedSpans[i].Name < sortedSpans[j].Name
 	})
 
 	// Compare retrieved spans with expected spans.
-	for i := range actualSpans {
+	for i := range sortedSpans {
 		// Retrieve the corresponding expected span info based on span name and
 		// span kind to compare.
-		if actualSpans[i].Name != wantSpanInfos[i].name || actualSpans[i].SpanKind.String() != wantSpanInfos[i].spanKind {
-			t.Errorf("Unexpected span: %v", actualSpans[i])
+		if sortedSpans[i].Name != wantSpanInfos[i].name || sortedSpans[i].SpanKind.String() != wantSpanInfos[i].spanKind {
+			t.Errorf("Unexpected span: %v", sortedSpans[i])
 			continue
 		}
 
 		// Check that the attempt span has the correct status.
-		if actualSpans[i].Status.Code != wantSpanInfos[i].status {
-			t.Errorf("Got status code %v, want %v", actualSpans[i], wantSpanInfos[i])
+		if sortedSpans[i].Status.Code != wantSpanInfos[i].status {
+			t.Errorf("Got status code %v, want %v", sortedSpans[i], wantSpanInfos[i])
 		}
 
 		// comparers
@@ -313,12 +311,12 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
 
 		// attributes
-		if diff := cmp.Diff(wantSpanInfos[i].attributes, actualSpans[i].Attributes, attributesSort, attributesValueComparable); diff != "" {
-			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", actualSpans[i].Name, diff)
+		if diff := cmp.Diff(wantSpanInfos[i].attributes, sortedSpans[i].Attributes, attributesSort, attributesValueComparable); diff != "" {
+			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", sortedSpans[i].Name, diff)
 		}
 		// events
-		if diff := cmp.Diff(wantSpanInfos[i].events, actualSpans[i].Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
-			t.Errorf("Events mismatch for span %s (-want +got):\n%s", actualSpans[i].Name, diff)
+		if diff := cmp.Diff(wantSpanInfos[i].events, sortedSpans[i].Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
+			t.Errorf("Events mismatch for span %s (-want +got):\n%s", sortedSpans[i].Name, diff)
 		}
 	}
 }
@@ -1970,72 +1968,12 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
 			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
-			// The old pick_first LB policy emits a duplicate
-			// "Delayed LB pick complete" event.
-			// TODO: Remove the extra event in the test referencing this issue.
-			// See: https://github.com/grpc/grpc-go/issues/8453
-			if !envconfig.NewPickFirstEnabled {
-				tt.wantSpanInfosFn = normalizeDelayedLBEvents(spans, tt.wantSpanInfosFn)
-			}
 			if err != nil {
 				t.Fatal(err)
 			}
 			validateTraces(t, spans, tt.wantSpanInfosFn)
 		})
 	}
-}
-
-// normalizeDelayedLBEvents adjusts expected span events to align with the
-// observed "Delayed LB pick complete" events emitted by legacy pick_first.
-// Applies only to UnaryCall and FullDuplexCall attempt spans.
-// See: https://github.com/grpc/grpc-go/issues/8453
-func normalizeDelayedLBEvents(spans tracetest.SpanStubs, wantSpans []traceSpanInfo) []traceSpanInfo {
-	actualCounts := make(map[string]int)
-	const delayedLBPickComplete = "Delayed LB pick complete"
-	for _, span := range spans {
-		if strings.HasPrefix(span.Name, "Attempt.grpc.testing.TestService.") {
-			for _, ev := range span.Events {
-				if ev.Name == delayedLBPickComplete {
-					actualCounts[span.Name]++
-				}
-			}
-		}
-	}
-	for i := range wantSpans {
-		name := wantSpans[i].name
-		if name != "Attempt.grpc.testing.TestService.UnaryCall" && name != "Attempt.grpc.testing.TestService.FullDuplexCall" {
-			continue
-		}
-		actualCount := actualCounts[name]
-		var nonDLBEvents []trace.Event
-		wantDLBCount := 0
-		for _, ev := range wantSpans[i].events {
-			if ev.Name == delayedLBPickComplete {
-				wantDLBCount++
-			} else {
-				nonDLBEvents = append(nonDLBEvents, ev)
-			}
-		}
-		switch {
-		case actualCount == 0:
-			// Remove all "Delayed LB pick complete"
-			wantSpans[i].events = nonDLBEvents
-		case actualCount > 1 && wantDLBCount >= 1:
-			// Add the missing number of "Delayed LB pick complete"
-			var dlbEvents []trace.Event
-			for j := 0; j < actualCount; j++ {
-				dlbEvents = append(dlbEvents, trace.Event{Name: delayedLBPickComplete})
-			}
-			wantSpans[i].events = append(dlbEvents, nonDLBEvents...)
-		case actualCount == 1 && wantDLBCount == 1:
-			// Already matches, nothing to change
-			wantSpans[i].events = append([]trace.Event{{Name: delayedLBPickComplete}}, nonDLBEvents...)
-		default:
-			// Unexpected combo — fallback to filtered
-			wantSpans[i].events = nonDLBEvents
-		}
-	}
-	return wantSpans
 }
 
 // TestStreamingRPC_TraceSequenceNumbers verifies that sequence numbers

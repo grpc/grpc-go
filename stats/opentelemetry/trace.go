@@ -64,7 +64,7 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		if !rs.IsTransparentRetryAttempt && ai.previousRPCAttempts != nil {
 			ai.previousRPCAttempts.Add(1)
 		}
-	case *stats.PickerUpdated:
+	case *stats.DelayedPickComplete:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting

@@ -3589,6 +3589,9 @@ func testClientStreamingError(t *testing.T, e env) {
 // Tests that a client receives a cardinality violation error for client-streaming
 // RPCs if the server doesn't send a message before returning status OK.
 func (s) TestClientStreamingCardinalityViolation_ServerHandlerMissingSendAndClose(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/8119 - remove `t.Skip()`
+	// after this is fixed.
+	t.Skip()
 	ss := &stubserver.StubServer{
 		StreamingInputCallF: func(_ testgrpc.TestService_StreamingInputCallServer) error {
 			// Returning status OK without sending a response message.This is a
@@ -3737,113 +3740,8 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests that a client receives a cardinality violation error for unary
-// RPCs if the server doesn't send a message before returning status OK.
-func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lis.Close()
-
-	ss := grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
-		return nil
-	})
-
-	s := grpc.NewServer(ss)
-	go s.Serve(lis)
-	defer s.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
-	}
-	defer cc.Close()
-
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-	}
-}
-
-// Tests that client will receive cardinality violations when calling
-// RecvMsg() multiple times for non-streaming response streams.
-func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
-	e := tcpTLSEnv
-	te := newTest(t, e)
-	defer te.tearDown()
-
-	te.startServer(&testServer{security: e.security})
-
-	cc := te.clientConn()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	desc := &grpc.StreamDesc{
-		StreamName:    "UnaryCall",
-		ServerStreams: false,
-		ClientStreams: false,
-	}
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/UnaryCall")
-	if err != nil {
-		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
-	}
-
-	if err := stream.SendMsg(&testpb.SimpleRequest{}); err != nil {
-		t.Fatalf("stream.SendMsg(_) = %v, want <nil>", err)
-	}
-
-	resp := &testpb.SimpleResponse{}
-	if err := stream.RecvMsg(resp); err != nil {
-		t.Fatalf("stream.RecvMsg() = %v , want <nil>", err)
-	}
-
-	if err = stream.RecvMsg(resp); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-	}
-}
-
-// Tests that client will receive cardinality violations when calling
-// RecvMsg() multiple times for non-streaming response streams.
-func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
-	ss := stubserver.StubServer{
-		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
-			if err := stream.SendAndClose(&testpb.StreamingInputCallResponse{}); err != nil {
-				t.Errorf("stream.SendAndClose(_) = %v, want <nil>", err)
-			}
-			return nil
-		},
-	}
-	if err := ss.Start(nil); err != nil {
-		t.Fatal("Error starting server:", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := ss.Client.StreamingInputCall(ctx)
-	if err != nil {
-		t.Fatalf(".StreamingInputCall(_) = _, %v, want <nil>", err)
-	}
-	if err := stream.Send(&testpb.StreamingInputCallRequest{}); err != nil {
-		t.Fatalf("stream.Send(_) = %v, want <nil>", err)
-	}
-	if err := stream.CloseSend(); err != nil {
-		t.Fatalf("stream.CloseSend() = %v, want <nil>", err)
-	}
-	resp := new(testpb.StreamingInputCallResponse)
-	if err := stream.RecvMsg(resp); err != nil {
-		t.Fatalf("stream.RecvMsg() = %v , want <nil>", err)
-	}
-	if err = stream.RecvMsg(resp); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-	}
-}
-
 // Tests that a client receives a cardinality violation error for client-streaming
-// RPCs if the server call SendMsg() multiple times.
+// RPCs if the server call SendMsg multiple times.
 func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
@@ -4224,6 +4122,55 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	if got := string(goAwayFrame.DebugData()); !strings.Contains(got, want) {
 		t.Fatalf(" Received: %v, Expected error message to contain: %v.", got, want)
 	}
+}
+
+// Tests that a gRPC server transport does not deadlock when it receives a zero
+// second deadline, and properly returns a deadline exceeded error immediately.
+func (s) TestZeroSecondTimeout(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/StreamingInputCall",
+			"content-type", "application/grpc",
+			"te", "trailers",
+			"grpc-timeout", "0n",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+	f := st.wantAnyFrame()
+	hf, ok := f.(*http2.MetaHeadersFrame)
+	if !ok {
+		t.Fatalf("Received frame of type %T; want *http2.MetaHeadersFrame", f)
+	}
+	if hf.StreamID != 1 || !hf.StreamEnded() {
+		t.Fatalf("Headers frame was wrong streamID or not end_stream: %v", hf)
+	}
+	for _, h := range hf.Fields {
+		if h.Name == "grpc-status" {
+			if got, want := h.Value, fmt.Sprintf("%d", codes.DeadlineExceeded); got != want {
+				t.Fatalf("Got status %v; want %v", got, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("Headers frame missing grpc-status: %v", hf)
 }
 
 // TestInvalidStreamIDSmallerThanPrevious tests the server sends a GOAWAY frame
@@ -5414,7 +5361,7 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 // will fail to marshal the status because of the invalid utf8 message. Details
 // will be dropped when sending.
 func (s) TestStatusInvalidUTF8Details(t *testing.T) {
-	grpctest.TLogger.ExpectError("Failed to marshal rpc status")
+	grpctest.ExpectError("Failed to marshal rpc status")
 
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})
@@ -6425,7 +6372,7 @@ func (s) TestServerClosesConn(t *testing.T) {
 // TestNilStatsHandler ensures we do not panic as a result of a nil stats
 // handler.
 func (s) TestNilStatsHandler(t *testing.T) {
-	grpctest.TLogger.ExpectErrorN("ignoring nil parameter", 2)
+	grpctest.ExpectErrorN("ignoring nil parameter", 2)
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
@@ -6751,13 +6698,13 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
-	var pickerUpdatedCount uint
+	var delayedPickCompleteCount int
 	for _, stat := range sh.s {
-		if _, ok := stat.(*stats.PickerUpdated); ok {
-			pickerUpdatedCount++
+		if _, ok := stat.(*stats.DelayedPickComplete); ok {
+			delayedPickCompleteCount++
 		}
 	}
-	if pickerUpdatedCount != 1 {
-		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
+	if got, want := delayedPickCompleteCount, 1; got != want {
+		t.Fatalf("sh.delayedPickComplete count: %v, want: %v", got, want)
 	}
 }

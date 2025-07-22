@@ -71,8 +71,18 @@ func main() {
 	// Configure W3C Trace Context Propagator for traces
 	textMapPropagator := otelpropagation.TraceContext{}
 	so := opentelemetry.ServerOption(opentelemetry.Options{
-		MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: meterProvider},
-		TraceOptions:   oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator}})
+		MetricsOptions: opentelemetry.MetricsOptions{
+			MeterProvider: meterProvider,
+			// These are example experimental gRPC metrics, which are disabled
+			// by default and must be explicitly enabled. For the full,
+			// up-to-date list of metrics, see:
+			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
+			Metrics: opentelemetry.DefaultMetrics().Add(
+				"grpc.server.call.started",
+				"grpc.server.call.duration",
+			),
+		},
+		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator}})
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
