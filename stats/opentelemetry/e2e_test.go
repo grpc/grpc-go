@@ -271,7 +271,7 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		}
 	}
 
-	// Sort expected spans by name, then by kind (if names are equal).
+	// Sort wantSpanInfos by name and kind for deterministic ordering.
 	sort.Slice(wantSpanInfos, func(i, j int) bool {
 		if wantSpanInfos[i].name == wantSpanInfos[j].name {
 			return wantSpanInfos[i].spanKind < wantSpanInfos[j].spanKind
@@ -279,7 +279,7 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		return wantSpanInfos[i].name < wantSpanInfos[j].name
 	})
 
-	// Make a copy of actual spans and sort them by name, then by kind.
+	// Copy spans and sort by name and kind.
 	sortedSpans := make([]tracetest.SpanStub, len(spans))
 	copy(sortedSpans, spans)
 	sort.Slice(sortedSpans, func(i, j int) bool {
@@ -291,16 +291,16 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 
 	// Compare retrieved spans with expected spans.
 	for i := range sortedSpans {
+		// Check that the attempt span has the correct status.
+		if sortedSpans[i].Status.Code != wantSpanInfos[i].status {
+			t.Errorf("Got status code %v, want %v", sortedSpans[i], wantSpanInfos[i])
+		}
+
 		// Retrieve the corresponding expected span info based on span name and
 		// span kind to compare.
 		if sortedSpans[i].Name != wantSpanInfos[i].name || sortedSpans[i].SpanKind.String() != wantSpanInfos[i].spanKind {
 			t.Errorf("Unexpected span: %v", sortedSpans[i])
 			continue
-		}
-
-		// Check that the attempt span has the correct status.
-		if sortedSpans[i].Status.Code != wantSpanInfos[i].status {
-			t.Errorf("Got status code %v, want %v", sortedSpans[i], wantSpanInfos[i])
 		}
 
 		// comparers
