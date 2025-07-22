@@ -97,20 +97,11 @@ func callAndVerify(ctx context.Context, msg string, client pb.GreeterClient, sho
 // TODO(ZhenLian): remove shouldFail and add ...DialOption to the function
 // signature to provider cleaner tests.
 func callAndVerifyWithClientConn(ctx context.Context, address string, msg string, creds credentials.TransportCredentials, shouldFail bool) (*grpc.ClientConn, pb.GreeterClient, error) {
-	var conn *grpc.ClientConn
-	var err error
-	// If we want the test to fail, we establish a non-blocking connection to
-	// avoid it hangs and killed by the context.
-	if shouldFail {
-		conn, err = grpc.NewClient(address, grpc.WithTransportCredentials(creds))
-		if err != nil {
-			return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
-		}
-	} else {
-		conn, err = grpc.NewClient(address, grpc.WithTransportCredentials(creds), grpc.WithBlock())
-		if err != nil {
-			return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
-		}
+	// Disable service config lookups as it results in a DNS lookup which can
+	// flake in CI.
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(creds), grpc.WithDisableServiceConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("client failed to connect to %s. Error: %v", address, err)
 	}
 	greetClient := pb.NewGreeterClient(conn)
 	err = callAndVerify(ctx, msg, greetClient, shouldFail)
