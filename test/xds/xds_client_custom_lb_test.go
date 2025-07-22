@@ -261,7 +261,7 @@ func (s) TestWrrLocality(t *testing.T) {
 					addrDistWant = append(addrDistWant, resolver.Address{Addr: addrAndCount.addr})
 				}
 			}
-			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, client, addrDistWant); err != nil {
+			if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, t, client, addrDistWant); err != nil {
 				t.Fatalf("Error in expected round robin: %v", err)
 			}
 		})

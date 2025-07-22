@@ -288,7 +288,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 			Backends: []e2e.BackendOptions{{Ports: []uint32{ports[1]}}},
 		},
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	// Use a 10 second timeout since validating WRR requires sending 500+ unary
+	// RPCs.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -320,7 +322,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 						"edsServiceName": "%s",
 						"outlierDetection": {}
 					}],
-					"xdsLbPolicy":[{"round_robin":{}}]
+					"xdsLbPolicy":[{"xds_wrr_locality_experimental": {"childPolicy": [{"round_robin": {}}]}}]
 				}
 			}]
 		}`, clusterName, edsServiceName)
@@ -336,7 +338,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Ensure RPCs are being weighted roundrobined across the two backends.
 	testClient := testgrpc.NewTestServiceClient(cc)
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, addrs[0:2]); err != nil {
+	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, t, testClient, addrs[0:2]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -362,7 +364,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, addrs[0:3]); err != nil {
+	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, t, testClient, addrs[0:3]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -383,13 +385,13 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, addrs[1:3]); err != nil {
+	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, t, testClient, addrs[1:3]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a backend to one locality, and ensure weighted roundrobin. Since RPCs
-	// are roundrobined across localities, locality2's backend will receive
-	// twice the traffic.
+	// are weighted-roundrobined across localities, locality2's backend will
+	// receive twice the traffic.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []e2e.LocalityOptions{
 		{
 			Name:     localityName2,
@@ -406,7 +408,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantAddrs := []resolver.Address{addrs[1], addrs[1], addrs[2], addrs[3]}
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, wantAddrs); err != nil {
+	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, t, testClient, wantAddrs); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -505,7 +507,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Ensure RPCs are being weighted roundrobined across healthy backends from
 	// both localities.
 	testClient := testgrpc.NewTestServiceClient(cc)
-	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, append(addrs[0:2], addrs[6:8]...)); err != nil {
+	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, t, testClient, append(addrs[0:2], addrs[6:8]...)); err != nil {
 		t.Fatal(err)
 	}
 }
