@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -620,6 +621,15 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	sc3 := scs["cluster_2"][0].sc.(*testutils.TestSubConn)
 	sc4 := scs["cluster_2"][1].sc.(*testutils.TestSubConn)
 
+	// Due to connection order randomization in RR, and the assumed order in the
+	// remainder of this test, adjust the scs according to the addrs if needed.
+	if sc1.Addresses[0].Addr != addr1.Addr {
+		sc1, sc2 = sc2, sc1
+	}
+	if sc3.Addresses[0].Addr != addr3.Addr {
+		sc3, sc4 = sc4, sc3
+	}
+
 	// The CONNECTING picker should be sent by all leaf pickfirst policies on
 	// receiving the first resolver update.
 	<-cc.NewPickerCh
@@ -670,6 +680,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
+
 	scShutdown := <-cc.ShutdownSubConnCh
 	if scShutdown != sc3 {
 		t.Fatalf("ShutdownSubConn, want %v, got %v", sc3, scShutdown)
@@ -1311,12 +1322,30 @@ func verifySubConnAddrs(t *testing.T, scs map[string][]subConnWithAddr, wantSubC
 			t.Fatalf("got new subConns %+v, want %v", scs, wantSubConnAddrs)
 		}
 		wantAddrs := wantSubConnAddrs[cfg]
-		for i, scWithAddr := range scsWithAddr {
-			if diff := cmp.Diff(wantAddrs[i].Addr, scWithAddr.addr.Addr); diff != "" {
-				t.Fatalf("got unexpected new subconn addrs: %v", diff)
-			}
+		if diff := cmp.Diff(addressesToAddrs(wantAddrs), scwasToAddrs(scsWithAddr),
+			cmpopts.SortSlices(func(a, b string) bool {
+				return a < b
+			}),
+		); diff != "" {
+			t.Fatalf("got unexpected new subconn addrs: %v", diff)
 		}
 	}
+}
+
+func scwasToAddrs(ss []subConnWithAddr) []string {
+	ret := make([]string, len(ss))
+	for i, s := range ss {
+		ret[i] = s.addr.Addr
+	}
+	return ret
+}
+
+func addressesToAddrs(as []resolver.Address) []string {
+	ret := make([]string, len(as))
+	for i, a := range as {
+		ret[i] = a.Addr
+	}
+	return ret
 }
 
 const initIdleBalancerName = "test-init-Idle-balancer"

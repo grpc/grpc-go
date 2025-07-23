@@ -119,7 +119,7 @@ func (s) TestFileWatcherCRLProviderConfig(t *testing.T) {
 	tooFastRefreshProvider.Close()
 
 	customCallback := func(err error) {
-		fmt.Printf("Custom error message: %v", err)
+		t.Logf("Custom error message: %v", err)
 	}
 	regularProvider, err := NewFileWatcherCRLProvider(FileWatcherOptions{
 		CRLDirectory:               testdata.Path("crl"),
