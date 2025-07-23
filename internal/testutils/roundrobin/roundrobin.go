@@ -24,9 +24,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"gonum.org/v1/gonum/stat/distuv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/peer"
@@ -137,7 +139,7 @@ func CheckRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 //
 // Returns a non-nil error if context deadline expires before RPCs start to get
 // roundrobined across the given backends.
-func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
+func CheckWeightedRoundRobinRPCs(ctx context.Context, t *testing.T, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
 	if err := waitForTrafficToReachBackends(ctx, client, addrs); err != nil {
 		return err
 	}
@@ -149,9 +151,11 @@ func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServic
 	for _, addr := range addrs {
 		wantAddrCount[addr.Addr]++
 	}
-	wantRatio := make(map[string]float64)
+	attemptCount := attemptCounts(wantAddrCount)
+
+	expectedCount := make(map[string]float64)
 	for addr, count := range wantAddrCount {
-		wantRatio[addr] = float64(count) / float64(len(addrs))
+		expectedCount[addr] = float64(count) / float64(len(addrs)) * float64(attemptCount)
 	}
 
 	// There is a small possibility that RPCs are reaching backends that we
@@ -170,17 +174,16 @@ func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServic
 	// We work around this situation by using two loops. The inner loop contains
 	// the meat of the calculations, and includes the logic which factors out
 	// the randomness in weighted roundrobin. If we ever see an RPCs getting
-	// routed to a backend that we dont expect it to get routed to, we break
+	// routed to a backend that we don't expect it to get routed to, we break
 	// from the inner loop thereby resetting all state and start afresh.
 	for {
-		results := make(map[string]float64)
-		totalCount := float64(0)
+		observedCount := make(map[string]float64)
 	InnerLoop:
 		for {
 			if ctx.Err() != nil {
 				return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
 			}
-			for i := 0; i < len(addrs); i++ {
+			for i := 0; i < attemptCount; i++ {
 				var peer peer.Peer
 				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 					return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
@@ -188,36 +191,96 @@ func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServic
 				if addr := peer.Addr.String(); wantAddrCount[addr] == 0 {
 					break InnerLoop
 				}
-				results[peer.Addr.String()]++
+				observedCount[peer.Addr.String()]++
 			}
-			totalCount += float64(len(addrs))
 
-			gotRatio := make(map[string]float64)
-			for addr, count := range results {
-				gotRatio[addr] = count / totalCount
-			}
-			if equalApproximate(gotRatio, wantRatio) {
-				return nil
-			}
-			logger.Infof("non-weighted-roundrobin, gotRatio: %v, wantRatio: %v", gotRatio, wantRatio)
+			return pearsonsChiSquareTest(t, observedCount, expectedCount)
 		}
 		<-time.After(time.Millisecond)
 	}
 }
 
-func equalApproximate(got, want map[string]float64) bool {
-	if len(got) != len(want) {
-		return false
+// attemptCounts returns the number of attempts needed to verify the expected
+// distribution of RPCs. Having more attempts per category will give the test
+// a greater ability to detect a small but real deviation from the expected
+// distribution.
+func attemptCounts(wantAddrWeights map[string]int) int {
+	if len(wantAddrWeights) == 0 {
+		return 0
 	}
-	opt := cmp.Comparer(func(x, y float64) bool {
-		delta := math.Abs(x - y)
-		mean := math.Abs(x+y) / 2.0
-		return delta/mean < 0.05
-	})
-	for addr := range want {
-		if !cmp.Equal(got[addr], want[addr], opt) {
-			return false
+
+	totalWeight := 0
+	minWeight := -1
+
+	for _, weight := range wantAddrWeights {
+		totalWeight += weight
+		if minWeight == -1 || weight < minWeight {
+			minWeight = weight
 		}
 	}
-	return true
+
+	minRatio := float64(minWeight) / float64(totalWeight)
+
+	// We want the expected count for the smallest category to be at least 500.
+	// ExpectedCount = TotalAttempts * minRatio
+	// So, 500 <= TotalAttempts * minRatio
+	// which means TotalAttempts >= 500 / minRatio
+	const minExpectedPerCategory = 500.0
+	requiredAttempts := minExpectedPerCategory / minRatio
+
+	return int(math.Ceil(requiredAttempts))
+}
+
+// pearsonsChiSquareTest checks if the observed counts match the expected
+// counts.
+// Pearson's Chi-Squared Test Formula:
+//
+//	χ² = ∑ (Oᵢ - Eᵢ)² / Eᵢ
+//
+// Where:
+//   - χ² is the chi-square statistic
+//   - Oᵢ is the observed count for category i
+//   - Eᵢ is the expected count for category i
+//   - The sum is over all categories (i = 1 to k)
+//
+// This tests how well the observed distribution matches the expected one.
+// Larger χ² values indicate a greater difference between observed and expected
+// counts. The p-value is computed as P(χ² ≥ computed value) under the
+// chi-square distribution with degrees of freedom:
+// df = number of categories - 1
+// See https://en.wikipedia.org/wiki/Pearson%27s_chi-squared_test for more
+// details.
+func pearsonsChiSquareTest(t *testing.T, observedCounts, expectedCounts map[string]float64) error {
+	chiSquaredStat := 0.0
+	for addr, want := range expectedCounts {
+		got := observedCounts[addr]
+		chiSquaredStat += (got - want) * (got - want) / want
+	}
+	degreesOfFreedom := len(expectedCounts) - 1
+	const alpha = 1e-6
+	chiSquareDist := distuv.ChiSquared{K: float64(degreesOfFreedom)}
+	pValue := chiSquareDist.Survival(chiSquaredStat)
+	t.Logf("Observed ratio: %v", observedCounts)
+	t.Logf("Expected ratio: %v", expectedCounts)
+	t.Logf("χ² statistic: %.4f", chiSquaredStat)
+	t.Logf("Degrees of freedom: %d\n", degreesOfFreedom)
+	t.Logf("p-value: %.10f\n", pValue)
+	// Alpha (α) is the threshold we use to decide if the test "fails".
+	// It controls how sensitive the chi-square test is.
+	//
+	// A smaller alpha means we require stronger evidence to say the load
+	// balancing is wrong. A larger alpha makes the test more likely to fail,
+	// even for small random fluctuations.
+	//
+	// For CI, we set alpha = 1e-6 to avoid flaky test failures.
+	// That means:
+	//  - There's only a 1-in-a-million chance the test fails due to random
+	//    variation, assuming the load balancer is working correctly.
+	//  - If the test *does* fail, it's very likely there's a real bug.
+	//
+	// TL;DR: smaller alpha = stricter test, fewer false alarms.
+	if pValue > alpha {
+		return nil
+	}
+	return fmt.Errorf("observed distribution significantly differs from expectations, observeredCounts: %v, expectedCounts: %v", observedCounts, expectedCounts)
 }

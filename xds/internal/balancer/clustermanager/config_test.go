@@ -96,7 +96,7 @@ var (
 	wtConfig2, _ = wtConfigParser.ParseConfig([]byte(wtConfigJSON2))
 )
 
-func Test_parseConfig(t *testing.T) {
+func (s) Test_parseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
