@@ -3740,18 +3740,11 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming when server calls RecvMsg twice.
-// Second call to RecvMsg should fail with Internal error.
-func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lis.Close()
-
+// Tests the behavior for server-side streaming when client calls SendMsg twice.
+// Second call to SendMsg should fail with Internal error.
+func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
-			// This is second call to RecvMsg(), the initial call having been performed by the server handler.
 			if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 				t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
 			}
@@ -3765,61 +3758,19 @@ func (s) TestServerStreaming_ServerCallRecvMsgTwice(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	stream, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf(".StreamingOutputCall(_) = _, %v, want <nil>", err)
-	}
-
-	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-	}
-}
-
-// Tests the behavior for server-side streaming when client calls SendMsg twice.
-// Second call to SendMsg should fail with Internal error.
-func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lis.Close()
-
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "ServerStreaming",
-				Handler: func(_ any, _ grpc.ServerStream) error {
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: true,
-			},
-		},
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
 	defer cc.Close()
 
 	desc := &grpc.StreamDesc{
-		StreamName:    "ServerStreaming",
+		StreamName:    "StreamingOutputCall",
 		ServerStreams: true,
 		ClientStreams: false,
 	}
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
 	if err != nil {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
@@ -3833,105 +3784,24 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	}
 }
 
-// Tests the behavior for unary RPC when server calls RecvMsg twice. Second call
-// to RecvMsg should fail with Internal error.
-func (s) TestUnaryRPC_ServerCallRecvMsgTwice(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lis.Close()
-
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "UnaryCall",
-				Handler: func(_ any, stream grpc.ServerStream) error {
-					err := stream.RecvMsg(&testpb.Empty{})
-					if err != nil {
-						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
-					}
-
-					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-					}
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: false,
-			},
-		},
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
-	}
-	defer cc.Close()
-
-	desc := &grpc.StreamDesc{
-		StreamName:    "UnaryCall",
-		ServerStreams: false,
-		ClientStreams: false,
-	}
-
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/UnaryCall")
-	if err != nil {
-		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
-	}
-
-	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
-		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
-	}
-
-	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-	}
-}
-
 // Tests the behavior for unary RPC when client calls SendMsg twice. Second call
 // to SendMsg should fail with Internal error.
 func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer lis.Close()
-
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "UnaryCall",
-				Handler: func(_ any, _ grpc.ServerStream) error {
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: false,
-			},
+	ss := stubserver.StubServer{
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
 	defer cc.Close()
 
@@ -3958,52 +3828,29 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 // Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
 // and sends multiple nessages.
 func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
+	ss := stubserver.StubServer{}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
 	}
-	defer lis.Close()
-
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "ServerStreaming",
-				Handler: func(_ any, stream grpc.ServerStream) error {
-					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-					}
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: true,
-			},
-		},
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
+	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
 	defer cc.Close()
 
 	// Making the client bi-di to bypass the client side checks that stop a non-streaming client
 	// from sending multiple messages.
 	desc := &grpc.StreamDesc{
-		StreamName:    "ServerStreaming",
+		StreamName:    "StreamingOutputCall",
 		ServerStreams: true,
 		ClientStreams: true,
 	}
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
 	if err != nil {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
@@ -4023,50 +3870,27 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 
 // Tests the behavior for server-side streaming RPC when client sends zero request message.
 func (s) TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatal(err)
+	ss := stubserver.StubServer{}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
 	}
-	defer lis.Close()
-
-	s := grpc.NewServer()
-	serviceDesc := grpc.ServiceDesc{
-		ServiceName: "grpc.testing.TestService",
-		HandlerType: (*any)(nil),
-		Methods:     []grpc.MethodDesc{},
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName: "ServerStreaming",
-				Handler: func(_ any, stream grpc.ServerStream) error {
-					if err = stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-						t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-					}
-					return nil
-				},
-				ClientStreams: false,
-				ServerStreams: true,
-			},
-		},
-	}
-	s.RegisterService(&serviceDesc, &testServer{})
-	go s.Serve(lis)
-	defer s.Stop()
+	defer ss.Stop()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
 	defer cc.Close()
 
 	desc := &grpc.StreamDesc{
-		StreamName:    "ServerStreaming",
+		StreamName:    "StreamingOutputCall",
 		ServerStreams: true,
 		ClientStreams: false,
 	}
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/ServerStreaming")
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
 	if err != nil {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}

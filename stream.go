@@ -1589,6 +1589,8 @@ type serverStream struct {
 
 	sendCompressorName string
 
+	recvFirstMsg bool // recv frist msg from client
+
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
 	trInfo                *traceInfo
@@ -1775,7 +1777,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 					binlog.Log(ss.ctx, chc)
 				}
 			}
-			if !ss.desc.ClientStreams {
+			if !ss.desc.ClientStreams && !ss.recvFirstMsg {
 				return status.Error(codes.Internal, "cardinality violation: received no request message from non-client-streaming RPC")
 			}
 			return err
@@ -1785,6 +1787,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 		}
 		return toRPCErr(err)
 	}
+	ss.recvFirstMsg = true
 	if len(ss.statsHandler) != 0 {
 		for _, sh := range ss.statsHandler {
 			sh.HandleRPC(ss.s.Context(), &stats.InPayload{
