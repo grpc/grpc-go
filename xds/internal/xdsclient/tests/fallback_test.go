@@ -841,7 +841,7 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 
 	// Verify that connection attempts were made to primaryWrappedLis and
 	// secondary1WrappedLis, before using secondary2WrappedLis to make
-	// succesful RPCs to backend3.
+	// successful RPCs to backend3.
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
 	}
