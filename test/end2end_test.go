@@ -3744,6 +3744,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 // Second call to SendMsg should fail with Internal error.
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
+		// The initial call to recvMsg made by the generated code, will return the error.
 		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, _ testgrpc.TestService_StreamingOutputCallServer) error {
 			return nil
 		},
@@ -3825,6 +3826,7 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 // Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
 // and sends multiple nessages.
 func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
+	// The initial call to recvMsg made by the generated code, will return the error.
 	ss := stubserver.StubServer{}
 	if err := ss.Start(nil); err != nil {
 		t.Fatal("Error starting server:", err)
@@ -3867,6 +3869,7 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 
 // Tests the behavior for server-side streaming RPC when client sends zero request message.
 func (s) TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
+	// The initial call to recvMsg made by the generated code, will return the error.
 	ss := stubserver.StubServer{}
 	if err := ss.Start(nil); err != nil {
 		t.Fatal("Error starting server:", err)
