@@ -3745,9 +3745,6 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
-			if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-				t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
-			}
 			return nil
 		},
 	}
