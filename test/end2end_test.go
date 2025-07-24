@@ -3744,7 +3744,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 // Second call to SendMsg should fail with Internal error.
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
-		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, _ testgrpc.TestService_StreamingOutputCallServer) error {
 			return nil
 		},
 	}
