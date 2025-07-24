@@ -36,9 +36,14 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats/opentelemetry"
 )
 
@@ -62,6 +67,12 @@ func main() {
 	traceProvider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName("grpc-client"))))
 	// Configure W3C Trace Context Propagator for traces
 	textMapPropagator := otelpropagation.TraceContext{}
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(fmt.Sprintf(`{"loadBalancingConfig":[{%q:{}}]}`, pickfirstleaf.Name))
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{
+		ServiceConfig: sc,
+		Addresses:     []resolver.Address{{Addr: "bad address"}}},
+	)
 	do := opentelemetry.DialOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: meterProvider,
@@ -70,8 +81,8 @@ func main() {
 			// up-to-date list of metrics, see:
 			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.xds_client.resource_updates_valid",
-				"grpc.xds_client.resource_updates_invalid",
+				"grpc.lb.pick_first.connection_attempts_succeeded",
+				"grpc.lb.pick_first.connection_attempts_failed",
 			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator},
