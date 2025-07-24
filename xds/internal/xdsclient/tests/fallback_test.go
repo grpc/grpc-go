@@ -729,15 +729,13 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 	}
 }
 
-// TestXDSFallback_ThreeServerPromotion verifies fallback and promotion
-// behavior across three xDS servers in the following scenarios.
-//  1. The primary server returns a partial config, triggering fallback to
-//     secondary1.
-//  2. Secondary1 also returns a partial config, triggering fallback to
-//     secondary2.
-//  3. Secondary2 returns a full config, so RPCs succeed to backend3.
-//  4. Secondary1 recovers with a full config, promoting RPCs to backend2.
-//  5. Primary finally recovers with a full config, promoting RPCs to backend1.
+// TestXDSFallback_ThreeServerPromotion verifies that when the primary
+// management server is unavailable, the system attempts to connect to the
+// first fallback server, and if that is also down, to the second fallback
+// server. It also ensures that the system switches back to the first fallback
+// server once it becomes available again, and eventually returns to the
+// primary server when it comes back online, closing connections to the
+// fallback servers accordingly.
 func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
@@ -833,7 +831,6 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
-	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Secondary2 fallback, RPCs reach backend3.
@@ -843,8 +840,8 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	}
 
 	// Verify that connection attempts were made to primaryWrappedLis and
-	// secondary1WrappedLis, even though the fallback succeeded using
-	// secondary2WrappedLis and RPCs reached backend3.
+	// secondary1WrappedLis, before using secondary2WrappedLis to make
+	// succesful RPCs to backend3.
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
 	}
