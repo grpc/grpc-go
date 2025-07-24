@@ -1266,7 +1266,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			}),
 			wantName: v3LDSTarget,
-			wantErr:  "transport_socket field has unexpected typeURL",
+			wantErr:  fmt.Sprintf("transport_socket missing typed_config or wrong type_url: \"%s\"", testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{}).TypeUrl),
 		},
 		{
 			name: "badly marshaled transport socket",

@@ -469,8 +469,9 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 func (a *csAttempt) getTransport() error {
 	cs := a.cs
 
-	var err error
-	a.transport, a.pickResult, err = cs.cc.getTransport(a.ctx, cs.callInfo.failFast, cs.callHdr.Method)
+	pickInfo := balancer.PickInfo{Ctx: a.ctx, FullMethodName: cs.callHdr.Method}
+	pick, err := cs.cc.pickerWrapper.pick(a.ctx, cs.callInfo.failFast, pickInfo)
+	a.transport, a.pickResult = pick.transport, pick.result
 	if err != nil {
 		if de, ok := err.(dropError); ok {
 			err = de.error
@@ -480,6 +481,11 @@ func (a *csAttempt) getTransport() error {
 	}
 	if a.trInfo != nil {
 		a.trInfo.firstLine.SetRemoteAddr(a.transport.RemoteAddr())
+	}
+	if pick.blocked {
+		for _, sh := range a.statsHandlers {
+			sh.HandleRPC(a.ctx, &stats.DelayedPickComplete{})
+		}
 	}
 	return nil
 }
