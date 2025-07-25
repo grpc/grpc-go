@@ -40,10 +40,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats/opentelemetry"
 )
 
@@ -67,12 +63,6 @@ func main() {
 	traceProvider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(traceExporter), sdktrace.WithResource(otelresource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName("grpc-client"))))
 	// Configure W3C Trace Context Propagator for traces
 	textMapPropagator := otelpropagation.TraceContext{}
-	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(fmt.Sprintf(`{"loadBalancingConfig":[{%q:{}}]}`, pickfirstleaf.Name))
-	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{
-		ServiceConfig: sc,
-		Addresses:     []resolver.Address{{Addr: "bad address"}}},
-	)
 	do := opentelemetry.DialOption(opentelemetry.Options{
 		MetricsOptions: opentelemetry.MetricsOptions{
 			MeterProvider: meterProvider,
@@ -90,7 +80,7 @@ func main() {
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
+	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig":[{%q:{}}]}`, pickfirstleaf.Name)), do)
 	if err != nil {
 		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}
