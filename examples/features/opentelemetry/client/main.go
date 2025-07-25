@@ -36,6 +36,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
@@ -70,8 +71,8 @@ func main() {
 			// up-to-date list of metrics, see:
 			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.client.attempt.started",
-				"grpc.client.attempt.duration",
+				"grpc.lb.pick_first.connection_attempts_succeeded",
+				"grpc.lb.pick_first.connection_attempts_failed",
 			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator},
@@ -79,7 +80,7 @@ func main() {
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
+	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig":[{%q:{}}]}`, pickfirstleaf.Name)), do)
 	if err != nil {
 		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}
