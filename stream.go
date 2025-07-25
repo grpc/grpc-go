@@ -1777,6 +1777,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 					binlog.Log(ss.ctx, chc)
 				}
 			}
+			// Received no request msg for non-client streaming rpcs.
 			if !ss.desc.ClientStreams && !ss.recvFirstMsg {
 				return status.Error(codes.Internal, "cardinality violation: received no request message from non-client-streaming RPC")
 			}
