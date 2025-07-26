@@ -235,12 +235,10 @@ func (c *jwtTokenFileCallCreds) extractExpiration(token string) (time.Time, erro
 		return time.Time{}, fmt.Errorf("invalid JWT format: expected 3 parts, got %d", len(parts))
 	}
 
-	// Decode the payload (second part)
 	payload := parts[1]
-
 	// Add padding if necessary for base64 decoding
-	for len(payload)%4 != 0 {
-		payload += "="
+	if m := len(payload) % 4; m != 0 {
+		payload += strings.Repeat("=", 4-m)
 	}
 
 	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
