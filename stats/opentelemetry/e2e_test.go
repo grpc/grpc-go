@@ -270,8 +270,7 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		}
 	}
 
-	// Convert collected spans to SpanStub format for comparison.
-	// This simplifies diffing with expected span stubs using cmp.Diff.
+	// Converts collected spans to SpanStub for simplified cmp.Diff comparison.
 	actualSpanStubs := make([]tracetest.SpanStub, len(spans))
 	for i, info := range spans {
 		actualSpanStubs[i] = tracetest.SpanStub{
@@ -283,8 +282,8 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		}
 	}
 
-	// Convert expected span information into SpanStub format, enabling
-	// structured comparison with actual spans using cmp.Diff.
+	// Converts expected span information into SpanStub format,
+	// enabling structured comparison with actual spans using cmp.Diff.
 	wantSpans := make([]tracetest.SpanStub, len(wantSpanInfos))
 	for i, info := range wantSpanInfos {
 		wantSpans[i] = tracetest.SpanStub{
