@@ -1589,7 +1589,7 @@ type serverStream struct {
 
 	sendCompressorName string
 
-	recvFirstMsg bool // recv frist msg from client
+	recvFirstMsg bool // set after the first message is received
 
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
@@ -1820,7 +1820,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 	} else if err != nil {
 		return err
 	}
-	return status.Error(codes.Internal, "cardinality violation: expected <EOF> for non client-streaming RPCs, but received another message")
+	return status.Error(codes.Internal, "cardinality violation: received multiple request messages for non-server-streaming RPC")
 }
 
 // MethodFromServerStream returns the method string for the input stream.
