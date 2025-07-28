@@ -3741,11 +3741,23 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 }
 
 // Tests the behavior for server-side streaming when client calls SendMsg twice.
-// Second call to SendMsg should fail with Internal error.
+// Second call to SendMsg should fail with Internal error and result in closing
+// the connection with a RST_STREAM.
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
+	// To ensure server.recvMsg() is successfully completed.
+	recvDoneOnServer := make(chan struct{})
+	// To ensure goroutine for test does not end before RPC handler performs error
+	// checking.
+	handlerDone := make(chan struct{})
 	ss := stubserver.StubServer{
-		// The initial call to recvMsg made by the generated code, will return the error.
-		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, _ testgrpc.TestService_StreamingOutputCallServer) error {
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+			// The initial call to recvMsg is made by the generated code.
+			close(recvDoneOnServer)
+			<-stream.Context().Done()
+			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
+				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
+			}
+			close(handlerDone)
 			return nil
 		},
 	}
@@ -3776,10 +3788,11 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
 		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
 	}
-
+	<-recvDoneOnServer
 	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-		t.Errorf("stream.SendMsg() = %v, want error %v", status.Code(err), codes.Internal)
+		t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Internal)
 	}
+	<-handlerDone
 }
 
 // Tests the behavior for unary RPC when client calls SendMsg twice. Second call
