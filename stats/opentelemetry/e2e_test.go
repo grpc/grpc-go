@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -86,7 +85,7 @@ func Test(t *testing.T) {
 // subset of information that is needed to verify if correct trace is being
 // attributed to the rpc.
 type traceSpanInfo struct {
-	spanKind   string
+	spanKind   oteltrace.SpanKind
 	name       string
 	events     []trace.Event
 	attributes []attribute.KeyValue
@@ -165,7 +164,7 @@ func waitForTraceSpans(ctx context.Context, exporter *tracetest.InMemoryExporter
 		missingAnySpan := false
 		for _, wantSpan := range wantSpans {
 			if !slices.ContainsFunc(spans, func(span tracetest.SpanStub) bool {
-				return span.Name == wantSpan.name && span.SpanKind.String() == wantSpan.spanKind
+				return span.Name == wantSpan.name && span.SpanKind == wantSpan.spanKind
 			}) {
 				missingAnySpan = true
 			}
@@ -271,53 +270,45 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		}
 	}
 
-	// Sort wantSpanInfos by name and kind for deterministic ordering.
-	sort.Slice(wantSpanInfos, func(i, j int) bool {
-		if wantSpanInfos[i].name == wantSpanInfos[j].name {
-			return wantSpanInfos[i].spanKind < wantSpanInfos[j].spanKind
+	// Convert collected spans to SpanStub format for comparison.
+	// This simplifies diffing with expected span stubs using cmp.Diff.
+	actualSpanStubs := make([]tracetest.SpanStub, len(spans))
+	for i, info := range spans {
+		actualSpanStubs[i] = tracetest.SpanStub{
+			SpanKind:   info.SpanKind,
+			Name:       info.Name,
+			Attributes: info.Attributes,
+			Events:     info.Events,
+			Status:     trace.Status{Code: info.Status.Code},
 		}
-		return wantSpanInfos[i].name < wantSpanInfos[j].name
-	})
+	}
 
-	// Copy spans and sort by name and kind.
-	sortedSpans := make([]tracetest.SpanStub, len(spans))
-	copy(sortedSpans, spans)
-	sort.Slice(sortedSpans, func(i, j int) bool {
-		if sortedSpans[i].Name == sortedSpans[j].Name {
-			return sortedSpans[i].SpanKind.String() < sortedSpans[j].SpanKind.String()
+	// Convert expected span information into SpanStub format, enabling
+	// structured comparison with actual spans using cmp.Diff.
+	wantSpans := make([]tracetest.SpanStub, len(wantSpanInfos))
+	for i, info := range wantSpanInfos {
+		wantSpans[i] = tracetest.SpanStub{
+			Name:       info.name,
+			SpanKind:   info.spanKind,
+			Attributes: info.attributes,
+			Events:     info.events,
+			Status:     trace.Status{Code: info.status},
 		}
-		return sortedSpans[i].Name < sortedSpans[j].Name
-	})
-
-	// Compare retrieved spans with expected spans.
-	for i := range sortedSpans {
-		// Check that the attempt span has the correct status.
-		if sortedSpans[i].Status.Code != wantSpanInfos[i].status {
-			t.Errorf("Got status code %v, want %v", sortedSpans[i], wantSpanInfos[i])
-		}
-
-		// Retrieve the corresponding expected span info based on span name and
-		// span kind to compare.
-		if sortedSpans[i].Name != wantSpanInfos[i].name || sortedSpans[i].SpanKind.String() != wantSpanInfos[i].spanKind {
-			t.Errorf("Unexpected span: %v", sortedSpans[i])
-			continue
-		}
-
-		// comparers
-		attributesSort := cmpopts.SortSlices(func(a, b attribute.KeyValue) bool {
-			return a.Key < b.Key
-		})
-		attributesValueComparable := cmpopts.EquateComparable(attribute.KeyValue{}.Value)
-		eventsTimeIgnore := cmpopts.IgnoreFields(trace.Event{}, "Time")
-
-		// attributes
-		if diff := cmp.Diff(wantSpanInfos[i].attributes, sortedSpans[i].Attributes, attributesSort, attributesValueComparable); diff != "" {
-			t.Errorf("Attributes mismatch for span %s (-want +got):\n%s", sortedSpans[i].Name, diff)
-		}
-		// events
-		if diff := cmp.Diff(wantSpanInfos[i].events, sortedSpans[i].Events, attributesSort, attributesValueComparable, eventsTimeIgnore); diff != "" {
-			t.Errorf("Events mismatch for span %s (-want +got):\n%s", sortedSpans[i].Name, diff)
-		}
+	}
+	opts := []cmp.Option{
+		cmpopts.SortSlices(func(a, b tracetest.SpanStub) bool {
+			if a.Name == b.Name {
+				return a.SpanKind < b.SpanKind
+			}
+			return a.Name < b.Name
+		}),
+		cmpopts.SortSlices(func(a, b trace.Event) bool { return a.Name < b.Name }),
+		cmpopts.IgnoreFields(trace.Event{}, "Time"),
+		cmpopts.EquateComparable(attribute.KeyValue{}, attribute.Value{}, attribute.Set{}),
+		cmpopts.IgnoreFields(tracetest.SpanStub{}, "InstrumentationScope"),
+	}
+	if diff := cmp.Diff(wantSpans, actualSpanStubs, opts...); diff != "" {
+		t.Errorf("Spans mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -861,7 +852,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 	wantSpanInfos := []traceSpanInfo{
 		{
 			name:     "Recv.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -920,7 +911,7 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -979,14 +970,14 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.UnaryCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			attributes: nil,
 			events:     nil,
 		},
 		{
 			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1010,14 +1001,14 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			attributes: nil,
 			events:     nil,
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1091,7 +1082,7 @@ func (s) TestSpan(t *testing.T) {
 	wantSpanInfos := []traceSpanInfo{
 		{
 			name:     "Recv.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1142,7 +1133,7 @@ func (s) TestSpan(t *testing.T) {
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1193,14 +1184,14 @@ func (s) TestSpan(t *testing.T) {
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.UnaryCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			attributes: nil,
 			events:     nil,
 		},
 		{
 			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1224,14 +1215,14 @@ func (s) TestSpan(t *testing.T) {
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			attributes: nil,
 			events:     nil,
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1307,7 +1298,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 	wantSpanInfos := []traceSpanInfo{
 		{
 			name:     "Recv.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1358,7 +1349,7 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1409,14 +1400,14 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.UnaryCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			attributes: nil,
 			events:     nil,
 		},
 		{
 			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1440,14 +1431,14 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			attributes: nil,
 			events:     nil,
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
 				{
@@ -1571,10 +1562,10 @@ const delayedResolutionEventName = "Delayed name resolution complete"
 // only once if any of the retry attempt encountered a delay in name resolution
 func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	tests := []struct {
-		name            string
-		setupStub       func() *stubserver.StubServer
-		doCall          func(context.Context, testgrpc.TestServiceClient) error
-		wantSpanInfosFn []traceSpanInfo
+		name          string
+		setupStub     func() *stubserver.StubServer
+		doCall        func(context.Context, testgrpc.TestServiceClient) error
+		wantSpanInfos []traceSpanInfo
 	}{
 		{
 			name: "unary",
@@ -1597,10 +1588,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				_, err := client.UnaryCall(ctx, &testpb.SimpleRequest{})
 				return err
 			},
-			wantSpanInfosFn: []traceSpanInfo{
+			wantSpanInfos: []traceSpanInfo{
 				{
 					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
+					spanKind: oteltrace.SpanKindServer,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", false),
@@ -1621,7 +1612,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				// RPC attempt #1
 				{
 					name:     "Attempt.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindInternal.String(),
+					spanKind: oteltrace.SpanKindInternal,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", true),
@@ -1644,7 +1635,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				},
 				{
 					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
+					spanKind: oteltrace.SpanKindServer,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", false),
@@ -1665,7 +1656,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				// RPC attempt #2
 				{
 					name:     "Attempt.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindInternal.String(),
+					spanKind: oteltrace.SpanKindInternal,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", true),
@@ -1685,7 +1676,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				},
 				{
 					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
+					spanKind: oteltrace.SpanKindServer,
 					status:   otelcodes.Ok,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", false),
@@ -1713,7 +1704,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				// RPC attempt #3
 				{
 					name:     "Attempt.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindInternal.String(),
+					spanKind: oteltrace.SpanKindInternal,
 					status:   otelcodes.Ok,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", true),
@@ -1740,7 +1731,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				},
 				{
 					name:       "Sent.grpc.testing.TestService.UnaryCall",
-					spanKind:   oteltrace.SpanKindClient.String(),
+					spanKind:   oteltrace.SpanKindClient,
 					status:     otelcodes.Ok,
 					attributes: nil,
 					events: []trace.Event{
@@ -1791,10 +1782,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				}
 				return nil
 			},
-			wantSpanInfosFn: []traceSpanInfo{
+			wantSpanInfos: []traceSpanInfo{
 				{
 					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
+					spanKind: oteltrace.SpanKindServer,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", false),
@@ -1807,7 +1798,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				// RPC attempt #1
 				{
 					name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindInternal.String(),
+					spanKind: oteltrace.SpanKindInternal,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", true),
@@ -1830,7 +1821,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				},
 				{
 					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
+					spanKind: oteltrace.SpanKindServer,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", false),
@@ -1843,7 +1834,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				// RPC attempt #2
 				{
 					name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindInternal.String(),
+					spanKind: oteltrace.SpanKindInternal,
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", true),
@@ -1863,7 +1854,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				},
 				{
 					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
+					spanKind: oteltrace.SpanKindServer,
 					status:   otelcodes.Ok,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", false),
@@ -1884,7 +1875,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				// RPC attempt #3
 				{
 					name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindInternal.String(),
+					spanKind: oteltrace.SpanKindInternal,
 					status:   otelcodes.Ok,
 					attributes: []attribute.KeyValue{
 						attribute.Bool("Client", true),
@@ -1904,7 +1895,7 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 				},
 				{
 					name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-					spanKind:   oteltrace.SpanKindClient.String(),
+					spanKind:   oteltrace.SpanKindClient,
 					status:     otelcodes.Ok,
 					attributes: nil,
 					events: []trace.Event{
@@ -1967,11 +1958,11 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			if err := tt.doCall(ctx, client); err != nil {
 				t.Fatalf("%s call failed: %v", tt.name, err)
 			}
-			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfosFn)
+			spans, err := waitForTraceSpans(ctx, exporter, tt.wantSpanInfos)
 			if err != nil {
 				t.Fatal(err)
 			}
-			validateTraces(t, spans, tt.wantSpanInfosFn)
+			validateTraces(t, spans, tt.wantSpanInfos)
 		})
 	}
 }
@@ -2023,14 +2014,14 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 	wantSpanInfos := []traceSpanInfo{
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
-			spanKind:   oteltrace.SpanKindClient.String(),
+			spanKind:   oteltrace.SpanKindClient,
 			status:     otelcodes.Ok,
 			events:     nil,
 			attributes: nil,
 		},
 		{
 			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
+			spanKind: oteltrace.SpanKindServer,
 			status:   otelcodes.Ok,
 			events:   wantInboundEvents,
 			attributes: []attribute.KeyValue{
@@ -2042,7 +2033,7 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindInternal.String(),
+			spanKind: oteltrace.SpanKindInternal,
 			status:   otelcodes.Ok,
 			events:   wantOutboundEvents,
 			attributes: []attribute.KeyValue{
