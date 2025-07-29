@@ -32,6 +32,8 @@ import (
 //
 // It returns a lrsclient.LoadStore for the user to report loads.
 func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context)) {
+	c.lrsClientMu.Lock()
+	defer c.lrsClientMu.Unlock()
 	if c.lrsClient == nil {
 		lrsC, err := lrsclient.New(lrsclient.Config{
 			Node:             c.xdsClientConfig.Node,

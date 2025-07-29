@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -89,7 +90,9 @@ type clientImpl struct {
 	bootstrapConfig *bootstrap.Config
 	logger          *grpclog.PrefixLogger
 	target          string
-	lrsClient       *lrsclient.LRSClient
+
+	lrsClientMu sync.Mutex
+	lrsClient   *lrsclient.LRSClient
 
 	// Accessed atomically
 	refCount int32
