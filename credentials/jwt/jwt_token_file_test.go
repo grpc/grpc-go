@@ -200,19 +200,19 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 	})
 
-	// First call should read from file
+	// First call should read from file.
 	metadata1, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("First GetRequestMetadata() failed: %v", err)
 	}
 
-	// Update the file with a different token
+	// Update the file with a different token.
 	newToken := createTestJWT(t, "", time.Now().Add(2*time.Hour))
 	if err := os.WriteFile(tokenFile, []byte(newToken), 0600); err != nil {
 		t.Fatalf("Failed to update token file: %v", err)
 	}
 
-	// Second call should return cached token (not the updated one)
+	// Second call should return cached token (not the updated one).
 	metadata2, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
@@ -301,7 +301,8 @@ func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 	return credentials.CommonAuthInfo{SecurityLevel: t.secLevel}
 }
 
-// createTestJWT creates a test JWT token with the specified audience and expiration.
+// createTestJWT creates a test JWT token with the specified audience and
+// expiration.
 func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
 	t.Helper()
 
@@ -345,7 +346,7 @@ func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
 // Tests that cached token expiration is set to 30 seconds before actual token
 // expiration.
 func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testing.T) {
-	// Create token that expires in 2 hours
+	// Create token that expires in 2 hours.
 	tokenExp := time.Now().Truncate(time.Second).Add(2 * time.Hour)
 	token := createTestJWT(t, "", tokenExp)
 	tokenFile := writeTempFile(t, "token", token)
@@ -361,13 +362,13 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 	})
 
-	// Get token to trigger caching
+	// Get token to trigger caching.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed: %v", err)
 	}
 
-	// Verify cached expiration is 30 seconds before actual token expiration
+	// Verify cached expiration is 30 seconds before actual token expiration.
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.RLock()
 	cachedExp := impl.cachedExpiration
@@ -382,7 +383,7 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 // Tests that pre-emptive refresh is triggered within 1 minute of expiration.
 func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	// Create token that expires in 80 seconds (=> cache expires in ~50s)
-	// This ensures pre-emptive refresh triggers since 50s < the 1 minute check
+	// This ensures pre-emptive refresh triggers since 50s < the 1 minute check.
 	tokenExp := time.Now().Add(80 * time.Second)
 	expiringToken := createTestJWT(t, "", tokenExp)
 	tokenFile := writeTempFile(t, "token", expiringToken)
@@ -398,13 +399,13 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 	})
 
-	// Get token - should trigger pre-emptive refresh
+	// Get token - should trigger pre-emptive refresh.
 	metadata1, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed: %v", err)
 	}
 
-	// Verify token was cached and check if refresh should be triggered
+	// Verify token was cached and check if refresh should be triggered.
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.RLock()
 	cacheExp := impl.cachedExpiration
@@ -422,16 +423,16 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	}
 
 	// Create new token file with different expiration while refresh is
-	// happening
+	// happening.
 	newToken := createTestJWT(t, "", time.Now().Add(2*time.Hour))
 	if err := os.WriteFile(tokenFile, []byte(newToken), 0600); err != nil {
 		t.Fatalf("Failed to write updated token file: %v", err)
 	}
 
 	// Get token again - should trigger a refresh given that the first one was
-	// cached but expiring soon
+	// cached but expiring soon.
 	// However, the function should have returned right away with the current
-	// cached token
+	// cached token.
 	metadata2, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
@@ -439,13 +440,13 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	// now should get the new token
+	// Now should get the new token.
 	metadata3, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
 	}
 
-	// If pre-emptive refresh worked, we should get the new token
+	// If pre-emptive refresh worked, we should get the new token.
 	expectedAuth1 := "Bearer " + expiringToken
 	expectedAuth2 := "Bearer " + expiringToken
 	expectedAuth3 := "Bearer " + newToken
@@ -490,7 +491,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 	})
 
-	// First call should fail with UNAVAILABLE
+	// First call should fail with UNAVAILABLE.
 	_, err1 := creds.GetRequestMetadata(ctx)
 	if err1 == nil {
 		t.Fatal("Expected error from nonexistent file")
@@ -499,7 +500,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Fatalf("GetRequestMetadata() = %v, want UNAVAILABLE", status.Code(err1))
 	}
 
-	// Verify error is cached internally
+	// Verify error is cached internally.
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.RLock()
 	cachedErr := impl.cachedError
@@ -517,7 +518,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("Next retry time should be set to future time")
 	}
 
-	// Second call should still return cached error
+	// Second call should still return cached error.
 	_, err2 := creds.GetRequestMetadata(ctx)
 	if err2 == nil {
 		t.Fatal("Expected cached error")
@@ -541,12 +542,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("retry attempt should not change due to backoff")
 	}
 
-	// fast-forward the backoff retry time to allow next retry attempt
+	// Fast-forward the backoff retry time to allow next retry attempt.
 	impl.mu.Lock()
 	impl.nextRetryTime = time.Now().Add(-1 * time.Minute)
 	impl.mu.Unlock()
 
-	// Third call should retry but still fail with UNAVAILABLE
+	// Third call should retry but still fail with UNAVAILABLE.
 	_, err3 := creds.GetRequestMetadata(ctx)
 	if err3 == nil {
 		t.Fatal("Expected cached error")
@@ -570,13 +571,13 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("retry attempt should not change due to backoff")
 	}
 
-	// Create valid token file
+	// Create valid token file.
 	validToken := createTestJWT(t, "", time.Now().Add(time.Hour))
 	if err := os.WriteFile(nonExistentFile, []byte(validToken), 0600); err != nil {
 		t.Fatalf("Failed to create valid token file: %v", err)
 	}
 
-	// Forth call should still fail even though the file now exists
+	// Fourth call should still fail even though the file now exists.
 	_, err4 := creds.GetRequestMetadata(ctx)
 	if err4 == nil {
 		t.Fatal("Expected cached error")
@@ -600,18 +601,18 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("retry attempt should not change due to backoff")
 	}
 
-	// fast-forward the backoff retry time to allow next retry attempt
+	// Fast-forward the backoff retry time to allow next retry attempt.
 	impl.mu.Lock()
 	impl.nextRetryTime = time.Now().Add(-1 * time.Minute)
 	impl.mu.Unlock()
 	// Fifth call should succeed since the file now exists
-	// and the backoff has expired
+	// and the backoff has expired.
 	_, err5 := creds.GetRequestMetadata(ctx)
 	if err5 != nil {
 		t.Errorf("after creating valid token file, GetRequestMetadata() should eventually succeed, but got: %v", err5)
 		t.Error("backoff should expire and trigger new attempt on next RPC")
 	} else {
-		// If successful, verify error cache and backoff state were cleared
+		// If successful, verify error cache and backoff state were cleared.
 		impl.mu.RLock()
 		clearedErr := impl.cachedError
 		retryAttempt := impl.retryAttempt
@@ -632,8 +633,8 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 
 // Tests that invalid JWT tokens are handled with UNAUTHENTICATED status.
 func (s) TestTokenFileCallCreds_InvalidJWTHandling(t *testing.T) {
-	// Write invalid JWT (missing exp field)
-	invalidJWT := createTestJWT(t, "", time.Time{}) // No expiration
+	// Write invalid JWT (missing exp field).
+	invalidJWT := createTestJWT(t, "", time.Time{})
 	tokenFile := writeTempFile(t, "token", invalidJWT)
 
 	creds, err := NewTokenFileCallCredentials(tokenFile)
@@ -656,12 +657,13 @@ func (s) TestTokenFileCallCreds_InvalidJWTHandling(t *testing.T) {
 	}
 }
 
-// Tests that RPCs are queued during file operations and all receive the same result.
+// Tests that RPCs are queued during file operations and all receive the same
+// result.
 func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 	tempDir := t.TempDir()
 	tokenFile := filepath.Join(tempDir, "token")
 
-	// Start with no token file to force file read during first RPC
+	// Start with no token file to force file read during first RPC.
 	creds, err := NewTokenFileCallCredentials(tokenFile)
 	if err != nil {
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
@@ -673,7 +675,7 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 	})
 
-	// Launch multiple concurrent RPCs before creating the token file
+	// Launch multiple concurrent RPCs before creating the token file.
 	const numConcurrentRPCs = 5
 	results := make(chan error, numConcurrentRPCs)
 
@@ -684,14 +686,14 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 		}()
 	}
 
-	// Collect all results - they should all be the same error (UNAVAILABLE)
+	// Collect all results - they should all be the same error (UNAVAILABLE).
 	var errors []error
 	for range numConcurrentRPCs {
 		err := <-results
 		errors = append(errors, err)
 	}
 
-	// All RPCs should fail with the same error (file not found)
+	// All RPCs should fail with the same error (file not found).
 	for i, err := range errors {
 		if err == nil {
 			t.Errorf("RPC %d should have failed with UNAVAILABLE", i)
@@ -705,7 +707,7 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 		}
 	}
 
-	// Verify error was cached after concurrent RPCs
+	// Verify error was cached after concurrent RPCs.
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.RLock()
 	finalCachedErr := impl.cachedError
@@ -731,7 +733,7 @@ func (s) TestTokenFileCallCreds_NoIdleRetries(t *testing.T) {
 
 	impl := creds.(*jwtTokenFileCallCreds)
 
-	// Verify state unchanged - no background file reads attempted
+	// Verify state unchanged - no background file reads attempted.
 	impl.mu.RLock()
 	token := impl.cachedToken
 	cachedErr := impl.cachedError

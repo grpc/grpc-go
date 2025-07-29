@@ -45,7 +45,7 @@ type jwtClaims struct {
 // This implementation follows the A97 JWT Call Credentials specification.
 type jwtTokenFileCallCreds struct {
 	tokenFilePath   string
-	backoffStrategy backoff.Strategy // Backoff strategy when error occurs
+	backoffStrategy backoff.Strategy // Strategy when error occurs
 
 	// Cached token data
 	mu               sync.RWMutex
@@ -86,7 +86,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 		return nil, fmt.Errorf("unable to transfer JWT token file PerRPCCredentials: %v", err)
 	}
 
-	// this may be delayed if the token needs to be refreshed from file
+	// This may be delayed if the token needs to be refreshed from file.
 	token, err := c.getToken(ctx)
 	if err != nil {
 		return nil, err
@@ -119,8 +119,8 @@ func (c *jwtTokenFileCallCreds) getToken(ctx context.Context) (string, error) {
 		return token, nil
 	}
 
-	// if still within backoff period, return cached error to avoid repeated
-	// file reads
+	// If still within backoff period, return cached error to avoid repeated
+	// file reads.
 	if c.cachedError != nil && time.Now().Before(c.nextRetryTime) {
 		err := c.cachedError
 		c.mu.RUnlock()
@@ -128,9 +128,9 @@ func (c *jwtTokenFileCallCreds) getToken(ctx context.Context) (string, error) {
 	}
 
 	c.mu.RUnlock()
-	// Token is expired or missing or the retry backoff period has expired. So
-	// refresh synchronously.
-	// NOTE: refreshTokenSync itself acquires the write lock
+	// Token is expired or missing or the retry backoff period has expired.
+	// So we should refresh synchronously.
+	// NOTE: refreshTokenSync itself acquires the write lock.
 	return c.refreshTokenSync(false)
 }
 
@@ -161,16 +161,16 @@ func (c *jwtTokenFileCallCreds) triggerPreemptiveRefresh() {
 		c.refreshMu.Lock()
 		defer c.refreshMu.Unlock()
 
-		// Re-check if refresh is still needed under mutex
+		// Re-check if refresh is still needed under mutex.
 		c.mu.RLock()
 		stillNeeded := c.needsPreemptiveRefreshLocked()
 		c.mu.RUnlock()
 
 		if !stillNeeded {
-			return // Another goroutine already refreshed or token expired
+			return // Another goroutine already refreshed or token expired.
 		}
 
-		// Force refresh to read new token even if current one is still valid
+		// Force refresh to read new token even if current one is still valid.
 		_, _ = c.refreshTokenSync(true)
 	}()
 }
@@ -187,7 +187,8 @@ func (c *jwtTokenFileCallCreds) refreshTokenSync(preemptiveRefresh bool) (string
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Double-check under write lock but skip if preemptive refresh is requested
+	// Double-check under write lock but skip if preemptive refresh is
+	// requested.
 	if !preemptiveRefresh && c.isTokenValidLocked() {
 		return c.cachedToken, nil
 	}
@@ -206,7 +207,7 @@ func (c *jwtTokenFileCallCreds) refreshTokenSync(preemptiveRefresh bool) (string
 		return "", err
 	}
 
-	// Parse JWT to extract expiration
+	// Parse JWT to extract expiration.
 	exp, err := c.extractExpiration(token)
 	if err != nil {
 		err = status.Errorf(codes.Unauthenticated, "failed to parse JWT from token file %q: %v", c.tokenFilePath, err)
@@ -214,7 +215,7 @@ func (c *jwtTokenFileCallCreds) refreshTokenSync(preemptiveRefresh bool) (string
 		return "", err
 	}
 
-	// Success - clear any cached error and backoff state, update token cache
+	// Success - clear any cached error and backoff state, update token cache.
 	c.clearErrorAndBackoffLocked()
 	c.cachedToken = token
 	// Per RFC A97: consider token invalid if it expires within the next 30
@@ -232,7 +233,7 @@ func (c *jwtTokenFileCallCreds) extractExpiration(token string) (time.Time, erro
 	}
 
 	payload := parts[1]
-	// Add padding if necessary for base64 decoding
+	// Add padding if necessary for base64 decoding.
 	if m := len(payload) % 4; m != 0 {
 		payload += strings.Repeat("=", 4-m)
 	}
@@ -253,7 +254,7 @@ func (c *jwtTokenFileCallCreds) extractExpiration(token string) (time.Time, erro
 
 	expTime := time.Unix(claims.Exp, 0)
 
-	// Check if token is already expired
+	// Check if token is already expired.
 	if expTime.Before(time.Now()) {
 		return time.Time{}, fmt.Errorf("JWT token is expired")
 	}
