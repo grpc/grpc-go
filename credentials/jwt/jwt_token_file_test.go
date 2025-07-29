@@ -409,7 +409,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	impl.mu.RLock()
 	cacheExp := impl.cachedExpiration
 	tokenCached := impl.cachedToken != ""
-	shouldTriggerRefresh := impl.needsPreemptiveRefresh()
+	shouldTriggerRefresh := impl.needsPreemptiveRefreshLocked()
 	impl.mu.RUnlock()
 
 	if !tokenCached {
