@@ -37,11 +37,6 @@ func (s) TestXDSClient_New(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "empty node ID",
-			config:  Config{},
-			wantErr: "node ID is empty",
-		},
-		{
 			name: "nil resource types",
 			config: Config{
 				Node: clients.Node{ID: "node-id"},
@@ -69,6 +64,16 @@ func (s) TestXDSClient_New(t *testing.T) {
 			name: "success with servers",
 			config: Config{
 				Node:             clients.Node{ID: "node-id"},
+				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+				TransportBuilder: grpctransport.NewBuilder(configs),
+				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
+			},
+			wantErr: "",
+		},
+		{
+			name: "success with servers and empty nodeID",
+			config: Config{
+				Node:             clients.Node{ID: ""},
 				ResourceTypes:    map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
 				TransportBuilder: grpctransport.NewBuilder(configs),
 				Servers:          []ServerConfig{{ServerIdentifier: clients.ServerIdentifier{ServerURI: "dummy-server"}}},
