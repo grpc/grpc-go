@@ -519,7 +519,7 @@ func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_ResolverError_AfterClose(t *testing.T) {
-	balancerName := "stub-balancer-test-resolver-error-after-close"
+	balancerName := t.Name()
 	exitIdleCh := make(chan struct{}, 1)
 
 	stub.Register(balancerName, stub.BalancerFuncs{
@@ -578,7 +578,7 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
-	balancerName := "stub-balancer-test-exit-idle-one-after-close"
+	balancerName := t.Name()
 	exitIdleCh := make(chan struct{})
 
 	stub.Register(balancerName, stub.BalancerFuncs{
@@ -599,7 +599,7 @@ func (s) TestBalancerGroup_ExitIdleOne_AfterClose(t *testing.T) {
 	bg.ExitIdleOne(testBalancerIDs[0])
 
 	select {
-	case <-time.After(defaultTestTimeout):
+	case <-time.After(defaultTestShortTimeout):
 	case <-exitIdleCh:
 		t.Fatalf("ExitIdleOne called ExitIdle on sub-balancer after BalancerGroup was closed")
 	}
@@ -798,8 +798,14 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 				t.Fatalf("ExitIdle was called multiple times for sub-balancer %q", name)
 			}
 			called[name] = true
-		case <-time.After(time.Second):
-			t.Fatalf("Timeout: ExitIdle not called for all sub-balancers, got %d/%d", len(called), len(balancerNames))
+		case <-time.After(defaultTestTimeout):
+			var balancers []string
+			for _, name := range balancerNames {
+				if !called[name] {
+					balancers = append(balancers, name)
+				}
+			}
+			t.Fatalf("Timeout waiting for ExitIdle. Missing calls from: %v", balancers)
 		}
 	}
 }
