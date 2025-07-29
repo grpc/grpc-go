@@ -35,6 +35,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const defaultTestTimeout = 5 * time.Second
+
 type s struct {
 	grpctest.Tester
 }
@@ -151,7 +153,7 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 				t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 				AuthInfo: tt.authInfo,
@@ -186,7 +188,6 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 }
 
 func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
-
 	token := createTestJWT(t, "", time.Now().Add(time.Hour))
 	tokenFile := writeTempFile(t, "token", token)
 
@@ -195,7 +196,7 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -271,7 +272,7 @@ func (s) TestTokenFileCallCreds_FileErrors(t *testing.T) {
 				t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 				AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -356,7 +357,7 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -393,7 +394,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -485,7 +486,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -642,7 +643,7 @@ func (s) TestTokenFileCallCreds_InvalidJWTHandling(t *testing.T) {
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -668,7 +669,7 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
