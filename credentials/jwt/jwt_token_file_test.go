@@ -47,33 +47,31 @@ func Test(t *testing.T) {
 
 func (s) TestNewTokenFileCallCredentials(t *testing.T) {
 	tests := []struct {
-		name            string
-		tokenFilePath   string
-		wantErr         bool
-		wantErrContains string
+		name          string
+		tokenFilePath string
+		wantErr       string
 	}{
 		{
 			name:          "valid parameters",
 			tokenFilePath: "/path/to/token",
-			wantErr:       false,
+			wantErr:       "",
 		},
 		{
-			name:            "empty token file path",
-			tokenFilePath:   "",
-			wantErr:         true,
-			wantErrContains: "tokenFilePath cannot be empty",
+			name:          "empty token file path",
+			tokenFilePath: "",
+			wantErr:       "tokenFilePath cannot be empty",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			creds, err := NewTokenFileCallCredentials(tt.tokenFilePath)
-			if tt.wantErr {
+			if tt.wantErr != "" {
 				if err == nil {
 					t.Fatalf("NewTokenFileCallCredentials() expected error, got nil")
 				}
-				if !strings.Contains(err.Error(), tt.wantErrContains) {
-					t.Fatalf("NewTokenFileCallCredentials() error = %v, want error containing %q", err, tt.wantErrContains)
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("NewTokenFileCallCredentials() error = %v, want error containing %q", err, tt.wantErr)
 				}
 				return
 			}
