@@ -44,19 +44,17 @@ type jwtClaims struct {
 // tokens from a file.
 // This implementation follows the A97 JWT Call Credentials specification.
 type jwtTokenFileCallCreds struct {
-	tokenFilePath string
+	tokenFilePath   string
+	backoffStrategy backoff.Strategy // Backoff strategy when error occurs
 
 	// Cached token data
 	mu               sync.RWMutex
 	cachedToken      string
 	cachedExpiration time.Time // Slightly reduced expiration time compared to the actual exp
-
-	// Error caching with backoff
-	cachedError     error            // Cached error from last failed attempt
-	cachedErrorTime time.Time        // When the error was cached
-	backoffStrategy backoff.Strategy // Backoff strategy when error occurs
-	retryAttempt    int              // Current retry attempt number
-	nextRetryTime   time.Time        // When next retry is allowed
+	cachedError      error     // Cached error from last failed attempt
+	cachedErrorTime  time.Time // When the error was cached
+	retryAttempt     int       // Current retry attempt number
+	nextRetryTime    time.Time // When next retry is allowed
 
 	// Pre-emptive refresh mutex
 	refreshMu sync.Mutex
@@ -64,8 +62,6 @@ type jwtTokenFileCallCreds struct {
 
 // NewTokenFileCallCredentials creates PerRPCCredentials that reads JWT tokens
 // from the specified file path.
-//
-// tokenFilePath is the filepath to the JWT token file.
 func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCredentials, error) {
 	if tokenFilePath == "" {
 		return nil, fmt.Errorf("tokenFilePath cannot be empty")
