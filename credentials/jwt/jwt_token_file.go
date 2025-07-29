@@ -130,7 +130,7 @@ func (c *jwtTokenFileCallCreds) getToken(ctx context.Context) (string, error) {
 	// Token is expired or missing or the retry backoff period has expired. So
 	// refresh synchronously.
 	// NOTE: refreshTokenSync itself acquires the write lock
-	return c.refreshTokenSync(ctx, false)
+	return c.refreshTokenSync(false)
 }
 
 // isTokenValidLocked checks if the cached token is still valid.
@@ -168,11 +168,8 @@ func (c *jwtTokenFileCallCreds) triggerPreemptiveRefresh() {
 			return // Another goroutine already refreshed or token expired
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
 		// Force refresh to read new token even if current one is still valid
-		_, _ = c.refreshTokenSync(ctx, true)
+		_, _ = c.refreshTokenSync(true)
 	}()
 }
 
@@ -183,7 +180,7 @@ func (c *jwtTokenFileCallCreds) triggerPreemptiveRefresh() {
 // the cached token is still valid. If preemptiveRefresh is false, skips file read
 // when cached token is still valid, optimizing concurrent synchronous refresh calls
 // where one RPC may have already updated the cache while another was waiting on the lock.
-func (c *jwtTokenFileCallCreds) refreshTokenSync(_ context.Context, preemptiveRefresh bool) (string, error) {
+func (c *jwtTokenFileCallCreds) refreshTokenSync(preemptiveRefresh bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
