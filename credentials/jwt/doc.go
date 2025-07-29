@@ -22,20 +22,7 @@
 // clients to authenticate using JWT tokens read from files. While originally
 // designed for xDS environments, these credentials are general-purpose.
 //
-// # Usage
-//
-// The credentials can be used directly:
-//
-//	import "google.golang.org/grpc/credentials/jwt"
-//
-//	creds, err := jwt.NewTokenFileCallCredentials("/path/to/jwt.token")
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//
-//	conn, err := grpc.NewClient("example.com:443", grpc.WithPerRPCCredentials(creds))
-//
-// Or configured via xDS bootstrap file; see grpc/xds/bootstrap for details.
+// The credentials can be used directly in gRPC clients or configured via xDS.
 //
 // # Token Requirements
 //
@@ -48,10 +35,16 @@
 //
 // - Tokens are cached until expiration to avoid excessive file I/O
 // - Transport security is required (RequireTransportSecurity returns true)
-// - Errors in reading tokens or parsing JWTs will result in RPC UNAVAILALBE or UNAUTHENTICATED errors
+// - Errors in reading tokens or parsing JWTs will result in RPC UNAVAILALBE or
+// UNAUTHENTICATED errors
 // - These errors are cached and retried with exponential backoff.
 //
 // This implementation is originally intended for use in service mesh
 // environments like Istio where JWT tokens are provisioned and rotated by the
 // infrastructure.
+//
+// # Experimental
+//
+// Notice: All APIs in this package are experimental and may be removed in a
+// later release.
 package jwt
