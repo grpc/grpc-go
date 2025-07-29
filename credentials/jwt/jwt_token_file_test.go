@@ -52,12 +52,12 @@ func (s) TestNewTokenFileCallCredentials(t *testing.T) {
 		wantErr       string
 	}{
 		{
-			name:          "valid parameters",
+			name:          "some filepath",
 			tokenFilePath: "/path/to/token",
 			wantErr:       "",
 		},
 		{
-			name:          "empty token file path",
+			name:          "empty filepath",
 			tokenFilePath: "",
 			wantErr:       "tokenFilePath cannot be empty",
 		},
@@ -113,14 +113,14 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 		wantMetadata    map[string]string
 	}{
 		{
-			name:            "valid token without expiration errors",
+			name:            "valid token without expiration",
 			tokenContent:    createTestJWT(t, "", time.Time{}),
 			authInfo:        &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			wantErr:         true,
 			wantErrContains: "JWT token has no expiration claim",
 		},
 		{
-			name:         "valid token with future expiration succeeds",
+			name:         "valid token with future expiration",
 			tokenContent: createTestJWT(t, "https://example.com", now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			wantErr:      false,
@@ -134,7 +134,7 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 			wantErrContains: "unable to transfer JWT token file PerRPCCredentials",
 		},
 		{
-			name:            "expired token errors",
+			name:            "expired token",
 			tokenContent:    createTestJWT(t, "", now.Add(-time.Hour)),
 			authInfo:        &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			wantErr:         true,
