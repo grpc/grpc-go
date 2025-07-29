@@ -3837,7 +3837,7 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 }
 
 // Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
-// and sends multiple nessages.
+// and sends multiple messages.
 func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 	// The initial call to recvMsg made by the generated code, will return the error.
 	ss := stubserver.StubServer{}
@@ -3880,8 +3880,8 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming RPC when client sends zero request message.
-func (s) TestServerStreaming_ClientSendsZeroRequest(t *testing.T) {
+// Tests the behavior for server-side streaming RPC when client sends zero request messages.
+func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
 	// The initial call to recvMsg made by the generated code, will return the error.
 	ss := stubserver.StubServer{}
 	if err := ss.Start(nil); err != nil {
