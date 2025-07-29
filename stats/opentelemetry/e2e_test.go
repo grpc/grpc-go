@@ -270,8 +270,7 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		}
 	}
 
-	// Converts collected spans to traceSpanInfo for simplified cmp.Diff
-	// comparison.
+	// Convert spans to traceSpanInfo for cmp.Diff comparison.
 	actualSpanInfos := make([]traceSpanInfo, len(spans))
 	for i, s := range spans {
 		actualSpanInfos[i] = traceSpanInfo{
