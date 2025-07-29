@@ -343,7 +343,8 @@ func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
 	return fmt.Sprintf("%s.%s.%s", headerB64, claimsB64, signature)
 }
 
-// Tests that cached token expiration is set to 30 seconds before actual token expiration.
+// Tests that cached token expiration is set to 30 seconds before actual token
+// expiration.
 func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testing.T) {
 	// Create token that expires in 2 hours
 	tokenExp := time.Now().Truncate(time.Second).Add(2 * time.Hour)
@@ -421,7 +422,8 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		t.Errorf("cache expires in %v, should be < 1 minute to trigger pre-emptive refresh", timeUntilExp)
 	}
 
-	// Create new token file with different expiration while refresh is happening
+	// Create new token file with different expiration while refresh is
+	// happening
 	newToken := createTestJWT(t, "", time.Now().Add(2*time.Hour))
 	if err := os.WriteFile(tokenFile, []byte(newToken), 0600); err != nil {
 		t.Fatalf("Failed to write updated token file: %v", err)
@@ -429,7 +431,8 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 
 	// Get token again - should trigger a refresh given that the first one was
 	// cached but expiring soon
-	// However, the function should have returned right away with the current cached token
+	// However, the function should have returned right away with the current
+	// cached token
 	metadata2, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
@@ -467,10 +470,12 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 // Tests that backoff behavior handles file read errors correctly.
 func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// This test has the following flow:
-	// First call to GetRequestMetadata() fails with UNAVAILABLE due to a missing file.
+	// First call to GetRequestMetadata() fails with UNAVAILABLE due to a
+	// missing file.
 	// Second call to GetRequestMetadata() fails with UNAVAILABLE due backoff.
 	// Third call to GetRequestMetadata() fails with UNAVAILABLE due to retry.
-	// Fourth call to GetRequestMetadata() fails with UNAVAILABLE due to backoff even though file exists.
+	// Fourth call to GetRequestMetadata() fails with UNAVAILABLE due to backoff
+	// even though file exists.
 	// Fifth call to GetRequestMetadata() succeeds after creating the file.
 	tempDir := t.TempDir()
 	nonExistentFile := filepath.Join(tempDir, "nonexistent")
@@ -499,16 +504,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.RLock()
 	cachedErr := impl.cachedError
-	cachedErrTime := impl.cachedErrorTime
 	retryAttempt := impl.retryAttempt
 	nextRetryTime := impl.nextRetryTime
 	impl.mu.RUnlock()
 
 	if cachedErr == nil {
 		t.Error("error should be cached internally after failed file read")
-	}
-	if cachedErrTime.IsZero() {
-		t.Error("error cache time should be set")
 	}
 	if retryAttempt != 1 {
 		t.Errorf("Expected retry attempt to be 1, got %d", retryAttempt)
@@ -614,16 +615,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		// If successful, verify error cache and backoff state were cleared
 		impl.mu.RLock()
 		clearedErr := impl.cachedError
-		clearedErrTime := impl.cachedErrorTime
 		retryAttempt := impl.retryAttempt
 		nextRetryTime := impl.nextRetryTime
 		impl.mu.RUnlock()
 
 		if clearedErr != nil {
 			t.Errorf("after successful retry, cached error should be cleared, got: %v", clearedErr)
-		}
-		if !clearedErrTime.IsZero() {
-			t.Error("after successful retry, cached error time should be cleared")
 		}
 		if retryAttempt != 0 {
 			t.Errorf("after successful retry, retry attempt should be reset, got: %d", retryAttempt)

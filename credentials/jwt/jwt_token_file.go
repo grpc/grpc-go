@@ -50,9 +50,8 @@ type jwtTokenFileCallCreds struct {
 	// Cached token data
 	mu               sync.RWMutex
 	cachedToken      string
-	cachedExpiration time.Time // Slightly reduced expiration time compared to the actual exp
-	cachedError      error     // Cached error from last failed attempt
-	cachedErrorTime  time.Time // When the error was cached
+	cachedExpiration time.Time // Slightly less than actual expiration time
+	cachedError      error     // Error from last failed attempt
 	retryAttempt     int       // Current retry attempt number
 	nextRetryTime    time.Time // When next retry is allowed
 
@@ -73,11 +72,12 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 	}, nil
 }
 
-// GetRequestMetadata gets the current request metadata, refreshing tokens
-// if required. This implementation follows the PerRPCCredentials interface.
-// The tokens will get automatically refreshed if they are about to expire or if
+// GetRequestMetadata gets the current request metadata, refreshing tokens if
+// required. This implementation follows the PerRPCCredentials interface.  The
+// tokens will get automatically refreshed if they are about to expire or if
 // they haven't been loaded successfully yet.
-// If it's not possible to extract a token from the file, UNAVAILABLE is returned.
+// If it's not possible to extract a token from the file, UNAVAILABLE is
+// returned.
 // If the token is extracted but invalid, then UNAUTHENTICATED is returned.
 // If errors are encoutered, a backoff is applied before retrying.
 func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
@@ -119,7 +119,8 @@ func (c *jwtTokenFileCallCreds) getToken(ctx context.Context) (string, error) {
 		return token, nil
 	}
 
-	// if still within backoff period, return cached error to avoid repeated file reads
+	// if still within backoff period, return cached error to avoid repeated
+	// file reads
 	if c.cachedError != nil && time.Now().Before(c.nextRetryTime) {
 		err := c.cachedError
 		c.mu.RUnlock()
@@ -142,10 +143,11 @@ func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
 	return c.cachedExpiration.After(time.Now())
 }
 
-// needsPreemptiveRefreshLocked checks if a pre-emptive refresh should be triggered.
+// needsPreemptiveRefreshLocked checks if a pre-emptive refresh should be
+// triggered.
 // Returns true if the cached token is valid but expires within 1 minute.
-// We only trigger pre-emptive refresh for valid tokens - if the token is invalid
-// or expired, the next RPC will handle synchronous refresh instead.
+// We only trigger pre-emptive refresh for valid tokens - if the token is
+// invalid or expired, the next RPC will handle synchronous refresh instead.
 // Caller must hold c.mu.RLock().
 func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
 	return c.isTokenValidLocked() && time.Until(c.cachedExpiration) < time.Minute
@@ -174,12 +176,13 @@ func (c *jwtTokenFileCallCreds) triggerPreemptiveRefresh() {
 }
 
 // refreshTokenSync reads a new token from the file and updates the cache.  If
-// preemptiveRefresh is true, bypasses the validity check of the currently cached
-// token and always reads from file.
-// This is used for pre-emptive refresh to ensure new tokens are loaded even when
-// the cached token is still valid. If preemptiveRefresh is false, skips file read
-// when cached token is still valid, optimizing concurrent synchronous refresh calls
-// where one RPC may have already updated the cache while another was waiting on the lock.
+// preemptiveRefresh is true, bypasses the validity check of the currently
+// cached token and always reads from file.
+// This is used for pre-emptive refresh to ensure new tokens are loaded even
+// when the cached token is still valid. If preemptiveRefresh is false, skips
+// file read when cached token is still valid, optimizing concurrent synchronous
+// refresh calls where one RPC may have already updated the cache while another
+// was waiting on the lock.
 func (c *jwtTokenFileCallCreds) refreshTokenSync(preemptiveRefresh bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -258,11 +261,11 @@ func (c *jwtTokenFileCallCreds) extractExpiration(token string) (time.Time, erro
 	return expTime, nil
 }
 
-// setErrorWithBackoffLocked caches an error and calculates the next retry time using exponential backoff.
+// setErrorWithBackoffLocked caches an error and calculates the next retry time
+// using exponential backoff.
 // Caller must hold c.mu write lock.
 func (c *jwtTokenFileCallCreds) setErrorWithBackoffLocked(err error) {
 	c.cachedError = err
-	c.cachedErrorTime = time.Now()
 	c.retryAttempt++
 	backoffDelay := c.backoffStrategy.Backoff(c.retryAttempt - 1)
 	c.nextRetryTime = time.Now().Add(backoffDelay)
@@ -272,7 +275,6 @@ func (c *jwtTokenFileCallCreds) setErrorWithBackoffLocked(err error) {
 // Caller must hold c.mu write lock.
 func (c *jwtTokenFileCallCreds) clearErrorAndBackoffLocked() {
 	c.cachedError = nil
-	c.cachedErrorTime = time.Time{}
 	c.retryAttempt = 0
 	c.nextRetryTime = time.Time{}
 }
