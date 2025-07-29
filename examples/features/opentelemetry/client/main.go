@@ -36,7 +36,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/pickfirst/pickfirstleaf"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/features/proto/echo"
 	oteltracing "google.golang.org/grpc/experimental/opentelemetry"
@@ -44,7 +43,7 @@ import (
 )
 
 var (
-	addr               = flag.String("addr", ":50051", "the server address to connect to")
+	addr               = flag.String("addr", "localhost:50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9465", "the Prometheus exporter endpoint for metrics")
 )
 
@@ -80,7 +79,7 @@ func main() {
 
 	go http.ListenAndServe(*prometheusEndpoint, promhttp.Handler())
 
-	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig":[{%q:{}}]}`, pickfirstleaf.Name)), do)
+	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
 	if err != nil {
 		log.Fatalf("grpc.NewClient() failed: %v", err)
 	}

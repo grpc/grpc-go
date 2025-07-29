@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	addr               = flag.String("addr", ":50051", "the server address to connect to")
+	addr               = flag.String("addr", "localhost:50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
 )
 
