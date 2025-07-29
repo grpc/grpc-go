@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
@@ -495,7 +494,6 @@ func (s) TestBalancerGroup_UpdateClientConnState_AfterClose(t *testing.T) {
 			return nil
 		},
 	})
-	internal.BalancerUnregister(balancerName)
 
 	bg := New(Options{
 		CC:              testutils.NewBalancerClientConn(t),
