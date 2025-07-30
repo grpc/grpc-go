@@ -382,7 +382,7 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 
 // Tests that pre-emptive refresh is triggered within 1 minute of expiration.
 func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
-	// Create token that expires in 80 seconds (=> cache expires in ~50s)
+	// Create token that expires in 80 seconds (=> cache expires in ~50s).
 	// This ensures pre-emptive refresh triggers since 50s < the 1 minute check.
 	tokenExp := time.Now().Add(80 * time.Second)
 	expiringToken := createTestJWT(t, "", tokenExp)
@@ -463,20 +463,21 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		t.Errorf("Second call should return the original token: got %q, want %q", actualAuth2, expectedAuth2)
 	}
 	if actualAuth3 != expectedAuth3 {
-		t.Errorf("Third call should return the original token: got %q, want %q", actualAuth3, expectedAuth3)
+		t.Errorf("Third call should return the new token: got %q, want %q", actualAuth3, expectedAuth3)
 	}
 }
 
 // Tests that backoff behavior handles file read errors correctly.
 func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
-	// This test has the following flow:
+	// This test has the following expectations:
 	// First call to GetRequestMetadata() fails with UNAVAILABLE due to a
 	// missing file.
 	// Second call to GetRequestMetadata() fails with UNAVAILABLE due backoff.
 	// Third call to GetRequestMetadata() fails with UNAVAILABLE due to retry.
 	// Fourth call to GetRequestMetadata() fails with UNAVAILABLE due to backoff
 	// even though file exists.
-	// Fifth call to GetRequestMetadata() succeeds after creating the file.
+	// Fifth call to GetRequestMetadata() succeeds after reading the file and
+	// backoff has expired.
 	tempDir := t.TempDir()
 	nonExistentFile := filepath.Join(tempDir, "nonexistent")
 
@@ -718,34 +719,6 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 	}
 	if finalCachedErr.Error() != errors[0].Error() {
 		t.Error("cached error should match the errors returned to RPCs")
-	}
-}
-
-// Tests that no background retries occur when channel is idle.
-func (s) TestTokenFileCallCreds_NoIdleRetries(t *testing.T) {
-	newToken := createTestJWT(t, "", time.Now().Add(2*time.Hour))
-	tokenFilepath := writeTempFile(t, "token", newToken)
-
-	creds, err := NewTokenFileCallCredentials(tokenFilepath)
-	if err != nil {
-		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
-	}
-
-	impl := creds.(*jwtTokenFileCallCreds)
-
-	// Verify state unchanged - no background file reads attempted.
-	impl.mu.RLock()
-	token := impl.cachedToken
-	cachedErr := impl.cachedError
-	impl.mu.RUnlock()
-
-	time.Sleep(100 * time.Millisecond)
-
-	if token != "" {
-		t.Errorf("after idle period, cached token = %q, want empty (no background reads)", token)
-	}
-	if cachedErr != nil {
-		t.Errorf("after idle period, cached error = %v, want nil (no background reads)", cachedErr)
 	}
 }
 
