@@ -33,15 +33,8 @@ import (
 // It returns a lrsclient.LoadStore for the user to report loads.
 func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context)) {
 	if c.lrsClient == nil {
-		lrsC, err := lrsclient.New(lrsclient.Config{
-			Node:             c.xdsClientConfig.Node,
-			TransportBuilder: c.xdsClientConfig.TransportBuilder,
-		})
-		if err != nil {
-			c.logger.Warningf("Failed to create an lrs client to the management server to report load: %v", server, err)
-			return nil, func(context.Context) {}
-		}
-		c.lrsClient = lrsC
+		c.logger.Warningf("lrs Client not found")
+		return nil, func(context.Context) {}
 	}
 
 	load, err := c.lrsClient.ReportLoad(clients.ServerIdentifier{
