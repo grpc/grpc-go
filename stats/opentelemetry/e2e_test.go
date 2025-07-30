@@ -1547,7 +1547,7 @@ const delayedResolutionEventName = "Delayed name resolution complete"
 // TestTraceSpan_WithRetriesAndNameResolutionDelay verifies that
 // "Delayed name resolution complete" event is recorded in the call trace span
 // only once if any of the retry attempt encountered a delay in name resolution
-func TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
+func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 	tests := []struct {
 		name          string
 		setupStub     func() *stubserver.StubServer
