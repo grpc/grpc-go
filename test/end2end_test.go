@@ -3887,7 +3887,7 @@ func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
 	testCases := []struct {
 		name     string
 		desc     *grpc.StreamDesc
-		wantCode codes.Code // expected error code from RecvMsg
+		wantCode codes.Code
 	}{
 		{
 			name: "ServerStreaming",
