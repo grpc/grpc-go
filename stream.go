@@ -1820,7 +1820,7 @@ func (ss *serverStream) RecvMsg(m any) (err error) {
 	} else if err != nil {
 		return err
 	}
-	return status.Error(codes.Internal, "cardinality violation: received multiple request messages for non-server-streaming RPC")
+	return status.Error(codes.Internal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
 }
 
 // MethodFromServerStream returns the method string for the input stream.

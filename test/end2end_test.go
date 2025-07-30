@@ -3881,38 +3881,71 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 }
 
 // Tests the behavior for server-side streaming RPC when client sends zero request messages.
-func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
-	// The initial call to recvMsg made by the generated code, will return the error.
-	ss := stubserver.StubServer{}
-	if err := ss.Start(nil); err != nil {
-		t.Fatal("Error starting server:", err)
+// Server runs against multiple StreamDesc configurations, including server-streaming,
+// bidi-streaming and client-streaming.
+func TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
+	testCases := []struct {
+		name     string
+		desc     *grpc.StreamDesc
+		wantCode codes.Code // expected error code from RecvMsg
+	}{
+		{
+			name: "ServerStreaming",
+			desc: &grpc.StreamDesc{
+				StreamName:    "StreamingOutputCall",
+				ServerStreams: true,
+				ClientStreams: false,
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "BidiStreaming",
+			desc: &grpc.StreamDesc{
+				StreamName:    "StreamingOutputCall",
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "ClientStreaming",
+			desc: &grpc.StreamDesc{
+				StreamName:    "StreamingOutputCall",
+				ServerStreams: false,
+				ClientStreams: true,
+			},
+			wantCode: codes.Internal,
+		},
 	}
-	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
-	}
-	defer cc.Close()
+	for _, tc := range testCases {
+		// The initial call to recvMsg made by the generated code, will return the error.
+		ss := stubserver.StubServer{}
+		if err := ss.Start(nil); err != nil {
+			t.Fatal("Error starting server:", err)
+		}
+		defer ss.Stop()
 
-	desc := &grpc.StreamDesc{
-		StreamName:    "StreamingOutputCall",
-		ServerStreams: true,
-		ClientStreams: false,
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+		}
+		defer cc.Close()
 
-	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
-	if err != nil {
-		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
-	}
+		stream, err := cc.NewStream(ctx, tc.desc, "/grpc.testing.TestService/StreamingOutputCall")
+		if err != nil {
+			t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+		}
 
-	if err := stream.CloseSend(); err != nil {
-		t.Errorf("stream.CloseSend() = %v, want <nil>", err)
-	}
-	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+		if err := stream.CloseSend(); err != nil {
+			t.Errorf("stream.CloseSend() = %v, want <nil>", err)
+		}
+
+		if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != tc.wantCode {
+			t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), tc.wantCode)
+		}
 	}
 }
 
