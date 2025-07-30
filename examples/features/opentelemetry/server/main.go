@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	addr               = flag.String("addr", ":50051", "the server address to connect to")
+	addr               = flag.String("addr", "localhost:50051", "the server address to connect to")
 	prometheusEndpoint = flag.String("prometheus_endpoint", ":9464", "the Prometheus exporter endpoint for metrics")
 )
 
@@ -78,8 +78,8 @@ func main() {
 			// up-to-date list of metrics, see:
 			// https://grpc.io/docs/guides/opentelemetry-metrics/#instruments
 			Metrics: opentelemetry.DefaultMetrics().Add(
-				"grpc.server.call.started",
-				"grpc.server.call.duration",
+				"grpc.lb.pick_first.connection_attempts_succeeded",
+				"grpc.lb.pick_first.connection_attempts_failed",
 			),
 		},
 		TraceOptions: oteltracing.TraceOptions{TracerProvider: traceProvider, TextMapPropagator: textMapPropagator}})
