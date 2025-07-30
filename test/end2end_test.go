@@ -3883,7 +3883,7 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 // Tests the behavior for server-side streaming RPC when client sends zero request messages.
 // Server runs against multiple StreamDesc configurations, including server-streaming,
 // bidi-streaming and client-streaming.
-func TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
+func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
 	testCases := []struct {
 		name     string
 		desc     *grpc.StreamDesc
