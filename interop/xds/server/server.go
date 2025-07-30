@@ -228,7 +228,7 @@ func xdsServingModeCallback(addr net.Addr, args xds.ServingModeChangeArgs) {
 func main() {
 	flag.Parse()
 	if *enableCSMObservability {
-		exporter, err := prometheus.New()
+		exporter, err := prometheus.New(prometheus.WithoutUnits())
 		if err != nil {
 			logger.Fatalf("Failed to start prometheus exporter: %v", err)
 		}
