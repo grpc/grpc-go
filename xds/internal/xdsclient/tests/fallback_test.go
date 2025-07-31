@@ -736,24 +736,22 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 // server once it becomes available again, and eventually returns to the
 // primary server when it comes back online, closing connections to the
 // fallback servers accordingly.
-func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
+func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
 
-	// Create three listener wrappers for three management servers.
+	// Create listener wrappers for the three management servers.
 	primaryWrappedLis := testutils.NewListenerWrapper(t, nil)
 	primaryLis := testutils.NewRestartableListener(primaryWrappedLis)
-
-	secondary1WrappedLis := testutils.NewListenerWrapper(t, nil)
-	secondary1Lis := testutils.NewRestartableListener(secondary1WrappedLis)
-
-	secondary2WrappedLis := testutils.NewListenerWrapper(t, nil)
-	secondary2Lis := testutils.NewRestartableListener(secondary2WrappedLis)
+	secondaryWrappedLis := testutils.NewListenerWrapper(t, nil)
+	secondaryLis := testutils.NewRestartableListener(secondaryWrappedLis)
+	tertiaryWrappedLis := testutils.NewListenerWrapper(t, nil)
+	tertiaryLis := testutils.NewRestartableListener(tertiaryWrappedLis)
 
 	// Start the three management servers.
 	primaryManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: primaryLis})
-	secondary1ManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: secondary1Lis})
-	secondary2ManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: secondary2Lis})
+	secondaryManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: secondaryLis})
+	tertiaryManagementServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{Listener: tertiaryLis})
 
 	// Start three test service backends.
 	backend1 := stubserver.StartTestService(t, nil)
@@ -765,22 +763,22 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	const serviceName = "my-service-fallback-xds"
+
 	// Configure partial resources on the primary management server.
 	primaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-p")},
 	})
-
-	// Configure incomplete (no endpoint) resources on secondary1.
-	secondary1ManagementServer.Update(ctx, e2e.UpdateOptions{
+	// Configure incomplete (no endpoint) resources on the secondary server.
+	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", serviceName, "cluster-s1")},
 		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s1", "endpoints-s1", e2e.SecurityLevelNone)},
 	})
 
-	// Configure full resources on secondary2.
-	secondary2ManagementServer.Update(ctx, e2e.UpdateOptions{
+	// Configure full resources on the tertiary server.
+	tertiaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s2")},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s2", serviceName, "cluster-s2")},
@@ -790,19 +788,23 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		},
 	})
 
-	// Stop all servers before creating client to simulate fallback behavior.
-	primaryLis.Stop()
-	secondary1Lis.Stop()
-	secondary2Lis.Stop()
-
 	// Create bootstrap configuration for all three management servers.
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[
-            {"server_uri": %q, "channel_creds":[{"type":"insecure"}]},
-            {"server_uri": %q, "channel_creds":[{"type":"insecure"}]},
-            {"server_uri": %q, "channel_creds":[{"type":"insecure"}]}
-        ]`, primaryManagementServer.Address, secondary1ManagementServer.Address, secondary2ManagementServer.Address)),
-		Node: []byte(fmt.Sprintf(`{"id":%q}`, nodeID)),
+            {
+                "server_uri": %q,
+                "channel_creds": [{"type": "insecure"}]
+            },
+            {
+                "server_uri": %q,
+                "channel_creds": [{"type": "insecure"}]
+            },
+             {
+                "server_uri": %q,
+                "channel_creds": [{"type": "insecure"}]
+            }
+        ]`, primaryManagementServer.Address, secondaryManagementServer.Address, tertiaryManagementServer.Address)),
+		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -833,25 +835,33 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// Secondary2 fallback, RPCs reach backend3.
-	secondary2Lis.Restart()
+	// --- Test Sequence ---
+
+	// 1. Initial connection attempt to primary (partial resources).
+	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
+	}
+
+	// Stop primary, client should connect to secondary.
+	primaryLis.Stop()
+	if _, err := secondaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected connection attempt to secondary but got error: %v", err)
+	}
+
+	// Stop secondary, client should connect to tertiary.
+	secondaryLis.Stop()
+	if _, err := tertiaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected connection attempt to tertiary but got error: %v", err)
+	}
+
+	// Tertiary has all resources, RPCs should succeed to backend3.
 	if err := waitForRPCsToReachBackend(ctx, client, backend3.Address); err != nil {
 		t.Fatal(err)
 	}
 
-	// Verify that connection attempts were made to primaryWrappedLis and
-	// secondary1WrappedLis, before using secondary2WrappedLis to make
-	// successful RPCs to backend3.
-	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
-	}
-	if _, err := secondary1WrappedLis.NewConnCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected connection attempt to secondary1 but got error: %v", err)
-	}
-
-	// Secondary1 becomes available, RPCs go to backend2.
-	secondary1Lis.Restart()
-	secondary1ManagementServer.Update(ctx, e2e.UpdateOptions{
+	// 2. Secondary becomes available with full resources, RPCs switch to backend2.
+	secondaryLis.Restart()
+	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", serviceName, "cluster-s1")},
@@ -861,18 +871,17 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		},
 	})
 
-	// Wait for switch from secondary2 to secondary1.
-	if conn, err := secondary2WrappedLis.NewConnCh.Receive(ctx); err == nil {
+	if conn, err := tertiaryWrappedLis.NewConnCh.Receive(ctx); err == nil {
 		cw := conn.(*testutils.ConnWrapper)
 		if _, err := cw.CloseCh.Receive(ctx); err != nil {
-			t.Fatalf("Expected secondary2 connection to close after promotion to secondary1, got error: %v", err)
+			t.Fatalf("Expected tertiary connection to close after promotion to secondary, got error: %v", err)
 		}
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend2.Address); err != nil {
 		t.Fatal(err)
 	}
 
-	// Primary becomes available, RPCs go to backend1.
+	// 3. Primary becomes available with full resources, RPCs switch to backend1.
 	primaryLis.Restart()
 	primaryManagementServer.Update(ctx, e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
@@ -881,10 +890,10 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		Port:       testutils.ParsePort(t, backend1.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	}))
-	if conn, err := secondary1WrappedLis.NewConnCh.Receive(ctx); err == nil {
+	if conn, err := secondaryWrappedLis.NewConnCh.Receive(ctx); err == nil {
 		cw := conn.(*testutils.ConnWrapper)
 		if _, err := cw.CloseCh.Receive(ctx); err != nil {
-			t.Fatalf("Expected secondary1 connection to close after promotion to primary, got error: %v", err)
+			t.Fatalf("Expected secondary connection to close after promotion to primary, got error: %v", err)
 		}
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend1.Address); err != nil {
