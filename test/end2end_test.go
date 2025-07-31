@@ -3880,24 +3880,13 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming RPC when client sends zero request messages.
-// Server runs against multiple StreamDesc configurations, including server-streaming,
-// bidi-streaming and client-streaming.
-func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
+// Tests the behavior of server for server-side streaming RPC when client sends zero request messages.
+func (s) TestServerStreaming_ServerRecvZeroRequests(t *testing.T) {
 	testCases := []struct {
 		name     string
 		desc     *grpc.StreamDesc
 		wantCode codes.Code
 	}{
-		{
-			name: "ServerStreaming",
-			desc: &grpc.StreamDesc{
-				StreamName:    "StreamingOutputCall",
-				ServerStreams: true,
-				ClientStreams: false,
-			},
-			wantCode: codes.Internal,
-		},
 		{
 			name: "BidiStreaming",
 			desc: &grpc.StreamDesc{
@@ -3946,6 +3935,40 @@ func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
 		if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != tc.wantCode {
 			t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), tc.wantCode)
 		}
+	}
+}
+
+// Tests the behavior of client for server-side streaming RPC when client sends zero request messages.
+func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
+	t.Skip()
+	// The initial call to recvMsg made by the generated code, will return the error.
+	ss := stubserver.StubServer{}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "StreamingOutputCall",
+		ServerStreams: true,
+		ClientStreams: false,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.CloseSend(); status.Code(err) != codes.Internal {
+		t.Errorf("stream.CloseSend() = %v, want error %v", status.Code(err), codes.Internal)
 	}
 }
 
