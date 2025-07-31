@@ -87,7 +87,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 	}
 
 	// This may be delayed if the token needs to be refreshed from file.
-	token, err := c.getToken(ctx)
+	token, err := c.getToken()
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (c *jwtTokenFileCallCreds) RequireTransportSecurity() bool {
 
 // getToken returns a valid JWT token, reading from file if necessary.
 // Implements pre-emptive refresh and caches errors with backoff.
-func (c *jwtTokenFileCallCreds) getToken(ctx context.Context) (string, error) {
+func (c *jwtTokenFileCallCreds) getToken() (string, error) {
 	c.mu.RLock()
 
 	if c.isTokenValidLocked() {
