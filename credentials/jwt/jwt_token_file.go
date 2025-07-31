@@ -176,20 +176,20 @@ func (c *jwtTokenFileCallCreds) triggerPreemptiveRefresh() {
 }
 
 // refreshTokenSync reads a new token from the file and updates the cache.  If
-// preemptiveRefresh is true, bypasses the validity check of the currently
+// forceRefresh is true, bypasses the validity check of the currently
 // cached token and always reads from file.
 // This is used for pre-emptive refresh to ensure new tokens are loaded even
-// when the cached token is still valid. If preemptiveRefresh is false, skips
+// when the cached token is still valid. If forceRefresh is false, skips
 // file read when cached token is still valid, optimizing concurrent synchronous
 // refresh calls where one RPC may have already updated the cache while another
 // was waiting on the lock.
-func (c *jwtTokenFileCallCreds) refreshTokenSync(preemptiveRefresh bool) (string, error) {
+func (c *jwtTokenFileCallCreds) refreshTokenSync(forceRefresh bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	// Double-check under write lock but skip if preemptive refresh is
 	// requested.
-	if !preemptiveRefresh && c.isTokenValidLocked() {
+	if !forceRefresh && c.isTokenValidLocked() {
 		return c.cachedToken, nil
 	}
 
