@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -458,13 +459,15 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
 	// Call ReportLoad() concurrently from multiple go routines.
+	var wg sync.WaitGroup
 	const numGoroutines = 10
+	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			store, cancelStore := client.ReportLoad(serverConfig)
-			if store != nil {
-				defer cancelStore(ctx)
-			}
+			defer wg.Done()
+			_, cancelStore := client.ReportLoad(serverConfig)
+			defer cancelStore(ctx)
 		}()
 	}
+	wg.Wait()
 }
