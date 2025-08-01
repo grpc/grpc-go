@@ -21,6 +21,7 @@ package xdsclient_test
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -736,15 +737,17 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 // server once it becomes available again, and eventually returns to the
 // primary server when it comes back online, closing connections to the
 // fallback servers accordingly.
-func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
+func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
 
-	// Create listener wrappers for the three management servers.
+	// Create three listener wrappers for three management servers.
 	primaryWrappedLis := testutils.NewListenerWrapper(t, nil)
 	primaryLis := testutils.NewRestartableListener(primaryWrappedLis)
+
 	secondaryWrappedLis := testutils.NewListenerWrapper(t, nil)
 	secondaryLis := testutils.NewRestartableListener(secondaryWrappedLis)
+
 	tertiaryWrappedLis := testutils.NewListenerWrapper(t, nil)
 	tertiaryLis := testutils.NewRestartableListener(tertiaryWrappedLis)
 
@@ -769,24 +772,22 @@ func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-p")},
 	})
-	// Configure incomplete (no endpoint) resources on the secondary server.
+
+	// Configure incomplete (no endpoint) resources on secondary management
+	// server.
 	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", serviceName, "cluster-s1")},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s1", "endpoints-s1", e2e.SecurityLevelNone)},
 	})
 
-	// Configure full resources on the tertiary server.
-	tertiaryManagementServer.Update(ctx, e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s2")},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s2", serviceName, "cluster-s2")},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s2", "endpoints-s2", e2e.SecurityLevelNone)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
-			e2e.DefaultEndpoint("endpoints-s2", "localhost", []uint32{testutils.ParsePort(t, backend3.Address)}),
-		},
-	})
+	// Configure full resources on tertiary management server.
+	tertiaryManagementServer.Update(ctx, e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, backend3.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	}))
 
 	// Create bootstrap configuration for all three management servers.
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
@@ -835,21 +836,30 @@ func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	defer cc.Close()
 	client := testgrpc.NewTestServiceClient(cc)
 
-	// --- Test Sequence ---
-
-	// 1. Initial connection attempt to primary (partial resources).
+	// Verify that connection attempts were made to primaryWrappedLis and
+	// secondaryWrappedLis, before using tertiaryWrappedLis to make
+	// successful RPCs to backend3.
+	if err := waitForServerReadiness(ctx, primaryManagementServer.Address); err != nil {
+		t.Fatalf("Primary server not ready: %v", err)
+	}
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
 	}
 
 	// Stop primary, client should connect to secondary.
 	primaryLis.Stop()
+	if err := waitForServerReadiness(ctx, secondaryManagementServer.Address); err != nil {
+		t.Fatalf("Secondary server not ready: %v", err)
+	}
 	if _, err := secondaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to secondary but got error: %v", err)
 	}
 
 	// Stop secondary, client should connect to tertiary.
 	secondaryLis.Stop()
+	if err := waitForServerReadiness(ctx, tertiaryManagementServer.Address); err != nil {
+		t.Fatalf("Tertiary server not ready: %v", err)
+	}
 	if _, err := tertiaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to tertiary but got error: %v", err)
 	}
@@ -859,7 +869,7 @@ func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2. Secondary becomes available with full resources, RPCs switch to backend2.
+	// Secondary1 becomes available, RPCs go to backend2.
 	secondaryLis.Restart()
 	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
@@ -871,6 +881,7 @@ func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		},
 	})
 
+	// Wait for switch from tertiaryWrappedLis to secondary.
 	if conn, err := tertiaryWrappedLis.NewConnCh.Receive(ctx); err == nil {
 		cw := conn.(*testutils.ConnWrapper)
 		if _, err := cw.CloseCh.Receive(ctx); err != nil {
@@ -881,7 +892,7 @@ func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 3. Primary becomes available with full resources, RPCs switch to backend1.
+	// Primary becomes available, RPCs go to backend1.
 	primaryLis.Restart()
 	primaryManagementServer.Update(ctx, e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
@@ -898,5 +909,25 @@ func TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend1.Address); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func waitForServerReadiness(ctx context.Context, address string) error {
+	d := net.Dialer{}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		conn, err := d.DialContext(ctx, "tcp", address)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for server at %s: %w", address, ctx.Err())
+		case <-ticker.C:
+		}
 	}
 }
