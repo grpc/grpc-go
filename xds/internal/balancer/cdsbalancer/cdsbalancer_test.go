@@ -207,7 +207,10 @@ func setupWithManagementServer(t *testing.T) (*e2e.ManagementServer, string, *gr
 func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
 	t.Helper()
 
-	cdsResourceRequestedCh := make(chan []string, 1)
+	// If more than 10 requests are received and no reader is available,
+	// additional requests will be dropped due to the use of a non-blocking
+	// send using select with a default case.
+	cdsResourceRequestedCh := make(chan []string, 10)
 	cdsResourceCanceledCh := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
