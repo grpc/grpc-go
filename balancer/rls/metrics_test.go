@@ -90,7 +90,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 		{
 			Name:        "grpc.lb.rls.target_picks",
 			Description: "EXPERIMENTAL. Number of LB picks sent to each RLS target. Note that if the default target is also returned by the RLS server, RPCs sent to that target from the cache will be counted in this metric, not in grpc.rls.default_target_picks.",
-			Unit:        "pick",
+			Unit:        "{pick}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -107,7 +107,7 @@ func (s) TestRLSTargetPickMetric(t *testing.T) {
 		{
 			Name:        "grpc.lb.rls.cache_entries",
 			Description: "EXPERIMENTAL. Number of entries in the RLS cache.",
-			Unit:        "entry",
+			Unit:        "{entry}",
 			Data: metricdata.Gauge[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -201,7 +201,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 		{
 			Name:        "grpc.lb.rls.default_target_picks",
 			Description: "EXPERIMENTAL. Number of LB picks sent to the default target.",
-			Unit:        "pick",
+			Unit:        "{pick}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -218,7 +218,7 @@ func (s) TestRLSDefaultTargetPickMetric(t *testing.T) {
 		{
 			Name:        "grpc.lb.rls.cache_entries",
 			Description: "EXPERIMENTAL. Number of entries in the RLS cache.",
-			Unit:        "entry",
+			Unit:        "{entry}",
 			Data: metricdata.Gauge[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -299,7 +299,7 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 		{
 			Name:        "grpc.lb.rls.failed_picks",
 			Description: "EXPERIMENTAL. Number of LB picks failed due to either a failed RLS request or the RLS channel being throttled.",
-			Unit:        "pick",
+			Unit:        "{pick}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -315,7 +315,7 @@ func (s) TestRLSFailedRPCMetric(t *testing.T) {
 		{
 			Name:        "grpc.lb.rls.cache_entries",
 			Description: "EXPERIMENTAL. Number of entries in the RLS cache.",
-			Unit:        "entry",
+			Unit:        "{entry}",
 			Data: metricdata.Gauge[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
