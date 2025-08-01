@@ -129,16 +129,14 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 	if err != nil {
 		return nil, err
 	}
-	c := &clientImpl{XDSClient: client, xdsClientConfig: gConfig, bootstrapConfig: config, target: target, refCount: 1}
 	lrsC, err := lrsclient.New(lrsclient.Config{
-		Node:             c.xdsClientConfig.Node,
-		TransportBuilder: c.xdsClientConfig.TransportBuilder,
+		Node:             gConfig.Node,
+		TransportBuilder: gConfig.TransportBuilder,
 	})
 	if err != nil {
-		c.logger.Warningf("Failed to create an lrs client to the management server to report load: %v", err)
 		return nil, err
 	}
-	c.lrsClient = lrsC
+	c := &clientImpl{XDSClient: client, xdsClientConfig: gConfig, bootstrapConfig: config, target: target, refCount: 1, lrsClient: lrsC}
 	c.logger = prefixLogger(c)
 	return c, nil
 }

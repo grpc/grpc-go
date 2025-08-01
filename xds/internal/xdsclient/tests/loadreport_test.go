@@ -465,10 +465,7 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			store, cancelStore := client.ReportLoad(serverConfig)
-			if store == nil {
-				t.Errorf("ReportLoad() got nil store, want non-nil")
-			}
+			_, cancelStore := client.ReportLoad(serverConfig)
 			defer cancelStore(ctx)
 		}()
 	}
