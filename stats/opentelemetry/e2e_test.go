@@ -342,7 +342,7 @@ func (s) TestMethodAttributeFilter(t *testing.T) {
 		{
 			Name:        "grpc.client.attempt.started",
 			Description: "Number of client call attempts started.",
-			Unit:        "attempt",
+			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -468,7 +468,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		{
 			Name:        "grpc.client.attempt.started",
 			Description: "Number of client call attempts started.",
-			Unit:        "attempt",
+			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -491,7 +491,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		{
 			Name:        "grpc.server.call.started",
 			Description: "Number of server calls started.",
-			Unit:        "call",
+			Unit:        "{call}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -685,7 +685,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 		{
 			Name:        "grpc.lb.wrr.rr_fallback",
 			Description: "EXPERIMENTAL. Number of scheduler updates in which there were not enough endpoints with valid weight, which caused the WRR policy to fall back to RR behavior.",
-			Unit:        "update",
+			Unit:        "{update}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -701,7 +701,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 		{
 			Name:        "grpc.lb.wrr.endpoint_weight_not_yet_usable",
 			Description: "EXPERIMENTAL. Number of endpoints from each scheduler update that don't yet have usable weight information (i.e., either the load report has not yet been received, or it is within the blackout period).",
-			Unit:        "endpoint",
+			Unit:        "{endpoint}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -716,7 +716,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 		{
 			Name:        "grpc.lb.wrr.endpoint_weights",
 			Description: "EXPERIMENTAL. Weight of each endpoint, recorded on every scheduler update. Endpoints without usable weights will be recorded as weight 0.",
-			Unit:        "endpoint",
+			Unit:        "{endpoint}",
 			Data: metricdata.Histogram[float64]{
 				DataPoints: []metricdata.HistogramDataPoint[float64]{
 					{
@@ -738,7 +738,7 @@ func (s) TestWRRMetrics(t *testing.T) {
 	eventuallyWantMetric := metricdata.Metrics{
 		Name:        "grpc.lb.wrr.endpoint_weight_stale",
 		Description: "EXPERIMENTAL. Number of endpoints from each scheduler update whose latest weight is older than the expiration period.",
-		Unit:        "endpoint",
+		Unit:        "{endpoint}",
 		Data: metricdata.Sum[int64]{
 			DataPoints: []metricdata.DataPoint[int64]{
 				{
