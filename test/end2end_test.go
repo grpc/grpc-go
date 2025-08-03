@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
@@ -3740,9 +3741,13 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming when client calls SendMsg twice.
-// Second call to SendMsg should fail with Internal error and result in closing
-// the connection with a RST_STREAM.
+// Tests the behavior for server-side streaming RPCs when client calls SendMsg twice.
+// The first client.SendMsg() sends EOF along with the message. When client calls a
+// second SendMsg, it triggers a RST_STREAM which cancels the stream context on the
+// server. There would be a race, the RST_STREAM could cause the server’s first RecvMsg
+// to fail, even if the request message was already delivered. By synchronizing, we
+// ensure that the server has read the first message before the client triggers RST_STREAM
+// and validating expected error codes.
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	// To ensure server.recvMsg() is successfully completed.
 	recvDoneOnServer := make(chan struct{})
@@ -3768,7 +3773,7 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
@@ -3795,6 +3800,8 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	<-handlerDone
 }
 
+// TODO : https://github.com/grpc/grpc-go/issues/7286 - Add tests to check
+// server-side behavior for Unary RPC.
 // Tests the behavior for unary RPC when client calls SendMsg twice. Second call
 // to SendMsg should fail with Internal error.
 func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
@@ -3810,7 +3817,7 @@ func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
@@ -3848,7 +3855,7 @@ func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
@@ -3917,7 +3924,7 @@ func (s) TestServerStreaming_ServerRecvZeroRequests(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
 		if err != nil {
 			t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 		}
@@ -3940,6 +3947,8 @@ func (s) TestServerStreaming_ServerRecvZeroRequests(t *testing.T) {
 
 // Tests the behavior of client for server-side streaming RPC when client sends zero request messages.
 func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
+	// TODO : https://github.com/grpc/grpc-go/issues/7286 - remove `t.Skip()`
+	// after this is fixed.
 	t.Skip()
 	// The initial call to recvMsg made by the generated code, will return the error.
 	ss := stubserver.StubServer{}
@@ -3950,7 +3959,7 @@ func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
 	}
