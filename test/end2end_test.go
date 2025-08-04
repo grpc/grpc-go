@@ -3741,13 +3741,9 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests the behavior for server-side streaming RPCs when client calls SendMsg twice.
-// The first client.SendMsg() sends EOF along with the message. When client calls a
-// second SendMsg, it triggers a RST_STREAM which cancels the stream context on the
-// server. There would be a race, the RST_STREAM could cause the server’s first RecvMsg
-// to fail, even if the request message was already delivered. By synchronizing, we
-// ensure that the server has read the first message before the client triggers RST_STREAM
-// and validating expected error codes.
+// Tests the behavior for server-side streaming when client calls SendMsg twice.
+// Second call to SendMsg should fail with Internal error and result in closing
+// the connection with a RST_STREAM.
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	// To ensure server.recvMsg() is successfully completed.
 	recvDoneOnServer := make(chan struct{})
@@ -3756,8 +3752,9 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	handlerDone := make(chan struct{})
 	ss := stubserver.StubServer{
 		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
-			// The initial call to recvMsg is made by the generated code.
+			// The initial call to recvMsg is made by the generated code. Signal test when done.
 			close(recvDoneOnServer)
+			// Block until the stream’s context is done (cancelled by client).
 			<-stream.Context().Done()
 			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
 				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
@@ -3790,9 +3787,12 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
 
+	// First SendMsg sends EOF along with the message.
 	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
 		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
 	}
+
+	// To ensure that the server has read the first message before client triggers RST_STREAM.
 	<-recvDoneOnServer
 	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Internal)
@@ -3800,8 +3800,7 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	<-handlerDone
 }
 
-// TODO : https://github.com/grpc/grpc-go/issues/7286 - Add tests to check
-// server-side behavior for Unary RPC.
+// TODO(i/7286) : Add tests to check server-side behavior for Unary RPC.
 // Tests the behavior for unary RPC when client calls SendMsg twice. Second call
 // to SendMsg should fail with Internal error.
 func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
@@ -3947,9 +3946,7 @@ func (s) TestServerStreaming_ServerRecvZeroRequests(t *testing.T) {
 
 // Tests the behavior of client for server-side streaming RPC when client sends zero request messages.
 func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
-	// TODO : https://github.com/grpc/grpc-go/issues/7286 - remove `t.Skip()`
-	// after this is fixed.
-	t.Skip()
+	t.Skip("blocked on i/7286")
 	// The initial call to recvMsg made by the generated code, will return the error.
 	ss := stubserver.StubServer{}
 	if err := ss.Start(nil); err != nil {
