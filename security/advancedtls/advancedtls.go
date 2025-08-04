@@ -430,11 +430,10 @@ func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
 func (c *advancedTLSCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	// Use local cfg to avoid clobbering ServerName if using multiple endpoints.
 	cfg := credinternal.CloneTLSConfig(c.config)
-	// We return the full authority name to users if ServerName is empty without
-	// stripping the trailing port.
-	if cfg.ServerName == "" {
-		cfg.ServerName = authority
-	}
+	// We return the full authority name to users without stripping the trailing
+	// port.
+	cfg.ServerName = authority
+
 	peerVerifiedChains := CertificateChains{}
 	cfg.VerifyPeerCertificate = buildVerifyFunc(c, cfg.ServerName, rawConn, &peerVerifiedChains)
 	conn := tls.Client(rawConn, cfg)
