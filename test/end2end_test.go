@@ -3745,16 +3745,20 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 // Second call to SendMsg should fail with Internal error and result in closing
 // the connection with a RST_STREAM.
 func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
-	// To ensure server.recvMsg() is successfully completed.
+	// To ensure initial call to server.recvMsg() made by the generated code is successfully
+	// completed. Otherwise, if the client attempts to send a second request message, that
+	// will trigger a RST_STREAM from the client due to the application violating the RPC's
+	// protocol. The RST_STREAM could cause the server’s first RecvMsg to fail and will prevent
+	// the method handler from being called.
 	recvDoneOnServer := make(chan struct{})
 	// To ensure goroutine for test does not end before RPC handler performs error
 	// checking.
 	handlerDone := make(chan struct{})
 	ss := stubserver.StubServer{
 		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
-			// The initial call to recvMsg is made by the generated code. Signal test when done.
 			close(recvDoneOnServer)
-			// Block until the stream’s context is done (cancelled by client).
+			// Block until the stream’s context is done. Second call to client.SendMsg
+			// triggers a RST_STREAM which cancels the stream context on the server.
 			<-stream.Context().Done()
 			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
 				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
@@ -3787,12 +3791,10 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
 	}
 
-	// First SendMsg sends EOF along with the message.
 	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
 		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
 	}
 
-	// To ensure that the server has read the first message before client triggers RST_STREAM.
 	<-recvDoneOnServer
 	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Internal)
