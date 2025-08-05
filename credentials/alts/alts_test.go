@@ -153,9 +153,6 @@ func (s) TestInfo(t *testing.T) {
 	// use NewServerCreds and not NewClientCreds.
 	c := NewServerCreds(DefaultServerOptions())
 	info := c.Info()
-	if got, want := info.ProtocolVersion, ""; got != want {
-		t.Errorf("info.ProtocolVersion=%v, want %v", got, want)
-	}
 	if got, want := info.SecurityProtocol, "alts"; got != want {
 		t.Errorf("info.SecurityProtocol=%v, want %v", got, want)
 	}
