@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/envconfig"
 )
 
 // registry is a map from credential type name to Credential builder.
@@ -58,6 +59,9 @@ func RegisterCredentials(c Credentials) {
 // GetCredentials returns the credentials associated with a given name.
 // If no credentials are registered with the name, nil will be returned.
 func GetCredentials(name string) Credentials {
+	if name == "jwt_token_file" && !envconfig.XDSBootstrapCallCredsEnabled {
+		return nil
+	}
 	if c, ok := registry[name]; ok {
 		return c
 	}
