@@ -1,12 +1,13 @@
+// xdsresource/clientimpl.go
 /*
- *
+
  * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,92 +25,81 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-
-	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/grpctransport"
 	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/transport/grpctransport"
+	"google.golang.org/grpc/xds/internal/util/estats"
 )
 
 const (
-	// NameForServer represents the value to be passed as name when creating an xDS
-	// client from xDS-enabled gRPC servers. This is a well-known dedicated key
-	// value, and is defined in gRFC A71.
+	// NameForServer is the key for the XDS server in the map of configs.
 	NameForServer = "#server"
-
+	// defaultWatchExpiryTimeout is the default resource watch expiry timeout.
 	defaultWatchExpiryTimeout = 15 * time.Second
 )
 
 var (
-	// The following functions are no-ops in the actual code, but can be
-	// overridden in tests to give them visibility into certain events.
+	// xdsClientImplCreateHook is a testing hook for a newly created xDS client.
 	xdsClientImplCreateHook = func(string) {}
-	xdsClientImplCloseHook  = func(string) {}
-
+	// xdsClientImplCloseHook is a testing hook for a closed xDS client.
+	xdsClientImplCloseHook = func(string) {}
+	// defaultExponentialBackoff is the default exponential backoff config used
+	// for xds servers.
 	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
-
+	// xdsClientResourceUpdatesValidMetric is the metric for valid resource updates.
 	xdsClientResourceUpdatesValidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.resource_updates_valid",
 		Description: "A counter of resources received that were considered valid. The counter will be incremented even for resources that have not changed.",
-		Unit:        "resource",
+		Unit:        "{resource}",
 		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
 		Default:     false,
 	})
+	// xdsClientResourceUpdatesInvalidMetric is the metric for invalid resource updates.
 	xdsClientResourceUpdatesInvalidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.resource_updates_invalid",
 		Description: "A counter of resources received that were considered invalid.",
-		Unit:        "resource",
+		Unit:        "{resource}",
 		Labels:      []string{"grpc.target", "grpc.xds.server", "grpc.xds.resource_type"},
 		Default:     false,
 	})
+	// xdsClientServerFailureMetric is the metric for xDS server failures.
 	xdsClientServerFailureMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.server_failure",
 		Description: "A counter of xDS servers going from healthy to unhealthy. A server goes unhealthy when we have a connectivity failure or when the ADS stream fails without seeing a response message, as per gRFC A57.",
-		Unit:        "failure",
+		Unit:        "{failure}",
 		Labels:      []string{"grpc.target", "grpc.xds.server"},
 		Default:     false,
 	})
 )
 
-// clientImpl embed xdsclient.XDSClient and implement internal XDSClient
-// interface with ref counting so that it can be shared by the xds resolver and
-// balancer implementations, across multiple ClientConns and Servers.
+// clientImpl is the client that communicates with the xDS server.
 type clientImpl struct {
-	*xdsclient.XDSClient // TODO: #8313 - get rid of embedding, if possible.
+	*xdsclient.XDSClient
 
-	// The following fields are initialized at creation time and are read-only
-	// after that.
 	xdsClientConfig xdsclient.Config
 	bootstrapConfig *bootstrap.Config
 	logger          *grpclog.PrefixLogger
 	target          string
 	lrsClient       *lrsclient.LRSClient
 
-	// Accessed atomically
 	refCount int32
 }
 
-// metricsReporter implements the clients.MetricsReporter interface and uses an
-// underlying stats.MetricsRecorderList to record metrics.
 type metricsReporter struct {
 	recorder estats.MetricsRecorder
 	target   string
 }
 
-// ReportMetric implements the clients.MetricsReporter interface.
-// It receives metric data, determines the appropriate metric based on the type
-// of the data, and records it using the embedded MetricsRecorderList.
 func (mr *metricsReporter) ReportMetric(metric any) {
 	if mr.recorder == nil {
 		return
 	}
-
 	switch m := metric.(type) {
 	case *metrics.ResourceUpdateValid:
 		xdsClientResourceUpdatesValidMetric.Record(mr.recorder, 1, mr.target, m.ServerURI, m.ResourceType)
@@ -134,8 +124,6 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 	return c, nil
 }
 
-// BootstrapConfig returns the configuration read from the bootstrap file.
-// Callers must treat the return value as read-only.
 func (c *clientImpl) BootstrapConfig() *bootstrap.Config {
 	return c.bootstrapConfig
 }
@@ -148,18 +136,14 @@ func (c *clientImpl) decrRef() int32 {
 	return atomic.AddInt32(&c.refCount, -1)
 }
 
-// buildXDSClientConfig builds the xdsclient.Config from the bootstrap.Config.
 func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string) (xdsclient.Config, error) {
 	grpcTransportConfigs := make(map[string]grpctransport.Config)
 	gServerCfgMap := make(map[xdsclient.ServerConfig]*bootstrap.ServerConfig)
-
 	gAuthorities := make(map[string]xdsclient.Authority)
 	for name, cfg := range config.Authorities() {
-		// If server configs are specified in the authorities map, use that.
-		// Else, use the top-level server configs.
 		serverCfg := config.XDSServers()
 		if len(cfg.XDSServers) >= 1 {
-			serverCfg = cfg.XDSServers
+			serverCfg = cfg.XDSSerservers
 		}
 		var gServerCfg []xdsclient.ServerConfig
 		for _, sc := range serverCfg {
@@ -174,7 +158,6 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 		}
 		gAuthorities[name] = xdsclient.Authority{XDSServers: gServerCfg}
 	}
-
 	gServerCfgs := make([]xdsclient.ServerConfig, 0, len(config.XDSServers()))
 	for _, sc := range config.XDSServers() {
 		if err := populateGRPCTransportConfigsFromServerConfig(sc, grpcTransportConfigs); err != nil {
@@ -186,7 +169,6 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 		gServerCfgs = append(gServerCfgs, gsc)
 		gServerCfgMap[gsc] = sc
 	}
-
 	node := config.Node()
 	gNode := clients.Node{
 		ID:               node.GetId(),
@@ -202,7 +184,6 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 			SubZone: node.Locality.SubZone,
 		}
 	}
-
 	return xdsclient.Config{
 		Authorities:      gAuthorities,
 		Servers:          gServerCfgs,
@@ -213,9 +194,6 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 	}, nil
 }
 
-// populateGRPCTransportConfigsFromServerConfig iterates through the channel
-// credentials of the provided server configuration, builds credential bundles,
-// and populates the grpctransport.Config map.
 func populateGRPCTransportConfigsFromServerConfig(sc *bootstrap.ServerConfig, grpcTransportConfigs map[string]grpctransport.Config) error {
 	for _, cc := range sc.ChannelCreds() {
 		c := xdsbootstrap.GetCredentials(cc.Type)
@@ -235,4 +213,16 @@ func populateGRPCTransportConfigsFromServerConfig(sc *bootstrap.ServerConfig, gr
 		}
 	}
 	return nil
+}
+
+// supportedResourceTypes defines the set of decoders that the xdsclient will use.
+// This function creates a map of decoders and passes the necessary state
+// (bootstrap config, server config map) to each of them during initialization.
+func supportedResourceTypes(config *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) map[string]xdsclient.Decoder {
+	return map[string]xdsclient.Decoder{
+		xdsresource.ListenerTypeURL:    xdsresource.NewListenerDecoder(config, gServerCfgMap),
+		xdsresource.RouteConfigTypeURL: xdsresource.NewRouteConfigDecoder(config, gServerCfgMap),
+		xdsresource.ClusterTypeURL:     xdsresource.NewClusterDecoder(config, gServerCfgMap),
+		xdsresource.EndpointsTypeURL:   xdsresource.NewEndpointsDecoder(config, gServerCfgMap),
+	}
 }

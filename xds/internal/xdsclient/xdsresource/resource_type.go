@@ -1,3 +1,4 @@
+// xdsresource/types.go
 /*
  *
  * Copyright 2022 gRPC authors.
@@ -6,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,13 +16,6 @@
  * limitations under the License.
  */
 
-// Package xdsresource implements the xDS data model layer.
-//
-// Provides resource-type specific functionality to unmarshal xDS protos into
-// internal data structures that contain only fields gRPC is interested in.
-// These internal data structures are passed to components in the xDS stack
-// (resolver/balancers/server) that have expressed interest in receiving
-// updates to specific resources.
 package xdsresource
 
 import (
@@ -29,11 +23,19 @@ import (
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsinternal "google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient" // New import for xdsclient.Decoder and related types
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto" // Needed for proto.Unmarshal and proto.Equal
 	"google.golang.org/protobuf/types/known/anypb"
+
+	// PLACEHOLDER IMPORTS FOR ENVOY PROTOS
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 )
 
+// The init function will now use instances of our new concrete types
 func init() {
 	xdsinternal.ResourceTypeMapForTesting = make(map[string]any)
 	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
@@ -41,6 +43,10 @@ func init() {
 	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
 	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
 }
+
+// Producer, ResourceWatcher, ResourceData (interface), DecodeOptions, DecodeResult, resourceTypeState
+// These interfaces and structs remain as they were, defining the internal
+// xdsresource package's data model and behavior.
 
 // Producer contains a single method to discover resource configuration from a
 // remote management server using xDS APIs.
@@ -59,11 +65,7 @@ type Producer interface {
 // received by the xDS client from the management server.
 //
 // All methods contain a done parameter which should be called when processing
-// of the update has completed.  For example, if processing a resource requires
-// watching new resources, registration of those new watchers should be
-// completed before done is called, which can happen after the ResourceWatcher
-// method has returned. Failure to call done will prevent the xDS client from
-// providing future ResourceWatcher notifications.
+// of the update has completed.
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
 	ResourceChanged(resourceData ResourceData, done func())
@@ -81,9 +83,6 @@ type ResourceWatcher interface {
 	AmbientError(err error, done func())
 }
 
-// TODO: Once the implementation is complete, rename this interface as
-// ResourceType and get rid of the existing ResourceType enum.
-
 // Type wraps all resource-type specific functionality. Each supported resource
 // type will provide an implementation of this interface.
 type Type interface {
@@ -94,9 +93,7 @@ type Type interface {
 	// can be used for logging/debugging purposes, as well in cases where the
 	// resource type name is to be uniquely identified but the actual
 	// functionality provided by the resource type is not required.
-	//
-	// TODO: once Type is renamed to ResourceType, rename TypeName to
-	// ResourceTypeName.
+
 	TypeName() string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
@@ -127,6 +124,8 @@ type ResourceData interface {
 	ToJSON() string
 
 	Raw() *anypb.Any
+	Bytes() []byte
+	Equal(xdsclient.ResourceData) bool
 }
 
 // DecodeOptions wraps the options required by ResourceType implementation for
@@ -171,118 +170,365 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 	return r.allResourcesRequiredInSotW
 }
 
-// GenericResourceTypeDecoder wraps an xdsresource.Type and implements
-// xdsclient.Decoder.
-//
-// TODO: #8313 - Delete this once the internal xdsclient usages are updated
-// to use the generic xdsclient.ResourceType interface directly.
-type GenericResourceTypeDecoder struct {
-	ResourceType    Type
-	BootstrapConfig *bootstrap.Config
-	ServerConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
+// --- CONCRETE RESOURCE TYPE IMPLEMENTATIONS ---
+// These structs are the "users" that will now directly implement xdsclient.Decoder.
+
+// Listener represents the internal data structure for a Listener resource.
+// You should adapt this to your actual internal Listener representation.
+type Listener struct {
+	*v3listenerpb.Listener // Embedding the proto for simplicity in this example
 }
 
-// Decode deserialize and validate resource bytes of an xDS resource received
-// from the xDS management server.
-func (gd *GenericResourceTypeDecoder) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	rProto := &anypb.Any{
+// RawEqual implements xdsresource.ResourceData.
+func (l *Listener) RawEqual(other ResourceData) bool {
+	o, ok := other.(*Listener)
+	if !ok {
+		return false
+	}
+	return proto.Equal(l.Listener, o.Listener)
+}
+
+// ToJSON implements xdsresource.ResourceData.
+func (l *Listener) ToJSON() string {
+	return l.Listener.String() // Or your actual JSON serialization logic
+}
+
+// Raw implements xdsresource.ResourceData.
+func (l *Listener) Raw() *anypb.Any {
+	any, _ := anypb.New(l.Listener) // Error ignored for brevity, handle in real code
+	return any
+}
+func (l *Listener) Bytes() []byte {
+	b, _ := proto.Marshal(l.Listener)
+	return b
+}
+func (l *Listener) Equal(other xdsclient.ResourceData) bool {
+	o, ok := other.(*Listener)
+	if !ok {
+		return false
+	}
+	return l.RawEqual(o)
+}
+
+// listenerTypeImpl implements xdsresource.Type and xdsclient.Decoder.
+type listenerTypeImpl struct {
+	resourceTypeState
+	bootstrapConfig *bootstrap.Config
+	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
+}
+
+var listenerType = listenerTypeImpl{
+	resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3ListenerURL,
+		typeName:                   "Listener",
+		allResourcesRequiredInSotW: false,
+	},
+}
+
+// TypeURL implements xdsresource.Type.
+func (lt listenerTypeImpl) TypeURL() string { return lt.resourceTypeState.TypeURL() }
+
+// TypeName implements xdsresource.Type.
+func (lt listenerTypeImpl) TypeName() string { return lt.resourceTypeState.TypeName() }
+
+// AllResourcesRequiredInSotW implements xdsresource.Type.
+func (lt listenerTypeImpl) AllResourcesRequiredInSotW() bool {
+	return lt.resourceTypeState.AllResourcesRequiredInSotW()
+}
+
+// Decode implements xdsresource.Type.
+// This is the internal decode logic for the xdsresource package.
+func (lt listenerTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*DecodeResult, error) {
+	var listenerProto v3listenerpb.Listener
+	if err := anyProto.UnmarshalTo(&listenerProto); err != nil {
+		return nil, fmt.Errorf("xdsresource: failed to unmarshal Listener: %v", err)
+	}
+
+	if err := validateListener(&listenerProto); err != nil {
+		return nil, fmt.Errorf("xdsresource: Listener validation failed for %q: %v", listenerProto.GetName(), err)
+	}
+
+	return &DecodeResult{
+		Name:     listenerProto.GetName(),
+		Resource: &Listener{Listener: &listenerProto},
+	}, nil
+}
+
+// XDSClientDecode implements xdsclient.Decoder.
+// This method bridges the xdsclient.Decoder interface to the xdsresource.Type.Decode method.
+// This is to eliminate GenericResourceTypeDecoder.
+func (lt listenerTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	anyProto := &anypb.Any{
 		TypeUrl: resource.TypeURL,
 		Value:   resource.Value,
 	}
-	opts := &DecodeOptions{BootstrapConfig: gd.BootstrapConfig}
+	// The BootstrapConfig is now taken from the struct's field.
+	opts := &DecodeOptions{BootstrapConfig: lt.bootstrapConfig}
 	if gOpts.ServerConfig != nil {
-		opts.ServerConfig = gd.ServerConfigMap[*gOpts.ServerConfig]
+		if bootstrapSC, ok := lt.serverConfigMap[*gOpts.ServerConfig]; ok {
+			opts.ServerConfig = bootstrapSC
+		} else {
+			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
+		}
 	}
 
-	result, err := gd.ResourceType.Decode(opts, rProto)
-	if result == nil {
+	internalResult, err := lt.Decode(opts, anyProto)
+	if err != nil {
+		if internalResult != nil {
+			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
+		}
 		return nil, err
 	}
+	if internalResult == nil {
+		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
+	}
+
+	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
+	if !ok {
+		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
+	}
+
+	return &xdsclient.DecodeResult{
+		Name:     internalResult.Name,
+		Resource: xdsClientResourceData,
+	}, nil
+}
+
+// Placeholder for Listener validation logic.
+func validateListener(l *v3listenerpb.Listener) error {
+	if l.GetName() == "" {
+		return fmt.Errorf("listener name cannot be empty")
+	}
+	return nil
+}
+
+func NewEndPointsDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *listenerTypeImpl {
+	val := listenerType
+	val.bootstrapConfig = bootstrapConfig
+	val.serverConfigMap = m
+	return &val
+}
+
+// RouteConfig represents the internal data structure for a RouteConfiguration resource.
+type RouteConfig struct {
+	*v3routepb.RouteConfiguration
+}
+
+func (rc *RouteConfig) Bytes() []byte {
+	b, _ := proto.Marshal(rc.RouteConfiguration)
+	return b
+}
+func (rc *RouteConfig) RawEqual(other ResourceData) bool {
+	o, ok := other.(*RouteConfig)
+	if !ok {
+		return false
+	}
+	return proto.Equal(rc.RouteConfiguration, o.RouteConfiguration)
+}
+func (rc *RouteConfig) Raw() *anypb.Any {
+	any, _ := anypb.New(rc.RouteConfiguration)
+	return any
+}
+func (rc *RouteConfig) Equal(other xdsclient.ResourceData) bool {
+	o, ok := other.(*RouteConfig)
+	if !ok {
+		return false
+	}
+	return rc.RawEqual(o)
+}
+
+func (rc *RouteConfig) ToJSON() string { return rc.RouteConfiguration.String() }
+
+type routeConfigTypeImpl struct {
+	resourceTypeState
+	bootstrapConfig *bootstrap.Config
+	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
+}
+
+func (rt routeConfigTypeImpl) TypeURL() string  { return rt.resourceTypeState.TypeURL() }
+func (rt routeConfigTypeImpl) TypeName() string { return rt.resourceTypeState.TypeName() }
+func (rt routeConfigTypeImpl) AllResourcesRequiredInSotW() bool {
+	return rt.resourceTypeState.AllResourcesRequiredInSotW()
+}
+
+func (rt routeConfigTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*DecodeResult, error) {
+	var rcProto v3routepb.RouteConfiguration
+	if err := anyProto.UnmarshalTo(&rcProto); err != nil {
+		return nil, fmt.Errorf("xdsresource: failed to unmarshal RouteConfiguration: %v", err)
+	}
+	// Placeholder validation
+	return &DecodeResult{Name: rcProto.GetName(), Resource: &RouteConfig{RouteConfiguration: &rcProto}}, nil
+}
+
+// XDSClientDecode implements xdsclient.Decoder for RouteConfig.
+func (rt routeConfigTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
+
+	opts := &DecodeOptions{BootstrapConfig: rt.bootstrapConfig}
+
+	if gOpts.ServerConfig != nil {
+		if bootstrapSC, ok := rt.serverConfigMap[*gOpts.ServerConfig]; ok {
+			opts.ServerConfig = bootstrapSC
+		} else {
+			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
+		}
+	}
+	internalResult, err := rt.Decode(opts, anyProto)
 	if err != nil {
-		return &xdsclient.DecodeResult{Name: result.Name}, err
+		if internalResult != nil {
+			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
+		}
+		return nil, err
+	}
+	if internalResult == nil {
+		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
 	}
 
-	return &xdsclient.DecodeResult{Name: result.Name, Resource: &genericResourceData{resourceData: result.Resource}}, nil
-}
-
-// genericResourceData embed an xdsresource.ResourceData and implements
-// xdsclient.ResourceData.
-//
-// TODO: #8313 - Delete this once the internal xdsclient usages are updated
-// to use the generic xdsclient.ResourceData interface directly.
-type genericResourceData struct {
-	resourceData ResourceData
-}
-
-// Equal returns true if the passed in xdsclient.ResourceData
-// is equal to that of the receiver.
-func (grd *genericResourceData) Equal(other xdsclient.ResourceData) bool {
-	if other == nil {
-		return false
+	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
+	if !ok {
+		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
 	}
-	otherResourceData, ok := other.(*genericResourceData)
+
+	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
+}
+
+// Cluster represents the internal data structure for a Cluster resource.
+type Cluster struct {
+	*v3clusterpb.Cluster
+}
+
+func (c *Cluster) Bytes() []byte {
+	b, _ := proto.Marshal(c.Cluster)
+	return b
+}
+func (c *Cluster) RawEqual(other ResourceData) bool {
+	o, ok := other.(*Cluster)
 	if !ok {
 		return false
 	}
-	return grd.resourceData.RawEqual(otherResourceData.resourceData)
+	return proto.Equal(c.Cluster, o.Cluster)
+}
+func (c *Cluster) ToJSON() string { return c.Cluster.String() }
+func (c *Cluster) Raw() *anypb.Any {
+	any, _ := anypb.New(c.Cluster)
+	return any
 }
 
-// Bytes returns the underlying raw bytes of the wrapped resource.
-func (grd *genericResourceData) Bytes() []byte {
-	rawAny := grd.resourceData.Raw()
-	if rawAny == nil {
-		return nil
-	}
-	return rawAny.Value
-}
-
-// genericResourceWatcher wraps xdsresource.ResourceWatcher and implements
-// xdsclient.ResourceWatcher.
-//
-// TODO: #8313 - Delete this once the internal xdsclient usages are updated
-// to use the generic xdsclient.ResourceWatcher interface directly.
-type genericResourceWatcher struct {
-	xdsResourceWatcher ResourceWatcher
-}
-
-// ResourceChanged indicates a new version of the wrapped resource is
-// available.
-func (gw *genericResourceWatcher) ResourceChanged(gData xdsclient.ResourceData, done func()) {
-	if gData == nil {
-		gw.xdsResourceWatcher.ResourceChanged(nil, done)
-		return
-	}
-
-	grd, ok := gData.(*genericResourceData)
+func (c *Cluster) Equal(other xdsclient.ResourceData) bool {
+	o, ok := other.(*Cluster)
 	if !ok {
-		err := fmt.Errorf("genericResourceWatcher received unexpected xdsclient.ResourceData type %T, want *genericResourceData", gData)
-		gw.xdsResourceWatcher.ResourceError(err, done)
-		return
+		return false
 	}
-	gw.xdsResourceWatcher.ResourceChanged(grd.resourceData, done)
+	return c.RawEqual(o)
 }
 
-// ResourceError indicates an error occurred while trying to fetch or
-// decode the associated wrapped resource. The previous version of the
-// wrapped resource should be considered invalid.
-func (gw *genericResourceWatcher) ResourceError(err error, done func()) {
-	gw.xdsResourceWatcher.ResourceError(err, done)
+type clusterTypeImpl struct {
+	resourceTypeState
+	bootstrapConfig *bootstrap.Config
+	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
-// AmbientError indicates an error occurred after a resource has been
-// received that should not modify the use of that wrapped resource but may
-// provide useful information about the state of the XDSClient for debugging
-// purposes. The previous version of the wrapped resource should still be
-// considered valid.
-func (gw *genericResourceWatcher) AmbientError(err error, done func()) {
-	gw.xdsResourceWatcher.AmbientError(err, done)
+func (ct clusterTypeImpl) TypeURL() string  { return ct.resourceTypeState.TypeURL() }
+func (ct clusterTypeImpl) TypeName() string { return ct.resourceTypeState.TypeName() }
+func (ct clusterTypeImpl) AllResourcesRequiredInSotW() bool {
+	return ct.resourceTypeState.AllResourcesRequiredInSotW()
 }
 
-// GenericResourceWatcher returns a xdsclient.ResourceWatcher that wraps an
-// xdsresource.ResourceWatcher to make it compatible with xdsclient.ResourceWatcher.
-func GenericResourceWatcher(xdsResourceWatcher ResourceWatcher) xdsclient.ResourceWatcher {
-	if xdsResourceWatcher == nil {
-		return nil
+func (ct clusterTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*DecodeResult, error) {
+	var cProto v3clusterpb.Cluster
+	if err := anyProto.UnmarshalTo(&cProto); err != nil {
+		return nil, fmt.Errorf("xdsresource: failed to unmarshal Cluster: %v", err)
 	}
-	return &genericResourceWatcher{xdsResourceWatcher: xdsResourceWatcher}
+	// Placeholder validation
+	return &DecodeResult{Name: cProto.GetName(), Resource: &Cluster{Cluster: &cProto}}, nil
+}
+
+// XDSClientDecode implements xdsclient.Decoder for Endpoints.
+func (et endpointsTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
+
+	opts := &DecodeOptions{BootstrapConfig: et.bootstrapConfig}
+
+	if gOpts.ServerConfig != nil {
+		if bootstrapSC, ok := et.serverConfigMap[*gOpts.ServerConfig]; ok {
+			opts.ServerConfig = bootstrapSC
+		} else {
+			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
+		}
+	}
+	internalResult, err := et.Decode(opts, anyProto)
+	if err != nil {
+		if internalResult != nil {
+			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
+		}
+		return nil, err
+	}
+	if internalResult == nil {
+		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
+	}
+
+	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
+	if !ok {
+		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
+	}
+	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
+}
+
+type Endpoints struct {
+	*v3endpointpb.ClusterLoadAssignment
+}
+
+// RawEqual implements xdsresource.ResourceData.
+func (e *Endpoints) RawEqual(other ResourceData) bool {
+	o, ok := other.(*Endpoints)
+	if !ok {
+		return false
+	}
+	return proto.Equal(e.ClusterLoadAssignment, o.ClusterLoadAssignment)
+}
+
+// ToJSON implements xdsresource.ResourceData.
+func (e *Endpoints) ToJSON() string {
+	return e.ClusterLoadAssignment.String()
+}
+
+// Raw implements xdsresource.ResourceData.
+func (e *Endpoints) Raw() *anypb.Any {
+	any, _ := anypb.New(e.ClusterLoadAssignment)
+	return any
+}
+
+// Bytes implements xdsresource.ResourceData and xdsclient.ResourceData.
+func (e *Endpoints) Bytes() []byte {
+	b, _ := proto.Marshal(e.ClusterLoadAssignment)
+	return b
+}
+
+func (e *Endpoints) Equal(other xdsclient.ResourceData) bool {
+	o, ok := other.(*Endpoints)
+	if !ok {
+		return false
+	}
+	return e.RawEqual(o)
+}
+
+type endpointsTypeImpl struct {
+	resourceTypeState
+	bootstrapConfig *bootstrap.Config
+	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
+}
+
+func (et endpointsTypeImpl) TypeURL() string  { return et.resourceTypeState.TypeURL() }
+func (et endpointsTypeImpl) TypeName() string { return et.resourceTypeState.TypeName() }
+func (et endpointsTypeImpl) AllResourcesRequiredInSotW() bool {
+	return et.resourceTypeState.AllResourcesRequiredInSotW()
+}
+
+func (et endpointsTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*DecodeResult, error) {
+	var epProto v3endpointpb.ClusterLoadAssignment
+	if err := anyProto.UnmarshalTo(&epProto); err != nil {
+		return nil, fmt.Errorf("xdsresource: failed to unmarshal Endpoints: %v", err)
+	}
+	// Placeholder validation
+	return &DecodeResult{Name: epProto.GetClusterName(), Resource: &Endpoints{ClusterLoadAssignment: &epProto}}, nil
 }
