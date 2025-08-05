@@ -872,10 +872,9 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 // removed from the tree no longer has a watcher and the new cluster added has a
 // new watcher.
 func (s) TestWatchers(t *testing.T) {
-	mgmtServer, nodeID, _, _, _, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	mgmtServer, nodeID, _, _, _, cdsResourceRequestedCh, _ := setupWithManagementServerWithResourceCheck(ctx, t)
 
 	const (
 		clusterA = clusterName

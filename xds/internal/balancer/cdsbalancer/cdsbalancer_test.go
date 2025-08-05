@@ -274,6 +274,78 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 	return mgmtServer, nodeID, cc, r, xdsC, cdsResourceRequestedCh, cdsResourceCanceledCh
 }
 
+func setupWithManagementServerWithResourceCheck(ctx context.Context, t *testing.T) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
+	return setupWithManagementServerAndListenerWithResourceCheck(ctx, t, nil)
+}
+
+// Same as setupWithManagementServer, but also allows the caller to specify
+// a listener to be used by the management server.
+func setupWithManagementServerAndListenerWithResourceCheck(ctx context.Context, t *testing.T, lis net.Listener) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
+	t.Helper()
+	cdsResourceRequestedCh := make(chan []string, 1)
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
+		Listener: lis,
+		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+			if req.GetTypeUrl() == version.V3ClusterURL {
+				switch len(req.GetResourceNames()) {
+				case 0:
+					select {
+					case cdsResourceCanceledCh <- struct{}{}:
+					default:
+					}
+				default:
+					select {
+					case cdsResourceRequestedCh <- req.GetResourceNames():
+					case <-ctx.Done():
+					}
+				}
+			}
+			return nil
+		},
+		// Required for aggregate clusters as all resources cannot be requested
+		// at once.
+		AllowResourceSubset: true,
+	})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(xdsClose)
+
+	r := manual.NewBuilderWithScheme("whatever")
+	jsonSC := fmt.Sprintf(`{
+			"loadBalancingConfig":[{
+				"cds_experimental":{
+					"cluster": "%s"
+				}
+			}]
+		}`, clusterName)
+	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsC))
+
+	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+	}
+	cc.Connect()
+	t.Cleanup(func() { cc.Close() })
+
+	return mgmtServer, nodeID, cc, r, xdsC, cdsResourceRequestedCh, cdsResourceCanceledCh
+}
+
 // Helper function to compare the load balancing configuration received on the
 // channel with the expected one. Both configs are marshalled to JSON and then
 // compared.
@@ -324,11 +396,11 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 // configuration changes, it stops requesting the old cluster resource and
 // starts requesting the new one.
 func (s) TestConfigurationUpdate_Success(t *testing.T) {
-	_, _, _, r, xdsClient, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
-
-	// Verify that the specified cluster resource is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	_, _, _, r, xdsClient, cdsResourceRequestedCh, _ := setupWithManagementServerWithResourceCheck(ctx, t)
+
+	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
 	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
@@ -692,11 +764,11 @@ func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 //     continue using the previous good update.
 func (s) TestClusterUpdate_Failure(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
-
-	// Verify that the specified cluster resource is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerWithResourceCheck(ctx, t)
+
+	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
 	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
@@ -809,12 +881,12 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 func (s) TestResolverError(t *testing.T) {
 	_, resolverErrCh, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
 	lis := testutils.NewListenerWrapper(t, nil)
-	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerAndListener(t, lis)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerAndListenerWithResourceCheck(ctx, t, lis)
 
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	val, err := lis.NewConnCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Failed to receive new connection from wrapped listener: %v", err)
@@ -952,11 +1024,11 @@ func (s) TestResolverError(t *testing.T) {
 //   - when the cluster resource is re-sent by the management server, RPCs
 //     should start succeeding.
 func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
-	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServer(t)
-
-	// Verify that the specified cluster resource is requested.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerWithResourceCheck(ctx, t)
+
+	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
 	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
 		t.Fatal(err)
