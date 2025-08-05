@@ -348,7 +348,7 @@ func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "transport_socket field has unexpected typeURL",
+			wantErr: fmt.Sprintf("transport_socket missing typed_config or wrong type_url: \"%s\"", testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{}).TypeUrl),
 		},
 		{
 			desc: "badly marshaled transport socket",

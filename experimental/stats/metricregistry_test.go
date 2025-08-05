@@ -52,7 +52,7 @@ func (s) TestPanic(t *testing.T) {
 		// set by the metric registry.
 		Name:        "simple counter",
 		Description: "number of times recorded on tests",
-		Unit:        "calls",
+		Unit:        "{call}",
 	}
 	RegisterInt64Count(desc)
 	RegisterInt64Gauge(desc)

@@ -22,6 +22,7 @@ require (
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.15.0
 	golang.org/x/sys v0.33.0
+	gonum.org/v1/gonum v0.16.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7
 	google.golang.org/protobuf v1.36.6
 )
@@ -42,3 +43,6 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
 )
+
+// v1.74.0 was published prematurely with known issues.
+retract [v1.74.0, v1.74.1]

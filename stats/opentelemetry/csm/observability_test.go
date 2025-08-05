@@ -523,7 +523,7 @@ func (s) TestXDSLabels(t *testing.T) {
 		{
 			Name:        "grpc.client.attempt.started",
 			Description: "Number of client call attempts started.",
-			Unit:        "attempt",
+			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
