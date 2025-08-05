@@ -182,10 +182,11 @@ type TransportCredentials interface {
 	Info() ProtocolInfo
 	// Clone makes a copy of this TransportCredentials.
 	Clone() TransportCredentials
-	// OverrideServerName specifies the value used for the following: -
-	// verifying the hostname on the returned certificates - as SNI in the
-	// client's handshake to support virtual hosting - as the value for
-	// `:authority` header at stream creation time
+	// OverrideServerName specifies the value used for the following:
+	//
+	// - verifying the hostname on the returned certificates
+	// - as SNI in the client's handshake to support virtual hosting
+	// - as the value for `:authority` header at stream creation time
 	//
 	// The provided string should be a valid `:authority` header according to
 	// [RFC3986](https://datatracker.ietf.org/doc/html/rfc3986#section-3.2).
