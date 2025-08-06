@@ -963,7 +963,7 @@ func (a *authority) resourceWatchStateForTesting(rType ResourceType, resourceNam
 		state, err = a.activeXDSChannel.channel.ads.adsResourceWatchStateForTesting(rType, resourceName)
 		close(done)
 	}, func() {
-		err = errors.New("Failed to retrieve resource watch state because the xDS client is closed")
+		err = errors.New("failed to retrieve resource watch state because the xDS client is closed")
 		close(done)
 	})
 	<-done
