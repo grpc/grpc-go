@@ -42,22 +42,17 @@ func populateSpan(rs stats.RPCStats, ai *attemptInfo) {
 		// Note: Go always added Client and FailFast attributes even though they are not
 		// defined by the OpenCensus gRPC spec. Thus, they are unimportant for
 		// correctness.
-		// previousRPCAttempts tracks the number of previous RPC attempts.
-		// If ai.previousRPCAttempts is nil (which can occur on the server path),
-		// prevAttempts defaults to 0 to avoid a nil pointer dereference.
-		previousRPCAttempts := int64(0)
-		if ai.previousRPCAttempts != nil {
-			previousRPCAttempts = int64(ai.previousRPCAttempts.Load())
-		}
-		span.SetAttributes(
+		attribs := []attribute.KeyValue{
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.FailFast),
-			// TODO: Remove "previous-rpc-attempts" and "transparent-retry"
-			// attributes from server spans. These attributes are only relevant
-			// to client spans.
-			attribute.Int64("previous-rpc-attempts", previousRPCAttempts),
-			attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
-		)
+		}
+		if rs.Client {
+			attribs = append(attribs,
+				attribute.Int64("previous-rpc-attempts", int64(ai.previousRPCAttempts.Load())),
+				attribute.Bool("transparent-retry", rs.IsTransparentRetryAttempt),
+			)
+		}
+		span.SetAttributes(attribs...)
 		// Increment retry count for the next attempt if not a transparent
 		// retry. Added nil check to avoid panic on server path where
 		// previousRPCAttempts is not set.
