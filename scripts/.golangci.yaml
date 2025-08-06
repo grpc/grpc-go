@@ -61,7 +61,6 @@ linters:
     staticcheck:
       checks:
         - all
-        - -QF1004 # Use strings.ReplaceAll instead of strings.Replace with n == -1
         - -QF1006 # Lift if+break into loop condition
         - -QF1007 # Merge conditional assignment into variable declaration
         - -QF1008 # Omit embedded fields from selector expression

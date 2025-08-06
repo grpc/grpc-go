@@ -92,7 +92,7 @@ func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo,
 	if nameResolutionDelayed && !ci.nameResolutionEventAdded.Swap(true) && callSpan.SpanContext().IsValid() {
 		callSpan.AddEvent(delayedResolutionEventName)
 	}
-	mn := "Attempt." + strings.Replace(ai.method, "/", ".", -1)
+	mn := "Attempt." + strings.ReplaceAll(ai.method, "/", ".")
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn)
 	carrier := otelinternaltracing.NewOutgoingCarrier(ctx)
@@ -104,7 +104,7 @@ func (h *clientTracingHandler) traceTagRPC(ctx context.Context, ai *attemptInfo,
 // createCallTraceSpan creates a call span to put in the provided context using
 // provided TraceProvider. If TraceProvider is nil, it returns context as is.
 func (h *clientTracingHandler) createCallTraceSpan(ctx context.Context, method string) (context.Context, trace.Span) {
-	mn := "Sent." + strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+	mn := "Sent." + strings.ReplaceAll(removeLeadingSlash(method), "/", ".")
 	tracer := h.options.TraceOptions.TracerProvider.Tracer(tracerName, trace.WithInstrumentationVersion(grpc.Version))
 	ctx, span := tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	return ctx, span
