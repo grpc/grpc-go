@@ -19,9 +19,7 @@
 package conn
 
 import (
-	"encoding/binary"
 	"errors"
-	"fmt"
 )
 
 const (
@@ -47,34 +45,4 @@ func SliceForAppend(in []byte, n int) (head, tail []byte) {
 	}
 	tail = head[len(in):]
 	return head, tail
-}
-
-// ParseFramedMsg parse the provided buffer and returns a frame of the format
-// msgLength+msg and any remaining bytes in that buffer.
-func ParseFramedMsg(b []byte, maxLen uint32) ([]byte, []byte, error) {
-	// If the size field is not complete, return the provided buffer as
-	// remaining buffer.
-	length, sufficientBytes := parseMessageLength(b)
-	if !sufficientBytes {
-		return nil, b, nil
-	}
-	if length > maxLen {
-		return nil, nil, fmt.Errorf("received the frame length %d larger than the limit %d", length, maxLen)
-	}
-	if len(b) < int(length)+4 { // account for the first 4 msg length bytes.
-		// Frame is not complete yet.
-		return nil, b, nil
-	}
-	return b[:MsgLenFieldSize+length], b[MsgLenFieldSize+length:], nil
-}
-
-// parseMessageLength returns the message length based on frame header. It also
-// returns a boolean indicating if the buffer contains sufficient bytes to parse
-// the length header. If there are insufficient bytes, (0, false) is returned.
-func parseMessageLength(b []byte) (uint32, bool) {
-	if len(b) < MsgLenFieldSize {
-		return 0, false
-	}
-	msgLenField := b[:MsgLenFieldSize]
-	return binary.LittleEndian.Uint32(msgLenField), true
 }
