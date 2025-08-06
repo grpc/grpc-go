@@ -194,47 +194,47 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 		if sf {
 			switch FeatureIndex(i) {
 			case EnableTraceIndex:
-				b.WriteString(fmt.Sprintf("Trace%v%v%v", sep, f.EnableTrace, delim))
+				fmt.Fprintf(b, "Trace%v%v%v", sep, f.EnableTrace, delim)
 			case ReadLatenciesIndex:
-				b.WriteString(fmt.Sprintf("Latency%v%v%v", sep, f.Latency, delim))
+				fmt.Fprintf(b, "Latency%v%v%v", sep, f.Latency, delim)
 			case ReadKbpsIndex:
-				b.WriteString(fmt.Sprintf("Kbps%v%v%v", sep, f.Kbps, delim))
+				fmt.Fprintf(b, "Kbps%v%v%v", sep, f.Kbps, delim)
 			case ReadMTUIndex:
-				b.WriteString(fmt.Sprintf("MTU%v%v%v", sep, f.MTU, delim))
+				fmt.Fprintf(b, "MTU%v%v%v", sep, f.MTU, delim)
 			case MaxConcurrentCallsIndex:
-				b.WriteString(fmt.Sprintf("Callers%v%v%v", sep, f.MaxConcurrentCalls, delim))
+				fmt.Fprintf(b, "Callers%v%v%v", sep, f.MaxConcurrentCalls, delim)
 			case ReqSizeBytesIndex:
-				b.WriteString(fmt.Sprintf("ReqSize%v%vB%v", sep, f.ReqSizeBytes, delim))
+				fmt.Fprintf(b, "ReqSize%v%vB%v", sep, f.ReqSizeBytes, delim)
 			case RespSizeBytesIndex:
-				b.WriteString(fmt.Sprintf("RespSize%v%vB%v", sep, f.RespSizeBytes, delim))
+				fmt.Fprintf(b, "RespSize%v%vB%v", sep, f.RespSizeBytes, delim)
 			case ReqPayloadCurveIndex:
 				if f.ReqPayloadCurve != nil {
-					b.WriteString(fmt.Sprintf("ReqPayloadCurve%vSHA-256:%v%v", sep, f.ReqPayloadCurve.Hash(), delim))
+					fmt.Fprintf(b, "ReqPayloadCurve%vSHA-256:%v%v", sep, f.ReqPayloadCurve.Hash(), delim)
 				}
 			case RespPayloadCurveIndex:
 				if f.RespPayloadCurve != nil {
-					b.WriteString(fmt.Sprintf("RespPayloadCurve%vSHA-256:%v%v", sep, f.RespPayloadCurve.Hash(), delim))
+					fmt.Fprintf(b, "RespPayloadCurve%vSHA-256:%v%v", sep, f.RespPayloadCurve.Hash(), delim)
 				}
 			case CompModesIndex:
-				b.WriteString(fmt.Sprintf("Compressor%v%v%v", sep, f.ModeCompressor, delim))
+				fmt.Fprintf(b, "Compressor%v%v%v", sep, f.ModeCompressor, delim)
 			case EnableChannelzIndex:
-				b.WriteString(fmt.Sprintf("Channelz%v%v%v", sep, f.EnableChannelz, delim))
+				fmt.Fprintf(b, "Channelz%v%v%v", sep, f.EnableChannelz, delim)
 			case EnablePreloaderIndex:
-				b.WriteString(fmt.Sprintf("Preloader%v%v%v", sep, f.EnablePreloader, delim))
+				fmt.Fprintf(b, "Preloader%v%v%v", sep, f.EnablePreloader, delim)
 			case ClientReadBufferSize:
-				b.WriteString(fmt.Sprintf("ClientReadBufferSize%v%v%v", sep, f.ClientReadBufferSize, delim))
+				fmt.Fprintf(b, "ClientReadBufferSize%v%v%v", sep, f.ClientReadBufferSize, delim)
 			case ClientWriteBufferSize:
-				b.WriteString(fmt.Sprintf("ClientWriteBufferSize%v%v%v", sep, f.ClientWriteBufferSize, delim))
+				fmt.Fprintf(b, "ClientWriteBufferSize%v%v%v", sep, f.ClientWriteBufferSize, delim)
 			case ServerReadBufferSize:
-				b.WriteString(fmt.Sprintf("ServerReadBufferSize%v%v%v", sep, f.ServerReadBufferSize, delim))
+				fmt.Fprintf(b, "ServerReadBufferSize%v%v%v", sep, f.ServerReadBufferSize, delim)
 			case ServerWriteBufferSize:
-				b.WriteString(fmt.Sprintf("ServerWriteBufferSize%v%v%v", sep, f.ServerWriteBufferSize, delim))
+				fmt.Fprintf(b, "ServerWriteBufferSize%v%v%v", sep, f.ServerWriteBufferSize, delim)
 			case SleepBetweenRPCs:
-				b.WriteString(fmt.Sprintf("SleepBetweenRPCs%v%v%v", sep, f.SleepBetweenRPCs, delim))
+				fmt.Fprintf(b, "SleepBetweenRPCs%v%v%v", sep, f.SleepBetweenRPCs, delim)
 			case RecvBufferPool:
-				b.WriteString(fmt.Sprintf("RecvBufferPool%v%v%v", sep, f.RecvBufferPool, delim))
+				fmt.Fprintf(b, "RecvBufferPool%v%v%v", sep, f.RecvBufferPool, delim)
 			case SharedWriteBuffer:
-				b.WriteString(fmt.Sprintf("SharedWriteBuffer%v%v%v", sep, f.SharedWriteBuffer, delim))
+				fmt.Fprintf(b, "SharedWriteBuffer%v%v%v", sep, f.SharedWriteBuffer, delim)
 			default:
 				log.Fatalf("Unknown feature index %v. maxFeatureIndex is %v", i, MaxFeatureIndex)
 			}

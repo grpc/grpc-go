@@ -62,7 +62,6 @@ linters:
       checks:
         - all
         - -QF1008 # Omit embedded fields from selector expression
-        - -QF1012 # Use fmt.Fprintf(x, ...) instead of x.Write(fmt.Sprintf(...))
         - -SA1019 # Using a deprecated function, variable, constant or field
         - -SA2001 # Empty critical section, did you mean to defer the unlock?
         - -SA4000 # Binary operator has identical expressions on both sides
