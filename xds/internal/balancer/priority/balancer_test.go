@@ -655,7 +655,7 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	scToShutdown[1] = <-cc.ShutdownSubConnCh
 	<-cc.ShutdownSubConnCh
 
-	if !(scToShutdown[0] == sc1 && scToShutdown[1] == sc2) && !(scToShutdown[0] == sc2 && scToShutdown[1] == sc1) {
+	if (scToShutdown[0] != sc1 || scToShutdown[1] != sc2) && (scToShutdown[0] != sc2 || scToShutdown[1] != sc1) {
 		t.Errorf("ShutdownSubConn, want [%v, %v], got %v", sc1, sc2, scToShutdown)
 	}
 

@@ -230,7 +230,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				// Both are non-nil, compare type and target.
 				aConcrete, aOK := a.(*metricsReporter)
 				bConcrete, bOK := b.(*metricsReporter)
-				if !(aOK && bOK && aConcrete.target == bConcrete.target) {
+				if !aOK || !bOK || aConcrete.target != bConcrete.target {
 					return false
 				}
 				// Compare recorder by type.
