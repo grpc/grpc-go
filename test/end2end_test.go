@@ -1144,10 +1144,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	tc := testgrpc.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
-	for {
-		if cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
-			break
-		}
+	for cc.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady == nil {
 		time.Sleep(time.Millisecond)
 	}
 
@@ -1228,10 +1225,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	tc := testgrpc.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
-	for {
-		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady != nil {
-			break
-		}
+	for cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").WaitForReady == nil {
 		time.Sleep(time.Millisecond)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1317,10 +1311,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	tc := testgrpc.NewTestServiceClient(cc)
 
 	// Make sure service config has been processed by grpc.
-	for {
-		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
-			break
-		}
+	for cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout == nil {
 		time.Sleep(time.Millisecond)
 	}
 
@@ -1438,10 +1429,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 		Payload:      smallPayload,
 	}
 
-	for {
-		if cc1.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
-			break
-		}
+	for cc1.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize == nil {
 		time.Sleep(time.Millisecond)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1503,10 +1491,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te2.srvAddr}}, ServiceConfig: sc})
 	tc = testgrpc.NewTestServiceClient(cc2)
 
-	for {
-		if cc2.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
-			break
-		}
+	for cc2.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize == nil {
 		time.Sleep(time.Millisecond)
 	}
 
@@ -1563,10 +1548,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: te3.srvAddr}}, ServiceConfig: sc})
 	tc = testgrpc.NewTestServiceClient(cc3)
 
-	for {
-		if cc3.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize != nil {
-			break
-		}
+	for cc3.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").MaxReqSize == nil {
 		time.Sleep(time.Millisecond)
 	}
 
@@ -1665,10 +1647,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	    ]
 	}`)})
 	// Make sure service config has been processed by grpc.
-	for {
-		if cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout != nil {
-			break
-		}
+	for cc.GetMethodConfig("/grpc.testing.TestService/FullDuplexCall").Timeout == nil {
 		time.Sleep(time.Millisecond)
 	}
 
