@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -954,4 +955,18 @@ func serviceStatusToProto(serviceStatus xdsresource.ServiceStatus) v3adminpb.Cli
 	default:
 		return v3adminpb.ClientResourceStatus_UNKNOWN
 	}
+}
+
+func (a *authority) resourceWatchStateForTesting(rType ResourceType, resourceName string) (state xdsresource.ResourceWatchState, err error) {
+	done := make(chan struct{})
+	a.xdsClientSerializer.ScheduleOr(func(context.Context) {
+		state, err = a.activeXDSChannel.channel.ads.adsResourceWatchStateForTesting(rType, resourceName)
+		close(done)
+	}, func() {
+		err = errors.New("failed to retrieve resource watch state because the xDS client is closed")
+		close(done)
+	})
+	<-done
+
+	return state, err
 }

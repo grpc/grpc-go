@@ -453,13 +453,11 @@ func (cs *channelState) adsResourceRemoveUnsubscribedCacheEntries(rType Resource
 }
 
 func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
-	c.channelsMu.Lock()
-	defer c.channelsMu.Unlock()
-
-	for _, state := range c.xdsActiveChannels {
-		if st, err := state.channel.ads.adsResourceWatchStateForTesting(rType, resourceName); err == nil {
-			return st, nil
-		}
+	n := xdsresource.ParseName(resourceName)
+	a := c.getAuthorityForResource(n)
+	if a == nil {
+		return xdsresource.ResourceWatchState{}, fmt.Errorf("unable to find authority for resource name %q", resourceName)
 	}
-	return xdsresource.ResourceWatchState{}, fmt.Errorf("unable to find watch state for resource type %q and name %q", rType.TypeName, resourceName)
+	return a.resourceWatchStateForTesting(rType, resourceName)
+
 }
