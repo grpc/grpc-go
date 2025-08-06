@@ -69,12 +69,10 @@ type Producer interface {
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
 	ResourceChanged(resourceData ResourceData, done func())
-
 	// ResourceError indicates an error occurred while trying to fetch or
 	// decode the associated resource. The previous version of the resource
 	// should be considered invalid.
 	ResourceError(err error, done func())
-
 	// AmbientError indicates an error occurred after a resource has been
 	// received that should not modify the use of that resource but may provide
 	// useful information about the state of the XDSClient for debugging
@@ -88,23 +86,18 @@ type ResourceWatcher interface {
 type Type interface {
 	// TypeURL is the xDS type URL of this resource type for v3 transport.
 	TypeURL() string
-
 	// TypeName identifies resources in a transport protocol agnostic way. This
 	// can be used for logging/debugging purposes, as well in cases where the
 	// resource type name is to be uniquely identified but the actual
 	// functionality provided by the resource type is not required.
-
 	TypeName() string
-
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
 	// that all resources be present in every SotW response from the server. If
 	// true, a response that does not include a previously seen resource will be
 	// interpreted as a deletion of that resource.
 	AllResourcesRequiredInSotW() bool
-
 	// Decode deserializes and validates an xDS resource serialized inside the
 	// provided `Any` proto, as received from the xDS management server.
-	//
 	// If protobuf deserialization fails or resource validation fails,
 	// returns a non-nil error. Otherwise, returns a fully populated
 	// DecodeResult.
@@ -119,10 +112,8 @@ type ResourceData interface {
 	// RawEqual returns true if the passed in resource data is equal to that of
 	// the receiver, based on the underlying raw protobuf message.
 	RawEqual(ResourceData) bool
-
 	// ToJSON returns a JSON string representation of the resource data.
 	ToJSON() string
-
 	Raw() *anypb.Any
 	Bytes() []byte
 	Equal(xdsclient.ResourceData) bool
@@ -150,8 +141,7 @@ type DecodeResult struct {
 }
 
 // resourceTypeState wraps the static state associated with concrete resource
-// type implementations, which can then embed this struct and get the methods
-// implemented here for free.
+// type implementations, which can then embed this struct
 type resourceTypeState struct {
 	typeURL                    string
 	typeName                   string
@@ -176,7 +166,7 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 // Listener represents the internal data structure for a Listener resource.
 // Listener
 type Listener struct {
-	*v3listenerpb.Listener // Embedding the proto for simplicity in this example
+	*v3listenerpb.Listener
 }
 
 // RawEqual implements xdsresource.ResourceData.
@@ -190,12 +180,12 @@ func (l *Listener) RawEqual(other ResourceData) bool {
 
 // ToJSON implements xdsresource.ResourceData.
 func (l *Listener) ToJSON() string {
-	return l.Listener.String() // Or your actual JSON serialization logic
+	return l.Listener.String()
 }
 
 // Raw implements xdsresource.ResourceData.
 func (l *Listener) Raw() *anypb.Any {
-	any, _ := anypb.New(l.Listener) // Error ignored for brevity, handle in real code
+	any, _ := anypb.New(l.Listener)
 	return any
 }
 func (l *Listener) Bytes() []byte {
