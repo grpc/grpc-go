@@ -20,7 +20,6 @@ package xdsresource
 import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -29,20 +28,6 @@ const (
 	// EndpointsResourceTypeName represents the transport agnostic name for the
 	// endpoint resource.
 	EndpointsResourceTypeName = "EndpointsResource"
-)
-
-var (
-	// Compile time interface checks.
-	_ Type = endpointsResourceType{}
-
-	// Singleton instantiation of the resource type implementation.
-	endpointsType = endpointsResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3EndpointsURL,
-			typeName:                   "EndpointsResource",
-			allResourcesRequiredInSotW: false,
-		},
-	}
 )
 
 // endpointsResourceType provides the resource-type specific functionality for a

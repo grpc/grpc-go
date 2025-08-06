@@ -21,7 +21,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -30,20 +29,6 @@ const (
 	// ClusterResourceTypeName represents the transport agnostic name for the
 	// cluster resource.
 	ClusterResourceTypeName = "ClusterResource"
-)
-
-var (
-	// Compile time interface checks.
-	_ Type = clusterResourceType{}
-
-	// Singleton instantiation of the resource type implementation.
-	clusterType = clusterResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3ClusterURL,
-			typeName:                   ClusterResourceTypeName,
-			allResourcesRequiredInSotW: true,
-		},
-	}
 )
 
 // clusterResourceType provides the resource-type specific functionality for a

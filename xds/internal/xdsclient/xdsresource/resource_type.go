@@ -174,7 +174,7 @@ func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
 // These structs are the "users" that will now directly implement xdsclient.Decoder.
 
 // Listener represents the internal data structure for a Listener resource.
-// You should adapt this to your actual internal Listener representation.
+// Listener
 type Listener struct {
 	*v3listenerpb.Listener // Embedding the proto for simplicity in this example
 }
@@ -302,7 +302,7 @@ func validateListener(l *v3listenerpb.Listener) error {
 	return nil
 }
 
-func NewEndPointsDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *listenerTypeImpl {
+func NewListenerDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *listenerTypeImpl {
 	val := listenerType
 	val.bootstrapConfig = bootstrapConfig
 	val.serverConfigMap = m
@@ -310,6 +310,7 @@ func NewEndPointsDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.Serv
 }
 
 // RouteConfig represents the internal data structure for a RouteConfiguration resource.
+// RouteConfig
 type RouteConfig struct {
 	*v3routepb.RouteConfiguration
 }
@@ -343,6 +344,14 @@ type routeConfigTypeImpl struct {
 	resourceTypeState
 	bootstrapConfig *bootstrap.Config
 	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
+}
+
+var routeConfigType = routeConfigTypeImpl{
+	resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3RouteConfigURL,
+		typeName:                   "RouteConfiguration",
+		allResourcesRequiredInSotW: false,
+	},
 }
 
 func (rt routeConfigTypeImpl) TypeURL() string  { return rt.resourceTypeState.TypeURL() }
@@ -391,8 +400,15 @@ func (rt routeConfigTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts
 
 	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
 }
+func NewRouteConfigDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *routeConfigTypeImpl {
+	val := routeConfigType
+	val.bootstrapConfig = bootstrapConfig
+	val.serverConfigMap = m
+	return &val
+}
 
 // Cluster represents the internal data structure for a Cluster resource.
+// Cluster
 type Cluster struct {
 	*v3clusterpb.Cluster
 }
@@ -428,6 +444,14 @@ type clusterTypeImpl struct {
 	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
+var clusterType = clusterTypeImpl{
+	resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3ClusterURL,
+		typeName:                   "Cluster",
+		allResourcesRequiredInSotW: false,
+	},
+}
+
 func (ct clusterTypeImpl) TypeURL() string  { return ct.resourceTypeState.TypeURL() }
 func (ct clusterTypeImpl) TypeName() string { return ct.resourceTypeState.TypeName() }
 func (ct clusterTypeImpl) AllResourcesRequiredInSotW() bool {
@@ -443,20 +467,17 @@ func (ct clusterTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*Dec
 	return &DecodeResult{Name: cProto.GetName(), Resource: &Cluster{Cluster: &cProto}}, nil
 }
 
-// XDSClientDecode implements xdsclient.Decoder for Endpoints.
-func (et endpointsTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+func (ct clusterTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
-
-	opts := &DecodeOptions{BootstrapConfig: et.bootstrapConfig}
-
+	opts := &DecodeOptions{BootstrapConfig: ct.bootstrapConfig}
 	if gOpts.ServerConfig != nil {
-		if bootstrapSC, ok := et.serverConfigMap[*gOpts.ServerConfig]; ok {
+		if bootstrapSC, ok := ct.serverConfigMap[*gOpts.ServerConfig]; ok {
 			opts.ServerConfig = bootstrapSC
 		} else {
 			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
 		}
 	}
-	internalResult, err := et.Decode(opts, anyProto)
+	internalResult, err := ct.Decode(opts, anyProto)
 	if err != nil {
 		if internalResult != nil {
 			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
@@ -466,14 +487,21 @@ func (et endpointsTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts x
 	if internalResult == nil {
 		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
 	}
-
 	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
 	if !ok {
 		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
 	}
 	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
 }
+func NewClusterDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *clusterTypeImpl {
+	val := clusterType
+	val.bootstrapConfig = bootstrapConfig
+	val.serverConfigMap = m
+	return &val
+}
 
+// XDSClientDecode implements xdsclient.Decoder for Endpoints.
+// End Points
 type Endpoints struct {
 	*v3endpointpb.ClusterLoadAssignment
 }
@@ -518,6 +546,14 @@ type endpointsTypeImpl struct {
 	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
+var endpointsType = endpointsTypeImpl{
+	resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3EndpointsURL,
+		typeName:                   "Endpoints",
+		allResourcesRequiredInSotW: false,
+	},
+}
+
 func (et endpointsTypeImpl) TypeURL() string  { return et.resourceTypeState.TypeURL() }
 func (et endpointsTypeImpl) TypeName() string { return et.resourceTypeState.TypeName() }
 func (et endpointsTypeImpl) AllResourcesRequiredInSotW() bool {
@@ -531,4 +567,39 @@ func (et endpointsTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*D
 	}
 	// Placeholder validation
 	return &DecodeResult{Name: epProto.GetClusterName(), Resource: &Endpoints{ClusterLoadAssignment: &epProto}}, nil
+}
+func (et endpointsTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
+
+	opts := &DecodeOptions{BootstrapConfig: et.bootstrapConfig}
+
+	if gOpts.ServerConfig != nil {
+		if bootstrapSC, ok := et.serverConfigMap[*gOpts.ServerConfig]; ok {
+			opts.ServerConfig = bootstrapSC
+		} else {
+			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
+		}
+	}
+	internalResult, err := et.Decode(opts, anyProto)
+	if err != nil {
+		if internalResult != nil {
+			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
+		}
+		return nil, err
+	}
+	if internalResult == nil {
+		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
+	}
+
+	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
+	if !ok {
+		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
+	}
+	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
+}
+func NewEndpointsDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *endpointsTypeImpl {
+	val := endpointsType
+	val.bootstrapConfig = bootstrapConfig
+	val.serverConfigMap = m
+	return &val
 }

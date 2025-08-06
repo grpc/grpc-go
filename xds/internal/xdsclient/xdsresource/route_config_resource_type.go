@@ -20,7 +20,6 @@ package xdsresource
 import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -29,20 +28,6 @@ const (
 	// RouteConfigTypeName represents the transport agnostic name for the
 	// route config resource.
 	RouteConfigTypeName = "RouteConfigResource"
-)
-
-var (
-	// Compile time interface checks.
-	_ Type = routeConfigResourceType{}
-
-	// Singleton instantiation of the resource type implementation.
-	routeConfigType = routeConfigResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3RouteConfigURL,
-			typeName:                   "RouteConfigResource",
-			allResourcesRequiredInSotW: false,
-		},
-	}
 )
 
 // routeConfigResourceType provides the resource-type specific functionality for
