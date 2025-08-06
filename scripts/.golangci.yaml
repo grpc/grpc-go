@@ -1,0 +1,87 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - govet
+    - misspell
+    - revive
+    - staticcheck
+  settings:
+    govet: # Needs to be fixed
+      disable:
+        - deepequalerrors
+        - fieldalignment
+        - nilness
+        - printf
+        - shadow
+      enable-all: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore: '*testing.T'
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+          # Disabled to allow intentional no-op blocks (e.g., channel draining).
+          disabled: true
+        - name: errorf
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: import-shadowing
+           # Disabled to allow intentional reuse of variable names that are the same as package imports.
+          disabled: true
+        - name: increment-decrement
+        - name: indent-error-flow
+          arguments:
+            - preserveScope
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+           # Disabled to allow intentional reuse of variable names that are the same as built-in functions.
+          disabled: true
+        - name: superfluous-else
+          arguments:
+            - preserveScope
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+          # Needs to be fixed
+          disabled: true
+        - name: use-any
+        - name: var-declaration
+        - name: var-naming
+          # Needs to be fixed
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+        - -QF1001 # Apply De Morgan’s law
+        - -QF1002 # Convert untagged switch to tagged switch
+        - -QF1003 # Convert if/else-if chain to tagged switch
+        - -QF1004 # Use strings.ReplaceAll instead of strings.Replace with n == -1
+        - -QF1006 # Lift if+break into loop condition
+        - -QF1007 # Merge conditional assignment into variable declaration
+        - -QF1008 # Omit embedded fields from selector expression
+        - -QF1012 # Use fmt.Fprintf(x, ...) instead of x.Write(fmt.Sprintf(...))
+        - -SA1019 # Using a deprecated function, variable, constant or field
+        - -SA2001 # Empty critical section, did you mean to defer the unlock?
+        - -SA4000 # Binary operator has identical expressions on both sides
+        - -ST1019 # Importing the same package multiple times
+  exclusions:
+    rules: []
+    warn-unused: true
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
