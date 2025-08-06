@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"syscall"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
 )
@@ -97,6 +98,18 @@ type conn struct {
 	nextFrame []byte
 	// overhead is the calculated overhead of each frame.
 	overhead int
+	// rcvlowat is the "receive low watermark" used to avoid unnecessary
+	// early returns from the kernel during [conn.Read], which saves CPU and
+	// can boost throughput under load. When we receive the first few bytes
+	// of a message we examine the length field. If, for example, we know
+	// there's 512KB of data remaining in the record, rcvlowat tells the
+	// kernel "don't wake me up every time you get another packet; wait
+	// until you have all 512KB."
+	//
+	// See SO_RCVLOWAT in tcp(7) for more info.
+	rcvlowat int
+	// rawConn allows us to set SO_RCVLOWAT on the underlying TCP socket.
+	rawConn syscall.RawConn
 }
 
 // NewConn creates a new secure channel instance given the other party role and
@@ -129,6 +142,18 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		nextFrame:          protectedBuf,
 		overhead:           overhead,
 	}
+
+	if rcvlowat {
+		tcpConn, ok := c.(*net.TCPConn)
+		if !ok {
+			return nil, fmt.Errorf("rcvlowat requires a *net.TCPConn, but got %T", c)
+		}
+		if altsConn.rawConn, err = tcpConn.SyscallConn(); err != nil {
+			return nil, fmt.Errorf("failed to get raw connection: %w", err)
+		}
+		altsConn.rcvlowat = 1
+	}
+
 	return altsConn, nil
 }
 
@@ -139,7 +164,8 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 func (p *conn) Read(b []byte) (n int, err error) {
 	if len(p.buf) == 0 {
 		var framedMsg []byte
-		framedMsg, err = p.parseFramedMsg(p.nextFrame, altsRecordLengthLimit)
+		var length uint32
+		framedMsg, length, err = p.parseFramedMsg(p.nextFrame, altsRecordLengthLimit)
 		if err != nil {
 			return n, err
 		}
@@ -154,6 +180,10 @@ func (p *conn) Read(b []byte) (n int, err error) {
 		}
 		// Check whether a complete frame has been received yet.
 		for len(framedMsg) == 0 {
+			if err := p.setRcvlowat(int(length)); err != nil {
+				return 0, err
+			}
+
 			if len(p.protected) == cap(p.protected) {
 				// We can parse the length header to know exactly how large
 				// the buffer needs to be to hold the entire frame.
@@ -179,7 +209,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 				return 0, err
 			}
 			p.protected = p.protected[:len(p.protected)+n]
-			framedMsg, err = p.parseFramedMsg(p.protected, altsRecordLengthLimit)
+			framedMsg, length, err = p.parseFramedMsg(p.protected, altsRecordLengthLimit)
 			if err != nil {
 				return 0, err
 			}
@@ -221,24 +251,25 @@ func (p *conn) Read(b []byte) (n int, err error) {
 }
 
 // parseFramedMsg parses the provided buffer and returns a frame of the format
-// msgLength+msg iff a full frame is available.
-func (p *conn) parseFramedMsg(b []byte, maxLen uint32) ([]byte, error) {
+// msgLength+msg iff a full frame is available. It also returns the message
+// length if available.
+func (p *conn) parseFramedMsg(b []byte, maxLen uint32) ([]byte, uint32, error) {
 	// If the size field is not complete, return the provided buffer as
 	// remaining buffer.
 	p.nextFrame = b
 	length, sufficientBytes := parseMessageLength(b)
 	if !sufficientBytes {
-		return nil, nil
+		return nil, length, nil
 	}
 	if length > maxLen {
-		return nil, fmt.Errorf("received the frame length %d larger than the limit %d", length, maxLen)
+		return nil, length, fmt.Errorf("received the frame length %d larger than the limit %d", length, maxLen)
 	}
-	if len(b) < int(length)+4 { // account for the first 4 msg length bytes.
+	if len(b) < int(length)+MsgLenFieldSize { // account for the first 4 msg length bytes.
 		// Frame is not complete yet.
-		return nil, nil
+		return nil, length, nil
 	}
 	p.nextFrame = b[MsgLenFieldSize+length:]
-	return b[:MsgLenFieldSize+length], nil
+	return b[:MsgLenFieldSize+length], length, nil
 }
 
 // parseMessageLength returns the message length based on frame header. It also
