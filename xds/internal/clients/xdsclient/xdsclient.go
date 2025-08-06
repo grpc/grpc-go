@@ -446,9 +446,7 @@ func (cs *channelState) adsResourceRemoveUnsubscribedCacheEntries(rType Resource
 	defer cs.parent.channelsMu.Unlock()
 
 	for authority := range cs.interestedAuthorities {
-		authority.xdsClientSerializer.TrySchedule(func(context.Context) {
-			authority.removeUnsubscribedCacheEntries(rType)
-		})
+		authority.removeUnsubscribedCacheEntries(rType)
 	}
 }
 

@@ -908,36 +908,36 @@ func (a *authority) close() {
 // after sending a discovery request to ensure that resources that were
 // unsubscribed (and thus have no watchers) are eventually removed from the
 // authority's cache.
-//
-// This method is only executed in the context of a serializer callback.
 func (a *authority) removeUnsubscribedCacheEntries(rType ResourceType) {
-	resources := a.resources[rType]
-	if resources == nil {
-		return
-	}
+	a.xdsClientSerializer.TrySchedule(func(context.Context) {
+		resources := a.resources[rType]
+		if resources == nil {
+			return
+		}
 
-	for name, state := range resources {
-		if len(state.watchers) == 0 {
-			if a.logger.V(2) {
-				a.logger.Infof("Removing resource state for %q of type %q as it has no watchers", name, rType.TypeName)
+		for name, state := range resources {
+			if len(state.watchers) == 0 {
+				if a.logger.V(2) {
+					a.logger.Infof("Removing resource state for %q of type %q as it has no watchers", name, rType.TypeName)
+				}
+				delete(resources, name)
 			}
-			delete(resources, name)
 		}
-	}
 
-	if len(resources) == 0 {
-		if a.logger.V(2) {
-			a.logger.Infof("Removing resource type %q from cache as it has no more resources", rType.TypeName)
+		if len(resources) == 0 {
+			if a.logger.V(2) {
+				a.logger.Infof("Removing resource type %q from cache as it has no more resources", rType.TypeName)
+			}
+			delete(a.resources, rType)
 		}
-		delete(a.resources, rType)
-	}
 
-	if len(a.resources) == 0 {
-		if a.logger.V(2) {
-			a.logger.Infof("Removing last watch for any resource type, releasing reference to the xdsChannels")
+		if len(a.resources) == 0 {
+			if a.logger.V(2) {
+				a.logger.Infof("Removing last watch for any resource type, releasing reference to the xdsChannels")
+			}
+			a.closeXDSChannels()
 		}
-		a.closeXDSChannels()
-	}
+	})
 }
 
 func serviceStatusToProto(serviceStatus xdsresource.ServiceStatus) v3adminpb.ClientResourceStatus {
