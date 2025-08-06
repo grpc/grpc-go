@@ -784,10 +784,8 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			if err != nil {
 				t.Fatalf("clientTLSCreds failed to create: %v", err)
 			}
-			shouldFail := false
-			if test.expectError {
-				shouldFail = true
-			}
+			shouldFail := test.expectError
+
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			conn, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, shouldFail)
@@ -926,10 +924,8 @@ func (s) TestTLSVersions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("clientTLSCreds failed to create: %v", err)
 			}
-			shouldFail := false
-			if test.expectError {
-				shouldFail = true
-			}
+			shouldFail := test.expectError
+
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			conn, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, shouldFail)
