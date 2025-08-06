@@ -955,3 +955,14 @@ func serviceStatusToProto(serviceStatus xdsresource.ServiceStatus) v3adminpb.Cli
 		return v3adminpb.ClientResourceStatus_UNKNOWN
 	}
 }
+
+func (a *authority) resourceWatchStateForTesting(rType ResourceType, resourceName string) (state xdsresource.ResourceWatchState, err error) {
+	done := make(chan struct{})
+	a.xdsClientSerializer.ScheduleOr(func(context.Context) {
+		state, err = a.activeXDSChannel.channel.ads.adsResourceWatchStateForTesting(rType, resourceName)
+		close(done)
+	}, func() { close(done) })
+	<-done
+
+	return state, err
+}
