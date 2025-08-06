@@ -104,6 +104,8 @@ type ClientOptions struct {
 	// HandshakerServiceAddress represents the ALTS handshaker gRPC service
 	// address to connect to.
 	HandshakerServiceAddress string
+	// EnableRcvlowat enables CPU savings via SO_RCVLOWAT.
+	EnableRcvlowat bool
 }
 
 // DefaultClientOptions creates a new ClientOptions object with the default
@@ -120,6 +122,8 @@ type ServerOptions struct {
 	// HandshakerServiceAddress represents the ALTS handshaker gRPC service
 	// address to connect to.
 	HandshakerServiceAddress string
+	// EnableRcvlowat enables CPU savings via SO_RCVLOWAT.
+	EnableRcvlowat bool
 }
 
 // DefaultServerOptions creates a new ServerOptions object with the default
@@ -138,19 +142,20 @@ type altsTC struct {
 	accounts         []string
 	hsAddress        string
 	boundAccessToken string
+	rcvlowat         bool
 }
 
 // NewClientCreds constructs a client-side ALTS TransportCredentials object.
 func NewClientCreds(opts *ClientOptions) credentials.TransportCredentials {
-	return newALTS(core.ClientSide, opts.TargetServiceAccounts, opts.HandshakerServiceAddress)
+	return newALTS(core.ClientSide, opts.TargetServiceAccounts, opts.HandshakerServiceAddress, opts.EnableRcvlowat)
 }
 
 // NewServerCreds constructs a server-side ALTS TransportCredentials object.
 func NewServerCreds(opts *ServerOptions) credentials.TransportCredentials {
-	return newALTS(core.ServerSide, nil, opts.HandshakerServiceAddress)
+	return newALTS(core.ServerSide, nil, opts.HandshakerServiceAddress, opts.EnableRcvlowat)
 }
 
-func newALTS(side core.Side, accounts []string, hsAddress string) credentials.TransportCredentials {
+func newALTS(side core.Side, accounts []string, hsAddress string, rcvlowat bool) credentials.TransportCredentials {
 	once.Do(func() {
 		vmOnGCP = googlecloud.OnGCE()
 	})
@@ -165,6 +170,7 @@ func newALTS(side core.Side, accounts []string, hsAddress string) credentials.Tr
 		side:      side,
 		accounts:  accounts,
 		hsAddress: hsAddress,
+		rcvlowat:  rcvlowat,
 	}
 }
 
@@ -200,6 +206,7 @@ func (g *altsTC) ClientHandshake(ctx context.Context, addr string, rawConn net.C
 		MinRpcVersion: minRPCVersion,
 	}
 	opts.BoundAccessToken = g.boundAccessToken
+	opts.Rcvlowat = g.rcvlowat
 	chs, err := handshaker.NewClientHandshaker(ctx, hsConn, rawConn, opts)
 	if err != nil {
 		return nil, nil, err
@@ -243,6 +250,7 @@ func (g *altsTC) ServerHandshake(rawConn net.Conn) (_ net.Conn, _ credentials.Au
 		MaxRpcVersion: maxRPCVersion,
 		MinRpcVersion: minRPCVersion,
 	}
+	opts.Rcvlowat = g.rcvlowat
 	shs, err := handshaker.NewServerHandshaker(ctx, hsConn, rawConn, opts)
 	if err != nil {
 		return nil, nil, err
