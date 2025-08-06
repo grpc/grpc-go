@@ -252,21 +252,22 @@ func main() {
 		logger.Fatal("Invalid creds")
 	}
 	if credsChosen == credsTLS {
-		if *testCase == "compute_engine_creds" {
+		switch *testCase {
+		case "compute_engine_creds":
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewComputeEngine()))
-		} else if *testCase == "service_account_creds" {
+		case "service_account_creds":
 			jwtCreds, err := oauth.NewServiceAccountFromFile(*serviceAccountKeyFile, *oauthScope)
 			if err != nil {
 				logger.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
-		} else if *testCase == "jwt_token_creds" {
+		case "jwt_token_creds":
 			jwtCreds, err := oauth.NewJWTAccessFromFile(*serviceAccountKeyFile)
 			if err != nil {
 				logger.Fatalf("Failed to create JWT credentials: %v", err)
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
-		} else if *testCase == "oauth2_auth_token" {
+		case "oauth2_auth_token":
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(interop.GetToken(ctx, *serviceAccountKeyFile, *oauthScope))}))
 		}
 	}

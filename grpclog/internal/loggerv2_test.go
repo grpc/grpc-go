@@ -283,15 +283,16 @@ func TestLoggerV2PrintFuncAllCombinations(t *testing.T) {
 			msgInf := "someinfo"
 			msgWarn := "somewarn"
 			msgErr := "someerr"
-			if discardTest.printType == print {
+			switch discardTest.printType {
+			case print:
 				logger.Info(msgInf)
 				logger.Warning(msgWarn)
 				logger.Error(msgErr)
-			} else if discardTest.printType == printf {
+			case printf:
 				logger.Infof("%v", msgInf)
 				logger.Warningf("%v", msgWarn)
 				logger.Errorf("%v", msgErr)
-			} else if discardTest.printType == println {
+			case println:
 				logger.Infoln(msgInf)
 				logger.Warningln(msgWarn)
 				logger.Errorln(msgErr)

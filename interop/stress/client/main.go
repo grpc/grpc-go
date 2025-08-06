@@ -290,11 +290,12 @@ func logParameterInfo(addresses []string, tests []testCaseWithWeight) {
 func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	if *customCredentialsType != "" {
-		if *customCredentialsType == googleDefaultCredsName {
+		switch *customCredentialsType {
+		case googleDefaultCredsName:
 			opts = append(opts, grpc.WithCredentialsBundle(google.NewDefaultCredentials()))
-		} else if *customCredentialsType == computeEngineCredsName {
+		case computeEngineCredsName:
 			opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
-		} else {
+		default:
 			logger.Fatalf("Unknown custom credentials: %v", *customCredentialsType)
 		}
 	} else if useTLS {
