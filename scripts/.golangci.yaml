@@ -47,11 +47,13 @@ linters:
             - preserveScope
         - name: time-naming
         - name: unexported-return
+        - name: unnecessary-stmt
         - name: unreachable-code
         - name: unused-parameter
           # Needs to be fixed
           disabled: true
         - name: use-any
+        - name: useless-break
         - name: var-declaration
         - name: var-naming
           # Needs to be fixed
@@ -74,5 +76,6 @@ formatters:
   settings:
     gofmt:
       rewrite-rules:
+        # - Do not use "interface{}"; use "any" instead.
         - pattern: 'interface{}'
           replacement: 'any'
