@@ -37,26 +37,22 @@ func TestNewBundle(t *testing.T) {
 	tests := []struct {
 		name            string
 		config          string
-		wantErr         bool
 		wantErrContains string
 	}{
 		{
-			name: "valid RFC A97 config with jwt_token_file",
+			name: "valid config",
 			config: `{
 				"jwt_token_file": "` + tokenFile + `"
 			}`,
-			wantErr: false,
 		},
 		{
-			name:            "empty config",
+			name:            "empty file",
 			config:          `""`,
-			wantErr:         true,
 			wantErrContains: "unmarshal",
 		},
 		{
 			name:            "empty config",
 			config:          `{}`,
-			wantErr:         true,
 			wantErrContains: "jwt_token_file is required",
 		},
 		{
@@ -64,7 +60,6 @@ func TestNewBundle(t *testing.T) {
 			config: `{
 				"jwt_token_file": ""
 			}`,
-			wantErr:         true,
 			wantErrContains: "jwt_token_file is required",
 		},
 	}
@@ -73,7 +68,7 @@ func TestNewBundle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bundle, cleanup, err := NewBundle(json.RawMessage(tt.config))
 
-			if tt.wantErr {
+			if tt.wantErrContains != "" {
 				if err == nil {
 					t.Fatal("Expected error, got nil")
 				}
@@ -97,7 +92,7 @@ func TestNewBundle(t *testing.T) {
 				defer cleanup()
 			}
 
-			// JWT bundle only deals with PerRPCCredentials, not TransportCredentials
+			// JWT bundle only deals with PerRPCCredentials, not TransportCredentials.
 			if bundle.TransportCredentials() != nil {
 				t.Error("Expected nil transport credentials for JWT call creds bundle")
 			}
@@ -168,7 +163,6 @@ func TestBundle_Cleanup(t *testing.T) {
 
 	// Cleanup should not panic
 	cleanup()
-
 	// Multiple cleanup calls should be safe
 	cleanup()
 }
@@ -190,14 +184,10 @@ func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 func createTestJWT(t *testing.T) string {
 	t.Helper()
 
-	// Create a valid JWT with proper base64 encoding for testing
 	// Header: {"typ":"JWT","alg":"HS256"}
 	header := "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9"
-
 	// Claims: {"aud":"https://example.com","exp":future_timestamp}
 	claims := "eyJhdWQiOiJodHRwczovL2V4YW1wbGUuY29tIiwiZXhwIjoyMDAwMDAwMDAwfQ"
-
-	// Fake signature for testing
 	signature := "fake_signature_for_testing"
 
 	return header + "." + claims + "." + signature
