@@ -265,7 +265,6 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 }
 
 func TestServerConfigCallCredsIntegration(t *testing.T) {
-	// Enable JWT call credentials
 	originalJWTEnabled := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
 	defer func() {
@@ -273,7 +272,7 @@ func TestServerConfigCallCredsIntegration(t *testing.T) {
 	}()
 
 	tokenFile := "/token.jwt"
-	// Test server config with both channel and call credentials
+	// Test server config with both channel and call credentials.
 	serverConfigJSON := `{
 		"server_uri": "xds-server:443",
 		"channel_creds": [{"type": "tls", "config": {}}],
@@ -290,7 +289,7 @@ func TestServerConfigCallCredsIntegration(t *testing.T) {
 		t.Fatalf("Failed to unmarshal server config: %v", err)
 	}
 
-	// Verify call credentials are processed
+	// Verify call credentials are processed.
 	callCreds := sc.CallCreds()
 	if len(callCreds) != 1 {
 		t.Errorf("Expected 1 call credential, got %d", len(callCreds))
@@ -301,16 +300,14 @@ func TestServerConfigCallCredsIntegration(t *testing.T) {
 		t.Errorf("Expected 1 selected call credential, got %d", len(selectedCallCreds))
 	}
 
-	// Test dial options for secure transport (should include JWT)
+	// Test dial options for secure transport (should include JWT).
 	secureOpts := sc.DialOptionsWithCallCredsForTransport("tls", &mockTransportCreds{protocol: "tls"})
 	if len(secureOpts) != 1 {
 		t.Errorf("Expected dial options for secure transport. Got: %#v", secureOpts)
 	}
 
-	// Test dial options for insecure transport (should exclude JWT)
+	// Test dial options for insecure transport (should exclude JWT).
 	insecureOpts := sc.DialOptionsWithCallCredsForTransport("insecure", &mockTransportCreds{protocol: "insecure"})
-
-	// JWT should be filtered out for insecure transport
 	if len(insecureOpts) >= len(secureOpts) {
 		t.Error("Expected fewer dial options for insecure transport (JWT should be filtered)")
 	}
