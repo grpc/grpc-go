@@ -494,12 +494,12 @@ func (c *Cluster) RawEqual(other ResourceData) bool {
 	}
 	return proto.Equal(c.Cluster, o.Cluster)
 }
+
 func (c *Cluster) ToJSON() string { return c.Cluster.String() }
 func (c *Cluster) Raw() *anypb.Any {
 	any, _ := anypb.New(c.Cluster)
 	return any
 }
-
 func (c *Cluster) Equal(other xdsclient.ResourceData) bool {
 	o, ok := other.(*Cluster)
 	if !ok {
@@ -507,6 +507,8 @@ func (c *Cluster) Equal(other xdsclient.ResourceData) bool {
 	}
 	return c.RawEqual(o)
 }
+func (c *Cluster) ResourceName() string { return c.GetName() }
+func (c *Cluster) GetName() string      { return c.Cluster.Name }
 
 type clusterTypeImpl struct {
 	resourceTypeState
@@ -533,36 +535,15 @@ func (ct clusterTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*Dec
 	if err := anyProto.UnmarshalTo(&cProto); err != nil {
 		return nil, fmt.Errorf("xdsresource: failed to unmarshal Cluster: %v", err)
 	}
-	// Placeholder validation
 	return &DecodeResult{Name: cProto.GetName(), Resource: &Cluster{Cluster: &cProto}}, nil
 }
 
-func (ct clusterTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
-	opts := &DecodeOptions{BootstrapConfig: ct.bootstrapConfig}
-	if gOpts.ServerConfig != nil {
-		if bootstrapSC, ok := ct.serverConfigMap[*gOpts.ServerConfig]; ok {
-			opts.ServerConfig = bootstrapSC
-		} else {
-			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
-		}
-	}
-	internalResult, err := ct.Decode(opts, anyProto)
-	if err != nil {
-		if internalResult != nil {
-			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
-		}
-		return nil, err
-	}
-	if internalResult == nil {
-		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
-	}
-	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
-	if !ok {
-		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
-	}
-	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
+// ClusterTypeURL returns the type URL for Cluster resources.
+func ClusterTypeURL() string {
+	return version.V3ClusterURL
 }
+
+// NewClusterDecoder returns a new Decoder for Cluster resources.
 func NewClusterDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) xdsclient.Decoder {
 	ct := clusterTypeImpl{
 		resourceTypeState: resourceTypeState{
