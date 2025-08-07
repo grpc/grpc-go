@@ -612,7 +612,11 @@ type Endpoints struct {
 	*v3endpointpb.ClusterLoadAssignment
 }
 
-// RawEqual implements xdsresource.ResourceData.
+func (e *Endpoints) Bytes() []byte {
+	b, _ := proto.Marshal(e.ClusterLoadAssignment)
+	return b
+}
+
 func (e *Endpoints) RawEqual(other ResourceData) bool {
 	o, ok := other.(*Endpoints)
 	if !ok {
@@ -621,21 +625,11 @@ func (e *Endpoints) RawEqual(other ResourceData) bool {
 	return proto.Equal(e.ClusterLoadAssignment, o.ClusterLoadAssignment)
 }
 
-// ToJSON implements xdsresource.ResourceData.
-func (e *Endpoints) ToJSON() string {
-	return e.ClusterLoadAssignment.String()
-}
+func (e *Endpoints) ToJSON() string { return e.ClusterLoadAssignment.String() }
 
-// Raw implements xdsresource.ResourceData.
 func (e *Endpoints) Raw() *anypb.Any {
 	any, _ := anypb.New(e.ClusterLoadAssignment)
 	return any
-}
-
-// Bytes implements xdsresource.ResourceData and xdsclient.ResourceData.
-func (e *Endpoints) Bytes() []byte {
-	b, _ := proto.Marshal(e.ClusterLoadAssignment)
-	return b
 }
 
 func (e *Endpoints) Equal(other xdsclient.ResourceData) bool {
@@ -645,6 +639,9 @@ func (e *Endpoints) Equal(other xdsclient.ResourceData) bool {
 	}
 	return e.RawEqual(o)
 }
+
+func (e *Endpoints) ResourceName() string   { return e.GetClusterName() }
+func (e *Endpoints) GetClusterName() string { return e.ClusterLoadAssignment.ClusterName }
 
 type endpointsTypeImpl struct {
 	resourceTypeState
@@ -671,42 +668,19 @@ func (et endpointsTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*D
 	if err := anyProto.UnmarshalTo(&epProto); err != nil {
 		return nil, fmt.Errorf("xdsresource: failed to unmarshal Endpoints: %v", err)
 	}
-	// Placeholder validation
 	return &DecodeResult{Name: epProto.GetClusterName(), Resource: &Endpoints{ClusterLoadAssignment: &epProto}}, nil
 }
-func (et endpointsTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
 
-	opts := &DecodeOptions{BootstrapConfig: et.bootstrapConfig}
-
-	if gOpts.ServerConfig != nil {
-		if bootstrapSC, ok := et.serverConfigMap[*gOpts.ServerConfig]; ok {
-			opts.ServerConfig = bootstrapSC
-		} else {
-			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
-		}
-	}
-	internalResult, err := et.Decode(opts, anyProto)
-	if err != nil {
-		if internalResult != nil {
-			return &xdsclient.DecodeResult{Name: internalResult.Name}, err
-		}
-		return nil, err
-	}
-	if internalResult == nil {
-		return nil, fmt.Errorf("xdsresource: internal decode returned nil result but no error")
-	}
-
-	xdsClientResourceData, ok := internalResult.Resource.(xdsclient.ResourceData)
-	if !ok {
-		return nil, fmt.Errorf("xdsresource: internal resource of type %T does not implement xdsclient.ResourceData", internalResult.Resource)
-	}
-	return &xdsclient.DecodeResult{Name: internalResult.Name, Resource: xdsClientResourceData}, nil
+// EndpointsTypeURL returns the type URL for Endpoints resources.
+func EndpointsTypeURL() string {
+	return version.V3EndpointsURL
 }
+
+// NewEndpointsDecoder returns a new Decoder for Endpoints resources.
 func NewEndpointsDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) xdsclient.Decoder {
 	et := endpointsTypeImpl{
 		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3EndpointsURL,
+			typeURL:                    EndpointsTypeURL(),
 			typeName:                   "Endpoints",
 			allResourcesRequiredInSotW: false,
 		},
