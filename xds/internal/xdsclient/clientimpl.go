@@ -1,5 +1,4 @@
-// xdsresource/clientimpl.go
-/*
+*
 
  * Copyright 2022 gRPC authors.
  *
@@ -27,15 +26,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/clients"
-	"google.golang.org/grpc/xds/internal/clients/lrsclient"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
-	"google.golang.org/grpc/xds/internal/clients/xdsclient/xdsresource"
-	"google.golang.org/grpc/xds/internal/transport/grpctransport"
-	"google.golang.org/grpc/xds/internal/util/estats"
+	"google.golang.org/grpc/internal/xds/bootstrap/xdsbootstrap"
+	"google.golang.org/grpc/internal/xdsclient" 
+	"google.golang.org/grpc/internal/xdsclient/lrsclient"
+	"google.golang.org/grpc/internal/xdsclient/metrics"
+	"google.golang.org/grpc/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/internal/xds/transport/grpctransport"
+	"google.golang.org/grpc/internal/xds/util/estats"
 )
+
 
 const (
 	// NameForServer is the key for the XDS server in the map of configs.
