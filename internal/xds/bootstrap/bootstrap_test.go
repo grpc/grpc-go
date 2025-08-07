@@ -588,7 +588,6 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 
 // Tests Istio-style bootstrap configurations with JWT call credentials
 func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
-	// Enable JWT call credentials feature
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
 	defer func() {
@@ -1249,12 +1248,11 @@ func (s) TestCallCreds_Equal(t *testing.T) {
 func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	defer func() { envconfig.XDSBootstrapCallCredsEnabled = original }()
-	envconfig.XDSBootstrapCallCredsEnabled = true // Enable call creds in bootstrap
+	envconfig.XDSBootstrapCallCredsEnabled = true
 	tests := []struct {
 		name          string
 		json          string
 		wantCallCreds []CallCreds
-		wantErr       bool
 		errContains   string
 	}{
 		{
@@ -1313,7 +1311,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 			var sc ServerConfig
 			err := sc.UnmarshalJSON([]byte(test.json))
 
-			if test.wantErr {
+			if test.errContains != "" {
 				if err == nil {
 					t.Fatal("Expected error, got nil")
 				}
@@ -1369,7 +1367,7 @@ func (s) TestServerConfig_Equal_WithCallCreds(t *testing.T) {
 func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	defer func() { envconfig.XDSBootstrapCallCredsEnabled = original }()
-	envconfig.XDSBootstrapCallCredsEnabled = true // Enable call creds in bootstrap
+	envconfig.XDSBootstrapCallCredsEnabled = true
 	sc := &ServerConfig{
 		serverURI:    "test-server:443",
 		channelCreds: []ChannelCreds{{Type: "insecure"}},
@@ -1385,7 +1383,7 @@ func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
 		t.Fatalf("MarshalJSON failed: %v", err)
 	}
 
-	// confirm Marshal/Unmarshal symmetry
+	// Check Marshal/Unmarshal symmetry.
 	var unmarshaled ServerConfig
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
@@ -1641,7 +1639,6 @@ func (s) TestGetConfiguration_FallbackDisabled(t *testing.T) {
 	})
 =======
 func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
-	// Enable JWT call credentials
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
 	defer func() {
@@ -1732,7 +1729,7 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 				t.Fatalf("Failed to unmarshal bootstrap config: %v", err)
 			}
 
-			// Verify call credentials processing
+			// Verify call credentials processing.
 			callCreds := sc.CallCreds()
 			selectedCallCreds := sc.SelectedCallCreds()
 
@@ -1743,7 +1740,7 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 				t.Errorf("Selected call creds count = %d, want %d", len(selectedCallCreds), test.expectCallCreds)
 			}
 
-			// Verify transport credentials are properly selected
+			// Verify transport credentials are properly selected.
 			if sc.SelectedCreds().Type != test.expectTransportType {
 				t.Errorf("Selected transport creds type = %q, want %q",
 					sc.SelectedCreds().Type, test.expectTransportType)
@@ -1753,7 +1750,6 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 }
 
 func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
-	// Create test JWT credentials that require transport security
 	testJWTCreds := &testPerRPCCreds{requireSecurity: true}
 	testInsecureCreds := &testPerRPCCreds{requireSecurity: false}
 
@@ -1763,7 +1759,7 @@ func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
 			testInsecureCreds,
 		},
 		extraDialOptions: []grpc.DialOption{
-			grpc.WithUserAgent("test-agent"), // Test extra option
+			grpc.WithUserAgent("test-agent"), // extra option
 		},
 	}
 
@@ -1778,22 +1774,22 @@ func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
 			name:             "insecure transport by type",
 			transportType:    "insecure",
 			transportCreds:   nil,
-			expectJWTCreds:   false, // JWT requires security
-			expectOtherCreds: true,  // Non-security creds allowed
+			expectJWTCreds:   false,
+			expectOtherCreds: true,
 		},
 		{
 			name:             "insecure transport by protocol",
 			transportType:    "custom",
 			transportCreds:   insecure.NewCredentials(),
-			expectJWTCreds:   false, // JWT requires security
-			expectOtherCreds: true,  // Non-security creds allowed
+			expectJWTCreds:   false,
+			expectOtherCreds: true,
 		},
 		{
 			name:             "secure transport",
 			transportType:    "tls",
 			transportCreds:   &testTransportCreds{securityProtocol: "tls"},
-			expectJWTCreds:   true, // JWT allowed on secure transport
-			expectOtherCreds: true, // All creds allowed
+			expectJWTCreds:   true,
+			expectOtherCreds: true,
 		},
 	}
 
@@ -1801,8 +1797,9 @@ func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			opts := sc.DialOptionsWithCallCredsForTransport(test.transportType, test.transportCreds)
 
-			// Count dial options (should include extra options + applicable call creds)
-			expectedCount := 2 // extraDialOptions + always include non-security creds
+			// Count dial options (should include extra options + applicable
+			// call creds)
+			expectedCount := 2
 			if test.expectJWTCreds {
 				expectedCount++
 			}

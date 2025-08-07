@@ -66,12 +66,12 @@ type ChannelCreds struct {
 }
 
 // CallCreds contains the call credentials configuration for individual RPCs.
-// This type implements RFC A97 call credentials structure.
+// It implements RFC A97 call credentials structure.
 type CallCreds struct {
 	// Type contains a unique name identifying the call credentials type.
 	// Currently only "jwt_token_file" is supported.
 	Type string `json:"type,omitempty"`
-	// Config contains the JSON configuration associated with the call credentials.
+	// Config contains the JSON configuration relevant for the call credentials.
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
@@ -196,7 +196,7 @@ type ServerConfig struct {
 	selectedCreds     ChannelCreds
 	credsDialOption   grpc.DialOption
 	extraDialOptions  []grpc.DialOption
-	selectedCallCreds []credentials.PerRPCCredentials // Built call credentials
+	selectedCallCreds []credentials.PerRPCCredentials
 
 	cleanups []func()
 }
@@ -224,7 +224,8 @@ func (sc *ServerConfig) CallCreds() []CallCreds {
 }
 
 // SelectedCallCreds returns the built call credentials that are ready to use.
-// These are the credentials that were successfully built from the call_creds configuration.
+// These are the credentials that were successfully built from the call_creds
+// configuration.
 func (sc *ServerConfig) SelectedCallCreds() []credentials.PerRPCCredentials {
 	return sc.selectedCallCreds
 }
@@ -262,19 +263,17 @@ func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 	return dopts
 }
 
-// DialOptionsWithCallCredsForTransport returns dial options including call credentials
-// only if they are compatible with the specified transport credentials type.
-// Call credentials that require transport security will be skipped for insecure transports.
+// DialOptionsWithCallCredsForTransport returns dial options with call
+// credentials but only if they are compatible with the specified transport
+// credentials type. For example, JWT call credentials require secure transport
+// and are skipped for insecure.
 func (sc *ServerConfig) DialOptionsWithCallCredsForTransport(transportCredsType string, transportCreds credentials.TransportCredentials) []grpc.DialOption {
 	dopts := sc.DialOptions()
 
-	// Check if transport is insecure
 	isInsecureTransport := transportCredsType == "insecure" ||
 		(transportCreds != nil && transportCreds.Info().SecurityProtocol == "insecure")
 
-	// Add call credentials only if compatible with transport security
 	for _, callCred := range sc.selectedCallCreds {
-		// Skip call credentials that require transport security on insecure transports
 		if isInsecureTransport && callCred.RequireTransportSecurity() {
 			continue
 		}
@@ -377,20 +376,19 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		break
 	}
 
-	// Process call credentials - unlike channel creds, we use ALL supported types
-	// Call credentials are optional per RFC A97
+	// Process call credentials - unlike channel creds, we use ALL supported
+	// types. Also, call credentials are optional per RFC A97.
 	for _, callCred := range server.CallCreds {
 		c := bootstrap.GetCredentials(callCred.Type)
 		if c == nil {
-			// Skip unsupported call credential types (don't fail bootstrap)
+			// Skip unsupported call credential types (don't fail bootstrap).
 			continue
 		}
 		bundle, cancel, err := c.Build(callCred.Config)
 		if err != nil {
-			// Call credential validation failed - this should fail bootstrap
+			// Call credential validation failed - this should fail bootstrap.
 			return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", callCred.Type, err)
 		}
-		// Extract the PerRPCCredentials from the bundle. Sanity check for nil just in case
 		if callCredentials := bundle.PerRPCCredentials(); callCredentials != nil {
 			sc.selectedCallCreds = append(sc.selectedCallCreds, callCredentials)
 		}
