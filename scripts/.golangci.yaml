@@ -64,9 +64,41 @@ linters:
         - -QF1008 # Omit embedded fields from selector expression
         - -SA2001 # Empty critical section, did you mean to defer the unlock?
         - -SA4000 # Binary operator has identical expressions on both sides
-        - -ST1019 # Importing the same package multiple times
   exclusions:
     rules:
+      - linters:
+        - staticcheck
+        text: 'ST1019.*channelz/grpc_channelz_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*go-control-plane/envoy'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*grpclb/grpc_lb_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*health/grpc_health_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*interop/grpc_testing"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*orca/v3"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*proto/grpc_gcp"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*proto/grpc_lookup_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*examples/features/proto/echo"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*reflection/grpc_reflection_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*reflection/grpc_reflection_v1alpha"'
       # XXXXX Protobuf related deprecation errors:
       - linters:
         - staticcheck
