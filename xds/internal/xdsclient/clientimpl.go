@@ -1,5 +1,7 @@
-*
+package xdsclient
 
+// xdsclient/clientimpl.go
+/*
  * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,27 +18,24 @@
  *
  */
 
-package xdsclient
-
 import (
 	"fmt"
+	"os"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/internal/xds/bootstrap/xdsbootstrap"
-	"google.golang.org/grpc/internal/xdsclient"
-	"google.golang.org/grpc/internal/xdsclient/lrsclient"
-	"google.golang.org/grpc/internal/xdsclient/metrics"
-	"google.golang.org/grpc/internal/xdsclient/xdsresource"
-	"google.golang.org/grpc/internal/xds/transport/grpctransport"
-	"google.golang.org/grpc/internal/xds/util/estats"
+	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 )
-
 
 const (
 	// NameForServer is the key for the XDS server in the map of configs.
@@ -52,7 +51,7 @@ var (
 	xdsClientImplCloseHook = func(string) {}
 	// defaultExponentialBackoff is the default exponential backoff config used
 	// for xds servers.
-	defaultExponentialBackoff = backoff.DefaultExponential.Backoff
+	defaultExponentialBackoff = backoff.DefaultConfig
 	// xdsClientResourceUpdatesValidMetric is the metric for valid resource updates.
 	xdsClientResourceUpdatesValidMetric = estats.RegisterInt64Count(estats.MetricDescriptor{
 		Name:        "grpc.xds_client.resource_updates_valid",
@@ -85,7 +84,7 @@ type clientImpl struct {
 
 	xdsClientConfig xdsclient.Config
 	bootstrapConfig *bootstrap.Config
-	logger          *grpclog.PrefixLogger
+	logger          grpclog.LoggerV2
 	target          string
 	lrsClient       *lrsclient.LRSClient
 
@@ -121,7 +120,9 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 		return nil, err
 	}
 	c := &clientImpl{XDSClient: client, xdsClientConfig: gConfig, bootstrapConfig: config, target: target, refCount: 1}
-	c.logger = prefixLogger(c)
+
+	c.logger = grpclog.NewLoggerV2(os.Stderr, os.Stderr, os.Stderr)
+
 	return c, nil
 }
 
@@ -144,7 +145,7 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 	for name, cfg := range config.Authorities() {
 		serverCfg := config.XDSServers()
 		if len(cfg.XDSServers) >= 1 {
-			serverCfg = cfg.XDSSerservers
+			serverCfg = cfg.XDSServers
 		}
 		var gServerCfg []xdsclient.ServerConfig
 		for _, sc := range serverCfg {
@@ -219,11 +220,3 @@ func populateGRPCTransportConfigsFromServerConfig(sc *bootstrap.ServerConfig, gr
 // supportedResourceTypes defines the set of decoders that the xdsclient will use.
 // This function creates a map of decoders and passes the necessary state
 // (bootstrap config, server config map) to each of them during initialization.
-func supportedResourceTypes(config *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) map[string]xdsclient.Decoder {
-	return map[string]xdsclient.Decoder{
-		xdsresource.ListenerTypeURL:    xdsresource.NewListenerDecoder(config, gServerCfgMap),
-		xdsresource.RouteConfigTypeURL: xdsresource.NewRouteConfigDecoder(config, gServerCfgMap),
-		xdsresource.ClusterTypeURL:     xdsresource.NewClusterDecoder(config, gServerCfgMap),
-		xdsresource.EndpointsTypeURL:   xdsresource.NewEndpointsDecoder(config, gServerCfgMap),
-	}
-}

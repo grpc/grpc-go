@@ -38,7 +38,7 @@ import (
 // The init function will now use instances of our new concrete types
 func init() {
 	xdsinternal.ResourceTypeMapForTesting = make(map[string]any)
-	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
+	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = ListenerType
 	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
 	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
 	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
@@ -207,7 +207,7 @@ type listenerTypeImpl struct {
 	serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
 }
 
-var listenerType = listenerTypeImpl{
+var ListenerType = listenerTypeImpl{
 	resourceTypeState: resourceTypeState{
 		typeURL:                    version.V3ListenerURL,
 		typeName:                   "Listener",
@@ -226,8 +226,7 @@ func (lt listenerTypeImpl) AllResourcesRequiredInSotW() bool {
 	return lt.resourceTypeState.AllResourcesRequiredInSotW()
 }
 
-// Decode implements xdsresource.Type.
-// This is the internal decode logic for the xdsresource package.
+// Decode is the internal decode logic for the xdsresource package.
 func (lt listenerTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*DecodeResult, error) {
 	var listenerProto v3listenerpb.Listener
 	if err := anyProto.UnmarshalTo(&listenerProto); err != nil {
@@ -244,15 +243,13 @@ func (lt listenerTypeImpl) Decode(opts *DecodeOptions, anyProto *anypb.Any) (*De
 	}, nil
 }
 
-// XDSClientDecode implements xdsclient.Decoder.
-// This method bridges the xdsclient.Decoder interface to the xdsresource.Type.Decode method.
-// This is to eliminate GenericResourceTypeDecoder.
+// Decode implements xdsclient.Decoder by bridging the new interface to the old internal logic.
+// This new method fixes the type mismatch error.
 func (lt listenerTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	anyProto := &anypb.Any{
 		TypeUrl: resource.TypeURL,
 		Value:   resource.Value,
 	}
-	// The BootstrapConfig is now taken from the struct's field.
 	opts := &DecodeOptions{BootstrapConfig: lt.bootstrapConfig}
 	if gOpts.ServerConfig != nil {
 		if bootstrapSC, ok := lt.serverConfigMap[*gOpts.ServerConfig]; ok {
@@ -284,7 +281,6 @@ func (lt listenerTypeImpl) XDSClientDecode(resource xdsclient.AnyProto, gOpts xd
 	}, nil
 }
 
-// Placeholder for Listener validation logic.
 func validateListener(l *v3listenerpb.Listener) error {
 	if l.GetName() == "" {
 		return fmt.Errorf("listener name cannot be empty")
@@ -292,8 +288,9 @@ func validateListener(l *v3listenerpb.Listener) error {
 	return nil
 }
 
+// NewListenerDecoder returns a new Decoder for listener resources.
 func NewListenerDecoder(bootstrapConfig *bootstrap.Config, m map[xdsclient.ServerConfig]*bootstrap.ServerConfig) *listenerTypeImpl {
-	val := listenerType
+	val := ListenerType
 	val.bootstrapConfig = bootstrapConfig
 	val.serverConfigMap = m
 	return &val

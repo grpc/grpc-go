@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -32,20 +31,6 @@ const (
 	// ListenerResourceTypeName represents the transport agnostic name for the
 	// listener resource.
 	ListenerResourceTypeName = "ListenerResource"
-)
-
-var (
-	// Compile time interface checks.
-	_ Type = listenerResourceType{}
-
-	// Singleton instantiation of the resource type implementation.
-	listenerType = listenerResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3ListenerURL,
-			typeName:                   ListenerResourceTypeName,
-			allResourcesRequiredInSotW: true,
-		},
-	}
 )
 
 // listenerResourceType provides the resource-type specific functionality for a
