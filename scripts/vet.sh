@@ -24,6 +24,7 @@ if [[ "$1" = "-install" ]]; then
   # Install the pinned versions as defined in module tools.
   pushd ./test/tools
   go install \
+    github.com/golangci/golangci-lint/v2/cmd/golangci-lint \
     golang.org/x/tools/cmd/goimports \
     honnef.co/go/tools/cmd/staticcheck \
     github.com/client9/misspell/cmd/misspell \
@@ -83,10 +84,12 @@ git grep -e 'context.Background()' --or -e 'context.TODO()' -- "*_test.go" | gre
 # can't parse link local IPv6 addresses.
 not git grep 'net.ParseIP' -- '*.go'
 
-misspell -error .
+misspell -error -i importas .
 
 # Get the absolute path to revive.toml relative to the script location
 REVIVE_CONFIG_PATH="$(dirname "$(realpath "$0")")/revive.toml"
+# Get the absolute path to .golangci-lint.yaml relative to the script location
+GOLANGCI_LINT_CONFIG="$(dirname "$(realpath "$0")")/.golangci.yaml"
 
 # - gofmt, goimports, go vet, go mod tidy.
 # Perform these checks on each module inside gRPC.
@@ -201,6 +204,8 @@ GetSuffixMatch
 GetTlsCertificateCertificateProviderInstance
 GetValidationContextCertificateProviderInstance
 XXXXX PleaseIgnoreUnused'
+
+    golangci-lint run --config "$GOLANGCI_LINT_CONFIG" ./...
   popd
 done
 

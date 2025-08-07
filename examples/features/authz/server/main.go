@@ -209,14 +209,15 @@ func main() {
 	// Create authorization interceptors according to the authz-option command-line flag.
 	var unaryAuthzInterceptor grpc.UnaryServerInterceptor
 	var streamAuthzInterceptor grpc.StreamServerInterceptor
-	if *authzOpt == authzOptStatic {
+	switch *authzOpt {
+	case authzOptStatic:
 		// Create an authorization interceptor using a static policy.
 		staticInterceptor, err := authz.NewStatic(authzPolicy)
 		if err != nil {
 			log.Fatalf("Creating a static authz interceptor: %v", err)
 		}
 		unaryAuthzInterceptor, streamAuthzInterceptor = staticInterceptor.UnaryInterceptor, staticInterceptor.StreamInterceptor
-	} else if *authzOpt == authzOptFileWatcher {
+	case authzOptFileWatcher:
 		// Create an authorization interceptor by watching a policy file.
 		fileWatcherInterceptor, err := authz.NewFileWatcher(data.Path("rbac/policy.json"), 100*time.Millisecond)
 		if err != nil {

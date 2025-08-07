@@ -251,9 +251,10 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
 	}
-	if scAddr == ring.items[0].hashKey {
+	switch scAddr {
+	case ring.items[0].hashKey:
 		subConns[0] = sc
-	} else if scAddr == ring.items[2].hashKey {
+	case ring.items[2].hashKey:
 		subConns[2] = sc
 	}
 
@@ -276,9 +277,10 @@ func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Errorf("timeout waiting for Connect() from SubConn %v", subConns[1])
 	}
-	if scAddr == ring.items[0].hashKey {
+	switch scAddr {
+	case ring.items[0].hashKey:
 		subConns[0] = sc
-	} else if scAddr == ring.items[2].hashKey {
+	case ring.items[2].hashKey:
 		subConns[2] = sc
 	}
 	sc.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})

@@ -201,7 +201,7 @@ func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 		return
 	}
 
-	if !(state.state.ConnectivityState == connectivity.TransientFailure && newState.ConnectivityState == connectivity.Connecting) {
+	if state.state.ConnectivityState != connectivity.TransientFailure || newState.ConnectivityState != connectivity.Connecting {
 		// If old state is TransientFailure, and new state is Connecting, don't
 		// update the state, to prevent the aggregated state from being always
 		// CONNECTING. Otherwise, stateToAggregate is the same as

@@ -154,7 +154,7 @@ func (bsa *balancerStateAggregator) UpdateState(id string, state balancer.State)
 		// it's either removed, or never existed.
 		return
 	}
-	if !(pickerSt.state.ConnectivityState == connectivity.TransientFailure && state.ConnectivityState == connectivity.Connecting) {
+	if pickerSt.state.ConnectivityState != connectivity.TransientFailure || state.ConnectivityState != connectivity.Connecting {
 		// If old state is TransientFailure, and new state is Connecting, don't
 		// update the state, to prevent the aggregated state from being always
 		// CONNECTING. Otherwise, stateToAggregate is the same as

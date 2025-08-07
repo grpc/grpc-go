@@ -225,7 +225,7 @@ func (s) TestServer_RedundantUpdateSuppression(t *testing.T) {
 		prev := connectivity.Ready // We know we are READY since we just did an RPC.
 		for {
 			curr := cc.GetState()
-			if !(curr == connectivity.Ready || curr == connectivity.Idle) {
+			if curr != connectivity.Ready && curr != connectivity.Idle {
 				errCh <- fmt.Errorf("unexpected connectivity state change {%s --> %s} on the client connection", prev, curr)
 				return
 			}

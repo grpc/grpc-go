@@ -880,7 +880,7 @@ func (s) TestResolverBuild(t *testing.T) {
 				}
 				return
 			}
-			if err == nil && test.wantErr != "" {
+			if test.wantErr != "" {
 				t.Fatalf("DNS resolver build for target %q succeeded when expected to fail with error: %s", test.target, test.wantErr)
 			}
 			r.Close()

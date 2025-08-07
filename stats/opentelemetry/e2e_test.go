@@ -203,32 +203,32 @@ func validateTraces(t *testing.T, spans tracetest.SpanStubs, wantSpanInfos []tra
 		var isUnary, isStream bool
 
 		for _, span := range spans {
-			switch {
-			case span.Name == "Sent.grpc.testing.TestService.UnaryCall":
+			switch span.Name {
+			case "Sent.grpc.testing.TestService.UnaryCall":
 				isUnary = true
 				if span.SpanKind == oteltrace.SpanKindClient {
 					unaryClient = &span
 				}
-			case span.Name == "Recv.grpc.testing.TestService.UnaryCall":
+			case "Recv.grpc.testing.TestService.UnaryCall":
 				isUnary = true
 				if span.SpanKind == oteltrace.SpanKindServer {
 					unaryServer = &span
 				}
-			case span.Name == "Attempt.grpc.testing.TestService.UnaryCall":
+			case "Attempt.grpc.testing.TestService.UnaryCall":
 				isUnary = true
 				unaryAttempt = &span
 
-			case span.Name == "Sent.grpc.testing.TestService.FullDuplexCall":
+			case "Sent.grpc.testing.TestService.FullDuplexCall":
 				isStream = true
 				if span.SpanKind == oteltrace.SpanKindClient {
 					streamClient = &span
 				}
-			case span.Name == "Recv.grpc.testing.TestService.FullDuplexCall":
+			case "Recv.grpc.testing.TestService.FullDuplexCall":
 				isStream = true
 				if span.SpanKind == oteltrace.SpanKindServer {
 					streamServer = &span
 				}
-			case span.Name == "Attempt.grpc.testing.TestService.FullDuplexCall":
+			case "Attempt.grpc.testing.TestService.FullDuplexCall":
 				isStream = true
 				streamAttempt = &span
 			}

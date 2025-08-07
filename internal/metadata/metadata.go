@@ -113,7 +113,7 @@ func ValidateKey(key string) error {
 	// check key, for i that saving a conversion if not using for range
 	for i := 0; i < len(key); i++ {
 		r := key[i]
-		if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '.' && r != '-' && r != '_' {
 			return fmt.Errorf("header key %q contains illegal characters not in [0-9a-z-_.]", key)
 		}
 	}

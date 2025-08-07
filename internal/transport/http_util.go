@@ -228,7 +228,7 @@ func encodeGrpcMessage(msg string) string {
 	lenMsg := len(msg)
 	for i := 0; i < lenMsg; i++ {
 		c := msg[i]
-		if !(c >= spaceByte && c <= tildeByte && c != percentByte) {
+		if c < spaceByte || c > tildeByte || c == percentByte {
 			return encodeGrpcMessageUnchecked(msg)
 		}
 	}

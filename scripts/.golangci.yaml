@@ -1,0 +1,236 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - govet
+    - misspell
+    - revive
+    - staticcheck
+  settings:
+    govet: # Needs to be fixed
+      disable:
+        - deepequalerrors
+        - fieldalignment
+        - shadow
+      enable-all: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+          arguments:
+            - allowTypesBefore: '*testing.T'
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+          # Disabled to allow intentional no-op blocks (e.g., channel draining).
+          disabled: true
+        - name: errorf
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: import-shadowing
+           # Disabled to allow intentional reuse of variable names that are the same as package imports.
+          disabled: true
+        - name: increment-decrement
+        - name: indent-error-flow
+          arguments:
+            - preserveScope
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+           # Disabled to allow intentional reuse of variable names that are the same as built-in functions.
+          disabled: true
+        - name: superfluous-else
+          arguments:
+            - preserveScope
+        - name: time-naming
+        - name: unexported-return
+        - name: unnecessary-stmt
+        - name: unreachable-code
+        - name: unused-parameter
+          # Needs to be fixed
+          disabled: true
+        - name: use-any
+        - name: useless-break
+        - name: var-declaration
+        - name: var-naming
+          # Needs to be fixed
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+        - -QF1008 # Omit embedded fields from selector expression
+        - -SA2001 # Empty critical section, did you mean to defer the unlock?
+  exclusions:
+    rules:
+      # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
+      - linters:
+        - staticcheck
+        text: "SA4000.*identical expressions on the left and right side of the '||' operator"
+        path: crl.go
+      - linters:
+        - staticcheck
+        text: 'ST1019.*channelz/grpc_channelz_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*go-control-plane/envoy'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*grpclb/grpc_lb_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*health/grpc_health_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*interop/grpc_testing"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*orca/v3"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*proto/grpc_gcp"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*proto/grpc_lookup_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*examples/features/proto/echo"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*reflection/grpc_reflection_v1"'
+      - linters:
+        - staticcheck
+        text: 'ST1019.*reflection/grpc_reflection_v1alpha"'
+      # XXXXX Protobuf related deprecation errors:
+      - linters:
+        - staticcheck
+        text: 'SA1019.*"github.com/golang/protobuf'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.pb.go:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*grpc_testing_not_regenerated'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*ptypes.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*proto.RegisterType'
+      # XXXXX gRPC internal usage deprecation errors:
+      - linters:
+        - staticcheck
+        text: 'SA1019.*"google.golang.org/grpc'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*grpc.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*v1alpha.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*v1alphareflectionpb.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*BalancerAttributes is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*CredsBundle is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetMetadata is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*internal.Logger is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*Metadata is deprecated: use Attributes instead.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*NewAddress is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*NewSubConn is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*OverrideServerName is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*RemoveSubConn is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*SecurityVersion is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.ServerName is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*stats.PickerUpdated is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*Target is deprecated: Use the Target field in the BuildOptions instead.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*UpdateAddresses is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*UpdateSubConnState is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*balancer.ErrTransientFailure is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*grpc/reflection/v1alpha/reflection.proto'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*SwitchTo is deprecated:'
+      # XXXXX xDS deprecated fields we support
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.ExactMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.PrefixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.SafeRegexMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.SuffixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetContainsMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetExactMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetMatchSubjectAltNames'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetPrefixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetSafeRegexMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetSuffixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetTlsCertificateCertificateProviderInstance'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetValidationContextCertificateProviderInstance'
+    warn-unused: true
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      rewrite-rules:
+        # - Do not use "interface{}"; use "any" instead.
+        - pattern: 'interface{}'
+          replacement: 'any'

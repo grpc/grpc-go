@@ -164,7 +164,8 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 		categories := stat.Tags
 		pid, tid := opid, fmt.Sprintf("%d", stat.Timers[i].GoId)
 
-		if stat.Timers[i].GoId == loopyReaderGoID {
+		switch stat.Timers[i].GoId {
+		case loopyReaderGoID:
 			pid, tid = fmt.Sprintf("/%s/%d/loopyReader", stat.Tags, connectionCounter), fmt.Sprintf("%d", stat.Timers[i].GoId)
 
 			var flowEndID int
@@ -215,7 +216,7 @@ func streamStatsCatapultJSONSingle(stat *ppb.Stat, baseSec int64, baseNsec int32
 					},
 				)
 			}
-		} else if stat.Timers[i].GoId == loopyWriterGoID {
+		case loopyWriterGoID:
 			pid, tid = fmt.Sprintf("/%s/%d/loopyWriter", stat.Tags, connectionCounter), fmt.Sprintf("%d", stat.Timers[i].GoId)
 
 			var flowBeginID int

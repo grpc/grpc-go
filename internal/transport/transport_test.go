@@ -88,9 +88,7 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	}
 
 	if data.Len() != len(p) {
-		if err == nil {
-			err = io.ErrUnexpectedEOF
-		}
+		err = io.ErrUnexpectedEOF
 		return 0, err
 	}
 
