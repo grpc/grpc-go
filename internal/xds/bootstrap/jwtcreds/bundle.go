@@ -32,8 +32,7 @@ import (
 // Call Credentials in xDS Bootstrap File per RFC A97.
 // This bundle only provides call credentials, not transport credentials.
 type bundle struct {
-	transportCreds credentials.TransportCredentials // Always nil for JWT call creds
-	callCreds      credentials.PerRPCCredentials
+	callCreds credentials.PerRPCCredentials
 }
 
 // NewBundle returns a credentials.Bundle which implements JWT Call Credentials
@@ -53,15 +52,13 @@ func NewBundle(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
 		return nil, nil, fmt.Errorf("jwt_token_file is required in JWT call credentials config")
 	}
 
-	// Create JWT call credentials
 	callCreds, err := jwt.NewTokenFileCallCredentials(cfg.JWTTokenFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create JWT call credentials: %v", err)
 	}
 
 	bundle := &bundle{
-		transportCreds: nil, // JWT call creds don't provide transport security
-		callCreds:      callCreds,
+		callCreds: callCreds,
 	}
 
 	return bundle, func() {}, nil
