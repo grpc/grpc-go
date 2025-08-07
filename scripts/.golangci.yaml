@@ -62,12 +62,131 @@ linters:
       checks:
         - all
         - -QF1008 # Omit embedded fields from selector expression
-        - -SA1019 # Using a deprecated function, variable, constant or field
         - -SA2001 # Empty critical section, did you mean to defer the unlock?
         - -SA4000 # Binary operator has identical expressions on both sides
         - -ST1019 # Importing the same package multiple times
   exclusions:
-    rules: []
+    rules:
+      # XXXXX Protobuf related deprecation errors:
+      - linters:
+        - staticcheck
+        text: 'SA1019.*"github.com/golang/protobuf'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.pb.go:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*grpc_testing_not_regenerated'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*ptypes.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*proto.RegisterType'
+      # XXXXX gRPC internal usage deprecation errors:
+      - linters:
+        - staticcheck
+        text: 'SA1019.*"google.golang.org/grpc'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*grpc.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*v1alpha.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*v1alphareflectionpb.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*BalancerAttributes is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*CredsBundle is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetMetadata is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*internal.Logger is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*Metadata is deprecated: use Attributes instead.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*NewAddress is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*NewSubConn is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*OverrideServerName is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*RemoveSubConn is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*SecurityVersion is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.ServerName is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*stats.PickerUpdated is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*Target is deprecated: Use the Target field in the BuildOptions instead.'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*UpdateAddresses is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*UpdateSubConnState is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*balancer.ErrTransientFailure is deprecated:'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*grpc/reflection/v1alpha/reflection.proto'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*SwitchTo is deprecated:'
+      # XXXXX xDS deprecated fields we support
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.ExactMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.PrefixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.SafeRegexMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*.SuffixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetContainsMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetExactMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetMatchSubjectAltNames'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetPrefixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetSafeRegexMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetSuffixMatch'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetTlsCertificateCertificateProviderInstance'
+      - linters:
+        - staticcheck
+        text: 'SA1019.*GetValidationContextCertificateProviderInstance'
     warn-unused: true
 formatters:
   enable:
