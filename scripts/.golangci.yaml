@@ -63,9 +63,13 @@ linters:
         - all
         - -QF1008 # Omit embedded fields from selector expression
         - -SA2001 # Empty critical section, did you mean to defer the unlock?
-        - -SA4000 # Binary operator has identical expressions on both sides
   exclusions:
     rules:
+      # TODO(https://github.com/dominikh/go-tools/issues/54): Remove this once the issue is fixed in staticcheck.
+      - linters:
+        - staticcheck
+        text: "SA4000.*identical expressions on the left and right side of the '||' operator"
+        path: crl.go
       - linters:
         - staticcheck
         text: 'ST1019.*channelz/grpc_channelz_v1"'
