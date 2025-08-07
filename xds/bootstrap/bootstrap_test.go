@@ -113,14 +113,13 @@ func TestJwtCallCredentials_BuildDisabledIfFeatureNotEnabled(t *testing.T) {
 		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
 	}
 
-	// Enable JWT call credentials
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
 	defer func() {
 		envconfig.XDSBootstrapCallCredsEnabled = original
 	}()
 
-	// Test that GetCredentials returns the JWT builder
+	// Test that GetCredentials returns the JWT builder.
 	builder = GetCredentials("jwt_token_file")
 	if builder == nil {
 		t.Fatal("GetCredentials(\"jwt_token_file\") returned nil")
