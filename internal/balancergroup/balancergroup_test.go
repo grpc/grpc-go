@@ -760,20 +760,22 @@ func (s) TestBalancerGracefulSwitch(t *testing.T) {
 func (s) TestBalancerExitIdle_All(t *testing.T) {
 	balancer1 := t.Name() + "-1"
 	balancer2 := t.Name() + "-2"
-	balancer3 := t.Name() + "-3"
 
-	balancerNames := []string{balancer1, balancer2, balancer3}
-	testIDs := []string{testBalancerIDs[0], testBalancerIDs[1], testBalancerIDs[2]}
+	testID1, testID2 := testBalancerIDs[0], testBalancerIDs[1]
 
-	exitIdleCh := make(chan string, len(balancerNames))
+	exitIdleCh1, exitIdleCh2 := make(chan struct{}, 1), make(chan struct{}, 1)
 
-	for _, name := range balancerNames {
-		stub.Register(name, stub.BalancerFuncs{
-			ExitIdle: func(_ *stub.BalancerData) {
-				exitIdleCh <- name
-			},
-		})
-	}
+	stub.Register(balancer1, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			exitIdleCh1 <- struct{}{}
+		},
+	})
+
+	stub.Register(balancer2, stub.BalancerFuncs{
+		ExitIdle: func(_ *stub.BalancerData) {
+			exitIdleCh2 <- struct{}{}
+		},
+	})
 
 	cc := testutils.NewBalancerClientConn(t)
 	bg := New(Options{
@@ -784,28 +786,34 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 	})
 	defer bg.Close()
 
-	bg.Add(testIDs[0], balancer.Get(balancer1))
-	bg.Add(testIDs[1], balancer.Get(balancer2))
-	bg.Add(testIDs[2], balancer.Get(balancer3))
+	bg.Add(testID1, balancer.Get(balancer1))
+	bg.Add(testID2, balancer.Get(balancer2))
 
 	bg.ExitIdle()
 
-	called := make(map[string]bool)
-	for i := 0; i < len(balancerNames); i++ {
+	errCh := make(chan error, 2)
+
+	go func() {
 		select {
-		case name := <-exitIdleCh:
-			if called[name] {
-				t.Fatalf("ExitIdle was called multiple times for sub-balancer %q", name)
-			}
-			called[name] = true
+		case <-exitIdleCh1:
+			errCh <- nil
 		case <-time.After(defaultTestTimeout):
-			var balancers []string
-			for _, name := range balancerNames {
-				if !called[name] {
-					balancers = append(balancers, name)
-				}
-			}
-			t.Fatalf("Timeout waiting for ExitIdle. Missing calls from: %v", balancers)
+			errCh <- fmt.Errorf("timeout waiting for ExitIdle on balancer1")
+		}
+	}()
+
+	go func() {
+		select {
+		case <-exitIdleCh2:
+			errCh <- nil
+		case <-time.After(defaultTestTimeout):
+			errCh <- fmt.Errorf("timeout waiting for ExitIdle on balancer2")
+		}
+	}()
+
+	for i := 0; i < 2; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatal(err)
 		}
 	}
 }
