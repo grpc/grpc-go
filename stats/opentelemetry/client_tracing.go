@@ -21,6 +21,7 @@ import (
 	"log"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -140,6 +141,23 @@ func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 	if ri == nil {
 		logger.Error("ctx passed into client side tracing handler trace event handling has no client attempt data present")
 		return
+	}
+
+	// Client-specific Begin attributes.
+	var previousRPCAttempts int64
+	if ri.ai.previousRPCAttempts != nil {
+		previousRPCAttempts = int64(ri.ai.previousRPCAttempts.Load())
+	}
+	if begin, ok := rs.(*stats.Begin); ok {
+		ri.ai.traceSpan.SetAttributes(
+			attribute.Bool("Client", begin.Client),
+			attribute.Bool("FailFast", begin.FailFast),
+			attribute.Int64("previous-rpc-attempts", previousRPCAttempts),
+			attribute.Bool("transparent-retry", begin.IsTransparentRetryAttempt),
+		)
+		if !begin.IsTransparentRetryAttempt && ri.ai.previousRPCAttempts != nil {
+			ri.ai.previousRPCAttempts.Add(1)
+		}
 	}
 	populateSpan(rs, ri.ai)
 }
