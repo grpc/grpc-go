@@ -56,17 +56,12 @@ const (
 	MsgLenFieldSize = 4
 	// The byte size of the message type field of a framed message.
 	msgTypeFieldSize = 4
-	// The bytes size limit for a ALTS record message.
+	// The bytes size limit for an ALTS record message.
 	altsRecordLengthLimit = 1024 * 1024 // 1 MiB
-	// The default bytes size of a ALTS record message.
-	altsRecordDefaultLength = 4 * 1024 // 4KiB
 	// Message type value included in ALTS record framing.
 	altsRecordMsgType = uint32(0x06)
 	// The initial write buffer size.
 	altsWriteBufferInitialSize = 32 * 1024 // 32KiB
-	// The maximum write buffer size. This *must* be multiple of
-	// altsRecordDefaultLength.
-	altsWriteBufferMaxSize = 512 * 1024 // 512KiB
 	// The initial buffer used to read from the network.
 	altsReadBufferInitialSize = 32 * 1024 // 32KiB
 )
@@ -116,7 +111,7 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		return nil, fmt.Errorf("protocol %q: %v", recordProtocol, err)
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
-	payloadLengthLimit := altsRecordDefaultLength - overhead
+	payloadLengthLimit := altsRecordLengthLimit - overhead
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
@@ -265,10 +260,9 @@ func (p *conn) Write(b []byte) (n int, err error) {
 	size := len(b) + numOfFrames*p.overhead
 	// If writeBuf is too small, increase its size up to the maximum size.
 	partialBSize := len(b)
-	if size > altsWriteBufferMaxSize {
-		size = altsWriteBufferMaxSize
-		const numOfFramesInMaxWriteBuf = altsWriteBufferMaxSize / altsRecordDefaultLength
-		partialBSize = numOfFramesInMaxWriteBuf * p.payloadLengthLimit
+	if size > altsRecordLengthLimit {
+		size = altsRecordLengthLimit
+		partialBSize = p.payloadLengthLimit
 	}
 	if len(p.writeBuf) < size {
 		p.writeBuf = make([]byte, size)
@@ -314,7 +308,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 			// written. This means we need to remove header,
 			// encryption overheads, and any partially-written
 			// frame data.
-			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(altsRecordDefaultLength)))
+			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(altsRecordLengthLimit)))
 			return partialBStart + numOfWrittenFrames*p.payloadLengthLimit, err
 		}
 	}
