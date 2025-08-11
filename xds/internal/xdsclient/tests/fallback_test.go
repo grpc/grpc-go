@@ -21,7 +21,6 @@ package xdsclient_test
 import (
 	"context"
 	"fmt"
-	"net"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -767,14 +766,12 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	nodeID := uuid.New().String()
 	const serviceName = "my-service-fallback-xds"
 
-	// Configure partial resources on the primary management server.
+	// Configure partial resources on the primary and secondary
+	// management servers.
 	primaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-p")},
 	})
-
-	// Configure incomplete (no endpoint) resources on secondary management
-	// server.
 	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
@@ -834,33 +831,26 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		t.Fatalf("Failed to create gRPC client: %v", err)
 	}
 	defer cc.Close()
+	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Verify that connection attempts were made to primaryWrappedLis and
 	// secondaryWrappedLis, before using tertiaryWrappedLis to make
 	// successful RPCs to backend3.
-	if err := waitForServerReadiness(ctx, primaryManagementServer.Address); err != nil {
-		t.Fatalf("Primary server not ready: %v", err)
-	}
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
 	}
 
 	// Stop primary, client should connect to secondary.
 	primaryLis.Stop()
-	if err := waitForServerReadiness(ctx, secondaryManagementServer.Address); err != nil {
-		t.Fatalf("Secondary server not ready: %v", err)
-	}
 	if _, err := secondaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Expected connection attempt to secondary but got error: %v", err)
 	}
 
 	// Stop secondary, client should connect to tertiary.
 	secondaryLis.Stop()
-	if err := waitForServerReadiness(ctx, tertiaryManagementServer.Address); err != nil {
-		t.Fatalf("Tertiary server not ready: %v", err)
-	}
-	if _, err := tertiaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
+	tertiaryConn, err := tertiaryWrappedLis.NewConnCh.Receive(ctx)
+	if err != nil {
 		t.Fatalf("Expected connection attempt to tertiary but got error: %v", err)
 	}
 
@@ -881,12 +871,12 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		},
 	})
 
-	// Wait for switch from tertiaryWrappedLis to secondary.
-	if conn, err := tertiaryWrappedLis.NewConnCh.Receive(ctx); err == nil {
-		cw := conn.(*testutils.ConnWrapper)
-		if _, err := cw.CloseCh.Receive(ctx); err != nil {
-			t.Fatalf("Expected tertiary connection to close after promotion to secondary, got error: %v", err)
-		}
+	secondaryConn, err := secondaryWrappedLis.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Expected new connection to secondary but got error: %v", err)
+	}
+	if _, err := tertiaryConn.(*testutils.ConnWrapper).CloseCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected tertiary connection to close after promotion to secondary, got error: %v", err)
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend2.Address); err != nil {
 		t.Fatal(err)
@@ -901,33 +891,14 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 		Port:       testutils.ParsePort(t, backend1.Address),
 		SecLevel:   e2e.SecurityLevelNone,
 	}))
-	if conn, err := secondaryWrappedLis.NewConnCh.Receive(ctx); err == nil {
-		cw := conn.(*testutils.ConnWrapper)
-		if _, err := cw.CloseCh.Receive(ctx); err != nil {
-			t.Fatalf("Expected secondary connection to close after promotion to primary, got error: %v", err)
-		}
+
+	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected new connection to primary but got error: %v", err)
+	}
+	if _, err := secondaryConn.(*testutils.ConnWrapper).CloseCh.Receive(ctx); err != nil {
+		t.Fatalf("Expected secondary connection to close after promotion to primary, got error: %v", err)
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend1.Address); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func waitForServerReadiness(ctx context.Context, address string) error {
-	d := net.Dialer{}
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		conn, err := d.DialContext(ctx, "tcp", address)
-		if err == nil {
-			conn.Close()
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for server at %s: %w", address, ctx.Err())
-		case <-ticker.C:
-		}
 	}
 }
