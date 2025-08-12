@@ -104,14 +104,6 @@ type Type interface {
 	// true, a response that does not include a previously seen resource will be
 	// interpreted as a deletion of that resource.
 	AllResourcesRequiredInSotW() bool
-
-	// Decode deserializes and validates an xDS resource serialized inside the
-	// provided `Any` proto, as received from the xDS management server.
-	//
-	// If protobuf deserialization fails or resource validation fails,
-	// returns a non-nil error. Otherwise, returns a fully populated
-	// DecodeResult.
-	Decode(*DecodeOptions, *anypb.Any) (*DecodeResult, error)
 }
 
 // ResourceData contains the configuration data sent by the xDS management
@@ -180,29 +172,6 @@ type GenericResourceTypeDecoder struct {
 	ResourceType    Type
 	BootstrapConfig *bootstrap.Config
 	ServerConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig
-}
-
-// Decode deserialize and validate resource bytes of an xDS resource received
-// from the xDS management server.
-func (gd *GenericResourceTypeDecoder) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	rProto := &anypb.Any{
-		TypeUrl: resource.TypeURL,
-		Value:   resource.Value,
-	}
-	opts := &DecodeOptions{BootstrapConfig: gd.BootstrapConfig}
-	if gOpts.ServerConfig != nil {
-		opts.ServerConfig = gd.ServerConfigMap[*gOpts.ServerConfig]
-	}
-
-	result, err := gd.ResourceType.Decode(opts, rProto)
-	if result == nil {
-		return nil, err
-	}
-	if err != nil {
-		return &xdsclient.DecodeResult{Name: result.Name}, err
-	}
-
-	return &xdsclient.DecodeResult{Name: result.Name, Resource: &genericResourceData{resourceData: result.Resource}}, nil
 }
 
 // genericResourceData embed an xdsresource.ResourceData and implements

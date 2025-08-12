@@ -68,6 +68,10 @@ type AnyProto struct {
 	Value   []byte
 }
 
+func (a AnyProto) GetValue() []byte {
+	panic("unimplemented")
+}
+
 // DecodeOptions wraps the options required by ResourceType implementations for
 // decoding configuration received from the xDS management server.
 type DecodeOptions struct {
