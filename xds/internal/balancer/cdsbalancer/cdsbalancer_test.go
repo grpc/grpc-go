@@ -456,7 +456,7 @@ func (s) TestConfigurationUpdate_MissingXdsClient(t *testing.T) {
 // Tests success scenarios where the cds LB policy receives a cluster resource
 // from the management server. Verifies that the load balancing configuration
 // pushed to the child is as expected.
-func TestClusterUpdate_Success(t *testing.T) {
+func (s) TestClusterUpdate_Success(t *testing.T) {
 	tests := []struct {
 		name            string
 		clusterResource *v3clusterpb.Cluster
