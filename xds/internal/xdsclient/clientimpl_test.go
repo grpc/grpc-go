@@ -112,7 +112,6 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 				topLevelSCfg, auth2SCfg := c.XDSServers()[0], c.Authorities()["auth2"].XDSServers[0]
 				expTopLevelS := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: topLevelSCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
 				expAuth2S := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: auth2SCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expTopLevelS},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -144,7 +143,6 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0]
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}, IgnoreResourceDeletion: true}
-
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
@@ -176,7 +174,6 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			wantXDSClientConfig: func(c *bootstrap.Config) xdsclient.Config {
 				node, serverCfg := c.Node(), c.XDSServers()[0] // SelectedCreds will be "insecure"
 				expectedServer := xdsclient.ServerConfig{ServerIdentifier: clients.ServerIdentifier{ServerURI: serverCfg.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"}}}
-
 				return xdsclient.Config{
 					Servers:     []xdsclient.ServerConfig{expectedServer},
 					Node:        clients.Node{ID: node.GetId(), Cluster: node.GetCluster(), Metadata: node.Metadata, UserAgentName: node.UserAgentName, UserAgentVersion: node.GetUserAgentVersion()},
