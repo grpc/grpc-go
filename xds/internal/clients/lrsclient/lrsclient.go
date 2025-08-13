@@ -62,8 +62,6 @@ type LRSClient struct {
 // New returns a new LRS Client configured with the provided config.
 func New(config Config) (*LRSClient, error) {
 	switch {
-	case config.Node.ID == "":
-		return nil, errors.New("lrsclient: node ID in node is empty")
 	case config.TransportBuilder == nil:
 		return nil, errors.New("lrsclient: transport builder is nil")
 	}
