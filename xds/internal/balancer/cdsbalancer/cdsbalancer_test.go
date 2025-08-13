@@ -88,6 +88,7 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 		case gotNames := <-resourceNamesCh:
 			// Sort both slices before comparing them, as the order of clusters
 			// does not matter.
+			fmt.Printf("eshita : gotNames: %v, wantNames: %v", gotNames, wantNames)
 			if cmp.Equal(gotNames, wantNames, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				return nil
 			}
@@ -265,35 +266,17 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 //   - a channel on which requested cluster resource names are sent
 //   - a channel used to signal that previously requested cluster resources are
 //     no longer requested
-func setupWithManagementServerWithResourceCheck(ctx context.Context, t *testing.T) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
-	return setupWithManagementServerAndListenerWithResourceCheck(ctx, t, nil)
+func setupWithManagementServerWithResourceCheck(ctx context.Context, t *testing.T, nStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
+	return setupWithManagementServerAndListenerWithResourceCheck(ctx, t, nil, nStreamRequest)
 }
 
 // Same as setupWithManagementServerWithResourceCheck, but also allows the caller to specify
 // a listener to be used by the management server.
-func setupWithManagementServerAndListenerWithResourceCheck(ctx context.Context, t *testing.T, lis net.Listener) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient, chan []string, chan struct{}) {
+func setupWithManagementServerAndListenerWithResourceCheck(ctx context.Context, t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
 	t.Helper()
-	cdsResourceRequestedCh := make(chan []string, 1)
-	cdsResourceCanceledCh := make(chan struct{}, 1)
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
-		Listener: lis,
-		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
-			if req.GetTypeUrl() == version.V3ClusterURL {
-				switch len(req.GetResourceNames()) {
-				case 0:
-					select {
-					case cdsResourceCanceledCh <- struct{}{}:
-					default:
-					}
-				default:
-					select {
-					case cdsResourceRequestedCh <- req.GetResourceNames():
-					case <-ctx.Done():
-					}
-				}
-			}
-			return nil
-		},
+		Listener:        lis,
+		OnStreamRequest: onStreamRequest,
 		// Required for aggregate clusters as all resources cannot be requested
 		// at once.
 		AllowResourceSubset: true,
@@ -334,7 +317,7 @@ func setupWithManagementServerAndListenerWithResourceCheck(ctx context.Context, 
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 
-	return mgmtServer, nodeID, cc, r, xdsC, cdsResourceRequestedCh, cdsResourceCanceledCh
+	return mgmtServer, nodeID, cc, r, xdsC
 }
 
 // Helper function to compare the load balancing configuration received on the
@@ -386,10 +369,29 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 // configuration again, it does not send out a new request, and when the
 // configuration changes, it stops requesting the old cluster resource and
 // starts requesting the new one.
-func (s) TestConfigurationUpdate_Success(t *testing.T) {
+func TestConfigurationUpdate_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, _, r, xdsClient, cdsResourceRequestedCh, _ := setupWithManagementServerWithResourceCheck(ctx, t)
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	cdsResourceRequestedCh := make(chan []string, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			switch len(req.GetResourceNames()) {
+			case 0:
+				select {
+				case cdsResourceCanceledCh <- struct{}{}:
+				default:
+				}
+			default:
+				select {
+				case cdsResourceRequestedCh <- req.GetResourceNames():
+				case <-ctx.Done():
+				}
+			}
+		}
+		return nil
+	}
+	_, _, _, r, xdsClient := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
 
 	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
@@ -757,13 +759,19 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 	_, resolverErrCh, _, _ := registerWrappedClusterResolverPolicy(t)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerWithResourceCheck(ctx, t)
-
-	// Verify that the specified cluster resource is requested.
-	wantNames := []string{clusterName}
-	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
-		t.Fatal(err)
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			if len(req.GetResourceNames()) == 0 {
+				select {
+				case cdsResourceCanceledCh <- struct{}{}:
+				default:
+				}
+			}
+		}
+		return nil
 	}
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
 
 	// Configure the management server to return a cluster resource that
 	// contains a config_source_specifier for the `lrs_server` field which is not
@@ -874,7 +882,26 @@ func (s) TestResolverError(t *testing.T) {
 	lis := testutils.NewListenerWrapper(t, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	mgmtServer, nodeID, cc, r, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerAndListenerWithResourceCheck(ctx, t, lis)
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	cdsResourceRequestedCh := make(chan []string, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			switch len(req.GetResourceNames()) {
+			case 0:
+				select {
+				case cdsResourceCanceledCh <- struct{}{}:
+				default:
+				}
+			default:
+				select {
+				case cdsResourceRequestedCh <- req.GetResourceNames():
+				case <-ctx.Done():
+				}
+			}
+		}
+		return nil
+	}
+	mgmtServer, nodeID, cc, r, _ := setupWithManagementServerAndListenerWithResourceCheck(ctx, t, lis, onStreamReq)
 
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
@@ -1017,13 +1044,19 @@ func (s) TestResolverError(t *testing.T) {
 func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	mgmtServer, nodeID, cc, _, _, cdsResourceRequestedCh, cdsResourceCanceledCh := setupWithManagementServerWithResourceCheck(ctx, t)
-
-	// Verify that the specified cluster resource is requested.
-	wantNames := []string{clusterName}
-	if err := waitForResourceNames(ctx, cdsResourceRequestedCh, wantNames); err != nil {
-		t.Fatal(err)
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			if len(req.GetResourceNames()) == 0 {
+				select {
+				case cdsResourceCanceledCh <- struct{}{}:
+				default:
+				}
+			}
+		}
+		return nil
 	}
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)

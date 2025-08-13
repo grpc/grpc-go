@@ -35,9 +35,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -874,7 +876,19 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 func (s) TestWatchers(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	mgmtServer, nodeID, _, _, _, cdsResourceRequestedCh, _ := setupWithManagementServerWithResourceCheck(ctx, t)
+	cdsResourceRequestedCh := make(chan []string, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			if len(req.GetResourceNames()) > 0 {
+				select {
+				case cdsResourceRequestedCh <- req.GetResourceNames():
+				case <-ctx.Done():
+				}
+			}
+		}
+		return nil
+	}
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
 
 	const (
 		clusterA = clusterName
