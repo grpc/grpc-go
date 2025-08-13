@@ -21,7 +21,6 @@ import (
 	"log"
 	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/stats"
@@ -72,12 +71,6 @@ func (h *serverTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 	if ri == nil {
 		logger.Error("ctx passed into server side tracing handler trace event handling has no server call data present")
 		return
-	}
-	if begin, ok := rs.(*stats.Begin); ok {
-		ri.ai.traceSpan.SetAttributes(
-			attribute.Bool("Client", begin.Client),
-			attribute.Bool("FailFast", begin.FailFast),
-		)
 	}
 	populateSpan(rs, ri.ai)
 }

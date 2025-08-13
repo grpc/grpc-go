@@ -838,19 +838,10 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 
 	wantSpanInfos := []traceSpanInfo{
 		{
-			name:     "Recv.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-			},
+			name:       "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			attributes: nil,
 			events: []trace.Event{
 				{
 					Name: "Inbound message",
@@ -893,14 +884,6 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			spanKind: oteltrace.SpanKindInternal.String(),
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
 				{
 					Key:   "previous-rpc-attempts",
 					Value: attribute.IntValue(0),
@@ -955,20 +938,11 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			events:     nil,
 		},
 		{
-			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: nil,
+			name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			attributes: nil,
+			events:     nil,
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
@@ -982,14 +956,6 @@ func (s) TestMetricsAndTracesOptionEnabled(t *testing.T) {
 			spanKind: oteltrace.SpanKindInternal.String(),
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
 				{
 					Key:   "previous-rpc-attempts",
 					Value: attribute.IntValue(0),
@@ -1052,19 +1018,10 @@ func (s) TestSpan(t *testing.T) {
 
 	wantSpanInfos := []traceSpanInfo{
 		{
-			name:     "Recv.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-			},
+			name:       "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			attributes: nil,
 			events: []trace.Event{
 				{
 					Name: "Inbound message",
@@ -1099,14 +1056,6 @@ func (s) TestSpan(t *testing.T) {
 			spanKind: oteltrace.SpanKindInternal.String(),
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
 				{
 					Key:   "previous-rpc-attempts",
 					Value: attribute.IntValue(0),
@@ -1153,20 +1102,11 @@ func (s) TestSpan(t *testing.T) {
 			events:     nil,
 		},
 		{
-			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: nil,
+			name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			attributes: nil,
+			events:     nil,
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
@@ -1180,14 +1120,6 @@ func (s) TestSpan(t *testing.T) {
 			spanKind: oteltrace.SpanKindInternal.String(),
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
 				{
 					Key:   "previous-rpc-attempts",
 					Value: attribute.IntValue(0),
@@ -1252,19 +1184,10 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 
 	wantSpanInfos := []traceSpanInfo{
 		{
-			name:     "Recv.grpc.testing.TestService.UnaryCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-			},
+			name:       "Recv.grpc.testing.TestService.UnaryCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			attributes: nil,
 			events: []trace.Event{
 				{
 					Name: "Inbound message",
@@ -1299,14 +1222,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			spanKind: oteltrace.SpanKindInternal.String(),
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
 				{
 					Key:   "previous-rpc-attempts",
 					Value: attribute.IntValue(0),
@@ -1353,20 +1268,11 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			events:     nil,
 		},
 		{
-			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(false),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(false),
-				},
-			},
-			events: nil,
+			name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			attributes: nil,
+			events:     nil,
 		},
 		{
 			name:       "Sent.grpc.testing.TestService.FullDuplexCall",
@@ -1380,14 +1286,6 @@ func (s) TestSpan_WithW3CContextPropagator(t *testing.T) {
 			spanKind: oteltrace.SpanKindInternal.String(),
 			status:   otelcodes.Ok,
 			attributes: []attribute.KeyValue{
-				{
-					Key:   "Client",
-					Value: attribute.BoolValue(true),
-				},
-				{
-					Key:   "FailFast",
-					Value: attribute.BoolValue(true),
-				},
 				{
 					Key:   "previous-rpc-attempts",
 					Value: attribute.IntValue(0),
@@ -1529,13 +1427,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			},
 			wantSpanInfos: []traceSpanInfo{
 				{
-					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Error,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-					},
+					name:       "Recv.grpc.testing.TestService.UnaryCall",
+					spanKind:   oteltrace.SpanKindServer.String(),
+					status:     otelcodes.Error,
+					attributes: nil,
 					events: []trace.Event{
 						{
 							Name: "Inbound message",
@@ -1552,8 +1447,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind: oteltrace.SpanKindInternal.String(),
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", true),
-						attribute.Bool("FailFast", true),
 						attribute.Int("previous-rpc-attempts", 0),
 						attribute.Bool("transparent-retry", false),
 					},
@@ -1571,13 +1464,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 				},
 				{
-					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Error,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-					},
+					name:       "Recv.grpc.testing.TestService.UnaryCall",
+					spanKind:   oteltrace.SpanKindServer.String(),
+					status:     otelcodes.Error,
+					attributes: nil,
 					events: []trace.Event{
 						{
 							Name: "Inbound message",
@@ -1594,8 +1484,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind: oteltrace.SpanKindInternal.String(),
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", true),
-						attribute.Bool("FailFast", true),
 						attribute.Int("previous-rpc-attempts", 1),
 						attribute.Bool("transparent-retry", false),
 					},
@@ -1610,13 +1498,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 				},
 				{
-					name:     "Recv.grpc.testing.TestService.UnaryCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Ok,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-					},
+					name:       "Recv.grpc.testing.TestService.UnaryCall",
+					spanKind:   oteltrace.SpanKindServer.String(),
+					status:     otelcodes.Ok,
+					attributes: nil,
 					events: []trace.Event{
 						{
 							Name: "Inbound message",
@@ -1640,8 +1525,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind: oteltrace.SpanKindInternal.String(),
 					status:   otelcodes.Ok,
 					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", true),
-						attribute.Bool("FailFast", true),
 						attribute.Int("previous-rpc-attempts", 2),
 						attribute.Bool("transparent-retry", false),
 					},
@@ -1717,14 +1600,11 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 			},
 			wantSpanInfos: []traceSpanInfo{
 				{
-					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Error,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-					},
-					events: nil,
+					name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+					spanKind:   oteltrace.SpanKindServer.String(),
+					status:     otelcodes.Error,
+					attributes: nil,
+					events:     nil,
 				},
 				// RPC attempt #1
 				{
@@ -1732,8 +1612,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind: oteltrace.SpanKindInternal.String(),
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", true),
-						attribute.Bool("FailFast", true),
 						attribute.Int("previous-rpc-attempts", 0),
 						attribute.Bool("transparent-retry", false),
 					},
@@ -1751,14 +1629,11 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 				},
 				{
-					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Error,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-					},
-					events: nil,
+					name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+					spanKind:   oteltrace.SpanKindServer.String(),
+					status:     otelcodes.Error,
+					attributes: nil,
+					events:     nil,
 				},
 				// RPC attempt #2
 				{
@@ -1766,8 +1641,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind: oteltrace.SpanKindInternal.String(),
 					status:   otelcodes.Error,
 					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", true),
-						attribute.Bool("FailFast", true),
 						attribute.Int("previous-rpc-attempts", 1),
 						attribute.Bool("transparent-retry", false),
 					},
@@ -1782,13 +1655,10 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					},
 				},
 				{
-					name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-					spanKind: oteltrace.SpanKindServer.String(),
-					status:   otelcodes.Ok,
-					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", false),
-						attribute.Bool("FailFast", false),
-					},
+					name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+					spanKind:   oteltrace.SpanKindServer.String(),
+					status:     otelcodes.Ok,
+					attributes: nil,
 					events: []trace.Event{
 						{
 							Name: "Inbound message",
@@ -1805,8 +1675,6 @@ func (s) TestTraceSpan_WithRetriesAndNameResolutionDelay(t *testing.T) {
 					spanKind: oteltrace.SpanKindInternal.String(),
 					status:   otelcodes.Ok,
 					attributes: []attribute.KeyValue{
-						attribute.Bool("Client", true),
-						attribute.Bool("FailFast", true),
 						attribute.Int("previous-rpc-attempts", 2),
 						attribute.Bool("transparent-retry", false),
 					},
@@ -1947,14 +1815,11 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 			attributes: nil,
 		},
 		{
-			name:     "Recv.grpc.testing.TestService.FullDuplexCall",
-			spanKind: oteltrace.SpanKindServer.String(),
-			status:   otelcodes.Ok,
-			events:   wantInboundEvents,
-			attributes: []attribute.KeyValue{
-				attribute.Bool("Client", false),
-				attribute.Bool("FailFast", false),
-			},
+			name:       "Recv.grpc.testing.TestService.FullDuplexCall",
+			spanKind:   oteltrace.SpanKindServer.String(),
+			status:     otelcodes.Ok,
+			events:     wantInboundEvents,
+			attributes: nil,
 		},
 		{
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
@@ -1962,8 +1827,6 @@ func (s) TestStreamingRPC_TraceSequenceNumbers(t *testing.T) {
 			status:   otelcodes.Ok,
 			events:   wantOutboundEvents,
 			attributes: []attribute.KeyValue{
-				attribute.Bool("Client", true),
-				attribute.Bool("FailFast", true),
 				attribute.Int("previous-rpc-attempts", 0),
 				attribute.Bool("transparent-retry", false),
 			},
