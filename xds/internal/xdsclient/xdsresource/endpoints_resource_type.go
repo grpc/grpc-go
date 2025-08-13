@@ -37,7 +37,7 @@ var (
 	_ xdsclient.Decoder = endpointsResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
-	endpointsType = endpointsResourceType{
+	EndpointsResourceType = endpointsResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3EndpointsURL,
 			typeName:                   "EndpointsResource",
@@ -168,5 +168,5 @@ func (d *delegatingEndpointsWatcher) AmbientError(err error, onDone func()) {
 // provided endpoints resource name.
 func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
 	delegator := &delegatingEndpointsWatcher{watcher: w}
-	return p.WatchResource(endpointsType, name, delegator)
+	return p.WatchResource(EndpointsResourceType, name, delegator)
 }

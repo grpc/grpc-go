@@ -56,7 +56,7 @@ var (
 	testMetadataJSON, _ = json.Marshal(map[string]any{"foo": "bar", "baz": float64(1)})
 )
 
-func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
+func TestBuildXDSClientConfig_Success(t *testing.T) {
 	tests := []struct {
 		name                string
 		bootstrapContents   []byte

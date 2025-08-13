@@ -36,10 +36,10 @@ import (
 
 func init() {
 	xdsinternal.ResourceTypeMapForTesting = make(map[string]any)
-	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
-	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
-	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
-	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
+	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = ListenerResourceType
+	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = RouteConfigResourceType
+	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = ClusterResourceType
+	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = EndpointsResourceType
 }
 
 // Producer contains a single method to discover resource configuration from a

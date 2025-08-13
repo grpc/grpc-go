@@ -39,7 +39,7 @@ var (
 	_ xdsclient.Decoder = listenerResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
-	listenerType = listenerResourceType{
+	ListenerResourceType = listenerResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ListenerURL,
 			typeName:                   ListenerResourceTypeName,
@@ -209,5 +209,5 @@ func (d *delegatingListenerWatcher) AmbientError(err error, onDone func()) {
 // provided listener resource name.
 func WatchListener(p Producer, name string, w ListenerWatcher) (cancel func()) {
 	delegator := &delegatingListenerWatcher{watcher: w}
-	return p.WatchResource(listenerType, name, delegator)
+	return p.WatchResource(ListenerResourceType, name, delegator)
 }

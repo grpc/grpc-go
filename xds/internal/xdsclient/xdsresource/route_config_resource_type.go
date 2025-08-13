@@ -37,7 +37,7 @@ var (
 	_ xdsclient.Decoder = routeConfigResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
-	routeConfigType = routeConfigResourceType{
+	RouteConfigResourceType = routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3RouteConfigURL,
 			typeName:                   "RouteConfigResource",
@@ -171,5 +171,5 @@ func (d *delegatingRouteConfigWatcher) AmbientError(err error, onDone func()) {
 // provided route configuration resource name.
 func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
 	delegator := &delegatingRouteConfigWatcher{watcher: w}
-	return p.WatchResource(routeConfigType, name, delegator)
+	return p.WatchResource(RouteConfigResourceType, name, delegator)
 }

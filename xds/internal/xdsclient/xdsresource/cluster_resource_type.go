@@ -38,7 +38,7 @@ var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = clusterResourceType{}
 	// Singleton instantiation of the resource type implementation.
-	clusterType = clusterResourceType{
+	ClusterResourceType = clusterResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ClusterURL,
 			typeName:                   ClusterResourceTypeName,
@@ -182,5 +182,5 @@ func (d *delegatingClusterWatcher) AmbientError(err error, onDone func()) {
 // provided cluster resource name.
 func WatchCluster(p Producer, name string, w ClusterWatcher) (cancel func()) {
 	delegator := &delegatingClusterWatcher{watcher: w}
-	return p.WatchResource(clusterType, name, delegator)
+	return p.WatchResource(ClusterResourceType, name, delegator)
 }
