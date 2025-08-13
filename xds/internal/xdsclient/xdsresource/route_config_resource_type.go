@@ -110,7 +110,7 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
-// // Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the clustered resource.
 func (r *RouteConfigResourceData) Bytes() []byte {
 	if r == nil || r.Resource.Raw == nil {
 		return nil

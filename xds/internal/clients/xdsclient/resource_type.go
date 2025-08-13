@@ -68,9 +68,7 @@ type AnyProto struct {
 	Value   []byte
 }
 
-// AnyProto contains the getvalue method and
-//serialized proto data of an xDS resource.
-
+// GetValue returns the serialized proto data for the resource.
 func (a AnyProto) GetValue() []byte {
 	panic("unimplemented")
 }
