@@ -22,12 +22,13 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
+// watcherAdapter adapts xdsresource.ResourceWatcher interface.
 type watcherAdapter struct {
 	xdsresource.ResourceWatcher
 }
 
+// ResourceChanged converts generic data for the wrapped watcher.
 func (a *watcherAdapter) ResourceChanged(data xdsclient.ResourceData, f func()) {
-	// Convert xdsclient.ResourceData to xdsresource.ResourceData if possible
 	a.ResourceWatcher.ResourceChanged(data.(xdsresource.ResourceData), f)
 }
 
