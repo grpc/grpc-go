@@ -263,16 +263,13 @@ func setupWithManagementServerAndListener(t *testing.T, lis net.Listener) (*e2e.
 //   - the grpc channel to the test backend service
 //   - the manual resolver configured on the channel
 //   - the xDS client used the grpc channel
-//   - a channel on which requested cluster resource names are sent
-//   - a channel used to signal that previously requested cluster resources are
-//     no longer requested
-func setupWithManagementServerWithResourceCheck(ctx context.Context, t *testing.T, nStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
-	return setupWithManagementServerAndListenerWithResourceCheck(ctx, t, nil, nStreamRequest)
+func setupWithManagementServerWithResourceCheck(t *testing.T, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
+	return setupWithManagementServerAndListenerWithResourceCheck(t, nil, onStreamRequest)
 }
 
 // Same as setupWithManagementServerWithResourceCheck, but also allows the caller to specify
 // a listener to be used by the management server.
-func setupWithManagementServerAndListenerWithResourceCheck(ctx context.Context, t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
+func setupWithManagementServerAndListenerWithResourceCheck(t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
 	t.Helper()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener:        lis,
@@ -372,17 +369,10 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 func TestConfigurationUpdate_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cdsResourceCanceledCh := make(chan struct{}, 1)
 	cdsResourceRequestedCh := make(chan []string, 1)
 	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 		if req.GetTypeUrl() == version.V3ClusterURL {
-			switch len(req.GetResourceNames()) {
-			case 0:
-				select {
-				case cdsResourceCanceledCh <- struct{}{}:
-				default:
-				}
-			default:
+			if len(req.GetResourceNames()) > 0 {
 				select {
 				case cdsResourceRequestedCh <- req.GetResourceNames():
 				case <-ctx.Done():
@@ -391,7 +381,7 @@ func TestConfigurationUpdate_Success(t *testing.T) {
 		}
 		return nil
 	}
-	_, _, _, r, xdsClient := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
+	_, _, _, r, xdsClient := setupWithManagementServerWithResourceCheck(t, onStreamReq)
 
 	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
@@ -771,7 +761,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServerWithResourceCheck(t, onStreamReq)
 
 	// Configure the management server to return a cluster resource that
 	// contains a config_source_specifier for the `lrs_server` field which is not
@@ -901,7 +891,7 @@ func (s) TestResolverError(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, r, _ := setupWithManagementServerAndListenerWithResourceCheck(ctx, t, lis, onStreamReq)
+	mgmtServer, nodeID, cc, r, _ := setupWithManagementServerAndListenerWithResourceCheck(t, lis, onStreamReq)
 
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
@@ -1056,7 +1046,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServerWithResourceCheck(t, onStreamReq)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)

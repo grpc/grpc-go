@@ -888,7 +888,7 @@ func (s) TestWatchers(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServerWithResourceCheck(ctx, t, onStreamReq)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServerWithResourceCheck(t, onStreamReq)
 
 	const (
 		clusterA = clusterName
