@@ -36,8 +36,8 @@ var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = routeConfigResourceType{}
 
-	// RouteConfigResourceType is a singleton instantiation of the
-	// resource type implementation.
+	// RouteConfigResourceTypeDecoder is the instantiation of the
+	// route config resource type implementation.
 	RouteConfigResourceTypeDecoder = &routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3RouteConfigURL,
@@ -110,7 +110,7 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the route configuration resource.
 func (r *RouteConfigResourceData) Bytes() []byte {
 	if r == nil || r.Resource.Raw == nil {
 		return nil
@@ -118,7 +118,7 @@ func (r *RouteConfigResourceData) Bytes() []byte {
 	return r.Resource.Raw.Value
 }
 
-// Equal returns the underlying raw bytes of the clustered resource.
+// Equal returns true if other is equal to r.
 func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	if r == nil && other == nil {
 		return true

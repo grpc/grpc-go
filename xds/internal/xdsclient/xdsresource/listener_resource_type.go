@@ -37,8 +37,8 @@ const (
 var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = listenerResourceType{}
-	// ListenerResourceType is a singleton instantiation of the
-	// resource type implementation.
+	// ListenerResourceTypeDecoder is the instantiation of the
+	// listener resource type implementation.
 	ListenerResourceTypeDecoder = &listenerResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ListenerURL,
@@ -149,7 +149,7 @@ func (l *ListenerResourceData) Raw() *anypb.Any {
 	return l.Resource.Raw
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the listener resource.
 func (l *ListenerResourceData) Bytes() []byte {
 	if l == nil || l.Resource.Raw == nil {
 		return nil
@@ -157,7 +157,7 @@ func (l *ListenerResourceData) Bytes() []byte {
 	return l.Resource.Raw.Value
 }
 
-// Equal returns the underlying raw bytes of the clustered resource.
+// Equal returns true if other is equal to l.
 func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	if l == nil && other == nil {
 		return true

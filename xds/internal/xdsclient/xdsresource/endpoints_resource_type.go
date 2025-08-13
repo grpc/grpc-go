@@ -36,8 +36,8 @@ var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = endpointsResourceType{}
 
-	// EndpointsResourceType is a singleton instantiation of the
-	// resource type implementation.
+	// EndpointsResourceTypeDecoder is the instantiation of the
+	// endpoints resource type implementation.
 	EndpointsResourceTypeDecoder = &endpointsResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3EndpointsURL,
@@ -86,7 +86,7 @@ type EndpointsResourceData struct {
 	Resource EndpointsUpdate
 }
 
-// RawEqual returns true if other is equal to r.
+// RawEqual returns true if other is equal to e.
 func (e *EndpointsResourceData) RawEqual(other ResourceData) bool {
 	if e == nil && other == nil {
 		return true
@@ -103,12 +103,12 @@ func (e *EndpointsResourceData) ToJSON() string {
 	return pretty.ToJSON(e.Resource)
 }
 
-// Raw returns the underlying raw protobuf form of the listener resource.
+// Raw returns the underlying raw protobuf form of the endpoints resource.
 func (e *EndpointsResourceData) Raw() *anypb.Any {
 	return e.Resource.Raw
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the endpoints resource.
 func (e *EndpointsResourceData) Bytes() []byte {
 	if e == nil || e.Resource.Raw == nil {
 		return nil
@@ -116,7 +116,7 @@ func (e *EndpointsResourceData) Bytes() []byte {
 	return e.Resource.Raw.Value
 }
 
-// Equal returns the underlying equal bytes of the clustered resource.
+// Equal returns true if other is equal to e
 func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
 	if e == nil && other == nil {
 		return true
