@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/internal/xds"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/balancer/loadstore"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -436,7 +435,7 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
-		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
 	var sc balancer.SubConn
 	scw := &scWrapper{}
@@ -475,7 +474,7 @@ func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resol
 	newAddrs := make([]resolver.Address, len(addrs))
 	var lID clients.Locality
 	for i, addr := range addrs {
-		newAddrs[i] = xds.SetXDSHandshakeClusterName(addr, clusterName)
+		newAddrs[i] = xdsinternal.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
 	if scw, ok := sc.(*scWrapper); ok {
