@@ -88,7 +88,6 @@ func waitForResourceNames(ctx context.Context, resourceNamesCh chan []string, wa
 		case gotNames := <-resourceNamesCh:
 			// Sort both slices before comparing them, as the order of clusters
 			// does not matter.
-			fmt.Printf("eshita : gotNames: %v, wantNames: %v", gotNames, wantNames)
 			if cmp.Equal(gotNames, wantNames, cmpopts.SortSlices(func(a, b string) bool { return a < b })) {
 				return nil
 			}
@@ -197,13 +196,7 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 //   - the grpc channel to the test backend service
 //   - the manual resolver configured on the channel
 //   - the xDS client used the grpc channel
-func setupWithManagementServer(t *testing.T, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
-	return setupWithManagementServerAndListener(t, nil, onStreamRequest)
-}
-
-// Same as setupWithManagementServer, but also allows the caller to specify
-// a listener to be used by the management server.
-func setupWithManagementServerAndListener(t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
+func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, *manual.Resolver, xdsclient.XDSClient) {
 	t.Helper()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener:        lis,
@@ -300,7 +293,7 @@ func verifyRPCError(gotErr error, wantCode codes.Code, wantErr, wantNodeID strin
 // configuration again, it does not send out a new request, and when the
 // configuration changes, it stops requesting the old cluster resource and
 // starts requesting the new one.
-func TestConfigurationUpdate_Success(t *testing.T) {
+func (s) TestConfigurationUpdate_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cdsResourceRequestedCh := make(chan []string, 1)
@@ -315,7 +308,7 @@ func TestConfigurationUpdate_Success(t *testing.T) {
 		}
 		return nil
 	}
-	_, _, _, r, xdsClient := setupWithManagementServer(t, onStreamReq)
+	_, _, _, r, xdsClient := setupWithManagementServer(t, nil, onStreamReq)
 
 	// Verify that the specified cluster resource is requested.
 	wantNames := []string{clusterName}
@@ -608,7 +601,7 @@ func TestClusterUpdate_Success(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-			mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil)
+			mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -632,7 +625,7 @@ func TestClusterUpdate_Success(t *testing.T) {
 // balancing configuration pushed to the child is as expected.
 func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 	clusterResource := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
@@ -695,7 +688,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, onStreamReq)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, onStreamReq)
 
 	// Configure the management server to return a cluster resource that
 	// contains a config_source_specifier for the `lrs_server` field which is not
@@ -825,7 +818,7 @@ func (s) TestResolverError(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, r, _ := setupWithManagementServerAndListener(t, lis, onStreamReq)
+	mgmtServer, nodeID, cc, r, _ := setupWithManagementServer(t, lis, onStreamReq)
 
 	// Grab the wrapped connection from the listener wrapper. This will be used
 	// to verify the connection is closed.
@@ -980,7 +973,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, onStreamReq)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, onStreamReq)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -1051,7 +1044,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 func (s) TestClose(t *testing.T) {
 	cdsBalancerCh := registerWrappedCDSPolicy(t)
 	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -1098,7 +1091,7 @@ func (s) TestClose(t *testing.T) {
 func (s) TestExitIdle(t *testing.T) {
 	cdsBalancerCh := registerWrappedCDSPolicy(t)
 	_, _, exitIdleCh, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
