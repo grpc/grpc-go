@@ -37,7 +37,7 @@ var (
 	_ xdsclient.Decoder = routeConfigResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
-	RouteConfigResourceType = routeConfigResourceType{
+	RouteConfigResourceType = &routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3RouteConfigURL,
 			typeName:                   "RouteConfigResource",

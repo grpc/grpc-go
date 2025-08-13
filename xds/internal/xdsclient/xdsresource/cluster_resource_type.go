@@ -38,7 +38,7 @@ var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = clusterResourceType{}
 	// Singleton instantiation of the resource type implementation.
-	ClusterResourceType = clusterResourceType{
+	ClusterResourceType = &clusterResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ClusterURL,
 			typeName:                   ClusterResourceTypeName,

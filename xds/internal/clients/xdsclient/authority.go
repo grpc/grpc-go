@@ -665,6 +665,8 @@ func (a *authority) watchResource(rType ResourceType, resourceName string, watch
 
 		// Lookup the entry for the resource type in the top-level map. If there is
 		// no entry for this resource type, create one.
+		//typeURL := rType.TypeURL()
+		fmt.Println(rType)
 		resources := a.resources[rType]
 		if resources == nil {
 			resources = make(map[string]*resourceState)

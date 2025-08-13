@@ -37,7 +37,7 @@ var (
 	_ xdsclient.Decoder = endpointsResourceType{}
 
 	// Singleton instantiation of the resource type implementation.
-	EndpointsResourceType = endpointsResourceType{
+	EndpointsResourceType = &endpointsResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3EndpointsURL,
 			typeName:                   "EndpointsResource",
