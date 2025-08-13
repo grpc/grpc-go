@@ -29,25 +29,25 @@ func supportedResourceTypes() map[string]xdsclient.ResourceType {
 			TypeURL:                    version.V3ListenerURL,
 			TypeName:                   xdsresource.ListenerResourceTypeName,
 			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.ListenerResourceType,
+			Decoder:                    xdsresource.ListenerResourceTypeDecoder,
 		},
 		version.V3RouteConfigURL: {
 			TypeURL:                    version.V3RouteConfigURL,
 			TypeName:                   xdsresource.RouteConfigTypeName,
 			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.RouteConfigResourceType,
+			Decoder:                    xdsresource.RouteConfigResourceTypeDecoder,
 		},
 		version.V3ClusterURL: {
 			TypeURL:                    version.V3ClusterURL,
 			TypeName:                   xdsresource.ClusterResourceTypeName,
 			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.ClusterResourceType,
+			Decoder:                    xdsresource.ClusterResourceTypeDecoder,
 		},
 		version.V3EndpointsURL: {
 			TypeURL:                    version.V3EndpointsURL,
 			TypeName:                   xdsresource.EndpointsResourceTypeName,
 			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.EndpointsResourceType,
+			Decoder:                    xdsresource.EndpointsResourceTypeDecoder,
 		},
 	}
 }

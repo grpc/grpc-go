@@ -37,9 +37,8 @@ const (
 var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = clusterResourceType{}
-	// ClusterResourceType is a singleton instantiation of the
-	// resource type implementation.
-	ClusterResourceType = &clusterResourceType{
+	//ClusterResourceType is the implementation for the Cluster resource type.
+	ClusterResourceTypeDecoder = &clusterResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ClusterURL,
 			typeName:                   ClusterResourceTypeName,
@@ -86,7 +85,6 @@ func (ct clusterResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclien
 	}
 
 	return &xdsclient.DecodeResult{Name: name, Resource: &ClusterResourceData{Resource: cluster}}, nil
-
 }
 
 // ClusterResourceData wraps the configuration of a Cluster resource as received
@@ -130,7 +128,7 @@ func (c *ClusterResourceData) Bytes() []byte {
 	return c.Resource.Raw.Value
 }
 
-// Equal returns the underlying raw equals of the clustered resource.
+// Equal returns true if other is equal to c
 func (c *ClusterResourceData) Equal(other xdsclient.ResourceData) bool {
 	if c == nil && other == nil {
 		return true
@@ -186,5 +184,5 @@ func (d *delegatingClusterWatcher) AmbientError(err error, onDone func()) {
 // provided cluster resource name.
 func WatchCluster(p Producer, name string, w ClusterWatcher) (cancel func()) {
 	delegator := &delegatingClusterWatcher{watcher: w}
-	return p.WatchResource(ClusterResourceType, name, delegator)
+	return p.WatchResource(ClusterResourceTypeDecoder, name, delegator)
 }

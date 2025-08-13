@@ -38,7 +38,7 @@ var (
 
 	// RouteConfigResourceType is a singleton instantiation of the
 	// resource type implementation.
-	RouteConfigResourceType = &routeConfigResourceType{
+	RouteConfigResourceTypeDecoder = &routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3RouteConfigURL,
 			typeName:                   "RouteConfigResource",
@@ -175,5 +175,5 @@ func (d *delegatingRouteConfigWatcher) AmbientError(err error, onDone func()) {
 // provided route configuration resource name.
 func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
 	delegator := &delegatingRouteConfigWatcher{watcher: w}
-	return p.WatchResource(RouteConfigResourceType, name, delegator)
+	return p.WatchResource(RouteConfigResourceTypeDecoder, name, delegator)
 }

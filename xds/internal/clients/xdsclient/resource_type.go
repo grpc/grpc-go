@@ -69,6 +69,8 @@ type AnyProto struct {
 }
 
 // GetValue returns the serialized proto data for the resource.
+// This is a placeholder that will panic if called. It is intended to
+// be implemented later to access the underlying protobuf message.
 func (a AnyProto) GetValue() []byte {
 	panic("unimplemented")
 }

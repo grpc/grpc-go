@@ -38,7 +38,7 @@ var (
 
 	// EndpointsResourceType is a singleton instantiation of the
 	// resource type implementation.
-	EndpointsResourceType = &endpointsResourceType{
+	EndpointsResourceTypeDecoder = &endpointsResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3EndpointsURL,
 			typeName:                   "EndpointsResource",
@@ -172,5 +172,5 @@ func (d *delegatingEndpointsWatcher) AmbientError(err error, onDone func()) {
 // provided endpoints resource name.
 func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
 	delegator := &delegatingEndpointsWatcher{watcher: w}
-	return p.WatchResource(EndpointsResourceType, name, delegator)
+	return p.WatchResource(EndpointsResourceTypeDecoder, name, delegator)
 }
