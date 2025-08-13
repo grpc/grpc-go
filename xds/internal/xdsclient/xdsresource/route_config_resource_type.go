@@ -36,7 +36,8 @@ var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = routeConfigResourceType{}
 
-	// Singleton instantiation of the resource type implementation.
+	// RouteConfigResourceType is a singleton instantiation of the
+	// resource type implementation.
 	RouteConfigResourceType = &routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3RouteConfigURL,
@@ -58,7 +59,7 @@ type routeConfigResourceType struct {
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (l routeConfigResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+func (l routeConfigResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	anypbResource := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
 	name, rc, err := unmarshalRouteConfigResource(anypbResource)
 	switch {
@@ -108,6 +109,8 @@ func (r *RouteConfigResourceData) ToJSON() string {
 func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
+
+// // Bytes returns the underlying raw bytes of the clustered resource.
 func (r *RouteConfigResourceData) Bytes() []byte {
 	if r == nil || r.Resource.Raw == nil {
 		return nil
@@ -115,6 +118,7 @@ func (r *RouteConfigResourceData) Bytes() []byte {
 	return r.Resource.Raw.Value
 }
 
+// Equal returns the underlying raw bytes of the clustered resource.
 func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	if r == nil && other == nil {
 		return true

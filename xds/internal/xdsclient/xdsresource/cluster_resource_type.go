@@ -37,7 +37,8 @@ const (
 var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = clusterResourceType{}
-	// Singleton instantiation of the resource type implementation.
+	// ClusterResourceType is a singleton instantiation of the
+	// resource type implementation.
 	ClusterResourceType = &clusterResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3ClusterURL,
@@ -120,6 +121,8 @@ func (c *ClusterResourceData) ToJSON() string {
 func (c *ClusterResourceData) Raw() *anypb.Any {
 	return c.Resource.Raw
 }
+
+// Bytes returns the underlying raw bytes of the clustered resource.
 func (c *ClusterResourceData) Bytes() []byte {
 	if c == nil || c.Resource.Raw == nil {
 		return nil
@@ -127,6 +130,7 @@ func (c *ClusterResourceData) Bytes() []byte {
 	return c.Resource.Raw.Value
 }
 
+// Equal returns the underlying raw equals of the clustered resource.
 func (c *ClusterResourceData) Equal(other xdsclient.ResourceData) bool {
 	if c == nil && other == nil {
 		return true

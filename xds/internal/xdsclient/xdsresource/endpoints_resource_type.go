@@ -36,7 +36,8 @@ var (
 	// Compile time interface checks.
 	_ xdsclient.Decoder = endpointsResourceType{}
 
-	// Singleton instantiation of the resource type implementation.
+	// EndpointsResourceType is a singleton instantiation of the
+	// resource type implementation.
 	EndpointsResourceType = &endpointsResourceType{
 		resourceTypeState: resourceTypeState{
 			typeURL:                    version.V3EndpointsURL,
@@ -58,7 +59,7 @@ type endpointsResourceType struct {
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (et endpointsResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+func (et endpointsResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	anyProto := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
 	name, rc, err := unmarshalEndpointsResource(anyProto)
 	switch {
@@ -106,6 +107,8 @@ func (e *EndpointsResourceData) ToJSON() string {
 func (e *EndpointsResourceData) Raw() *anypb.Any {
 	return e.Resource.Raw
 }
+
+// Bytes returns the underlying raw bytes of the clustered resource.
 func (e *EndpointsResourceData) Bytes() []byte {
 	if e == nil || e.Resource.Raw == nil {
 		return nil
@@ -113,6 +116,7 @@ func (e *EndpointsResourceData) Bytes() []byte {
 	return e.Resource.Raw.Value
 }
 
+// Equal returns the underlying equal bytes of the clustered resource.
 func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
 	if e == nil && other == nil {
 		return true

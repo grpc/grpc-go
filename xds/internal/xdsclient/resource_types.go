@@ -18,13 +18,12 @@
 package xdsclient
 
 import (
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
-func supportedResourceTypes(config *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) map[string]xdsclient.ResourceType {
+func supportedResourceTypes() map[string]xdsclient.ResourceType {
 	return map[string]xdsclient.ResourceType{
 		version.V3ListenerURL: {
 			TypeURL:                    version.V3ListenerURL,
