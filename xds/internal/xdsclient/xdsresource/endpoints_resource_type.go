@@ -72,6 +72,7 @@ func (et endpointsResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.
 	}
 
 	return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: rc}}, nil
+
 }
 
 // EndpointsResourceData wraps the configuration of an Endpoints resource as
