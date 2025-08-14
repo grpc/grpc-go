@@ -183,7 +183,8 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 }
 
 // Performs the following setup required for tests:
-//   - Spins up an xDS management server
+//   - Spins up an xDS management server and and the provided onStreamRequest
+//     function is set to be called for every incoming request on the ADS stream.
 //   - Creates an xDS client talking to this management server
 //   - Creates a manual resolver that configures the cds LB policy as the
 //     top-level policy, and pushes an initial configuration to it
@@ -682,7 +683,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 			if len(req.GetResourceNames()) == 0 {
 				select {
 				case cdsResourceCanceledCh <- struct{}{}:
-				default:
+				case <-ctx.Done():
 				}
 			}
 		}
@@ -807,7 +808,7 @@ func (s) TestResolverError(t *testing.T) {
 			case 0:
 				select {
 				case cdsResourceCanceledCh <- struct{}{}:
-				default:
+				case <-ctx.Done():
 				}
 			default:
 				select {
@@ -967,7 +968,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 			if len(req.GetResourceNames()) == 0 {
 				select {
 				case cdsResourceCanceledCh <- struct{}{}:
-				default:
+				case <-ctx.Done():
 				}
 			}
 		}
