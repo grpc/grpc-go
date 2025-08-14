@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -436,4 +437,37 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	sCtx3, sCancel3 := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel3()
 	cancel3(sCtx3)
+}
+
+// TestConcurrentReportLoad verifies that the client can safely handle concurrent
+// requests to initiate load reporting streams. It launches multiple goroutines
+// that all call client.ReportLoad simultaneously.
+func (s) TestConcurrentReportLoad(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Create a management server that serves LRS.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+	// Create an xDS client with bootstrap pointing to the above server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	client := createXDSClient(t, bc)
+
+	serverConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+	// Call ReportLoad() concurrently from multiple go routines.
+	var wg sync.WaitGroup
+	const numGoroutines = 10
+	wg.Add(numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			_, cancelStore := client.ReportLoad(serverConfig)
+			defer cancelStore(ctx)
+		}()
+	}
+	wg.Wait()
 }
