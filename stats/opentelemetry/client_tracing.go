@@ -130,7 +130,6 @@ func (h *clientTracingHandler) TagRPC(ctx context.Context, info *stats.RPCTagInf
 		logger.Error("context passed into client side stats handler (TagRPC) has no call info")
 		return ctx
 	}
-	ai.previousRPCAttempts = ci.previousRPCAttempts
 	ctx = h.traceTagRPC(ctx, ai, info.NameResolutionDelay)
 	return setRPCInfo(ctx, &rpcInfo{ai: ai})
 }
@@ -145,13 +144,12 @@ func (h *clientTracingHandler) HandleRPC(ctx context.Context, rs stats.RPCStats)
 
 	// Client-specific Begin attributes.
 	if begin, ok := rs.(*stats.Begin); ok {
+		ci := getCallInfo(ctx)
+		previousRPCAttempts := ci.previousRPCAttempts.Add(1) - 1
 		ri.ai.traceSpan.SetAttributes(
-			attribute.Int64("previous-rpc-attempts", int64(ri.ai.previousRPCAttempts.Load())),
+			attribute.Int64("previous-rpc-attempts", int64(previousRPCAttempts)),
 			attribute.Bool("transparent-retry", begin.IsTransparentRetryAttempt),
 		)
-		if !begin.IsTransparentRetryAttempt && ri.ai.previousRPCAttempts != nil {
-			ri.ai.previousRPCAttempts.Add(1)
-		}
 	}
 	populateSpan(rs, ri.ai)
 }

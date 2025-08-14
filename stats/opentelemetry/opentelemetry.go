@@ -242,9 +242,8 @@ type attemptInfo struct {
 	// message counters for sent and received messages (used for
 	// generating message IDs), and the number of previous RPC attempts for the
 	// associated call.
-	countSentMsg        uint32
-	countRecvMsg        uint32
-	previousRPCAttempts *atomic.Uint32
+	countSentMsg uint32
+	countRecvMsg uint32
 }
 
 type clientMetrics struct {
