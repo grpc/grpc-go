@@ -18,8 +18,6 @@
 package xdsresource
 
 import (
-	"fmt"
-
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
@@ -64,11 +62,7 @@ func (ct clusterResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclien
 	anypbResource := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
 	opts := &DecodeOptions{BootstrapConfig: ct.BootstrapConfig}
 	if gOpts.ServerConfig != nil {
-		if bootstrapSC, ok := ct.ServerConfigMap[*gOpts.ServerConfig]; ok {
-			opts.ServerConfig = bootstrapSC
-		} else {
-			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
-		}
+		opts.ServerConfig = ct.ServerConfigMap[*gOpts.ServerConfig]
 	}
 	name, cluster, err := unmarshalClusterResource(anypbResource, opts.ServerConfig)
 	switch {

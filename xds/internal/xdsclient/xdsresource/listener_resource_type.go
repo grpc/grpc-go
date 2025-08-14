@@ -92,13 +92,11 @@ func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 func (l listenerResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	anypbResource := &anypb.Any{TypeUrl: resource.TypeURL, Value: resource.Value}
 	opts := &DecodeOptions{BootstrapConfig: l.BootstrapConfig}
+
 	if gOpts.ServerConfig != nil {
-		if bootstrapSC, ok := l.ServerConfigMap[*gOpts.ServerConfig]; ok {
-			opts.ServerConfig = bootstrapSC
-		} else {
-			return nil, fmt.Errorf("xdsresource: server config %v not found in map", *gOpts.ServerConfig)
-		}
+		opts.ServerConfig = l.ServerConfigMap[*gOpts.ServerConfig]
 	}
+
 	name, listener, err := unmarshalListenerResource(anypbResource)
 	switch {
 	case name == "":
