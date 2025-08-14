@@ -838,20 +838,20 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	// secondaryWrappedLis, before using tertiaryWrappedLis to make
 	// successful RPCs to backend3.
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected connection attempt to primary but got error: %v", err)
+		t.Fatalf("Timeout when waiting for connection to primary: %v", err)
 	}
 
 	// Stop primary, client should connect to secondary.
 	primaryLis.Stop()
 	if _, err := secondaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected connection attempt to secondary but got error: %v", err)
+		t.Fatalf("Timeout when waiting for connection to secondary after primary stopped: %v", err)
 	}
 
 	// Stop secondary, client should connect to tertiary.
 	secondaryLis.Stop()
 	tertiaryConn, err := tertiaryWrappedLis.NewConnCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Expected connection attempt to tertiary but got error: %v", err)
+		t.Fatalf("Timeout when waiting for connection to tertiary after secondary stopped: %v", err)
 	}
 
 	// Tertiary has all resources, RPCs should succeed to backend3.
@@ -873,10 +873,10 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 
 	secondaryConn, err := secondaryWrappedLis.NewConnCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("Expected new connection to secondary but got error: %v", err)
+		t.Fatalf("Timeout when waiting for new connection to secondary: %v", err)
 	}
 	if _, err := tertiaryConn.(*testutils.ConnWrapper).CloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected tertiary connection to close after promotion to secondary, got error: %v", err)
+		t.Fatalf("Timeout when waiting for connection to the tertiary to be closed after promotion to secondary: %v", err)
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend2.Address); err != nil {
 		t.Fatal(err)
@@ -893,10 +893,10 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 	}))
 
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected new connection to primary but got error: %v", err)
+		t.Fatalf("Timeout when waiting for new connection to primary: %v", err)
 	}
 	if _, err := secondaryConn.(*testutils.ConnWrapper).CloseCh.Receive(ctx); err != nil {
-		t.Fatalf("Expected secondary connection to close after promotion to primary, got error: %v", err)
+		t.Fatalf("Timeout when waiting for connection to the secondary to be closed after promotion to primary: %v", err)
 	}
 	if err := waitForRPCsToReachBackend(ctx, client, backend1.Address); err != nil {
 		t.Fatal(err)
