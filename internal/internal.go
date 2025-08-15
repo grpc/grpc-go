@@ -244,6 +244,8 @@ var (
 	// When set, the function will be called before the stream enters
 	// the blocking state.
 	NewStreamWaitingForResolver = func() {}
+
+	ActiveStreamTracker = func(created, deleted int) {}
 )
 
 // HealthChecker defines the signature of the client-side LB channel health

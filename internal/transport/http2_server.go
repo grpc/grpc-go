@@ -615,6 +615,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 
 	t.activeStreams[streamID] = s
+	internal.ActiveStreamTracker(1, 0)
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}
 	}
@@ -1310,6 +1311,7 @@ func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 		if len(t.activeStreams) == 0 {
 			t.idle = time.Now()
 		}
+		internal.ActiveStreamTracker(0, 1)
 	}
 	t.mu.Unlock()
 
