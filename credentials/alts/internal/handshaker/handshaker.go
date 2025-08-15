@@ -90,6 +90,8 @@ type ClientHandshakerOptions struct {
 	RPCVersions *altspb.RpcProtocolVersions
 	// BoundAccessToken is a bound access token to be sent to the server for authentication.
 	BoundAccessToken string
+	// Rcvlowat is whether to use SO_RCVLOWAT to reduce CPU usage.
+	Rcvlowat bool
 }
 
 // ServerHandshakerOptions contains the server handshaker options that can
@@ -97,6 +99,8 @@ type ClientHandshakerOptions struct {
 type ServerHandshakerOptions struct {
 	// RPCVersions specifies the gRPC versions accepted by the server.
 	RPCVersions *altspb.RpcProtocolVersions
+	// Rcvlowat is whether to use SO_RCVLOWAT to reduce CPU usage.
+	Rcvlowat bool
 }
 
 // DefaultClientHandshakerOptions returns the default client handshaker options.
@@ -125,6 +129,8 @@ type altsHandshaker struct {
 	serverOpts *ServerHandshakerOptions
 	// defines the side doing the handshake, client or server.
 	side core.Side
+	// rcvlowat is whether to use SO_RCVLOWAT to reduce CPU usage.
+	rcvlowat bool
 }
 
 // NewClientHandshaker creates a core.Handshaker that performs a client-side
@@ -137,6 +143,7 @@ func NewClientHandshaker(_ context.Context, conn *grpc.ClientConn, c net.Conn, o
 		clientConn: conn,
 		clientOpts: opts,
 		side:       core.ClientSide,
+		rcvlowat:   opts.Rcvlowat,
 	}, nil
 }
 
@@ -150,6 +157,7 @@ func NewServerHandshaker(_ context.Context, conn *grpc.ClientConn, c net.Conn, o
 		clientConn: conn,
 		serverOpts: opts,
 		side:       core.ServerSide,
+		rcvlowat:   opts.Rcvlowat,
 	}, nil
 }
 
@@ -289,7 +297,7 @@ func (h *altsHandshaker) doHandshake(req *altspb.HandshakerReq) (net.Conn, *alts
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown resulted record protocol %v", result.RecordProtocol)
 	}
-	sc, err := conn.NewConn(h.conn, h.side, result.GetRecordProtocol(), result.KeyData[:keyLen], extra)
+	sc, err := conn.NewConn(h.conn, h.side, result.GetRecordProtocol(), result.KeyData[:keyLen], extra, h.rcvlowat)
 	if err != nil {
 		return nil, nil, err
 	}
