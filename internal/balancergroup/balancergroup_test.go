@@ -820,7 +820,7 @@ func (s) TestBalancerExitIdle_All(t *testing.T) {
 
 func (s) TestBalancerGroup_ExitIdle_AfterClose(t *testing.T) {
 	balancerName := t.Name()
-	exitIdleCh := make(chan struct{})
+	exitIdleCh := make(chan struct{}, 1)
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		ExitIdle: func(_ *stub.BalancerData) {
