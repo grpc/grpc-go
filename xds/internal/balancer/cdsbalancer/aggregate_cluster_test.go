@@ -35,9 +35,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -131,7 +133,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-			mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+			mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 			// Push the first cluster resource through the management server and
 			// verify the configuration pushed to the child policy.
@@ -174,7 +176,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 // contains the expected discovery mechanisms.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
 	// pointing to two child clusters, one EDS and one LogicalDNS. Include the
@@ -281,7 +283,7 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 // policy contains a single discovery mechanism.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
 	// pointing to two child clusters.
@@ -356,7 +358,7 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // discovery mechanisms.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start off with the requested cluster being a leaf EDS cluster.
 	resources := e2e.UpdateOptions{
@@ -450,7 +452,7 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 // longer exceed maximum depth, but be at the maximum allowed depth, and
 // verifies that an RPC can be made successfully.
 func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
 
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
@@ -538,7 +540,7 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource having
 	// a diamond dependency pattern, (A->[B,C]; B->D; C->D). Includes resources
@@ -605,7 +607,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource that
 	// has duplicates in the graph, (A->[B, C]; B->[C, D]). Include resources
@@ -683,7 +685,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
 
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
@@ -768,7 +770,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 // that the aggregate cluster graph has no leaf clusters.
 func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
 
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
@@ -816,7 +818,7 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 // child policy and RPCs should get routed to that leaf cluster.
 func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _, _, _ := setupWithManagementServer(t)
+	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -872,10 +874,21 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 // removed from the tree no longer has a watcher and the new cluster added has a
 // new watcher.
 func (s) TestWatchers(t *testing.T) {
-	mgmtServer, nodeID, _, _, _, cdsResourceRequestedCh, _ := setupWithManagementServer(t)
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	cdsResourceRequestedCh := make(chan []string, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			if len(req.GetResourceNames()) > 0 {
+				select {
+				case cdsResourceRequestedCh <- req.GetResourceNames():
+				case <-ctx.Done():
+				}
+			}
+		}
+		return nil
+	}
+	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, onStreamReq)
 
 	const (
 		clusterA = clusterName
