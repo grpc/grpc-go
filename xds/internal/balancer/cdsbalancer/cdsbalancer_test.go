@@ -189,7 +189,6 @@ func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
 //   - Creates a manual resolver that configures the cds LB policy as the
 //     top-level policy, and pushes an initial configuration to it
 //   - Creates a gRPC channel with the above manual resolver
-//   - Executes OnStreamRequest callback provided by the caller
 //
 // Returns the following:
 //   - the xDS management server
