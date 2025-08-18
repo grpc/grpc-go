@@ -1513,7 +1513,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 					return
 				}
-				return
 			}
 			httpStatusCode = &statusCode
 			if hf.Value == "200" {
