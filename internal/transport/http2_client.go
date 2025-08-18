@@ -1511,8 +1511,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 					se := status.New(codes.Internal, fmt.Sprintf(
 						"protocol error: received 1xx informational header with END_STREAM set: %d", statusCode))
 					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-					return
 				}
+				return
 			}
 			httpStatusCode = &statusCode
 			if hf.Value == "200" {
