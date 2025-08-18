@@ -49,7 +49,7 @@ type Producer interface {
 	// xDS responses are are deserialized and validated, as received from the
 	// xDS management server. Upon receipt of a response from the management
 	// server, an appropriate callback on the watcher is invoked.
-	WatchResource(rType Type, resourceName string, watcher ResourceWatcher) (cancel func())
+	WatchResource(rType ResourceType, resourceName string, watcher ResourceWatcher) (cancel func())
 }
 
 // ResourceWatcher is notified of the resource updates and errors that are
@@ -78,23 +78,18 @@ type ResourceWatcher interface {
 	AmbientError(err error, done func())
 }
 
-// TODO: Once the implementation is complete, rename this interface as
-// ResourceType and get rid of the existing ResourceType enum.
-
-// Type wraps all resource-type specific functionality. Each supported resource
+// ResourceType wraps all resource-type specific functionality. Each supported resource
 // type will provide an implementation of this interface.
-type Type interface {
+type ResourceType interface {
 	// TypeURL is the xDS type URL of this resource type for v3 transport.
 	TypeURL() string
 
-	// TypeName identifies resources in a transport protocol agnostic way. This
+	// ResourceTypeName identifies resources in a transport protocol agnostic way. This
 	// can be used for logging/debugging purposes, as well in cases where the
 	// resource type name is to be uniquely identified but the actual
 	// functionality provided by the resource type is not required.
 	//
-	// TODO: once Type is renamed to ResourceType, rename TypeName to
-	// ResourceTypeName.
-	TypeName() string
+	ResourceTypeName() string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
 	// that all resources be present in every SotW response from the server. If
@@ -152,7 +147,7 @@ func (r resourceTypeState) TypeURL() string {
 	return r.typeURL
 }
 
-func (r resourceTypeState) TypeName() string {
+func (r resourceTypeState) ResourceTypeName() string {
 	return r.typeName
 }
 

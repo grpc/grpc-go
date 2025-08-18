@@ -37,7 +37,7 @@ func (a *watcherAdapter) ResourceChanged(data xdsclient.ResourceData, f func()) 
 // are are deserialized and validated, as received from the xDS management
 // server. Upon receipt of a response from the management server, an
 // appropriate callback on the watcher is invoked.
-func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func()) {
+func (c *clientImpl) WatchResource(rType xdsresource.ResourceType, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func()) {
 	adapter := &watcherAdapter{watcher}
 	return c.XDSClient.WatchResource(rType.TypeURL(), resourceName, adapter)
 }

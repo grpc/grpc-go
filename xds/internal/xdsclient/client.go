@@ -47,7 +47,7 @@ type XDSClient interface {
 	// During a race (e.g. an xDS response is received while the user is calling
 	// cancel()), there's a small window where the callback can be called after
 	// the watcher is canceled. Callers need to handle this case.
-	WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func())
+	WatchResource(rType xdsresource.ResourceType, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func())
 
 	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context))
 
