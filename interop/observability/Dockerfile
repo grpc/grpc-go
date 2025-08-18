@@ -17,7 +17,7 @@
 # Stage 1: Build the interop test client and server
 #
 
-FROM golang:1.23-bullseye as build
+FROM golang:1.24-bullseye as build
 
 WORKDIR /grpc-go
 COPY . .
