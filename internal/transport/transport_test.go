@@ -3125,3 +3125,71 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 		t.Fatalf("RST frame received earlier than expected by duration: %v", want-got)
 	}
 }
+
+// TestClientTransport_Handle1xxHeaders validates that 1xx HTTP status
+// headers are ignored unless END_STREAM is also set, which results in a
+// protocol error.
+func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
+	testStream := func() *ClientStream {
+		return &ClientStream{
+			Stream: &Stream{
+				buf: &recvBuffer{
+					c:  make(chan recvMsg),
+					mu: sync.Mutex{},
+				},
+			},
+			done:       make(chan struct{}),
+			headerChan: make(chan struct{}),
+		}
+	}
+
+	testClient := func(ts *ClientStream) *http2Client {
+		return &http2Client{
+			mu: sync.Mutex{},
+			activeStreams: map[uint32]*ClientStream{
+				0: ts,
+			},
+			controlBuf: newControlBuffer(make(<-chan struct{})),
+		}
+	}
+
+	for _, test := range []struct {
+		name            string
+		metaHeaderFrame *http2.MetaHeadersFrame
+		wantStatus      *status.Status
+	}{
+		{
+			name: "1xx with END_STREAM is error",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: ":status", Value: "100"},
+				},
+			},
+			wantStatus: status.New(
+				codes.Internal,
+				"protocol error: received 1xx informational header with END_STREAM set: 100",
+			),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ts := testStream()
+			s := testClient(ts)
+
+			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 0,
+					Flags:    http2.FlagHeadersEndStream,
+				},
+			}
+
+			s.operateHeaders(test.metaHeaderFrame)
+
+			got := ts.status
+			want := test.wantStatus
+
+			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Fatalf("operateHeaders(%v); status = \ngot: %v\nwant: %v", test.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}

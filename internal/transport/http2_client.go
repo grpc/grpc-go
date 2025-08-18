@@ -1499,13 +1499,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case ":status":
-			if hf.Value == "200" {
-				httpStatusErr = ""
-				statusCode := 200
-				httpStatusCode = &statusCode
-				break
-			}
-
 			c, err := strconv.ParseInt(hf.Value, 10, 32)
 			if err != nil {
 				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
@@ -1513,7 +1506,22 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				return
 			}
 			statusCode := int(c)
+			if statusCode >= 100 && statusCode < 200 {
+				if endStream {
+					se := status.New(codes.Internal, fmt.Sprintf(
+						"protocol error: received 1xx informational header with END_STREAM set: %d", statusCode))
+					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+					return
+				}
+				return
+			}
 			httpStatusCode = &statusCode
+			if hf.Value == "200" {
+				httpStatusErr = ""
+				statusCode := 200
+				httpStatusCode = &statusCode
+				break
+			}
 
 			httpStatusErr = fmt.Sprintf(
 				"unexpected HTTP status code received from server: %d (%s)",
