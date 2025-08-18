@@ -3126,9 +3126,8 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 	}
 }
 
-// TestClientTransport_Handle1xxHeaders validates that 1xx HTTP status
-// headers are ignored unless END_STREAM is also set, which results in a
-// protocol error.
+// TestClientTransport_Handle1xxHeaders validates that 1xx HTTP status headers
+// are ignored and treated as a protocol error if END_STREAM is set.
 func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 	testStream := func() *ClientStream {
 		return &ClientStream{
