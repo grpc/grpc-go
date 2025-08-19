@@ -51,4 +51,16 @@ swift review.
 
 6. Self-review your code changes before sending your PR.
 
-7. Delete all of the above before sending your PR.
+7. All tests must be passing or you PR cannot be merged.  There are two github
+   checkers that need not be green:
+
+   1. We test the freshness of the generated proto code we maintain via the
+      `vet-proto` check.  If the source proto files are updated, but our repo is
+      not updated, an optional checker will fail.  This will be fixed by our
+      team in a separate PR and will not prevent the merge of your PR.
+
+   2. We run a checker that will fail if there is any change in dependencies of
+      an exported package via the `dependencies` check.  If new dependencies are
+      added that are not appropriate, we may not accept your PR.
+
+8. Delete all of the above before sending your PR.
