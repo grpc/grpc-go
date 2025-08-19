@@ -16,7 +16,7 @@
 # following command from grpc-go directory:
 # docker build -t <TAG> -f examples/features/csm_observability/server/Dockerfile .
 
-FROM golang:1.23-alpine as build
+FROM golang:1.25-alpine as build
 RUN apk --no-cache add curl
 # Make a grpc-go directory and copy the repo into it.
 WORKDIR /go/src/grpc-go
