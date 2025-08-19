@@ -15,7 +15,7 @@
 # Dockerfile for building the example client. To build the image, run the
 # following command from grpc-go directory:
 # docker build -t <TAG> -f examples/features/csm_observability/client/Dockerfile .
-FROM golang:1.23-alpine as build
+FROM golang:1.25-alpine as build
 
 RUN apk --no-cache add curl
 
