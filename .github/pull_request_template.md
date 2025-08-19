@@ -29,7 +29,7 @@ swift review.
 
    ```
    RELEASE NOTES:
-   * <componenet>: <summary>
+   * <component>: <summary>
    ```
 
    This need not match the PR title.
