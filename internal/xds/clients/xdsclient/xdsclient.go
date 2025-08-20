@@ -119,6 +119,9 @@ func New(config Config) (*XDSClient, error) {
 // SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
 // with provided timeout value.
 func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Duration) {
+	if watchExpiryTimeout <= 0 {
+		watchExpiryTimeout = defaultWatchExpiryTimeout
+	}
 	c.watchExpiryTimeout = watchExpiryTimeout
 }
 
