@@ -117,9 +117,6 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.Name == "" {
 		return nil, nil, fmt.Errorf("xds: opts.Name field must be non-empty")
 	}
-	if opts.WatchExpiryTimeout == 0 {
-		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
-	}
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultExponentialBackoff
 	}
