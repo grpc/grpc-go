@@ -31,12 +31,19 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -469,5 +476,98 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 			defer cancelStore(ctx)
 		}()
 	}
+	wg.Wait()
+}
+
+// TestConcurrentChannels verifies that we can create mutliple gRPC channels
+// concurrently with a shared XDSClient, each of which will create a new LRS
+// stream without any race.
+func (s) TestConcurrentChannels(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Create a management server that serves LRS.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true, SupportLoadReportingService: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	// // Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithPoolForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+
+	// Get the xDS resolver to use the above xDS client.
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	xdsResolver, err := resolverBuilder(pool)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a backend test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure the management server with resources that enable LRS.
+	const serviceName = "my-service-e2e-lrs-test"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	const (
+		numGoroutines = 10
+		numRPCs       = 10
+	)
+	start := make(chan struct{})
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			<-start
+			defer wg.Done()
+			for range numRPCs {
+				cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+				if err != nil {
+					// This can happen if the test context is cancelled.
+					if ctx.Err() != nil {
+						return
+					}
+					t.Errorf("grpc.NewClient() failed: %v", err)
+					return
+				}
+				defer cc.Close()
+
+				testClient := testgrpc.NewTestServiceClient(cc)
+				if _, err := testClient.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+					// This can happen if the test context is cancelled.
+					if ctx.Err() != nil {
+						return
+					}
+					t.Errorf("EmptyCall() failed: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	close(start)
 	wg.Wait()
 }
