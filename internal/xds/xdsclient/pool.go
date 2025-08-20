@@ -99,7 +99,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCounted(name, metricsRecorder)
+	return p.newRefCounted(name, metricsRecorder, 0)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -126,11 +126,11 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder)
+	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
-	c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
+	// c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
 	return c, cancel, nil
 }
 
@@ -252,7 +252,7 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder) (*clientImpl, func(), error) {
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout time.Duration) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -275,11 +275,11 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		c.incrRef()
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
-
 	c, err := newClientImpl(config, metricsRecorder, name)
 	if err != nil {
 		return nil, nil, err
 	}
+	c.XDSClient.SetWatchExpiryTimeoutForTesting(watchExpiryTimeout)
 	if logger.V(2) {
 		c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, config)
 	}
@@ -287,5 +287,7 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", config.Node().GetId())
-	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
+	return c, sync.OnceFunc(func() {
+		p.clientRefCountedClose(name)
+	}), nil
 }
