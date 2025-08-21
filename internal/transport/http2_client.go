@@ -989,7 +989,9 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 // only once on a transport. Once it is called, the transport should not be
 // accessed anymore.
 func (t *http2Client) Close(err error) {
-	t.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
+	if err := t.conn.SetWriteDeadline(time.Now().Add(time.Second * 10)); err != nil {
+		logger.Warningf("Failed to set write deadline on t.conn during Close(): %s", err)
+	}
 	t.mu.Lock()
 	// Make sure we only close once.
 	if t.state == closing {
