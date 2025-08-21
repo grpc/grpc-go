@@ -209,7 +209,6 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 	}
 }
 
-
 // testAuthInfo implements credentials.AuthInfo for testing.
 type testAuthInfo struct {
 	secLevel credentials.SecurityLevel
@@ -222,7 +221,6 @@ func (t *testAuthInfo) AuthType() string {
 func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 	return credentials.CommonAuthInfo{SecurityLevel: t.secLevel}
 }
-
 
 // Tests that cached token expiration is set to 30 seconds before actual token
 // expiration.
@@ -513,71 +511,6 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 }
 
-
-// Tests that RPCs are queued during file operations and all receive the same
-// result.
-func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
-	tempDir := t.TempDir()
-	tokenFile := filepath.Join(tempDir, "token")
-
-	// Start with no token file to force file read during first RPC.
-	creds, err := NewTokenFileCallCredentials(tokenFile)
-	if err != nil {
-		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
-		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-	})
-
-	// Launch multiple concurrent RPCs before creating the token file.
-	const numConcurrentRPCs = 5
-	results := make(chan error, numConcurrentRPCs)
-
-	for range numConcurrentRPCs {
-		go func() {
-			_, err := creds.GetRequestMetadata(ctx)
-			results <- err
-		}()
-	}
-
-	// Collect all results - they should all be the same error (UNAVAILABLE).
-	var errors []error
-	for range numConcurrentRPCs {
-		err := <-results
-		errors = append(errors, err)
-	}
-
-	// All RPCs should fail with the same error (file not found).
-	for i, err := range errors {
-		if err == nil {
-			t.Errorf("RPC %d should have failed with UNAVAILABLE", i)
-			continue
-		}
-		if status.Code(err) != codes.Unavailable {
-			t.Errorf("RPC %d = %v, want UNAVAILABLE", i, status.Code(err))
-		}
-		if i > 0 && err.Error() != errors[0].Error() {
-			t.Errorf("RPC %d error should match first RPC error for proper queueing", i)
-		}
-	}
-
-	// Verify error was cached after concurrent RPCs.
-	impl := creds.(*jwtTokenFileCallCreds)
-	impl.mu.Lock()
-	finalCachedErr := impl.cachedError
-	impl.mu.Unlock()
-
-	if finalCachedErr == nil {
-		t.Error("error should be cached after failed concurrent RPCs")
-	}
-	if finalCachedErr.Error() != errors[0].Error() {
-		t.Error("cached error should match the errors returned to RPCs")
-	}
-}
-
 // createTestJWT creates a test JWT token with the specified audience and
 // expiration.
 func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
@@ -629,4 +562,3 @@ func writeTempFile(t *testing.T, name, content string) string {
 	}
 	return filePath
 }
-

@@ -21,10 +21,7 @@ package jwt
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -35,28 +32,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// jwtClaims represents the JWT claims structure for extracting expiration time.
-type jwtClaims struct {
-	Exp int64 `json:"exp"`
-}
-
 // jwtTokenFileCallCreds provides JWT token-based PerRPCCredentials that reads
 // tokens from a file.
 // This implementation follows the A97 JWT Call Credentials specification.
 type jwtTokenFileCallCreds struct {
-	tokenFilePath   string
-	backoffStrategy backoff.Strategy // Strategy when error occurs
+	fileReader      *jWTFileReader
+	backoffStrategy backoff.Strategy
 
-	// Cached token data
-	mu               sync.RWMutex
-	cachedToken      string
-	cachedExpiration time.Time // Slightly less than actual expiration time
-	cachedError      error     // Error from last failed attempt
-	retryAttempt     int       // Current retry attempt number
-	nextRetryTime    time.Time // When next retry is allowed
-
-	// Pre-emptive refresh mutex
-	refreshMu sync.Mutex
+	// The below state is protected by mu. The cond field is initialised with
+	// &mu and used to coordinate an async token refresh.
+	mu             sync.Mutex
+	cond           *sync.Cond
+	cachedToken    string
+	cachedExpiry   time.Time // Slightly less than actual expiration time
+	cachedError    error     // Error from last failed attempt
+	retryAttempt   int       // Current retry attempt number
+	nextRetryTime  time.Time // When next retry is allowed
+	pendingRefresh bool      // Whether a refresh is currently in progress
 }
 
 // NewTokenFileCallCredentials creates PerRPCCredentials that reads JWT tokens
@@ -66,10 +58,13 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 		return nil, fmt.Errorf("tokenFilePath cannot be empty")
 	}
 
-	return &jwtTokenFileCallCreds{
-		tokenFilePath:   tokenFilePath,
+	creds := &jwtTokenFileCallCreds{
+		fileReader:      newJWTFileReader(tokenFilePath),
 		backoffStrategy: backoff.DefaultExponential,
-	}, nil
+	}
+	creds.cond = sync.NewCond(&creds.mu)
+
+	return creds, nil
 }
 
 // GetRequestMetadata gets the current request metadata, refreshing tokens if
@@ -86,14 +81,49 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 		return nil, fmt.Errorf("unable to transfer JWT token file PerRPCCredentials: %v", err)
 	}
 
-	// This may be delayed if the token needs to be refreshed from file.
-	token, err := c.getToken()
-	if err != nil {
-		return nil, err
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.isTokenValidLocked() {
+		if c.needsPreemptiveRefreshLocked() {
+			// Start refresh if not pending (handling the prior RPC may have
+			// just spwaned a goroutine).
+			if !c.pendingRefresh {
+				c.pendingRefresh = true
+				go c.refreshToken()
+			}
+		}
+		return map[string]string{
+			"authorization": "Bearer " + c.cachedToken,
+		}, nil
+	}
+
+	// If in backoff state, just return the cached error.
+	if c.cachedError != nil && time.Now().Before(c.nextRetryTime) {
+		return nil, c.cachedError
+	}
+
+	// At this point, the token is either invalid or expired and we are no
+	// longer backing off. So refresh it.
+
+	if !c.pendingRefresh {
+		c.pendingRefresh = true
+		go c.refreshToken()
+	}
+	// Wait for refresh to complete.
+	// NOTE: cond is initialised with &mu, so it gets released while waiting.
+	for c.pendingRefresh {
+		c.cond.Wait()
+	}
+
+	// Refresh completed, re-check the state.
+
+	if c.cachedError != nil {
+		return nil, c.cachedError
 	}
 
 	return map[string]string{
-		"authorization": "Bearer " + token,
+		"authorization": "Bearer " + c.cachedToken,
 	}, nil
 }
 
@@ -103,44 +133,13 @@ func (c *jwtTokenFileCallCreds) RequireTransportSecurity() bool {
 	return true
 }
 
-// getToken returns a valid JWT token, reading from file if necessary.
-// Implements pre-emptive refresh and caches errors with backoff.
-func (c *jwtTokenFileCallCreds) getToken() (string, error) {
-	c.mu.RLock()
-
-	if c.isTokenValidLocked() {
-		token := c.cachedToken
-		shouldRefresh := c.needsPreemptiveRefreshLocked()
-		c.mu.RUnlock()
-
-		if shouldRefresh {
-			c.triggerPreemptiveRefresh()
-		}
-		return token, nil
-	}
-
-	// If still within backoff period, return cached error to avoid repeated
-	// file reads.
-	if c.cachedError != nil && time.Now().Before(c.nextRetryTime) {
-		err := c.cachedError
-		c.mu.RUnlock()
-		return "", err
-	}
-
-	c.mu.RUnlock()
-	// Token is expired or missing or the retry backoff period has expired.
-	// So we should refresh synchronously.
-	// NOTE: refreshTokenSync itself acquires the write lock.
-	return c.refreshTokenSync(false)
-}
-
 // isTokenValidLocked checks if the cached token is still valid.
-// Caller must hold c.mu.RLock().
+// Caller must hold c.mu lock.
 func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
 	if c.cachedToken == "" {
 		return false
 	}
-	return c.cachedExpiration.After(time.Now())
+	return c.cachedExpiry.After(time.Now())
 }
 
 // needsPreemptiveRefreshLocked checks if a pre-emptive refresh should be
@@ -148,132 +147,54 @@ func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
 // Returns true if the cached token is valid but expires within 1 minute.
 // We only trigger pre-emptive refresh for valid tokens - if the token is
 // invalid or expired, the next RPC will handle synchronous refresh instead.
-// Caller must hold c.mu.RLock().
+// Caller must hold c.mu lock.
 func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
-	return c.isTokenValidLocked() && time.Until(c.cachedExpiration) < time.Minute
+	return c.isTokenValidLocked() && time.Until(c.cachedExpiry) < time.Minute
 }
 
-// triggerPreemptiveRefresh starts a background refresh if needed.
-// Multiple concurrent calls are safe - only one refresh will run at a time.
-// The refresh runs in a separate goroutine and does not block the caller.
-func (c *jwtTokenFileCallCreds) triggerPreemptiveRefresh() {
-	go func() {
-		c.refreshMu.Lock()
-		defer c.refreshMu.Unlock()
+// refreshToken reads the token from file.
+// The file read is done without holding the mutex to avoid blocking RPCs in
+// GetRequestMetadata while waiting for the file read.
+// Updates the cache and broadcasts to waiting goroutines when complete.
+func (c *jwtTokenFileCallCreds) refreshToken() {
+	// Deliberately not locking c.mu here
+	token, expiry, err := c.fileReader.ReadToken()
 
-		// Re-check if refresh is still needed under mutex.
-		c.mu.RLock()
-		stillNeeded := c.needsPreemptiveRefreshLocked()
-		c.mu.RUnlock()
-
-		if !stillNeeded {
-			return // Another goroutine already refreshed or token expired.
-		}
-
-		// Force refresh to read new token even if current one is still valid.
-		_, _ = c.refreshTokenSync(true)
-	}()
-}
-
-// refreshTokenSync reads a new token from the file and updates the cache.  If
-// forceRefresh is true, bypasses the validity check of the currently
-// cached token and always reads from file.
-// This is used for pre-emptive refresh to ensure new tokens are loaded even
-// when the cached token is still valid. If forceRefresh is false, skips
-// file read when cached token is still valid, optimizing concurrent synchronous
-// refresh calls where one RPC may have already updated the cache while another
-// was waiting on the lock.
-func (c *jwtTokenFileCallCreds) refreshTokenSync(forceRefresh bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	// Double-check under write lock but skip if preemptive refresh is
-	// requested.
-	if !forceRefresh && c.isTokenValidLocked() {
-		return c.cachedToken, nil
-	}
-
-	tokenBytes, err := os.ReadFile(c.tokenFilePath)
 	if err != nil {
-		err = status.Errorf(codes.Unavailable, "failed to read token file %q: %v", c.tokenFilePath, err)
-		c.setErrorWithBackoffLocked(err)
-		return "", err
+		// Convert to gRPC status codes
+		if strings.Contains(err.Error(), "failed to read token file") || strings.Contains(err.Error(), "token file") && strings.Contains(err.Error(), "is empty") {
+			c.cachedError = status.Errorf(codes.Unavailable, "%v", err)
+		} else {
+			c.cachedError = status.Errorf(codes.Unauthenticated, "%v", err)
+		}
+		c.setErrorWithBackoffLocked()
+	} else {
+		// Success - clear any cached error and update token cache
+		c.clearErrorAndBackoffLocked()
+		c.cachedToken = token
+		// Per RFC A97: consider token invalid if it expires within the next 30
+		// seconds to accommodate for clock skew and server processing time.
+		c.cachedExpiry = expiry.Add(-30 * time.Second)
 	}
 
-	token := strings.TrimSpace(string(tokenBytes))
-	if token == "" {
-		err := status.Errorf(codes.Unavailable, "token file %q is empty", c.tokenFilePath)
-		c.setErrorWithBackoffLocked(err)
-		return "", err
-	}
-
-	// Parse JWT to extract expiration.
-	exp, err := c.extractExpiration(token)
-	if err != nil {
-		err = status.Errorf(codes.Unauthenticated, "failed to parse JWT from token file %q: %v", c.tokenFilePath, err)
-		c.setErrorWithBackoffLocked(err)
-		return "", err
-	}
-
-	// Success - clear any cached error and backoff state, update token cache.
-	c.clearErrorAndBackoffLocked()
-	c.cachedToken = token
-	// Per RFC A97: consider token invalid if it expires within the next 30
-	// seconds to accommodate for clock skew and server processing time.
-	c.cachedExpiration = exp.Add(-30 * time.Second)
-
-	return token, nil
-}
-
-// extractExpiration parses the JWT token to extract the expiration time.
-func (c *jwtTokenFileCallCreds) extractExpiration(token string) (time.Time, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return time.Time{}, fmt.Errorf("invalid JWT format: expected 3 parts, got %d", len(parts))
-	}
-
-	payload := parts[1]
-	// Add padding if necessary for base64 decoding.
-	if m := len(payload) % 4; m != 0 {
-		payload += strings.Repeat("=", 4-m)
-	}
-
-	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to decode JWT payload: %v", err)
-	}
-
-	var claims jwtClaims
-	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return time.Time{}, fmt.Errorf("failed to unmarshal JWT claims: %v", err)
-	}
-
-	if claims.Exp == 0 {
-		return time.Time{}, fmt.Errorf("JWT token has no expiration claim")
-	}
-
-	expTime := time.Unix(claims.Exp, 0)
-
-	// Check if token is already expired.
-	if expTime.Before(time.Now()) {
-		return time.Time{}, fmt.Errorf("JWT token is expired")
-	}
-
-	return expTime, nil
+	// Reset pending refresh and broadcast to waiting goroutines
+	c.pendingRefresh = false
+	c.cond.Broadcast()
 }
 
 // setErrorWithBackoffLocked caches an error and calculates the next retry time
 // using exponential backoff.
-// Caller must hold c.mu write lock.
-func (c *jwtTokenFileCallCreds) setErrorWithBackoffLocked(err error) {
-	c.cachedError = err
+// Caller must hold c.mu lock.
+func (c *jwtTokenFileCallCreds) setErrorWithBackoffLocked() {
 	c.retryAttempt++
 	backoffDelay := c.backoffStrategy.Backoff(c.retryAttempt - 1)
 	c.nextRetryTime = time.Now().Add(backoffDelay)
 }
 
 // clearErrorAndBackoffLocked clears the cached error and resets backoff state.
-// Caller must hold c.mu write lock.
+// Caller must hold c.mu lock.
 func (c *jwtTokenFileCallCreds) clearErrorAndBackoffLocked() {
 	c.cachedError = nil
 	c.retryAttempt = 0
