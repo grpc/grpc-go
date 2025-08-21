@@ -19,6 +19,7 @@ package clusterresolver
 
 import (
 	"fmt"
+
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
