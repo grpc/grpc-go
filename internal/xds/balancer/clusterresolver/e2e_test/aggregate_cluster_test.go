@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xds_client "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/peer"
@@ -1185,11 +1186,10 @@ func (s) TestAggregateCluster_Fallback_EDS_ResourceNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
+	SetOriginalWatchExpiryTimeout := xds_client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
+	defer SetOriginalWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
-	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name:               t.Name(),
-		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-	})
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}
