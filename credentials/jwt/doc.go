@@ -36,8 +36,8 @@
 // - Tokens are cached until expiration to avoid excessive file I/O
 // - Transport security is required (RequireTransportSecurity returns true)
 // - Errors in reading tokens or parsing JWTs will result in RPC UNAVAILALBE or
-// UNAUTHENTICATED errors
-// - These errors are cached and retried with exponential backoff.
+// UNAUTHENTICATED errors. The errors are cached and retried with exponential
+// backoff.
 //
 // This implementation is originally intended for use in service mesh
 // environments like Istio where JWT tokens are provisioned and rotated by the
