@@ -140,8 +140,7 @@ func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
 	return c.isTokenValidLocked() && time.Until(c.cachedExpiry) < preemptiveRefreshThreshold
 }
 
-// refreshToken reads the token from file.
-// Updates the cache and broadcasts to waiting goroutines when complete.
+// refreshToken reads the token from file and updates the cached data.
 func (c *jwtTokenFileCallCreds) refreshToken() {
 	// Deliberately not locking c.mu here
 	token, expiry, err := c.fileReader.ReadToken()
@@ -150,7 +149,6 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 	defer c.mu.Unlock()
 	c.updateCacheLocked(token, expiry, err)
 
-	// Reset pending refresh and broadcast to waiting goroutines
 	c.pendingRefresh = false
 }
 
