@@ -75,7 +75,7 @@ smoothly and quickly.
   GitHub, which will trigger a GitHub Actions run that you can use to verify
   everything is passing.
 
-- Note that there are two github actions checks that need not be green:
+- Note that there are two GitHub actions checks that need not be green:
 
   1. We test the freshness of the generated proto code we maintain via the
      `vet-proto` check. If the source proto files are updated, but our repo is
@@ -112,7 +112,7 @@ smoothly and quickly.
 - **Does this PR relate to an open issue?** On the first line, please use the
   tag `Fixes #<issue>` to ensure the issue is closed when the PR is merged. Or
   use `Updates #<issue>` if the PR is related to an open issue, but does not fix
-  it.  Consider filing an issue if one does not already exist.
+  it. Consider filing an issue if one does not already exist.
 
 - PR descriptions *must* conclude with **release notes** as follows:
 
@@ -136,11 +136,11 @@ smoothly and quickly.
   * be as short as possible to describe the change being made.
 
   If a PR is *not* end-user visible -- e.g. a cleanup, testing change, or
-  github-related, use `RELEASE NOTES: n/a`.
+  GitHub-related, use `RELEASE NOTES: n/a`.
 
 ### PR Process
 
-- Please **self-review** your code changes before sending your PR.  This will
+- Please **self-review** your code changes before sending your PR. This will
   prevent simple, obvious errors from causing delays.
 
 - Maintain a **clean commit history** and use **meaningful commit messages**.
