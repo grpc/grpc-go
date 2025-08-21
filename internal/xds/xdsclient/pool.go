@@ -268,6 +268,7 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 		c.incrRef()
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
+
 	c, err := newClientImpl(config, metricsRecorder, name)
 	if err != nil {
 		return nil, nil, err
@@ -279,7 +280,5 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 	xdsClientImplCreateHook(name)
 
 	logger.Infof("xDS node ID: %s", config.Node().GetId())
-	return c, sync.OnceFunc(func() {
-		p.clientRefCountedClose(name)
-	}), nil
+	return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }
