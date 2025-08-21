@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const preemptiveRefreshThreshold = time.Minute
+
 // jwtTokenFileCallCreds provides JWT token-based PerRPCCredentials that reads
 // tokens from a file.
 // This implementation follows the A97 JWT Call Credentials specification.
@@ -40,13 +42,13 @@ type jwtTokenFileCallCreds struct {
 	backoffStrategy backoff.Strategy
 
 	// cached data protected by mu
-	mu             sync.Mutex
-	cachedToken    string
-	cachedExpiry   time.Time // Slightly less than actual expiration time
-	cachedError    error     // Error from last failed attempt
-	retryAttempt   int       // Current retry attempt number
-	nextRetryTime  time.Time // When next retry is allowed
-	pendingRefresh bool      // Whether a refresh is currently in progress
+	mu               sync.Mutex
+	cachedAuthHeader string    // "Bearer " + token
+	cachedExpiry     time.Time // Slightly less than actual expiration time
+	cachedError      error     // Error from last failed attempt
+	retryAttempt     int       // Current retry attempt number
+	nextRetryTime    time.Time // When next retry is allowed
+	pendingRefresh   bool      // Whether a refresh is currently in progress
 }
 
 // NewTokenFileCallCredentials creates PerRPCCredentials that reads JWT tokens
@@ -91,7 +93,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 			}
 		}
 		return map[string]string{
-			"authorization": "Bearer " + c.cachedToken,
+			"authorization": c.cachedAuthHeader,
 		}, nil
 	}
 
@@ -109,7 +111,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 		return nil, c.cachedError
 	}
 	return map[string]string{
-		"authorization": "Bearer " + c.cachedToken,
+		"authorization": c.cachedAuthHeader,
 	}, nil
 }
 
@@ -122,7 +124,7 @@ func (c *jwtTokenFileCallCreds) RequireTransportSecurity() bool {
 // isTokenValidLocked checks if the cached token is still valid.
 // Caller must hold c.mu lock.
 func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
-	if c.cachedToken == "" {
+	if c.cachedAuthHeader == "" {
 		return false
 	}
 	return c.cachedExpiry.After(time.Now())
@@ -135,7 +137,7 @@ func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
 // invalid or expired, the next RPC will handle synchronous refresh instead.
 // Caller must hold c.mu lock.
 func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
-	return c.isTokenValidLocked() && time.Until(c.cachedExpiry) < time.Minute
+	return c.isTokenValidLocked() && time.Until(c.cachedExpiry) < preemptiveRefreshThreshold
 }
 
 // refreshToken reads the token from file.
@@ -173,7 +175,7 @@ func (c *jwtTokenFileCallCreds) setCacheLocked(token string, expiry time.Time, e
 		c.retryAttempt = 0
 		c.nextRetryTime = time.Time{}
 
-		c.cachedToken = token
+		c.cachedAuthHeader = "Bearer " + token
 		// Per RFC A97: consider token invalid if it expires within the next 30
 		// seconds to accommodate for clock skew and server processing time.
 		c.cachedExpiry = expiry.Add(-30 * time.Second)

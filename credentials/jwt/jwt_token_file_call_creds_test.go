@@ -288,7 +288,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.Lock()
 	cacheExp := impl.cachedExpiry
-	tokenCached := impl.cachedToken != ""
+	tokenCached := impl.cachedAuthHeader != ""
 	shouldTriggerRefresh := impl.needsPreemptiveRefreshLocked()
 	impl.mu.Unlock()
 
