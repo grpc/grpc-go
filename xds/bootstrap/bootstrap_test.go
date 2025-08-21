@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/envconfig"
 )
 
 const testCredsBuilderName = "test_creds"
@@ -65,14 +64,12 @@ func TestRegisterNew(t *testing.T) {
 
 func TestCredsBuilders(t *testing.T) {
 	tests := []struct {
-		typename              string
-		builder               Credentials
-		minimumRequiredConfig json.RawMessage
+		typename string
+		builder  Credentials
 	}{
-		{"google_default", &googleDefaultCredsBuilder{}, nil},
-		{"insecure", &insecureCredsBuilder{}, nil},
-		{"tls", &tlsCredsBuilder{}, nil},
-		{"jwt_token_file", &jwtCallCredsBuilder{}, json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)},
+		{"google_default", &googleDefaultCredsBuilder{}},
+		{"insecure", &insecureCredsBuilder{}},
+		{"tls", &tlsCredsBuilder{}},
 	}
 
 	for _, test := range tests {
@@ -81,12 +78,9 @@ func TestCredsBuilders(t *testing.T) {
 				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
 			}
 
-			bundle, stop, err := test.builder.Build(test.minimumRequiredConfig)
+			_, stop, err := test.builder.Build(nil)
 			if err != nil {
 				t.Fatalf("%T.Build failed: %v", test.builder, err)
-			}
-			if bundle == nil {
-				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
 			}
 			stop()
 		})
@@ -104,29 +98,5 @@ func TestTlsCredsBuilder(t *testing.T) {
 	if _, stop, err := tls.Build(json.RawMessage(`{"ca_certificate_file":"/ca_certificates.pem","refresh_interval": "asdf"}`)); err == nil {
 		t.Errorf("tls.Build() succeeded with an invalid refresh interval, when expected to fail")
 		stop()
-	}
-}
-
-func TestJwtCallCredentials_BuildDisabledIfFeatureNotEnabled(t *testing.T) {
-	builder := GetCredentials("jwt_call_creds")
-	if builder != nil {
-		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
-	}
-
-	// Enable JWT call credentials
-	original := envconfig.XDSBootstrapCallCredsEnabled
-	envconfig.XDSBootstrapCallCredsEnabled = true
-	defer func() {
-		envconfig.XDSBootstrapCallCredsEnabled = original
-	}()
-
-	// Test that GetCredentials returns the JWT builder
-	builder = GetCredentials("jwt_token_file")
-	if builder == nil {
-		t.Fatal("GetCredentials(\"jwt_token_file\") returned nil")
-	}
-
-	if got, want := builder.Name(), "jwt_token_file"; got != want {
-		t.Errorf("Retrieved builder name = %q, want %q", got, want)
 	}
 }

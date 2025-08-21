@@ -86,7 +86,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 	if c.isTokenValidLocked() {
 		if c.needsPreemptiveRefreshLocked() {
 			// Start refresh if not pending (handling the prior RPC may have
-			// just spwaned a goroutine).
+			// just spawned a goroutine).
 			if !c.pendingRefresh {
 				c.pendingRefresh = true
 				go c.refreshToken()
@@ -105,7 +105,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 	// At this point, the token is either invalid or expired and we are no
 	// longer backing off. So refresh it.
 	token, expiry, err := c.fileReader.ReadToken()
-	c.setCacheLocked(token, expiry, err)
+	c.updateCacheLocked(token, expiry, err)
 
 	if c.cachedError != nil {
 		return nil, c.cachedError
@@ -148,17 +148,17 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.setCacheLocked(token, expiry, err)
+	c.updateCacheLocked(token, expiry, err)
 
 	// Reset pending refresh and broadcast to waiting goroutines
 	c.pendingRefresh = false
 }
 
-// setCacheLocked updates the cached token, expiry, and error state.
+// updateCacheLocked updates the cached token, expiry, and error state.
 // If an error is provided, it determines whether to set it as an UNAVAILABLE
 // or UNAUTHENTICATED error based on the error type.
 // Caller must hold c.mu lock.
-func (c *jwtTokenFileCallCreds) setCacheLocked(token string, expiry time.Time, err error) {
+func (c *jwtTokenFileCallCreds) updateCacheLocked(token string, expiry time.Time, err error) {
 	if err != nil {
 		// Convert to gRPC status codes
 		if strings.Contains(err.Error(), "failed to read token file") || strings.Contains(err.Error(), "token file") && strings.Contains(err.Error(), "is empty") {

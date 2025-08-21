@@ -229,9 +229,7 @@ func populateGRPCTransportConfigsFromServerConfig(sc *bootstrap.ServerConfig, gr
 		grpcTransportConfigs[cc.Type] = grpctransport.Config{
 			Credentials: bundle,
 			GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-				// Only add call credentials that are compatible with this transport type
-				// Call credentials requiring transport security are skipped for insecure transports
-				opts = append(opts, sc.DialOptionsWithCallCredsForTransport(cc.Type, bundle.TransportCredentials())...)
+				opts = append(opts, sc.DialOptions()...)
 				return grpc.NewClient(target, opts...)
 			},
 		}

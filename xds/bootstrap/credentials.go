@@ -24,7 +24,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/xds/bootstrap/jwtcreds"
 	"google.golang.org/grpc/internal/xds/bootstrap/tlscreds"
 )
 
@@ -32,7 +31,6 @@ func init() {
 	RegisterCredentials(&insecureCredsBuilder{})
 	RegisterCredentials(&googleDefaultCredsBuilder{})
 	RegisterCredentials(&tlsCredsBuilder{})
-	RegisterCredentials(&jwtCallCredsBuilder{})
 }
 
 // insecureCredsBuilder implements the `Credentials` interface defined in
@@ -69,16 +67,4 @@ func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, 
 
 func (d *googleDefaultCredsBuilder) Name() string {
 	return "google_default"
-}
-
-// jwtCallCredsBuilder implements the `Credentials` interface defined in
-// package `xds/bootstrap` and encapsulates JWT call credentials.
-type jwtCallCredsBuilder struct{}
-
-func (j *jwtCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
-	return jwtcreds.NewBundle(configJSON)
-}
-
-func (j *jwtCallCredsBuilder) Name() string {
-	return "jwt_token_file"
 }
