@@ -16,7 +16,7 @@
 # following command from grpc-go directory:
 # docker build -t <TAG> -f interop/xds/client/Dockerfile .
 
-FROM golang:1.23-alpine as build
+FROM golang:1.25-alpine as build
 
 # Make a grpc-go directory and copy the repo into it.
 WORKDIR /go/src/grpc-go

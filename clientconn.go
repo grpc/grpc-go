@@ -1824,7 +1824,7 @@ func (cc *ClientConn) initAuthority() error {
 	} else if auth, ok := cc.resolverBuilder.(resolver.AuthorityOverrider); ok {
 		cc.authority = auth.OverrideAuthority(cc.parsedTarget)
 	} else if strings.HasPrefix(endpoint, ":") {
-		cc.authority = "localhost" + endpoint
+		cc.authority = "localhost" + encodeAuthority(endpoint)
 	} else {
 		cc.authority = encodeAuthority(endpoint)
 	}

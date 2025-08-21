@@ -181,7 +181,7 @@ func MetricDataUnary(options MetricDataOptions) []metricdata.Metrics {
 		{
 			Name:        "grpc.client.attempt.started",
 			Description: "Number of client call attempts started.",
-			Unit:        "attempt",
+			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -264,7 +264,7 @@ func MetricDataUnary(options MetricDataOptions) []metricdata.Metrics {
 		{
 			Name:        "grpc.server.call.started",
 			Description: "Number of server calls started.",
-			Unit:        "call",
+			Unit:        "{call}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -356,7 +356,7 @@ func MetricDataStreaming(options MetricDataOptions) []metricdata.Metrics {
 		{
 			Name:        "grpc.client.attempt.started",
 			Description: "Number of client call attempts started.",
-			Unit:        "attempt",
+			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -439,7 +439,7 @@ func MetricDataStreaming(options MetricDataOptions) []metricdata.Metrics {
 		{
 			Name:        "grpc.server.call.started",
 			Description: "Number of server calls started.",
-			Unit:        "call",
+			Unit:        "{call}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -555,7 +555,7 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 		{
 			Name:        "grpc.client.attempt.started",
 			Description: "Number of client call attempts started.",
-			Unit:        "attempt",
+			Unit:        "{attempt}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
@@ -670,7 +670,7 @@ func MetricData(options MetricDataOptions) []metricdata.Metrics {
 		{
 			Name:        "grpc.server.call.started",
 			Description: "Number of server calls started.",
-			Unit:        "call",
+			Unit:        "{call}",
 			Data: metricdata.Sum[int64]{
 				DataPoints: []metricdata.DataPoint[int64]{
 					{
