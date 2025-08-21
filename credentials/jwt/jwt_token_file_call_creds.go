@@ -39,10 +39,8 @@ type jwtTokenFileCallCreds struct {
 	fileReader      *jWTFileReader
 	backoffStrategy backoff.Strategy
 
-	// The below state is protected by mu. The cond field is initialised with
-	// &mu and used to coordinate an async token refresh.
+	// cached data protected by mu
 	mu             sync.Mutex
-	cond           *sync.Cond
 	cachedToken    string
 	cachedExpiry   time.Time // Slightly less than actual expiration time
 	cachedError    error     // Error from last failed attempt
@@ -62,7 +60,6 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 		fileReader:      newJWTFileReader(tokenFilePath),
 		backoffStrategy: backoff.DefaultExponential,
 	}
-	creds.cond = sync.NewCond(&creds.mu)
 
 	return creds, nil
 }
@@ -105,23 +102,12 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 
 	// At this point, the token is either invalid or expired and we are no
 	// longer backing off. So refresh it.
-
-	if !c.pendingRefresh {
-		c.pendingRefresh = true
-		go c.refreshToken()
-	}
-	// Wait for refresh to complete.
-	// NOTE: cond is initialised with &mu, so it gets released while waiting.
-	for c.pendingRefresh {
-		c.cond.Wait()
-	}
-
-	// Refresh completed, re-check the state.
+	token, expiry, err := c.fileReader.ReadToken()
+	c.setCacheLocked(token, expiry, err)
 
 	if c.cachedError != nil {
 		return nil, c.cachedError
 	}
-
 	return map[string]string{
 		"authorization": "Bearer " + c.cachedToken,
 	}, nil
@@ -153,8 +139,6 @@ func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
 }
 
 // refreshToken reads the token from file.
-// The file read is done without holding the mutex to avoid blocking RPCs in
-// GetRequestMetadata while waiting for the file read.
 // Updates the cache and broadcasts to waiting goroutines when complete.
 func (c *jwtTokenFileCallCreds) refreshToken() {
 	// Deliberately not locking c.mu here
@@ -162,6 +146,17 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.setCacheLocked(token, expiry, err)
+
+	// Reset pending refresh and broadcast to waiting goroutines
+	c.pendingRefresh = false
+}
+
+// setCacheLocked updates the cached token, expiry, and error state.
+// If an error is provided, it determines whether to set it as an UNAVAILABLE
+// or UNAUTHENTICATED error based on the error type.
+// Caller must hold c.mu lock.
+func (c *jwtTokenFileCallCreds) setCacheLocked(token string, expiry time.Time, err error) {
 	if err != nil {
 		// Convert to gRPC status codes
 		if strings.Contains(err.Error(), "failed to read token file") || strings.Contains(err.Error(), "token file") && strings.Contains(err.Error(), "is empty") {
@@ -169,34 +164,18 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 		} else {
 			c.cachedError = status.Errorf(codes.Unauthenticated, "%v", err)
 		}
-		c.setErrorWithBackoffLocked()
+		c.retryAttempt++
+		backoffDelay := c.backoffStrategy.Backoff(c.retryAttempt - 1)
+		c.nextRetryTime = time.Now().Add(backoffDelay)
 	} else {
 		// Success - clear any cached error and update token cache
-		c.clearErrorAndBackoffLocked()
+		c.cachedError = nil
+		c.retryAttempt = 0
+		c.nextRetryTime = time.Time{}
+
 		c.cachedToken = token
 		// Per RFC A97: consider token invalid if it expires within the next 30
 		// seconds to accommodate for clock skew and server processing time.
 		c.cachedExpiry = expiry.Add(-30 * time.Second)
 	}
-
-	// Reset pending refresh and broadcast to waiting goroutines
-	c.pendingRefresh = false
-	c.cond.Broadcast()
-}
-
-// setErrorWithBackoffLocked caches an error and calculates the next retry time
-// using exponential backoff.
-// Caller must hold c.mu lock.
-func (c *jwtTokenFileCallCreds) setErrorWithBackoffLocked() {
-	c.retryAttempt++
-	backoffDelay := c.backoffStrategy.Backoff(c.retryAttempt - 1)
-	c.nextRetryTime = time.Now().Add(backoffDelay)
-}
-
-// clearErrorAndBackoffLocked clears the cached error and resets backoff state.
-// Caller must hold c.mu lock.
-func (c *jwtTokenFileCallCreds) clearErrorAndBackoffLocked() {
-	c.cachedError = nil
-	c.retryAttempt = 0
-	c.nextRetryTime = time.Time{}
 }
