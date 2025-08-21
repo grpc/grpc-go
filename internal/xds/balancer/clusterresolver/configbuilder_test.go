@@ -259,7 +259,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 				},
 				IgnoreReresolutionRequests: true,
 			},
-			"priority-0-1": {
+			"priority-0-2": {
 				Config: &iserviceconfig.BalancerConfig{
 					Name: outlierdetection.Name,
 					Config: &outlierdetection.LBConfig{
@@ -299,7 +299,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 				IgnoreReresolutionRequests: false,
 			},
 		},
-		Priorities: []string{"priority-0-0", "priority-0-1", "priority-1"},
+		Priorities: []string{"priority-0-0", "priority-0-2", "priority-1"},
 	}
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
 		t.Errorf("buildPriorityConfig() diff (-got +want) %v", diff)
@@ -388,7 +388,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 
 	wantNames := []string{
 		fmt.Sprintf("priority-%v-%v", 2, 0),
-		fmt.Sprintf("priority-%v-%v", 2, 1),
+		fmt.Sprintf("priority-%v-%v", 2, 2),
 	}
 	wantConfigs := map[string]*clusterimpl.LBConfig{
 		"priority-2-0": {
@@ -403,7 +403,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 				},
 			},
 		},
-		"priority-2-1": {
+		"priority-2-2": {
 			Cluster:               testClusterName,
 			EDSServiceName:        testEDSServiceName,
 			LoadReportingServer:   testLRSServerConfig,
@@ -421,10 +421,10 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 		testEndpointWithAttrs(testEndpoints[0][1].Addresses, 20, 1, "priority-2-0", &testLocalityIDs[0]),
 		testEndpointWithAttrs(testEndpoints[1][0].Addresses, 80, 1, "priority-2-0", &testLocalityIDs[1]),
 		testEndpointWithAttrs(testEndpoints[1][1].Addresses, 80, 1, "priority-2-0", &testLocalityIDs[1]),
-		testEndpointWithAttrs(testEndpoints[2][0].Addresses, 20, 1, "priority-2-1", &testLocalityIDs[2]),
-		testEndpointWithAttrs(testEndpoints[2][1].Addresses, 20, 1, "priority-2-1", &testLocalityIDs[2]),
-		testEndpointWithAttrs(testEndpoints[3][0].Addresses, 80, 1, "priority-2-1", &testLocalityIDs[3]),
-		testEndpointWithAttrs(testEndpoints[3][1].Addresses, 80, 1, "priority-2-1", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[2][0].Addresses, 20, 1, "priority-2-2", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[2][1].Addresses, 20, 1, "priority-2-2", &testLocalityIDs[2]),
+		testEndpointWithAttrs(testEndpoints[3][0].Addresses, 80, 1, "priority-2-2", &testLocalityIDs[3]),
+		testEndpointWithAttrs(testEndpoints[3][1].Addresses, 80, 1, "priority-2-2", &testLocalityIDs[3]),
 	}
 
 	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
