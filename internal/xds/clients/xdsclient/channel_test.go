@@ -772,6 +772,3 @@ func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (Re
 	}
 	return typ, name, nil
 }
-
-func (*testEventHandler) adsResourceRemoveUnsubscribedCacheEntries(ResourceType) {
-}
