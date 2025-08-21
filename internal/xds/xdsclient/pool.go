@@ -61,10 +61,6 @@ type OptionsForTesting struct {
 	// Name is a unique name for this xDS client.
 	Name string
 
-	// WatchExpiryTimeout is the timeout for xDS resource watch expiry. If
-	// unspecified, uses the default value used in non-test code.
-	WatchExpiryTimeout time.Duration
-
 	// StreamBackoffAfterFailure is the backoff function used to determine the
 	// backoff duration after stream failures.
 	// If unspecified, uses the default value used in non-test code.
@@ -99,7 +95,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCounted(name, metricsRecorder, 0)
+	return p.newRefCounted(name, metricsRecorder)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -123,7 +119,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder, opts.WatchExpiryTimeout)
+	c, cancel, err := p.newRefCounted(opts.Name, opts.MetricsRecorder)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -249,7 +245,7 @@ func (p *Pool) clientRefCountedClose(name string) {
 // newRefCounted creates a new reference counted xDS client implementation for
 // name, if one does not exist already. If an xDS client for the given name
 // exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder, watchExpiryTimeout time.Duration) (*clientImpl, func(), error) {
+func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder) (*clientImpl, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -276,7 +272,6 @@ func (p *Pool) newRefCounted(name string, metricsRecorder estats.MetricsRecorder
 	if err != nil {
 		return nil, nil, err
 	}
-	c.XDSClient.SetWatchExpiryTimeoutForTesting(watchExpiryTimeout)
 	if logger.V(2) {
 		c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, config)
 	}
