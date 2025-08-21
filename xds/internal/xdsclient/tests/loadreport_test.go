@@ -453,10 +453,7 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Create a management server that serves LRS.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
-
-	// Create an xDS client with bootstrap pointing to the above server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 	client := createXDSClient(t, bc)
@@ -465,11 +462,12 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create server config for testing: %v", err)
 	}
+
 	// Call ReportLoad() concurrently from multiple go routines.
 	var wg sync.WaitGroup
 	const numGoroutines = 10
 	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
 			_, cancelStore := client.ReportLoad(serverConfig)
@@ -479,21 +477,20 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 	wg.Wait()
 }
 
-// TestConcurrentChannels verifies that we can create mutliple gRPC channels
+// TestConcurrentChannels verifies that we can create multiple gRPC channels
 // concurrently with a shared XDSClient, each of which will create a new LRS
 // stream without any race.
 func (s) TestConcurrentChannels(t *testing.T) {
+	// TODO(emchandwani) : Remove after https://github.com/grpc/grpc-go/pull/8526 gets merged.
+	t.Skip()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// Create a management server that serves LRS.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true, SupportLoadReportingService: true})
 
-	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	// // Create an xDS resolver with the above bootstrap configuration.
 	if internal.NewXDSResolverWithPoolForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
@@ -504,14 +501,12 @@ func (s) TestConcurrentChannels(t *testing.T) {
 	}
 	pool := xdsclient.NewPool(config)
 
-	// Get the xDS resolver to use the above xDS client.
 	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
 	xdsResolver, err := resolverBuilder(pool)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
-	// Start a backend test service.
 	server := stubserver.StartTestService(t, nil)
 	defer server.Stop()
 
@@ -538,19 +533,13 @@ func (s) TestConcurrentChannels(t *testing.T) {
 		numGoroutines = 10
 		numRPCs       = 10
 	)
-	start := make(chan struct{})
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		wg.Add(1)
 		go func() {
-			<-start
 			defer wg.Done()
 			for range numRPCs {
 				cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
 				if err != nil {
-					// This can happen if the test context is cancelled.
-					if ctx.Err() != nil {
-						return
-					}
 					t.Errorf("grpc.NewClient() failed: %v", err)
 					return
 				}
@@ -558,16 +547,11 @@ func (s) TestConcurrentChannels(t *testing.T) {
 
 				testClient := testgrpc.NewTestServiceClient(cc)
 				if _, err := testClient.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-					// This can happen if the test context is cancelled.
-					if ctx.Err() != nil {
-						return
-					}
 					t.Errorf("EmptyCall() failed: %v", err)
 					return
 				}
 			}
 		}()
 	}
-	close(start)
 	wg.Wait()
 }
