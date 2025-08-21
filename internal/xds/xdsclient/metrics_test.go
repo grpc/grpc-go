@@ -100,7 +100,7 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	defer SetOriginalWatchExpiryTimeout()
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
-		Name: t.Name(),
+		Name:            t.Name(),
 		MetricsRecorder: tmr,
 	})
 	if err != nil {
@@ -203,8 +203,7 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	defer SetOriginalWatchExpiryTimeout()
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
-		Name: t.Name(),
-		// WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+		Name:            t.Name(),
 		MetricsRecorder: tmr,
 	})
 	if err != nil {
