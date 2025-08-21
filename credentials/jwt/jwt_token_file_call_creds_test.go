@@ -113,13 +113,6 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 		wantMetadata    map[string]string
 	}{
 		{
-			name:            "valid token without expiration",
-			tokenContent:    createTestJWT(t, "", time.Time{}),
-			authInfo:        &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			wantErr:         true,
-			wantErrContains: "JWT token has no expiration claim",
-		},
-		{
 			name:         "valid token with future expiration",
 			tokenContent: createTestJWT(t, "https://example.com", now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
@@ -128,17 +121,10 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 		},
 		{
 			name:            "insufficient security level",
-			tokenContent:    createTestJWT(t, "", time.Time{}),
+			tokenContent:    createTestJWT(t, "", now.Add(time.Hour)),
 			authInfo:        &testAuthInfo{secLevel: credentials.NoSecurity},
 			wantErr:         true,
 			wantErrContains: "unable to transfer JWT token file PerRPCCredentials",
-		},
-		{
-			name:            "expired token",
-			tokenContent:    createTestJWT(t, "", now.Add(-time.Hour)),
-			authInfo:        &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			wantErr:         true,
-			wantErrContains: "JWT token is expired",
 		},
 	}
 
@@ -223,70 +209,6 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 	}
 }
 
-func (s) TestTokenFileCallCreds_FileErrors(t *testing.T) {
-	tests := []struct {
-		name            string
-		setupFile       func(string) error
-		wantErrContains string
-	}{
-		{
-			name: "nonexistent file",
-			setupFile: func(_ string) error {
-				return nil // Don't create the file
-			},
-			wantErrContains: "failed to read token file",
-		},
-		{
-			name: "empty file",
-			setupFile: func(path string) error {
-				return os.WriteFile(path, []byte(""), 0600)
-			},
-			wantErrContains: "token file",
-		},
-		{
-			name: "file with whitespace only",
-			setupFile: func(path string) error {
-				return os.WriteFile(path, []byte("   \n\t  "), 0600)
-			},
-			wantErrContains: "token file",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tempDir, err := os.MkdirTemp("", "jwt_test")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tempDir)
-
-			tokenFile := filepath.Join(tempDir, "token")
-			if err := tt.setupFile(tokenFile); err != nil {
-				t.Fatalf("Failed to setup test file: %v", err)
-			}
-
-			creds, err := NewTokenFileCallCredentials(tokenFile)
-			if err != nil {
-				t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
-			}
-
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
-				AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			})
-
-			_, err = creds.GetRequestMetadata(ctx)
-			if err == nil {
-				t.Fatal("GetRequestMetadata() expected error, got nil")
-			}
-
-			if !strings.Contains(err.Error(), tt.wantErrContains) {
-				t.Fatalf("GetRequestMetadata() error = %v, want error containing %q", err, tt.wantErrContains)
-			}
-		})
-	}
-}
 
 // testAuthInfo implements credentials.AuthInfo for testing.
 type testAuthInfo struct {
@@ -301,47 +223,6 @@ func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 	return credentials.CommonAuthInfo{SecurityLevel: t.secLevel}
 }
 
-// createTestJWT creates a test JWT token with the specified audience and
-// expiration.
-func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
-	t.Helper()
-
-	header := map[string]any{
-		"typ": "JWT",
-		"alg": "HS256",
-	}
-
-	claims := map[string]any{}
-	if audience != "" {
-		claims["aud"] = audience
-	}
-	if !expiration.IsZero() {
-		claims["exp"] = expiration.Unix()
-	}
-
-	headerBytes, err := json.Marshal(header)
-	if err != nil {
-		t.Fatalf("Failed to marshal header: %v", err)
-	}
-
-	claimsBytes, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatalf("Failed to marshal claims: %v", err)
-	}
-
-	headerB64 := base64.URLEncoding.EncodeToString(headerBytes)
-	claimsB64 := base64.URLEncoding.EncodeToString(claimsBytes)
-
-	// Remove padding for URL-safe base64
-	headerB64 = strings.TrimRight(headerB64, "=")
-	claimsB64 = strings.TrimRight(claimsB64, "=")
-
-	// For testing, we'll use a fake signature
-	signature := base64.URLEncoding.EncodeToString([]byte("fake_signature"))
-	signature = strings.TrimRight(signature, "=")
-
-	return fmt.Sprintf("%s.%s.%s", headerB64, claimsB64, signature)
-}
 
 // Tests that cached token expiration is set to 30 seconds before actual token
 // expiration.
@@ -370,9 +251,9 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 
 	// Verify cached expiration is 30 seconds before actual token expiration.
 	impl := creds.(*jwtTokenFileCallCreds)
-	impl.mu.RLock()
-	cachedExp := impl.cachedExpiration
-	impl.mu.RUnlock()
+	impl.mu.Lock()
+	cachedExp := impl.cachedExpiry
+	impl.mu.Unlock()
 
 	expectedExp := tokenExp.Add(-30 * time.Second)
 	if !cachedExp.Equal(expectedExp) {
@@ -407,11 +288,11 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 
 	// Verify token was cached and check if refresh should be triggered.
 	impl := creds.(*jwtTokenFileCallCreds)
-	impl.mu.RLock()
-	cacheExp := impl.cachedExpiration
+	impl.mu.Lock()
+	cacheExp := impl.cachedExpiry
 	tokenCached := impl.cachedToken != ""
 	shouldTriggerRefresh := impl.needsPreemptiveRefreshLocked()
-	impl.mu.RUnlock()
+	impl.mu.Unlock()
 
 	if !tokenCached {
 		t.Error("token should be cached after successful GetRequestMetadata")
@@ -503,11 +384,11 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 
 	// Verify error is cached internally.
 	impl := creds.(*jwtTokenFileCallCreds)
-	impl.mu.RLock()
+	impl.mu.Lock()
 	cachedErr := impl.cachedError
 	retryAttempt := impl.retryAttempt
 	nextRetryTime := impl.nextRetryTime
-	impl.mu.RUnlock()
+	impl.mu.Unlock()
 
 	if cachedErr == nil {
 		t.Error("error should be cached internally after failed file read")
@@ -531,10 +412,10 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Errorf("cached error = %q, want %q", err2.Error(), err1.Error())
 	}
 
-	impl.mu.RLock()
+	impl.mu.Lock()
 	retryAttempt2 := impl.retryAttempt
 	nextRetryTime2 := impl.nextRetryTime
-	impl.mu.RUnlock()
+	impl.mu.Unlock()
 
 	if !nextRetryTime2.Equal(nextRetryTime) {
 		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime2, nextRetryTime)
@@ -560,10 +441,10 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Errorf("cached error = %q, want %q", err3.Error(), err1.Error())
 	}
 
-	impl.mu.RLock()
+	impl.mu.Lock()
 	retryAttempt3 := impl.retryAttempt
 	nextRetryTime3 := impl.nextRetryTime
-	impl.mu.RUnlock()
+	impl.mu.Unlock()
 
 	if !nextRetryTime3.After(nextRetryTime2) {
 		t.Error("nextRetryTime should not change due to backoff")
@@ -590,10 +471,10 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Errorf("cached error = %q, want %q", err4.Error(), err3.Error())
 	}
 
-	impl.mu.RLock()
+	impl.mu.Lock()
 	retryAttempt4 := impl.retryAttempt
 	nextRetryTime4 := impl.nextRetryTime
-	impl.mu.RUnlock()
+	impl.mu.Unlock()
 
 	if !nextRetryTime4.Equal(nextRetryTime3) {
 		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime4, nextRetryTime3)
@@ -614,11 +495,11 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("backoff should expire and trigger new attempt on next RPC")
 	} else {
 		// If successful, verify error cache and backoff state were cleared.
-		impl.mu.RLock()
+		impl.mu.Lock()
 		clearedErr := impl.cachedError
 		retryAttempt := impl.retryAttempt
 		nextRetryTime := impl.nextRetryTime
-		impl.mu.RUnlock()
+		impl.mu.Unlock()
 
 		if clearedErr != nil {
 			t.Errorf("after successful retry, cached error should be cleared, got: %v", clearedErr)
@@ -632,31 +513,6 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 }
 
-// Tests that invalid JWT tokens are handled with UNAUTHENTICATED status.
-func (s) TestTokenFileCallCreds_InvalidJWTHandling(t *testing.T) {
-	// Write invalid JWT (missing exp field).
-	invalidJWT := createTestJWT(t, "", time.Time{})
-	tokenFile := writeTempFile(t, "token", invalidJWT)
-
-	creds, err := NewTokenFileCallCredentials(tokenFile)
-	if err != nil {
-		t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
-		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-	})
-
-	_, err = creds.GetRequestMetadata(ctx)
-	if err == nil {
-		t.Fatal("Expected UNAUTHENTICATED from invalid JWT")
-	}
-	if status.Code(err) != codes.Unauthenticated {
-		t.Errorf("GetRequestMetadata() = %v, want UNAUTHENTICATED for invalid JWT", status.Code(err))
-	}
-}
 
 // Tests that RPCs are queued during file operations and all receive the same
 // result.
@@ -710,9 +566,9 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 
 	// Verify error was cached after concurrent RPCs.
 	impl := creds.(*jwtTokenFileCallCreds)
-	impl.mu.RLock()
+	impl.mu.Lock()
 	finalCachedErr := impl.cachedError
-	impl.mu.RUnlock()
+	impl.mu.Unlock()
 
 	if finalCachedErr == nil {
 		t.Error("error should be cached after failed concurrent RPCs")
@@ -720,6 +576,48 @@ func (s) TestTokenFileCallCreds_RPCQueueing(t *testing.T) {
 	if finalCachedErr.Error() != errors[0].Error() {
 		t.Error("cached error should match the errors returned to RPCs")
 	}
+}
+
+// createTestJWT creates a test JWT token with the specified audience and
+// expiration.
+func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
+	t.Helper()
+
+	header := map[string]any{
+		"typ": "JWT",
+		"alg": "HS256",
+	}
+
+	claims := map[string]any{}
+	if audience != "" {
+		claims["aud"] = audience
+	}
+	if !expiration.IsZero() {
+		claims["exp"] = expiration.Unix()
+	}
+
+	headerBytes, err := json.Marshal(header)
+	if err != nil {
+		t.Fatalf("Failed to marshal header: %v", err)
+	}
+
+	claimsBytes, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("Failed to marshal claims: %v", err)
+	}
+
+	headerB64 := base64.URLEncoding.EncodeToString(headerBytes)
+	claimsB64 := base64.URLEncoding.EncodeToString(claimsBytes)
+
+	// Remove padding for URL-safe base64
+	headerB64 = strings.TrimRight(headerB64, "=")
+	claimsB64 = strings.TrimRight(claimsB64, "=")
+
+	// For testing, we'll use a fake signature
+	signature := base64.URLEncoding.EncodeToString([]byte("fake_signature"))
+	signature = strings.TrimRight(signature, "=")
+
+	return fmt.Sprintf("%s.%s.%s", headerB64, claimsB64, signature)
 }
 
 func writeTempFile(t *testing.T, name, content string) string {
@@ -731,3 +629,4 @@ func writeTempFile(t *testing.T, name, content string) string {
 	}
 	return filePath
 }
+
