@@ -117,8 +117,11 @@ func New(config Config) (*XDSClient, error) {
 }
 
 // SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
-// with provided timeout value and returns a function to reset the timeout to the
-// original value.
+// with provided timeout value and returns a function to reset the timeout to
+// the original value.
+//
+// Note: This function should not be called concurrently and must be called
+// before any RPCs to avoid race conditions.
 func SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Duration) func() {
 	originalWatchTimeout := xdsclientinternal.WatchExpiryTimeout
 	if watchExpiryTimeout == 0 {

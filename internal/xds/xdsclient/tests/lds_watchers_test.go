@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	xds_client "google.golang.org/grpc/internal/xds/clients/xdsclient"
+	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
@@ -701,8 +701,8 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
-	SetOriginalWatchExpiryTimeout := xds_client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-	defer SetOriginalWatchExpiryTimeout()
+	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
+	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
 	if err != nil {
@@ -743,8 +743,8 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
-	SetOriginalWatchExpiryTimeout := xds_client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-	defer SetOriginalWatchExpiryTimeout()
+	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
+	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
 	if err != nil {

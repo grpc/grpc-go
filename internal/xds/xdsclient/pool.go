@@ -123,7 +123,6 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if err != nil {
 		return nil, nil, err
 	}
-	// c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
 	return c, cancel, nil
 }
 

@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/stats"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	xds_client "google.golang.org/grpc/internal/xds/clients/xdsclient"
+	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -96,8 +96,8 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
-	SetOriginalWatchExpiryTimeout := xds_client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-	defer SetOriginalWatchExpiryTimeout()
+	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
+	defer revertWatchExpiryTimeout()
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
 		Name:            t.Name(),
@@ -199,8 +199,8 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
-	SetOriginalWatchExpiryTimeout := xds_client.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-	defer SetOriginalWatchExpiryTimeout()
+	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
+	defer revertWatchExpiryTimeout()
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
 		Name:            t.Name(),
