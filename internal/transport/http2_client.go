@@ -990,12 +990,12 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 // accessed anymore.
 func (t *http2Client) Close(err error) {
 	if err := t.conn.SetWriteDeadline(time.Now().Add(time.Second * 10)); err != nil {
-		logger.Warningf("Failed to set write deadline on t.conn during Close(): %s", err)
+		logger.Warningf("Failed to set write deadline when closing connection: %v", err)
 	}
 	// For background on the deadline value chosen here, see
 	// https://github.com/grpc/grpc-go/issues/8425#issuecomment-3057938248 .
 	if err := t.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-		logger.Warningf("Failed to set read deadline on t.conn during Close(): %s", err)
+		logger.Warningf("Failed to set read deadline when closing connection: %v", err)
 	}
 	t.mu.Lock()
 	// Make sure we only close once.
