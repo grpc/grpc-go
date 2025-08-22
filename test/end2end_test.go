@@ -3958,7 +3958,6 @@ func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
 	<-handlerDone
 }
 
-// TODO(i/7286) : Add tests to check server-side behavior for Unary RPC.
 // Tests the behavior for unary RPC when client calls SendMsg twice. Second call
 // to SendMsg should fail with Internal error.
 func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
