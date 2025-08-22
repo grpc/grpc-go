@@ -106,6 +106,35 @@ func Test_nameGenerator_generate(t *testing.T) {
 			want: []string{"priority-0-0", "priority-0-2", "priority-0-1"},
 		},
 		{
+			name: "split and reverse priority",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+				},
+			},
+			want: []string{"priority-0-0", "priority-0-1"},
+		},
+		{
+			name: "delete and bring back",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L0"}}},
+				},
+			},
+			want: []string{"priority-0-0"},
+		},
+		{
 			name: "complex merge split sequence",
 			inputs: [][][]xdsresource.Locality{
 				{
@@ -140,7 +169,7 @@ func Test_nameGenerator_generate(t *testing.T) {
 					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 			},
-			want: []string{"priority-0-0", "priority-0-1", "priority-0-2"},
+			want: []string{"priority-0-0", "priority-0-3", "priority-0-2"},
 		},
 		{
 			name: "complex full merges splits sequence",
@@ -198,7 +227,59 @@ func Test_nameGenerator_generate(t *testing.T) {
 					{{ID: clients.Locality{Zone: "L1"}}},
 				},
 			},
-			want: []string{"priority-0-1", "priority-0-0"},
+			want: []string{"priority-0-0", "priority-0-2"},
+		},
+		{
+			name: "merge-split reverse times 2",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+			},
+			want: []string{"priority-0-2", "priority-0-0"},
+		},
+		{
+			name: "complex merge-split reverse",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L4"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L4"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L4"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+			},
+			want: []string{"priority-0-4", "priority-0-2"},
 		},
 		{
 			name: "2 by 2 shuffle sequence",
