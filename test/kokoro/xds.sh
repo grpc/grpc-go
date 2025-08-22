@@ -9,7 +9,7 @@ export GOPATH="${HOME}/gopath"
 pushd grpc-go/interop/xds/client
 # Install a version of Go supported by gRPC for the new features, e.g.
 # errors.Is()
-gofilename=go1.23.0.linux-amd64.tar.gz
+gofilename=go1.25.0.linux-amd64.tar.gz
 curl --retry 3 -O -L "https://go.dev/dl/${gofilename}"
 sudo tar -C /usr/local -xf "${gofilename}"
 sudo ln -s /usr/local/go/bin/go /usr/bin/go

@@ -27,7 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache-dependency-path: "**/go.sum"
 
       # Run the vet-proto checks.
@@ -36,38 +36,41 @@ jobs:
 
   # Run the main gRPC-Go tests.
   tests:
-    runs-on: ubuntu-latest
+    # Use the matrix variable to set the runner, with 'ubuntu-latest' as the
+    # default.
+    runs-on: ${{ matrix.runner || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
           - type: vet
-            goversion: '1.23'
+            goversion: '1.24'
 
           - type: extras
-            goversion: '1.24'
+            goversion: '1.25'
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             testflags: -race
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             goarch: 386
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             goarch: arm64
-
-          - type: tests
-            goversion: '1.23'
+            runner: ubuntu-24.04-arm
 
           - type: tests
             goversion: '1.24'
+
+          - type: tests
+            goversion: '1.25'
             testflags: -race
             grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=false'
 
@@ -76,12 +79,6 @@ jobs:
       - name: Setup GOARCH
         if: matrix.goarch != ''
         run: echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
-
-      - name: Setup qemu emulator
-        if: matrix.goarch == 'arm64'
-        # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
-        # are automatically executed using qemu.
-        run: docker run --rm --privileged multiarch/qemu-user-static:7.2.0-1 --reset --credential yes --persistent yes
 
       - name: Setup GRPC environment
         if: matrix.grpcenv != ''
@@ -128,7 +125,7 @@ jobs:
           echo -e "\n-- Running Interop Test --"
           interop/interop_test.sh
           echo -e "\n-- Running xDS E2E Test --"
-          xds/internal/test/e2e/run.sh
+          internal/xds/test/e2e/run.sh
           echo -e "\n-- Running protoc-gen-go-grpc test --"
           ./scripts/vet-proto.sh -install
           cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh

@@ -533,12 +533,19 @@ func (s) TestGetConfiguration_Failure(t *testing.T) {
 	cancel := setupBootstrapOverride(bootstrapFileMap)
 	defer cancel()
 
-	for _, name := range []string{"nonExistentBootstrapFile", "empty", "badJSON", "noBalancerName", "emptyXdsServer"} {
+	for _, name := range []string{"nonExistentBootstrapFile", "badJSON", "noBalancerName", "emptyXdsServer"} {
 		t.Run(name, func(t *testing.T) {
 			testGetConfigurationWithFileNameEnv(t, name, true, nil)
 			testGetConfigurationWithFileContentEnv(t, name, true, nil)
 		})
 	}
+	const name = "empty"
+	t.Run(name, func(t *testing.T) {
+		testGetConfigurationWithFileNameEnv(t, name, true, nil)
+		// If both the env vars are empty, a nil config with a nil error must be
+		// returned.
+		testGetConfigurationWithFileContentEnv(t, name, false, nil)
+	})
 }
 
 // Tests the functionality in GetConfiguration with different bootstrap file
@@ -640,9 +647,9 @@ func (s) TestGetConfiguration_BootstrapEnvPriority(t *testing.T) {
 	envconfig.XDSBootstrapFileContent = ""
 	defer func() { envconfig.XDSBootstrapFileContent = origBootstrapContent }()
 
-	// When both env variables are empty, GetConfiguration should fail.
-	if _, err := GetConfiguration(); err == nil {
-		t.Errorf("GetConfiguration() returned nil error, expected to fail")
+	// When both env variables are empty, GetConfiguration should return nil.
+	if cfg, err := GetConfiguration(); err != nil || cfg != nil {
+		t.Errorf("GetConfiguration() returned (%v, %v), want (<nil>, <nil>)", cfg, err)
 	}
 
 	// When one of them is set, it should be used.
@@ -1563,7 +1570,6 @@ func (s) TestNode_ToProto(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 // Tests the case where the xDS fallback env var is set to false, and verifies
 // that only the first server from the list of server configurations is used.
 func (s) TestGetConfiguration_FallbackDisabled(t *testing.T) {
@@ -1637,7 +1643,7 @@ func (s) TestGetConfiguration_FallbackDisabled(t *testing.T) {
 	t.Run("bootstrap_file_contents", func(t *testing.T) {
 		testGetConfigurationWithFileContentEnv(t, "multipleXDSServers", false, wantConfig)
 	})
-=======
+
 func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 	original := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
@@ -1863,5 +1869,4 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
->>>>>>> 317ecac7 (xds: read JWT credentials from file as per A97)
 }

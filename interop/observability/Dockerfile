@@ -17,7 +17,7 @@
 # Stage 1: Build the interop test client and server
 #
 
-FROM golang:1.23-bullseye as build
+FROM golang:1.24-bullseye as build
 
 WORKDIR /grpc-go
 COPY . .
@@ -36,7 +36,7 @@ RUN go build -o server/ server/server.go && \
 #   with the given parameters.
 #
 
-FROM golang:1.23-bullseye
+FROM golang:1.24-bullseye
 
 ENV GRPC_GO_LOG_SEVERITY_LEVEL info
 ENV GRPC_GO_LOG_VERBOSITY_LEVEL 2

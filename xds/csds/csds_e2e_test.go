@@ -36,9 +36,9 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/internal/xds/xdsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/csds"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -52,7 +52,7 @@ import (
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	v3statuspbgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter
+	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter
 )
 
 const defaultTestTimeout = 5 * time.Second

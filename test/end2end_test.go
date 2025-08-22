@@ -51,6 +51,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/local"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
@@ -3740,6 +3741,245 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
+// Tests the behavior for server-side streaming when client calls SendMsg twice.
+// Second call to SendMsg should fail with Internal error and result in closing
+// the connection with a RST_STREAM.
+func (s) TestServerStreaming_ClientCallSendMsgTwice(t *testing.T) {
+	// To ensure initial call to server.recvMsg() made by the generated code is successfully
+	// completed. Otherwise, if the client attempts to send a second request message, that
+	// will trigger a RST_STREAM from the client due to the application violating the RPC's
+	// protocol. The RST_STREAM could cause the server’s first RecvMsg to fail and will prevent
+	// the method handler from being called.
+	recvDoneOnServer := make(chan struct{})
+	// To ensure goroutine for test does not end before RPC handler performs error
+	// checking.
+	handlerDone := make(chan struct{})
+	ss := stubserver.StubServer{
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
+			close(recvDoneOnServer)
+			// Block until the stream’s context is done. Second call to client.SendMsg
+			// triggers a RST_STREAM which cancels the stream context on the server.
+			<-stream.Context().Done()
+			if err := stream.SendMsg(&testpb.StreamingOutputCallRequest{}); status.Code(err) != codes.Canceled {
+				t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Canceled)
+			}
+			close(handlerDone)
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "StreamingOutputCall",
+		ServerStreams: true,
+		ClientStreams: false,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	<-recvDoneOnServer
+	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+		t.Errorf("stream.SendMsg() = %v, want error %v", err, codes.Internal)
+	}
+	<-handlerDone
+}
+
+// TODO(i/7286) : Add tests to check server-side behavior for Unary RPC.
+// Tests the behavior for unary RPC when client calls SendMsg twice. Second call
+// to SendMsg should fail with Internal error.
+func (s) TestUnaryRPC_ClientCallSendMsgTwice(t *testing.T) {
+	ss := stubserver.StubServer{
+		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "UnaryCall",
+		ServerStreams: false,
+		ClientStreams: false,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/UnaryCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+		t.Errorf("stream.SendMsg() = %v, want error %v", status.Code(err), codes.Internal)
+	}
+}
+
+// Tests the behavior for server-side streaming RPC when client misbehaves as Bidi-streaming
+// and sends multiple messages.
+func (s) TestServerStreaming_ClientSendsMultipleMessages(t *testing.T) {
+	// The initial call to recvMsg made by the generated code, will return the error.
+	ss := stubserver.StubServer{}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	// Making the client bi-di to bypass the client side checks that stop a non-streaming client
+	// from sending multiple messages.
+	desc := &grpc.StreamDesc{
+		StreamName:    "StreamingOutputCall",
+		ServerStreams: true,
+		ClientStreams: true,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.SendMsg(&testpb.Empty{}); err != nil {
+		t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+	}
+
+	if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != codes.Internal {
+		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+	}
+}
+
+// Tests the behavior of server for server-side streaming RPC when client sends zero request messages.
+func (s) TestServerStreaming_ServerRecvZeroRequests(t *testing.T) {
+	testCases := []struct {
+		name     string
+		desc     *grpc.StreamDesc
+		wantCode codes.Code
+	}{
+		{
+			name: "BidiStreaming",
+			desc: &grpc.StreamDesc{
+				StreamName:    "StreamingOutputCall",
+				ServerStreams: true,
+				ClientStreams: true,
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "ClientStreaming",
+			desc: &grpc.StreamDesc{
+				StreamName:    "StreamingOutputCall",
+				ServerStreams: false,
+				ClientStreams: true,
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tc := range testCases {
+		// The initial call to recvMsg made by the generated code, will return the error.
+		ss := stubserver.StubServer{}
+		if err := ss.Start(nil); err != nil {
+			t.Fatal("Error starting server:", err)
+		}
+		defer ss.Stop()
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
+		if err != nil {
+			t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+		}
+		defer cc.Close()
+
+		stream, err := cc.NewStream(ctx, tc.desc, "/grpc.testing.TestService/StreamingOutputCall")
+		if err != nil {
+			t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+		}
+
+		if err := stream.CloseSend(); err != nil {
+			t.Errorf("stream.CloseSend() = %v, want <nil>", err)
+		}
+
+		if err := stream.RecvMsg(&testpb.Empty{}); status.Code(err) != tc.wantCode {
+			t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), tc.wantCode)
+		}
+	}
+}
+
+// Tests the behavior of client for server-side streaming RPC when client sends zero request messages.
+func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
+	t.Skip("blocked on i/7286")
+	// The initial call to recvMsg made by the generated code, will return the error.
+	ss := stubserver.StubServer{}
+	if err := ss.Start(nil); err != nil {
+		t.Fatal("Error starting server:", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(ss.Address, grpc.WithTransportCredentials(local.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	desc := &grpc.StreamDesc{
+		StreamName:    "StreamingOutputCall",
+		ServerStreams: true,
+		ClientStreams: false,
+	}
+
+	stream, err := cc.NewStream(ctx, desc, "/grpc.testing.TestService/StreamingOutputCall")
+	if err != nil {
+		t.Fatalf("cc.NewStream() failed unexpectedly: %v", err)
+	}
+
+	if err := stream.CloseSend(); status.Code(err) != codes.Internal {
+		t.Errorf("stream.CloseSend() = %v, want error %v", status.Code(err), codes.Internal)
+	}
+}
+
 // Tests that a client receives a cardinality violation error for client-streaming
 // RPCs if the server call SendMsg multiple times.
 func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
@@ -4122,6 +4362,55 @@ func (s) TestClientInvalidStreamID(t *testing.T) {
 	if got := string(goAwayFrame.DebugData()); !strings.Contains(got, want) {
 		t.Fatalf(" Received: %v, Expected error message to contain: %v.", got, want)
 	}
+}
+
+// Tests that a gRPC server transport does not deadlock when it receives a zero
+// second deadline, and properly returns a deadline exceeded error immediately.
+func (s) TestZeroSecondTimeout(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	st.writeHeaders(http2.HeadersFrameParam{
+		StreamID: 1,
+		BlockFragment: st.encodeHeader(
+			":method", "POST",
+			":path", "/grpc.testing.TestService/StreamingInputCall",
+			"content-type", "application/grpc",
+			"te", "trailers",
+			"grpc-timeout", "0n",
+		),
+		EndStream:  false,
+		EndHeaders: true,
+	})
+	f := st.wantAnyFrame()
+	hf, ok := f.(*http2.MetaHeadersFrame)
+	if !ok {
+		t.Fatalf("Received frame of type %T; want *http2.MetaHeadersFrame", f)
+	}
+	if hf.StreamID != 1 || !hf.StreamEnded() {
+		t.Fatalf("Headers frame was wrong streamID or not end_stream: %v", hf)
+	}
+	for _, h := range hf.Fields {
+		if h.Name == "grpc-status" {
+			if got, want := h.Value, fmt.Sprintf("%d", codes.DeadlineExceeded); got != want {
+				t.Fatalf("Got status %v; want %v", got, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("Headers frame missing grpc-status: %v", hf)
 }
 
 // TestInvalidStreamIDSmallerThanPrevious tests the server sends a GOAWAY frame
@@ -5312,7 +5601,7 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 // will fail to marshal the status because of the invalid utf8 message. Details
 // will be dropped when sending.
 func (s) TestStatusInvalidUTF8Details(t *testing.T) {
-	grpctest.TLogger.ExpectError("Failed to marshal rpc status")
+	grpctest.ExpectError("Failed to marshal rpc status")
 
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})
@@ -6323,7 +6612,7 @@ func (s) TestServerClosesConn(t *testing.T) {
 // TestNilStatsHandler ensures we do not panic as a result of a nil stats
 // handler.
 func (s) TestNilStatsHandler(t *testing.T) {
-	grpctest.TLogger.ExpectErrorN("ignoring nil parameter", 2)
+	grpctest.ExpectErrorN("ignoring nil parameter", 2)
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
@@ -6649,13 +6938,13 @@ func (s) TestRPCBlockingOnPickerStatsCall(t *testing.T) {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 
-	var pickerUpdatedCount uint
+	var delayedPickCompleteCount int
 	for _, stat := range sh.s {
-		if _, ok := stat.(*stats.PickerUpdated); ok {
-			pickerUpdatedCount++
+		if _, ok := stat.(*stats.DelayedPickComplete); ok {
+			delayedPickCompleteCount++
 		}
 	}
-	if pickerUpdatedCount != 1 {
-		t.Fatalf("sh.pickerUpdated count: %v, want: %v", pickerUpdatedCount, 2)
+	if got, want := delayedPickCompleteCount, 1; got != want {
+		t.Fatalf("sh.delayedPickComplete count: %v, want: %v", got, want)
 	}
 }

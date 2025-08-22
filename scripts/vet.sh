@@ -97,7 +97,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   gofmt -s -d -l . 2>&1 | fail_on_output
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
 
-  go mod tidy -compat=1.23
+  go mod tidy -compat=1.24
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
 
@@ -179,6 +179,8 @@ NewSubConn is deprecated:
 OverrideServerName is deprecated:
 RemoveSubConn is deprecated:
 SecurityVersion is deprecated:
+.ServerName is deprecated:
+stats.PickerUpdated is deprecated:
 Target is deprecated: Use the Target field in the BuildOptions instead.
 UpdateAddresses is deprecated:
 UpdateSubConnState is deprecated:
