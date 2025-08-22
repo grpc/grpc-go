@@ -3738,7 +3738,7 @@ func (s) TestClientStreaming_ReturnErrorAfterSendAndClose(t *testing.T) {
 	}
 }
 
-// Tests that a client receives a cardinality violation error for unary
+// Tests that client receives a cardinality violation error for unary
 // RPCs if the server doesn't send a message before returning status OK.
 func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	lis, err := testutils.LocalTCPListener()
@@ -3769,8 +3769,8 @@ func (s) TestUnaryRPC_ServerSendsOnlyTrailersWithOK(t *testing.T) {
 	}
 }
 
-// Tests that client will receive cardinality violations when calling
-// RecvMsg() multiple times for non-streaming response streams.
+// Tests the behavior for unary RPC when client calls RecvMsg() twice.
+// Second call to RecvMsg should fail with io.EOF.
 func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 	e := tcpTLSEnv
 	te := newTest(t, e)
@@ -3801,13 +3801,67 @@ func (s) TestUnaryRPC_ClientCallRecvMsgTwice(t *testing.T) {
 		t.Fatalf("stream.RecvMsg() = %v , want <nil>", err)
 	}
 
-	if err = stream.RecvMsg(resp); status.Code(err) != codes.Internal {
+	if err = stream.RecvMsg(resp); err != io.EOF {
+		t.Errorf("stream.RecvMsg() = %v, want error %v", err, io.EOF)
+	}
+}
+
+// Tests the behavior for unary RPC when server calls SendMsg() twice.
+// Client should fail with cardinality violation error.
+func (s) TestUnaryRPC_ServerCallSendMsgTwice(t *testing.T) {
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lis.Close()
+
+	s := grpc.NewServer()
+	serviceDesc := grpc.ServiceDesc{
+		ServiceName: "grpc.testing.TestService",
+		HandlerType: (*any)(nil),
+		Methods:     []grpc.MethodDesc{},
+		Streams: []grpc.StreamDesc{
+			{
+				StreamName: "UnaryCall",
+				Handler: func(_ any, stream grpc.ServerStream) error {
+					if err := stream.RecvMsg(&testpb.Empty{}); err != nil {
+						t.Errorf("stream.RecvMsg() = %v, want <nil>", err)
+					}
+
+					if err = stream.SendMsg(&testpb.Empty{}); err != nil {
+						t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+					}
+
+					if err = stream.SendMsg(&testpb.Empty{}); err != nil {
+						t.Errorf("stream.SendMsg() = %v, want <nil>", err)
+					}
+					return nil
+				},
+				ClientStreams: false,
+				ServerStreams: false,
+			},
+		},
+	}
+	s.RegisterService(&serviceDesc, &testServer{})
+	go s.Serve(lis)
+	defer s.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(%q) failed unexpectedly: %v", lis.Addr(), err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err = client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Internal {
 		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
 	}
 }
 
-// Tests that client will receive cardinality violations when calling
-// RecvMsg() multiple times for non-streaming response streams.
+// Tests the behavior for client-streaming RPC when client calls RecvMsg() twice.
+// Second call to RecvMsg should fail with io.EOF.
 func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
@@ -3838,8 +3892,8 @@ func (s) TestClientStreaming_ClientCallRecvMsgTwice(t *testing.T) {
 	if err := stream.RecvMsg(resp); err != nil {
 		t.Fatalf("stream.RecvMsg() = %v , want <nil>", err)
 	}
-	if err = stream.RecvMsg(resp); status.Code(err) != codes.Internal {
-		t.Errorf("stream.RecvMsg() = %v, want error %v", status.Code(err), codes.Internal)
+	if err = stream.RecvMsg(resp); err != io.EOF {
+		t.Errorf("stream.RecvMsg() = %v, want error %v", err, io.EOF)
 	}
 }
 
