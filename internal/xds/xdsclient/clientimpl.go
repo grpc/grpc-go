@@ -21,7 +21,6 @@ package xdsclient
 import (
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
@@ -42,8 +41,6 @@ const (
 	// client from xDS-enabled gRPC servers. This is a well-known dedicated key
 	// value, and is defined in gRFC A71.
 	NameForServer = "#server"
-
-	defaultWatchExpiryTimeout = 15 * time.Second
 )
 
 var (

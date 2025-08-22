@@ -61,10 +61,6 @@ type OptionsForTesting struct {
 	// Name is a unique name for this xDS client.
 	Name string
 
-	// WatchExpiryTimeout is the timeout for xDS resource watch expiry. If
-	// unspecified, uses the default value used in non-test code.
-	WatchExpiryTimeout time.Duration
-
 	// StreamBackoffAfterFailure is the backoff function used to determine the
 	// backoff duration after stream failures.
 	// If unspecified, uses the default value used in non-test code.
@@ -117,9 +113,6 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.Name == "" {
 		return nil, nil, fmt.Errorf("xds: opts.Name field must be non-empty")
 	}
-	if opts.WatchExpiryTimeout == 0 {
-		opts.WatchExpiryTimeout = defaultWatchExpiryTimeout
-	}
 	if opts.StreamBackoffAfterFailure == nil {
 		opts.StreamBackoffAfterFailure = defaultExponentialBackoff
 	}
@@ -130,7 +123,6 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if err != nil {
 		return nil, nil, err
 	}
-	c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
 	return c, cancel, nil
 }
 
