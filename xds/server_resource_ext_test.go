@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	xds_client "google.golang.org/grpc/internal/xds/clients/xdsclient"
+	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/xds"
@@ -111,8 +111,8 @@ func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 	}
 	// Create a specific xDS client instance within that pool for the server,
 	// configuring it with a short WatchExpiryTimeout.
-	SetOriginalWatchExpiryTimeout := xds_client.SetWatchExpiryTimeoutForTesting(500 * time.Millisecond)
-	defer SetOriginalWatchExpiryTimeout()
+	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(500 * time.Millisecond)
+	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
 	_, serverXDSClientClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: xdsclient.NameForServer})
 	if err != nil {
