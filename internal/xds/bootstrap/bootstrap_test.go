@@ -1569,6 +1569,7 @@ func (s) TestNode_ToProto(t *testing.T) {
 		})
 	}
 }
+<<<<<<< HEAD
 
 func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 	original := envconfig.XDSBootstrapCallCredsEnabled
@@ -1796,3 +1797,5 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
+=======
+>>>>>>> origin/master
