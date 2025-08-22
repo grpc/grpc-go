@@ -3012,17 +3012,17 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 // during http2Client.Close().
 type deadlineTestConn struct {
 	net.Conn
-	observedReadDeadline  time.Time
-	observedWriteDeadline time.Time
+	observedReadDeadline  atomic.Bool
+	observedWriteDeadline atomic.Bool
 }
 
 func (c *deadlineTestConn) SetReadDeadline(t time.Time) error {
-	c.observedReadDeadline = t
+	c.observedReadDeadline.Store(true)
 	return c.Conn.SetReadDeadline(t)
 }
 
 func (c *deadlineTestConn) SetWriteDeadline(t time.Time) error {
-	c.observedWriteDeadline = t
+	c.observedWriteDeadline.Store(true)
 	return c.Conn.SetWriteDeadline(t)
 }
 
@@ -3044,10 +3044,10 @@ func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
 	defer server.stop()
 	client.Close(fmt.Errorf("closed manually by test"))
 	dConn := client.conn.(*deadlineTestConn)
-	if dConn.observedReadDeadline.IsZero() {
+	if !dConn.observedReadDeadline.Load() {
 		t.Errorf("Connection read deadline was never set")
 	}
-	if dConn.observedWriteDeadline.IsZero() {
+	if !dConn.observedWriteDeadline.Load() {
 		t.Errorf("Connection write deadline was never set")
 	}
 }
