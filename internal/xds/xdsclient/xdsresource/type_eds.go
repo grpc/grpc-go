@@ -74,3 +74,9 @@ type EndpointsUpdate struct {
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
 }
+
+// Metadata stores a map from keys to internal representations of metadata
+// proto.
+type Metadata struct {
+	Metadata map[string]MetadataValue
+}

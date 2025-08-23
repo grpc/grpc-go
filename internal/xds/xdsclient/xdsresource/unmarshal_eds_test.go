@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -586,6 +587,93 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s) TestValidateAndConstructMetadata(t *testing.T) {
+	originalRegistry := metadataregistry
+	// Restore the original registry.
+	defer func() {
+		metadataregistry = originalRegistry
+	}()
+	newRegistry := make(map[string]Converter)
+	metadataregistry = newRegistry
+
+	// Register a mock converter for this test. The key is the type URL for an
+	// envoy.config.core.v3.Address proto, which will be used in the success case.
+	Register("type.googleapis.com/envoy.config.core.v3.Address", testMetadataValueConvertor{})
+	metadataMap := map[string]MetadataValue{
+		"type.googleapis.com/envoy.config.core.v3.Address": testMetadataValue{Address: "1.2.3.4"},
+		"untyped-key": JSONMetadata{Data: json.RawMessage(`{"field":"value"}`)},
+	}
+	tests := []struct {
+		name          string
+		metadataProto *v3corepb.Metadata
+		want          Metadata
+		wantErr       bool
+	}{
+		{
+			name: "success-case",
+			metadataProto: &v3corepb.Metadata{
+				TypedFilterMetadata: map[string]*anypb.Any{
+					"type.googleapis.com/envoy.config.core.v3.Address": testutils.MarshalAny(t, &v3corepb.Address{
+						Address: &v3corepb.Address_SocketAddress{
+							SocketAddress: &v3corepb.SocketAddress{Address: "1.2.3.4"},
+						},
+					}),
+				},
+				FilterMetadata: map[string]*structpb.Struct{
+					"untyped-key": {Fields: map[string]*structpb.Value{"field": structpb.NewStringValue("value")}},
+				},
+			},
+			want: Metadata{Metadata: metadataMap},
+		},
+		{
+			name: "failure-case-converter-error",
+			metadataProto: &v3corepb.Metadata{
+				TypedFilterMetadata: map[string]*anypb.Any{
+					"type.googleapis.com/envoy.config.core.v3.Address": testutils.MarshalAny(t, &v3corepb.Address{
+						Address: &v3corepb.Address_SocketAddress{
+							SocketAddress: &v3corepb.SocketAddress{Address: "invalid"},
+						},
+					}),
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateAndConstructMetadata(tt.metadataProto)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if diff := cmp.Diff(got, tt.want, cmp.AllowUnexported(testMetadataValue{})); diff != "" {
+				t.Errorf("validateAndConstructMetadata() returned unexpected value:\n%s", diff)
+			}
+		})
+	}
+}
+
+type testMetadataValue struct {
+	MetadataValue
+	Address string
+}
+
+type testMetadataValueConvertor struct{}
+
+// testMetadataValueConvertor is a mock converter for testing purposes.
+func (testMetadataValueConvertor) Convert(anyBytes []byte) (MetadataValue, error) {
+	addrProto := &v3corepb.Address{}
+	if err := proto.Unmarshal(anyBytes, addrProto); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal address proto: %v", err)
+	}
+	// For the failure case, return an error if the address is "invalid".
+	if addrProto.GetSocketAddress().GetAddress() == "invalid" {
+		return nil, fmt.Errorf("mock parser error: invalid address")
+	}
+	return testMetadataValue{Address: addrProto.GetSocketAddress().GetAddress()}, nil
 }
 
 // claBuilder builds a ClusterLoadAssignment, aka EDS

@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -30,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -203,4 +205,41 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
+}
+
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (Metadata, error) {
+	metadata := make(map[string]MetadataValue)
+	if metadataProto == nil {
+		return Metadata{Metadata: metadata}, nil
+	}
+	// First go through TypedFilterMetadata.
+	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
+		converter := ConverterForType(anyProto.GetTypeUrl())
+		// Ignore types we don't have a converter for.
+		if converter == nil {
+			continue
+		}
+
+		val, err := converter.Convert(anyProto.GetValue())
+		if err != nil {
+			// If the converter fails, nack the whole resource.
+			return Metadata{}, fmt.Errorf("metadata parser for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+		}
+		metadata[key] = val
+	}
+
+	// Process FilterMetadata for any keys not already handled.
+	for key, structProto := range metadataProto.GetFilterMetadata() {
+		_, exists := metadata[key]
+		// Skip keys already added from TyperFilterMetadata.
+		if exists {
+			continue
+		}
+		b, err := protojson.Marshal(structProto)
+		if err != nil {
+			return Metadata{}, fmt.Errorf("failed to marshal filter metadata for key %q: %v", key, err)
+		}
+		metadata[key] = JSONMetadata{Data: json.RawMessage(b)}
+	}
+	return Metadata{Metadata: metadata}, nil
 }
