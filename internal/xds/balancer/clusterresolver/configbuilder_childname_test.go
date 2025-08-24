@@ -106,38 +106,83 @@ func Test_nameGenerator_generate(t *testing.T) {
 			want: []string{"priority-0-0", "priority-0-1", "priority-0-2"},
 		},
 		{
+			name: "split and reverse priority",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+				},
+			},
+			want: []string{"priority-0-1", "priority-0-0"},
+		},
+		{
+			name: "delete and bring back",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+			},
+			want: []string{"priority-0-0"},
+		},
+		{
+			name: "delete and bring back reverse",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L1"}}},
+				},
+			},
+			want: []string{"priority-0-2"},
+		},
+		{
 			name: "complex merge split sequence",
 			inputs: [][][]xdsresource.Locality{
 				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
-				},
-				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
-				},
-				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 			},
 			want: []string{"priority-0-0", "priority-0-1", "priority-0-2"},
@@ -146,39 +191,39 @@ func Test_nameGenerator_generate(t *testing.T) {
 			name: "complex full merges splits sequence",
 			inputs: [][][]xdsresource.Locality{
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}},
-						{ID: clients.Locality{Zone: "L3"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}},
+						{ID: clients.Locality{Zone: "L2"}}},
 				},
 				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}},
-						{ID: clients.Locality{Zone: "L3"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}},
+						{ID: clients.Locality{Zone: "L2"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
-				},
-				{
-					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
-				},
-				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}},
-						{ID: clients.Locality{Zone: "L3"}}},
-				},
-				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}},
+						{ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
 				},
 			},
 			want: []string{"priority-0-0", "priority-0-1", "priority-0-2"},
@@ -187,60 +232,203 @@ func Test_nameGenerator_generate(t *testing.T) {
 			name: "merge-split reverse",
 			inputs: [][][]xdsresource.Locality{
 				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L2"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
 				},
 			},
 			want: []string{"priority-0-1", "priority-0-0"},
 		},
 		{
-			name: "2 by 2 shuffle sequence",
+			name: "merge-split reverse times 2",
 			inputs: [][][]xdsresource.Locality{
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}},
-						{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L4"}}},
-				},
-				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L3"}}},
-					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
 				},
 				{
 					{{ID: clients.Locality{Zone: "L1"}}},
-					{{ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}},
-					{{ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+				},
+			},
+			want: []string{"priority-0-1", "priority-0-0"},
+		},
+		{
+			name: "complex merge-split reverse",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
-					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
 				},
 				{
-					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
-					{{ID: clients.Locality{Zone: "L4"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 				{
+					{{ID: clients.Locality{Zone: "L3"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+				},
+			},
+			want: []string{"priority-0-3", "priority-0-0"},
+		},
+		{
+			name: "2 by 2 shuffle sequence",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}},
+						{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
 					{{ID: clients.Locality{Zone: "L1"}}},
 					{{ID: clients.Locality{Zone: "L2"}}},
 					{{ID: clients.Locality{Zone: "L3"}}},
-					{{ID: clients.Locality{Zone: "L4"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L3"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L3"}}},
 				},
 			},
 			want: []string{"priority-0-0", "priority-0-1", "priority-0-2", "priority-0-3"},
+		},
+		{
+			name: "traffic director proxyless example",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L3"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+			},
+			want: []string{"priority-0-3", "priority-0-1"},
+		},
+		{
+			name: "defensive test - same zone in multiple priorities",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L0"}}}, // Same zone in different priority
+				},
+			},
+			want: []string{"priority-0-0", "priority-0-1"},
+		},
+		{
+			name: "defensive test - zone conflict cascade",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L2"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L1"}}}, // Both L0 and L1 conflict
+				},
+			},
+			want: []string{"priority-0-1", "priority-0-0", "priority-0-3"},
+		},
+		{
+			name: "defensive test - complex zone duplication across multiple priorities",
+			inputs: [][][]xdsresource.Locality{
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L0"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+				{
+					{{ID: clients.Locality{Zone: "L1"}}},
+					{{ID: clients.Locality{Zone: "L0"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L2"}}},
+					{{ID: clients.Locality{Zone: "L1"}}, {ID: clients.Locality{Zone: "L3"}}},
+				},
+			},
+			want: []string{"priority-0-1", "priority-0-0", "priority-0-2", "priority-0-3"},
 		},
 	}
 	for _, tt := range tests {

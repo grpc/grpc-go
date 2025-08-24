@@ -19,7 +19,6 @@ package clusterresolver
 
 import (
 	"fmt"
-
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
@@ -57,14 +56,12 @@ func newNameGenerator(prefix uint64) *nameGenerator {
 func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string {
 	var ret []string
 	usedNames := make(map[string]bool)
-
 	for _, priority := range priorities {
 		var candidates []string
 		for _, locality := range priority {
 			name, exists := ng.existingNames[locality.ID]
 			if !exists {
-				name = fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
-				ng.nextID++
+				name = ng.generateNewName(name)
 				ng.existingNames[locality.ID] = name
 			}
 			candidates = append(candidates, name)
@@ -77,9 +74,19 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 				break
 			}
 		}
+		if chosenName == "" {
+			// All candidate names are used, generate a new name.
+			chosenName = ng.generateNewName(chosenName)
+		}
 
 		ret = append(ret, chosenName)
 		usedNames[chosenName] = true
 	}
 	return ret
+}
+
+func (ng *nameGenerator) generateNewName(name string) string {
+	name = fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
+	ng.nextID++
+	return name
 }
