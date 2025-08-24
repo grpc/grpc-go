@@ -31,17 +31,15 @@ import (
 // struct keeps state between generate() calls, and a later generate() might
 // return names returned by the previous call.
 type nameGenerator struct {
-	existingNames      map[clients.Locality]string
-	firstAssignedNames map[clients.Locality]string
-	prefix             uint64
-	nextID             uint64
+	existingNames map[clients.Locality]string
+	prefix        uint64
+	nextID        uint64
 }
 
 func newNameGenerator(prefix uint64) *nameGenerator {
 	return &nameGenerator{
-		prefix:             prefix,
-		existingNames:      make(map[clients.Locality]string),
-		firstAssignedNames: make(map[clients.Locality]string),
+		prefix:        prefix,
+		existingNames: make(map[clients.Locality]string),
 	}
 }
 
@@ -50,7 +48,6 @@ func newNameGenerator(prefix uint64) *nameGenerator {
 // Each priority is a list of localities. The name for the priority is picked as
 // - for each locality in this priority, if it exists in the existing names,
 // this priority will reuse the name
-// - if no name is found in existing names, then prior names will be checked from first assigned names to localities
 // - if no reusable name is found for this priority, a new name is generated and associated with first priority
 // locality to be remembered through merges and splits
 //
@@ -62,7 +59,6 @@ func newNameGenerator(prefix uint64) *nameGenerator {
 func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string {
 	var ret []string
 	usedNames := make(map[string]bool)
-	newNames := make(map[clients.Locality]string)
 	for _, priority := range priorities {
 		var nameFound string
 		for _, locality := range priority {
@@ -73,34 +69,19 @@ func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string 
 		}
 
 		if nameFound == "" {
-			// If no name found in current names, check first assigned names instead of generating completely new names.
+			// Cannot find a name to reuse. Generate a new one, and associate it with the first priority.
+			nameFound = fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
+			ng.nextID++
 			for _, locality := range priority {
-				if name, ok := ng.firstAssignedNames[locality.ID]; ok && !usedNames[name] {
-					nameFound = name
+				priorID := locality.ID
+				if _, ok := ng.existingNames[priorID]; !ok {
+					ng.existingNames[priorID] = nameFound
 					break
 				}
 			}
 		}
-
-		if nameFound == "" {
-			// Cannot find a name to reuse. Generate a new one, and associate it the first priority.
-			nameFound = fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
-			ng.nextID++
-			if len(priority) > 0 {
-				priorID := priority[0].ID
-				if _, ok := ng.firstAssignedNames[priorID]; !ok {
-					ng.firstAssignedNames[priorID] = nameFound
-				}
-			}
-		}
 		ret = append(ret, nameFound)
-		// All localities in this priority share the same name. Add them all to
-		// the new map.
-		for _, l := range priority {
-			newNames[l.ID] = nameFound
-		}
 		usedNames[nameFound] = true
 	}
-	ng.existingNames = newNames
 	return ret
 }
