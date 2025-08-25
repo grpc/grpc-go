@@ -21,7 +21,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 const proxyAddressFilterName = "envoy.http11_proxy_transport_socket.proxy_address"
@@ -49,7 +49,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 				},
 			},
 			want: ProxyAddressMetadataValue{
-				Address: "192.168.1.1",
+				Address: "192.168.1.1:8080",
 			},
 		},
 		{
@@ -65,23 +65,20 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 				},
 			},
 			want: ProxyAddressMetadataValue{
-				Address: "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+				Address: "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:9090",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			anyBytes, err := proto.Marshal(tt.addr)
-			if err != nil {
-				t.Fatalf("Failed to marshal address proto: %v", err)
-			}
-			got, err := converter.Convert(anyBytes)
+			anyProto := testutils.MarshalAny(t, tt.addr)
+			got, err := converter.convert(anyProto.GetValue())
 			if err != nil {
 				t.Fatalf("convert() failed with error: %v", err)
 			}
 			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(ProxyAddressMetadataValue{})); diff != "" {
-				t.Errorf("convert() returned unexpected value:\n%s", diff)
+				t.Errorf("convert() returned unexpected value (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -103,9 +100,6 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
 						Address: "invalid-ip",
-						PortSpecifier: &v3corepb.SocketAddress_PortValue{
-							PortValue: 8080,
-						},
 					},
 				},
 			},
@@ -147,15 +141,10 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			anyBytes, err := proto.Marshal(tt.addr)
-			if err != nil {
-				t.Fatalf("Failed to marshal address proto: %v", err)
-			}
-
-			// Call the convert function and check the returned error.
-			_, gotErr := converter.Convert(anyBytes)
-			if gotErr == nil || gotErr.Error() != tt.wantErr {
-				t.Errorf("convert() got error = %v, wantErr = %q", gotErr, tt.wantErr)
+			anyProto := testutils.MarshalAny(t, tt.addr)
+			_, err := converter.convert(anyProto.GetValue())
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
 			}
 		})
 	}
