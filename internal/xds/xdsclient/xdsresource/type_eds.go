@@ -53,6 +53,7 @@ type Endpoint struct {
 	HealthStatus EndpointHealthStatus
 	Weight       uint32
 	HashKey      string
+	Metadata     *Metadata
 }
 
 // Locality contains information of a locality.
@@ -61,6 +62,7 @@ type Locality struct {
 	ID        clients.Locality
 	Priority  uint32
 	Weight    uint32
+	Metadata  *Metadata
 }
 
 // EndpointsUpdate contains an EDS update.
@@ -73,4 +75,10 @@ type EndpointsUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+}
+
+// Metadata stores a map from keys to internal representations of metadata
+// proto.
+type Metadata struct {
+	Metadata map[string]MetadataValue
 }

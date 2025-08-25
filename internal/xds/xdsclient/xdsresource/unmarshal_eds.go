@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -30,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -108,11 +110,20 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
+		var endpointMetadata *Metadata
+		if md := lbEndpoint.GetMetadata(); md != nil {
+			m, err := validateAndConstructMetadata(md)
+			if err != nil {
+				return nil, err
+			}
+			endpointMetadata = &m
+		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Addresses:    addrs,
 			Weight:       weight,
 			HashKey:      hashKey(lbEndpoint),
+			Metadata:     endpointMetadata,
 		})
 	}
 	return endpoints, nil
@@ -190,11 +201,20 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
+		var localityMetadata *Metadata
+		if md := locality.GetMetadata(); md != nil {
+			m, err := validateAndConstructMetadata(md)
+			if err != nil {
+				return EndpointsUpdate{}, err
+			}
+			localityMetadata = &m
+		}
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: endpoints,
 			Weight:    weight,
 			Priority:  priority,
+			Metadata:  localityMetadata,
 		})
 	}
 	for i := 0; i < len(priorities); i++ {
@@ -203,4 +223,36 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
+}
+
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (Metadata, error) {
+	metadata := make(map[string]MetadataValue)
+	// First go through TypedFilterMetadata.
+	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
+		converter := ConverterForType(key)
+		// Ignore types we don't have a converter for.
+		if converter == nil {
+			continue
+		}
+		val, err := converter.convert(anyProto.GetValue())
+		if err != nil {
+			// If the converter fails, nack the whole resource.
+			return Metadata{}, fmt.Errorf("metadata converting for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+		}
+		metadata[key] = val
+	}
+
+	// Process FilterMetadata for any keys not already handled.
+	for key, structProto := range metadataProto.GetFilterMetadata() {
+		// Skip keys already added from TyperFilterMetadata.
+		if metadata[key] != nil {
+			continue
+		}
+		b, err := protojson.Marshal(structProto)
+		if err != nil {
+			return Metadata{}, fmt.Errorf("failed to marshal filter metadata for key %q: %v", key, err)
+		}
+		metadata[key] = JSONMetadata{Data: json.RawMessage(b)}
+	}
+	return Metadata{Metadata: metadata}, nil
 }
