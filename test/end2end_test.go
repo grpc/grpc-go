@@ -4136,7 +4136,7 @@ func (s) TestServerStreaming_ClientSendsZeroRequests(t *testing.T) {
 }
 
 // Tests that a client receives a cardinality violation error for client-streaming
-// RPCs if the server call SendMsg() multiple times.
+// RPCs if the server calls SendMsg() multiple times.
 func (s) TestClientStreaming_ServerHandlerSendMsgAfterSendMsg(t *testing.T) {
 	ss := stubserver.StubServer{
 		StreamingInputCallF: func(stream testgrpc.TestService_StreamingInputCallServer) error {
