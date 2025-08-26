@@ -89,14 +89,14 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 	}{
 		{
 			name:         "valid token with future expiration",
-			tokenContent: createTestJWT(t, "https://example.com", now.Add(time.Hour)),
+			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			wantErr:      false,
-			wantMetadata: map[string]string{"authorization": "Bearer " + createTestJWT(t, "https://example.com", now.Add(time.Hour))},
+			wantMetadata: map[string]string{"authorization": "Bearer " + createTestJWT(t, now.Add(time.Hour))},
 		},
 		{
 			name:            "insufficient security level",
-			tokenContent:    createTestJWT(t, "", now.Add(time.Hour)),
+			tokenContent:    createTestJWT(t, now.Add(time.Hour)),
 			authInfo:        &testAuthInfo{secLevel: credentials.NoSecurity},
 			wantErr:         true,
 			wantErrContains: "unable to transfer JWT token file PerRPCCredentials",
@@ -147,7 +147,7 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 }
 
 func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
-	token := createTestJWT(t, "", time.Now().Add(time.Hour))
+	token := createTestJWT(t, time.Now().Add(time.Hour))
 	tokenFile := writeTempFile(t, "token", token)
 
 	creds, err := NewTokenFileCallCredentials(tokenFile)
@@ -168,7 +168,7 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 	}
 
 	// Update the file with a different token.
-	newToken := createTestJWT(t, "", time.Now().Add(2*time.Hour))
+	newToken := createTestJWT(t, time.Now().Add(2*time.Hour))
 	if err := os.WriteFile(tokenFile, []byte(newToken), 0600); err != nil {
 		t.Fatalf("Failed to update token file: %v", err)
 	}
@@ -202,7 +202,7 @@ func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testing.T) {
 	// Create token that expires in 2 hours.
 	tokenExp := time.Now().Truncate(time.Second).Add(2 * time.Hour)
-	token := createTestJWT(t, "", tokenExp)
+	token := createTestJWT(t, tokenExp)
 	tokenFile := writeTempFile(t, "token", token)
 
 	creds, err := NewTokenFileCallCredentials(tokenFile)
@@ -217,8 +217,7 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 	})
 
 	// Get token to trigger caching.
-	_, err = creds.GetRequestMetadata(ctx)
-	if err != nil {
+	if _, err = creds.GetRequestMetadata(ctx); err != nil {
 		t.Fatalf("GetRequestMetadata() failed: %v", err)
 	}
 
@@ -239,7 +238,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	// Create token that expires in 80 seconds (=> cache expires in ~50s).
 	// This ensures pre-emptive refresh triggers since 50s < the 1 minute check.
 	tokenExp := time.Now().Add(80 * time.Second)
-	expiringToken := createTestJWT(t, "", tokenExp)
+	expiringToken := createTestJWT(t, tokenExp)
 	tokenFile := writeTempFile(t, "token", expiringToken)
 
 	creds, err := NewTokenFileCallCredentials(tokenFile)
@@ -278,7 +277,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 
 	// Create new token file with different expiration while refresh is
 	// happening.
-	newToken := createTestJWT(t, "", time.Now().Add(2*time.Hour))
+	newToken := createTestJWT(t, time.Now().Add(2*time.Hour))
 	if err := os.WriteFile(tokenFile, []byte(newToken), 0600); err != nil {
 		t.Fatalf("Failed to write updated token file: %v", err)
 	}
@@ -427,7 +426,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 
 	// Create valid token file.
-	validToken := createTestJWT(t, "", time.Now().Add(time.Hour))
+	validToken := createTestJWT(t, time.Now().Add(time.Hour))
 	if err := os.WriteFile(nonExistentFile, []byte(validToken), 0600); err != nil {
 		t.Fatalf("Failed to create valid token file: %v", err)
 	}
@@ -488,22 +487,18 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 
 // createTestJWT creates a test JWT token with the specified audience and
 // expiration.
-func createTestJWT(t *testing.T, audience string, expiration time.Time) string {
+func createTestJWT(t *testing.T, expiration time.Time) string {
 	t.Helper()
+
+	claims := map[string]any{}
+	if !expiration.IsZero() {
+		claims["exp"] = expiration.Unix()
+	}
 
 	header := map[string]any{
 		"typ": "JWT",
 		"alg": "HS256",
 	}
-
-	claims := map[string]any{}
-	if audience != "" {
-		claims["aud"] = audience
-	}
-	if !expiration.IsZero() {
-		claims["exp"] = expiration.Unix()
-	}
-
 	headerBytes, err := json.Marshal(header)
 	if err != nil {
 		t.Fatalf("Failed to marshal header: %v", err)

@@ -91,12 +91,12 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 	}{
 		{
 			name:            "valid token without expiration",
-			tokenContent:    createTestJWT(t, "", time.Time{}),
+			tokenContent:    createTestJWT(t, time.Time{}),
 			wantErrContains: "JWT token has no expiration claim",
 		},
 		{
 			name:            "expired token",
-			tokenContent:    createTestJWT(t, "", now.Add(-time.Hour)),
+			tokenContent:    createTestJWT(t, now.Add(-time.Hour)),
 			wantErrContains: "JWT token is expired",
 		},
 		{
@@ -133,7 +133,7 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 func (s) TestJWTFileReader_ReadToken_ValidToken(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	tokenExp := now.Add(time.Hour)
-	token := createTestJWT(t, "https://example.com", tokenExp)
+	token := createTestJWT(t, tokenExp)
 	tokenFile := writeTempFile(t, "token", token)
 
 	reader := jWTFileReader{tokenFilePath: tokenFile}
