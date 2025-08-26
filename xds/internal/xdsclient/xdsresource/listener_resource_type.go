@@ -164,7 +164,7 @@ func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	if l == nil || other == nil {
 		return false
 	}
-	o, ok := other.(*ClusterResourceData)
+	o, ok := other.(*ListenerResourceData)
 	if !ok {
 		return false
 	}

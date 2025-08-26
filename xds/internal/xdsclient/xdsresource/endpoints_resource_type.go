@@ -125,7 +125,7 @@ func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
 	if e == nil || other == nil {
 		return false
 	}
-	o, ok := other.(*ClusterResourceData)
+	o, ok := other.(*EndpointsResourceData)
 	if !ok {
 		return false
 	}

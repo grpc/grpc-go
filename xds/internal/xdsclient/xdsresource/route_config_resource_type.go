@@ -126,7 +126,7 @@ func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	if r == nil || other == nil {
 		return false
 	}
-	o, ok := other.(*ClusterResourceData)
+	o, ok := other.(*RouteConfigResourceData)
 	if !ok {
 		return false
 	}
