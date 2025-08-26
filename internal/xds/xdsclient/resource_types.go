@@ -18,37 +18,36 @@
 package xdsclient
 
 import (
-	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 )
 
-func supportedResourceTypes(config *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) map[string]xdsclient.ResourceType {
+func supportedResourceTypes() map[string]xdsclient.ResourceType {
 	return map[string]xdsclient.ResourceType{
 		version.V3ListenerURL: {
 			TypeURL:                    version.V3ListenerURL,
 			TypeName:                   xdsresource.ListenerResourceTypeName,
 			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewGenericListenerResourceTypeDecoder(config),
+			Decoder:                    xdsresource.ListenerResourceTypeDecoder,
 		},
 		version.V3RouteConfigURL: {
 			TypeURL:                    version.V3RouteConfigURL,
 			TypeName:                   xdsresource.RouteConfigTypeName,
 			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.NewGenericRouteConfigResourceTypeDecoder(),
+			Decoder:                    xdsresource.RouteConfigResourceTypeDecoder,
 		},
 		version.V3ClusterURL: {
 			TypeURL:                    version.V3ClusterURL,
 			TypeName:                   xdsresource.ClusterResourceTypeName,
 			AllResourcesRequiredInSotW: true,
-			Decoder:                    xdsresource.NewGenericClusterResourceTypeDecoder(config, gServerCfgMap),
+			Decoder:                    xdsresource.ClusterResourceTypeDecoder,
 		},
 		version.V3EndpointsURL: {
 			TypeURL:                    version.V3EndpointsURL,
 			TypeName:                   xdsresource.EndpointsResourceTypeName,
 			AllResourcesRequiredInSotW: false,
-			Decoder:                    xdsresource.NewGenericEndpointsResourceTypeDecoder(),
+			Decoder:                    xdsresource.EndpointsResourceTypeDecoder,
 		},
 	}
 }
