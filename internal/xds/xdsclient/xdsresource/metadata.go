@@ -27,7 +27,7 @@ import (
 )
 
 func init() {
-	registerMetadataConverter("envoy.http11_proxy_transport_socket.proxy_address", proxyAddressConvertor{})
+	registerMetadataConverter("type.googleapis.com/envoy.config.core.v3.Address", proxyAddressConvertor{})
 }
 
 var (

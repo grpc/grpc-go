@@ -229,7 +229,7 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]
 	metadata := make(map[string]MetadataValue)
 	// First go through TypedFilterMetadata.
 	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
-		converter := metadataConverterForType(key)
+		converter := metadataConverterForType(anyProto.GetTypeUrl())
 		// Ignore types we don't have a converter for.
 		if converter == nil {
 			continue

@@ -24,12 +24,12 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 )
 
-const proxyAddressFilterName = "envoy.http11_proxy_transport_socket.proxy_address"
+const proxyAddressTypeURL = "type.googleapis.com/envoy.config.core.v3.Address"
 
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {
-	converter := metadataConverterForType(proxyAddressFilterName)
+	converter := metadataConverterForType(proxyAddressTypeURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", proxyAddressFilterName)
+		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
 	}
 	tests := []struct {
 		name string
@@ -133,9 +133,9 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 }
 
 func (s) TestProxyAddressConverterFailure(t *testing.T) {
-	converter := metadataConverterForType(proxyAddressFilterName)
+	converter := metadataConverterForType(proxyAddressTypeURL)
 	if converter == nil {
-		t.Fatalf("Converter for %q not found in registry", proxyAddressFilterName)
+		t.Fatalf("Converter for %q not found in registry", proxyAddressTypeURL)
 	}
 	tests := []struct {
 		name    string
