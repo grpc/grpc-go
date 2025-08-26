@@ -45,43 +45,24 @@ func TestTokenFileCallCreds(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func (s) TestNewTokenFileCallCredentials(t *testing.T) {
-	tests := []struct {
-		name          string
-		tokenFilePath string
-		wantErr       string
-	}{
-		{
-			name:          "some filepath",
-			tokenFilePath: "/path/to/token",
-			wantErr:       "",
-		},
-		{
-			name:          "empty filepath",
-			tokenFilePath: "",
-			wantErr:       "tokenFilePath cannot be empty",
-		},
+func (s) TestNewTokenFileCallCredentialsValidFilepath(t *testing.T) {
+	creds, err := NewTokenFileCallCredentials("/path/to/token")
+	if err != nil {
+		t.Fatalf("NewTokenFileCallCredentials() unexpected error: %v", err)
 	}
+	if creds == nil {
+		t.Fatal("NewTokenFileCallCredentials() returned nil credentials")
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			creds, err := NewTokenFileCallCredentials(tt.tokenFilePath)
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("NewTokenFileCallCredentials() expected error, got nil")
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("NewTokenFileCallCredentials() error = %v, want error containing %q", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("NewTokenFileCallCredentials() unexpected error: %v", err)
-			}
-			if creds == nil {
-				t.Fatal("NewTokenFileCallCredentials() returned nil credentials")
-			}
-		})
+func (s) TestNewTokenFileCallCredentialsMissingFilepath(t *testing.T) {
+	_, err := NewTokenFileCallCredentials("")
+	if err == nil {
+		t.Fatalf("NewTokenFileCallCredentials() expected error, got nil")
+	}
+	expectedErr := "tokenFilePath cannot be empty"
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Fatalf("NewTokenFileCallCredentials() error = %v, want error containing %q", err, expectedErr)
 	}
 }
 
@@ -289,7 +270,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	impl.mu.Lock()
 	cacheExp := impl.cachedExpiry
 	tokenCached := impl.cachedAuthHeader != ""
-	shouldTriggerRefresh := impl.needsPreemptiveRefreshLocked()
+	shouldTriggerRefresh := time.Until(cacheExp) < preemptiveRefreshThreshold
 	impl.mu.Unlock()
 
 	if !tokenCached {
