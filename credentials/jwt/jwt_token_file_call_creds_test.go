@@ -161,6 +161,10 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("First GetRequestMetadata() failed: %v", err)
 	}
+	wantMetadata := map[string]string{"authorization": "Bearer " + token}
+	if diff := cmp.Diff(wantMetadata, metadata1); diff != "" {
+		t.Errorf("First GetRequestMetadata() returned unexpected metadata (-want +got):\n%s", diff)
+	}
 
 	// Update the file with a different token.
 	newToken := createTestJWT(t, time.Now().Add(2*time.Hour))
@@ -174,8 +178,8 @@ func (s) TestTokenFileCallCreds_TokenCaching(t *testing.T) {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
 	}
 
-	if metadata1["authorization"] != metadata2["authorization"] {
-		t.Error("Expected cached token to be returned, but got different token")
+	if diff := cmp.Diff(metadata1, metadata2); diff != "" {
+		t.Errorf("Second GetRequestMetadata() returned unexpected metadata (-want +got):\n%s", diff)
 	}
 }
 
