@@ -104,7 +104,7 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 
 	// At this point, the token is either invalid or expired and we are no
 	// longer backing off. So refresh it.
-	token, expiry, err := c.fileReader.ReadToken()
+	token, expiry, err := c.fileReader.readToken()
 	c.updateCacheLocked(token, expiry, err)
 
 	if c.cachedError != nil {
@@ -143,7 +143,7 @@ func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
 // refreshToken reads the token from file and updates the cached data.
 func (c *jwtTokenFileCallCreds) refreshToken() {
 	// Deliberately not locking c.mu here
-	token, expiry, err := c.fileReader.ReadToken()
+	token, expiry, err := c.fileReader.readToken()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()

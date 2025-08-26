@@ -37,9 +37,9 @@ type jWTFileReader struct {
 	tokenFilePath string
 }
 
-// ReadToken reads and parses a JWT token from the configured file.
+// readToken reads and parses a JWT token from the configured file.
 // Returns the token string, expiration time, and any error encountered.
-func (r *jWTFileReader) ReadToken() (string, time.Time, error) {
+func (r *jWTFileReader) readToken() (string, time.Time, error) {
 	tokenBytes, err := os.ReadFile(r.tokenFilePath)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("failed to read token file %q: %v", r.tokenFilePath, err)

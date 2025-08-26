@@ -67,7 +67,7 @@ func TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 			}
 
 			reader := jWTFileReader{tokenFilePath: tokenFile}
-			_, _, err := reader.ReadToken()
+			_, _, err := reader.readToken()
 			if err == nil {
 				t.Fatal("ReadToken() expected error, got nil")
 			}
@@ -118,7 +118,7 @@ func TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 			tokenFile := writeTempFile(t, "token", tt.tokenContent)
 
 			reader := jWTFileReader{tokenFilePath: tokenFile}
-			_, _, err := reader.ReadToken()
+			_, _, err := reader.readToken()
 			if err == nil {
 				t.Fatal("ReadToken() expected error, got nil")
 			}
@@ -137,7 +137,7 @@ func TestJWTFileReader_ReadToken_ValidToken(t *testing.T) {
 	tokenFile := writeTempFile(t, "token", token)
 
 	reader := jWTFileReader{tokenFilePath: tokenFile}
-	readToken, expiry, err := reader.ReadToken()
+	readToken, expiry, err := reader.readToken()
 	if err != nil {
 		t.Fatalf("ReadToken() unexpected error: %v", err)
 	}
