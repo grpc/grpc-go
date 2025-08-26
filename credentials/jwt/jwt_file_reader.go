@@ -37,13 +37,6 @@ type jWTFileReader struct {
 	tokenFilePath string
 }
 
-// newJWTFileReader creates a new JWTFileReader for the specified file path.
-func newJWTFileReader(tokenFilePath string) *jWTFileReader {
-	return &jWTFileReader{
-		tokenFilePath: tokenFilePath,
-	}
-}
-
 // ReadToken reads and parses a JWT token from the configured file.
 // Returns the token string, expiration time, and any error encountered.
 func (r *jWTFileReader) ReadToken() (string, time.Time, error) {

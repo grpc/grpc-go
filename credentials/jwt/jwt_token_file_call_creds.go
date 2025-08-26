@@ -59,7 +59,7 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 	}
 
 	creds := &jwtTokenFileCallCreds{
-		fileReader:      newJWTFileReader(tokenFilePath),
+		fileReader:      &jWTFileReader{tokenFilePath: tokenFilePath},
 		backoffStrategy: backoff.DefaultExponential,
 	}
 
