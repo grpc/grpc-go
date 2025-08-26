@@ -78,12 +78,6 @@ func (s) TestTokenFileCallCreds_RequireTransportSecurity(t *testing.T) {
 }
 
 func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "jwt_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
 	now := time.Now().Truncate(time.Second)
 	tests := []struct {
 		name            string
