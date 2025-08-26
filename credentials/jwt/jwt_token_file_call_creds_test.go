@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
@@ -80,26 +81,36 @@ func (s) TestTokenFileCallCreds_RequireTransportSecurity(t *testing.T) {
 func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	tests := []struct {
-		name            string
-		tokenContent    string
-		authInfo        credentials.AuthInfo
-		wantErr         bool
-		wantErrContains string
-		wantMetadata    map[string]string
+		name         string
+		tokenContent string
+		authInfo     credentials.AuthInfo
+		grpcCode     codes.Code
+		wantMetadata map[string]string
 	}{
 		{
 			name:         "valid token with future expiration",
 			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			wantErr:      false,
+			grpcCode:     codes.OK,
 			wantMetadata: map[string]string{"authorization": "Bearer " + createTestJWT(t, now.Add(time.Hour))},
 		},
 		{
-			name:            "insufficient security level",
-			tokenContent:    createTestJWT(t, now.Add(time.Hour)),
-			authInfo:        &testAuthInfo{secLevel: credentials.NoSecurity},
-			wantErr:         true,
-			wantErrContains: "unable to transfer JWT token file PerRPCCredentials",
+			name:         "insufficient security level",
+			tokenContent: createTestJWT(t, now.Add(time.Hour)),
+			authInfo:     &testAuthInfo{secLevel: credentials.NoSecurity},
+			grpcCode:     codes.Unknown,
+		},
+		{
+			name:         "unreachable token file",
+			tokenContent: "",
+			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
+			grpcCode:     codes.Unavailable,
+		},
+		{
+			name:         "malformed JWT token",
+			tokenContent: "bad contents",
+			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
+			grpcCode:     codes.Unauthenticated,
 		},
 	}
 
@@ -119,28 +130,12 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 			})
 
 			metadata, err := creds.GetRequestMetadata(ctx)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("GetRequestMetadata() expected error, got nil")
-				}
-				if !strings.Contains(err.Error(), tt.wantErrContains) {
-					t.Fatalf("GetRequestMetadata() error = %v, want error containing %q", err, tt.wantErrContains)
-				}
-				return
+			if status.Code(err) != tt.grpcCode {
+				t.Fatalf("GetRequestMetadata() = %v, want %v", status.Code(err), tt.grpcCode)
 			}
 
-			if err != nil {
-				t.Fatalf("GetRequestMetadata() unexpected error: %v", err)
-			}
-
-			if len(metadata) != len(tt.wantMetadata) {
-				t.Fatalf("GetRequestMetadata() returned %d metadata entries, want %d", len(metadata), len(tt.wantMetadata))
-			}
-
-			for k, v := range tt.wantMetadata {
-				if metadata[k] != v {
-					t.Errorf("GetRequestMetadata() metadata[%q] = %q, want %q", k, metadata[k], v)
-				}
+			if diff := cmp.Diff(tt.wantMetadata, metadata); diff != "" {
+				t.Errorf("GetRequestMetadata() returned unexpected metadata (-want +got):\n%s", diff)
 			}
 		})
 	}
