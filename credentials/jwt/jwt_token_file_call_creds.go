@@ -84,7 +84,8 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 	defer c.mu.Unlock()
 
 	if c.isTokenValidLocked() {
-		if c.needsPreemptiveRefreshLocked() {
+		needsPreemptiveRefresh := time.Until(c.cachedExpiry) < preemptiveRefreshThreshold
+		if needsPreemptiveRefresh {
 			// Start refresh if not pending (handling the prior RPC may have
 			// just spawned a goroutine).
 			if !c.pendingRefresh {
@@ -132,16 +133,6 @@ func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
 		return false
 	}
 	return c.cachedExpiry.After(time.Now())
-}
-
-// needsPreemptiveRefreshLocked checks if a pre-emptive refresh should be
-// triggered.
-// Returns true if the cached token is valid but expires within 1 minute.
-// We only trigger pre-emptive refresh for valid tokens - if the token is
-// invalid or expired, the next RPC will handle synchronous refresh instead.
-// Caller must hold c.mu lock.
-func (c *jwtTokenFileCallCreds) needsPreemptiveRefreshLocked() bool {
-	return c.isTokenValidLocked() && time.Until(c.cachedExpiry) < preemptiveRefreshThreshold
 }
 
 // refreshToken reads the token from file and updates the cached data.
