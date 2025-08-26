@@ -27,24 +27,24 @@ import (
 )
 
 func init() {
-	Register("envoy.http11_proxy_transport_socket.proxy_address", proxyAddressConvertor{})
+	registerMetadataConverter("envoy.http11_proxy_transport_socket.proxy_address", proxyAddressConvertor{})
 }
 
 var (
 	// metadataregistry is a map from proto type to Converter.
-	metadataregistry = make(map[string]converter)
+	metadataregistry = make(map[string]metadataConverter)
 )
 
 // MetadataValue is the interface for a converted metadata value. It is
 // implemented by concrete types that hold the converted metadata.
 type MetadataValue interface {
-	// Type returns the type.
+	// Type returns the actual type url of the any proto.
 	Type() string
 }
 
-// converter is the interface for a metadata converter. It is implemented by
+// metadataConverter is the interface for a metadata converter. It is implemented by
 // concrete types that convert raw bytes into a MetadataValue.
-type converter interface {
+type metadataConverter interface {
 	// convert parses the proto serialized bytes of an Any proto or
 	// google.protobuf.Struct into a MetadataValue. The bytes of an Any proto
 	// are from the value field, which has proto serialized bytes of the
@@ -52,22 +52,28 @@ type converter interface {
 	convert([]byte) (MetadataValue, error)
 }
 
-// Register registers the converter to the map keyed on a proto type. Must be
+// registerMetadataConverter registers the converter to the map keyed on a proto type. Must be
 // called at init time. Not thread safe.
-func Register(protoType string, c converter) {
+func registerMetadataConverter(protoType string, c metadataConverter) {
 	metadataregistry[protoType] = c
 }
 
-// ConverterForType retrieves a converter based on key given.
-func ConverterForType(typeURL string) converter {
+// metadataConverterForType retrieves a converter based on key given.
+func metadataConverterForType(typeURL string) metadataConverter {
 	return metadataregistry[typeURL]
 }
 
-// JSONMetadata stores the values in a google.protobufStruct from
+// JSONMetadataValue stores the values in a google.protobuf.Struct from
 // FilterMetadata.
-type JSONMetadata struct {
-	MetadataValue
+type JSONMetadataValue struct {
+	// Data stores the contents of the google.protobuf.Struct.
 	Data json.RawMessage
+}
+
+// Type returns the type URL for the proto. Type of JSON-based metadata, is
+// google.protobuf.Struct.
+func (JSONMetadataValue) Type() string {
+	return "google.protobuf.Struct"
 }
 
 // ProxyAddressMetadataValue holds the address parsed from the
@@ -83,11 +89,11 @@ func (ProxyAddressMetadataValue) Type() string {
 	return "envoy.config.core.v3.Address"
 }
 
-// ProxyAddressConvertor implements the converter for A86 (Proxy Address) metadata.
+// proxyAddressConvertor implements the metadataConverter interface to handle
+// the conversion of envoy.config.core.v3.Address protobuf messages into an
+// internal representation.
 type proxyAddressConvertor struct{}
 
-// Convert parses the bytes from the value field of an Any proto containing an
-// Address proto into a ProxyAddressMetadataValue.
 func (proxyAddressConvertor) convert(anyBytes []byte) (MetadataValue, error) {
 	addressProto := &v3corepb.Address{}
 	if err := proto.Unmarshal(anyBytes, addressProto); err != nil {
@@ -105,8 +111,5 @@ func (proxyAddressConvertor) convert(anyBytes []byte) (MetadataValue, error) {
 		return nil, fmt.Errorf("port value not set in socket_address")
 	}
 
-	metadata := ProxyAddressMetadataValue{
-		Address: parseAddress(socketaddress),
-	}
-	return metadata, nil
+	return ProxyAddressMetadataValue{Address: parseAddress(socketaddress)}, nil
 }

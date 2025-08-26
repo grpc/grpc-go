@@ -27,7 +27,7 @@ import (
 const proxyAddressFilterName = "envoy.http11_proxy_transport_socket.proxy_address"
 
 func (s) TestProxyAddressConverterSuccess(t *testing.T) {
-	converter := ConverterForType(proxyAddressFilterName)
+	converter := metadataConverterForType(proxyAddressFilterName)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", proxyAddressFilterName)
 	}
@@ -53,7 +53,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 		},
 		{
-			name: "valid IPv6 address and port",
+			name: "valid full IPv6 address and port",
 			addr: &v3corepb.Address{
 				Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
@@ -66,6 +66,54 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 			},
 			want: ProxyAddressMetadataValue{
 				Address: "[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:9090",
+			},
+		},
+		{
+			name: "valid shortened IPv6 address",
+			addr: &v3corepb.Address{
+				Address: &v3corepb.Address_SocketAddress{
+					SocketAddress: &v3corepb.SocketAddress{
+						Address: "2001:db8::1",
+						PortSpecifier: &v3corepb.SocketAddress_PortValue{
+							PortValue: 9090,
+						},
+					},
+				},
+			},
+			want: ProxyAddressMetadataValue{
+				Address: "[2001:db8::1]:9090",
+			},
+		},
+		{
+			name: "valid link-local IPv6 address",
+			addr: &v3corepb.Address{
+				Address: &v3corepb.Address_SocketAddress{
+					SocketAddress: &v3corepb.SocketAddress{
+						Address: "fe80::1ff:fe23:4567:890a",
+						PortSpecifier: &v3corepb.SocketAddress_PortValue{
+							PortValue: 8888,
+						},
+					},
+				},
+			},
+			want: ProxyAddressMetadataValue{
+				Address: "[fe80::1ff:fe23:4567:890a]:8888",
+			},
+		},
+		{
+			name: "valid IPv4-mapped IPv6 address",
+			addr: &v3corepb.Address{
+				Address: &v3corepb.Address_SocketAddress{
+					SocketAddress: &v3corepb.SocketAddress{
+						Address: "::ffff:192.0.2.128",
+						PortSpecifier: &v3corepb.SocketAddress_PortValue{
+							PortValue: 1234,
+						},
+					},
+				},
+			},
+			want: ProxyAddressMetadataValue{
+				Address: "[::ffff:192.0.2.128]:1234",
 			},
 		},
 	}
@@ -85,7 +133,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 }
 
 func (s) TestProxyAddressConverterFailure(t *testing.T) {
-	converter := ConverterForType(proxyAddressFilterName)
+	converter := metadataConverterForType(proxyAddressFilterName)
 	if converter == nil {
 		t.Fatalf("Converter for %q not found in registry", proxyAddressFilterName)
 	}

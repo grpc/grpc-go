@@ -110,13 +110,13 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
-		var endpointMetadata *Metadata
+		var endpointMetadata map[string]MetadataValue
 		if md := lbEndpoint.GetMetadata(); md != nil {
 			m, err := validateAndConstructMetadata(md)
 			if err != nil {
 				return nil, err
 			}
-			endpointMetadata = &m
+			endpointMetadata = m
 		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
@@ -201,13 +201,13 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
-		var localityMetadata *Metadata
+		var localityMetadata map[string]MetadataValue
 		if md := locality.GetMetadata(); md != nil {
 			m, err := validateAndConstructMetadata(md)
 			if err != nil {
 				return EndpointsUpdate{}, err
 			}
-			localityMetadata = &m
+			localityMetadata = m
 		}
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
@@ -225,11 +225,11 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
-func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (Metadata, error) {
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]MetadataValue, error) {
 	metadata := make(map[string]MetadataValue)
 	// First go through TypedFilterMetadata.
 	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
-		converter := ConverterForType(key)
+		converter := metadataConverterForType(key)
 		// Ignore types we don't have a converter for.
 		if converter == nil {
 			continue
@@ -237,7 +237,7 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (Metadata, e
 		val, err := converter.convert(anyProto.GetValue())
 		if err != nil {
 			// If the converter fails, nack the whole resource.
-			return Metadata{}, fmt.Errorf("metadata converting for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+			return nil, fmt.Errorf("metadata converting for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
 		}
 		metadata[key] = val
 	}
@@ -250,9 +250,9 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (Metadata, e
 		}
 		b, err := protojson.Marshal(structProto)
 		if err != nil {
-			return Metadata{}, fmt.Errorf("failed to marshal filter metadata for key %q: %v", key, err)
+			return nil, fmt.Errorf("failed to marshal filter metadata for key %q: %v", key, err)
 		}
-		metadata[key] = JSONMetadata{Data: json.RawMessage(b)}
+		metadata[key] = JSONMetadataValue{Data: json.RawMessage(b)}
 	}
-	return Metadata{Metadata: metadata}, nil
+	return metadata, nil
 }

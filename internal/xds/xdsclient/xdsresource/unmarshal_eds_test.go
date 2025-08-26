@@ -49,6 +49,65 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name: "with endpoint metadata",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{
+					addrWithPort: "addr1:314",
+					metadata: &v3corepb.Metadata{
+						FilterMetadata: map[string]*structpb.Struct{"test-key": {}},
+					},
+				}}, nil)
+				return clab0.Build()
+			}(),
+			want: EndpointsUpdate{
+				Localities: []Locality{
+					{
+						Endpoints: []Endpoint{{
+							Addresses:    []string{"addr1:314"},
+							HealthStatus: EndpointHealthStatusUnknown,
+							Weight:       1,
+							Metadata: map[string]MetadataValue{
+								"test-key": JSONMetadataValue{Data: json.RawMessage("{}")},
+							},
+						}},
+						ID:       clients.Locality{SubZone: "locality-1"},
+						Priority: 0,
+						Weight:   1,
+					},
+				},
+			},
+		},
+		{
+			name: "with locality metadata",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{addrWithPort: "addr1:314"}}, &addLocalityOptions{
+					Metadata: &v3corepb.Metadata{
+						FilterMetadata: map[string]*structpb.Struct{"test-key": {}},
+					},
+				})
+				return clab0.Build()
+			}(),
+			want: EndpointsUpdate{
+				Localities: []Locality{
+					{
+						Endpoints: []Endpoint{{
+							Addresses:    []string{"addr1:314"},
+							HealthStatus: EndpointHealthStatusUnknown,
+							Weight:       1,
+						}},
+						ID:       clients.Locality{SubZone: "locality-1"},
+						Priority: 0,
+						Weight:   1,
+						Metadata: map[string]MetadataValue{
+							"test-key": JSONMetadataValue{Data: json.RawMessage("{}")},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "missing-priority",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
@@ -593,7 +652,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 	tests := []struct {
 		name          string
 		metadataProto *v3corepb.Metadata
-		want          Metadata
+		want          map[string]MetadataValue
 		wantErr       bool
 	}{
 		{
@@ -612,10 +671,10 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 					"untyped-key": {Fields: map[string]*structpb.Value{"field": structpb.NewStringValue("value")}},
 				},
 			},
-			want: Metadata{Metadata: map[string]MetadataValue{
+			want: map[string]MetadataValue{
 				"envoy.http11_proxy_transport_socket.proxy_address": ProxyAddressMetadataValue{Address: "1.2.3.4:8080"},
-				"untyped-key": JSONMetadata{Data: json.RawMessage(`{"field":"value"}`)},
-			}},
+				"untyped-key": JSONMetadataValue{Data: json.RawMessage(`{"field":"value"}`)},
+			},
 		},
 		{
 			name: "failure-case-converter-error",
@@ -677,13 +736,15 @@ func newClaBuilder(clusterName string, dropPercents []uint32) *claBuilder {
 
 // addLocalityOptions contains options when adding locality to the builder.
 type addLocalityOptions struct {
-	Health []v3corepb.HealthStatus
-	Weight []uint32
+	Health   []v3corepb.HealthStatus
+	Weight   []uint32
+	Metadata *v3corepb.Metadata
 }
 
 type endpointOpts struct {
 	addrWithPort            string
 	additionalAddrWithPorts []string
+	metadata                *v3corepb.Metadata
 }
 
 func addressFromStr(addrWithPort string) *v3corepb.Address {
@@ -724,6 +785,7 @@ func (clab *claBuilder) addLocality(subzone string, weight uint32, priority uint
 					AdditionalAddresses: additionalAddrs,
 				},
 			},
+			Metadata: e.metadata,
 		}
 		if opts != nil {
 			if i < len(opts.Health) {
@@ -745,12 +807,16 @@ func (clab *claBuilder) addLocality(subzone string, weight uint32, priority uint
 		}
 	}
 
-	clab.v.Endpoints = append(clab.v.Endpoints, &v3endpointpb.LocalityLbEndpoints{
+	locality := &v3endpointpb.LocalityLbEndpoints{
 		Locality:            localityID,
 		LbEndpoints:         lbEndPoints,
 		LoadBalancingWeight: &wrapperspb.UInt32Value{Value: weight},
 		Priority:            priority,
-	})
+	}
+	if opts != nil {
+		locality.Metadata = opts.Metadata
+	}
+	clab.v.Endpoints = append(clab.v.Endpoints, locality)
 }
 
 // Build builds ClusterLoadAssignment.
