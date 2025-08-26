@@ -101,8 +101,6 @@ type XDSClient struct {
 // New returns a new xDS Client configured with the provided config.
 func New(config Config) (*XDSClient, error) {
 	switch {
-	case config.Node.ID == "":
-		return nil, errors.New("xdsclient: node ID is empty")
 	case config.ResourceTypes == nil:
 		return nil, errors.New("xdsclient: resource types map is nil")
 	case config.TransportBuilder == nil:
