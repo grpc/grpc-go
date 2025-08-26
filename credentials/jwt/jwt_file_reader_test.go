@@ -22,8 +22,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -38,38 +36,37 @@ func TestJWTFileReader(t *testing.T) {
 func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 	tests := []struct {
 		name            string
-		setupFile       func(string) error
+		create          bool
+		contents        string
 		wantErrContains string
 	}{
 		{
-			name: "nonexistent file",
-			setupFile: func(_ string) error {
-				return nil // Don't create the file
-			},
+			name:            "nonexistent file",
+			create:          false,
+			contents:        "",
 			wantErrContains: "failed to read token file",
 		},
 		{
-			name: "empty file",
-			setupFile: func(path string) error {
-				return os.WriteFile(path, []byte(""), 0600)
-			},
+			name:            "empty file",
+			create:          true,
+			contents:        "",
 			wantErrContains: "token file",
 		},
 		{
-			name: "file with whitespace only",
-			setupFile: func(path string) error {
-				return os.WriteFile(path, []byte("   \n\t  "), 0600)
-			},
+			name:            "file with whitespace only",
+			create:          true,
+			contents:        "   \n\t  ",
 			wantErrContains: "token file",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-			tokenFile := filepath.Join(tempDir, "token")
-			if err := tt.setupFile(tokenFile); err != nil {
-				t.Fatalf("Failed to setup test file: %v", err)
+			var tokenFile string
+			if !tt.create {
+				tokenFile = "/does-not-exixt"
+			} else {
+				tokenFile = writeTempFile(t, "token", tt.contents)
 			}
 
 			reader := jWTFileReader{tokenFilePath: tokenFile}
@@ -124,12 +121,9 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 			tokenFile := writeTempFile(t, "token", tt.tokenContent)
 
 			reader := jWTFileReader{tokenFilePath: tokenFile}
-			_, _, err := reader.readToken()
-			if err == nil {
+			if _, _, err := reader.readToken(); err == nil {
 				t.Fatal("ReadToken() expected error, got nil")
-			}
-
-			if !strings.Contains(err.Error(), tt.wantErrContains) {
+			} else if !strings.Contains(err.Error(), tt.wantErrContains) {
 				t.Fatalf("ReadToken() error = %v, want error containing %q", err, tt.wantErrContains)
 			}
 		})
