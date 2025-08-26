@@ -300,6 +300,17 @@ func decodeResponse(opts *DecodeOptions, rType *ResourceType, resp response) (ma
 	topLevelErrors := make([]error, 0)          // Tracks deserialization errors, where we don't have a resource name.
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
+
+	if rType.Decoder == nil {
+		err := fmt.Errorf("decoder for resource type %q is nil", rType.TypeName)
+		md.Status = xdsresource.ServiceStatusNACKed
+		md.ErrState = &xdsresource.UpdateErrorMetadata{
+			Version:   resp.version,
+			Err:       xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error()),
+			Timestamp: timestamp,
+		}
+		return nil, md, err
+	}
 	for _, r := range resp.resources {
 		result, err := rType.Decoder.Decode(AnyProto{
 			TypeURL: r.GetTypeUrl(),
