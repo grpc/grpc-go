@@ -103,7 +103,11 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 	}
 
 	// At this point, the token is either invalid or expired and we are no
-	// longer backing off. So refresh it.
+	// longer backing off from any encountered errors. So refresh it.
+	// NB: We are holding the lock while reading the token from file. This will
+	// cause other RPCs to block until the read completes (sucecssfully or not)
+	// and the cache is updated. Subsequent RPCs will end up using the cache.
+	// This is per A97.
 	token, expiry, err := c.fileReader.readToken()
 	c.updateCacheLocked(token, expiry, err)
 
