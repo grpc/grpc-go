@@ -27,9 +27,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/internal/grpctest"
 )
 
-func TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
+func TestJWTFileReader(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 	tests := []struct {
 		name            string
 		setupFile       func(string) error
@@ -79,7 +85,7 @@ func TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 	}
 }
 
-func TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
+func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	tests := []struct {
 		name            string
@@ -130,7 +136,7 @@ func TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 	}
 }
 
-func TestJWTFileReader_ReadToken_ValidToken(t *testing.T) {
+func (s) TestJWTFileReader_ReadToken_ValidToken(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	tokenExp := now.Add(time.Hour)
 	token := createTestJWT(t, "https://example.com", tokenExp)
