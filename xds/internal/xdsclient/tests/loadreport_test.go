@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -30,17 +31,24 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -436,4 +444,114 @@ func (s) TestReportLoad_StreamCreation(t *testing.T) {
 	sCtx3, sCancel3 := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel3()
 	cancel3(sCtx3)
+}
+
+// TestConcurrentReportLoad verifies that the client can safely handle concurrent
+// requests to initiate load reporting streams. It launches multiple goroutines
+// that all call client.ReportLoad simultaneously.
+func (s) TestConcurrentReportLoad(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	client := createXDSClient(t, bc)
+
+	serverConfig, err := bootstrap.ServerConfigForTesting(bootstrap.ServerConfigTestingOptions{URI: mgmtServer.Address})
+	if err != nil {
+		t.Fatalf("Failed to create server config for testing: %v", err)
+	}
+
+	// Call ReportLoad() concurrently from multiple go routines.
+	var wg sync.WaitGroup
+	const numGoroutines = 10
+	wg.Add(numGoroutines)
+	for range numGoroutines {
+		go func() {
+			defer wg.Done()
+			_, cancelStore := client.ReportLoad(serverConfig)
+			defer cancelStore(ctx)
+		}()
+	}
+	wg.Wait()
+}
+
+// TestConcurrentChannels verifies that we can create multiple gRPC channels
+// concurrently with a shared XDSClient, each of which will create a new LRS
+// stream without any race.
+func (s) TestConcurrentChannels(t *testing.T) {
+	// TODO(emchandwani) : Unskip after https://github.com/grpc/grpc-go/pull/8526 gets merged.
+	t.Skip()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true, SupportLoadReportingService: true})
+
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+
+	if internal.NewXDSResolverWithPoolForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+
+	config, err := bootstrap.NewConfigFromContents(bc)
+	if err != nil {
+		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
+	}
+	pool := xdsclient.NewPool(config)
+
+	resolverBuilder := internal.NewXDSResolverWithPoolForTesting.(func(*xdsclient.Pool) (resolver.Builder, error))
+	xdsResolver, err := resolverBuilder(pool)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure the management server with resources that enable LRS.
+	const serviceName = "my-service-e2e-lrs-test"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	const (
+		numGoroutines = 10
+		numRPCs       = 10
+	)
+	for range numGoroutines {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range numRPCs {
+				cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolver))
+				if err != nil {
+					t.Errorf("grpc.NewClient() failed: %v", err)
+					return
+				}
+				defer cc.Close()
+
+				testClient := testgrpc.NewTestServiceClient(cc)
+				if _, err := testClient.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+					t.Errorf("EmptyCall() failed: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
