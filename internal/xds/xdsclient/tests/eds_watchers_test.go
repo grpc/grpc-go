@@ -205,8 +205,12 @@ func (s) TestEDSWatch(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+							Endpoints: []xdsresource.Endpoint{{
+								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, 
+								Metadata: map[string]xdsresource.MetadataValue{
+								"envoy.lb": xdsresource.JSONMetadataValue{
+									Data: json.RawMessage("{}")
+								},
 							},
 							}},
 							ID: clients.Locality{
