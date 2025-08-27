@@ -210,10 +210,10 @@ func (s) TestEDSWatch(t *testing.T) {
 								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)},
 								Weight:    1,
 								Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{
-									Data: json.RawMessage("{}"),
+									"envoy.lb": xdsresource.JSONMetadataValue{
+										Data: json.RawMessage("{}"),
+									},
 								},
-							},
 							}},
 							ID: clients.Locality{
 								Region:  "region-1",
@@ -357,10 +357,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)},
 								Weight:    1,
 								Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{
-									Data: json.RawMessage("{}"),
-								},
-							}}},
+									"envoy.lb": xdsresource.JSONMetadataValue{
+										Data: json.RawMessage("{}"),
+									},
+								}}},
 							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -383,7 +383,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 									"envoy.lb": xdsresource.JSONMetadataValue{
 										Data: json.RawMessage("{}"),
 									},
-							}}},
+								}}},
 							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -409,10 +409,10 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)},
 								Weight:    1,
 								Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{
-									Data: json.RawMessage("{}"),
-								},
-							}}},
+									"envoy.lb": xdsresource.JSONMetadataValue{
+										Data: json.RawMessage("{}"),
+									},
+								}}},
 							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -435,7 +435,7 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 									"envoy.lb": xdsresource.JSONMetadataValue{
 										Data: json.RawMessage("{}"),
 									},
-							}}},
+								}}},
 							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -873,10 +873,10 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 						Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)},
 						Weight:    1,
 						Metadata: map[string]xdsresource.MetadataValue{
-						"envoy.lb": xdsresource.JSONMetadataValue{
-							Data: json.RawMessage("{}"),
-						},
-					}}},
+							"envoy.lb": xdsresource.JSONMetadataValue{
+								Data: json.RawMessage("{}"),
+							},
+						}}},
 					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
@@ -1046,7 +1046,7 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 							"envoy.lb": xdsresource.JSONMetadataValue{
 								Data: json.RawMessage("{}"),
 							},
-					}}},
+						}}},
 					ID: clients.Locality{
 						Region:  "region-1",
 						Zone:    "zone-1",
