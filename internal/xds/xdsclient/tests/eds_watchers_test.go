@@ -181,7 +181,7 @@ func (s) TestEDSWatch(t *testing.T) {
 								Weight:    1,
 								Metadata: map[string]xdsresource.MetadataValue{
 									"envoy.lb": xdsresource.JSONMetadataValue{
-										Data: json.RawMessage("{}")
+										Data: json.RawMessage("{}"),
 									},
 								}}},
 							ID: clients.Locality{
