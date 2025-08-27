@@ -62,7 +62,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 										Address: "1.2.3.4",
 										PortSpecifier: &v3corepb.SocketAddress_PortValue{
 											PortValue: 1111,
-									}},
+										}},
 								},
 							}),
 						},
@@ -85,7 +85,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 								"typed.key": ProxyAddressMetadataValue{
 									Address: "1.2.3.4:1111",
 								},
-								"some.key":  JSONMetadataValue{
+								"some.key": JSONMetadataValue{
 									Data: json.RawMessage(`{"field":"untyped-value"}`),
 								},
 							},
@@ -717,7 +717,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 								Address: "1.2.3.4",
 								PortSpecifier: &v3corepb.SocketAddress_PortValue{
 									PortValue: 1111,
-							}},
+								}},
 						},
 					}),
 				},
@@ -741,7 +741,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 								Address: "1.2.3.4",
 								PortSpecifier: &v3corepb.SocketAddress_PortValue{
 									PortValue: 8080,
-							}},
+								}},
 						},
 					}),
 				},
