@@ -59,7 +59,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							"typed.key": testutils.MarshalAny(t, &v3corepb.Address{
 								Address: &v3corepb.Address_SocketAddress{
 									SocketAddress: &v3corepb.SocketAddress{
-										Address: "1.2.3.4", 
+										Address: "1.2.3.4",
 										PortSpecifier: &v3corepb.SocketAddress_PortValue{
 											PortValue: 1111,
 									}},
@@ -714,7 +714,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 					"some.key": testutils.MarshalAny(t, &v3corepb.Address{
 						Address: &v3corepb.Address_SocketAddress{
 							SocketAddress: &v3corepb.SocketAddress{
-								Address: "1.2.3.4", 
+								Address: "1.2.3.4",
 								PortSpecifier: &v3corepb.SocketAddress_PortValue{
 									PortValue: 1111,
 							}},
@@ -738,7 +738,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 					"envoy.http11_proxy_transport_socket.proxy_address": testutils.MarshalAny(t, &v3corepb.Address{
 						Address: &v3corepb.Address_SocketAddress{
 							SocketAddress: &v3corepb.SocketAddress{
-								Address: "1.2.3.4", 
+								Address: "1.2.3.4",
 								PortSpecifier: &v3corepb.SocketAddress_PortValue{
 									PortValue: 8080,
 							}},
