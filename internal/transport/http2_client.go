@@ -989,14 +989,10 @@ func (t *http2Client) closeStream(s *ClientStream, err error, rst bool, rstCode 
 // only once on a transport. Once it is called, the transport should not be
 // accessed anymore.
 func (t *http2Client) Close(err error) {
-	if err := t.conn.SetWriteDeadline(time.Now().Add(time.Second * 10)); err != nil {
-		logger.Warningf("Failed to set write deadline when closing connection: %v", err)
-	}
+	t.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
 	// For background on the deadline value chosen here, see
 	// https://github.com/grpc/grpc-go/issues/8425#issuecomment-3057938248 .
-	if err := t.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-		logger.Warningf("Failed to set read deadline when closing connection: %v", err)
-	}
+	t.conn.SetReadDeadline(time.Now().Add(time.Second))
 	t.mu.Lock()
 	// Make sure we only close once.
 	if t.state == closing {
