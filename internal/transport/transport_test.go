@@ -3012,6 +3012,16 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 // during http2Client.Close().
 type deadlineTestConn struct {
 	net.Conn
+	// We use atomic.Bool here since there may be more than one call to
+	// http2Client.Close -- which sets these deadlines -- and not all of them
+	// from the same goroutine as our test. In fact we only care about the first
+	// such invocation, which *does* come from the main goroutine of our test,
+	// but the race detector can't know that and complains (understandably)
+	// about writes from those successive calls when these variables are not
+	// atomic.Bool.
+	//
+	// For more detailed background, see
+	// https://github.com/grpc/grpc-go/pull/8534#discussion_r2297717445 .
 	observedReadDeadline  atomic.Bool
 	observedWriteDeadline atomic.Bool
 }
