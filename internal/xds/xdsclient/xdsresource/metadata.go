@@ -52,8 +52,8 @@ type metadataConverter interface {
 	convert([]byte) (MetadataValue, error)
 }
 
-// registerMetadataConverter registers the converter to the map keyed on a proto type. Must be
-// called at init time. Not thread safe.
+// registerMetadataConverter registers the converter to the map keyed on a proto
+// type. Must be called at init time. Not thread safe.
 func registerMetadataConverter(protoType string, c metadataConverter) {
 	metadataregistry[protoType] = c
 }
@@ -66,7 +66,7 @@ func metadataConverterForType(typeURL string) metadataConverter {
 // JSONMetadataValue stores the values in a google.protobuf.Struct from
 // FilterMetadata.
 type JSONMetadataValue struct {
-	// Data stores the contents of the google.protobuf.Struct.
+	// Data stores the parsed JSON representation of a google.protobuf.Struct.
 	Data json.RawMessage
 }
 

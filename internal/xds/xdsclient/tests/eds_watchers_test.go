@@ -176,9 +176,13 @@ func (s) TestEDSWatch(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
-							}}},
+							Endpoints: []xdsresource.Endpoint{{
+								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)},
+								Weight:    1,
+								Metadata: map[string]xdsresource.MetadataValue{
+									"envoy.lb": xdsresource.JSONMetadataValue{
+										Data: json.RawMessage("{}")},
+									}}},
 							ID: clients.Locality{
 								Region:  "region-1",
 								Zone:    "zone-1",
@@ -343,8 +347,12 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+							Endpoints: []xdsresource.Endpoint{{
+								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, 
+								Metadata: map[string]xdsresource.MetadataValue{
+								"envoy.lb": xdsresource.JSONMetadataValue{
+									Data: json.RawMessage("{}"),
+								},
 							}}},
 							ID: clients.Locality{
 								Region:  "region-1",
@@ -361,8 +369,12 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+							Endpoints: []xdsresource.Endpoint{{
+								Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1, 
+								Metadata: map[string]xdsresource.MetadataValue{
+									"envoy.lb": xdsresource.JSONMetadataValue{
+										Data: json.RawMessage("{}"),
+									},
 							}}},
 							ID: clients.Locality{
 								Region:  "region-1",
@@ -385,8 +397,12 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+							Endpoints: []xdsresource.Endpoint{{
+								Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, 
+								Metadata: map[string]xdsresource.MetadataValue{
+								"envoy.lb": xdsresource.JSONMetadataValue{
+									Data: json.RawMessage("{}"),
+								},
 							}}},
 							ID: clients.Locality{
 								Region:  "region-1",
@@ -403,8 +419,12 @@ func (s) TestEDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 				update: xdsresource.EndpointsUpdate{
 					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-								"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+							Endpoints: []xdsresource.Endpoint{{
+								Addresses: []string{fmt.Sprintf("%s:%d", edsHost2, edsPort2)}, Weight: 1, 
+								Metadata: map[string]xdsresource.MetadataValue{
+									"envoy.lb": xdsresource.JSONMetadataValue{
+										Data: json.RawMessage("{}"),
+									},
 							}}},
 							ID: clients.Locality{
 								Region:  "region-1",
@@ -700,9 +720,13 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1,
+					Endpoints: []xdsresource.Endpoint{{
+						Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, 
+						Weight: 1,
 						Metadata: map[string]xdsresource.MetadataValue{
-							"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+							"envoy.lb": xdsresource.JSONMetadataValue{
+								Data: json.RawMessage("{}"),
+							},
 						}}},
 					ID: clients.Locality{
 						Region:  "region-1",
@@ -835,8 +859,13 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-						"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+					Endpoints: []xdsresource.Endpoint{{
+						Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, 
+						Weight: 1, 
+						Metadata: map[string]xdsresource.MetadataValue{
+						"envoy.lb": xdsresource.JSONMetadataValue{
+							Data: json.RawMessage("{}"),
+						},
 					}}},
 					ID: clients.Locality{
 						Region:  "region-1",
@@ -1000,8 +1029,13 @@ func (s) TestEDSWatch_PartialValid(t *testing.T) {
 		update: xdsresource.EndpointsUpdate{
 			Localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsresource.Endpoint{{Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, Weight: 1, Metadata: map[string]xdsresource.MetadataValue{
-						"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+					Endpoints: []xdsresource.Endpoint{{
+						Addresses: []string{fmt.Sprintf("%s:%d", edsHost1, edsPort1)}, 
+						Weight: 1, 
+						Metadata: map[string]xdsresource.MetadataValue{
+							"envoy.lb": xdsresource.JSONMetadataValue{
+								Data: json.RawMessage("{}"),
+							},
 					}}},
 					ID: clients.Locality{
 						Region:  "region-1",

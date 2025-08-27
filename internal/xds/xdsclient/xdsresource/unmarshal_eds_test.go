@@ -49,13 +49,65 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "with endpoint metadata",
+			name: "with endpoint metadata from typed",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
 				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{
 					addrWithPort: "addr1:314",
 					metadata: &v3corepb.Metadata{
-						FilterMetadata: map[string]*structpb.Struct{"test-key": {}},
+						TypedFilterMetadata: map[string]*anypb.Any{
+							"typed.key": testutils.MarshalAny(t, &v3corepb.Address{
+								Address: &v3corepb.Address_SocketAddress{
+									SocketAddress: &v3corepb.SocketAddress{
+										Address: "1.2.3.4", 
+										PortSpecifier: &v3corepb.SocketAddress_PortValue{
+											PortValue: 1111,
+									}},
+								},
+							}),
+						},
+						FilterMetadata: map[string]*structpb.Struct{
+							"some.key": {Fields: map[string]*structpb.Value{
+								"field": structpb.NewStringValue("untyped-value")}},
+						},
+					},
+				}}, nil)
+				return clab0.Build()
+			}(),
+			want: EndpointsUpdate{
+				Localities: []Locality{
+					{
+						Endpoints: []Endpoint{{
+							Addresses:    []string{"addr1:314"},
+							HealthStatus: EndpointHealthStatusUnknown,
+							Weight:       1,
+							Metadata: map[string]MetadataValue{
+								"typed.key": ProxyAddressMetadataValue{
+									Address: "1.2.3.4:1111",
+								},
+								"some.key":  JSONMetadataValue{
+									Data: json.RawMessage(`{"field":"untyped-value"}`),
+								},
+							},
+						}},
+						ID:       clients.Locality{SubZone: "locality-1"},
+						Priority: 0,
+						Weight:   1,
+					},
+				},
+			},
+		},
+
+		{
+			name: "with endpoint metadata from filtered",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{
+					addrWithPort: "addr1:314",
+					metadata: &v3corepb.Metadata{
+						FilterMetadata: map[string]*structpb.Struct{
+							"test-key": {},
+						},
 					},
 				}}, nil)
 				return clab0.Build()
@@ -79,7 +131,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			},
 		},
 		{
-			name: "with locality metadata",
+			name: "with locality metadata from filtered",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
 				clab0.addLocality("locality-1", 1, 0, []endpointOpts{{addrWithPort: "addr1:314"}}, &addLocalityOptions{
@@ -656,13 +708,39 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 		wantErr       bool
 	}{
 		{
+			name: "typed filter metadata over filter metadata",
+			metadataProto: &v3corepb.Metadata{
+				TypedFilterMetadata: map[string]*anypb.Any{
+					"some.key": testutils.MarshalAny(t, &v3corepb.Address{
+						Address: &v3corepb.Address_SocketAddress{
+							SocketAddress: &v3corepb.SocketAddress{
+								Address: "1.2.3.4", 
+								PortSpecifier: &v3corepb.SocketAddress_PortValue{
+									PortValue: 1111,
+							}},
+						},
+					}),
+				},
+				FilterMetadata: map[string]*structpb.Struct{
+					"some.key": {Fields: map[string]*structpb.Value{
+						"field": structpb.NewStringValue("untyped-value")}},
+				},
+			},
+
+			want: map[string]MetadataValue{
+				"some.key": ProxyAddressMetadataValue{Address: "1.2.3.4:1111"},
+			},
+		},
+		{
 			name: "success-case",
 			metadataProto: &v3corepb.Metadata{
 				TypedFilterMetadata: map[string]*anypb.Any{
 					"envoy.http11_proxy_transport_socket.proxy_address": testutils.MarshalAny(t, &v3corepb.Address{
 						Address: &v3corepb.Address_SocketAddress{
-							SocketAddress: &v3corepb.SocketAddress{Address: "1.2.3.4", PortSpecifier: &v3corepb.SocketAddress_PortValue{
-								PortValue: 8080,
+							SocketAddress: &v3corepb.SocketAddress{
+								Address: "1.2.3.4", 
+								PortSpecifier: &v3corepb.SocketAddress_PortValue{
+									PortValue: 8080,
 							}},
 						},
 					}),
@@ -682,7 +760,9 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 				TypedFilterMetadata: map[string]*anypb.Any{
 					"envoy.http11_proxy_transport_socket.proxy_address": testutils.MarshalAny(t, &v3corepb.Address{
 						Address: &v3corepb.Address_SocketAddress{
-							SocketAddress: &v3corepb.SocketAddress{Address: "invalid"},
+							SocketAddress: &v3corepb.SocketAddress{
+								Address: "invalid",
+							},
 						},
 					}),
 				},
