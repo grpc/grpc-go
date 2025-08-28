@@ -323,6 +323,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
 			got, err := parseEDSRespProto(tt.m)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
@@ -685,6 +686,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
 			name, update, err := unmarshalEndpointsResource(test.resource)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("unmarshalEndpointsResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
@@ -699,7 +701,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 	}
 }
 
-func (s) TestValidateAndConstructMetadata(t *testing.T) {
+func (s) TestValidateAndConstructMetadataWithXDSHTTPConnectEnabled(t *testing.T) {
 	tests := []struct {
 		name          string
 		metadataProto *v3corepb.Metadata
@@ -774,12 +776,95 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testutils.SetEnvConfig(t, &envconfig.XDSHTTPConnectEnabled, true)
 			got, err := validateAndConstructMetadata(tt.metadataProto)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if diff := cmp.Diff(got, tt.want, cmp.AllowUnexported(ProxyAddressMetadataValue{})); diff != "" {
+			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(ProxyAddressMetadataValue{})); diff != "" {
+				t.Errorf("validateAndConstructMetadata() returned unexpected diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestValidateAndConstructMetadataWithXDSHTTPConnectDisabled(t *testing.T) {
+	tests := []struct {
+		name          string
+		metadataProto *v3corepb.Metadata
+		want          map[string]any
+		wantErr       bool
+	}{
+		{
+			name: "typed filter metadata over filter metadata",
+			metadataProto: &v3corepb.Metadata{
+				TypedFilterMetadata: map[string]*anypb.Any{
+					"some.key": testutils.MarshalAny(t, &v3corepb.Address{
+						Address: &v3corepb.Address_SocketAddress{
+							SocketAddress: &v3corepb.SocketAddress{
+								Address: "1.2.3.4",
+								PortSpecifier: &v3corepb.SocketAddress_PortValue{
+									PortValue: 1111,
+								},
+							},
+						},
+					}),
+				},
+				FilterMetadata: map[string]*structpb.Struct{
+					"some.key": {Fields: map[string]*structpb.Value{
+						"field": structpb.NewStringValue("untyped-value")}},
+				},
+			},
+
+			want: nil,
+		},
+		{
+			name: "success-case",
+			metadataProto: &v3corepb.Metadata{
+				TypedFilterMetadata: map[string]*anypb.Any{
+					"envoy.http11_proxy_transport_socket.proxy_address": testutils.MarshalAny(t, &v3corepb.Address{
+						Address: &v3corepb.Address_SocketAddress{
+							SocketAddress: &v3corepb.SocketAddress{
+								Address: "1.2.3.4",
+								PortSpecifier: &v3corepb.SocketAddress_PortValue{
+									PortValue: 8080,
+								},
+							},
+						},
+					}),
+				},
+				FilterMetadata: map[string]*structpb.Struct{
+					"untyped-key": {Fields: map[string]*structpb.Value{"field": structpb.NewStringValue("value")}},
+				},
+			},
+			want: nil,
+		},
+		{
+			name: "failure-case-converter-error",
+			metadataProto: &v3corepb.Metadata{
+				TypedFilterMetadata: map[string]*anypb.Any{
+					"envoy.http11_proxy_transport_socket.proxy_address": testutils.MarshalAny(t, &v3corepb.Address{
+						Address: &v3corepb.Address_SocketAddress{
+							SocketAddress: &v3corepb.SocketAddress{
+								Address: "invalid",
+							},
+						},
+					}),
+				},
+			},
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := validateAndConstructMetadata(tt.metadataProto)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(ProxyAddressMetadataValue{})); diff != "" {
 				t.Errorf("validateAndConstructMetadata() returned unexpected diff (-want +got):\n%s", diff)
 			}
 		})

@@ -199,14 +199,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
-		// var localityMetadata map[string]any
-		// if md := locality.GetMetadata(); md != nil {
-		// 	m, err := validateAndConstructMetadata(md)
-		// 	if err != nil {
-		// 		return EndpointsUpdate{}, err
-		// 	}
-		// 	localityMetadata = m
-		// }
+
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: endpoints,
@@ -224,6 +217,10 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 }
 
 func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
+	// TODO(easwars): Find a better place for this check once A83 is implemented.
+	if !envconfig.XDSHTTPConnectEnabled {
+		return nil, nil
+	}
 	metadata := make(map[string]any)
 	// First go through TypedFilterMetadata.
 	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
