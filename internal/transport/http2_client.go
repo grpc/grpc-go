@@ -1467,7 +1467,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		recvCompress   string
 		httpStatusCode *int
 		httpStatusErr  string
-		rawStatusCode  = codes.Unknown
+		rawStatusCode  = codes.Internal
 		// headerError is set if an error is encountered while parsing the headers
 		headerError string
 	)
@@ -1475,7 +1475,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if initialHeader {
 		httpStatusErr = "malformed header: missing HTTP status"
 	}
-
 	for _, hf := range frame.Fields {
 		switch hf.Name {
 		case "content-type":
@@ -1534,7 +1533,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	if !isGRPC || httpStatusErr != "" {
+	//if response is not grpc or endstream doesn't receive a grpc status, fall back to http error code
+	if !isGRPC {
 		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
 
 		if httpStatusCode != nil {
