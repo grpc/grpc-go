@@ -294,8 +294,10 @@ func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 					Endpoints: []xdsresource.Endpoint{{
 						Addresses: []string{"localhost:666"},
 						Weight:    1,
-						Metadata: map[string]xdsresource.MetadataValue{
-							"envoy.lb": xdsresource.JSONMetadataValue{Data: json.RawMessage("{}")},
+						Metadata: map[string]any{
+							"envoy.lb": xdsresource.StructMetadataValue{
+								Data: map[string]any{},
+							},
 						},
 					}},
 					Weight: 1,

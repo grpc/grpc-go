@@ -121,7 +121,7 @@ func (s) TestProxyAddressConverterSuccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			anyProto := testutils.MarshalAny(t, tt.addr)
-			got, err := converter.convert(anyProto.GetValue())
+			got, err := converter.convert(anyProto)
 			if err != nil {
 				t.Fatalf("convert() failed with error: %v", err)
 			}
@@ -190,7 +190,7 @@ func (s) TestProxyAddressConverterFailure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			anyProto := testutils.MarshalAny(t, tt.addr)
-			_, err := converter.convert(anyProto.GetValue())
+			_, err := converter.convert(anyProto)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Errorf("convert() got error = %v, wantErr = %q", err, tt.wantErr)
 			}

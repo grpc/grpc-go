@@ -18,7 +18,6 @@
 package xdsresource
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -81,12 +80,12 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnknown,
 							Weight:       1,
-							Metadata: map[string]MetadataValue{
+							Metadata: map[string]any{
 								"typed.key": ProxyAddressMetadataValue{
 									Address: "1.2.3.4:1111",
 								},
-								"some.key": JSONMetadataValue{
-									Data: json.RawMessage(`{"field":"untyped-value"}`),
+								"some.key": StructMetadataValue{
+									Data: map[string]any{"field": "untyped-value"},
 								},
 							},
 						}},
@@ -119,8 +118,8 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Addresses:    []string{"addr1:314"},
 							HealthStatus: EndpointHealthStatusUnknown,
 							Weight:       1,
-							Metadata: map[string]MetadataValue{
-								"test-key": JSONMetadataValue{Data: json.RawMessage("{}")},
+							Metadata: map[string]any{
+								"test-key": StructMetadataValue{Data: map[string]any{}},
 							},
 						}},
 						ID:       clients.Locality{SubZone: "locality-1"},
@@ -152,8 +151,8 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 						ID:       clients.Locality{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
-						Metadata: map[string]MetadataValue{
-							"test-key": JSONMetadataValue{Data: json.RawMessage("{}")},
+						Metadata: map[string]any{
+							"test-key": StructMetadataValue{Data: map[string]any{}},
 						},
 					},
 				},
@@ -704,7 +703,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 	tests := []struct {
 		name          string
 		metadataProto *v3corepb.Metadata
-		want          map[string]MetadataValue
+		want          map[string]any
 		wantErr       bool
 	}{
 		{
@@ -717,7 +716,8 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 								Address: "1.2.3.4",
 								PortSpecifier: &v3corepb.SocketAddress_PortValue{
 									PortValue: 1111,
-								}},
+								},
+							},
 						},
 					}),
 				},
@@ -727,7 +727,7 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 				},
 			},
 
-			want: map[string]MetadataValue{
+			want: map[string]any{
 				"some.key": ProxyAddressMetadataValue{Address: "1.2.3.4:1111"},
 			},
 		},
@@ -741,7 +741,8 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 								Address: "1.2.3.4",
 								PortSpecifier: &v3corepb.SocketAddress_PortValue{
 									PortValue: 8080,
-								}},
+								},
+							},
 						},
 					}),
 				},
@@ -749,9 +750,9 @@ func (s) TestValidateAndConstructMetadata(t *testing.T) {
 					"untyped-key": {Fields: map[string]*structpb.Value{"field": structpb.NewStringValue("value")}},
 				},
 			},
-			want: map[string]MetadataValue{
+			want: map[string]any{
 				"envoy.http11_proxy_transport_socket.proxy_address": ProxyAddressMetadataValue{Address: "1.2.3.4:8080"},
-				"untyped-key": JSONMetadataValue{Data: json.RawMessage(`{"field":"value"}`)},
+				"untyped-key": StructMetadataValue{Data: map[string]any{"field": string("value")}},
 			},
 		},
 		{

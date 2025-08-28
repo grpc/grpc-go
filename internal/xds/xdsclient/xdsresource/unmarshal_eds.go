@@ -18,7 +18,6 @@
 package xdsresource
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -31,7 +30,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/clients"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -110,7 +108,7 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
-		var endpointMetadata map[string]MetadataValue
+		var endpointMetadata map[string]any
 		if md := lbEndpoint.GetMetadata(); md != nil {
 			m, err := validateAndConstructMetadata(md)
 			if err != nil {
@@ -201,7 +199,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
-		var localityMetadata map[string]MetadataValue
+		var localityMetadata map[string]any
 		if md := locality.GetMetadata(); md != nil {
 			m, err := validateAndConstructMetadata(md)
 			if err != nil {
@@ -225,8 +223,8 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
-func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]MetadataValue, error) {
-	metadata := make(map[string]MetadataValue)
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
+	metadata := make(map[string]any)
 	// First go through TypedFilterMetadata.
 	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
 		converter := metadataConverterForType(anyProto.GetTypeUrl())
@@ -234,7 +232,7 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]
 		if converter == nil {
 			continue
 		}
-		val, err := converter.convert(anyProto.GetValue())
+		val, err := converter.convert(anyProto)
 		if err != nil {
 			// If the converter fails, nack the whole resource.
 			return nil, fmt.Errorf("metadata converting for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
@@ -248,11 +246,7 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]
 		if metadata[key] != nil {
 			continue
 		}
-		b, err := protojson.Marshal(structProto)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal filter metadata for key %q: %v", key, err)
-		}
-		metadata[key] = JSONMetadataValue{Data: json.RawMessage(b)}
+		metadata[key] = StructMetadataValue{Data: structProto.AsMap()}
 	}
 	return metadata, nil
 }
