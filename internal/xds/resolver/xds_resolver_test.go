@@ -352,7 +352,7 @@ func (s) TestResolverBadServiceUpdate_NACKedWithCache(t *testing.T) {
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
 
 	// Expect a good update from the resolver.
-	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(defaultTestClusterName))
 
 	// "Make an RPC" by invoking the config selector.
 	_, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -417,7 +417,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			}),
 			clusterConfig:     []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)},
 			endpointConfig:    []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)},
-			wantServiceConfig: wantDefaultServiceConfig,
+			wantServiceConfig: wantServiceConfig(defaultTestClusterName),
 			wantClusters:      map[string]bool{fmt.Sprintf("cluster:%s", defaultTestClusterName): true},
 		},
 		{
@@ -434,26 +434,26 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 			// as this update, as the previous config selector still references
 			// the old cluster when the new one is pushed.
 			wantServiceConfig: `{
-		  "loadBalancingConfig": [{
-		    "xds_cluster_manager_experimental": {
-		      "children": {
-		        "cluster:cluster_1": {
-		          "childPolicy": [{
-					"cds_experimental": {
-					  "cluster": "cluster_1"
-					}
-				  }]
-		        },
-		        "cluster:cluster_2": {
-		          "childPolicy": [{
-					"cds_experimental": {
-					  "cluster": "cluster_2"
-					}
-				  }]
-		        }
-		      }
-		    }
-		  }]}`,
+  "loadBalancingConfig": [{
+    "xds_cluster_manager_experimental": {
+      "children": {
+        "cluster:cluster_1": {
+          "childPolicy": [{
+			"cds_experimental": {
+			  "cluster": "cluster_1"
+			}
+		  }]
+        },
+        "cluster:cluster_2": {
+          "childPolicy": [{
+			"cds_experimental": {
+			  "cluster": "cluster_2"
+			}
+		  }]
+        }
+      }
+    }
+  }]}`,
 			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 	} {
@@ -574,16 +574,19 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
-	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	mgmtServer.Update(ctx, resources)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Read the update pushed by the resolver to the ClientConn.
-	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
@@ -600,7 +603,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// not produce an empty service config at this point. Instead it will retain
 	// the cluster to which the RPC is ongoing in the service config, but will
 	// return an erroring config selector which will fail new RPCs.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err := verifyResolverError(err, codes.Unavailable, "has been removed", nodeID); err != nil {
 		t.Fatal(err)
@@ -640,14 +643,14 @@ waitForStateUpdate:
 		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 		defer sCancel()
 
-		configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+		configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
 
 		select {
 		case state = <-stateCh:
 			if err := state.ServiceConfig.Err; err != nil {
 				t.Fatalf("Received error in service config: %v", state.ServiceConfig.Err)
 			}
-			wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantDefaultServiceConfig)
+			wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantServiceConfig(resources.Clusters[0].Name))
 			if !internal.EqualServiceConfigForTesting(state.ServiceConfig.Config, wantSCParsed.Config) {
 				t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, state.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 			}
@@ -678,16 +681,18 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
-	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
-
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	mgmtServer.Update(ctx, resources)
 	stateCh, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Read the update pushed by the resolver to the ClientConn.
-	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// "Make an RPC" by invoking the config selector.
 	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -707,7 +712,7 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 
 	// The channel should receive the existing service config with the original
 	// cluster but with an erroring config selector.
-	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// "Make another RPC" by invoking the config selector.
 	_, err = cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
@@ -897,38 +902,43 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	mgmtServer, _, _, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	cluster := []*v3clusterpb.Cluster{e2e.DefaultCluster(defaultTestClusterName, defaultTestEndpointName, e2e.SecurityLevelNone)}
-	endpoints := []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(defaultTestEndpointName, defaultTestHostname, defaultTestPort)}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	mgmtServer.Update(ctx, resources)
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Read the update pushed by the resolver to the ClientConn.
-	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	cs := verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// Make an RPC, but do not commit it yet.
 	resOld, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	wantClusterName := fmt.Sprintf("cluster:%s", defaultTestClusterName)
+	wantClusterName := fmt.Sprintf("cluster:%s", resources.Clusters[0].Name)
 	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != wantClusterName {
 		t.Fatalf("Picked cluster is %q, want %q", cluster, wantClusterName)
 	}
 
 	// Delay resOld.OnCommitted(). As long as there are pending RPCs to removed
 	// clusters, they still appear in the service config.
-
+	oldClusterName := resources.Clusters[0].Name
 	// Update the route configuration resource on the management server to
 	// return a new cluster.
 	newClusterName := "new-" + defaultTestClusterName
 	newEndpointName := "new-" + defaultTestEndpointName
-	routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, newClusterName)}
-	cluster = []*v3clusterpb.Cluster{e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone)}
-	endpoints = []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort)}
-	configureAllResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes, cluster, endpoints)
+	resources.Routes = []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(resources.Routes[0].Name, defaultTestServiceName, newClusterName)}
+	resources.Clusters = []*v3clusterpb.Cluster{e2e.DefaultCluster(newClusterName, newEndpointName, e2e.SecurityLevelNone)}
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(newEndpointName, defaultTestHostname, defaultTestPort)}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
 
 	// Read the update pushed by the resolver to the ClientConn and ensure the
 	// old cluster is present in the service config. Also ensure that the newly
@@ -961,7 +971,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		  }
 		}
 	  ]
-}`, defaultTestClusterName, defaultTestClusterName, newClusterName, newClusterName)
+}`, oldClusterName, oldClusterName, newClusterName, newClusterName)
 	cs = verifyUpdateFromResolver(ctx, t, stateCh, wantSC)
 
 	resNew, err := cs.SelectConfig(iresolver.RPCInfo{Context: ctx, Method: "/service/method"})

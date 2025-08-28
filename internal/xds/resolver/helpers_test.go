@@ -68,9 +68,11 @@ const (
 
 var defaultTestPort = []uint32{8080}
 
-// This is the expected service config when using default listener and route
-// configuration resources from the e2e package using the above resource names.
-var wantDefaultServiceConfig = fmt.Sprintf(`{
+// wantServiceConfig returns a JSON representation of a service config with
+// xds_cluster_manager_experimental LB policy with a child policy of
+// cds_experimental for the provided cluster name.
+func wantServiceConfig(clusterName string) string {
+	return fmt.Sprintf(`{
    "loadBalancingConfig": [{
 	 "xds_cluster_manager_experimental": {
 	   "children": {
@@ -84,7 +86,8 @@ var wantDefaultServiceConfig = fmt.Sprintf(`{
 	   }
 	 }
    }]
- }`, defaultTestClusterName, defaultTestClusterName)
+ }`, clusterName, clusterName)
+}
 
 // buildResolverForTarget builds an xDS resolver for the given target. If
 // the bootstrap contents are provided, it build the xDS resolver using them
@@ -289,9 +292,8 @@ func configureResourcesOnManagementServer(ctx context.Context, t *testing.T, mgm
 	}
 }
 
-// Spins up an xDS management server and configures it with given listener,
-// route, cluster and endpoint configuration resource. It also sets up an xDS
-// bootstrap configuration file that points to the above management server.
+// Updates all the listener, route, cluster and endpoint configuration resources
+// on the given management server.
 func configureAllResourcesOnManagementServer(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, listeners []*v3listenerpb.Listener, routes []*v3routepb.RouteConfiguration, clusters []*v3clusterpb.Cluster, endpoints []*v3endpointpb.ClusterLoadAssignment) {
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
