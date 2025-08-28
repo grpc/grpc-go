@@ -55,7 +55,7 @@ func metadataConverterForType(typeURL string) metadataConverter {
 	return metdataRegistry[typeURL]
 }
 
-// JSONMetadataValue stores the values in a google.protobuf.Struct from
+// StructMetadataValue stores the values in a google.protobuf.Struct from
 // FilterMetadata.
 type StructMetadataValue struct {
 	// Data stores the parsed JSON representation of a google.protobuf.Struct.
