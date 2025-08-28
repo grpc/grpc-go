@@ -428,8 +428,12 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 				ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
 				WeightedClusters:     map[string]int{"cluster_1": 75, "cluster_2": 25},
 			}),
-			clusterConfig:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster_1", "endpoint_1", e2e.SecurityLevelNone), e2e.DefaultCluster("cluster_2", "endpoint_2", e2e.SecurityLevelNone)},
-			endpointConfig: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint("endpoint_1", defaultTestHostname, defaultTestPort), e2e.DefaultEndpoint("endpoint_2", defaultTestHostname, defaultTestPort)},
+			clusterConfig: []*v3clusterpb.Cluster{
+				e2e.DefaultCluster("cluster_1", "endpoint_1", e2e.SecurityLevelNone),
+				e2e.DefaultCluster("cluster_2", "endpoint_2", e2e.SecurityLevelNone)},
+			endpointConfig: []*v3endpointpb.ClusterLoadAssignment{
+				e2e.DefaultEndpoint("endpoint_1", defaultTestHostname, defaultTestPort),
+				e2e.DefaultEndpoint("endpoint_2", defaultTestHostname, defaultTestPort)},
 			// This update contains the cluster from the previous update as well
 			// as this update, as the previous config selector still references
 			// the old cluster when the new one is pushed.
