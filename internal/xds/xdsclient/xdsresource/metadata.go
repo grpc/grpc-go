@@ -30,22 +30,20 @@ func init() {
 }
 
 var (
-	// metdataRegistry is a map from proto type to Converter.
+	// metdataRegistry is a map from proto type to metadataConverter.
 	metdataRegistry = make(map[string]metadataConverter)
 )
 
-// metadataConverter is the interface for a metadata converter. It is implemented by
-// concrete types that convert raw bytes into a MetadataValue.
+// metadataConverter converts xds metadata entries in
+// Metadata.typed_filter_metadata into an internal form with the fields relevant
+// to gRPC.
 type metadataConverter interface {
-	// convert parses the proto serialized bytes of an Any proto or
-	// google.protobuf.Struct into a MetadataValue. The bytes of an Any proto
-	// are from the value field, which has proto serialized bytes of the
-	// protobuf message type specified by the type_url field.
+	// convert parses the Any proto into a concrete struct.
 	convert(*anypb.Any) (any, error)
 }
 
 // registerMetadataConverter registers the converter to the map keyed on a proto
-// type. Must be called at init time. Not thread safe.
+// type_url. Must be called at init time. Not thread safe.
 func registerMetadataConverter(protoType string, c metadataConverter) {
 	metdataRegistry[protoType] = c
 }

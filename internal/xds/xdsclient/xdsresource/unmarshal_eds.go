@@ -108,13 +108,9 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
-		var endpointMetadata map[string]any
-		if md := lbEndpoint.GetMetadata(); md != nil {
-			m, err := validateAndConstructMetadata(md)
-			if err != nil {
-				return nil, err
-			}
-			endpointMetadata = m
+		endpointMetadata, err := validateAndConstructMetadata(lbEndpoint.GetMetadata())
+		if err != nil {
+			return nil, err
 		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
@@ -199,14 +195,18 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
-		var localityMetadata map[string]any
-		if md := locality.GetMetadata(); md != nil {
-			m, err := validateAndConstructMetadata(md)
-			if err != nil {
-				return EndpointsUpdate{}, err
-			}
-			localityMetadata = m
+		localityMetadata, err := validateAndConstructMetadata(locality.GetMetadata())
+		if err != nil {
+			return EndpointsUpdate{}, err
 		}
+		// var localityMetadata map[string]any
+		// if md := locality.GetMetadata(); md != nil {
+		// 	m, err := validateAndConstructMetadata(md)
+		// 	if err != nil {
+		// 		return EndpointsUpdate{}, err
+		// 	}
+		// 	localityMetadata = m
+		// }
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: endpoints,
@@ -235,7 +235,7 @@ func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]
 		val, err := converter.convert(anyProto)
 		if err != nil {
 			// If the converter fails, nack the whole resource.
-			return nil, fmt.Errorf("metadata converting for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+			return nil, fmt.Errorf("metadata conversion for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
 		}
 		metadata[key] = val
 	}
