@@ -2618,6 +2618,8 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		metaHeaderFrame *http2.MetaHeadersFrame
 		// output
 		wantStatus *status.Status
+		// end stream output
+		wantStatusEndStream *status.Status
 	}{
 		{
 			name: "valid header",
@@ -2695,7 +2697,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			),
 		},
 		{
-			name: "bad status in grpc mode",
+			name: "ignoring bad http status in grpc mode",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
@@ -2703,26 +2705,47 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: ":status", Value: "504"},
 				},
 			},
-			wantStatus: status.New(
-				codes.Unavailable,
-				"unexpected HTTP status code received from server: 504 (Gateway Timeout)",
-			),
+			wantStatus: status.New(codes.OK, ""),
 		},
 		{
-			name: "missing http status",
+			name: "missing http status and grpc status",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 				},
 			},
-			wantStatus: status.New(
-				codes.Internal,
-				"malformed header: missing HTTP status",
-			),
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.Internal, ""),
+		},
+		{
+			name: "ignore http status and fail for grpc status missing in trailer",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: ":status", Value: "504"},
+				},
+			},
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.Internal, ""),
+		},
+		{
+			name: "trailer only grpc timeout ignores http status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "4"},
+					{Name: "grpc-message", Value: "Request timed out: Internal error"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantStatusEndStream: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
 		},
 	} {
 
 		t.Run(test.name, func(t *testing.T) {
+			if test.wantStatus == nil {
+				t.Skip()
+			}
 			ts := testStream()
 			s := testClient(ts)
 
@@ -2733,7 +2756,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			}
 
 			s.operateHeaders(test.metaHeaderFrame)
-
 			got := ts.status
 			want := test.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
@@ -2755,6 +2777,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 
 			got := ts.status
 			want := test.wantStatus
+			if test.wantStatusEndStream != nil {
+				want = test.wantStatusEndStream
+			}
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
 			}
