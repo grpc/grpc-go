@@ -291,7 +291,10 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(), 
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -570,7 +573,10 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(), 
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -810,7 +816,10 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(), 
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})			
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -1162,7 +1171,10 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
-			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+				Name: t.Name(), 
+				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}

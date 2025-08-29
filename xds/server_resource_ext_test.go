@@ -114,7 +114,10 @@ func (s) TestServer_RouteConfiguration_ResourceNotFound(t *testing.T) {
 	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(500 * time.Millisecond)
 	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
-	_, serverXDSClientClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: xdsclient.NameForServer})
+	_, serverXDSClientClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: xdsclient.NameForServer, 
+		WatchExpiryTimeout: 500 * time.Millisecond,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client for server: %v", err)
 	}

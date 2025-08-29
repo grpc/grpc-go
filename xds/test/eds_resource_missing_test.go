@@ -82,7 +82,10 @@ func (s) TestEDS_MissingResource(t *testing.T) {
 	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
 	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
-	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(), 
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}

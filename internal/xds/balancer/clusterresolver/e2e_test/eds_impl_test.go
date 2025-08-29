@@ -41,7 +41,6 @@ import (
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/peer"
@@ -1102,10 +1101,11 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 	}
-	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
-	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+		Name: t.Name(),
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
 	}

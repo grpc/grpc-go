@@ -726,11 +726,10 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 		Node:             clients.Node{ID: nodeID},
 		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
+		// Override the default watch expiry timeout.
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	}
 
-	// Create an xDS client with the above config and override the default
-	// watch expiry timeout.
-	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -777,11 +776,11 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 		Node:             clients.Node{ID: nodeID},
 		TransportBuilder: grpctransport.NewBuilder(configs),
 		ResourceTypes:    resourceTypes,
+		// Override the default watch expiry timeout.
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	}
 
-	// Create an xDS client with the above config and override the default
-	// watch expiry timeout.
-	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
+	// Create an xDS client with the above config.
 	client, err := xdsclient.New(xdsClientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)

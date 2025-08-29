@@ -108,7 +108,9 @@ func New(config Config) (*XDSClient, error) {
 	case config.Authorities == nil && config.Servers == nil:
 		return nil, errors.New("xdsclient: no servers or authorities specified")
 	}
-
+	if config.WatchExpiryTimeout == 0 {
+		config.WatchExpiryTimeout = defaultWatchExpiryTimeout
+	}
 	client, err := newClient(&config, name)
 	if err != nil {
 		return nil, err
@@ -141,7 +143,7 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
-		watchExpiryTimeout: xdsclientinternal.WatchExpiryTimeout,
+		watchExpiryTimeout: config.WatchExpiryTimeout,
 		backoff:            xdsclientinternal.StreamBackoff,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,

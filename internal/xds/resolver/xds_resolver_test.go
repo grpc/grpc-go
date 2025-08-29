@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/httpfilter"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
@@ -268,9 +267,10 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create an xDS client pool: %v", err)
 		}
-		revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestTimeout)
-		defer revertWatchExpiryTimeout()
-		c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{Name: t.Name()})
+		c, cancel, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+			Name: t.Name(), 
+			WatchExpiryTimeout: defaultTestTimeout,
+		})
 		return c, sync.OnceFunc(func() {
 			close(closeCh)
 			cancel()
