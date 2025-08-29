@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils/e2e"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
-	xdsclientinternal "google.golang.org/grpc/internal/xds/clients/xdsclient/internal"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient/internal/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -113,12 +112,6 @@ func badListenerResource(t *testing.T, name string) *v3listenerpb.Listener {
 		Name:        name,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
 	}
-}
-
-func overrideWatchExpiryTimeout(t *testing.T, watchExpiryTimeout time.Duration) {
-	originalWatchExpiryTimeout := xdsclientinternal.WatchExpiryTimeout
-	xdsclientinternal.WatchExpiryTimeout = watchExpiryTimeout
-	t.Cleanup(func() { xdsclientinternal.WatchExpiryTimeout = originalWatchExpiryTimeout })
 }
 
 // verifyNoListenerUpdate verifies that no listener update is received on the

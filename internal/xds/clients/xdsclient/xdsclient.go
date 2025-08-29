@@ -61,7 +61,6 @@ var (
 )
 
 func init() {
-	xdsclientinternal.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	xdsclientinternal.StreamBackoff = defaultExponentialBackoff
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
 }
