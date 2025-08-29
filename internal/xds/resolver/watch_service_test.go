@@ -49,28 +49,35 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 	mgmtServer, lisCh, routeCfgCh, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
 
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Verify initial update from the resolver.
 	waitForResourceNames(ctx, t, lisCh, []string{defaultTestServiceName})
-	waitForResourceNames(ctx, t, routeCfgCh, []string{defaultTestRouteConfigName})
-	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	waitForResourceNames(ctx, t, routeCfgCh, []string{resources.Routes[0].Name})
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// Update the listener resource to point to a new route configuration name.
 	// Leave the old route configuration resource unchanged.
 	newTestRouteConfigName := defaultTestRouteConfigName + "-new"
-	listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, newTestRouteConfigName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, newTestRouteConfigName)}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
 
 	// Verify that the new route configuration resource is requested.
 	waitForResourceNames(ctx, t, routeCfgCh, []string{newTestRouteConfigName})
 
 	// Update the old route configuration resource by adding a new route.
-	routes[0].VirtualHosts[0].Routes = append(routes[0].VirtualHosts[0].Routes, &v3routepb.Route{
+	resources.Routes[0].VirtualHosts[0].Routes = append(resources.Routes[0].VirtualHosts[0].Routes, &v3routepb.Route{
 		Match: &v3routepb.RouteMatch{
 			PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/foo/bar"},
 			CaseSensitive: &wrapperspb.BoolValue{Value: false},
@@ -81,17 +88,17 @@ func (s) TestServiceWatch_ListenerPointsToNewRouteConfiguration(t *testing.T) {
 			},
 		},
 	})
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
 
 	// Wait for no update from the resolver.
 	verifyNoUpdateFromResolver(ctx, t, stateCh)
 
 	// Update the management server with the new route configuration resource.
-	routes = append(routes, e2e.DefaultRouteConfig(newTestRouteConfigName, defaultTestServiceName, defaultTestClusterName))
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	resources.Routes = append(resources.Routes, e2e.DefaultRouteConfig(newTestRouteConfigName, defaultTestServiceName, resources.Clusters[0].Name))
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
 
 	// Ensure update from the resolver.
-	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 }
 
 // Tests the case where the listener resource changes to contain an inline route
@@ -106,22 +113,28 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 	mgmtServer, lisCh, routeCfgCh, bc := setupManagementServerForTest(t, nodeID)
 
 	// Configure resources on the management server.
-	listeners := []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	routes := []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(defaultTestRouteConfigName, defaultTestServiceName, defaultTestClusterName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
-
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: defaultTestServiceName,
+		NodeID:     nodeID,
+		Host:       defaultTestHostname,
+		Port:       defaultTestPort[0],
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
 	stateCh, _, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
 
 	// Verify initial update from the resolver.
 	waitForResourceNames(ctx, t, lisCh, []string{defaultTestServiceName})
-	waitForResourceNames(ctx, t, routeCfgCh, []string{defaultTestRouteConfigName})
-	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	waitForResourceNames(ctx, t, routeCfgCh, []string{resources.Routes[0].Name})
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// Update listener to contain an inline route configuration.
 	hcm := testutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 			RouteConfig: &v3routepb.RouteConfiguration{
-				Name: defaultTestRouteConfigName,
+				Name: resources.Routes[0].Name,
 				VirtualHosts: []*v3routepb.VirtualHost{{
 					Domains: []string{defaultTestServiceName},
 					Routes: []*v3routepb.Route{{
@@ -130,7 +143,7 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 						},
 						Action: &v3routepb.Route_Route{
 							Route: &v3routepb.RouteAction{
-								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: defaultTestClusterName},
+								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: resources.Clusters[0].Name},
 							},
 						},
 					}},
@@ -139,7 +152,7 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 		},
 		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
 	})
-	listeners = []*v3listenerpb.Listener{{
+	resources.Listeners = []*v3listenerpb.Listener{{
 		Name:        defaultTestServiceName,
 		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
 		FilterChains: []*v3listenerpb.FilterChain{{
@@ -150,19 +163,19 @@ func (s) TestServiceWatch_ListenerPointsToInlineRouteConfiguration(t *testing.T)
 			}},
 		}},
 	}}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, nil)
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, nil)
 
 	// Verify that the old route configuration is not requested anymore.
 	waitForResourceNames(ctx, t, routeCfgCh, []string{})
-	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 
 	// Update listener back to contain a route configuration name.
-	listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, defaultTestRouteConfigName)}
-	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, listeners, routes)
+	resources.Listeners = []*v3listenerpb.Listener{e2e.DefaultClientListener(defaultTestServiceName, resources.Routes[0].Name)}
+	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, resources.Listeners, resources.Routes)
 
 	// Verify that that route configuration resource is requested.
-	waitForResourceNames(ctx, t, routeCfgCh, []string{defaultTestRouteConfigName})
+	waitForResourceNames(ctx, t, routeCfgCh, []string{resources.Routes[0].Name})
 
 	// Verify that appropriate SC is pushed on the channel.
-	verifyUpdateFromResolver(ctx, t, stateCh, wantDefaultServiceConfig)
+	verifyUpdateFromResolver(ctx, t, stateCh, wantServiceConfig(resources.Clusters[0].Name))
 }
