@@ -296,12 +296,11 @@ func configureResourcesOnManagementServer(ctx context.Context, t *testing.T, mgm
 // on the given management server.
 func configureAllResourcesOnManagementServer(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, listeners []*v3listenerpb.Listener, routes []*v3routepb.RouteConfiguration, clusters []*v3clusterpb.Cluster, endpoints []*v3endpointpb.ClusterLoadAssignment) {
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Listeners:      listeners,
-		Routes:         routes,
-		Clusters:       clusters,
-		Endpoints:      endpoints,
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: listeners,
+		Routes:    routes,
+		Clusters:  clusters,
+		Endpoints: endpoints,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
