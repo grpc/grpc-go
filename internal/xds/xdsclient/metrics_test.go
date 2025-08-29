@@ -98,8 +98,8 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
 		Name:               t.Name(),
-		MetricsRecorder:    tmr,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+		MetricsRecorder:    tmr,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
@@ -200,8 +200,8 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 	pool := NewPool(config)
 	client, close, err := pool.NewClientForTesting(OptionsForTesting{
 		Name:               t.Name(),
-		MetricsRecorder:    tmr,
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+		MetricsRecorder:    tmr,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create an xDS client: %v", err)
