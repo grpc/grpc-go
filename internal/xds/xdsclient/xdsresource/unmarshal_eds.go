@@ -217,8 +217,9 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 }
 
 func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
-	// TODO(easwars): Find a better place for this check once A83 is implemented.
-	if !envconfig.XDSHTTPConnectEnabled {
+	// TODO(easwars): Find a better place for the environment variable check
+	// once A83 is implemented.
+	if !envconfig.XDSHTTPConnectEnabled || metadataProto == nil {
 		return nil, nil
 	}
 	metadata := make(map[string]any)
