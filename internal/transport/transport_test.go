@@ -3155,7 +3155,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 	for _, test := range []struct {
 		name            string
 		metaHeaderFrame *http2.MetaHeadersFrame
-		endStreamFlag   http2.Flags
+		httpFlags       http2.Flags
 		wantStatus      *status.Status
 	}{
 		{
@@ -3165,7 +3165,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 					{Name: ":status", Value: "100"},
 				},
 			},
-			endStreamFlag: http2.FlagHeadersEndStream,
+			httpFlags: http2.FlagHeadersEndStream,
 			wantStatus: status.New(
 				codes.Internal,
 				"protocol error: informational header with status code 100 must not have END_STREAM set",
@@ -3178,8 +3178,8 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 					{Name: ":status", Value: "100"},
 				},
 			},
-			endStreamFlag: 0,
-			wantStatus:    nil,
+			httpFlags:  0,
+			wantStatus: nil,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -3189,7 +3189,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
 				FrameHeader: http2.FrameHeader{
 					StreamID: 0,
-					Flags:    test.endStreamFlag,
+					Flags:    test.httpFlags,
 				},
 			}
 
@@ -3199,7 +3199,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 			want := test.wantStatus
 
 			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Fatalf("operateHeaders(%v); status = \ngot: %v\nwant: %v", test.metaHeaderFrame, got, want)
+				t.Fatalf("operateHeaders(%v); status = %v, want %v", test.metaHeaderFrame, got, want)
 			}
 		})
 	}
