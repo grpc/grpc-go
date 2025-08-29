@@ -484,8 +484,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 }
 
-// createTestJWT creates a test JWT token with the specified audience and
-// expiration.
+// createTestJWT creates a test JWT token with the specified expiration.
 func createTestJWT(t *testing.T, expiration time.Time) string {
 	t.Helper()
 
