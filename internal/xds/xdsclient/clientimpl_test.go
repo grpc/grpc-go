@@ -208,7 +208,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create bootstrap config: %v", err)
 			}
-			gotCfg, err := buildXDSClientConfig(bootstrapConfig, stats.NewTestMetricsRecorder(), testTargetName)
+			gotCfg, err := buildXDSClientConfig(bootstrapConfig, stats.NewTestMetricsRecorder(), testTargetName, 0)
 			if err != nil {
 				t.Fatalf("Failed to build XDSClientConfig: %v", err)
 			}

@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
-	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/proto"
@@ -288,11 +287,9 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
 			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-				Name: t.Name(), 
+				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {
@@ -570,11 +567,9 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
 			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-				Name: t.Name(), 
+				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {
@@ -813,13 +808,11 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
 			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-				Name: t.Name(), 
+				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
-			})			
+			})
 			if err != nil {
 				t.Fatalf("Failed to create an xDS client: %v", err)
 			}
@@ -1168,11 +1161,9 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
 			}
-			revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-			defer revertWatchExpiryTimeout()
 			pool := xdsclient.NewPool(config)
 			client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-				Name: t.Name(), 
+				Name:               t.Name(),
 				WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 			})
 			if err != nil {

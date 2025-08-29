@@ -739,7 +739,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(), 
+		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
@@ -782,7 +782,7 @@ func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(), 
+		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {

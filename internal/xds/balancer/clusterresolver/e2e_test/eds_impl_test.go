@@ -1103,7 +1103,7 @@ func (s) TestEDS_ResourceNotFound(t *testing.T) {
 	}
 	pool := xdsclient.NewPool(config)
 	xdsClient, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
+		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {

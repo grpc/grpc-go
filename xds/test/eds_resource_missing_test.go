@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/testutils/xds/e2e/setup"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	ixdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
@@ -79,11 +78,9 @@ func (s) TestEDS_MissingResource(t *testing.T) {
 	}
 
 	// Create an xDS client with a short resource expiry timer.
-	revertWatchExpiryTimeout := ixdsclient.SetWatchExpiryTimeoutForTesting(defaultTestWatchExpiryTimeout)
-	defer revertWatchExpiryTimeout()
 	pool := xdsclient.NewPool(config)
 	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(), 
+		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {

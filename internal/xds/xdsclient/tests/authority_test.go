@@ -108,7 +108,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T) (*testutils.Liste
 	}
 	pool := xdsclient.NewPool(config)
 	client, close, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(), 
+		Name:               t.Name(),
 		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
 	})
 	if err != nil {
