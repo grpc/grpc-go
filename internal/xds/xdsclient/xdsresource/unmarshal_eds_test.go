@@ -326,7 +326,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseEDSRespProto(tt.m)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if d := cmp.Diff(got, tt.want, cmpopts.EquateEmpty()); d != "" {
 				t.Errorf("parseEDSRespProto() got = %v, want %v, diff: %v", got, tt.want, d)
@@ -436,7 +436,7 @@ func (s) TestEDSParseRespProtoAdditionalAddrs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseEDSRespProto(tt.m)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if d := cmp.Diff(got, tt.want, cmpopts.EquateEmpty()); d != "" {
 				t.Errorf("parseEDSRespProto() got = %v, want %v, diff: %v", got, tt.want, d)
@@ -777,7 +777,7 @@ func (s) TestValidateAndConstructMetadataWithXDSHTTPConnectEnabled(t *testing.T)
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := validateAndConstructMetadata(tt.metadataProto)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(ProxyAddressMetadataValue{})); diff != "" {
 				t.Errorf("validateAndConstructMetadata() returned unexpected diff (-want +got):\n%s", diff)
@@ -858,7 +858,7 @@ func (s) TestValidateAndConstructMetadataWithXDSHTTPConnectDisabled(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := validateAndConstructMetadata(tt.metadataProto)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("validateAndConstructMetadata() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(ProxyAddressMetadataValue{})); diff != "" {
 				t.Errorf("validateAndConstructMetadata() returned unexpected diff (-want +got):\n%s", diff)
