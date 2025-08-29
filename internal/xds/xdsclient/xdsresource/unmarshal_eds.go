@@ -108,11 +108,16 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
+		endpointMetadata, err := validateAndConstructMetadata(lbEndpoint.GetMetadata())
+		if err != nil {
+			return nil, err
+		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Addresses:    addrs,
 			Weight:       weight,
 			HashKey:      hashKey(lbEndpoint),
+			Metadata:     endpointMetadata,
 		})
 	}
 	return endpoints, nil
@@ -190,11 +195,17 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
+		localityMetadata, err := validateAndConstructMetadata(locality.GetMetadata())
+		if err != nil {
+			return EndpointsUpdate{}, err
+		}
+
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: endpoints,
 			Weight:    weight,
 			Priority:  priority,
+			Metadata:  localityMetadata,
 		})
 	}
 	for i := 0; i < len(priorities); i++ {
@@ -203,4 +214,37 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
+}
+
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
+	// TODO(easwars): Find a better place for the environment variable check
+	// once A83 is implemented.
+	if !envconfig.XDSHTTPConnectEnabled || metadataProto == nil {
+		return nil, nil
+	}
+	metadata := make(map[string]any)
+	// First go through TypedFilterMetadata.
+	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
+		converter := metadataConverterForType(anyProto.GetTypeUrl())
+		// Ignore types we don't have a converter for.
+		if converter == nil {
+			continue
+		}
+		val, err := converter.convert(anyProto)
+		if err != nil {
+			// If the converter fails, nack the whole resource.
+			return nil, fmt.Errorf("metadata conversion for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+		}
+		metadata[key] = val
+	}
+
+	// Process FilterMetadata for any keys not already handled.
+	for key, structProto := range metadataProto.GetFilterMetadata() {
+		// Skip keys already added from TyperFilterMetadata.
+		if metadata[key] != nil {
+			continue
+		}
+		metadata[key] = StructMetadataValue{Data: structProto.AsMap()}
+	}
+	return metadata, nil
 }
