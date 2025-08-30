@@ -65,8 +65,8 @@ type Config struct {
 
 	// WatchExpiryTimeout is the duration after which a resource watch expires
 	// if the requested resource is not received from the management server.
-	// Most users will not need to set this.If zero, a default value of 15
-	// seconds is used as specified here :
+	// Most users will not need to set this. If zero, a default value of 15
+	// seconds is used as specified here:
 	// envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol#knowing-when-a-requested-resource-does-not-exist
 	WatchExpiryTimeout time.Duration
 }
