@@ -481,8 +481,6 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 // concurrently with a shared XDSClient, each of which will create a new LRS
 // stream without any race.
 func (s) TestConcurrentChannels(t *testing.T) {
-	// TODO(emchandwani) : Unskip after https://github.com/grpc/grpc-go/pull/8526 gets merged.
-	t.Skip()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
