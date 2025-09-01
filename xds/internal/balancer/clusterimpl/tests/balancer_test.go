@@ -361,7 +361,7 @@ func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Serv
 // Tests that circuit breaking limits RPCs E2E.
 func (s) TestCircuitBreaking(t *testing.T) {
 	// Create an xDS management server that serves ADS requests.
-	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
 	// Create bootstrap configuration pointing to the above management server.
 	nodeID := uuid.New().String()
@@ -380,9 +380,6 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Start a server backend exposing the test service.
 	f := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
 			for {
 				if _, err := stream.Recv(); err != nil {
@@ -396,12 +393,13 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Configure the xDS management server with default resources.
 	const serviceName = "my-test-xds-service"
-	const maxRequests = 3
+	const maxRequests = 10
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
 		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
 	})
 	resources.Clusters[0].CircuitBreakers = &v3clusterpb.CircuitBreakers{
 		Thresholds: []*v3clusterpb.CircuitBreakers_Thresholds{
@@ -409,6 +407,11 @@ func (s) TestCircuitBreaking(t *testing.T) {
 				Priority:    v3corepb.RoutingPriority_DEFAULT,
 				MaxRequests: wrapperspb.UInt32(maxRequests),
 			},
+		},
+	}
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
 		},
 	}
 
@@ -436,21 +439,50 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Since we are at the max, new streams should fail.  It's possible some are
 	// allowed due to inherent raciness in the tracking, however.
-	for i := 0; i < 100; i++ {
+	const droppedRpcCount = 100
+	for i := 0; i < droppedRpcCount; i++ {
 		stream, err := client.FullDuplexCall(ctx)
-		if status.Code(err) == codes.Unavailable {
-			return
-		}
-		if err == nil {
+		switch {
+		case err == nil:
 			// Terminate the stream (the server immediately exits upon a client
 			// CloseSend) to ensure we never go over the limit.
 			stream.CloseSend()
 			stream.Recv()
+		case status.Code(err) == codes.Unavailable:
+			continue
+		default:
+			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	t.Fatalf("RPCs unexpectedly allowed beyond circuit breaking maximum")
+	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
+	}
+
+	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure waiting for initial LRS request: %v", err)
+	}
+
+	resp := fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: durationpb.New(10 * time.Millisecond),
+		},
+	}
+	mgmtServer.LRSServer.LRSResponseChan <- &resp
+
+	select {
+	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+		for _, cs := range loadStats.ClusterStats {
+			if cs.TotalDroppedRequests != droppedRpcCount || cs.UpstreamLocalityStats[0].TotalIssuedRequests != maxRequests {
+				t.Errorf("Failed with unexpected outputs")
+			}
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout while waiting for LRS stream: %v", ctx.Err())
+	}
 }
 
 // Tests that circuit breaking limits RPCs in LOGICAL_DNS clusters E2E.
