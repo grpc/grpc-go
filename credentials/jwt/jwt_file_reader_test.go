@@ -21,6 +21,7 @@ package jwt
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -35,28 +36,28 @@ func TestJWTFileReader(t *testing.T) {
 
 func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 	tests := []struct {
-		name            string
-		create          bool
-		contents        string
-		wantErrContains string
+		name     string
+		create   bool
+		contents string
+		wantErr  error
 	}{
 		{
-			name:            "nonexistent file",
-			create:          false,
-			contents:        "",
-			wantErrContains: "failed to read token file",
+			name:     "nonexistent file",
+			create:   false,
+			contents: "",
+			wantErr:  errTokenFileAccess,
 		},
 		{
-			name:            "empty file",
-			create:          true,
-			contents:        "",
-			wantErrContains: "token file",
+			name:     "empty file",
+			create:   true,
+			contents: "",
+			wantErr:  errJWTFormat,
 		},
 		{
-			name:            "file with whitespace only",
-			create:          true,
-			contents:        "   \n\t  ",
-			wantErrContains: "token file",
+			name:     "file with whitespace only",
+			create:   true,
+			contents: "   \n\t  ",
+			wantErr:  errJWTFormat,
 		},
 	}
 
@@ -75,8 +76,8 @@ func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 				t.Fatal("ReadToken() expected error, got nil")
 			}
 
-			if !strings.Contains(err.Error(), tt.wantErrContains) {
-				t.Fatalf("ReadToken() error = %v, want error containing %q", err, tt.wantErrContains)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ReadToken() error = %v, want error %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -85,34 +86,34 @@ func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	tests := []struct {
-		name            string
-		tokenContent    string
-		wantErrContains string
+		name         string
+		tokenContent string
+		wantErr      error
 	}{
 		{
-			name:            "valid token without expiration",
-			tokenContent:    createTestJWT(t, time.Time{}),
-			wantErrContains: "JWT token has no expiration claim",
+			name:         "valid token without expiration",
+			tokenContent: createTestJWT(t, time.Time{}),
+			wantErr:      errJWTValidation,
 		},
 		{
-			name:            "expired token",
-			tokenContent:    createTestJWT(t, now.Add(-time.Hour)),
-			wantErrContains: "JWT token is expired",
+			name:         "expired token",
+			tokenContent: createTestJWT(t, now.Add(-time.Hour)),
+			wantErr:      errJWTValidation,
 		},
 		{
-			name:            "malformed JWT - not enough parts",
-			tokenContent:    "invalid.jwt",
-			wantErrContains: "invalid JWT format: expected 3 parts, got 2",
+			name:         "malformed JWT - not enough parts",
+			tokenContent: "invalid.jwt",
+			wantErr:      errJWTFormat,
 		},
 		{
-			name:            "malformed JWT - invalid base64",
-			tokenContent:    "header.invalid_base64!@#.signature",
-			wantErrContains: "failed to decode JWT payload",
+			name:         "malformed JWT - invalid base64",
+			tokenContent: "header.invalid_base64!@#.signature",
+			wantErr:      errJWTFormat,
 		},
 		{
-			name:            "malformed JWT - invalid JSON",
-			tokenContent:    createInvalidJSONJWT(t),
-			wantErrContains: "failed to unmarshal JWT claims",
+			name:         "malformed JWT - invalid JSON",
+			tokenContent: createInvalidJSONJWT(t),
+			wantErr:      errJWTFormat,
 		},
 	}
 
@@ -123,8 +124,8 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 			reader := jWTFileReader{tokenFilePath: tokenFile}
 			if _, _, err := reader.readToken(); err == nil {
 				t.Fatal("ReadToken() expected error, got nil")
-			} else if !strings.Contains(err.Error(), tt.wantErrContains) {
-				t.Fatalf("ReadToken() error = %v, want error containing %q", err, tt.wantErrContains)
+			} else if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("ReadToken() error = %v, want error %v", err, tt.wantErr)
 			}
 		})
 	}

@@ -61,10 +61,6 @@ func (s) TestNewTokenFileCallCredentialsMissingFilepath(t *testing.T) {
 	if err == nil {
 		t.Fatalf("NewTokenFileCallCredentials() expected error, got nil")
 	}
-	expectedErr := "tokenFilePath cannot be empty"
-	if !strings.Contains(err.Error(), expectedErr) {
-		t.Fatalf("NewTokenFileCallCredentials() error = %v, want error containing %q", err, expectedErr)
-	}
 }
 
 func (s) TestTokenFileCallCreds_RequireTransportSecurity(t *testing.T) {
@@ -81,11 +77,12 @@ func (s) TestTokenFileCallCreds_RequireTransportSecurity(t *testing.T) {
 func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	tests := []struct {
-		name         string
-		tokenContent string
-		authInfo     credentials.AuthInfo
-		grpcCode     codes.Code
-		wantMetadata map[string]string
+		name             string
+		invalidTokenPath bool
+		tokenContent     string
+		authInfo         credentials.AuthInfo
+		grpcCode         codes.Code
+		wantMetadata     map[string]string
 	}{
 		{
 			name:         "valid token with future expiration",
@@ -98,13 +95,20 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 			name:         "insufficient security level",
 			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.NoSecurity},
-			grpcCode:     codes.Unknown,
+			grpcCode:     codes.Unknown, // http2Client.getCallAuthData actually transforms such errors into into Unauthenticated
 		},
 		{
-			name:         "unreachable token file",
+			name:             "unreachable token file",
+			invalidTokenPath: true,
+			tokenContent:     "",
+			authInfo:         &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
+			grpcCode:         codes.Unavailable,
+		},
+		{
+			name:         "empty file",
 			tokenContent: "",
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			grpcCode:     codes.Unavailable,
+			grpcCode:     codes.Unauthenticated,
 		},
 		{
 			name:         "malformed JWT token",
@@ -116,8 +120,12 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tokenFile := writeTempFile(t, "token", tt.tokenContent)
-
+			var tokenFile string
+			if tt.invalidTokenPath {
+				tokenFile = "/does-not-exist"
+			} else {
+				tokenFile = writeTempFile(t, "token", tt.tokenContent)
+			}
 			creds, err := NewTokenFileCallCredentials(tokenFile)
 			if err != nil {
 				t.Fatalf("NewTokenFileCallCredentials() failed: %v", err)

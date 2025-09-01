@@ -21,8 +21,8 @@ package jwt
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -154,10 +154,13 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 func (c *jwtTokenFileCallCreds) updateCacheLocked(token string, expiry time.Time, err error) {
 	if err != nil {
 		// Convert to gRPC status codes
-		if strings.Contains(err.Error(), "failed to read token file") || strings.Contains(err.Error(), "token file") && strings.Contains(err.Error(), "is empty") {
-			c.cachedError = status.Errorf(codes.Unavailable, "%v", err)
+		if errors.Is(err, errTokenFileAccess) {
+			c.cachedError = status.Error(codes.Unavailable, err.Error())
+		} else if errors.Is(err, errJWTFormat) || errors.Is(err, errJWTValidation) {
+			c.cachedError = status.Error(codes.Unauthenticated, err.Error())
 		} else {
-			c.cachedError = status.Errorf(codes.Unauthenticated, "%v", err)
+			// Should not happen. Treat unknown errors as UNAUTHENTICATED.
+			c.cachedError = status.Error(codes.Unauthenticated, err.Error())
 		}
 		c.retryAttempt++
 		backoffDelay := c.backoffStrategy.Backoff(c.retryAttempt - 1)
