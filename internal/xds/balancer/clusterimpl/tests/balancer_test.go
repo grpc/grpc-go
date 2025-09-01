@@ -439,8 +439,8 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Since we are at the max, new streams should fail.  It's possible some are
 	// allowed due to inherent raciness in the tracking, however.
-	const droppedRpcCount = 100
-	for i := 0; i < droppedRpcCount; i++ {
+	const droppedRPCCount = 100
+	for i := 0; i < droppedRPCCount; i++ {
 		stream, err := client.FullDuplexCall(ctx)
 		switch {
 		case err == nil:
@@ -476,7 +476,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
 		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
 		for _, cs := range loadStats.ClusterStats {
-			if cs.TotalDroppedRequests != droppedRpcCount || cs.UpstreamLocalityStats[0].TotalIssuedRequests != maxRequests {
+			if cs.TotalDroppedRequests != droppedRPCCount || cs.UpstreamLocalityStats[0].TotalIssuedRequests != maxRequests {
 				t.Errorf("Failed with unexpected outputs")
 			}
 		}
