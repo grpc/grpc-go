@@ -47,7 +47,7 @@ const (
 	defaultTestTimeout      = 1 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 	defaultTestCertSAN      = "abc.test.example.com"
-	authority               = "authority"
+	authority               = "x.test.example.com"
 )
 
 type s struct {
@@ -61,7 +61,7 @@ func Test(t *testing.T) {
 // Helper function to create a real TLS client credentials which is used as
 // fallback credentials from multiple tests.
 func makeFallbackClientCreds(t *testing.T) credentials.TransportCredentials {
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "")
 	if err != nil {
 		t.Fatal(err)
 	}

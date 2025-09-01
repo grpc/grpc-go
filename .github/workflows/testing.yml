@@ -27,7 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache-dependency-path: "**/go.sum"
 
       # Run the vet-proto checks.
@@ -45,32 +45,32 @@ jobs:
       matrix:
         include:
           - type: vet
-            goversion: '1.23'
+            goversion: '1.24'
 
           - type: extras
-            goversion: '1.24'
+            goversion: '1.25'
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             testflags: -race
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             goarch: 386
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             goarch: arm64
             runner: ubuntu-24.04-arm
 
           - type: tests
-            goversion: '1.23'
+            goversion: '1.24'
 
           - type: tests
-            goversion: '1.24'
+            goversion: '1.25'
             testflags: -race
             grpcenv: 'GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST=false'
 
@@ -125,7 +125,7 @@ jobs:
           echo -e "\n-- Running Interop Test --"
           interop/interop_test.sh
           echo -e "\n-- Running xDS E2E Test --"
-          xds/internal/test/e2e/run.sh
+          internal/xds/test/e2e/run.sh
           echo -e "\n-- Running protoc-gen-go-grpc test --"
           ./scripts/vet-proto.sh -install
           cmd/protoc-gen-go-grpc/protoc-gen-go-grpc_test.sh
