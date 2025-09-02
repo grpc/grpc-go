@@ -114,7 +114,6 @@ func expectedNodeJSON(ipv6Capable bool) []byte {
 			}
 		}`)
 	}
-
 	// Otherwise, return the node metadata including the IPv6 capability flag.
 	return []byte(`{
 		"id": "C2P-666",

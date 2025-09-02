@@ -183,7 +183,7 @@ func newNodeConfig(zone string, ipv6Capable bool) map[string]any {
 		"locality": map[string]any{"zone": zone},
 	}
 	if envconfig.NewPickFirstEnabled {
-		// Enable dualstack endpoint in TD.
+		// Enable dualstack endpoints in TD.
 		// TODO(apolcyn): remove IPv6 metadata server queries entirely after old pick first is removed.
 		ipv6Capable = true
 	} else {
