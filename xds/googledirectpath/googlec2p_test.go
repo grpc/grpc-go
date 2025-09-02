@@ -108,17 +108,23 @@ func useCleanUniverseDomain(t *testing.T) {
 func expectedNodeJSON(ipv6Capable bool) []byte {
 	if !envconfig.NewPickFirstEnabled && !ipv6Capable {
 		return []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-					}`)
+			"id": "C2P-666",
+			"locality": {
+				"zone": "test-zone"
+			}
+		}`)
 	}
+
+	// Otherwise, return the node metadata including the IPv6 capability flag.
 	return []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`)
+		"id": "C2P-666",
+		"locality": {
+			"zone": "test-zone"
+		},
+		"metadata": {
+			"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+		}
+	}`)
 }
 
 // Tests the scenario where the bootstrap env vars are set and we're running on
