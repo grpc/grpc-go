@@ -103,6 +103,24 @@ func useCleanUniverseDomain(t *testing.T) {
 	})
 }
 
+// TODO(apolcyn): this content can be hardcoded directly in wanted bootstraps again after
+// old pick first is fully removed.
+func expectedNodeJSON(ipv6Capable bool) []byte {
+	if !envconfig.NewPickFirstEnabled && !ipv6Capable {
+		return []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"},
+					}`)
+	}
+	return []byte(`{
+					  "id": "C2P-666",
+					  "locality": {"zone": "test-zone"},
+			  			"metadata": {
+							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+			  			}
+					}`)
+}
+
 // Tests the scenario where the bootstrap env vars are set and we're running on
 // GCE. The test builds a google-c2p resolver and verifies that an xDS resolver
 // is built and that we don't fallback to DNS (because federation is enabled by
@@ -196,7 +214,6 @@ func (s) TestBuildXDS(t *testing.T) {
 	for _, tt := range []struct {
 		desc                string
 		ipv6Capable         bool
-		disableNewPickFirst bool
 		tdURIOverride       string
 		wantBootstrapConfig *bootstrap.Config
 	}{
@@ -219,39 +236,7 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
-			}),
-		},
-		{
-			desc:                "ipv6 false with new pick first disabled",
-			disableNewPickFirst: true,
-			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
-				Servers: []byte(`[{
-					"server_uri": "dns:///directpath-pa.googleapis.com",
-					"channel_creds": [{"type": "google_default"}],
-					"server_features": ["ignore_resource_deletion"]
-  				}]`),
-				Authorities: map[string]json.RawMessage{
-					"traffic-director-c2p.xds.googleapis.com": []byte(`{
-							"xds_servers": [
-  								{
-								    "server_uri": "dns:///directpath-pa.googleapis.com",
-								    "channel_creds": [{"type": "google_default"}],
-								    "server_features": ["ignore_resource_deletion"]
-  								}
-							]
-						}`),
-				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"}
-					}`),
+				Node: expectedNodeJSON(false),
 			}),
 		},
 		{
@@ -274,43 +259,7 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
-			}),
-		},
-		{
-			desc:                "ipv6 true with new pick first disabled",
-			ipv6Capable:         true,
-			disableNewPickFirst: true,
-			wantBootstrapConfig: bootstrapConfig(t, bootstrap.ConfigOptionsForTesting{
-				Servers: []byte(`[{
-					"server_uri": "dns:///directpath-pa.googleapis.com",
-					"channel_creds": [{"type": "google_default"}],
-					"server_features": ["ignore_resource_deletion"]
-  				}]`),
-				Authorities: map[string]json.RawMessage{
-					"traffic-director-c2p.xds.googleapis.com": []byte(`{
-							"xds_servers": [
-  								{
-								    "server_uri": "dns:///directpath-pa.googleapis.com",
-								    "channel_creds": [{"type": "google_default"}],
-								    "server_features": ["ignore_resource_deletion"]
-  								}
-							]
-						}`),
-				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
+				Node: expectedNodeJSON(true),
 			}),
 		},
 		{
@@ -334,13 +283,7 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
+				Node: expectedNodeJSON(true),
 			}),
 		},
 	} {
@@ -349,11 +292,6 @@ func (s) TestBuildXDS(t *testing.T) {
 			oldGetIPv6Capability := getIPv6Capable
 			getIPv6Capable = func(time.Duration) bool { return tt.ipv6Capable }
 			defer func() { getIPv6Capable = oldGetIPv6Capability }()
-			if tt.disableNewPickFirst {
-				prev := envconfig.NewPickFirstEnabled
-				envconfig.NewPickFirstEnabled = false
-				defer func() { envconfig.NewPickFirstEnabled = prev }()
-			}
 
 			// Override TD URI test only env var.
 			if tt.tdURIOverride != "" {
@@ -507,13 +445,7 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 							]
 						}`),
 		},
-		Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
+		Node: expectedNodeJSON(false),
 	})
 	if diff := cmp.Diff(wantBootstrapConfig, gotConfig); diff != "" {
 		t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
@@ -581,13 +513,7 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 							]
 						}`),
 		},
-		Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
+		Node: expectedNodeJSON(false),
 	})
 	if diff := cmp.Diff(wantBootstrapConfig, gotConfig); diff != "" {
 		t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
