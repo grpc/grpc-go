@@ -42,19 +42,19 @@ func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			name:     "nonexistent file",
+			name:     "nonexistent_file",
 			create:   false,
 			contents: "",
 			wantErr:  errTokenFileAccess,
 		},
 		{
-			name:     "empty file",
+			name:     "empty_file",
 			create:   true,
 			contents: "",
 			wantErr:  errJWTValidation,
 		},
 		{
-			name:     "file with whitespace only",
+			name:     "file_with_whitespace_only",
 			create:   true,
 			contents: "   \n\t  ",
 			wantErr:  errJWTValidation,
@@ -91,27 +91,27 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 		wantErr      error
 	}{
 		{
-			name:         "valid token without expiration",
+			name:         "valid_token_without_expiration",
 			tokenContent: createTestJWT(t, time.Time{}),
 			wantErr:      errJWTValidation,
 		},
 		{
-			name:         "expired token",
+			name:         "expired_token",
 			tokenContent: createTestJWT(t, now.Add(-time.Hour)),
 			wantErr:      errJWTValidation,
 		},
 		{
-			name:         "malformed JWT - not enough parts",
+			name:         "malformed_JWT_not_enough_parts",
 			tokenContent: "invalid.jwt",
 			wantErr:      errJWTValidation,
 		},
 		{
-			name:         "malformed JWT - invalid base64",
+			name:         "malformed_JWT_invalid_base64",
 			tokenContent: "header.invalid_base64!@#.signature",
 			wantErr:      errJWTValidation,
 		},
 		{
-			name:         "malformed JWT - invalid JSON",
+			name:         "malformed_JWT_invalid_JSON",
 			tokenContent: createInvalidJSONJWT(t),
 			wantErr:      errJWTValidation,
 		},

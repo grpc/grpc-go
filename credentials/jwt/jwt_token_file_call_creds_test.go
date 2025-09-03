@@ -85,33 +85,33 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 		wantMetadata     map[string]string
 	}{
 		{
-			name:         "valid token with future expiration",
+			name:         "valid_token_with_future_expiration",
 			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			grpcCode:     codes.OK,
 			wantMetadata: map[string]string{"authorization": "Bearer " + createTestJWT(t, now.Add(time.Hour))},
 		},
 		{
-			name:         "insufficient security level",
+			name:         "insufficient_security_level",
 			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.NoSecurity},
 			grpcCode:     codes.Unknown, // http2Client.getCallAuthData actually transforms such errors into into Unauthenticated
 		},
 		{
-			name:             "unreachable token file",
+			name:             "unreachable_token_file",
 			invalidTokenPath: true,
 			tokenContent:     "",
 			authInfo:         &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			grpcCode:         codes.Unavailable,
 		},
 		{
-			name:         "empty file",
+			name:         "empty_file",
 			tokenContent: "",
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			grpcCode:     codes.Unauthenticated,
 		},
 		{
-			name:         "malformed JWT token",
+			name:         "malformed_JWT_token",
 			tokenContent: "bad contents",
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			grpcCode:     codes.Unauthenticated,
