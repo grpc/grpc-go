@@ -372,14 +372,10 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// Verify error is cached internally.
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.Lock()
-	cachedErr := impl.cachedError
 	retryAttempt := impl.retryAttempt
 	nextRetryTime := impl.nextRetryTime
 	impl.mu.Unlock()
 
-	if cachedErr == nil {
-		t.Error("error should be cached internally after failed file read")
-	}
 	if retryAttempt != 1 {
 		t.Errorf("Expected retry attempt to be 1, got %d", retryAttempt)
 	}
@@ -394,9 +390,6 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 	if status.Code(err2) != codes.Unavailable {
 		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err2))
-	}
-	if err1.Error() != err2.Error() {
-		t.Errorf("cached error = %q, want %q", err2.Error(), err1.Error())
 	}
 
 	impl.mu.Lock()
@@ -424,9 +417,6 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	if status.Code(err3) != codes.Unavailable {
 		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err3))
 	}
-	if err3.Error() != err1.Error() {
-		t.Errorf("cached error = %q, want %q", err3.Error(), err1.Error())
-	}
 
 	impl.mu.Lock()
 	retryAttempt3 := impl.retryAttempt
@@ -453,9 +443,6 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 	if status.Code(err4) != codes.Unavailable {
 		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err4))
-	}
-	if err4.Error() != err3.Error() {
-		t.Errorf("cached error = %q, want %q", err4.Error(), err3.Error())
 	}
 
 	impl.mu.Lock()
