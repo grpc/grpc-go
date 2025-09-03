@@ -156,7 +156,7 @@ func (c *jwtTokenFileCallCreds) updateCacheLocked(token string, expiry time.Time
 		// Convert to gRPC status codes
 		if errors.Is(err, errTokenFileAccess) {
 			c.cachedError = status.Error(codes.Unavailable, err.Error())
-		} else if errors.Is(err, errJWTFormat) || errors.Is(err, errJWTValidation) {
+		} else if errors.Is(err, errJWTValidation) {
 			c.cachedError = status.Error(codes.Unauthenticated, err.Error())
 		} else {
 			// Should not happen. Treat unknown errors as UNAUTHENTICATED.

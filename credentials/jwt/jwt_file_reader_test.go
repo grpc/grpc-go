@@ -51,13 +51,13 @@ func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 			name:     "empty file",
 			create:   true,
 			contents: "",
-			wantErr:  errJWTFormat,
+			wantErr:  errJWTValidation,
 		},
 		{
 			name:     "file with whitespace only",
 			create:   true,
 			contents: "   \n\t  ",
-			wantErr:  errJWTFormat,
+			wantErr:  errJWTValidation,
 		},
 	}
 
@@ -103,17 +103,17 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 		{
 			name:         "malformed JWT - not enough parts",
 			tokenContent: "invalid.jwt",
-			wantErr:      errJWTFormat,
+			wantErr:      errJWTValidation,
 		},
 		{
 			name:         "malformed JWT - invalid base64",
 			tokenContent: "header.invalid_base64!@#.signature",
-			wantErr:      errJWTFormat,
+			wantErr:      errJWTValidation,
 		},
 		{
 			name:         "malformed JWT - invalid JSON",
 			tokenContent: createInvalidJSONJWT(t),
-			wantErr:      errJWTFormat,
+			wantErr:      errJWTValidation,
 		},
 	}
 

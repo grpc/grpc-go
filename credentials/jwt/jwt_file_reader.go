@@ -30,7 +30,6 @@ import (
 
 var (
 	errTokenFileAccess = errors.New("token file access error")
-	errJWTFormat       = errors.New("invalid JWT format")
 	errJWTValidation   = errors.New("JWT validation failure")
 )
 
@@ -54,7 +53,7 @@ func (r *jWTFileReader) readToken() (string, time.Time, error) {
 
 	token := strings.TrimSpace(string(tokenBytes))
 	if token == "" {
-		return "", time.Time{}, fmt.Errorf("%w: token file %q is empty", errJWTFormat, r.tokenFilePath)
+		return "", time.Time{}, fmt.Errorf("%w: token file %q is empty", errJWTValidation, r.tokenFilePath)
 	}
 
 	exp, err := r.extractExpiration(token)
@@ -69,7 +68,7 @@ func (r *jWTFileReader) readToken() (string, time.Time, error) {
 func (r *jWTFileReader) extractExpiration(token string) (time.Time, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return time.Time{}, fmt.Errorf("%w: expected 3 parts, got %d", errJWTFormat, len(parts))
+		return time.Time{}, fmt.Errorf("%w: expected 3 parts, got %d", errJWTValidation, len(parts))
 	}
 
 	payload := parts[1]
@@ -80,12 +79,12 @@ func (r *jWTFileReader) extractExpiration(token string) (time.Time, error) {
 
 	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("%w: failed to decode JWT payload: %v", errJWTFormat, err)
+		return time.Time{}, fmt.Errorf("%w: failed to decode JWT payload: %v", errJWTValidation, err)
 	}
 
 	var claims jwtClaims
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return time.Time{}, fmt.Errorf("%w: failed to unmarshal JWT claims: %v", errJWTFormat, err)
+		return time.Time{}, fmt.Errorf("%w: failed to unmarshal JWT claims: %v", errJWTValidation, err)
 	}
 
 	if claims.Exp == 0 {
