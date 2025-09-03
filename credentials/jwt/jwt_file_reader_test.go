@@ -65,7 +65,7 @@ func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var tokenFile string
 			if !tt.create {
-				tokenFile = "/does-not-exixt"
+				tokenFile = "/does-not-exist"
 			} else {
 				tokenFile = writeTempFile(t, "token", tt.contents)
 			}

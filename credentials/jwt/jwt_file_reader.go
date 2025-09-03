@@ -30,7 +30,7 @@ import (
 
 var (
 	errTokenFileAccess = errors.New("token file access error")
-	errJWTValidation   = errors.New("JWT validation failure")
+	errJWTValidation   = errors.New("invalid JWT")
 )
 
 // jwtClaims represents the JWT claims structure for extracting expiration time.
@@ -48,12 +48,12 @@ type jWTFileReader struct {
 func (r *jWTFileReader) readToken() (string, time.Time, error) {
 	tokenBytes, err := os.ReadFile(r.tokenFilePath)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("%w: failed to read token file %q: %v", errTokenFileAccess, r.tokenFilePath, err)
+		return "", time.Time{}, fmt.Errorf("%v: %w", err, errTokenFileAccess)
 	}
 
 	token := strings.TrimSpace(string(tokenBytes))
 	if token == "" {
-		return "", time.Time{}, fmt.Errorf("%w: token file %q is empty", errJWTValidation, r.tokenFilePath)
+		return "", time.Time{}, fmt.Errorf("token file %q is empty: %w", r.tokenFilePath, errJWTValidation)
 	}
 
 	exp, err := r.extractExpiration(token)
@@ -68,7 +68,7 @@ func (r *jWTFileReader) readToken() (string, time.Time, error) {
 func (r *jWTFileReader) extractExpiration(token string) (time.Time, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return time.Time{}, fmt.Errorf("%w: expected 3 parts, got %d", errJWTValidation, len(parts))
+		return time.Time{}, fmt.Errorf("expected 3 parts, got %d: %w", len(parts), errJWTValidation)
 	}
 
 	payload := parts[1]
@@ -79,23 +79,23 @@ func (r *jWTFileReader) extractExpiration(token string) (time.Time, error) {
 
 	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("%w: failed to decode JWT payload: %v", errJWTValidation, err)
+		return time.Time{}, fmt.Errorf("decode error: %v: %w", err, errJWTValidation)
 	}
 
 	var claims jwtClaims
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return time.Time{}, fmt.Errorf("%w: failed to unmarshal JWT claims: %v", errJWTValidation, err)
+		return time.Time{}, fmt.Errorf("unmarshal error: %v: %w", err, errJWTValidation)
 	}
 
 	if claims.Exp == 0 {
-		return time.Time{}, fmt.Errorf("%w: JWT token has no expiration claim", errJWTValidation)
+		return time.Time{}, fmt.Errorf("no expiration claims: %w", errJWTValidation)
 	}
 
 	expTime := time.Unix(claims.Exp, 0)
 
 	// Check if token is already expired.
 	if expTime.Before(time.Now()) {
-		return time.Time{}, fmt.Errorf("%w: JWT token is expired", errJWTValidation)
+		return time.Time{}, fmt.Errorf("expired token: %w", errJWTValidation)
 	}
 
 	return expTime, nil
