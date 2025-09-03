@@ -77,7 +77,7 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
-		return nil, fmt.Errorf("unable to transfer JWT token file PerRPCCredentials: %v", err)
+		return nil, fmt.Errorf("cannot send secure credentials on an insecure connection: %w", err)
 	}
 
 	c.mu.Lock()
@@ -165,15 +165,15 @@ func (c *jwtTokenFileCallCreds) updateCacheLocked(token string, expiry time.Time
 		c.retryAttempt++
 		backoffDelay := c.backoffStrategy.Backoff(c.retryAttempt - 1)
 		c.nextRetryTime = time.Now().Add(backoffDelay)
-	} else {
-		// Success - clear any cached error and update token cache
-		c.cachedError = nil
-		c.retryAttempt = 0
-		c.nextRetryTime = time.Time{}
-
-		c.cachedAuthHeader = "Bearer " + token
-		// Per RFC A97: consider token invalid if it expires within the next 30
-		// seconds to accommodate for clock skew and server processing time.
-		c.cachedExpiry = expiry.Add(-30 * time.Second)
+		return
 	}
+	// Success - clear any cached error and update token cache
+	c.cachedError = nil
+	c.retryAttempt = 0
+	c.nextRetryTime = time.Time{}
+
+	c.cachedAuthHeader = "Bearer " + token
+	// Per RFC A97: consider token invalid if it expires within the next 30
+	// seconds to accommodate for clock skew and server processing time.
+	c.cachedExpiry = expiry.Add(-30 * time.Second)
 }

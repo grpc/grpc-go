@@ -71,12 +71,9 @@ func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 			}
 
 			reader := jWTFileReader{tokenFilePath: tokenFile}
-			_, _, err := reader.readToken()
-			if err == nil {
+			if _, _, err := reader.readToken(); err == nil {
 				t.Fatal("ReadToken() expected error, got nil")
-			}
-
-			if !errors.Is(err, tt.wantErr) {
+			} else if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("ReadToken() error = %v, want error %v", err, tt.wantErr)
 			}
 		})
