@@ -108,35 +108,42 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
-		endpointMetadata, err := validateAndConstructMetadata(lbEndpoint.GetMetadata())
-		if err != nil {
-			return nil, err
+
+		var endpointMetadata map[string]any
+		var hashKey string
+		if envconfig.XDSHTTPConnectEnabled || !envconfig.XDSEndpointHashKeyBackwardCompat {
+			var err error
+			endpointMetadata, err = validateAndConstructMetadata(lbEndpoint.GetMetadata())
+			if err != nil {
+				return nil, err
+			}
+
+			// "The xDS resolver, described in A74, will be changed to set the hash_key
+			// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
+			// field, as described in Envoy's documentation for the ring hash load
+			// balancer." - A76
+			if !envconfig.XDSEndpointHashKeyBackwardCompat {
+				hashKey = hashKeyFromMetadata(endpointMetadata)
+			}
 		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Addresses:    addrs,
 			Weight:       weight,
-			HashKey:      hashKey(lbEndpoint),
+			HashKey:      hashKey,
 			Metadata:     endpointMetadata,
 		})
 	}
 	return endpoints, nil
 }
 
-// hashKey extracts and returns the hash key from the given LbEndpoint. If no
-// hash key is found, it returns an empty string.
-func hashKey(lbEndpoint *v3endpointpb.LbEndpoint) string {
-	// "The xDS resolver, described in A74, will be changed to set the hash_key
-	// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
-	// field, as described in Envoy's documentation for the ring hash load
-	// balancer." - A76
-	if envconfig.XDSEndpointHashKeyBackwardCompat {
-		return ""
-	}
-	envoyLB := lbEndpoint.GetMetadata().GetFilterMetadata()["envoy.lb"]
-	if envoyLB != nil {
-		if h := envoyLB.GetFields()["hash_key"]; h != nil {
-			return h.GetStringValue()
+// hashKey extracts and returns the hash key from the given endpoint metadata.
+// If no hash key is found, it returns an empty string.
+func hashKeyFromMetadata(metadata map[string]any) string {
+	envoyLB, ok := metadata["envoy.lb"].(StructMetadataValue)
+	if ok {
+		if h, ok := envoyLB.Data["hash_key"].(string); ok {
+			return h
 		}
 	}
 	return ""
@@ -195,9 +202,13 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
-		localityMetadata, err := validateAndConstructMetadata(locality.GetMetadata())
-		if err != nil {
-			return EndpointsUpdate{}, err
+		var localityMetadata map[string]any
+		if envconfig.XDSHTTPConnectEnabled {
+			var err error
+			localityMetadata, err = validateAndConstructMetadata(locality.GetMetadata())
+			if err != nil {
+				return EndpointsUpdate{}, err
+			}
 		}
 
 		ret.Localities = append(ret.Localities, Locality{
@@ -217,9 +228,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 }
 
 func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
-	// TODO(easwars): Find a better place for the environment variable check
-	// once A83 is implemented.
-	if !envconfig.XDSHTTPConnectEnabled || metadataProto == nil {
+	if metadataProto == nil {
 		return nil, nil
 	}
 	metadata := make(map[string]any)
