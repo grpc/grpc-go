@@ -57,8 +57,7 @@ func (s) TestNewTokenFileCallCredentialsValidFilepath(t *testing.T) {
 }
 
 func (s) TestNewTokenFileCallCredentialsMissingFilepath(t *testing.T) {
-	_, err := NewTokenFileCallCredentials("")
-	if err == nil {
+	if _, err := NewTokenFileCallCredentials(""); err == nil {
 		t.Fatalf("NewTokenFileCallCredentials() expected error, got nil")
 	}
 }
@@ -81,40 +80,40 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 		invalidTokenPath bool
 		tokenContent     string
 		authInfo         credentials.AuthInfo
-		grpcCode         codes.Code
+		wantCode         codes.Code
 		wantMetadata     map[string]string
 	}{
 		{
 			name:         "valid_token_with_future_expiration",
 			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			grpcCode:     codes.OK,
+			wantCode:     codes.OK,
 			wantMetadata: map[string]string{"authorization": "Bearer " + createTestJWT(t, now.Add(time.Hour))},
 		},
 		{
 			name:         "insufficient_security_level",
 			tokenContent: createTestJWT(t, now.Add(time.Hour)),
 			authInfo:     &testAuthInfo{secLevel: credentials.NoSecurity},
-			grpcCode:     codes.Unknown, // http2Client.getCallAuthData actually transforms such errors into into Unauthenticated
+			wantCode:     codes.Unknown, // http2Client.getCallAuthData actually transforms such errors into into Unauthenticated
 		},
 		{
 			name:             "unreachable_token_file",
 			invalidTokenPath: true,
 			tokenContent:     "",
 			authInfo:         &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			grpcCode:         codes.Unavailable,
+			wantCode:         codes.Unavailable,
 		},
 		{
 			name:         "empty_file",
 			tokenContent: "",
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			grpcCode:     codes.Unauthenticated,
+			wantCode:     codes.Unauthenticated,
 		},
 		{
 			name:         "malformed_JWT_token",
 			tokenContent: "bad contents",
 			authInfo:     &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			grpcCode:     codes.Unauthenticated,
+			wantCode:     codes.Unauthenticated,
 		},
 	}
 
@@ -138,8 +137,8 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 			})
 
 			metadata, err := creds.GetRequestMetadata(ctx)
-			if status.Code(err) != tt.grpcCode {
-				t.Fatalf("GetRequestMetadata() = %v, want %v", status.Code(err), tt.grpcCode)
+			if gotCode := status.Code(err); gotCode != tt.wantCode {
+				t.Fatalf("GetRequestMetadata() = %v, want %v", gotCode, tt.wantCode)
 			}
 
 			if diff := cmp.Diff(tt.wantMetadata, metadata); diff != "" {
@@ -234,9 +233,9 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 	cachedExp := impl.cachedExpiry
 	impl.mu.Unlock()
 
-	expectedExp := tokenExp.Add(-30 * time.Second)
-	if !cachedExp.Equal(expectedExp) {
-		t.Errorf("cache expiration = %v, want %v", cachedExp, expectedExp)
+	wantExp := tokenExp.Add(-30 * time.Second)
+	if !cachedExp.Equal(wantExp) {
+		t.Errorf("cache expiration = %v, want %v", cachedExp, wantExp)
 	}
 }
 
@@ -259,10 +258,15 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 	})
 
-	// Get token - should trigger pre-emptive refresh.
+	// First call should read from file synchronously.
 	metadata1, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("GetRequestMetadata() failed: %v", err)
+	}
+	wantAuth1 := "Bearer " + expiringToken
+	gotAuth1 := metadata1["authorization"]
+	if gotAuth1 != wantAuth1 {
+		t.Fatalf("First call should return original token: got %q, want %q", gotAuth1, wantAuth1)
 	}
 
 	// Verify token was cached and check if refresh should be triggered.
@@ -274,12 +278,12 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	impl.mu.Unlock()
 
 	if !tokenCached {
-		t.Error("token should be cached after successful GetRequestMetadata")
+		t.Fatal("token should be cached after successful GetRequestMetadata")
 	}
 
 	if !shouldTriggerRefresh {
 		timeUntilExp := time.Until(cacheExp)
-		t.Errorf("cache expires in %v, should be < 1 minute to trigger pre-emptive refresh", timeUntilExp)
+		t.Fatalf("cache expires in %v, should be < 1 minute to trigger pre-emptive refresh", timeUntilExp)
 	}
 
 	// Create new token file with different expiration while refresh is
@@ -297,47 +301,51 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
 	}
-
-	time.Sleep(50 * time.Millisecond)
-
-	// Now should get the new token.
-	metadata3, err := creds.GetRequestMetadata(ctx)
-	if err != nil {
-		t.Fatalf("Second GetRequestMetadata() failed: %v", err)
+	wantAuth2 := wantAuth1
+	gotAuth2 := metadata2["authorization"]
+	if gotAuth2 != wantAuth2 {
+		t.Fatalf("Second call should return the original token: got %q, want %q", gotAuth2, wantAuth2)
 	}
 
-	// If pre-emptive refresh worked, we should get the new token.
-	expectedAuth1 := "Bearer " + expiringToken
-	expectedAuth2 := "Bearer " + expiringToken
-	expectedAuth3 := "Bearer " + newToken
-
-	actualAuth1 := metadata1["authorization"]
-	actualAuth2 := metadata2["authorization"]
-	actualAuth3 := metadata3["authorization"]
-
-	if actualAuth1 != expectedAuth1 {
-		t.Errorf("First call should return original token: got %q, want %q", actualAuth1, expectedAuth1)
-	}
-
-	if actualAuth2 != expectedAuth2 {
-		t.Errorf("Second call should return the original token: got %q, want %q", actualAuth2, expectedAuth2)
-	}
-	if actualAuth3 != expectedAuth3 {
-		t.Errorf("Third call should return the new token: got %q, want %q", actualAuth3, expectedAuth3)
+	// Now should get the new token which was refreshed in the background.
+	wantAuth3 := "Bearer " + newToken
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
+		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
+	})
+	for ; ; <-time.After(time.Millisecond) {
+		if ctx.Err() != nil {
+			t.Fatal("context deadline expired before pre-emptive refresh completed")
+		}
+		// If the newly returned metadata is different to the old one, verify that it matches the token from the updated file. If not, fail the test. }
+		metadata3, err := creds.GetRequestMetadata(ctx)
+		if err != nil {
+			t.Fatalf("Second GetRequestMetadata() failed: %v", err)
+		}
+		// Pre-emptive refresh not completed yet, try again.
+		gotAuth3 := metadata3["authorization"]
+		if gotAuth3 == gotAuth2 {
+			continue
+		}
+		if gotAuth3 != wantAuth3 {
+			t.Fatalf("Third call should return the new token: got %q, want %q", gotAuth3, wantAuth3)
+		}
+		break
 	}
 }
 
 // Tests that backoff behavior handles file read errors correctly.
+// It has the following expectations:
+// First call to GetRequestMetadata() fails with UNAVAILABLE due to a
+// missing file.
+// Second call to GetRequestMetadata() fails with UNAVAILABLE due backoff.
+// Third call to GetRequestMetadata() fails with UNAVAILABLE due to retry.
+// Fourth call to GetRequestMetadata() fails with UNAVAILABLE due to backoff
+// even though file exists.
+// Fifth call to GetRequestMetadata() succeeds after reading the file and
+// backoff has expired.
 func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
-	// This test has the following expectations:
-	// First call to GetRequestMetadata() fails with UNAVAILABLE due to a
-	// missing file.
-	// Second call to GetRequestMetadata() fails with UNAVAILABLE due backoff.
-	// Third call to GetRequestMetadata() fails with UNAVAILABLE due to retry.
-	// Fourth call to GetRequestMetadata() fails with UNAVAILABLE due to backoff
-	// even though file exists.
-	// Fifth call to GetRequestMetadata() succeeds after reading the file and
-	// backoff has expired.
 	tempDir := t.TempDir()
 	nonExistentFile := filepath.Join(tempDir, "nonexistent")
 
