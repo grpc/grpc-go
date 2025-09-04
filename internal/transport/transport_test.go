@@ -3125,3 +3125,82 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 		t.Fatalf("RST frame received earlier than expected by duration: %v", want-got)
 	}
 }
+
+// TestClientTransport_Handle1xxHeaders validates that 1xx HTTP status headers
+// are ignored and treated as a protocol error if END_STREAM is set.
+func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
+	testStream := func() *ClientStream {
+		return &ClientStream{
+			Stream: &Stream{
+				buf: &recvBuffer{
+					c:  make(chan recvMsg),
+					mu: sync.Mutex{},
+				},
+			},
+			done:       make(chan struct{}),
+			headerChan: make(chan struct{}),
+		}
+	}
+
+	testClient := func(ts *ClientStream) *http2Client {
+		return &http2Client{
+			mu: sync.Mutex{},
+			activeStreams: map[uint32]*ClientStream{
+				0: ts,
+			},
+			controlBuf: newControlBuffer(make(<-chan struct{})),
+		}
+	}
+
+	for _, test := range []struct {
+		name            string
+		metaHeaderFrame *http2.MetaHeadersFrame
+		httpFlags       http2.Flags
+		wantStatus      *status.Status
+	}{
+		{
+			name: "1xx with END_STREAM is error",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: ":status", Value: "100"},
+				},
+			},
+			httpFlags: http2.FlagHeadersEndStream,
+			wantStatus: status.New(
+				codes.Internal,
+				"protocol error: informational header with status code 100 must not have END_STREAM set",
+			),
+		},
+		{
+			name: "1xx without END_STREAM is ignored",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: ":status", Value: "100"},
+				},
+			},
+			httpFlags:  0,
+			wantStatus: nil,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ts := testStream()
+			s := testClient(ts)
+
+			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 0,
+					Flags:    test.httpFlags,
+				},
+			}
+
+			s.operateHeaders(test.metaHeaderFrame)
+
+			got := ts.status
+			want := test.wantStatus
+
+			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Fatalf("operateHeaders(%v); status = %v, want %v", test.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}
