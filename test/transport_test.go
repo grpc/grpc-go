@@ -256,7 +256,7 @@ func (s) TestCancelWhileServerWaitingForFlowControl(t *testing.T) {
 	ss = stubserver.StartTestService(t, ss, grpc.MaxConcurrentStreams(1))
 	defer ss.Stop()
 	// Use a static flow control window.
-	if err := ss.StartClient(grpc.WithStaticStreamWindowSize(flowControlWindowSize)); err != nil {
+	if err := ss.StartClient(grpc.WithInitialWindowSize(flowControlWindowSize)); err != nil {
 		t.Fatalf("Error while start test service client: %v", err)
 	}
 	client := ss.Client
