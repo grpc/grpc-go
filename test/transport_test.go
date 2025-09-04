@@ -240,7 +240,7 @@ func (s) TestCancelWhileServerWaitingForFlowControl(t *testing.T) {
 	serverDoneCh := make(chan struct{}, 2)
 	const flowControlWindowSize = 65535
 	ss := &stubserver.StubServer{
-		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
+		StreamingOutputCallF: func(_ *testpb.StreamingOutputCallRequest, stream testgrpc.TestService_StreamingOutputCallServer) error {
 			// Send a large message to exhaust the client's flow control window.
 			stream.Send(&testpb.StreamingOutputCallResponse{
 				Payload: &testpb.Payload{
