@@ -34,7 +34,7 @@ type ignoreResolveNowClientConn struct {
 
 func newIgnoreResolveNowClientConn(cc balancer.ClientConn, ignore bool) *ignoreResolveNowClientConn {
 	ret := &ignoreResolveNowClientConn{ClientConn: cc}
-	ret.ignoreResolveNow.Store(ignore)
+	ret.updateIgnoreResolveNow(ignore)
 	return ret
 }
 
