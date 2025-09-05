@@ -205,6 +205,7 @@ func (t *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 
 // Tests that cached token expiration is set to 30 seconds before actual token
 // expiration.
+// TODO: Refactor the test to avoid inspecting and mutating internal state.
 func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testing.T) {
 	// Create token that expires in 2 hours.
 	tokenExp := time.Now().Truncate(time.Second).Add(2 * time.Hour)
@@ -345,6 +346,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 // even though file exists.
 // Fifth call to GetRequestMetadata() succeeds after reading the file and
 // backoff has expired.
+// TODO: Refactor the test to avoid inspecting and mutating internal state.
 func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	tempDir := t.TempDir()
 	nonExistentFile := filepath.Join(tempDir, "nonexistent")
