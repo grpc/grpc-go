@@ -37,15 +37,17 @@ type nameGenerator struct {
 }
 
 func newNameGenerator(prefix uint64) *nameGenerator {
-	return &nameGenerator{prefix: prefix}
+	return &nameGenerator{
+		prefix:        prefix,
+		existingNames: make(map[clients.Locality]string),
+	}
 }
 
 // generate returns a list of names for the given list of priorities.
 //
 // Each priority is a list of localities. The name for the priority is picked as
-// - for each locality in this priority, if it exists in the existing names,
-// this priority will reuse the name
-// - if no reusable name is found for this priority, a new name is generated
+// - A new name is generated for each locality upon they are seen for the first time,
+// for each priority all corresponding names are collected in order as candidates  and first unused name is picked for reuse
 //
 // For example:
 // - update 1: [[L1], [L2], [L3]] --> ["0", "1", "2"]
@@ -55,34 +57,37 @@ func newNameGenerator(prefix uint64) *nameGenerator {
 func (ng *nameGenerator) generate(priorities [][]xdsresource.Locality) []string {
 	var ret []string
 	usedNames := make(map[string]bool)
-	newNames := make(map[clients.Locality]string)
 	for _, priority := range priorities {
-		var nameFound string
+		var candidates []string
 		for _, locality := range priority {
-			if name, ok := ng.existingNames[locality.ID]; ok {
-				if !usedNames[name] {
-					nameFound = name
-					// Found a name to use. No need to process the remaining
-					// localities.
-					break
-				}
+			name, exists := ng.existingNames[locality.ID]
+			if !exists {
+				name = ng.generateNewName()
+				ng.existingNames[locality.ID] = name
+			}
+			candidates = append(candidates, name)
+		}
+
+		var chosenName string
+		for _, candidate := range candidates {
+			if !usedNames[candidate] {
+				chosenName = candidate
+				break
 			}
 		}
-
-		if nameFound == "" {
-			// No appropriate used name is found. Make a new name.
-			nameFound = fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
-			ng.nextID++
+		if chosenName == "" {
+			// All candidate names are used, generate a new name.
+			chosenName = ng.generateNewName()
 		}
 
-		ret = append(ret, nameFound)
-		// All localities in this priority share the same name. Add them all to
-		// the new map.
-		for _, l := range priority {
-			newNames[l.ID] = nameFound
-		}
-		usedNames[nameFound] = true
+		ret = append(ret, chosenName)
+		usedNames[chosenName] = true
 	}
-	ng.existingNames = newNames
 	return ret
+}
+
+func (ng *nameGenerator) generateNewName() string {
+	name := fmt.Sprintf("priority-%d-%d", ng.prefix, ng.nextID)
+	ng.nextID++
+	return name
 }
