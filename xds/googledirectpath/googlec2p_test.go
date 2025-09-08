@@ -103,6 +103,29 @@ func useCleanUniverseDomain(t *testing.T) {
 	})
 }
 
+// TODO(https://github.com/grpc/grpc-go/issues/8561): this content can be hardcoded directly
+// in wanted bootstraps again after old pick first is removed.
+func expectedNodeJSON(ipv6Capable bool) []byte {
+	if !envconfig.NewPickFirstEnabled && !ipv6Capable {
+		return []byte(`{
+			"id": "C2P-666",
+			"locality": {
+				"zone": "test-zone"
+			}
+		}`)
+	}
+	// Otherwise, return the node metadata including the IPv6 capability flag.
+	return []byte(`{
+		"id": "C2P-666",
+		"locality": {
+			"zone": "test-zone"
+		},
+		"metadata": {
+			"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
+		}
+	}`)
+}
+
 // Tests the scenario where the bootstrap env vars are set and we're running on
 // GCE. The test builds a google-c2p resolver and verifies that an xDS resolver
 // is built and that we don't fallback to DNS (because federation is enabled by
@@ -218,10 +241,7 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"}
-					}`),
+				Node: expectedNodeJSON(false),
 			}),
 		},
 		{
@@ -244,13 +264,7 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
+				Node: expectedNodeJSON(true),
 			}),
 		},
 		{
@@ -274,13 +288,7 @@ func (s) TestBuildXDS(t *testing.T) {
 							]
 						}`),
 				},
-				Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"},
-			  			"metadata": {
-							"TRAFFICDIRECTOR_DIRECTPATH_C2P_IPV6_CAPABLE": true
-			  			}
-					}`),
+				Node: expectedNodeJSON(true),
 			}),
 		},
 	} {
@@ -442,10 +450,7 @@ func (s) TestSetUniverseDomainNonDefault(t *testing.T) {
 							]
 						}`),
 		},
-		Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"}
-					}`),
+		Node: expectedNodeJSON(false),
 	})
 	if diff := cmp.Diff(wantBootstrapConfig, gotConfig); diff != "" {
 		t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
@@ -513,10 +518,7 @@ func (s) TestDefaultUniverseDomain(t *testing.T) {
 							]
 						}`),
 		},
-		Node: []byte(`{
-					  "id": "C2P-666",
-					  "locality": {"zone": "test-zone"}
-					}`),
+		Node: expectedNodeJSON(false),
 	})
 	if diff := cmp.Diff(wantBootstrapConfig, gotConfig); diff != "" {
 		t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
