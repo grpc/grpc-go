@@ -56,14 +56,14 @@ func (c tlsCreds) Info() credentials.ProtocolInfo {
 func (c *tlsCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (_ net.Conn, _ credentials.AuthInfo, err error) {
 	// use local cfg to avoid clobbering ServerName if using multiple endpoints
 	cfg := cloneTLSConfig(c.config)
-	if cfg.ServerName == "" {
-		serverName, _, err := net.SplitHostPort(authority)
-		if err != nil {
-			// If the authority had no host port or if the authority cannot be parsed, use it as-is.
-			serverName = authority
-		}
-		cfg.ServerName = serverName
+
+	serverName, _, err := net.SplitHostPort(authority)
+	if err != nil {
+		// If the authority had no host port or if the authority cannot be parsed, use it as-is.
+		serverName = authority
 	}
+	cfg.ServerName = serverName
+
 	conn := tls.Client(rawConn, cfg)
 	errChannel := make(chan error, 1)
 	go func() {

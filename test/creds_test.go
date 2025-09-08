@@ -83,6 +83,7 @@ func (s) TestCredsBundleBoth(t *testing.T) {
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t}),
+		grpc.WithAuthority("x.test.example.com"),
 	}
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
@@ -107,6 +108,7 @@ func (s) TestCredsBundleTransportCredentials(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", security: "empty"})
 	te.customDialOptions = []grpc.DialOption{
 		grpc.WithCredentialsBundle(&testCredsBundle{t: t, mode: bundleTLSOnly}),
+		grpc.WithAuthority("x.test.example.com"),
 	}
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
