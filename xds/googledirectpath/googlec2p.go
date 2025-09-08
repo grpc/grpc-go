@@ -184,7 +184,7 @@ func newNodeConfig(zone string, ipv6Capable bool) map[string]any {
 	}
 	if envconfig.NewPickFirstEnabled {
 		// Enable dualstack endpoints in TD.
-		// TODO(apolcyn): remove IPv6 metadata server queries entirely after old pick first is removed.
+		// TODO(https://github.com/grpc/grpc-go/issues/8561): remove IPv6 metadata server queries entirely after old pick first is removed.
 		ipv6Capable = true
 	} else {
 		logger.Infof("GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST is disabled, setting ipv6Capable node metadata based on metadata server query")
