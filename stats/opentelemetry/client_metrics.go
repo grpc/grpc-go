@@ -78,7 +78,7 @@ func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string
 		ci = &callInfo{
 			target:              cc.CanonicalTarget(),
 			method:              determineMethod(method, opts...),
-			previousRPCAttempts: new(atomic.Uint32),
+			previousRPCAttempts: atomic.Uint32{},
 		}
 		ctx = setCallInfo(ctx, ci)
 	}

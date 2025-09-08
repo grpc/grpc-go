@@ -181,7 +181,7 @@ type callInfo struct {
 	nameResolutionEventAdded atomic.Bool
 	// previousRPCAttempts holds the count of RPC attempts that have happened
 	// before current attempt. Transparent retries are excluded.
-	previousRPCAttempts *atomic.Uint32
+	previousRPCAttempts atomic.Uint32
 }
 
 type callInfoKey struct{}
