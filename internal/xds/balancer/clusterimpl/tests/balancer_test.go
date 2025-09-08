@@ -21,6 +21,7 @@ package clusterimpl_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -478,6 +479,150 @@ func (s) TestCircuitBreaking(t *testing.T) {
 		for _, cs := range loadStats.ClusterStats {
 			if cs.TotalDroppedRequests != droppedRPCCount || cs.UpstreamLocalityStats[0].TotalIssuedRequests != maxRequests {
 				t.Errorf("Failed with unexpected outputs")
+			}
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout while waiting for LRS stream: %v", ctx.Err())
+	}
+}
+
+// ComputeIdealNumRpcs calculates the ideal number of RPCs to send to test
+// probabilistic behaviors.
+//
+// It's based on the idea of a binomial distribution approximated by a normal
+// distribution. The function aims to find a number of RPCs such that
+// the observed probability is within a certain error_tolerance of the expected
+// probability (p).
+func computeIdealNumRpcs(p float64, errorTolerance float64) uint64 {
+	numRpcs :=
+		uint64(math.Ceil(p * (1 - p) * 5.00 * 5.00 / errorTolerance / errorTolerance))
+	return numRpcs
+}
+
+// TestDropByCategory verifies that the balancer correctly drops the picks, and
+// that the drops are reported.
+func (s) TestDropByCategory(t *testing.T) {
+	// Create an xDS management server that serves ADS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	var resolverBuilder resolver.Builder
+	var err error
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		resolverBuilder, err = newResolver.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	}
+
+	// Start a server backend exposing the test service.
+	f := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
+			for {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+			}
+		},
+	}
+	server := stubserver.StartTestService(t, f)
+	defer server.Stop()
+
+	// Configure the xDS management server with default resources.
+	const (
+		dropReason      = "test-dropping-category"
+		dropNumerator   = 1
+		dropDenominator = 50
+		serviceName     = "my-test-xds-service"
+		errortolerance  = 0.05
+	)
+	rpcDropRate := float64(dropNumerator) / float64(dropDenominator)
+	rpcCount := computeIdealNumRpcs(rpcDropRate, errortolerance)
+
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: "endpoints-" + serviceName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
+					Weight:   1,
+				},
+			},
+			DropPercents: map[string]int{
+				dropReason: dropNumerator * 100 / dropDenominator, // 50
+			},
+		})}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+
+	for i := 0; i < int(rpcCount); i++ {
+		stream, err := client.FullDuplexCall(ctx)
+		switch {
+		case err == nil:
+			// Close stream to avoid exceeding limits.
+			stream.CloseSend()
+		case status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "RPC is dropped"):
+			continue
+		default:
+			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
+	}
+
+	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("Failure waiting for initial LRS request: %v", err)
+	}
+
+	resp := fakeserver.Response{
+		Resp: &v3lrspb.LoadStatsResponse{
+			SendAllClusters:       true,
+			LoadReportingInterval: durationpb.New(10 * time.Millisecond),
+		},
+	}
+	mgmtServer.LRSServer.LRSResponseChan <- &resp
+
+	select {
+	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+		for _, cs := range loadStats.ClusterStats {
+			dropRate := float64(cs.TotalDroppedRequests / rpcCount)
+			if math.Abs(dropRate-rpcDropRate) > errortolerance {
+				t.Errorf("Drop rate goes out of errortolerance got %v, want %v", math.Abs(dropRate-rpcDropRate), errortolerance)
 			}
 		}
 	case <-ctx.Done():
