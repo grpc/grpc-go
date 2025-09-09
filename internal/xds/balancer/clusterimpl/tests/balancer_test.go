@@ -360,7 +360,7 @@ func waitForSuccessfulLoadReport(ctx context.Context, lrsServer *fakeserver.Serv
 }
 
 // Tests that circuit breaking limits RPCs E2E.
-func (s) TestCircuitBreaking(t *testing.T) {
+func TestCircuitBreaking(t *testing.T) {
 	// Create an xDS management server that serves ADS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
@@ -394,7 +394,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Configure the xDS management server with default resources.
 	const serviceName = "my-test-xds-service"
-	const maxRequests = 10
+	const maxRequests = 3
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
@@ -442,13 +442,10 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// allowed due to inherent raciness in the tracking, however.
 	const droppedRPCCount = 100
 	for i := 0; i < droppedRPCCount; i++ {
-		stream, err := client.FullDuplexCall(ctx)
+		_, err := client.FullDuplexCall(ctx)
 		switch {
 		case err == nil:
-			// Terminate the stream (the server immediately exits upon a client
-			// CloseSend) to ensure we never go over the limit.
-			stream.CloseSend()
-			stream.Recv()
+			t.Fatalf("client.FullDuplexCall(_) failed with unexpected error got: <nil>, want: %v", err)
 		case status.Code(err) == codes.Unavailable:
 			continue
 		default:
@@ -477,8 +474,11 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
 		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
 		for _, cs := range loadStats.ClusterStats {
-			if cs.TotalDroppedRequests != droppedRPCCount || cs.UpstreamLocalityStats[0].TotalIssuedRequests != maxRequests {
-				t.Errorf("Failed with unexpected outputs")
+			if cs.TotalDroppedRequests != droppedRPCCount {
+				t.Errorf("Failed with unexpected diff got: %v, want: %v", cs.TotalDroppedRequests, droppedRPCCount)
+			}
+			if cs.UpstreamLocalityStats[0].TotalIssuedRequests != maxRequests {
+				t.Errorf("Failed with unexpected diff got: %v, want: %v", cs.UpstreamLocalityStats[0].TotalIssuedRequests, maxRequests)
 			}
 		}
 	case <-ctx.Done():
@@ -501,7 +501,7 @@ func computeIdealNumRpcs(p float64, errorTolerance float64) uint64 {
 
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
 // that the drops are reported.
-func (s) TestDropByCategory(t *testing.T) {
+func TestDropByCategory(t *testing.T) {
 	// Create an xDS management server that serves ADS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
@@ -567,7 +567,7 @@ func (s) TestDropByCategory(t *testing.T) {
 				},
 			},
 			DropPercents: map[string]int{
-				dropReason: dropNumerator * 100 / dropDenominator, // 50
+				dropReason: dropNumerator * 100 / dropDenominator,
 			},
 		})}
 
@@ -582,11 +582,16 @@ func (s) TestDropByCategory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
+	cc.Connect()
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
 	for i := 0; i < int(rpcCount); i++ {
+		if ctx.Err() != nil {
+			t.Fatalf("Context error: %v", ctx.Err())
+		}
 		stream, err := client.FullDuplexCall(ctx)
 		switch {
 		case err == nil:
@@ -597,7 +602,6 @@ func (s) TestDropByCategory(t *testing.T) {
 		default:
 			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 
 	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
@@ -615,6 +619,63 @@ func (s) TestDropByCategory(t *testing.T) {
 		},
 	}
 	mgmtServer.LRSServer.LRSResponseChan <- &resp
+
+	select {
+	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
+		for _, cs := range loadStats.ClusterStats {
+			dropRate := float64(cs.TotalDroppedRequests / rpcCount)
+			if math.Abs(dropRate-rpcDropRate) > errortolerance {
+				t.Errorf("Drop rate goes out of errortolerance got %v, want %v", math.Abs(dropRate-rpcDropRate), errortolerance)
+			}
+		}
+	case <-ctx.Done():
+		t.Fatalf("Timeout while waiting for LRS stream: %v", ctx.Err())
+	}
+
+	const (
+		dropReason2      = "test-dropping-category-2"
+		dropNumerator2   = 1
+		dropDenominator2 = 40
+	)
+
+	resources.Endpoints = []*v3endpointpb.ClusterLoadAssignment{
+		e2e.EndpointResourceWithOptions(e2e.EndpointOptions{
+			ClusterName: "endpoints-" + serviceName,
+			Host:        "localhost",
+			Localities: []e2e.LocalityOptions{
+				{
+					Backends: []e2e.BackendOptions{{Ports: []uint32{testutils.ParsePort(t, server.Address)}}},
+					Weight:   1,
+				},
+			},
+			DropPercents: map[string]int{
+				dropReason2: dropNumerator2 * 100 / dropDenominator2,
+			},
+		})}
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	rpcDropRate = float64(dropNumerator2) / float64(dropDenominator2)
+	rpcCount = computeIdealNumRpcs(rpcDropRate, errortolerance)
+
+	for i := 0; i < int(rpcCount); i++ {
+		if ctx.Err() != nil {
+			t.Fatalf("Context error: %v", ctx.Err())
+		}
+		stream, err := client.FullDuplexCall(ctx)
+		switch {
+		case err == nil:
+			// Close stream to avoid exceeding limits.
+			stream.CloseSend()
+		case status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "RPC is dropped"):
+			continue
+		default:
+			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
+		}
+	}
 
 	select {
 	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
