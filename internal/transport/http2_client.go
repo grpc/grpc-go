@@ -1465,16 +1465,13 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		contentTypeErr = "malformed header: missing HTTP content-type"
 		grpcMessage    string
 		recvCompress   string
-		httpStatusCode *int
 		httpStatusErr  string
 		rawStatusCode  = codes.Internal
 		// headerError is set if an error is encountered while parsing the headers
-		headerError string
+		headerError        string
+		receivedHttpStatus string
 	)
 
-	if initialHeader {
-		httpStatusErr = "malformed header: missing HTTP status"
-	}
 	for _, hf := range frame.Fields {
 		switch hf.Name {
 		case "content-type":
@@ -1498,27 +1495,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case ":status":
-			if hf.Value == "200" {
-				httpStatusErr = ""
-				statusCode := 200
-				httpStatusCode = &statusCode
-				break
+			if !isGRPC {
+				receivedHttpStatus = hf.Value
 			}
-
-			c, err := strconv.ParseInt(hf.Value, 10, 32)
-			if err != nil {
-				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
-			}
-			statusCode := int(c)
-			httpStatusCode = &statusCode
-
-			httpStatusErr = fmt.Sprintf(
-				"unexpected HTTP status code received from server: %d (%s)",
-				statusCode,
-				http.StatusText(statusCode),
-			)
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -1533,26 +1512,48 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	//if response is not grpc or endstream doesn't receive a grpc status, fall back to http error code
+	//if not a gRPC response - evaluate entire http status and process close stream / response
+	//for 200 -> Unknown, else decode the error
 	if !isGRPC {
-		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
-
-		if httpStatusCode != nil {
-			var ok bool
-			code, ok = HTTPStatusConvTab[*httpStatusCode]
-			if !ok {
-				code = codes.Unknown
-			}
-		}
+		var grpcErrorCode = codes.Internal // when header does not include HTTP status, return INTERNAL
 		var errs []string
+
+		switch receivedHttpStatus {
+		case "":
+			httpStatusErr = "malformed header: missing HTTP status"
+		case "200":
+			grpcErrorCode = codes.Unknown
+		default:
+			// Any other status code (e.g., "404", "503"). We must parse it.
+			c, err := strconv.ParseInt(receivedHttpStatus, 10, 32)
+			if err != nil {
+				se := status.New(grpcErrorCode, fmt.Sprintf("transport: malformed http-status: %v", err))
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				return
+			}
+			statusCode := int(c)
+			httpStatusErr = fmt.Sprintf(
+				"unexpected HTTP status code received from server: %d (%s)",
+				statusCode,
+				http.StatusText(statusCode),
+			)
+			var ok bool
+			grpcErrorCode, ok = HTTPStatusConvTab[statusCode]
+			if !ok {
+				grpcErrorCode = codes.Unknown
+			}
+
+		}
+
 		if httpStatusErr != "" {
 			errs = append(errs, httpStatusErr)
 		}
+
 		if contentTypeErr != "" {
 			errs = append(errs, contentTypeErr)
 		}
 		// Verify the HTTP response is a 200.
-		se := status.New(code, strings.Join(errs, "; "))
+		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
