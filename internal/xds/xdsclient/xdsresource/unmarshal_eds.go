@@ -108,30 +108,42 @@ func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint, uniqueEndpointAddrs 
 			}
 			uniqueEndpointAddrs[a] = true
 		}
+
+		var endpointMetadata map[string]any
+		var hashKey string
+		if envconfig.XDSHTTPConnectEnabled || !envconfig.XDSEndpointHashKeyBackwardCompat {
+			var err error
+			endpointMetadata, err = validateAndConstructMetadata(lbEndpoint.GetMetadata())
+			if err != nil {
+				return nil, err
+			}
+
+			// "The xDS resolver, described in A74, will be changed to set the hash_key
+			// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
+			// field, as described in Envoy's documentation for the ring hash load
+			// balancer." - A76
+			if !envconfig.XDSEndpointHashKeyBackwardCompat {
+				hashKey = hashKeyFromMetadata(endpointMetadata)
+			}
+		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Addresses:    addrs,
 			Weight:       weight,
-			HashKey:      hashKey(lbEndpoint),
+			HashKey:      hashKey,
+			Metadata:     endpointMetadata,
 		})
 	}
 	return endpoints, nil
 }
 
-// hashKey extracts and returns the hash key from the given LbEndpoint. If no
-// hash key is found, it returns an empty string.
-func hashKey(lbEndpoint *v3endpointpb.LbEndpoint) string {
-	// "The xDS resolver, described in A74, will be changed to set the hash_key
-	// endpoint attribute to the value of LbEndpoint.Metadata envoy.lb hash_key
-	// field, as described in Envoy's documentation for the ring hash load
-	// balancer." - A76
-	if envconfig.XDSEndpointHashKeyBackwardCompat {
-		return ""
-	}
-	envoyLB := lbEndpoint.GetMetadata().GetFilterMetadata()["envoy.lb"]
-	if envoyLB != nil {
-		if h := envoyLB.GetFields()["hash_key"]; h != nil {
-			return h.GetStringValue()
+// hashKey extracts and returns the hash key from the given endpoint metadata.
+// If no hash key is found, it returns an empty string.
+func hashKeyFromMetadata(metadata map[string]any) string {
+	envoyLB, ok := metadata["envoy.lb"].(StructMetadataValue)
+	if ok {
+		if h, ok := envoyLB.Data["hash_key"].(string); ok {
+			return h
 		}
 	}
 	return ""
@@ -190,11 +202,21 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		if err != nil {
 			return EndpointsUpdate{}, err
 		}
+		var localityMetadata map[string]any
+		if envconfig.XDSHTTPConnectEnabled {
+			var err error
+			localityMetadata, err = validateAndConstructMetadata(locality.GetMetadata())
+			if err != nil {
+				return EndpointsUpdate{}, err
+			}
+		}
+
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: endpoints,
 			Weight:    weight,
 			Priority:  priority,
+			Metadata:  localityMetadata,
 		})
 	}
 	for i := 0; i < len(priorities); i++ {
@@ -203,4 +225,35 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		}
 	}
 	return ret, nil
+}
+
+func validateAndConstructMetadata(metadataProto *v3corepb.Metadata) (map[string]any, error) {
+	if metadataProto == nil {
+		return nil, nil
+	}
+	metadata := make(map[string]any)
+	// First go through TypedFilterMetadata.
+	for key, anyProto := range metadataProto.GetTypedFilterMetadata() {
+		converter := metadataConverterForType(anyProto.GetTypeUrl())
+		// Ignore types we don't have a converter for.
+		if converter == nil {
+			continue
+		}
+		val, err := converter.convert(anyProto)
+		if err != nil {
+			// If the converter fails, nack the whole resource.
+			return nil, fmt.Errorf("metadata conversion for key %q and type %q failed: %v", key, anyProto.GetTypeUrl(), err)
+		}
+		metadata[key] = val
+	}
+
+	// Process FilterMetadata for any keys not already handled.
+	for key, structProto := range metadataProto.GetFilterMetadata() {
+		// Skip keys already added from TyperFilterMetadata.
+		if metadata[key] != nil {
+			continue
+		}
+		metadata[key] = StructMetadataValue{Data: structProto.AsMap()}
+	}
+	return metadata, nil
 }

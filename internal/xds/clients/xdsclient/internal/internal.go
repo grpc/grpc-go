@@ -21,10 +21,6 @@ package internal
 import "time"
 
 var (
-	// WatchExpiryTimeout is the watch expiry timeout for xDS client. It can be
-	// overridden by tests to change the default watch expiry timeout.
-	WatchExpiryTimeout time.Duration
-
 	// StreamBackoff is the stream backoff for xDS client. It can be overridden
 	// by tests to change the default backoff strategy.
 	StreamBackoff func(int) time.Duration

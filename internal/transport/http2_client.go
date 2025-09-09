@@ -1469,7 +1469,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		rawStatusCode  = codes.Internal
 		// headerError is set if an error is encountered while parsing the headers
 		headerError        string
-		receivedHttpStatus string
+		receivedHTTPStatus string
 	)
 
 	for _, hf := range frame.Fields {
@@ -1496,7 +1496,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case ":status":
 			if !isGRPC {
-				receivedHttpStatus = hf.Value
+				receivedHTTPStatus = hf.Value
 			}
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
@@ -1518,20 +1518,25 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		var grpcErrorCode = codes.Internal // when header does not include HTTP status, return INTERNAL
 		var errs []string
 
-		switch receivedHttpStatus {
+		switch receivedHTTPStatus {
 		case "":
 			httpStatusErr = "malformed header: missing HTTP status"
 		case "200":
 			grpcErrorCode = codes.Unknown
 		default:
 			// Any other status code (e.g., "404", "503"). We must parse it.
-			c, err := strconv.ParseInt(receivedHttpStatus, 10, 32)
+			c, err := strconv.ParseInt(receivedHTTPStatus, 10, 32)
 			if err != nil {
 				se := status.New(grpcErrorCode, fmt.Sprintf("transport: malformed http-status: %v", err))
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
 			statusCode := int(c)
+			if statusCode >= 100 && statusCode < 200 {
+				//In case of informational headers return
+				//For trailers, since we are already in gRPC mode, we will ignore all http statuses and not enter this block
+				return
+			}
 			httpStatusErr = fmt.Sprintf(
 				"unexpected HTTP status code received from server: %d (%s)",
 				statusCode,
