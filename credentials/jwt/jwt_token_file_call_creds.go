@@ -38,7 +38,7 @@ const preemptiveRefreshThreshold = time.Minute
 // tokens from a file.
 // This implementation follows the A97 JWT Call Credentials specification.
 type jwtTokenFileCallCreds struct {
-	fileReader      *jWTFileReader
+	fileReader      *jwtFileReader
 	backoffStrategy backoff.Strategy
 
 	// cached data protected by mu
@@ -59,7 +59,7 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 	}
 
 	creds := &jwtTokenFileCallCreds{
-		fileReader:      &jWTFileReader{tokenFilePath: tokenFilePath},
+		fileReader:      &jwtFileReader{tokenFilePath: tokenFilePath},
 		backoffStrategy: backoff.DefaultExponential,
 	}
 

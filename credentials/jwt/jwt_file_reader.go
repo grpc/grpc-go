@@ -38,14 +38,14 @@ type jwtClaims struct {
 	Exp int64 `json:"exp"`
 }
 
-// jWTFileReader handles reading and parsing JWT tokens from files.
-type jWTFileReader struct {
+// jwtFileReader handles reading and parsing JWT tokens from files.
+type jwtFileReader struct {
 	tokenFilePath string
 }
 
 // readToken reads and parses a JWT token from the configured file.
 // Returns the token string, expiration time, and any error encountered.
-func (r *jWTFileReader) readToken() (string, time.Time, error) {
+func (r *jwtFileReader) readToken() (string, time.Time, error) {
 	tokenBytes, err := os.ReadFile(r.tokenFilePath)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("%v: %w", err, errTokenFileAccess)
@@ -65,7 +65,7 @@ func (r *jWTFileReader) readToken() (string, time.Time, error) {
 }
 
 // extractExpiration parses the JWT token to extract the expiration time.
-func (r *jWTFileReader) extractExpiration(token string) (time.Time, error) {
+func (r *jwtFileReader) extractExpiration(token string) (time.Time, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return time.Time{}, fmt.Errorf("expected 3 parts, got %d: %w", len(parts), errJWTValidation)
