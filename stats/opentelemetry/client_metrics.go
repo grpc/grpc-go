@@ -76,9 +76,8 @@ func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string
 			logger.Info("Creating new CallInfo since its not present in context")
 		}
 		ci = &callInfo{
-			target:              cc.CanonicalTarget(),
-			method:              determineMethod(method, opts...),
-			previousRPCAttempts: atomic.Uint32{},
+			target: cc.CanonicalTarget(),
+			method: determineMethod(method, opts...),
 		}
 		ctx = setCallInfo(ctx, ci)
 	}
