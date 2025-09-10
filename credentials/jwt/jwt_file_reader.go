@@ -58,7 +58,7 @@ func (r *jwtFileReader) readToken() (string, time.Time, error) {
 
 	exp, err := r.extractExpiration(token)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("%q: %w", r.tokenFilePath, err)
+		return "", time.Time{}, fmt.Errorf("token file %q: %v: %w", r.tokenFilePath, err, errJWTValidation)
 	}
 
 	return token, exp, nil
@@ -68,7 +68,7 @@ func (r *jwtFileReader) readToken() (string, time.Time, error) {
 func (r *jwtFileReader) extractExpiration(token string) (time.Time, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return time.Time{}, fmt.Errorf("expected 3 parts, got %d: %w", len(parts), errJWTValidation)
+		return time.Time{}, fmt.Errorf("expected 3 parts, got %d", len(parts))
 	}
 
 	payload := parts[1]
@@ -79,23 +79,23 @@ func (r *jwtFileReader) extractExpiration(token string) (time.Time, error) {
 
 	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("decode error: %v: %w", err, errJWTValidation)
+		return time.Time{}, fmt.Errorf("decode error: %v", err)
 	}
 
 	var claims jwtClaims
 	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-		return time.Time{}, fmt.Errorf("unmarshal error: %v: %w", err, errJWTValidation)
+		return time.Time{}, fmt.Errorf("unmarshal error: %v", err)
 	}
 
 	if claims.Exp == 0 {
-		return time.Time{}, fmt.Errorf("no expiration claims: %w", errJWTValidation)
+		return time.Time{}, fmt.Errorf("no expiration claims")
 	}
 
 	expTime := time.Unix(claims.Exp, 0)
 
 	// Check if token is already expired.
 	if expTime.Before(time.Now()) {
-		return time.Time{}, fmt.Errorf("expired token: %w", errJWTValidation)
+		return time.Time{}, fmt.Errorf("expired token")
 	}
 
 	return expTime, nil
