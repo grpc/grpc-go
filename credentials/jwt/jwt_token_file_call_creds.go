@@ -16,7 +16,6 @@
  *
  */
 
-// Package jwt implements gRPC credentials using JWT tokens from files.
 package jwt
 
 import (
