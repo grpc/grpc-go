@@ -23,10 +23,11 @@ package proto
 import (
 	"fmt"
 
-	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/mem"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/protoadapt"
+
+	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/mem"
 )
 
 // Name is the name registered for the proto compressor.
@@ -48,7 +49,7 @@ func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 
 	size := proto.Size(vv)
 	if mem.IsBelowBufferPoolingThreshold(size) {
-		buf, err := proto.Marshal(vv)
+		buf, err := proto.MarshalOptions{UseCachedSize: true}.Marshal(vv)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +57,7 @@ func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 	} else {
 		pool := mem.DefaultBufferPool()
 		buf := pool.Get(size)
-		if _, err := (proto.MarshalOptions{}).MarshalAppend((*buf)[:0], vv); err != nil {
+		if _, err := (proto.MarshalOptions{UseCachedSize: true}).MarshalAppend((*buf)[:0], vv); err != nil {
 			pool.Put(buf)
 			return nil, err
 		}
