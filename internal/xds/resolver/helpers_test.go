@@ -28,7 +28,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
@@ -119,29 +118,16 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 		}
 	}
 
-	stateCh := make(chan resolver.State, 10)
+	stateCh := make(chan resolver.State, 1)
 	updateStateF := func(s resolver.State) error {
-		select {
-		case stateCh <- s:
-		default:
-			select {
-			case <-stateCh:
-				stateCh <- s
-			default:
-			}
-		}
+		stateCh <- s
 		return nil
 	}
-	errCh := make(chan error, 10)
+	errCh := make(chan error, 1)
 	reportErrorF := func(err error) {
 		select {
 		case errCh <- err:
 		default:
-			select {
-			case <-errCh:
-				errCh <- err
-			default:
-			}
 		}
 	}
 	tcc := &testutils.ResolverClientConn{Logger: t, UpdateStateF: updateStateF, ReportErrorF: reportErrorF}
@@ -151,19 +137,7 @@ func buildResolverForTarget(t *testing.T, target resolver.Target, bootstrapConte
 	if err != nil {
 		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
 	}
-	t.Cleanup(func() {
-		go func() {
-			for range stateCh {
-			}
-		}()
-		go func() {
-			for range errCh {
-			}
-		}()
-		r.Close()
-		close(stateCh)
-		close(errCh)
-	})
+	t.Cleanup(r.Close)
 	return stateCh, errCh, r
 }
 
