@@ -48,8 +48,12 @@ func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 	}
 
 	size := proto.Size(vv)
+	// proto.Size caches the size, enabling UseCachedSize
+	// lets us reuse that value instead of recomputing it during marshal.
+	marshalOptions := proto.MarshalOptions{UseCachedSize: true}
+
 	if mem.IsBelowBufferPoolingThreshold(size) {
-		buf, err := proto.MarshalOptions{UseCachedSize: true}.Marshal(vv)
+		buf, err := marshalOptions.Marshal(vv)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +61,7 @@ func (c *codecV2) Marshal(v any) (data mem.BufferSlice, err error) {
 	} else {
 		pool := mem.DefaultBufferPool()
 		buf := pool.Get(size)
-		if _, err := (proto.MarshalOptions{UseCachedSize: true}).MarshalAppend((*buf)[:0], vv); err != nil {
+		if _, err := marshalOptions.MarshalAppend((*buf)[:0], vv); err != nil {
 			pool.Put(buf)
 			return nil, err
 		}
