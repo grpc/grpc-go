@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"syscall"
 
 	core "google.golang.org/grpc/credentials/alts/internal"
 )
@@ -56,17 +57,12 @@ const (
 	MsgLenFieldSize = 4
 	// The byte size of the message type field of a framed message.
 	msgTypeFieldSize = 4
-	// The bytes size limit for a ALTS record message.
+	// The bytes size limit for an ALTS record message.
 	altsRecordLengthLimit = 1024 * 1024 // 1 MiB
-	// The default bytes size of a ALTS record message.
-	altsRecordDefaultLength = 4 * 1024 // 4KiB
 	// Message type value included in ALTS record framing.
 	altsRecordMsgType = uint32(0x06)
 	// The initial write buffer size.
 	altsWriteBufferInitialSize = 32 * 1024 // 32KiB
-	// The maximum write buffer size. This *must* be multiple of
-	// altsRecordDefaultLength.
-	altsWriteBufferMaxSize = 512 * 1024 // 512KiB
 	// The initial buffer used to read from the network.
 	altsReadBufferInitialSize = 32 * 1024 // 32KiB
 )
@@ -102,11 +98,23 @@ type conn struct {
 	nextFrame []byte
 	// overhead is the calculated overhead of each frame.
 	overhead int
+	// rcvlowat is the "receive low watermark" used to avoid unnecessary
+	// early returns from the kernel during [conn.Read], which saves CPU and
+	// can boost throughput under load. When we receive the first few bytes
+	// of a message we examine the length field. If, for example, we know
+	// there's 512KB of data remaining in the record, rcvlowat tells the
+	// kernel "don't wake me up every time you get another packet; wait
+	// until you have all 512KB."
+	//
+	// See SO_RCVLOWAT in tcp(7) for more info.
+	rcvlowat int
+	// rawConn allows us to set SO_RCVLOWAT on the underlying TCP socket.
+	rawConn syscall.RawConn
 }
 
 // NewConn creates a new secure channel instance given the other party role and
 // handshaking result.
-func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte) (net.Conn, error) {
+func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, protected []byte, rcvlowat bool) (net.Conn, error) {
 	newCrypto := protocols[recordProtocol]
 	if newCrypto == nil {
 		return nil, fmt.Errorf("negotiated unknown next_protocol %q", recordProtocol)
@@ -116,7 +124,7 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		return nil, fmt.Errorf("protocol %q: %v", recordProtocol, err)
 	}
 	overhead := MsgLenFieldSize + msgTypeFieldSize + crypto.EncryptionOverhead()
-	payloadLengthLimit := altsRecordDefaultLength - overhead
+	payloadLengthLimit := altsRecordLengthLimit - overhead
 	// We pre-allocate protected to be of size 32KB during initialization.
 	// We increase the size of the buffer by the required amount if it can't
 	// hold a complete encrypted record.
@@ -134,6 +142,18 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 		nextFrame:          protectedBuf,
 		overhead:           overhead,
 	}
+
+	if rcvlowat {
+		tcpConn, ok := c.(*net.TCPConn)
+		if !ok {
+			return nil, fmt.Errorf("rcvlowat requires a *net.TCPConn, but got %T", c)
+		}
+		if altsConn.rawConn, err = tcpConn.SyscallConn(); err != nil {
+			return nil, fmt.Errorf("failed to get raw connection: %w", err)
+		}
+		altsConn.rcvlowat = 1
+	}
+
 	return altsConn, nil
 }
 
@@ -144,7 +164,8 @@ func NewConn(c net.Conn, side core.Side, recordProtocol string, key []byte, prot
 func (p *conn) Read(b []byte) (n int, err error) {
 	if len(p.buf) == 0 {
 		var framedMsg []byte
-		framedMsg, p.nextFrame, err = ParseFramedMsg(p.nextFrame, altsRecordLengthLimit)
+		var length uint32
+		framedMsg, length, err = p.parseFramedMsg(p.nextFrame, altsRecordLengthLimit)
 		if err != nil {
 			return n, err
 		}
@@ -159,6 +180,10 @@ func (p *conn) Read(b []byte) (n int, err error) {
 		}
 		// Check whether a complete frame has been received yet.
 		for len(framedMsg) == 0 {
+			if err := p.setRcvlowat(int(length)); err != nil {
+				return 0, err
+			}
+
 			if len(p.protected) == cap(p.protected) {
 				// We can parse the length header to know exactly how large
 				// the buffer needs to be to hold the entire frame.
@@ -184,7 +209,7 @@ func (p *conn) Read(b []byte) (n int, err error) {
 				return 0, err
 			}
 			p.protected = p.protected[:len(p.protected)+n]
-			framedMsg, p.nextFrame, err = ParseFramedMsg(p.protected, altsRecordLengthLimit)
+			framedMsg, length, err = p.parseFramedMsg(p.protected, altsRecordLengthLimit)
 			if err != nil {
 				return 0, err
 			}
@@ -225,6 +250,39 @@ func (p *conn) Read(b []byte) (n int, err error) {
 	return n, nil
 }
 
+// parseFramedMsg parses the provided buffer and returns a frame of the format
+// msgLength+msg iff a full frame is available. It also returns the message
+// length if available.
+func (p *conn) parseFramedMsg(b []byte, maxLen uint32) ([]byte, uint32, error) {
+	// If the size field is not complete, return the provided buffer as
+	// remaining buffer.
+	p.nextFrame = b
+	length, sufficientBytes := parseMessageLength(b)
+	if !sufficientBytes {
+		return nil, length, nil
+	}
+	if length > maxLen {
+		return nil, length, fmt.Errorf("received the frame length %d larger than the limit %d", length, maxLen)
+	}
+	if len(b) < int(length)+MsgLenFieldSize { // account for the first 4 msg length bytes.
+		// Frame is not complete yet.
+		return nil, length, nil
+	}
+	p.nextFrame = b[MsgLenFieldSize+length:]
+	return b[:MsgLenFieldSize+length], length, nil
+}
+
+// parseMessageLength returns the message length based on frame header. It also
+// returns a boolean indicating if the buffer contains sufficient bytes to parse
+// the length header. If there are insufficient bytes, (0, false) is returned.
+func parseMessageLength(b []byte) (uint32, bool) {
+	if len(b) < MsgLenFieldSize {
+		return 0, false
+	}
+	msgLenField := b[:MsgLenFieldSize]
+	return binary.LittleEndian.Uint32(msgLenField), true
+}
+
 // Write encrypts, frames, and writes bytes from b to the underlying connection.
 func (p *conn) Write(b []byte) (n int, err error) {
 	n = len(b)
@@ -233,10 +291,9 @@ func (p *conn) Write(b []byte) (n int, err error) {
 	size := len(b) + numOfFrames*p.overhead
 	// If writeBuf is too small, increase its size up to the maximum size.
 	partialBSize := len(b)
-	if size > altsWriteBufferMaxSize {
-		size = altsWriteBufferMaxSize
-		const numOfFramesInMaxWriteBuf = altsWriteBufferMaxSize / altsRecordDefaultLength
-		partialBSize = numOfFramesInMaxWriteBuf * p.payloadLengthLimit
+	if size > altsRecordLengthLimit {
+		size = altsRecordLengthLimit
+		partialBSize = p.payloadLengthLimit
 	}
 	if len(p.writeBuf) < size {
 		p.writeBuf = make([]byte, size)
@@ -282,7 +339,7 @@ func (p *conn) Write(b []byte) (n int, err error) {
 			// written. This means we need to remove header,
 			// encryption overheads, and any partially-written
 			// frame data.
-			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(altsRecordDefaultLength)))
+			numOfWrittenFrames := int(math.Floor(float64(nn) / float64(altsRecordLengthLimit)))
 			return partialBStart + numOfWrittenFrames*p.payloadLengthLimit, err
 		}
 	}

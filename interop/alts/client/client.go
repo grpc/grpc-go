@@ -35,6 +35,7 @@ import (
 var (
 	hsAddr     = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
 	serverAddr = flag.String("server_address", ":8080", "The port on which the server is listening")
+	rcvlowat   = flag.Bool("rcvlowat", false, "Enable use of SO_RCVLOWAT to reduce CPU usage")
 
 	logger = grpclog.Component("interop")
 )
@@ -46,6 +47,7 @@ func main() {
 	if *hsAddr != "" {
 		opts.HandshakerServiceAddress = *hsAddr
 	}
+	opts.EnableRcvlowat = *rcvlowat
 	altsTC := alts.NewClientCreds(opts)
 	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(altsTC))
 	if err != nil {
