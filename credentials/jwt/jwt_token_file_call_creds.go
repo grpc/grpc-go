@@ -76,7 +76,7 @@ func NewTokenFileCallCredentials(tokenFilePath string) (credentials.PerRPCCreden
 func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	ri, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
-		return nil, fmt.Errorf("cannot send secure credentials on an insecure connection: %w", err)
+		return nil, fmt.Errorf("cannot send secure credentials on an insecure connection: %v", err)
 	}
 
 	c.mu.Lock()
@@ -142,7 +142,6 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.updateCacheLocked(token, expiry, err)
-
 	c.pendingRefresh = false
 }
 
@@ -172,7 +171,7 @@ func (c *jwtTokenFileCallCreds) updateCacheLocked(token string, expiry time.Time
 	c.nextRetryTime = time.Time{}
 
 	c.cachedAuthHeader = "Bearer " + token
-	// Per RFC A97: consider token invalid if it expires within the next 30
+	// Per gRFC A97: consider token invalid if it expires within the next 30
 	// seconds to accommodate for clock skew and server processing time.
 	c.cachedExpiry = expiry.Add(-30 * time.Second)
 }
