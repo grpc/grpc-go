@@ -72,12 +72,7 @@ func (r *jwtFileReader) extractExpiration(token string) (time.Time, error) {
 	}
 
 	payload := parts[1]
-	// Add padding if necessary for base64 decoding.
-	if m := len(payload) % 4; m != 0 {
-		payload += strings.Repeat("=", 4-m)
-	}
-
-	payloadBytes, err := base64.URLEncoding.DecodeString(payload)
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("decode error: %v", err)
 	}
