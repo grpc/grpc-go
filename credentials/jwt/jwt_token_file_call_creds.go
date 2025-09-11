@@ -84,13 +84,11 @@ func (c *jwtTokenFileCallCreds) GetRequestMetadata(ctx context.Context, _ ...str
 
 	if c.isTokenValidLocked() {
 		needsPreemptiveRefresh := time.Until(c.cachedExpiry) < preemptiveRefreshThreshold
-		if needsPreemptiveRefresh {
+		if needsPreemptiveRefresh && !c.pendingRefresh {
 			// Start refresh if not pending (handling the prior RPC may have
 			// just spawned a goroutine).
-			if !c.pendingRefresh {
-				c.pendingRefresh = true
-				go c.refreshToken()
-			}
+			c.pendingRefresh = true
+			go c.refreshToken()
 		}
 		return map[string]string{
 			"authorization": c.cachedAuthHeader,
