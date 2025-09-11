@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -31,6 +32,12 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	"google.golang.org/grpc/codes"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal"
@@ -41,17 +48,13 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
+	xdsresolver "google.golang.org/grpc/internal/xds/resolver"
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/structpb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	v3xdsxdstypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -320,11 +323,58 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
 
-	// Build the resolver and expect an error update from it. Since the
-	// resource is not cached, it should be received as resource error.
-	_, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
-	if err := waitForErrorFromResolver(ctx, errCh, "no RouteSpecifier", nodeID); err != nil {
-		t.Fatal(err)
+	// Build the resolver inline (duplicating buildResolverForTarget internals)
+	// to avoid issues with blocked channel writes when NACKs occur.
+	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
+	var builder resolver.Builder
+	if bc != nil {
+		// Create an xDS resolver with the provided bootstrap configuration.
+		if internal.NewXDSResolverWithConfigForTesting == nil {
+			t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+		}
+		var err error
+		builder, err = internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+		if err != nil {
+			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+		}
+	} else {
+		builder = resolver.Get(xdsresolver.Scheme)
+		if builder == nil {
+			t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
+		}
+	}
+
+	errCh := testutils.NewChannel()
+	reportErrorF := func(err error) {
+		errCh.Replace(err)
+	}
+	tcc := &testutils.ResolverClientConn{Logger: t, ReportErrorF: reportErrorF}
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{
+		Authority: url.PathEscape(target.Endpoint()),
+	})
+	if err != nil {
+		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
+	}
+	t.Cleanup(func() {
+		r.Close()
+	})
+
+	// Wait for and verify the error update from the resolver.
+	// Since the resource is not cached, it should be received as resource error.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh.C:
+		if gotErr == nil {
+			t.Fatalf("got nil error from resolver, want error containing 'no RouteSpecifier'")
+		}
+		errStr := fmt.Sprint(gotErr)
+		if !strings.Contains(errStr, "no RouteSpecifier") {
+			t.Fatalf("got error from resolver %q, want error containing 'no RouteSpecifier'", errStr)
+		}
+		if !strings.Contains(errStr, nodeID) {
+			t.Fatalf("got error from resolver %q, want nodeID %q", errStr, nodeID)
+		}
 	}
 }
 
