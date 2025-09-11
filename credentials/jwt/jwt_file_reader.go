@@ -39,6 +39,7 @@ type jwtClaims struct {
 }
 
 // jwtFileReader handles reading and parsing JWT tokens from files.
+// It is safe to call methods on this type concurrently as no state is stored.
 type jwtFileReader struct {
 	tokenFilePath string
 }

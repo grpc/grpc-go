@@ -134,7 +134,8 @@ func (c *jwtTokenFileCallCreds) isTokenValidLocked() bool {
 
 // refreshToken reads the token from file and updates the cached data.
 func (c *jwtTokenFileCallCreds) refreshToken() {
-	// Deliberately not locking c.mu here
+	// Deliberately not locking c.mu here. This way other RPCs can proceed
+	// while we read the token. This is per gRFC A97.
 	token, expiry, err := c.fileReader.readToken()
 
 	c.mu.Lock()
