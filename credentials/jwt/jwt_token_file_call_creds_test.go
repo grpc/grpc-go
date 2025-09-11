@@ -319,7 +319,9 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatal("context deadline expired before pre-emptive refresh completed")
 		}
-		// If the newly returned metadata is different to the old one, verify that it matches the token from the updated file. If not, fail the test. }
+		// If the newly returned metadata is different to the old one, verify
+		// that it matches the token from the updated file. If not, fail the
+		// test.
 		metadata3, err := creds.GetRequestMetadata(ctx)
 		if err != nil {
 			t.Fatalf("Second GetRequestMetadata() failed: %v", err)
