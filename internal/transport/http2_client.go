@@ -556,6 +556,19 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	// Make the slice of certain predictable size to reduce allocations made by append.
 	hfLen := 7 // :method, :scheme, :path, :authority, content-type, user-agent, te
 	hfLen += len(authData) + len(callAuthData)
+	registeredCompressors := t.registeredCompressors
+	if callHdr.PreviousAttempts > 0 {
+		hfLen++
+	}
+	if callHdr.SendCompress != "" {
+		hfLen++
+	}
+	if registeredCompressors != "" {
+		hfLen++
+	}
+	if _, ok := ctx.Deadline(); ok {
+		hfLen++
+	}
 	headerFields := make([]hpack.HeaderField, 0, hfLen)
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":scheme", Value: t.scheme})
@@ -568,7 +581,6 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-previous-rpc-attempts", Value: strconv.Itoa(callHdr.PreviousAttempts)})
 	}
 
-	registeredCompressors := t.registeredCompressors
 	if callHdr.SendCompress != "" {
 		headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-encoding", Value: callHdr.SendCompress})
 		// Include the outgoing compressor name when compressor is not registered
