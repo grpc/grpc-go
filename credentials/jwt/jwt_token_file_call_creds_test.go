@@ -42,7 +42,7 @@ type s struct {
 	grpctest.Tester
 }
 
-func TestTokenFileCallCreds(t *testing.T) {
+func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 

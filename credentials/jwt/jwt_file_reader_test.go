@@ -26,13 +26,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/internal/grpctest"
 )
-
-func TestJWTFileReader(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
 
 func (s) TestJWTFileReader_ReadToken_FileErrors(t *testing.T) {
 	tests := []struct {
