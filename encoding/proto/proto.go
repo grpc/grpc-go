@@ -23,11 +23,10 @@ package proto
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/protoadapt"
-
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/mem"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 )
 
 // Name is the name registered for the proto compressor.
