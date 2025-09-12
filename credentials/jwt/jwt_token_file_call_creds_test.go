@@ -374,12 +374,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	})
 
 	// First call should fail with UNAVAILABLE.
-	_, err1 := creds.GetRequestMetadata(ctx)
-	if err1 == nil {
+	_, err = creds.GetRequestMetadata(ctx)
+	if err == nil {
 		t.Fatal("Expected error from nonexistent file")
 	}
-	if status.Code(err1) != codes.Unavailable {
-		t.Fatalf("GetRequestMetadata() = %v, want UNAVAILABLE", status.Code(err1))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("GetRequestMetadata() = %v, want UNAVAILABLE", status.Code(err))
 	}
 
 	// Verify error is cached internally.
@@ -397,12 +397,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 
 	// Second call should still return cached error.
-	_, err2 := creds.GetRequestMetadata(ctx)
-	if err2 == nil {
+	_, err = creds.GetRequestMetadata(ctx)
+	if err == nil {
 		t.Fatal("Expected cached error")
 	}
-	if status.Code(err2) != codes.Unavailable {
-		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err2))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err))
 	}
 
 	impl.mu.Lock()
@@ -423,12 +423,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	impl.mu.Unlock()
 
 	// Third call should retry but still fail with UNAVAILABLE.
-	_, err3 := creds.GetRequestMetadata(ctx)
-	if err3 == nil {
+	_, err = creds.GetRequestMetadata(ctx)
+	if err == nil {
 		t.Fatal("Expected cached error")
 	}
-	if status.Code(err3) != codes.Unavailable {
-		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err3))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err))
 	}
 
 	impl.mu.Lock()
@@ -450,12 +450,12 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	}
 
 	// Fourth call should still fail even though the file now exists.
-	_, err4 := creds.GetRequestMetadata(ctx)
-	if err4 == nil {
+	_, err = creds.GetRequestMetadata(ctx)
+	if err == nil {
 		t.Fatal("Expected cached error")
 	}
-	if status.Code(err4) != codes.Unavailable {
-		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err4))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err))
 	}
 
 	impl.mu.Lock()
@@ -476,9 +476,9 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	impl.mu.Unlock()
 	// Fifth call should succeed since the file now exists
 	// and the backoff has expired.
-	_, err5 := creds.GetRequestMetadata(ctx)
-	if err5 != nil {
-		t.Errorf("after creating valid token file, GetRequestMetadata() should eventually succeed, but got: %v", err5)
+	_, err = creds.GetRequestMetadata(ctx)
+	if err != nil {
+		t.Errorf("after creating valid token file, GetRequestMetadata() should eventually succeed, but got: %v", err)
 		t.Error("backoff should expire and trigger new attempt on next RPC")
 	} else {
 		// If successful, verify error cache and backoff state were cleared.
