@@ -241,6 +241,13 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 }
 
 // Tests that pre-emptive refresh is triggered within 1 minute of expiration.
+// This is tested as follows:
+// * A token which expires "soon" is created.
+// * On the first call to GetRequestMetadata, the token will get loaded and returned.
+// * Another token is created and overwrites the file.
+// * On the second call we will still return the (valid) first token but also
+// detect that a refresh needs to happen and trigger it.
+// * On the third call we confirm the new token has been loaded and returnen
 func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	// Create token that expires in 80 seconds (=> cache expires in ~50s).
 	// This ensures pre-emptive refresh triggers since 50s < the 1 minute check.
@@ -270,7 +277,8 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		t.Fatalf("First call should return original token: got %q, want %q", gotAuth1, wantAuth1)
 	}
 
-	// Verify token was cached and check if refresh should be triggered.
+	// Verify token was cached and confirm expectation that refresh should be
+	// triggered.
 	impl := creds.(*jwtTokenFileCallCreds)
 	impl.mu.Lock()
 	cacheExp := impl.cachedExpiry
@@ -294,10 +302,11 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 		t.Fatalf("Failed to write updated token file: %v", err)
 	}
 
-	// Get token again - should trigger a refresh given that the first one was
-	// cached but expiring soon.
+	// Get token again - this call should trigger a refresh given that the first
+	// one was cached but expiring soon.
 	// However, the function should have returned right away with the current
-	// cached token.
+	// cached token because it is still valid and the preemptive refresh is
+	// meant to happen without blocking the RPC.
 	metadata2, err := creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("Second GetRequestMetadata() failed: %v", err)

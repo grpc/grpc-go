@@ -147,6 +147,10 @@ func (c *jwtTokenFileCallCreds) refreshToken() {
 // updateCacheLocked updates the cached token, expiry, and error state.
 // If an error is provided, it determines whether to set it as an UNAVAILABLE
 // or UNAUTHENTICATED error based on the error type.
+// NOTE: This method (and its callers) do not queue up a token refresh/retry if
+// the expiration is soon / an error was encountered. Instead, this is done when
+// handling RPCs. This is as per gRFC A97, which states that it is
+// undesirable to retry loading the token if the channel is idle.
 // Caller must hold c.mu lock.
 func (c *jwtTokenFileCallCreds) updateCacheLocked(token string, expiry time.Time, err error) {
 	if err != nil {
