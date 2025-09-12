@@ -40,7 +40,8 @@ var (
 	_ xdsclient.Decoder      = listenerResourceType{}
 	_ xdsclient.ResourceData = (*ListenerResourceData)(nil)
 
-	// Singleton instantiation of the resource type implementation.
+	// ListenerResource is a singleton instance of xdsclient.ResourceType
+	// that defines the configuration for the Listener resource.
 	ListenerResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3ListenerURL,
 		TypeName:                   ListenerResourceTypeName,

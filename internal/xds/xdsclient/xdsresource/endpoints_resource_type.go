@@ -39,7 +39,8 @@ var (
 	_ xdsclient.Decoder      = endpointsResourceType{}
 	_ xdsclient.ResourceData = (*EndpointsResourceData)(nil)
 
-	// Exported generic ResourceType for endpoints.
+	// EndpointsResource is a singleton instance of xdsclient.ResourceType
+	// that defines the configuration for the Listener resource.
 	EndpointsResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3EndpointsURL,
 		TypeName:                   EndpointsResourceTypeName,

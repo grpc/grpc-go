@@ -40,7 +40,8 @@ var (
 	_ xdsclient.Decoder      = clusterResourceType{}
 	_ xdsclient.ResourceData = (*ClusterResourceData)(nil)
 
-	// Singleton instantiation of the resource type implementation.
+	// ClusterResource is a singleton instance of xdsclient.ResourceType
+	// that defines the configuration for the Listener resource.
 	ClusterResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3ClusterURL,
 		TypeName:                   ClusterResourceTypeName,

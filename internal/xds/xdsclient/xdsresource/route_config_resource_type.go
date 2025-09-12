@@ -39,7 +39,8 @@ var (
 	_ xdsclient.Decoder      = routeConfigResourceType{}
 	_ xdsclient.ResourceData = (*RouteConfigResourceData)(nil)
 
-	// Singleton instantiation of the resource type implementation.
+	// RouteConfigResource is a singleton instance of xdsclient.ResourceType
+	// that defines the configuration for the Listener resource.
 	RouteConfigResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3RouteConfigURL,
 		TypeName:                   RouteConfigTypeName,
