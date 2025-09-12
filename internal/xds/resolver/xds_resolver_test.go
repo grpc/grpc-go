@@ -343,10 +343,10 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	r, err := builder.Build(target, tcc, resolver.BuildOptions{
 		Authority: url.PathEscape(target.Endpoint()),
 	})
-	defer r.Close()
 	if err != nil {
 		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
 	}
+	defer r.Close()
 
 	// Wait for and verify the error update from the resolver.
 	// Since the resource is not cached, it should be received as resource error.
