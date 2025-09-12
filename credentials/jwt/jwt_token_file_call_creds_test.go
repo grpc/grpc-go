@@ -399,7 +399,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// Second call should still return cached error.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err == nil {
-		t.Fatal("Expected cached error")
+		t.Fatalf("creds.GetRequestMetadata() = %v, want non-nil", err)
 	}
 	if status.Code(err) != codes.Unavailable {
 		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err))
@@ -425,7 +425,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// Third call should retry but still fail with UNAVAILABLE.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err == nil {
-		t.Fatal("Expected cached error")
+		t.Fatalf("creds.GetRequestMetadata() = %v, want non-nil", err)
 	}
 	if status.Code(err) != codes.Unavailable {
 		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err))
@@ -452,7 +452,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// Fourth call should still fail even though the file now exists.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err == nil {
-		t.Fatal("Expected cached error")
+		t.Fatalf("creds.GetRequestMetadata() = %v, want non-nil", err)
 	}
 	if status.Code(err) != codes.Unavailable {
 		t.Fatalf("GetRequestMetadata() = %v, want cached UNAVAILABLE", status.Code(err))
