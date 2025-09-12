@@ -40,7 +40,7 @@ type Client struct {
 	name         string
 	loadReportCh *testutils.Channel
 	lrsCancelCh  *testutils.Channel
-	loadStore    *lrsclient.LoadStore
+	loadStore    xdsclient.LoadStore
 	bootstrapCfg *bootstrap.Config
 }
 
@@ -80,7 +80,7 @@ func (*stream) Recv() ([]byte, error) {
 }
 
 // ReportLoad starts reporting load about clusterName to server.
-func (xdsC *Client) ReportLoad(server *bootstrap.ServerConfig) (loadStore *lrsclient.LoadStore, cancel func(context.Context)) {
+func (xdsC *Client) ReportLoad(server *bootstrap.ServerConfig) (loadStore xdsclient.LoadStore, cancel func(context.Context)) {
 	lrsClient, _ := lrsclient.New(lrsclient.Config{Node: clients.Node{ID: "fake-node-id"}, TransportBuilder: &transportBuilder{}})
 	xdsC.loadStore, _ = lrsClient.ReportLoad(clients.ServerIdentifier{ServerURI: server.ServerURI()})
 
@@ -100,7 +100,7 @@ func (xdsC *Client) WaitForCancelReportLoad(ctx context.Context) error {
 }
 
 // LoadStore returns the underlying load data store.
-func (xdsC *Client) LoadStore() *lrsclient.LoadStore {
+func (xdsC *Client) LoadStore() xdsclient.LoadStore {
 	return xdsC.loadStore
 }
 

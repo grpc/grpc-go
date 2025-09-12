@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/internal/xds/clients"
-	"google.golang.org/grpc/internal/xds/clients/lrsclient"
+	"google.golang.org/grpc/internal/xds/xdsclient"
 )
 
 // NewWrapper creates a Wrapper.
@@ -54,8 +54,8 @@ type Wrapper struct {
 	// store and perCluster are initialized as nil. They are only set by the
 	// balancer when LRS is enabled. Before that, all functions to record loads
 	// are no-op.
-	store      *lrsclient.LoadStore
-	perCluster *lrsclient.PerClusterReporter
+	store      xdsclient.LoadStore
+	perCluster xdsclient.PerClusterReporter
 }
 
 // UpdateClusterAndService updates the cluster name and eds service for this
@@ -77,7 +77,7 @@ func (lsw *Wrapper) UpdateClusterAndService(cluster, edsService string) {
 
 // UpdateLoadStore updates the load store for this wrapper. If it is changed
 // from before, the perCluster store in this wrapper will also be updated.
-func (lsw *Wrapper) UpdateLoadStore(store *lrsclient.LoadStore) {
+func (lsw *Wrapper) UpdateLoadStore(store xdsclient.LoadStore) {
 	lsw.mu.Lock()
 	defer lsw.mu.Unlock()
 	if store == lsw.store {
