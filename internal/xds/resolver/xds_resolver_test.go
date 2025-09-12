@@ -42,7 +42,7 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
-	xdsresolver "google.golang.org/grpc/internal/xds/resolver"
+
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -336,25 +336,17 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 		}
-	} else {
-		builder = resolver.Get(xdsresolver.Scheme)
-		if builder == nil {
-			t.Fatalf("Scheme %q is not registered", xdsresolver.Scheme)
-		}
 	}
 
 	errCh := testutils.NewChannel()
-	reportErrorF := func(err error) {
-		errCh.Replace(err)
-	}
-	tcc := &testutils.ResolverClientConn{Logger: t, ReportErrorF: reportErrorF}
+	tcc := &testutils.ResolverClientConn{Logger: t, ReportErrorF: func(err error) { errCh.Replace(err) }}
 	r, err := builder.Build(target, tcc, resolver.BuildOptions{
 		Authority: url.PathEscape(target.Endpoint()),
 	})
+	defer r.Close()
 	if err != nil {
 		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
 	}
-	t.Cleanup(r.Close)
 
 	// Wait for and verify the error update from the resolver.
 	// Since the resource is not cached, it should be received as resource error.
