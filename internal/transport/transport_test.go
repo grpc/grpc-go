@@ -2618,6 +2618,8 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		metaHeaderFrame *http2.MetaHeadersFrame
 		// output
 		wantStatus *status.Status
+		// end stream output
+		wantStatusEndStream *status.Status
 	}{
 		{
 			name: "valid header",
@@ -2629,7 +2631,8 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				},
 			},
 			// no error
-			wantStatus: status.New(codes.OK, ""),
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.OK, ""),
 		},
 		{
 			name: "missing content-type header",
@@ -2640,6 +2643,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				},
 			},
 			wantStatus: status.New(
+				codes.Unknown,
+				"malformed header: missing HTTP content-type",
+			),
+			wantStatusEndStream: status.New(
 				codes.Unknown,
 				"malformed header: missing HTTP content-type",
 			),
@@ -2657,6 +2664,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
 			),
+			wantStatusEndStream: status.New(
+				codes.Internal,
+				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+			),
 		},
 		{
 			name: "invalid http content type",
@@ -2666,6 +2677,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				},
 			},
 			wantStatus: status.New(
+				codes.Internal,
+				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
+			),
+			wantStatusEndStream: status.New(
 				codes.Internal,
 				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
 			),
@@ -2682,6 +2697,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
 			),
+			wantStatusEndStream: status.New(
+				codes.Internal,
+				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+			),
 		},
 		{
 			name: "http2 frame size exceeds",
@@ -2693,9 +2712,13 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"peer header list size exceeded limit",
 			),
+			wantStatusEndStream: status.New(
+				codes.Internal,
+				"peer header list size exceeded limit",
+			),
 		},
 		{
-			name: "bad status in grpc mode",
+			name: "ignoring bad http status in grpc mode",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
@@ -2703,22 +2726,55 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: ":status", Value: "504"},
 				},
 			},
-			wantStatus: status.New(
-				codes.Unavailable,
-				"unexpected HTTP status code received from server: 504 (Gateway Timeout)",
-			),
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.OK, ""),
 		},
 		{
-			name: "missing http status",
+			name: "missing http status and grpc status",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 				},
 			},
-			wantStatus: status.New(
-				codes.Internal,
-				"malformed header: missing HTTP status",
-			),
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.Internal, ""),
+		},
+		{
+			name: "ignore http status and fail for grpc status missing in trailer",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: ":status", Value: "504"},
+				},
+			},
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.Internal, ""),
+		},
+		{
+			name: "ignore valid http status for grpc",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "4"},
+					{Name: "grpc-message", Value: "Request timed out: Internal error"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
+		},
+		{
+			name: "ignore illegal http status for grpc",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "4"},
+					{Name: "grpc-message", Value: "Request timed out: Internal error"},
+					{Name: ":status", Value: "thisIsIllegal"},
+				},
+			},
+			wantStatus:          status.New(codes.OK, ""),
+			wantStatusEndStream: status.New(codes.DeadlineExceeded, "Request timed out: Internal error"),
 		},
 	} {
 
@@ -2733,7 +2789,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			}
 
 			s.operateHeaders(test.metaHeaderFrame)
-
 			got := ts.status
 			want := test.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
@@ -2752,9 +2807,8 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			}
 
 			s.operateHeaders(test.metaHeaderFrame)
-
 			got := ts.status
-			want := test.wantStatus
+			want := test.wantStatusEndStream
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
 			}

@@ -1477,16 +1477,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		contentTypeErr = "malformed header: missing HTTP content-type"
 		grpcMessage    string
 		recvCompress   string
-		httpStatusCode *int
 		httpStatusErr  string
-		rawStatusCode  = codes.Unknown
+		rawStatusCode  = codes.Internal
 		// headerError is set if an error is encountered while parsing the headers
-		headerError string
+		headerError        string
+		receivedHTTPStatus string
 	)
-
-	if initialHeader {
-		httpStatusErr = "malformed header: missing HTTP status"
-	}
 
 	for _, hf := range frame.Fields {
 		switch hf.Name {
@@ -1511,32 +1507,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case ":status":
-			c, err := strconv.ParseInt(hf.Value, 10, 32)
-			if err != nil {
-				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
+			if !isGRPC {
+				receivedHTTPStatus = hf.Value
 			}
-			statusCode := int(c)
-			if statusCode >= 100 && statusCode < 200 {
-				if endStream {
-					se := status.New(codes.Internal, fmt.Sprintf(
-						"protocol error: informational header with status code %d must not have END_STREAM set", statusCode))
-					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				}
-				return
-			}
-			httpStatusCode = &statusCode
-			if statusCode == 200 {
-				httpStatusErr = ""
-				break
-			}
-
-			httpStatusErr = fmt.Sprintf(
-				"unexpected HTTP status code received from server: %d (%s)",
-				statusCode,
-				http.StatusText(statusCode),
-			)
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -1551,25 +1524,57 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	if !isGRPC || httpStatusErr != "" {
-		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
-
-		if httpStatusCode != nil {
-			var ok bool
-			code, ok = HTTPStatusConvTab[*httpStatusCode]
-			if !ok {
-				code = codes.Unknown
-			}
-		}
+	// If a non gRPC response is received, then evaluate entire http status and process close stream / response.
+	// In case http status doesn't provide any error information (status : 200), evalute response code to be Unknown.
+	if !isGRPC {
+		var grpcErrorCode = codes.Internal // when header does not include HTTP status, return INTERNAL
 		var errs []string
+
+		switch receivedHTTPStatus {
+		case "":
+			httpStatusErr = "malformed header: missing HTTP status"
+		case "200":
+			grpcErrorCode = codes.Unknown
+		default:
+			// Any other status code (e.g., "404", "503"). We must parse it.
+			c, err := strconv.ParseInt(receivedHTTPStatus, 10, 32)
+			if err != nil {
+				se := status.New(grpcErrorCode, fmt.Sprintf("transport: malformed http-status: %v", err))
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				return
+			}
+			statusCode := int(c)
+			if statusCode >= 100 && statusCode < 200 {
+				if endStream {
+					se := status.New(codes.Internal, fmt.Sprintf(
+						"protocol error: informational header with status code %d must not have END_STREAM set", statusCode))
+					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				}
+				//In case of informational headers return
+				return
+			}
+			httpStatusErr = fmt.Sprintf(
+				"unexpected HTTP status code received from server: %d (%s)",
+				statusCode,
+				http.StatusText(statusCode),
+			)
+			var ok bool
+			grpcErrorCode, ok = HTTPStatusConvTab[statusCode]
+			if !ok {
+				grpcErrorCode = codes.Unknown
+			}
+
+		}
+
 		if httpStatusErr != "" {
 			errs = append(errs, httpStatusErr)
 		}
+
 		if contentTypeErr != "" {
 			errs = append(errs, contentTypeErr)
 		}
-		// Verify the HTTP response is a 200.
-		se := status.New(code, strings.Join(errs, "; "))
+
+		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
