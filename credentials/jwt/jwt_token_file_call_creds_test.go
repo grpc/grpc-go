@@ -478,25 +478,23 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// and the backoff has expired.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err != nil {
-		t.Errorf("After creating valid token file, GetRequestMetadata() should eventually succeed, but got: %v", err)
-		t.Error("Backoff should expire and trigger new attempt on next RPC")
-	} else {
-		// If successful, verify error cache and backoff state were cleared.
-		impl.mu.Lock()
-		clearedErr := impl.cachedError
-		retryAttempt := impl.retryAttempt
-		nextRetryTime := impl.nextRetryTime
-		impl.mu.Unlock()
+		t.Fatalf("After creating valid token file, backoff should expire and trigger a token reload on the next RPC. GetRequestMetadata() should eventually succeed, but got: %v", err)
+	}
+	// If successful, verify error cache and backoff state were cleared.
+	impl.mu.Lock()
+	clearedErr := impl.cachedError
+	retryAttempt = impl.retryAttempt
+	nextRetryTime = impl.nextRetryTime
+	impl.mu.Unlock()
 
-		if clearedErr != nil {
-			t.Errorf("After successful retry, cached error should be cleared, got: %v", clearedErr)
-		}
-		if retryAttempt != 0 {
-			t.Errorf("After successful retry, retry attempt should be reset, got: %d", retryAttempt)
-		}
-		if !nextRetryTime.IsZero() {
-			t.Error("After successful retry, next retry time should be cleared")
-		}
+	if clearedErr != nil {
+		t.Errorf("After successful retry, cached error should be cleared, got: %v", clearedErr)
+	}
+	if retryAttempt != 0 {
+		t.Errorf("After successful retry, retry attempt should be reset, got: %d", retryAttempt)
+	}
+	if !nextRetryTime.IsZero() {
+		t.Error("After successful retry, next retry time should be cleared")
 	}
 }
 
