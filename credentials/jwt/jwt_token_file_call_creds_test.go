@@ -236,7 +236,7 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 
 	wantExp := tokenExp.Add(-30 * time.Second)
 	if !cachedExp.Equal(wantExp) {
-		t.Errorf("cache expiration = %v, want %v", cachedExp, wantExp)
+		t.Errorf("Cache expiration = %v, want %v", cachedExp, wantExp)
 	}
 }
 
@@ -287,12 +287,12 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	impl.mu.Unlock()
 
 	if !tokenCached {
-		t.Fatal("token should be cached after successful GetRequestMetadata")
+		t.Fatal("Token should be cached after successful GetRequestMetadata")
 	}
 
 	if !shouldTriggerRefresh {
 		timeUntilExp := time.Until(cacheExp)
-		t.Fatalf("cache expires in %v; test precondition requires that this triggers preemptive refresh", timeUntilExp)
+		t.Fatalf("Cache expires in %v; test precondition requires that this triggers preemptive refresh", timeUntilExp)
 	}
 
 	// Create new token file with different expiration while refresh is
@@ -326,7 +326,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	})
 	for ; ; <-time.After(time.Millisecond) {
 		if ctx.Err() != nil {
-			t.Fatal("context deadline expired before pre-emptive refresh completed")
+			t.Fatal("Context deadline expired before pre-emptive refresh completed")
 		}
 		// If the newly returned metadata is different to the old one, verify
 		// that it matches the token from the updated file. If not, fail the
@@ -414,7 +414,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime2, nextRetryTime)
 	}
 	if retryAttempt2 != 1 {
-		t.Error("retry attempt should not change due to backoff")
+		t.Error("Retry attempt should not change due to backoff")
 	}
 
 	// Fast-forward the backoff retry time to allow next retry attempt.
@@ -440,7 +440,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("nextRetryTime should not change due to backoff")
 	}
 	if retryAttempt3 != 2 {
-		t.Error("retry attempt should not change due to backoff")
+		t.Error("Retry attempt should not change due to backoff")
 	}
 
 	// Create valid token file.
@@ -467,7 +467,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime4, nextRetryTime3)
 	}
 	if retryAttempt4 != retryAttempt3 {
-		t.Error("retry attempt should not change due to backoff")
+		t.Error("Retry attempt should not change due to backoff")
 	}
 
 	// Fast-forward the backoff retry time to allow next retry attempt.
@@ -478,8 +478,8 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	// and the backoff has expired.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err != nil {
-		t.Errorf("after creating valid token file, GetRequestMetadata() should eventually succeed, but got: %v", err)
-		t.Error("backoff should expire and trigger new attempt on next RPC")
+		t.Errorf("After creating valid token file, GetRequestMetadata() should eventually succeed, but got: %v", err)
+		t.Error("Backoff should expire and trigger new attempt on next RPC")
 	} else {
 		// If successful, verify error cache and backoff state were cleared.
 		impl.mu.Lock()
@@ -489,13 +489,13 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		impl.mu.Unlock()
 
 		if clearedErr != nil {
-			t.Errorf("after successful retry, cached error should be cleared, got: %v", clearedErr)
+			t.Errorf("After successful retry, cached error should be cleared, got: %v", clearedErr)
 		}
 		if retryAttempt != 0 {
-			t.Errorf("after successful retry, retry attempt should be reset, got: %d", retryAttempt)
+			t.Errorf("After successful retry, retry attempt should be reset, got: %d", retryAttempt)
 		}
 		if !nextRetryTime.IsZero() {
-			t.Error("after successful retry, next retry time should be cleared")
+			t.Error("After successful retry, next retry time should be cleared")
 		}
 	}
 }
