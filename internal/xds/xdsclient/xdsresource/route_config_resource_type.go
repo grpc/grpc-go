@@ -18,6 +18,9 @@
 package xdsresource
 
 import (
+	"bytes"
+	"fmt"
+
 	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -33,15 +36,15 @@ const (
 
 var (
 	// Compile time interface checks.
-	_ Type = routeConfigResourceType{}
+	_ xdsclient.Decoder      = routeConfigResourceType{}
+	_ xdsclient.ResourceData = (*RouteConfigResourceData)(nil)
 
 	// Singleton instantiation of the resource type implementation.
-	routeConfigType = routeConfigResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3RouteConfigURL,
-			typeName:                   "RouteConfigResource",
-			allResourcesRequiredInSotW: false,
-		},
+	RouteConfigResource = xdsclient.ResourceType{
+		TypeURL:                    version.V3RouteConfigURL,
+		TypeName:                   RouteConfigTypeName,
+		AllResourcesRequiredInSotW: false,
+		Decoder:                    routeConfigResourceType{resourceTypeState: resourceTypeState{typeURL: version.V3RouteConfigURL, typeName: RouteConfigTypeName, allResourcesRequiredInSotW: false}},
 	}
 )
 
@@ -55,19 +58,21 @@ type routeConfigResourceType struct {
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (routeConfigResourceType) Decode(_ *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
-	name, rc, err := unmarshalRouteConfigResource(resource)
-	switch {
-	case name == "":
-		// Name is unset only when protobuf deserialization fails.
-		return nil, err
-	case err != nil:
-		// Protobuf deserialization succeeded, but resource validation failed.
-		return &DecodeResult{Name: name, Resource: &RouteConfigResourceData{Resource: RouteConfigUpdate{}}}, err
+func (rt routeConfigResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	// Reconstruct anypb.Any from the generic AnyProto provided by the client.
+	a := &anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
 	}
 
-	return &DecodeResult{Name: name, Resource: &RouteConfigResourceData{Resource: rc}}, nil
-
+	name, rc, err := unmarshalRouteConfigResource(a)
+	switch {
+	case name == "":
+		return nil, err
+	case err != nil:
+		return &xdsclient.DecodeResult{Name: name, Resource: &RouteConfigResourceData{Resource: RouteConfigUpdate{}}}, err
+	}
+	return &xdsclient.DecodeResult{Name: name, Resource: &RouteConfigResourceData{Resource: rc}}, nil
 }
 
 // RouteConfigResourceData wraps the configuration of a RouteConfiguration
@@ -105,6 +110,29 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
+// Equal returns true if other is equal to c
+func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
+	if r == nil && other == nil {
+		return true
+	}
+	if (r == nil) != (other == nil) {
+		return false
+	}
+	if otherRCRD, ok := other.(*RouteConfigResourceData); ok {
+		return r.RawEqual(otherRCRD)
+	}
+	return bytes.Equal(r.Bytes(), other.Bytes())
+}
+
+// Bytes returns the underlying raw bytes of the clustered resource.
+func (r *RouteConfigResourceData) Bytes() []byte {
+	raw := r.Raw()
+	if raw == nil {
+		return nil
+	}
+	return raw.Value
+}
+
 // RouteConfigWatcher wraps the callbacks to be invoked for different
 // events corresponding to the route configuration resource being watched. gRFC
 // A88 contains an exhaustive list of what method is invoked under what
@@ -130,8 +158,16 @@ type delegatingRouteConfigWatcher struct {
 	watcher RouteConfigWatcher
 }
 
-func (d *delegatingRouteConfigWatcher) ResourceChanged(data ResourceData, onDone func()) {
-	rc := data.(*RouteConfigResourceData)
+func (d *delegatingRouteConfigWatcher) ResourceChanged(gData xdsclient.ResourceData, onDone func()) {
+	if gData == nil {
+		d.watcher.ResourceError(fmt.Errorf("route config resource missing"), onDone)
+		return
+	}
+	rc, ok := gData.(*RouteConfigResourceData)
+	if !ok {
+		d.watcher.ResourceError(fmt.Errorf("delegatingRouteConfigWatcher: unexpected resource data type %T", gData), onDone)
+		return
+	}
 	d.watcher.ResourceChanged(rc, onDone)
 }
 
@@ -146,12 +182,22 @@ func (d *delegatingRouteConfigWatcher) AmbientError(err error, onDone func()) {
 // WatchRouteConfig uses xDS to discover the configuration associated with the
 // provided route configuration resource name.
 func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
-	delegator := &delegatingRouteConfigWatcher{watcher: w}
-	return p.WatchResource(routeConfigType, name, delegator)
+	var gw xdsclient.ResourceWatcher
+	if w != nil {
+		gw = &delegatingRouteConfigWatcher{watcher: w}
+	}
+	return p.WatchResource(RouteConfigResource, name, gw)
 }
 
-// NewGenericRouteConfigResourceTypeDecoder returns a xdsclient.Decoder that
-// wraps the xdsresource.routeConfigType.
-func NewGenericRouteConfigResourceTypeDecoder() xdsclient.Decoder {
-	return &GenericResourceTypeDecoder{ResourceType: routeConfigType}
+// NewRouteConfigResourceTypeDecoder returns a decoder for RouteConfig resources.
+// RouteConfig is stateless so this just returns the zero-valued
+// routeConfigResourceType.
+func NewRouteConfigResourceTypeDecoder() xdsclient.Decoder {
+	return routeConfigResourceType{
+		resourceTypeState: resourceTypeState{
+			typeURL:                    version.V3RouteConfigURL,
+			typeName:                   RouteConfigTypeName,
+			allResourcesRequiredInSotW: false,
+		},
+	}
 }
