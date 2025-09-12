@@ -25,5 +25,5 @@ import "google.golang.org/grpc/internal/xds/clients/xdsclient"
 // server. Upon receipt of a response from the management server, an
 // appropriate callback on the watcher is invoked.
 func (c *clientImpl) WatchResource(rType xdsclient.ResourceType, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func()) {
-	return c.XDSClient.WatchResource(rType.TypeURL, resourceName, watcher)
+	return c.genericClient.WatchResource(rType.TypeURL, resourceName, watcher)
 }
