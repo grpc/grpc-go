@@ -1512,8 +1512,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	//if not a gRPC response - evaluate entire http status and process close stream / response
-	//for 200 -> Unknown, else decode the error
+	// If a non gRPC response is received, then evaluate entire http status and process close stream / response.
+	// In case http status doesn't provide any error information (status : 200), evalute response code to be Unknown.
 	if !isGRPC {
 		var grpcErrorCode = codes.Internal // when header does not include HTTP status, return INTERNAL
 		var errs []string
@@ -1533,8 +1533,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			}
 			statusCode := int(c)
 			if statusCode >= 100 && statusCode < 200 {
+				if endStream {
+					se := status.New(codes.Internal, fmt.Sprintf(
+						"protocol error: informational header with status code %d must not have END_STREAM set", statusCode))
+					t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				}
 				//In case of informational headers return
-				//For trailers, since we are already in gRPC mode, we will ignore all http statuses and not enter this block
 				return
 			}
 			httpStatusErr = fmt.Sprintf(
@@ -1557,7 +1561,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		if contentTypeErr != "" {
 			errs = append(errs, contentTypeErr)
 		}
-		// Verify the HTTP response is a 200.
+
 		se := status.New(grpcErrorCode, strings.Join(errs, "; "))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return

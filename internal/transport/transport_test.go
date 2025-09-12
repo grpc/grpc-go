@@ -2807,12 +2807,8 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			}
 
 			s.operateHeaders(test.metaHeaderFrame)
-
 			got := ts.status
-			want := test.wantStatus
-			if test.wantStatusEndStream != nil {
-				want = test.wantStatusEndStream
-			}
+			want := test.wantStatusEndStream
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
 			}
@@ -3217,14 +3213,17 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 		wantStatus      *status.Status
 	}{
 		{
-			name: "1xx with END_STREAM will be ignored",
+			name: "1xx with END_STREAM is error",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: ":status", Value: "100"},
 				},
 			},
-			httpFlags:  http2.FlagHeadersEndStream,
-			wantStatus: nil,
+			httpFlags: http2.FlagHeadersEndStream,
+			wantStatus: status.New(
+				codes.Internal,
+				"protocol error: informational header with status code 100 must not have END_STREAM set",
+			),
 		},
 		{
 			name: "1xx without END_STREAM is ignored",
