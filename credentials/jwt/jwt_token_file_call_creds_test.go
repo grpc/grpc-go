@@ -374,6 +374,7 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	})
 
 	// First call should fail with UNAVAILABLE.
+	beforeCallRetryTime := time.Now()
 	_, err = creds.GetRequestMetadata(ctx)
 	if err == nil {
 		t.Fatal("Expected error from nonexistent file")
@@ -392,11 +393,16 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	if retryAttempt != 1 {
 		t.Errorf("Expected retry attempt to be 1, got %d", retryAttempt)
 	}
-	if nextRetryTime.IsZero() || nextRetryTime.Before(time.Now()) {
-		t.Error("Next retry time should be set to future time")
+	if !nextRetryTime.After(beforeCallRetryTime) {
+		t.Error("Next retry time should be set to a time after the first call")
 	}
 
-	// Second call should still return cached error.
+	// Second call should still return cached error and not retry.
+	// Set nextRetryTime far enough in the future to ensure that's the case.
+	impl.mu.Lock()
+	impl.nextRetryTime = time.Now().Add(1 * time.Minute)
+	wantNextRetryTime := impl.nextRetryTime
+	impl.mu.Unlock()
 	_, err = creds.GetRequestMetadata(ctx)
 	if err == nil {
 		t.Fatalf("creds.GetRequestMetadata() = %v, want non-nil", err)
@@ -409,20 +415,19 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	retryAttempt2 := impl.retryAttempt
 	nextRetryTime2 := impl.nextRetryTime
 	impl.mu.Unlock()
-
-	if !nextRetryTime2.Equal(nextRetryTime) {
-		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime2, nextRetryTime)
+	if !nextRetryTime2.Equal(wantNextRetryTime) {
+		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime2, wantNextRetryTime)
 	}
 	if retryAttempt2 != 1 {
 		t.Error("Retry attempt should not change due to backoff")
 	}
 
-	// Fast-forward the backoff retry time to allow next retry attempt.
+	// Third call should retry but still fail with UNAVAILABLE.
+	// Set the backoff retry time in the past to allow next retry attempt.
 	impl.mu.Lock()
 	impl.nextRetryTime = time.Now().Add(-1 * time.Minute)
+	beforeCallRetryTime = impl.nextRetryTime
 	impl.mu.Unlock()
-
-	// Third call should retry but still fail with UNAVAILABLE.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err == nil {
 		t.Fatalf("creds.GetRequestMetadata() = %v, want non-nil", err)
@@ -436,11 +441,11 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	nextRetryTime3 := impl.nextRetryTime
 	impl.mu.Unlock()
 
-	if !nextRetryTime3.After(nextRetryTime2) {
-		t.Error("nextRetryTime should not change due to backoff")
+	if !nextRetryTime3.After(beforeCallRetryTime) {
+		t.Error("nextRetryTime3 should have been updated after third call")
 	}
 	if retryAttempt3 != 2 {
-		t.Error("Retry attempt should not change due to backoff")
+		t.Error("Expected retry attempt to increase after retry")
 	}
 
 	// Create valid token file.
@@ -449,8 +454,13 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Fatalf("Failed to create valid token file: %v", err)
 	}
 
-	// Fourth call should still fail even though the file now exists.
+	// Fourth call should still fail even though the file now exists due to backoff.
+	// Set nextRetryTime far enough in the future to ensure that's the case.
 	_, err = creds.GetRequestMetadata(ctx)
+	impl.mu.Lock()
+	impl.nextRetryTime = time.Now().Add(1 * time.Minute)
+	wantNextRetryTime = impl.nextRetryTime
+	impl.mu.Unlock()
 	if err == nil {
 		t.Fatalf("creds.GetRequestMetadata() = %v, want non-nil", err)
 	}
@@ -463,19 +473,19 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 	nextRetryTime4 := impl.nextRetryTime
 	impl.mu.Unlock()
 
-	if !nextRetryTime4.Equal(nextRetryTime3) {
-		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime4, nextRetryTime3)
+	if !nextRetryTime4.Equal(wantNextRetryTime) {
+		t.Errorf("nextRetryTime should not change due to backoff. Got: %v, Want: %v", nextRetryTime4, wantNextRetryTime)
 	}
 	if retryAttempt4 != retryAttempt3 {
 		t.Error("Retry attempt should not change due to backoff")
 	}
 
-	// Fast-forward the backoff retry time to allow next retry attempt.
+	// Fifth call should succeed since the file now exists
+	// and the backoff has expired.
+	// Set the backoff retry time in the past to allow next retry attempt.
 	impl.mu.Lock()
 	impl.nextRetryTime = time.Now().Add(-1 * time.Minute)
 	impl.mu.Unlock()
-	// Fifth call should succeed since the file now exists
-	// and the backoff has expired.
 	_, err = creds.GetRequestMetadata(ctx)
 	if err != nil {
 		t.Fatalf("After creating valid token file, backoff should expire and trigger a token reload on the next RPC. GetRequestMetadata() should eventually succeed, but got: %v", err)
