@@ -292,7 +292,7 @@ func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 
 	if !shouldTriggerRefresh {
 		timeUntilExp := time.Until(cacheExp)
-		t.Fatalf("cache expires in %v, should be < 1 minute to trigger pre-emptive refresh", timeUntilExp)
+		t.Fatalf("cache expires in %v; test precondition requires that this triggers preemptive refresh", timeUntilExp)
 	}
 
 	// Create new token file with different expiration while refresh is
