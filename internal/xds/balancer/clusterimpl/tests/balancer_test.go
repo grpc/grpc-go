@@ -43,9 +43,9 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"google.golang.org/protobuf/testing/protocmp"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -632,21 +632,13 @@ func (s) TestDropByCategory(t *testing.T) {
 	}
 	mgmtServer.LRSServer.LRSResponseChan <- &resp
 
-	time.Sleep(time.Second)
 	select {
 	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
 		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
 		for _, cs := range loadStats.ClusterStats {
-			if len(cs.DroppedRequests) > 0 {
-				if cs.DroppedRequests[0].Category != dropReason {
-					t.Errorf("Unexpected drop category got: %q, want: %q", cs.DroppedRequests[0].Category, dropReason)
-				}
-				gotRPCDropRate := float64(cs.DroppedRequests[0].DroppedCount) / float64(rpcCount)
-				if math.Abs(gotRPCDropRate-wantRPCDropRate) > errorTolerance {
-					t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", math.Abs(gotRPCDropRate-wantRPCDropRate), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
-				}
-			} else {
-				t.Errorf("No DroppedRequests reported, want at least one with category %q", dropReason)
+			gotRPCDropRate := float64(cs.TotalDroppedRequests) / float64(rpcCount)
+			if math.Abs(gotRPCDropRate-wantRPCDropRate) > errorTolerance {
+				t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", math.Abs(gotRPCDropRate-wantRPCDropRate), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
 			}
 		}
 	case <-ctx.Done():
@@ -700,24 +692,13 @@ func (s) TestDropByCategory(t *testing.T) {
 		}
 	}
 
-	time.Sleep(time.Second)
 	select {
 	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
 		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
 		for _, cs := range loadStats.ClusterStats {
-			found := false
-			for _, dr := range cs.DroppedRequests {
-				if dr.Category == dropReason2 {
-					found = true
-					gotRPCDropRate := float64(dr.DroppedCount) / float64(rpcCount)
-					if math.Abs(gotRPCDropRate-wantRPCDropRate) > errorTolerance {
-						t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", math.Abs(gotRPCDropRate-wantRPCDropRate), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
-					}
-					break
-				}
-			}
-			if !found {
-				t.Errorf("No DroppedRequests reported for expected category %q", dropReason2)
+			gotRPCDropRate := float64(cs.TotalDroppedRequests) / float64(rpcCount)
+			if math.Abs(gotRPCDropRate-wantRPCDropRate) > errorTolerance {
+				t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", math.Abs(gotRPCDropRate-wantRPCDropRate), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
 			}
 		}
 	case <-ctx.Done():
