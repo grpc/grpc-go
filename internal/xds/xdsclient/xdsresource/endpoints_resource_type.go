@@ -188,15 +188,3 @@ func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func())
 	}
 	return p.WatchResource(EndpointsResource, name, gw)
 }
-
-// NewEndpointsResourceTypeDecoder returns a xdsclient.Decoder for endpoints.
-// Endpoints is stateless so this returns the zero-value endpointsResourceType.
-func NewEndpointsResourceTypeDecoder() xdsclient.Decoder {
-	return endpointsResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3EndpointsURL,
-			typeName:                   EndpointsResourceTypeName,
-			allResourcesRequiredInSotW: false,
-		},
-	}
-}

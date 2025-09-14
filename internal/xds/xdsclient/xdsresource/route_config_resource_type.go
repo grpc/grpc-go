@@ -189,16 +189,3 @@ func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel fun
 	}
 	return p.WatchResource(RouteConfigResource, name, gw)
 }
-
-// NewRouteConfigResourceTypeDecoder returns a decoder for RouteConfig resources.
-// RouteConfig is stateless so this just returns the zero-valued
-// routeConfigResourceType.
-func NewRouteConfigResourceTypeDecoder() xdsclient.Decoder {
-	return routeConfigResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3RouteConfigURL,
-			typeName:                   RouteConfigTypeName,
-			allResourcesRequiredInSotW: false,
-		},
-	}
-}

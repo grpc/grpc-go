@@ -46,7 +46,6 @@ var (
 		TypeURL:                    version.V3ListenerURL,
 		TypeName:                   ListenerResourceTypeName,
 		AllResourcesRequiredInSotW: true,
-		Decoder:                    &listenerResourceType{resourceTypeState: resourceTypeState{typeURL: version.V3ListenerURL, typeName: ListenerResourceTypeName, allResourcesRequiredInSotW: true}},
 	}
 )
 

@@ -46,7 +46,6 @@ var (
 		TypeURL:                    version.V3ClusterURL,
 		TypeName:                   ClusterResourceTypeName,
 		AllResourcesRequiredInSotW: true,
-		Decoder:                    &clusterResourceType{resourceTypeState: resourceTypeState{typeURL: version.V3ClusterURL, typeName: ClusterResourceTypeName, allResourcesRequiredInSotW: true}},
 	}
 )
 
