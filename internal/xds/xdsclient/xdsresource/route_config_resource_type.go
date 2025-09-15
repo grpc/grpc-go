@@ -45,7 +45,6 @@ var (
 		TypeURL:                    version.V3RouteConfigURL,
 		TypeName:                   RouteConfigTypeName,
 		AllResourcesRequiredInSotW: false,
-		Decoder:                    routeConfigResourceType{resourceTypeState: resourceTypeState{typeURL: version.V3RouteConfigURL, typeName: RouteConfigTypeName, allResourcesRequiredInSotW: false}},
 	}
 )
 
@@ -189,4 +188,13 @@ func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel fun
 		gw = &delegatingRouteConfigWatcher{watcher: w}
 	}
 	return p.WatchResource(RouteConfigResource, name, gw)
+}
+
+// NewRouteConfigResourceTypeDecoder returns a decoder for RouteConfig resources.
+func NewRouteConfigResourceTypeDecoder() xdsclient.Decoder {
+	return routeConfigResourceType{resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3RouteConfigURL,
+		typeName:                   RouteConfigTypeName,
+		allResourcesRequiredInSotW: false,
+	}}
 }

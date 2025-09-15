@@ -45,7 +45,6 @@ var (
 		TypeURL:                    version.V3EndpointsURL,
 		TypeName:                   EndpointsResourceTypeName,
 		AllResourcesRequiredInSotW: false,
-		Decoder:                    endpointsResourceType{resourceTypeState: resourceTypeState{typeURL: version.V3EndpointsURL, typeName: EndpointsResourceTypeName, allResourcesRequiredInSotW: false}},
 	}
 )
 
@@ -187,4 +186,13 @@ func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func())
 		gw = &delegatingEndpointsWatcher{watcher: w}
 	}
 	return p.WatchResource(EndpointsResource, name, gw)
+}
+
+// NewEndpointsResourceTypeDecoder returns a decoder for Endpoint resources.
+func NewEndpointsResourceTypeDecoder() xdsclient.Decoder {
+	return endpointsResourceType{resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3EndpointsURL,
+		typeName:                   EndpointsResourceTypeName,
+		allResourcesRequiredInSotW: false,
+	}}
 }

@@ -103,7 +103,7 @@ type ResourceType interface {
 	// If protobuf deserialization fails or resource validation fails,
 	// returns a non-nil error. Otherwise, returns a fully populated
 	// DecodeResult.
-	Decode(*xdsclient.AnyProto, *xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error)
+	Decode(*xdsclient.AnyProto, xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error)
 }
 
 // ResourceData contains the configuration data sent by the xDS management
