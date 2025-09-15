@@ -65,15 +65,35 @@ func (r *jwtFileReader) readToken() (string, time.Time, error) {
 	return token, exp, nil
 }
 
+const tokenDelim = "."
+
+// extractClaimsRaw returns the JWT's claims part as raw string. Even though the
+// header and signature are not used, it still expects that the input string to
+// be well-formed (ie comprised of exactly three parts, separated by a dot
+// character).
+func extractClaimsRaw(s string) (string, bool) {
+	_, s, ok := strings.Cut(s, tokenDelim)
+	if !ok { // no period found
+		return "", false
+	}
+	claims, s, ok := strings.Cut(s, tokenDelim)
+	if !ok { // only one period found
+		return "", false
+	}
+	_, _, ok = strings.Cut(s, tokenDelim)
+	if ok { // three periods found
+		return "", false
+	}
+	return claims, true
+}
+
 // extractExpiration parses the JWT token to extract the expiration time.
 func (r *jwtFileReader) extractExpiration(token string) (time.Time, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return time.Time{}, fmt.Errorf("expected 3 parts, got %d", len(parts))
+	claimsRaw, ok := extractClaimsRaw(token)
+	if !ok {
+		return time.Time{}, fmt.Errorf("expected 3 parts in token")
 	}
-
-	payload := parts[1]
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(payload)
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(claimsRaw)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("decode error: %v", err)
 	}
