@@ -1521,8 +1521,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		switch receivedHTTPStatus {
 		case "":
 			httpStatusErr = "malformed header: missing HTTP status"
-		case "200":
-			grpcErrorCode = codes.Unknown
 		default:
 			// Any other status code (e.g., "404", "503"). We must parse it.
 			c, err := strconv.ParseInt(receivedHTTPStatus, 10, 32)
@@ -1551,7 +1549,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			if !ok {
 				grpcErrorCode = codes.Unknown
 			}
-
 		}
 
 		if httpStatusErr != "" {
