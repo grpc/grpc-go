@@ -39,9 +39,14 @@ import (
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter.
+	_ "google.golang.org/grpc/internal/xds/resolver"          // Register the xds resolver
 )
 
 // makeAggregateClusterResource returns an aggregate cluster resource with the
@@ -105,13 +110,13 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 		},
 		{
 			name:                  "dns",
-			firstClusterResource:  makeLogicalDNSClusterResource(clusterName, "dns_host", uint32(8080)),
-			secondClusterResource: makeLogicalDNSClusterResource(clusterName, "dns_host_new", uint32(8080)),
+			firstClusterResource:  makeLogicalDNSClusterResource(clusterName, "dns_host", uint32(port)),
+			secondClusterResource: makeLogicalDNSClusterResource(clusterName, "dns_host_new", uint32(port)),
 			wantFirstChildCfg: &clusterresolver.LBConfig{
 				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
 					Cluster:          clusterName,
 					Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
-					DNSHostname:      "dns_host:8080",
+					DNSHostname:      fmt.Sprintf("dns_host:%d", port),
 					OutlierDetection: json.RawMessage(`{}`),
 					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 				}},
@@ -121,7 +126,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 				DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{{
 					Cluster:          clusterName,
 					Type:             clusterresolver.DiscoveryMechanismTypeLogicalDNS,
-					DNSHostname:      "dns_host_new:8080",
+					DNSHostname:      fmt.Sprintf("dns_host_new:%d", port),
 					OutlierDetection: json.RawMessage(`{}`),
 					TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 				}},
@@ -133,13 +138,16 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-			mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
+			mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
 
 			// Push the first cluster resource through the management server and
 			// verify the configuration pushed to the child policy.
 			resources := e2e.UpdateOptions{
 				NodeID:         nodeID,
+				Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+				Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 				Clusters:       []*v3clusterpb.Cluster{test.firstClusterResource},
+				Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 				SkipValidation: true,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -154,6 +162,7 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 			// Push the second cluster resource through the management server and
 			// verify the configuration pushed to the child policy.
 			resources.Clusters[0] = test.secondClusterResource
+			resources.Endpoints[0] = e2e.DefaultEndpoint(serviceName+"-new", host, []uint32{port})
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
@@ -176,19 +185,21 @@ func (s) TestAggregateClusterSuccess_LeafNode(t *testing.T) {
 // contains the expected discovery mechanisms.
 func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
 	// pointing to two child clusters, one EDS and one LogicalDNS. Include the
 	// resource corresponding to the EDS cluster here, but don't include
 	// resource corresponding to the LogicalDNS cluster yet.
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelNone),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -237,14 +248,16 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 	const dnsClusterNameNew = dnsClusterName + "-new"
 	const dnsHostNameNew = dnsHostName + "-new"
 	resources = e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterNameNew}),
 			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelNone),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 			makeLogicalDNSClusterResource(dnsClusterNameNew, dnsHostNameNew, dnsPort),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -283,18 +296,20 @@ func (s) TestAggregateClusterSuccess_ThenUpdateChildClusters(t *testing.T) {
 // policy contains a single discovery mechanism.
 func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with the aggregate cluster resource
 	// pointing to two child clusters.
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelNone),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -326,12 +341,14 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 	}
 
 	resources = e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -358,13 +375,15 @@ func (s) TestAggregateClusterSuccess_ThenChangeRootToEDS(t *testing.T) {
 // discovery mechanisms.
 func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start off with the requested cluster being a leaf EDS cluster.
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -388,13 +407,15 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 	// Switch the requested cluster to be an aggregate cluster pointing to two
 	// child clusters.
 	resources = e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{edsClusterName, dnsClusterName}),
 			e2e.DefaultCluster(edsClusterName, serviceName, e2e.SecurityLevelNone),
 			makeLogicalDNSClusterResource(dnsClusterName, dnsHostName, dnsPort),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -424,9 +445,11 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 
 	// Switch the cluster back to a leaf EDS cluster.
 	resources = e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -452,10 +475,13 @@ func (s) TestAggregatedClusterSuccess_SwitchBetweenLeafAndAggregate(t *testing.T
 // longer exceed maximum depth, but be at the maximum allowed depth, and
 // verifies that an RPC can be made successfully.
 func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, nil)
 
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{clusterName + "-1"}),
 			makeAggregateClusterResource(clusterName+"-1", []string{clusterName + "-2"}),
@@ -475,7 +501,7 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 			makeAggregateClusterResource(clusterName+"-15", []string{clusterName + "-16"}),
 			e2e.DefaultCluster(clusterName+"-16", serviceName, e2e.SecurityLevelNone),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -502,7 +528,9 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 	// Update the aggregate cluster resource to no longer exceed max depth, and
 	// be at the maximum depth allowed.
 	resources = e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterName, []string{clusterName + "-1"}),
 			makeAggregateClusterResource(clusterName+"-1", []string{clusterName + "-2"}),
@@ -521,8 +549,7 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 			makeAggregateClusterResource(clusterName+"-14", []string{clusterName + "-15"}),
 			e2e.DefaultCluster(clusterName+"-15", serviceName, e2e.SecurityLevelNone),
 		},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, server.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -540,7 +567,7 @@ func (s) TestAggregatedClusterFailure_ExceedsMaxStackDepth(t *testing.T) {
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource having
 	// a diamond dependency pattern, (A->[B,C]; B->D; C->D). Includes resources
@@ -554,13 +581,15 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 		clusterNameD = clusterName + "-D"
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB, clusterNameC}),
 			makeAggregateClusterResource(clusterNameB, []string{clusterNameD}),
 			e2e.DefaultCluster(clusterNameD, serviceName, e2e.SecurityLevelNone),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -607,7 +636,7 @@ func (s) TestAggregatedClusterSuccess_DiamondDependency(t *testing.T) {
 // pushed only after all child clusters are resolved.
 func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
 
 	// Configure the management server with an aggregate cluster resource that
 	// has duplicates in the graph, (A->[B, C]; B->[C, D]). Include resources
@@ -621,13 +650,15 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 		clusterNameD = clusterName + "-D"
 	)
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB, clusterNameC}),
 			makeAggregateClusterResource(clusterNameB, []string{clusterNameC, clusterNameD}),
 			e2e.DefaultCluster(clusterNameD, serviceName, e2e.SecurityLevelNone),
 		},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{port})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -646,7 +677,8 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 	// Now configure the resource for cluster C in the management server,
 	// thereby completing the cluster graph. This should result in configuration
 	// being pushed down to the child policy.
-	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(clusterNameC, serviceName, e2e.SecurityLevelNone))
+	resources.Clusters = append(resources.Clusters, e2e.DefaultCluster(clusterNameC, edsClusterName, e2e.SecurityLevelNone))
+	resources.Endpoints = append(resources.Endpoints, e2e.DefaultEndpoint(edsClusterName, "eshita_eds", []uint32{1234}))
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +688,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 			{
 				Cluster:          clusterNameC,
 				Type:             clusterresolver.DiscoveryMechanismTypeEDS,
-				EDSServiceName:   serviceName,
+				EDSServiceName:   edsClusterName,
 				OutlierDetection: json.RawMessage(`{}`),
 				TelemetryLabels:  xdsinternal.UnknownCSMLabels,
 			},
@@ -685,7 +717,7 @@ func (s) TestAggregatedClusterSuccess_IgnoreDups(t *testing.T) {
 // child policy and that an RPC can be successfully made.
 func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, nil)
 
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
@@ -695,6 +727,8 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 	// child is itself.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters:       []*v3clusterpb.Cluster{makeAggregateClusterResource(clusterNameA, []string{clusterNameA})},
 		SkipValidation: true,
 	}
@@ -729,13 +763,14 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 
 	// Update the aggregate cluster to point to a leaf EDS cluster.
 	resources = e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB}),
 			e2e.DefaultCluster(clusterNameB, serviceName, e2e.SecurityLevelNone),
 		},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
-		SkipValidation: true,
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, server.Address)})},
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -770,7 +805,7 @@ func (s) TestAggregatedCluster_NodeChildOfItself(t *testing.T) {
 // that the aggregate cluster graph has no leaf clusters.
 func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, nil)
 
 	const (
 		clusterNameA = clusterName // cluster name in cds LB policy config
@@ -779,7 +814,9 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 	// Configure the management server with an aggregate cluster resource graph
 	// that contains a cycle and no leaf clusters.
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB}),
 			makeAggregateClusterResource(clusterNameB, []string{clusterNameA}),
@@ -818,7 +855,7 @@ func (s) TestAggregatedCluster_CycleWithNoLeafNode(t *testing.T) {
 // child policy and RPCs should get routed to that leaf cluster.
 func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -832,13 +869,15 @@ func (s) TestAggregatedCluster_CycleWithLeafNode(t *testing.T) {
 	// Configure the management server with an aggregate cluster resource graph
 	// that contains a cycle, but also contains a leaf cluster.
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterNameA, []string{clusterNameB}),
 			makeAggregateClusterResource(clusterNameB, []string{clusterNameA, clusterNameC}),
 			e2e.DefaultCluster(clusterNameC, serviceName, e2e.SecurityLevelNone),
 		},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, server.Address)})},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -888,7 +927,7 @@ func (s) TestWatchers(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, _, _, _ := setupWithManagementServer(t, nil, onStreamReq)
+	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, onStreamReq)
 
 	const (
 		clusterA = clusterName
@@ -899,7 +938,9 @@ func (s) TestWatchers(t *testing.T) {
 
 	// Initial CDS resources: A -> B, C
 	initialResources := e2e.UpdateOptions{
-		NodeID: nodeID,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterA)},
 		Clusters: []*v3clusterpb.Cluster{
 			makeAggregateClusterResource(clusterA, []string{clusterB, clusterC}),
 		},
@@ -914,14 +955,10 @@ func (s) TestWatchers(t *testing.T) {
 	}
 
 	// Update the CDS resources to remove cluster C and add cluster D.
-	updatedResources := e2e.UpdateOptions{
-		NodeID: nodeID,
-		Clusters: []*v3clusterpb.Cluster{
-			makeAggregateClusterResource(clusterA, []string{clusterB, clusterD}),
-		},
-		SkipValidation: true,
+	initialResources.Clusters = []*v3clusterpb.Cluster{
+		makeAggregateClusterResource(clusterA, []string{clusterB, clusterD}),
 	}
-	if err := mgmtServer.Update(ctx, updatedResources); err != nil {
+	if err := mgmtServer.Update(ctx, initialResources); err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 	wantNames = []string{clusterA, clusterB, clusterD}

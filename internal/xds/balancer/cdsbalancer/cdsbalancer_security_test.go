@@ -48,18 +48,21 @@ import (
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
+	_ "google.golang.org/grpc/internal/xds/httpfilter/router"       // Register the router filter.
+	_ "google.golang.org/grpc/internal/xds/resolver"                // Register the xds resolver
 )
 
 // testCCWrapper wraps a balancer.ClientConn and intercepts NewSubConn and
@@ -126,9 +129,7 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 
 // Common setup for security tests:
 //   - creates an xDS client with the specified bootstrap configuration
-//   - creates a manual resolver that specifies cds as the top-level LB policy
-//   - creates a channel that uses the passed in client creds and the manual
-//     resolver
+//   - creates a channel that uses the passed in client creds
 //   - creates a test server that uses the passed in server creds
 //
 // Returns the following:
@@ -142,27 +143,20 @@ func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, 
 		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
 	}
 	pool := xdsclient.NewPool(config)
-	xdsClient, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
+	_, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
 		Name: t.Name(),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	t.Cleanup(xdsClose)
-
-	// Create a manual resolver that configures the CDS LB policy as the
-	// top-level LB policy on the channel.
-	r := manual.NewBuilderWithScheme("whatever")
-	jsonSC := fmt.Sprintf(`{
-			"loadBalancingConfig":[{
-				"cds_experimental":{
-					"cluster": "%s"
-				}
-			}]
-		}`, clusterName)
-	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
-	state := xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, xdsClient)
-	r.InitialState(state)
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	r, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
 
 	// Create a ClientConn with the specified transport credentials.
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(clientCreds), grpc.WithResolvers(r))
@@ -280,12 +274,13 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -334,12 +329,12 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is not configured to return any security configuration.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -395,11 +390,13 @@ func (s) TestSecurityConfigNotFoundInBootstrap(t *testing.T) {
 
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -458,15 +455,17 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 	}
 
 	// Create a grpc channel with xDS creds.
-	cc, _ := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
+	cc, serverAddress := setupForSecurityTests(t, bootstrapContents, xdsClientCredsWithInsecureFallback(t), nil)
 
 	// Configure a cluster resource that contains security configuration, in the
 	// management server.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -495,12 +494,13 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -554,10 +554,12 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		},
 	}
 	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
+		NodeID: nodeID,
+
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{cluster},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, serverAddress)})},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -572,8 +574,10 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// configuration.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
+		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, host, []uint32{testutils.ParsePort(t, serverAddress)})},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -609,12 +613,13 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -636,12 +641,13 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// Update the resources in the management server to contain no security
 	// configuration. This should result in the use of fallback credentials,
 	// which is insecure in our case.
-	resources = e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, insecureServer.Address)})},
-		SkipValidation: true,
-	}
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, insecureServer.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -688,12 +694,13 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelMTLS)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -711,8 +718,8 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource contains security configuration with a certificate
 	// provider instance that is missing in the bootstrap configuration.
-	cluster := e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)
-	cluster.TransportSocket = &v3corepb.TransportSocket{
+	resources.Clusters[0] = e2e.DefaultCluster(resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, e2e.SecurityLevelNone)
+	resources.Clusters[0].TransportSocket = &v3corepb.TransportSocket{
 		Name: "envoy.transport_sockets.tls",
 		ConfigType: &v3corepb.TransportSocket_TypedConfig{
 			TypedConfig: testutils.MarshalAny(t, &v3tlspb.UpstreamTlsContext{
@@ -725,12 +732,6 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 				},
 			}),
 		},
-	}
-	resources = e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{cluster},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -793,12 +794,13 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 
 	// Configure cluster and endpoints resources in the management server. The
 	// cluster resource is configured to return security configuration.
-	resources := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelTLSWithSystemRootCerts)},
-		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(serviceName, "localhost", []uint32{testutils.ParsePort(t, serverAddress)})},
-		SkipValidation: true,
-	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, serverAddress),
+		SecLevel:   e2e.SecurityLevelTLSWithSystemRootCerts,
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
