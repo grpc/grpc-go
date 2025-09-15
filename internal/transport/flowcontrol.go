@@ -67,9 +67,9 @@ func (w *writeQuota) get(sz int32) error {
 
 func (w *writeQuota) realReplenish(n int) {
 	sz := int32(n)
-	a := atomic.AddInt32(&w.quota, sz)
-	b := a - sz
-	if b <= 0 && a > 0 {
+	newQuota := atomic.AddInt32(&w.quota, sz)
+	previousQuota := newQuota - sz
+	if previousQuota <= 0 && newQuota > 0 {
 		select {
 		case w.ch <- struct{}{}:
 		default:
