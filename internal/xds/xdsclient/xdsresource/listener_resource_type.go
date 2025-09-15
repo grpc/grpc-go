@@ -91,7 +91,6 @@ func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (lt listenerResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	// Build an anypb.Any from the generic AnyProto.
 	a := &anypb.Any{
 		TypeUrl: resource.TypeURL,
 		Value:   resource.Value,
@@ -104,8 +103,6 @@ func (lt listenerResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclie
 			internalOpts.ServerConfig = sc
 		}
 	}
-
-	// Unmarshal the resource from the Any proto.
 	name, listener, err := unmarshalListenerResource(a)
 	switch {
 	case name == "":
@@ -119,7 +116,7 @@ func (lt listenerResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclie
 		}, err
 	}
 
-	// Additional validation that uses bootstrap config (internalOpts.BootstrapConfig might be nil).
+	// Perform extra validation here.
 	if err := listenerValidator(internalOpts.BootstrapConfig, listener); err != nil {
 		return &xdsclient.DecodeResult{
 			Name:     name,

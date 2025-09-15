@@ -60,18 +60,18 @@ type endpointsResourceType struct {
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (et endpointsResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	// Build anypb.Any from the generic AnyProto passed by the generic client.
 	a := &anypb.Any{
 		TypeUrl: resource.TypeURL,
 		Value:   resource.Value,
 	}
 
-	// Unmarshal using the helper (it expects an *anypb.Any)
 	name, rc, err := unmarshalEndpointsResource(a)
 	switch {
 	case name == "":
+		// Name is unset only when protobuf deserialization fails.
 		return nil, err
 	case err != nil:
+		// Protobuf deserialization succeeded, but resource validation failed.
 		return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: EndpointsUpdate{}}}, err
 	}
 	return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: rc}}, nil

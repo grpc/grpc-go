@@ -79,11 +79,8 @@ type ResourceWatcher interface {
 	AmbientError(err error, done func())
 }
 
-// TODO: Once the implementation is complete, rename this interface as
-// ResourceType and get rid of the existing ResourceType enum.
-
-// Type wraps all resource-type specific functionality. Each supported resource
-// type will provide an implementation of this interface.
+// ResourceType wraps all resource-type specific functionality. Each supported
+// resource type will provide an implementation of this interface.
 type ResourceType interface {
 	// TypeURL is the xDS type URL of this resource type for v3 transport.
 	TypeURL() string
@@ -92,10 +89,7 @@ type ResourceType interface {
 	// can be used for logging/debugging purposes, as well in cases where the
 	// resource type name is to be uniquely identified but the actual
 	// functionality provided by the resource type is not required.
-	//
-	// TODO: once Type is renamed to ResourceType, rename TypeName to
-	// ResourceTypeName.
-	TypeName() string
+	ResourceTypeName() string
 
 	// AllResourcesRequiredInSotW indicates whether this resource type requires
 	// that all resources be present in every SotW response from the server. If

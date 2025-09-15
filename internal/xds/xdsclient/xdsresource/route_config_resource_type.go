@@ -60,7 +60,6 @@ type routeConfigResourceType struct {
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (rt routeConfigResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	// Reconstruct anypb.Any from the generic AnyProto provided by the client.
 	a := &anypb.Any{
 		TypeUrl: resource.TypeURL,
 		Value:   resource.Value,
@@ -69,8 +68,10 @@ func (rt routeConfigResourceType) Decode(resource xdsclient.AnyProto, _ xdsclien
 	name, rc, err := unmarshalRouteConfigResource(a)
 	switch {
 	case name == "":
+		// Name is unset only when protobuf deserialization fails.
 		return nil, err
 	case err != nil:
+		// Protobuf deserialization succeeded, but resource validation failed.
 		return &xdsclient.DecodeResult{Name: name, Resource: &RouteConfigResourceData{Resource: RouteConfigUpdate{}}}, err
 	}
 	return &xdsclient.DecodeResult{Name: name, Resource: &RouteConfigResourceData{Resource: rc}}, nil
@@ -111,7 +112,7 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
-// Equal returns true if other is equal to c
+// Equal returns true if other is equal to r
 func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	if r == nil && other == nil {
 		return true

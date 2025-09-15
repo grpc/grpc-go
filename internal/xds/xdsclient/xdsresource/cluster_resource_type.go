@@ -79,9 +79,10 @@ func (ct clusterResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclien
 	name, cluster, err := unmarshalClusterResource(a, internalOpts.ServerConfig)
 	switch {
 	case name == "":
-		// Name unset => protobuf deserialization failure.
+		// Name is unset only when protobuf deserialization fails.
 		return nil, err
 	case err != nil:
+		// Protobuf deserialization succeeded, but resource validation failed.
 		return &xdsclient.DecodeResult{
 			Name:     name,
 			Resource: &ClusterResourceData{Resource: ClusterUpdate{}},
