@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -320,11 +321,46 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	}
 	configureResourcesOnManagementServer(ctx, t, mgmtServer, nodeID, []*v3listenerpb.Listener{lis}, nil)
 
-	// Build the resolver and expect an error update from it. Since the
-	// resource is not cached, it should be received as resource error.
-	_, errCh, _ := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}, bc)
-	if err := waitForErrorFromResolver(ctx, errCh, "no RouteSpecifier", nodeID); err != nil {
-		t.Fatal(err)
+	// Build the resolver inline (duplicating buildResolverForTarget internals)
+	// to avoid issues with blocked channel writes when NACKs occur.
+	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
+
+	// Create an xDS resolver with the provided bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+
+	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	errCh := testutils.NewChannel()
+	tcc := &testutils.ResolverClientConn{Logger: t, ReportErrorF: func(err error) { errCh.Replace(err) }}
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{
+		Authority: url.PathEscape(target.Endpoint()),
+	})
+	if err != nil {
+		t.Fatalf("Failed to build xDS resolver for target %q: %v", target, err)
+	}
+	defer r.Close()
+
+	// Wait for and verify the error update from the resolver.
+	// Since the resource is not cached, it should be received as resource error.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for error to be propagated to the ClientConn")
+	case gotErr := <-errCh.C:
+		if gotErr == nil {
+			t.Fatalf("got nil error from resolver, want error containing 'no RouteSpecifier'")
+		}
+		errStr := fmt.Sprint(gotErr)
+		if !strings.Contains(errStr, "no RouteSpecifier") {
+			t.Fatalf("got error from resolver %q, want error containing 'no RouteSpecifier'", errStr)
+		}
+		if !strings.Contains(errStr, nodeID) {
+			t.Fatalf("got error from resolver %q, want nodeID %q", errStr, nodeID)
+		}
 	}
 }
 
