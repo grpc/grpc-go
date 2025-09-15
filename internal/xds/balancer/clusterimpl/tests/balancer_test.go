@@ -774,3 +774,90 @@ func (s) TestReResolution(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+// TestUpdateLRSServerToNil verifies that updating the cluster's LRS server config from 'Self' to nil
+// correctly closes the LRS stream and ensures no more LRS reports are sent.
+func (s) TestUpdateLRSServerToNil(t *testing.T) {
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure the xDS management server with default resources.
+	const serviceName = "my-test-xds-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+
+	cc.Connect()
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	// Ensure that an LRS stream is created.
+	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("error waiting for initial LRS stream open: %v", err)
+	}
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("error waiting for initial LRS report: %v", err)
+	}
+
+	// Update LRS Server to nil
+	resources.Clusters[0].LrsServer = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that the old LRS stream is not closed.
+	if _, err := mgmtServer.LRSServer.LRSStreamCloseChan.Receive(ctx); err != nil {
+		t.Fatalf("error waiting for initial LRS stream close : %v", err)
+	}
+
+	// Also ensure that a new LRS stream is not created.
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != context.DeadlineExceeded {
+		t.Fatalf("expected no LRS reports after disable, but got: %v", err)
+	}
+}
