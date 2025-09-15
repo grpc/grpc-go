@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/clustermanager"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/httpfilter"
-
 	rinternal "google.golang.org/grpc/internal/xds/resolver/internal"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -325,17 +324,15 @@ func (s) TestResolverBadServiceUpdate_NACKedWithoutCache(t *testing.T) {
 	// Build the resolver inline (duplicating buildResolverForTarget internals)
 	// to avoid issues with blocked channel writes when NACKs occur.
 	target := resolver.Target{URL: *testutils.MustParseURL("xds:///" + defaultTestServiceName)}
-	var builder resolver.Builder
-	if bc != nil {
-		// Create an xDS resolver with the provided bootstrap configuration.
-		if internal.NewXDSResolverWithConfigForTesting == nil {
-			t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
-		}
-		var err error
-		builder, err = internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
-		if err != nil {
-			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-		}
+
+	// Create an xDS resolver with the provided bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+
+	builder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
 	errCh := testutils.NewChannel()
