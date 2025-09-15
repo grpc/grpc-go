@@ -84,7 +84,7 @@ type ResourceWatcher interface {
 
 // Type wraps all resource-type specific functionality. Each supported resource
 // type will provide an implementation of this interface.
-type Type interface {
+type ResourceType interface {
 	// TypeURL is the xDS type URL of this resource type for v3 transport.
 	TypeURL() string
 
@@ -109,7 +109,7 @@ type Type interface {
 	// If protobuf deserialization fails or resource validation fails,
 	// returns a non-nil error. Otherwise, returns a fully populated
 	// DecodeResult.
-	Decode(*DecodeOptions, *anypb.Any) (*DecodeResult, error)
+	Decode(*xdsclient.AnyProto, *xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error)
 }
 
 // ResourceData contains the configuration data sent by the xDS management

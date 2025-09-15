@@ -81,7 +81,7 @@ var (
 // interface with ref counting so that it can be shared by the xds resolver and
 // balancer implementations, across multiple ClientConns and Servers.
 type clientImpl struct {
-	genericClient *xdsclient.XDSClient
+	xdsClient *xdsclient.XDSClient
 
 	// The following fields are initialized at creation time and are read-only
 	// after that.
@@ -137,7 +137,7 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 		return nil, err
 	}
 	c := &clientImpl{
-		genericClient:   client,
+		xdsClient:       client,
 		xdsClientConfig: gConfig,
 		bootstrapConfig: config,
 		target:          target,
