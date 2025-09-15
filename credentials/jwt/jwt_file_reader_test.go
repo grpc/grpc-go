@@ -103,7 +103,7 @@ func (s) TestJWTFileReader_ReadToken_InvalidJWT(t *testing.T) {
 		},
 		{
 			name:         "malformed_JWT_invalid_JSON",
-			tokenContent: createInvalidJSONJWT(t),
+			tokenContent: createInvalidJWT(t),
 			wantErr:      errJWTValidation,
 		},
 	}
@@ -143,8 +143,8 @@ func (s) TestJWTFileReader_ReadToken_ValidToken(t *testing.T) {
 	}
 }
 
-// createInvalidJSONJWT creates a JWT with invalid JSON in the payload.
-func createInvalidJSONJWT(t *testing.T) string {
+// createInvalidJWT creates a JWT with invalid JSON in the payload.
+func createInvalidJWT(t *testing.T) string {
 	t.Helper()
 
 	header := map[string]any{

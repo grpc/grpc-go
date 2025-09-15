@@ -99,7 +99,6 @@ func (s) TestTokenFileCallCreds_GetRequestMetadata(t *testing.T) {
 		{
 			name:             "unreachable_token_file",
 			invalidTokenPath: true,
-			tokenContent:     "",
 			authInfo:         &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			wantCode:         codes.Unavailable,
 		},
@@ -247,7 +246,7 @@ func (s) TestTokenFileCallCreds_CacheExpirationIsBeforeTokenExpiration(t *testin
 // * Another token is created and overwrites the file.
 // * On the second call we will still return the (valid) first token but also
 // detect that a refresh needs to happen and trigger it.
-// * On the third call we confirm the new token has been loaded and returnen
+// * On the third call we confirm the new token has been loaded and returned.
 func (s) TestTokenFileCallCreds_PreemptiveRefreshIsTriggered(t *testing.T) {
 	// Create token that expires in 80 seconds (=> cache expires in ~50s).
 	// This ensures pre-emptive refresh triggers since 50s < the 1 minute check.
@@ -480,8 +479,8 @@ func (s) TestTokenFileCallCreds_BackoffBehavior(t *testing.T) {
 		t.Error("Retry attempt should not change due to backoff")
 	}
 
-	// Fifth call should succeed since the file now exists
-	// and the backoff has expired.
+	// Fifth call should succeed since the file now exists and the backoff has
+	// expired.
 	// Set the backoff retry time in the past to allow next retry attempt.
 	impl.mu.Lock()
 	impl.nextRetryTime = time.Now().Add(-1 * time.Minute)
