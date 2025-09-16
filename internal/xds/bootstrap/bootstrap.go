@@ -65,23 +65,8 @@ type ChannelCreds struct {
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
-// CallCreds contains the call credentials configuration for individual RPCs.
-// It implements RFC A97 call credentials structure.
-type CallCreds struct {
-	// Type contains a unique name identifying the call credentials type.
-	// Currently only "jwt_token_file" is supported.
-	Type string `json:"type,omitempty"`
-	// Config contains the JSON configuration relevant for the call credentials.
-	Config json.RawMessage `json:"config,omitempty"`
-}
-
 // Equal reports whether cc and other are considered equal.
 func (cc ChannelCreds) Equal(other ChannelCreds) bool {
-	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
-}
-
-// Equal reports whether cc and other are considered equal.
-func (cc CallCreds) Equal(other CallCreds) bool {
 	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
 }
 
@@ -97,6 +82,21 @@ func (cc ChannelCreds) String() string {
 	// it is safe to ignore the error here.
 	b, _ := json.Marshal(cc.Config)
 	return cc.Type + "-" + string(b)
+}
+
+// CallCreds contains the call credentials configuration for individual RPCs.
+// It implements gRFC A97 call credentials structure.
+type CallCreds struct {
+	// Type contains a unique name identifying the call credentials type.
+	// Currently only "jwt_token_file" is supported.
+	Type string `json:"type,omitempty"`
+	// Config contains the JSON configuration relevant for the call credentials.
+	Config json.RawMessage `json:"config,omitempty"`
+}
+
+// Equal reports whether cc and other are considered equal.
+func (cc CallCreds) Equal(other CallCreds) bool {
+	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
 }
 
 // ServerConfigs represents a collection of server configurations.
