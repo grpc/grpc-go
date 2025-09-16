@@ -29,15 +29,15 @@ import (
 )
 
 // bundle is an implementation of credentials.Bundle which implements JWT
-// Call Credentials in xDS Bootstrap File per RFC A97.
+// Call Credentials in xDS Bootstrap File per gRFC A97.
 // This bundle only provides call credentials, not transport credentials.
 type bundle struct {
 	callCreds credentials.PerRPCCredentials
 }
 
 // NewBundle returns a credentials.Bundle which implements JWT Call Credentials
-// in xDS Bootstrap File per RFC A97. This implementation focuses on call credentials
-// only and expects the config to match RFC A97 structure.
+// in xDS Bootstrap File per gRFC A97. This implementation focuses on call credentials
+// only and expects the config to match gRFC A97 structure.
 // See gRFC A97: https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
 func NewBundle(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
 	var cfg struct {

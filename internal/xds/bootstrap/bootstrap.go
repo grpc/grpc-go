@@ -263,7 +263,6 @@ func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 // and are skipped for insecure.
 func (sc *ServerConfig) DialOptionsWithCallCredsForTransport(transportCredsType string, transportCreds credentials.TransportCredentials) []grpc.DialOption {
 	dopts := sc.DialOptions()
-
 	isInsecureTransport := transportCredsType == "insecure" ||
 		(transportCreds != nil && transportCreds.Info().SecurityProtocol == "insecure")
 
@@ -273,7 +272,6 @@ func (sc *ServerConfig) DialOptionsWithCallCredsForTransport(transportCredsType 
 		}
 		dopts = append(dopts, grpc.WithPerRPCCredentials(callCred))
 	}
-
 	return dopts
 }
 
@@ -371,7 +369,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	// Process call credentials - unlike channel creds, we use ALL supported
-	// types. Also, call credentials are optional per RFC A97.
+	// types. Also, call credentials are optional as per gRFC A97.
 	for _, callCred := range server.CallCreds {
 		c := bootstrap.GetCredentials(callCred.Type)
 		if c == nil {

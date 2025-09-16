@@ -204,7 +204,7 @@ var (
 		}`,
 		// example data seeded from
 		// https://github.com/istio/istio/blob/master/pkg/istio-agent/testdata/grpc-bootstrap.json
-		"istioStyleWithJWTCallCreds": `
+		"istioStyleInsecureWithJWTCallCreds": `
 		{
 			"node": {
                 "id": "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
@@ -227,7 +227,7 @@ var (
 				"server_features" : ["xds_v3"]
 			}]
 		}`,
-		"istioStyleWithoutCallCreds": `
+		"istioStyleInsecureWithoutCallCreds": `
 		{
 			"node": {
                 "id": "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
@@ -582,7 +582,7 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 		{"goodBootstrap", configWithGoogleDefaultCredsAndV3},
 		{"multipleXDSServers", configWithMultipleServers},
 		{"serverSupportsIgnoreResourceDeletion", configWithGoogleDefaultCredsAndIgnoreResourceDeletion},
-		{"istioStyleWithoutCallCreds", configWithIstioStyleNoCallCreds},
+		{"istioStyleInsecureWithoutCallCreds", configWithIstioStyleNoCallCreds},
 	}
 
 	for _, test := range tests {
@@ -608,7 +608,7 @@ func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
 		name       string
 		wantConfig *Config
 	}{
-		{"istioStyleWithJWTCallCreds", configWithIstioJWTCallCreds},
+		{"istioStyleInsecureWithJWTCallCreds", configWithIstioJWTCallCreds},
 		{"istioStyleWithTLSAndJWT", configWithIstioStyleWithTLSAndJWT},
 	}
 
@@ -1203,50 +1203,58 @@ func (s) TestDefaultBundles(t *testing.T) {
 	}
 }
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 func (s) TestCallCreds_Equal(t *testing.T) {
 	tests := []struct {
-		name   string
-		cc1    CallCreds
-		cc2    CallCreds
-		expect bool
+		name string
+		cc1  CallCreds
+		cc2  CallCreds
+		want bool
 	}{
 		{
-			name:   "identical configs",
-			cc1:    CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			cc2:    CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			expect: true,
+			name: "identical_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			want: true,
 		},
 		{
-			name:   "different types",
-			cc1:    CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			cc2:    CallCreds{Type: "other_type", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			expect: false,
+			name: "different_types",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCreds{Type: "other_type", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			want: false,
 		},
 		{
-			name:   "different configs",
-			cc1:    CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			cc2:    CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/different/path"}`)},
-			expect: false,
+			name: "different_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/different/path"}`)},
+			want: false,
 		},
 		{
-			name:   "nil vs non-nil configs",
-			cc1:    CallCreds{Type: "jwt_token_file", Config: nil},
-			cc2:    CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			expect: false,
+			name: "nil_vs_non-nil_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: nil},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			want: false,
 		},
 		{
-			name:   "both nil configs",
-			cc1:    CallCreds{Type: "jwt_token_file", Config: nil},
-			cc2:    CallCreds{Type: "jwt_token_file", Config: nil},
-			expect: true,
+			name: "both_nil_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: nil},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: nil},
+			want: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			result := test.cc1.Equal(test.cc2)
-			if result != test.expect {
-				t.Errorf("CallCreds.Equal() = %v, want %v", result, test.expect)
+			if result != test.want {
+				t.Errorf("CallCreds.Equal() = %v, want %v", result, test.want)
 			}
 		})
 	}
@@ -1787,12 +1795,4 @@ func (a *testAuthInfo) AuthType() string {
 
 func (a *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
 	return credentials.CommonAuthInfo{}
-}
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
 }
