@@ -186,60 +186,10 @@ func (l *ListenerResourceData) Bytes() []byte {
 	return raw.Value
 }
 
-// ListenerWatcher wraps the callbacks to be invoked for different
-// events corresponding to the listener resource being watched. gRFC A88
-// contains an exhaustive list of what method is invoked under what conditions.
-type ListenerWatcher interface {
-	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resource *ListenerResourceData, done func())
-
-	// ResourceError indicates an error occurred while trying to fetch or
-	// decode the associated resource. The previous version of the resource
-	// should be considered invalid.
-	ResourceError(err error, done func())
-
-	// AmbientError indicates an error occurred after a resource has been
-	// received that should not modify the use of that resource but may provide
-	// useful information about the state of the XDSClient for debugging
-	// purposes. The previous version of the resource should still be
-	// considered valid.
-	AmbientError(err error, done func())
-}
-
-type delegatingListenerWatcher struct {
-	watcher ListenerWatcher
-}
-
-func (d *delegatingListenerWatcher) ResourceChanged(gData xdsclient.ResourceData, done func()) {
-	if gData == nil {
-		d.watcher.ResourceError(fmt.Errorf("listener resource missing"), done)
-		return
-	}
-	lrd, ok := gData.(*ListenerResourceData)
-	if !ok {
-		d.watcher.ResourceError(fmt.Errorf("delegatingListenerWatcher: unexpected resource data type %T", gData), done)
-		return
-	}
-	d.watcher.ResourceChanged(lrd, done)
-}
-
-func (d *delegatingListenerWatcher) ResourceError(err error, onDone func()) {
-	d.watcher.ResourceError(err, onDone)
-}
-
-func (d *delegatingListenerWatcher) AmbientError(err error, onDone func()) {
-	d.watcher.AmbientError(err, onDone)
-}
-
 // WatchListener uses xDS to discover the configuration associated with the
 // provided listener resource name.
-func WatchListener(p Producer, name string, w ListenerWatcher) (cancel func()) {
-	var gw xdsclient.ResourceWatcher
-	if w != nil {
-		gw = &delegatingListenerWatcher{watcher: w}
-	}
-	// Use the exported generic ResourceType value for listener.
-	return p.WatchResource(ListenerResource, name, gw)
+func WatchListener(p Producer, name string, w xdsclient.ResourceWatcher) (cancel func()) {
+	return p.WatchResource(ListenerResource, name, w)
 }
 
 // NewListenerResourceTypeDecoder returns a decoder for RouteConfig resources.

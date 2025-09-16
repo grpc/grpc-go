@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdsClient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 
@@ -48,7 +49,7 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) ResourceChanged(_ *xdsresource.ListenerResourceData, onDone func()) {
+func (noopListenerWatcher) ResourceChanged(_ xdsClient.ResourceData, onDone func()) {
 	onDone()
 }
 func (noopListenerWatcher) ResourceError(_ error, onDone func()) {
@@ -71,8 +72,19 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (lw *listenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
-	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+func (lw *listenerWatcher) ResourceChanged(rd xdsClient.ResourceData, onDone func()) {
+	if rd == nil {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received nil resource data")})
+		onDone()
+		return
+	}
+	clusterData, ok := rd.(*xdsresource.ListenerResourceData)
+	if !ok {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received unexpected resource data type %T", rd)})
+		onDone()
+		return
+	}
+	lw.updateCh.Send(listenerUpdateErrTuple{update: clusterData.Resource})
 	onDone()
 }
 
@@ -100,8 +112,19 @@ func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 	return &listenerWatcherMultiple{updateCh: testutils.NewChannelWithSize(size)}
 }
 
-func (lw *listenerWatcherMultiple) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
-	lw.updateCh.Send(listenerUpdateErrTuple{update: update.Resource})
+func (lw *listenerWatcherMultiple) ResourceChanged(rd xdsClient.ResourceData, onDone func()) {
+	if rd == nil {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received nil resource data")})
+		onDone()
+		return
+	}
+	listenerData, ok := rd.(*xdsresource.ListenerResourceData)
+	if !ok {
+		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received unexpected resource data type %T", rd)})
+		onDone()
+		return
+	}
+	lw.updateCh.Send(listenerUpdateErrTuple{update: listenerData.Resource})
 	onDone()
 }
 

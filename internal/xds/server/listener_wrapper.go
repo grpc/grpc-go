@@ -387,17 +387,23 @@ type ldsWatcher struct {
 	name   string
 }
 
-func (lw *ldsWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
+func (lw *ldsWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) {
 	defer onDone()
 	if lw.parent.closed.HasFired() {
-		lw.logger.Warningf("Resource %q received update: %#v after listener was closed", lw.name, update)
+		lw.logger.Warningf("Resource %q received update after listener was closed", lw.name)
+		return
+	}
+	listenerData, ok := rd.(*xdsresource.ListenerResourceData)
+	if !ok {
+		lw.logger.Warningf("LDS watcher received unexpected resource data type %T", rd)
 		return
 	}
 	if lw.logger.V(2) {
-		lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, update.Resource)
+		lw.logger.Infof("LDS watch for resource %q received update: %#v", lw.name, listenerData.Resource)
 	}
 	l := lw.parent
-	ilc := update.Resource.InboundListenerCfg
+	ilc := listenerData.Resource.InboundListenerCfg
+
 	// Make sure that the socket address on the received Listener resource
 	// matches the address of the net.Listener passed to us by the user. This
 	// check is done here instead of at the XDSClient layer because of the

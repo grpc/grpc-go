@@ -19,7 +19,6 @@ package xdsresource
 
 import (
 	"bytes"
-	"fmt"
 
 	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -133,59 +132,10 @@ func (e *EndpointsResourceData) Bytes() []byte {
 	return raw.Value
 }
 
-// EndpointsWatcher wraps the callbacks to be invoked for different
-// events corresponding to the endpoints resource being watched. gRFC A88
-// contains an exhaustive list of what method is invoked under what conditions.
-type EndpointsWatcher interface {
-	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resource *EndpointsResourceData, done func())
-
-	// ResourceError indicates an error occurred while trying to fetch or
-	// decode the associated resource. The previous version of the resource
-	// should be considered invalid.
-	ResourceError(err error, done func())
-
-	// AmbientError indicates an error occurred after a resource has been
-	// received that should not modify the use of that resource but may provide
-	// useful information about the state of the XDSClient for debugging
-	// purposes. The previous version of the resource should still be
-	// considered valid.
-	AmbientError(err error, done func())
-}
-
-type delegatingEndpointsWatcher struct {
-	watcher EndpointsWatcher
-}
-
-func (d *delegatingEndpointsWatcher) ResourceChanged(gData xdsclient.ResourceData, onDone func()) {
-	if gData == nil {
-		d.watcher.ResourceError(fmt.Errorf("endpoints resource missing"), onDone)
-		return
-	}
-	e, ok := gData.(*EndpointsResourceData)
-	if !ok {
-		d.watcher.ResourceError(fmt.Errorf("delegatingEndpointsWatcher: unexpected resource data type %T", gData), onDone)
-		return
-	}
-	d.watcher.ResourceChanged(e, onDone)
-}
-
-func (d *delegatingEndpointsWatcher) ResourceError(err error, onDone func()) {
-	d.watcher.ResourceError(err, onDone)
-}
-
-func (d *delegatingEndpointsWatcher) AmbientError(err error, onDone func()) {
-	d.watcher.AmbientError(err, onDone)
-}
-
 // WatchEndpoints uses xDS to discover the configuration associated with the
 // provided endpoints resource name.
-func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
-	var gw xdsclient.ResourceWatcher
-	if w != nil {
-		gw = &delegatingEndpointsWatcher{watcher: w}
-	}
-	return p.WatchResource(EndpointsResource, name, gw)
+func WatchEndpoints(p Producer, name string, w xdsclient.ResourceWatcher) (cancel func()) {
+	return p.WatchResource(EndpointsResource, name, w)
 }
 
 // NewEndpointsResourceTypeDecoder returns a decoder for Endpoint resources.

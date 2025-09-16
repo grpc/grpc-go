@@ -19,7 +19,6 @@ package xdsresource
 
 import (
 	"bytes"
-	"fmt"
 
 	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -134,60 +133,10 @@ func (r *RouteConfigResourceData) Bytes() []byte {
 	return raw.Value
 }
 
-// RouteConfigWatcher wraps the callbacks to be invoked for different
-// events corresponding to the route configuration resource being watched. gRFC
-// A88 contains an exhaustive list of what method is invoked under what
-// conditions.
-type RouteConfigWatcher interface {
-	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resource *RouteConfigResourceData, done func())
-
-	// ResourceError indicates an error occurred while trying to fetch or
-	// decode the associated resource. The previous version of the resource
-	// should be considered invalid.
-	ResourceError(err error, done func())
-
-	// AmbientError indicates an error occurred after a resource has been
-	// received that should not modify the use of that resource but may provide
-	// useful information about the state of the XDSClient for debugging
-	// purposes. The previous version of the resource should still be
-	// considered valid.
-	AmbientError(err error, done func())
-}
-
-type delegatingRouteConfigWatcher struct {
-	watcher RouteConfigWatcher
-}
-
-func (d *delegatingRouteConfigWatcher) ResourceChanged(gData xdsclient.ResourceData, onDone func()) {
-	if gData == nil {
-		d.watcher.ResourceError(fmt.Errorf("route config resource missing"), onDone)
-		return
-	}
-	rc, ok := gData.(*RouteConfigResourceData)
-	if !ok {
-		d.watcher.ResourceError(fmt.Errorf("delegatingRouteConfigWatcher: unexpected resource data type %T", gData), onDone)
-		return
-	}
-	d.watcher.ResourceChanged(rc, onDone)
-}
-
-func (d *delegatingRouteConfigWatcher) ResourceError(err error, onDone func()) {
-	d.watcher.ResourceError(err, onDone)
-}
-
-func (d *delegatingRouteConfigWatcher) AmbientError(err error, onDone func()) {
-	d.watcher.AmbientError(err, onDone)
-}
-
 // WatchRouteConfig uses xDS to discover the configuration associated with the
 // provided route configuration resource name.
-func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
-	var gw xdsclient.ResourceWatcher
-	if w != nil {
-		gw = &delegatingRouteConfigWatcher{watcher: w}
-	}
-	return p.WatchResource(RouteConfigResource, name, gw)
+func WatchRouteConfig(p Producer, name string, w xdsclient.ResourceWatcher) (cancel func()) {
+	return p.WatchResource(RouteConfigResource, name, w)
 }
 
 // NewRouteConfigResourceTypeDecoder returns a decoder for RouteConfig resources.

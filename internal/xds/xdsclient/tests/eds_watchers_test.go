@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
+	clientimpl "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -53,7 +54,7 @@ const (
 
 type noopEndpointsWatcher struct{}
 
-func (noopEndpointsWatcher) ResourceChanged(_ *xdsresource.EndpointsResourceData, onDone func()) {
+func (noopEndpointsWatcher) ResourceChanged(_ clientimpl.ResourceData, onDone func()) {
 	onDone()
 }
 func (noopEndpointsWatcher) ResourceError(_ error, onDone func()) {
@@ -76,11 +77,14 @@ func newEndpointsWatcher() *endpointsWatcher {
 	return &endpointsWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (ew *endpointsWatcher) ResourceChanged(update *xdsresource.EndpointsResourceData, onDone func()) {
-	ew.updateCh.Send(endpointsUpdateErrTuple{update: update.Resource})
-	onDone()
+func (ew *endpointsWatcher) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
+	defer onDone()
+	endpointsData, ok := rd.(*xdsresource.EndpointsResourceData)
+	if !ok {
+		return
+	}
+	ew.updateCh.Send(endpointsUpdateErrTuple{update: endpointsData.Resource})
 }
-
 func (ew *endpointsWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`

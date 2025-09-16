@@ -19,7 +19,6 @@ package xdsresource
 
 import (
 	"bytes"
-	"fmt"
 
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -158,59 +157,10 @@ func (c *ClusterResourceData) Bytes() []byte {
 	return raw.Value
 }
 
-// ClusterWatcher wraps the callbacks to be invoked for different events
-// corresponding to the cluster resource being watched. gRFC A88 contains an
-// exhaustive list of what method is invoked under what conditions.
-type ClusterWatcher interface {
-	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resource *ClusterResourceData, done func())
-
-	// ResourceError indicates an error occurred while trying to fetch or
-	// decode the associated resource. The previous version of the resource
-	// should be considered invalid.
-	ResourceError(err error, done func())
-
-	// AmbientError indicates an error occurred after a resource has been
-	// received that should not modify the use of that resource but may provide
-	// useful information about the state of the XDSClient for debugging
-	// purposes. The previous version of the resource should still be
-	// considered valid.
-	AmbientError(err error, done func())
-}
-
-type delegatingClusterWatcher struct {
-	watcher ClusterWatcher
-}
-
-func (d *delegatingClusterWatcher) ResourceChanged(gData xdsclient.ResourceData, onDone func()) {
-	if gData == nil {
-		d.watcher.ResourceError(fmt.Errorf("cluster resource missing"), onDone)
-		return
-	}
-	c, ok := gData.(*ClusterResourceData)
-	if !ok {
-		d.watcher.ResourceError(fmt.Errorf("delegatingClusterWatcher: unexpected resource data type %T", gData), onDone)
-		return
-	}
-	d.watcher.ResourceChanged(c, onDone)
-}
-
-func (d *delegatingClusterWatcher) ResourceError(err error, onDone func()) {
-	d.watcher.ResourceError(err, onDone)
-}
-
-func (d *delegatingClusterWatcher) AmbientError(err error, onDone func()) {
-	d.watcher.AmbientError(err, onDone)
-}
-
 // WatchCluster uses xDS to discover the configuration associated with the
 // provided cluster resource name.
-func WatchCluster(p Producer, name string, w ClusterWatcher) (cancel func()) {
-	var gw xdsclient.ResourceWatcher
-	if w != nil {
-		gw = &delegatingClusterWatcher{watcher: w}
-	}
-	return p.WatchResource(ClusterResource, name, gw)
+func WatchCluster(p Producer, name string, w xdsclient.ResourceWatcher) (cancel func()) {
+	return p.WatchResource(ClusterResource, name, w)
 }
 
 // NewClusterResourceTypeDecoder returns a xdsclient.Decoder that has access to
