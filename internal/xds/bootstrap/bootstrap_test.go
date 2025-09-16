@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -1268,10 +1267,9 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 		name          string
 		json          string
 		wantCallCreds []CallCreds
-		errContains   string
 	}{
 		{
-			name: "valid call_creds with jwt_token_file",
+			name: "valid_call_creds_with_jwt_token_file",
 			json: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}],
@@ -1288,7 +1286,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 			}},
 		},
 		{
-			name: "multiple call_creds types",
+			name: "multiple_call_creds_types",
 			json: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}],
@@ -1303,7 +1301,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 			},
 		},
 		{
-			name: "empty call_creds array",
+			name: "empty_call_creds_array",
 			json: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}],
@@ -1312,7 +1310,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 			wantCallCreds: []CallCreds{},
 		},
 		{
-			name: "missing call_creds field",
+			name: "unspecified_call_creds_field",
 			json: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}]
@@ -1325,21 +1323,9 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var sc ServerConfig
 			err := sc.UnmarshalJSON([]byte(test.json))
-
-			if test.errContains != "" {
-				if err == nil {
-					t.Fatal("Expected error, got nil")
-				}
-				if test.errContains != "" && !strings.Contains(err.Error(), test.errContains) {
-					t.Errorf("Error %v should contain %q", err, test.errContains)
-				}
-				return
-			}
-
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-
 			if diff := cmp.Diff(test.wantCallCreds, sc.CallCreds()); diff != "" {
 				t.Errorf("CallCreds mismatch (-want +got):\n%s", diff)
 			}
@@ -1403,7 +1389,6 @@ func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
-
 	if diff := cmp.Diff(sc.CallCreds(), unmarshaled.CallCreds()); diff != "" {
 		t.Errorf("Marshal/Unmarshal call credentials produces differences:\n%s", diff)
 	}
@@ -1587,13 +1572,13 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 
 	tokenFile := "/token.jwt"
 	tests := []struct {
-		name                string
-		bootstrapConfig     string
-		expectCallCreds     int
-		expectTransportType string
+		name              string
+		bootstrapConfig   string
+		wantCallCreds     int
+		wantTransportType string
 	}{
 		{
-			name: "JWT call creds with TLS channel creds",
+			name: "JWT_call_creds_with_TLS_channel_creds",
 			bootstrapConfig: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "tls", "config": {}}],
@@ -1604,11 +1589,11 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			expectCallCreds:     1,
-			expectTransportType: "tls",
+			wantCallCreds:     1,
+			wantTransportType: "tls",
 		},
 		{
-			name: "JWT call creds with multiple channel creds",
+			name: "JWT_call_creds_with_multiple_channel_creds",
 			bootstrapConfig: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "tls", "config": {}}, {"type": "insecure"}],
@@ -1623,11 +1608,11 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			expectCallCreds:     2,
-			expectTransportType: "tls", // the first channel creds is selected
+			wantCallCreds:     2,
+			wantTransportType: "tls", // the first channel creds is selected
 		},
 		{
-			name: "JWT call creds with insecure channel creds",
+			name: "JWT_call_creds_with_insecure_channel_creds",
 			bootstrapConfig: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}],
@@ -1638,26 +1623,26 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			expectCallCreds:     1,
-			expectTransportType: "insecure",
+			wantCallCreds:     1,
+			wantTransportType: "insecure",
 		},
 		{
-			name: "No call creds",
+			name: "No_call_creds",
 			bootstrapConfig: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}]
 			}`,
-			expectCallCreds:     0,
-			expectTransportType: "insecure",
+			wantCallCreds:     0,
+			wantTransportType: "insecure",
 		},
 		{
-			name: "No call creds multiple channel creds",
+			name: "No_call_creds_multiple_channel_creds",
 			bootstrapConfig: `{
 				"server_uri": "xds-server:443",
 				"channel_creds": [{"type": "insecure"}, {"type": "tls", "config": {}}]
 			}`,
-			expectCallCreds:     0,
-			expectTransportType: "insecure",
+			wantCallCreds:     0,
+			wantTransportType: "insecure",
 		},
 	}
 
@@ -1673,17 +1658,16 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 			callCreds := sc.CallCreds()
 			selectedCallCreds := sc.SelectedCallCreds()
 
-			if len(callCreds) != test.expectCallCreds {
-				t.Errorf("Call creds count = %d, want %d", len(callCreds), test.expectCallCreds)
+			if len(callCreds) != test.wantCallCreds {
+				t.Errorf("Call creds count = %d, want %d", len(callCreds), test.wantCallCreds)
 			}
-			if len(selectedCallCreds) != test.expectCallCreds {
-				t.Errorf("Selected call creds count = %d, want %d", len(selectedCallCreds), test.expectCallCreds)
+			if len(selectedCallCreds) != test.wantCallCreds {
+				t.Errorf("Selected call creds count = %d, want %d", len(selectedCallCreds), test.wantCallCreds)
 			}
-
 			// Verify transport credentials are properly selected.
-			if sc.SelectedCreds().Type != test.expectTransportType {
+			if sc.SelectedCreds().Type != test.wantTransportType {
 				t.Errorf("Selected transport creds type = %q, want %q",
-					sc.SelectedCreds().Type, test.expectTransportType)
+					sc.SelectedCreds().Type, test.wantTransportType)
 			}
 		})
 	}
@@ -1704,48 +1688,46 @@ func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		transportType    string
-		transportCreds   credentials.TransportCredentials
-		expectJWTCreds   bool
-		expectOtherCreds bool
+		name           string
+		transportType  string
+		transportCreds credentials.TransportCredentials
+		wantJWTCreds   bool
+		wantOtherCreds bool
 	}{
 		{
-			name:             "insecure transport by type",
-			transportType:    "insecure",
-			transportCreds:   nil,
-			expectJWTCreds:   false,
-			expectOtherCreds: true,
+			name:           "insecure_transport_by_type",
+			transportType:  "insecure",
+			transportCreds: nil,
+			wantJWTCreds:   false,
+			wantOtherCreds: true,
 		},
 		{
-			name:             "insecure transport by protocol",
-			transportType:    "custom",
-			transportCreds:   insecure.NewCredentials(),
-			expectJWTCreds:   false,
-			expectOtherCreds: true,
+			name:           "insecure_transport_by_protocol",
+			transportType:  "custom",
+			transportCreds: insecure.NewCredentials(),
+			wantJWTCreds:   false,
+			wantOtherCreds: true,
 		},
 		{
-			name:             "secure transport",
-			transportType:    "tls",
-			transportCreds:   &testTransportCreds{securityProtocol: "tls"},
-			expectJWTCreds:   true,
-			expectOtherCreds: true,
+			name:           "secure_transport",
+			transportType:  "tls",
+			transportCreds: &testTransportCreds{securityProtocol: "tls"},
+			wantJWTCreds:   true,
+			wantOtherCreds: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			opts := sc.DialOptionsWithCallCredsForTransport(test.transportType, test.transportCreds)
-
 			// Count dial options (should include extra options + applicable
 			// call creds)
-			expectedCount := 2
-			if test.expectJWTCreds {
-				expectedCount++
+			wantCount := 2
+			if test.wantJWTCreds {
+				wantCount++
 			}
-
-			if len(opts) != expectedCount {
-				t.Errorf("DialOptions count = %d, want %d", len(opts), expectedCount)
+			if len(opts) != wantCount {
+				t.Errorf("DialOptions count = %d, want %d", len(opts), wantCount)
 			}
 		})
 	}
