@@ -78,9 +78,9 @@ func newEndpointsWatcher() *endpointsWatcher {
 }
 
 func (ew *endpointsWatcher) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
-	defer onDone()
 	endpointsData := rd.(*xdsresource.EndpointsResourceData)
 	ew.updateCh.Send(endpointsUpdateErrTuple{update: endpointsData.Resource})
+	onDone()
 }
 func (ew *endpointsWatcher) ResourceError(err error, onDone func()) {
 	// When used with a go-control-plane management server that continuously

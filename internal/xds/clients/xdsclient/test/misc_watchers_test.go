@@ -62,8 +62,14 @@ func newTestLDSWatcher(client *xdsclient.XDSClient, name1, name2 string) *testLD
 }
 
 func (lw *testLDSWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
-	lisData := update.(*listenerResourceData)
+	lisData, ok := update.(*listenerResourceData)
+	if !ok {
+		lw.updateCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
+		onDone()
+		return
+	}
 	lw.updateCh.Send(listenerUpdateErrTuple{update: lisData.Resource})
+
 	lw.cancel1 = lw.client.WatchResource(xdsresource.V3ListenerURL, lw.name1, lw.lw1)
 	lw.cancel2 = lw.client.WatchResource(xdsresource.V3ListenerURL, lw.name2, lw.lw2)
 	onDone()
