@@ -124,7 +124,6 @@ func TestJwtCallCredentials_BuildDisabledIfFeatureNotEnabled(t *testing.T) {
 	if builder == nil {
 		t.Fatal("GetCredentials(\"jwt_token_file\") returned nil")
 	}
-
 	if got, want := builder.Name(), "jwt_token_file"; got != want {
 		t.Errorf("Retrieved builder name = %q, want %q", got, want)
 	}

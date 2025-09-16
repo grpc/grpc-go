@@ -16,8 +16,9 @@
  *
  */
 
-// Package jwtcreds implements JWT Call Credentials in xDS Bootstrap File.
-// See gRFC A97: https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
+// Package jwtcreds implements JWT Call Credentials for XDS, configured via xDS
+// Bootstrap File.  For more details, see gRFC A97:
+// https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
 package jwtcreds
 
 import (
@@ -47,11 +48,9 @@ func NewBundle(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal JWT call credentials config: %v", err)
 	}
-
 	if cfg.JWTTokenFile == "" {
 		return nil, nil, fmt.Errorf("jwt_token_file is required in JWT call credentials config")
 	}
-
 	callCreds, err := jwt.NewTokenFileCallCredentials(cfg.JWTTokenFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create JWT call credentials: %v", err)
@@ -60,7 +59,6 @@ func NewBundle(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
 	bundle := &bundle{
 		callCreds: callCreds,
 	}
-
 	return bundle, func() {}, nil
 }
 

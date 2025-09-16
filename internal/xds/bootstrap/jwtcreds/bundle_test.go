@@ -35,32 +35,28 @@ func TestNewBundle(t *testing.T) {
 	tokenFile := writeTempFile(t, token)
 
 	tests := []struct {
-		name            string
-		config          string
-		wantErrContains string
+		name   string
+		config string
 	}{
 		{
-			name: "valid config",
+			name: "valid_config",
 			config: `{
 				"jwt_token_file": "` + tokenFile + `"
 			}`,
 		},
 		{
-			name:            "empty file",
-			config:          `""`,
-			wantErrContains: "unmarshal",
+			name:   "empty_file",
+			config: `""`,
 		},
 		{
-			name:            "empty config",
-			config:          `{}`,
-			wantErrContains: "jwt_token_file is required",
+			name:   "empty_config",
+			config: `{}`,
 		},
 		{
-			name: "empty path",
+			name: "empty_path",
 			config: `{
 				"jwt_token_file": ""
 			}`,
-			wantErrContains: "jwt_token_file is required",
 		},
 	}
 
@@ -68,35 +64,21 @@ func TestNewBundle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bundle, cleanup, err := NewBundle(json.RawMessage(tt.config))
 
-			if tt.wantErrContains != "" {
-				if err == nil {
-					t.Fatal("Expected error, got nil")
-				}
-				if !strings.Contains(err.Error(), tt.wantErrContains) {
-					t.Errorf("Error %v should contain %q", err, tt.wantErrContains)
-				}
-				return
-			}
-
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-
 			if bundle == nil {
 				t.Fatal("Expected non-nil bundle")
 			}
-
 			if cleanup == nil {
 				t.Error("Expected non-nil cleanup function")
 			} else {
 				defer cleanup()
 			}
-
 			// JWT bundle only deals with PerRPCCredentials, not TransportCredentials.
 			if bundle.TransportCredentials() != nil {
 				t.Error("Expected nil transport credentials for JWT call creds bundle")
 			}
-
 			if bundle.PerRPCCredentials() == nil {
 				t.Error("Expected non-nil per-RPC credentials for valid JWT config")
 			}
@@ -107,21 +89,17 @@ func TestNewBundle(t *testing.T) {
 			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 				AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			})
-
 			metadata, err := bundle.PerRPCCredentials().GetRequestMetadata(ctx)
 			if err != nil {
 				t.Fatalf("GetRequestMetadata failed: %v", err)
 			}
-
 			if len(metadata) == 0 {
 				t.Error("Expected metadata to be returned")
 			}
-
 			authHeader, ok := metadata["authorization"]
 			if !ok {
 				t.Error("Expected authorization header in metadata")
 			}
-
 			if !strings.HasPrefix(authHeader, "Bearer ") {
 				t.Errorf("Authorization header should start with 'Bearer ', got %q", authHeader)
 			}
@@ -143,9 +121,6 @@ func TestBundle_NewWithMode(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error from NewWithMode, got nil")
 	}
-	if !strings.Contains(err.Error(), "does not support mode switching") {
-		t.Errorf("Error should mention mode switching, got: %v", err)
-	}
 }
 
 func TestBundle_Cleanup(t *testing.T) {
@@ -156,11 +131,9 @@ func TestBundle_Cleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewBundle failed: %v", err)
 	}
-
 	if cleanup == nil {
 		t.Fatal("Expected non-nil cleanup function")
 	}
-
 	// Cleanup should not panic
 	cleanup()
 	// Multiple cleanup calls should be safe

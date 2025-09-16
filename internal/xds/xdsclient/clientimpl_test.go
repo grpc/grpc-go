@@ -288,24 +288,20 @@ func TestServerConfigCallCredsIntegration(t *testing.T) {
 	if err := sc.UnmarshalJSON([]byte(serverConfigJSON)); err != nil {
 		t.Fatalf("Failed to unmarshal server config: %v", err)
 	}
-
 	// Verify call credentials are processed.
 	callCreds := sc.CallCreds()
 	if len(callCreds) != 1 {
 		t.Errorf("Expected 1 call credential, got %d", len(callCreds))
 	}
-
 	selectedCallCreds := sc.SelectedCallCreds()
 	if len(selectedCallCreds) != 1 {
 		t.Errorf("Expected 1 selected call credential, got %d", len(selectedCallCreds))
 	}
-
 	// Test dial options for secure transport (should include JWT).
 	secureOpts := sc.DialOptionsWithCallCredsForTransport("tls", &mockTransportCreds{protocol: "tls"})
 	if len(secureOpts) != 1 {
 		t.Errorf("Expected dial options for secure transport. Got: %#v", secureOpts)
 	}
-
 	// Test dial options for insecure transport (should exclude JWT).
 	insecureOpts := sc.DialOptionsWithCallCredsForTransport("insecure", &mockTransportCreds{protocol: "insecure"})
 	if len(insecureOpts) >= len(secureOpts) {
