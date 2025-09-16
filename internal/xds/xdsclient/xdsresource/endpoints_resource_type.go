@@ -38,8 +38,8 @@ var (
 	_ xdsclient.Decoder      = endpointsResourceType{}
 	_ xdsclient.ResourceData = (*EndpointsResourceData)(nil)
 
-	// EndpointsResource is a singleton instance of xdsclient.ResourceType
-	// that defines the configuration for the Listener resource.
+	// EndpointsResource is a singleton instance of xdsclient.ResourceType that
+	// defines the configuration for the Endpoints resource.
 	EndpointsResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3EndpointsURL,
 		TypeName:                   EndpointsResourceTypeName,
@@ -109,7 +109,7 @@ func (e *EndpointsResourceData) Raw() *anypb.Any {
 	return e.Resource.Raw
 }
 
-// Equal returns true if other is equal to c
+// Equal returns true if other xdsclient.ResourceData is equal to e.
 func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
 	if e == nil && other == nil {
 		return true
@@ -123,7 +123,7 @@ func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
 	return bytes.Equal(e.Bytes(), other.Bytes())
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the Endpoints resource.
 func (e *EndpointsResourceData) Bytes() []byte {
 	raw := e.Raw()
 	if raw == nil {
@@ -138,7 +138,7 @@ func WatchEndpoints(p Producer, name string, w xdsclient.ResourceWatcher) (cance
 	return p.WatchResource(EndpointsResource, name, w)
 }
 
-// NewEndpointsResourceTypeDecoder returns a decoder for Endpoint resources.
+// NewEndpointsResourceTypeDecoder returns a decoder for Endpoints resources.
 func NewEndpointsResourceTypeDecoder() xdsclient.Decoder {
 	return endpointsResourceType{resourceTypeState: resourceTypeState{
 		typeURL:                    version.V3EndpointsURL,

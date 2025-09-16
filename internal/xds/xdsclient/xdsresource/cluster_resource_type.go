@@ -40,7 +40,7 @@ var (
 	_ xdsclient.ResourceData = (*ClusterResourceData)(nil)
 
 	// ClusterResource is a singleton instance of xdsclient.ResourceType
-	// that defines the configuration for the Listener resource.
+	// that defines the configuration for the Cluster resource.
 	ClusterResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3ClusterURL,
 		TypeName:                   ClusterResourceTypeName,
@@ -148,7 +148,7 @@ func (c *ClusterResourceData) Equal(other xdsclient.ResourceData) bool {
 	return bytes.Equal(c.Bytes(), other.Bytes())
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the Cluster resource.
 func (c *ClusterResourceData) Bytes() []byte {
 	raw := c.Raw()
 	if raw == nil {
@@ -163,7 +163,7 @@ func WatchCluster(p Producer, name string, w xdsclient.ResourceWatcher) (cancel 
 	return p.WatchResource(ClusterResource, name, w)
 }
 
-// NewClusterResourceTypeDecoder returns a xdsclient.Decoder that has access to
+// NewClusterResourceTypeDecoder returns an xdsclient.Decoder that has access to
 // bootstrap config and server config mapping for decoding.
 func NewClusterResourceTypeDecoder(bc *bootstrap.Config, gServerCfgMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) xdsclient.Decoder {
 	return &clusterResourceType{

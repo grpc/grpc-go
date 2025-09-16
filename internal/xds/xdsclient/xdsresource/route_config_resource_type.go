@@ -39,7 +39,7 @@ var (
 	_ xdsclient.ResourceData = (*RouteConfigResourceData)(nil)
 
 	// RouteConfigResource is a singleton instance of xdsclient.ResourceType
-	// that defines the configuration for the Listener resource.
+	// that defines the configuration for the RouteConfig resource.
 	RouteConfigResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3RouteConfigURL,
 		TypeName:                   RouteConfigTypeName,
@@ -110,7 +110,7 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
-// Equal returns true if other is equal to r
+// Equal returns true if other xdsclient.ResourceData is equal to r.
 func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	if r == nil && other == nil {
 		return true
@@ -124,7 +124,7 @@ func (r *RouteConfigResourceData) Equal(other xdsclient.ResourceData) bool {
 	return bytes.Equal(r.Bytes(), other.Bytes())
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the RouteConfig resource.
 func (r *RouteConfigResourceData) Bytes() []byte {
 	raw := r.Raw()
 	if raw == nil {

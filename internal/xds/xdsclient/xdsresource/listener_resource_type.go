@@ -40,8 +40,8 @@ var (
 	_ xdsclient.Decoder      = listenerResourceType{}
 	_ xdsclient.ResourceData = (*ListenerResourceData)(nil)
 
-	// ListenerResource is a singleton instance of xdsclient.ResourceType
-	// that defines the configuration for the Listener resource.
+	// ListenerResource is a singleton instance of xdsclient.ResourceType that
+	// defines the configuration for the Listener resource.
 	ListenerResource = xdsclient.ResourceType{
 		TypeURL:                    version.V3ListenerURL,
 		TypeName:                   ListenerResourceTypeName,
@@ -163,7 +163,7 @@ func (l *ListenerResourceData) Raw() *anypb.Any {
 	return l.Resource.Raw
 }
 
-// Equal returns true if other is equal to c
+// Equal returns true if other xdsclient.ResourceData is equal to l.
 func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	if l == nil && other == nil {
 		return true
@@ -177,7 +177,7 @@ func (l *ListenerResourceData) Equal(other xdsclient.ResourceData) bool {
 	return bytes.Equal(l.Bytes(), other.Bytes())
 }
 
-// Bytes returns the underlying raw bytes of the clustered resource.
+// Bytes returns the underlying raw bytes of the listener resource.
 func (l *ListenerResourceData) Bytes() []byte {
 	raw := l.Raw()
 	if raw == nil {
@@ -192,9 +192,8 @@ func WatchListener(p Producer, name string, w xdsclient.ResourceWatcher) (cancel
 	return p.WatchResource(ListenerResource, name, w)
 }
 
-// NewListenerResourceTypeDecoder returns a decoder for RouteConfig resources.
-// RouteConfig is stateless so this just returns the zero-valued
-// routeConfigResourceType.
+// NewListenerResourceTypeDecoder returns an xdsclient.Decoder that has access to
+// bootstrap config and server config mapping for decoding.
 func NewListenerResourceTypeDecoder(bc *bootstrap.Config, serverConfigMap map[xdsclient.ServerConfig]*bootstrap.ServerConfig) xdsclient.Decoder {
 	return &listenerResourceType{
 		resourceTypeState: resourceTypeState{
