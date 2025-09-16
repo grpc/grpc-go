@@ -79,10 +79,7 @@ func newEndpointsWatcher() *endpointsWatcher {
 
 func (ew *endpointsWatcher) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
 	defer onDone()
-	endpointsData, ok := rd.(*xdsresource.EndpointsResourceData)
-	if !ok {
-		return
-	}
+	endpointsData := rd.(*xdsresource.EndpointsResourceData)
 	ew.updateCh.Send(endpointsUpdateErrTuple{update: endpointsData.Resource})
 }
 func (ew *endpointsWatcher) ResourceError(err error, onDone func()) {

@@ -73,17 +73,7 @@ func newListenerWatcher() *listenerWatcher {
 }
 
 func (lw *listenerWatcher) ResourceChanged(rd xdsClient.ResourceData, onDone func()) {
-	if rd == nil {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received nil resource data")})
-		onDone()
-		return
-	}
-	clusterData, ok := rd.(*xdsresource.ListenerResourceData)
-	if !ok {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received unexpected resource data type %T", rd)})
-		onDone()
-		return
-	}
+	clusterData := rd.(*xdsresource.ListenerResourceData)
 	lw.updateCh.Send(listenerUpdateErrTuple{update: clusterData.Resource})
 	onDone()
 }
@@ -113,17 +103,7 @@ func newListenerWatcherMultiple(size int) *listenerWatcherMultiple {
 }
 
 func (lw *listenerWatcherMultiple) ResourceChanged(rd xdsClient.ResourceData, onDone func()) {
-	if rd == nil {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received nil resource data")})
-		onDone()
-		return
-	}
-	listenerData, ok := rd.(*xdsresource.ListenerResourceData)
-	if !ok {
-		lw.updateCh.Send(listenerUpdateErrTuple{err: fmt.Errorf("watcher received unexpected resource data type %T", rd)})
-		onDone()
-		return
-	}
+	listenerData := rd.(*xdsresource.ListenerResourceData)
 	lw.updateCh.Send(listenerUpdateErrTuple{update: listenerData.Resource})
 	onDone()
 }

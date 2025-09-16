@@ -144,11 +144,7 @@ func (rw *rdsWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) 
 		return
 	}
 	rw.mu.Unlock()
-	rcData, ok := rd.(*xdsresource.RouteConfigResourceData)
-	if !ok {
-		rw.logger.Warningf("RDS watcher received unexpected resource data type %T", rd)
-		return
-	}
+	rcData := rd.(*xdsresource.RouteConfigResourceData)
 	if rw.logger.V(2) {
 		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, rcData.Resource)
 	}

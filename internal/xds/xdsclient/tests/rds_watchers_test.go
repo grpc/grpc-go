@@ -68,17 +68,7 @@ func newRouteConfigWatcher() *routeConfigWatcher {
 }
 
 func (rw *routeConfigWatcher) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
-	if rd == nil {
-		rw.updateCh.Send(routeConfigUpdateErrTuple{err: fmt.Errorf("watcher received nil resource data")})
-		onDone()
-		return
-	}
-	rcData, ok := rd.(*xdsresource.RouteConfigResourceData)
-	if !ok {
-		rw.updateCh.Send(routeConfigUpdateErrTuple{err: fmt.Errorf("watcher received unexpected resource data type %T", rd)})
-		onDone()
-		return
-	}
+	rcData := rd.(*xdsresource.RouteConfigResourceData)
 	rw.updateCh.Send(routeConfigUpdateErrTuple{update: rcData.Resource})
 	onDone()
 }

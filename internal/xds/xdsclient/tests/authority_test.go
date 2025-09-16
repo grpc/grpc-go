@@ -353,17 +353,7 @@ func newClusterWatcherV2() *clusterWatcherV2 {
 }
 
 func (cw *clusterWatcherV2) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
-	if rd == nil {
-		cw.updateCh.Send(clusterUpdateErrTuple{err: fmt.Errorf("watcher received nil resource data")})
-		onDone()
-		return
-	}
-	clusterData, ok := rd.(*xdsresource.ClusterResourceData)
-	if !ok {
-		cw.updateCh.Send(clusterUpdateErrTuple{err: fmt.Errorf("watcher received unexpected resource data type %T", rd)})
-		onDone()
-		return
-	}
+	clusterData := rd.(*xdsresource.ClusterResourceData)
 	cw.updateCh.Send(clusterUpdateErrTuple{update: clusterData.Resource})
 	onDone()
 }

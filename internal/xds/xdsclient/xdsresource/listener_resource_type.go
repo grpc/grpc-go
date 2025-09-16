@@ -118,16 +118,10 @@ func (lt listenerResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclie
 
 	// Perform extra validation here.
 	if err := listenerValidator(internalOpts.BootstrapConfig, listener); err != nil {
-		return &xdsclient.DecodeResult{
-			Name:     name,
-			Resource: &ListenerResourceData{Resource: ListenerUpdate{}},
-		}, err
+		return &xdsclient.DecodeResult{Name: name, Resource: &ListenerResourceData{Resource: ListenerUpdate{}}}, err
 	}
 
-	return &xdsclient.DecodeResult{
-		Name:     name,
-		Resource: &ListenerResourceData{Resource: listener},
-	}, nil
+	return &xdsclient.DecodeResult{Name: name, Resource: &ListenerResourceData{Resource: listener}}, nil
 }
 
 // ListenerResourceData wraps the configuration of a Listener resource as

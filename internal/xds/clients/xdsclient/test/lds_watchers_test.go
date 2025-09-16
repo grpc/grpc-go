@@ -75,12 +75,7 @@ func newListenerWatcher() *listenerWatcher {
 }
 
 func (lw *listenerWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
-	lisData, ok := update.(*listenerResourceData)
-	if !ok {
-		lw.resourceErrCh.Send(listenerUpdateErrTuple{resourceErr: fmt.Errorf("unexpected resource type: %T", update)})
-		onDone()
-		return
-	}
+	lisData := update.(*listenerResourceData)
 	select {
 	case <-lw.updateCh.C:
 	default:

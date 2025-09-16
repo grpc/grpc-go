@@ -78,22 +78,19 @@ func newEDSResolver(nameToWatch string, producer xdsresource.Producer, topLevelR
 
 // ResourceChanged is invoked to report an update for the resource being watched.
 func (er *edsDiscoveryMechanism) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
-	defer onDone()
 	if er.stopped.HasFired() {
-		return
-	}
-	update, ok := rd.(*xdsresource.EndpointsResourceData)
-	if !ok {
-		er.logger.Warningf("EDS discovery mechanism received unexpected resource data type %T", rd)
+		onDone()
 		return
 	}
 
+	update := rd.(*xdsresource.EndpointsResourceData)
 	er.mu.Lock()
 	er.update = &update.Resource
 	er.mu.Unlock()
 
 	er.topLevelResolver.onUpdate(onDone)
 }
+
 func (er *edsDiscoveryMechanism) ResourceError(err error, onDone func()) {
 	if er.stopped.HasFired() {
 		onDone()

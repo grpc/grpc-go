@@ -18,7 +18,6 @@ package cdsbalancer
 
 import (
 	"context"
-	"fmt"
 
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -35,11 +34,7 @@ type clusterWatcher struct {
 }
 
 func (cw *clusterWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) {
-	clusterData, ok := rd.(*xdsresource.ClusterResourceData)
-	if !ok {
-		cw.ResourceError(fmt.Errorf("clusterWatcher: unexpected resource data type %T", rd), onDone)
-		return
-	}
+	clusterData := rd.(*xdsresource.ClusterResourceData)
 	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, clusterData.Resource); onDone() }
 	cw.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }

@@ -29,7 +29,7 @@ import (
 // ReportLoad starts a load reporting stream to the given server. All load
 // reports to the same server share the LRS stream.
 //
-// It returns a lrsclient.LoadStore for the user to report loads.
+// It returns a LoadStore for the user to report loads.
 func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (LoadStore, func(context.Context)) {
 	load, err := c.lrsClient.ReportLoad(clients.ServerIdentifier{
 		ServerURI: server.ServerURI(),

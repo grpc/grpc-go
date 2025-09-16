@@ -89,16 +89,10 @@ func (ct clusterResourceType) Decode(resource xdsclient.AnyProto, gOpts xdsclien
 	}
 
 	if err := securityConfigValidator(internalOpts.BootstrapConfig, cluster.SecurityCfg); err != nil {
-		return &xdsclient.DecodeResult{
-			Name:     name,
-			Resource: &ClusterResourceData{Resource: ClusterUpdate{}},
-		}, err
+		return &xdsclient.DecodeResult{Name: name, Resource: &ClusterResourceData{Resource: ClusterUpdate{}}}, err
 	}
 
-	return &xdsclient.DecodeResult{
-		Name:     name,
-		Resource: &ClusterResourceData{Resource: cluster},
-	}, nil
+	return &xdsclient.DecodeResult{Name: name, Resource: &ClusterResourceData{Resource: cluster}}, nil
 }
 
 // ClusterResourceData wraps the configuration of a Cluster resource as received
