@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
 	"google.golang.org/grpc/internal/xds/clients/internal/testutils"
 	"google.golang.org/grpc/internal/xds/clients/xdsclient"
@@ -175,9 +176,34 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	// short resource expiry timeout.
 	nodeID := uuid.New().String()
 	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
-	overrideWatchExpiryTimeout(t, defaultTestWatchExpiryTimeout)
-	client := createXDSClient(t, mgmtServer.Address, nodeID, grpctransport.NewBuilder(configs))
+	resourceTypes := map[string]xdsclient.ResourceType{xdsresource.V3ListenerURL: listenerType}
+	si := clients.ServerIdentifier{
+		ServerURI:  mgmtServer.Address,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
 
+	xdsClientConfig := xdsclient.Config{
+		Servers:          []xdsclient.ServerConfig{{ServerIdentifier: si}},
+		Node:             clients.Node{ID: nodeID, UserAgentName: "user-agent", UserAgentVersion: "0.0.0.0"},
+		TransportBuilder: grpctransport.NewBuilder(configs),
+		ResourceTypes:    resourceTypes,
+		// Xdstp resource names used in this test do not specify an
+		// authority. These will end up looking up an entry with the
+		// empty key in the authorities map. Having an entry with an
+		// empty key and empty configuration, results in these
+		// resources also using the top-level configuration.
+		Authorities: map[string]xdsclient.Authority{
+			"": {XDSServers: []xdsclient.ServerConfig{}},
+		},
+		WatchExpiryTimeout: defaultTestWatchExpiryTimeout,
+	}
+
+	// Create an xDS client with the above config.
+	client, err := xdsclient.New(xdsClientConfig)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(func() { client.Close() })
 	// Create a watch for the first listener resource and verify that the timer
 	// is running and the watch state is `requested`.
 	const listenerName = "listener"

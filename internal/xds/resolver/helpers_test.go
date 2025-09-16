@@ -40,6 +40,8 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -60,11 +62,17 @@ const (
 	defaultTestServiceName     = "service-name"
 	defaultTestRouteConfigName = "route-config-name"
 	defaultTestClusterName     = "cluster-name"
+	defaultTestEndpointName    = "endpoint-name"
+	defaultTestHostname        = "test-host"
 )
 
-// This is the expected service config when using default listener and route
-// configuration resources from the e2e package using the above resource names.
-var wantDefaultServiceConfig = fmt.Sprintf(`{
+var defaultTestPort = []uint32{8080}
+
+// wantServiceConfig returns a JSON representation of a service config with
+// xds_cluster_manager_experimental LB policy with a child policy of
+// cds_experimental for the provided cluster name.
+func wantServiceConfig(clusterName string) string {
+	return fmt.Sprintf(`{
    "loadBalancingConfig": [{
 	 "xds_cluster_manager_experimental": {
 	   "children": {
@@ -78,7 +86,8 @@ var wantDefaultServiceConfig = fmt.Sprintf(`{
 	   }
 	 }
    }]
- }`, defaultTestClusterName, defaultTestClusterName)
+ }`, clusterName, clusterName)
+}
 
 // buildResolverForTarget builds an xDS resolver for the given target. If
 // the bootstrap contents are provided, it build the xDS resolver using them
@@ -277,6 +286,21 @@ func configureResourcesOnManagementServer(ctx context.Context, t *testing.T, mgm
 		Listeners:      listeners,
 		Routes:         routes,
 		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Updates all the listener, route, cluster and endpoint configuration resources
+// on the given management server.
+func configureAllResourcesOnManagementServer(ctx context.Context, t *testing.T, mgmtServer *e2e.ManagementServer, nodeID string, listeners []*v3listenerpb.Listener, routes []*v3routepb.RouteConfiguration, clusters []*v3clusterpb.Cluster, endpoints []*v3endpointpb.ClusterLoadAssignment) {
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: listeners,
+		Routes:    routes,
+		Clusters:  clusters,
+		Endpoints: endpoints,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

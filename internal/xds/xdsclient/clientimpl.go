@@ -120,8 +120,8 @@ func (mr *metricsReporter) ReportMetric(metric any) {
 	}
 }
 
-func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string) (*clientImpl, error) {
-	gConfig, err := buildXDSClientConfig(config, metricsRecorder, target)
+func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (*clientImpl, error) {
+	gConfig, err := buildXDSClientConfig(config, metricsRecorder, target, watchExpiryTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,21 @@ func newClientImpl(config *bootstrap.Config, metricsRecorder estats.MetricsRecor
 	if err != nil {
 		return nil, err
 	}
-	c := &clientImpl{XDSClient: client, xdsClientConfig: gConfig, bootstrapConfig: config, target: target, refCount: 1}
+	lrsC, err := lrsclient.New(lrsclient.Config{
+		Node:             gConfig.Node,
+		TransportBuilder: gConfig.TransportBuilder,
+	})
+	if err != nil {
+		return nil, err
+	}
+	c := &clientImpl{
+		XDSClient:       client,
+		xdsClientConfig: gConfig,
+		bootstrapConfig: config,
+		target:          target,
+		refCount:        1,
+		lrsClient:       lrsC,
+	}
 	c.logger = prefixLogger(c)
 	return c, nil
 }
@@ -149,7 +163,7 @@ func (c *clientImpl) decrRef() int32 {
 }
 
 // buildXDSClientConfig builds the xdsclient.Config from the bootstrap.Config.
-func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string) (xdsclient.Config, error) {
+func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.MetricsRecorder, target string, watchExpiryTimeout time.Duration) (xdsclient.Config, error) {
 	grpcTransportConfigs := make(map[string]grpctransport.Config)
 	gServerCfgMap := make(map[xdsclient.ServerConfig]*bootstrap.ServerConfig)
 
@@ -204,12 +218,13 @@ func buildXDSClientConfig(config *bootstrap.Config, metricsRecorder estats.Metri
 	}
 
 	return xdsclient.Config{
-		Authorities:      gAuthorities,
-		Servers:          gServerCfgs,
-		Node:             gNode,
-		TransportBuilder: grpctransport.NewBuilder(grpcTransportConfigs),
-		ResourceTypes:    supportedResourceTypes(config, gServerCfgMap),
-		MetricsReporter:  &metricsReporter{recorder: metricsRecorder, target: target},
+		Authorities:        gAuthorities,
+		Servers:            gServerCfgs,
+		Node:               gNode,
+		TransportBuilder:   grpctransport.NewBuilder(grpcTransportConfigs),
+		ResourceTypes:      supportedResourceTypes(config, gServerCfgMap),
+		MetricsReporter:    &metricsReporter{recorder: metricsRecorder, target: target},
+		WatchExpiryTimeout: watchExpiryTimeout,
 	}, nil
 }
 
