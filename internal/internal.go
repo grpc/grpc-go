@@ -244,6 +244,14 @@ var (
 	// When set, the function will be called before the stream enters
 	// the blocking state.
 	NewStreamWaitingForResolver = func() {}
+
+	// RegisterCompressorForTesting registers a compressor in the global compressor
+	// registry. It returns a cleanup function that should be called at the end
+	// of the test to unregister the compressor.
+	//
+	// This prevents compressors registered in one test from appearing in the
+	// encoding headers of subsequent tests.
+	RegisterCompressorForTesting any // func RegisterCompressor(c Compressor) func()
 )
 
 // HealthChecker defines the signature of the client-side LB channel health
