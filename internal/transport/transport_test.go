@@ -2620,6 +2620,8 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		wantStatus *status.Status
 		// end stream output
 		wantStatusEndStream *status.Status
+		// head channel closed
+		headerChanClosedForEndStream bool
 	}{
 		{
 			name: "valid header",
@@ -2644,11 +2646,14 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Unknown,
-				"malformed header: missing HTTP content-type",
+				"unexpected HTTP status code received from server: 200 (OK); malformed header: missing HTTP content-type",
 			),
+			headerChanClosedForEndStream: true,
+			// when headerChan is closed, it is already gRPC and we just need
+			// grpc-status
 			wantStatusEndStream: status.New(
-				codes.Unknown,
-				"malformed header: missing HTTP content-type",
+				codes.OK,
+				"",
 			),
 		},
 		{
@@ -2680,9 +2685,30 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
 			),
+			// This content type will only come when end stream is also initial
+			// header, otherwise we would already be talking gRPC
 			wantStatusEndStream: status.New(
 				codes.Internal,
 				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
+			),
+		},
+		{
+			name: "invalid http content type with http status 504 translation",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/json"},
+					{Name: ":status", Value: "504"},
+				},
+			},
+			wantStatus: status.New(
+				codes.Unavailable,
+				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
+			),
+			// This content type will only come when end stream is also initial
+			// header, otherwise we would already be talking gRPC
+			wantStatusEndStream: status.New(
+				codes.Unavailable,
+				"unexpected HTTP status code received from server: 504 (Gateway Timeout); transport: received unexpected content-type \"application/json\"",
 			),
 		},
 		{
@@ -2697,9 +2723,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				codes.Internal,
 				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
 			),
+			// for end stream, when we are already talking gRPC, we expect
+			// grpc - status and fail for it, we will ignore http status.
+			headerChanClosedForEndStream: true,
 			wantStatusEndStream: status.New(
 				codes.Internal,
-				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+				"",
 			),
 		},
 		{
@@ -2747,8 +2776,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: ":status", Value: "504"},
 				},
 			},
-			wantStatus:          status.New(codes.OK, ""),
-			wantStatusEndStream: status.New(codes.Internal, ""),
+			wantStatus:                   status.New(codes.OK, ""),
+			headerChanClosedForEndStream: true,
+			wantStatusEndStream:          status.New(codes.Internal, ""),
 		},
 		{
 			name: "ignore valid http status for grpc",
@@ -2797,6 +2827,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 		})
 		t.Run(fmt.Sprintf("%s-end_stream", test.name), func(t *testing.T) {
 			ts := testStream()
+			if test.headerChanClosedForEndStream {
+				ts.headerChanClosed = 1
+			}
 			s := testClient(ts)
 
 			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
