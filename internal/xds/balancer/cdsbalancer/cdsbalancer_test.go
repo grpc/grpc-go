@@ -971,6 +971,78 @@ func (s) TestResolverError(t *testing.T) {
 	}
 }
 
+// Tests the scenario for resolver errors: when a resolver resource not found
+// error is received when the LDS resource is removed with a previous good
+// update from the management server, the cds LB policy is expected to push the
+// error down the child policy and put the channel in TRANSIENT_FAILURE. It is
+// also expected to cancel the CDS watch.
+func (s) TestResourceNotFoundResolverError(t *testing.T) {
+	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cdsResourceCanceledCh := make(chan struct{}, 1)
+	onStreamReq := func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+		if req.GetTypeUrl() == version.V3ClusterURL {
+			if len(req.GetResourceNames()) == 0 {
+				select {
+				case cdsResourceCanceledCh <- struct{}{}:
+				case <-ctx.Done():
+				}
+			}
+		}
+		return nil
+	}
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, onStreamReq)
+
+	// Start a test service backend.
+	server := stubserver.StartTestService(t, nil)
+	t.Cleanup(server.Stop)
+
+	// Configure default resources in the management server.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: target,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       testutils.ParsePort(t, server.Address),
+	})
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that a successful RPC can be made.
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("EmptyCall() failed: %v", err)
+	}
+
+	// Push a resource-not-found type error  by removing the LDS resource.
+	resources.Listeners = nil
+	resources.SkipValidation = true
+	mgmtServer.Update(ctx, resources)
+
+	// Wait for the CDS resource to be not requested anymore.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for CDS resource to be not requested")
+	case <-cdsResourceCanceledCh:
+	}
+
+	// Verify that the resolver error is pushed to the child policy.
+	select {
+	case <-childPolicyCloseCh:
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for child policy to be closed")
+	}
+
+	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
+
+	// Ensure that the resolver error is propagated to the RPC caller.
+	_, err := client.EmptyCall(ctx, &testpb.Empty{})
+	if err := verifyRPCError(err, codes.Unavailable, "", nodeID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Tests scenarios involving removal of a cluster resource from the management
 // server.
 //
