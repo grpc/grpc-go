@@ -160,38 +160,8 @@ func registerWrappedClusterResolverPolicy(t *testing.T) (chan serviceconfig.Load
 	return lbCfgCh, resolverErrCh, exitIdleCh, closeCh
 }
 
-// Registers a wrapped cds LB policy for the duration of this test that retains
-// all the functionality of the original cds LB policy, but makes the newly
-// built policy available to the test to directly invoke any balancer methods.
-//
-// Returns a channel on which the newly built cds LB policy is written to.
-func registerWrappedCDSPolicy(t *testing.T) chan balancer.Balancer {
-	cdsBuilder := balancer.Get(cdsName)
-	internal.BalancerUnregister(cdsBuilder.Name())
-	cdsBalancerCh := make(chan balancer.Balancer, 1)
-	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
-			bal := cdsBuilder.Build(bd.ClientConn, bd.BuildOptions)
-			bd.ChildBalancer = bal
-			cdsBalancerCh <- bal
-		},
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return cdsBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.ChildBalancer.Close()
-		},
-	})
-	t.Cleanup(func() { balancer.Register(cdsBuilder) })
-
-	return cdsBalancerCh
-}
-
 // Performs the following setup required for tests:
-//   - Spins up an xDS management server and and the provided onStreamRequest
+//   - Spins up an xDS management server and the provided onStreamRequest
 //     function is set to be called for every incoming request on the ADS stream.
 //   - Creates an xDS client talking to this management server
 //   - Creates a manual resolver that configures the cds LB policy as the
@@ -244,7 +214,7 @@ func setupWithManagementServerAndManualResolver(t *testing.T, lis net.Listener, 
 
 	cc, err := grpc.NewClient(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(\"%s:///test.service\") = %v", r.Scheme(), err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
@@ -253,7 +223,7 @@ func setupWithManagementServerAndManualResolver(t *testing.T, lis net.Listener, 
 }
 
 // Performs the following setup required for tests:
-//   - Spins up an xDS management server and and the provided onStreamRequest
+//   - Spins up an xDS management server and the provided onStreamRequest
 //     function is set to be called for every incoming request on the ADS stream.
 //   - Creates an xDS client talking to this management server
 //   - Creates a gRPC channel with grpc.NewClient that create a xds resolver.
@@ -263,7 +233,7 @@ func setupWithManagementServerAndManualResolver(t *testing.T, lis net.Listener, 
 //   - the nodeID expected by the management server
 //   - the grpc channel to the test backend service
 //   - the xDS client used the grpc channel
-func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn, xdsclient.XDSClient) {
+func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error) (*e2e.ManagementServer, string, *grpc.ClientConn) {
 	t.Helper()
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{
 		Listener:        lis,
@@ -277,18 +247,6 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	nodeID := uuid.New().String()
 	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
 
-	config, err := bootstrap.NewConfigFromContents(bc)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bc), err)
-	}
-	pool := xdsclient.NewPool(config)
-	xdsC, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	t.Cleanup(xdsClose)
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
@@ -298,12 +256,12 @@ func setupWithManagementServer(t *testing.T, lis net.Listener, onStreamRequest f
 	}
 	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", target), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
-		t.Fatalf("grpc.NewClient(%q) = %v", lis.Addr().String(), err)
+		t.Fatalf("grpc.NewClient(\"xds:///%s\") = %v", target, err)
 	}
 	cc.Connect()
 	t.Cleanup(func() { cc.Close() })
 
-	return mgmtServer, nodeID, cc, xdsC
+	return mgmtServer, nodeID, cc
 }
 
 // Helper function to compare the load balancing configuration received on the
@@ -663,7 +621,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-			mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
+			mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -689,7 +647,7 @@ func (s) TestClusterUpdate_Success(t *testing.T) {
 // balancing configuration pushed to the child is as expected.
 func (s) TestClusterUpdate_SuccessWithLRS(t *testing.T) {
 	lbCfgCh, _, _, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, _, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, _ := setupWithManagementServer(t, nil, nil)
 
 	clusterResource := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
@@ -754,7 +712,7 @@ func (s) TestClusterUpdate_Failure(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, onStreamReq)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, onStreamReq)
 
 	// Configure the management server to return a cluster resource that
 	// contains a config_source_specifier for the `lrs_server` field which is not
@@ -1036,13 +994,13 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 		}
 		return nil
 	}
-	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, onStreamReq)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, onStreamReq)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
 	t.Cleanup(server.Stop)
 
-	// Configure cluster and endpoints resources in the management server.
+	// Configure default resources in the management server.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
 		NodeID:     nodeID,
@@ -1061,7 +1019,7 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 	// Remove the cluster resource from the management server, triggering a
 	// resource-not-found error.
-	oldCluster := resources.Clusters
+	oldClusters := resources.Clusters
 	resources.Clusters = nil
 	resources.SkipValidation = true
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -1081,14 +1039,14 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 	// Ensure RPC fails with Unavailable status code and the error message is
 	// meaningful and contains the xDS node ID.
-	wantErr := fmt.Sprintf("resource %q of type %q has been removed", oldCluster[0].Name, "ClusterResource")
+	wantErr := fmt.Sprintf("resource %q of type %q has been removed", oldClusters[0].Name, "ClusterResource")
 	_, err := client.EmptyCall(ctx, &testpb.Empty{})
 	if err := verifyRPCError(err, codes.Unavailable, wantErr, nodeID); err != nil {
 		t.Fatal(err)
 	}
 
 	// Re-add the cluster resource to the management server.
-	resources.Clusters = oldCluster
+	resources.Clusters = oldClusters
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -1101,10 +1059,9 @@ func (s) TestClusterUpdate_ResourceNotFound(t *testing.T) {
 
 // Tests that closing the cds LB policy results in the the child policy being
 // closed.
-func (s) TestClose(t *testing.T) {
-	cdsBalancerCh := registerWrappedCDSPolicy(t)
+func TestClose(t *testing.T) {
 	_, _, _, childPolicyCloseCh := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -1129,14 +1086,8 @@ func (s) TestClose(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Retrieve the cds LB policy and close it.
-	var cdsBal balancer.Balancer
-	select {
-	case cdsBal = <-cdsBalancerCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for cds LB policy to be created")
-	}
-	cdsBal.Close()
+	// Close the gRPC ClientConn, which will close the cds LB policy.
+	cc.Close()
 
 	// Wait for the child policy to be closed.
 	select {
@@ -1149,9 +1100,8 @@ func (s) TestClose(t *testing.T) {
 // Tests that calling ExitIdle on the cds LB policy results in the call being
 // propagated to the child policy.
 func (s) TestExitIdle(t *testing.T) {
-	cdsBalancerCh := registerWrappedCDSPolicy(t)
 	_, _, exitIdleCh, _ := registerWrappedClusterResolverPolicy(t)
-	mgmtServer, nodeID, cc, _ := setupWithManagementServer(t, nil, nil)
+	mgmtServer, nodeID, cc := setupWithManagementServer(t, nil, nil)
 
 	// Start a test service backend.
 	server := stubserver.StartTestService(t, nil)
@@ -1176,14 +1126,8 @@ func (s) TestExitIdle(t *testing.T) {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Retrieve the cds LB policy and call ExitIdle() on it.
-	var cdsBal balancer.Balancer
-	select {
-	case cdsBal = <-cdsBalancerCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for cds LB policy to be created")
-	}
-	cdsBal.ExitIdle()
+	// Connect to gRPC channel that will call ExitIdle on the cds LB policy.
+	cc.Connect()
 
 	// Wait for ExitIdle to be called on the child policy.
 	select {

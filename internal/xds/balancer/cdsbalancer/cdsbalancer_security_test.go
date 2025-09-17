@@ -45,7 +45,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
-	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -129,7 +128,7 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 
 // Common setup for security tests:
 //   - creates an xDS client with the specified bootstrap configuration
-//   - creates a channel that uses the passed in client creds
+//   - creates a gRPC channel that uses the passed in client creds
 //   - creates a test server that uses the passed in server creds
 //
 // Returns the following:
@@ -138,18 +137,6 @@ func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscr
 func setupForSecurityTests(t *testing.T, bootstrapContents []byte, clientCreds, serverCreds credentials.TransportCredentials) (*grpc.ClientConn, string) {
 	t.Helper()
 
-	config, err := bootstrap.NewConfigFromContents(bootstrapContents)
-	if err != nil {
-		t.Fatalf("Failed to parse bootstrap contents: %s, %v", string(bootstrapContents), err)
-	}
-	pool := xdsclient.NewPool(config)
-	_, xdsClose, err := pool.NewClientForTesting(xdsclient.OptionsForTesting{
-		Name: t.Name(),
-	})
-	if err != nil {
-		t.Fatalf("Failed to create xDS client: %v", err)
-	}
-	t.Cleanup(xdsClose)
 	if internal.NewXDSResolverWithConfigForTesting == nil {
 		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
 	}
@@ -272,7 +259,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// insecure credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, insecure.NewCredentials(), nil)
 
-	// Configure cluster and endpoints resources in the management server. The
+	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
@@ -327,7 +314,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// insecure credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), nil)
 
-	// Configure cluster and endpoints resources in the management server. The
+	// Configure default resources in the management server. The
 	// cluster resource is not configured to return any security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
@@ -492,7 +479,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
-	// Configure cluster and endpoints resources in the management server. The
+	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
@@ -535,8 +522,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
-	// Configure cluster and endpoints resources in the management server. The
-	// cluster resource contains security configuration with a certificate
+	// The cluster resource contains security configuration with a certificate
 	// provider instance that is missing in the bootstrap configuration.
 	cluster := e2e.DefaultCluster(clusterName, serviceName, e2e.SecurityLevelNone)
 	cluster.TransportSocket = &v3corepb.TransportSocket{
@@ -554,8 +540,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 		},
 	}
 	resources := e2e.UpdateOptions{
-		NodeID: nodeID,
-
+		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(target, routeName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, target, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{cluster},
@@ -611,7 +596,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
-	// Configure cluster and endpoints resources in the management server. The
+	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
@@ -692,7 +677,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
-	// Configure cluster and endpoints resources in the management server. The
+	// Configure default resources in the management server. The
 	// cluster resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
@@ -715,8 +700,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	}
 	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelMTLS)
 
-	// Configure cluster and endpoints resources in the management server. The
-	// cluster resource contains security configuration with a certificate
+	// The cluster resource contains security configuration with a certificate
 	// provider instance that is missing in the bootstrap configuration.
 	resources.Clusters[0] = e2e.DefaultCluster(resources.Clusters[0].Name, resources.Endpoints[0].ClusterName, e2e.SecurityLevelNone)
 	resources.Clusters[0].TransportSocket = &v3corepb.TransportSocket{
@@ -792,8 +776,8 @@ func (s) TestSystemRootCertsSecurityConfig(t *testing.T) {
 	// credentials.
 	cc, serverAddress := setupForSecurityTests(t, bc, xdsClientCredsWithInsecureFallback(t), tlsServerCreds(t))
 
-	// Configure cluster and endpoints resources in the management server. The
-	// cluster resource is configured to return security configuration.
+	// Configure default resources in the management server. The cluster
+	// resource is configured to return security configuration.
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: target,
 		NodeID:     nodeID,
