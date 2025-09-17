@@ -25,21 +25,15 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"unsafe"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/balancer/stub"
-	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -47,7 +41,6 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -63,68 +56,6 @@ import (
 	_ "google.golang.org/grpc/internal/xds/httpfilter/router"       // Register the router filter.
 	_ "google.golang.org/grpc/internal/xds/resolver"                // Register the xds resolver
 )
-
-// testCCWrapper wraps a balancer.ClientConn and intercepts NewSubConn and
-// returns the xDS handshake info back to the test for inspection.
-type testCCWrapper struct {
-	balancer.ClientConn
-	handshakeInfoCh chan *xdscredsinternal.HandshakeInfo
-}
-
-// NewSubConn forwards the call to the underlying balancer.ClientConn, but
-// before that, it validates the following:
-//   - there is only one address in the addrs slice
-//   - the single address contains xDS handshake information, which is then
-//     pushed onto the handshakeInfoCh channel
-func (tcc *testCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	if len(addrs) != 1 {
-		return nil, fmt.Errorf("NewSubConn got %d addresses, want 1", len(addrs))
-	}
-	getHI := internal.GetXDSHandshakeInfoForTesting.(func(attr *attributes.Attributes) *unsafe.Pointer)
-	hi := getHI(addrs[0].Attributes)
-	if hi == nil {
-		return nil, fmt.Errorf("NewSubConn got address without xDS handshake info")
-	}
-
-	sc, err := tcc.ClientConn.NewSubConn(addrs, opts)
-	select {
-	case tcc.handshakeInfoCh <- (*xdscredsinternal.HandshakeInfo)(*hi):
-	default:
-	}
-	return sc, err
-}
-
-// Registers a wrapped cds LB policy for the duration of this test that retains
-// all the functionality of the original cds LB policy, but overrides the
-// NewSubConn method passed to the policy and makes the xDS handshake
-// information passed to NewSubConn available to the test.
-//
-// Accepts as argument a channel onto which xDS handshake information passed to
-// NewSubConn is written to.
-func registerWrappedCDSPolicyWithNewSubConnOverride(t *testing.T, ch chan *xdscredsinternal.HandshakeInfo) {
-	cdsBuilder := balancer.Get(cdsName)
-	internal.BalancerUnregister(cdsBuilder.Name())
-	var ccWrapper *testCCWrapper
-	stub.Register(cdsBuilder.Name(), stub.BalancerFuncs{
-		Init: func(bd *stub.BalancerData) {
-			ccWrapper = &testCCWrapper{
-				ClientConn:      bd.ClientConn,
-				handshakeInfoCh: ch,
-			}
-			bd.ChildBalancer = cdsBuilder.Build(ccWrapper, bd.BuildOptions)
-		},
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-			return cdsBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
-		},
-		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
-			return bd.ChildBalancer.UpdateClientConnState(ccs)
-		},
-		Close: func(bd *stub.BalancerData) {
-			bd.ChildBalancer.Close()
-		},
-	})
-	t.Cleanup(func() { balancer.Register(cdsBuilder) })
-}
 
 // Common setup for security tests:
 //   - creates an xDS client with the specified bootstrap configuration
@@ -240,14 +171,8 @@ func verifySecurityInformationFromPeer(t *testing.T, pr *peer.Peer, wantSecLevel
 
 // Tests the case where xDS credentials are not in use, but the cds LB policy
 // receives a Cluster update with security configuration. Verifies that the
-// security configuration is not parsed by the cds LB policy by looking at the
-// xDS handshake info passed to NewSubConn.
+// connection between client and server is insecure.
 func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
-	// Register a wrapped cds LB policy for the duration of this test that writes
-	// the xDS handshake info passed to NewSubConn onto the given channel.
-	handshakeInfoCh := make(chan *xdscredsinternal.HandshakeInfo, 1)
-	registerWrappedCDSPolicyWithNewSubConnOverride(t, handshakeInfoCh)
-
 	// Spin up an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -275,34 +200,19 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	}
 
 	// Verify that a successful RPC can be made.
+	peer := &peer.Peer{}
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
 
-	// Ensure that the xDS handshake info passed to NewSubConn is empty.
-	var gotHI *xdscredsinternal.HandshakeInfo
-	select {
-	case gotHI = <-handshakeInfoCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting to read handshake info passed to NewSubConn")
-	}
-	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil, nil, false)
-	if !cmp.Equal(gotHI, wantHI) {
-		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
-	}
+	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelNone)
 }
 
 // Tests the case where xDS credentials are in use, but the cds LB policy
 // receives a Cluster update without security configuration. Verifies that the
-// xDS handshake info passed to NewSubConn specified the use of fallback
-// credentials.
+// connection between client and server is insecure.
 func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
-	// Register a wrapped cds LB policy for the duration of this test that writes
-	// the xDS handshake info passed to NewSubConn onto the given channel.
-	handshakeInfoCh := make(chan *xdscredsinternal.HandshakeInfo, 1)
-	registerWrappedCDSPolicyWithNewSubConnOverride(t, handshakeInfoCh)
-
 	// Spin up an xDS management server.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
 
@@ -329,25 +239,12 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	}
 
 	// Verify that a successful RPC can be made.
+	peer := &peer.Peer{}
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(peer)); err != nil {
 		t.Fatalf("EmptyCall() failed: %v", err)
 	}
-
-	// Ensure that the xDS handshake info passed to NewSubConn is empty.
-	var gotHI *xdscredsinternal.HandshakeInfo
-	select {
-	case gotHI = <-handshakeInfoCh:
-	case <-ctx.Done():
-		t.Fatal("Timeout when waiting to read handshake info passed to NewSubConn")
-	}
-	wantHI := xdscredsinternal.NewHandshakeInfo(nil, nil, nil, false)
-	if !cmp.Equal(gotHI, wantHI) {
-		t.Fatalf("NewSubConn got handshake info %+v, want %+v", gotHI, wantHI)
-	}
-	if !gotHI.UseFallbackCreds() {
-		t.Fatal("NewSubConn got handshake info that does not specify the use of fallback creds")
-	}
+	verifySecurityInformationFromPeer(t, peer, e2e.SecurityLevelNone)
 }
 
 // Tests the case where the security config returned by the management server
