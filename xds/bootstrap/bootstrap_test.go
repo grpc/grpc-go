@@ -107,7 +107,7 @@ func TestTlsCredsBuilder(t *testing.T) {
 	}
 }
 
-func TestJwtCallCredentials_BuildDisabledIfFeatureNotEnabled(t *testing.T) {
+func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
 	builder := GetCredentials("jwt_call_creds")
 	if builder != nil {
 		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
