@@ -35,14 +35,16 @@ func TestNewBundle(t *testing.T) {
 	tokenFile := writeTempFile(t, token)
 
 	tests := []struct {
-		name   string
-		config string
+		name        string
+		config      string
+		wantSuccess bool
 	}{
 		{
 			name: "valid_config",
 			config: `{
 				"jwt_token_file": "` + tokenFile + `"
 			}`,
+			wantSuccess: true,
 		},
 		{
 			name:   "empty_file",
@@ -64,8 +66,14 @@ func TestNewBundle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bundle, cleanup, err := NewBundle(json.RawMessage(tt.config))
 
+			if !tt.wantSuccess {
+				if err == nil {
+					t.Fatal("Expected error, got nil")
+				}
+				return
+			}
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("NewBundle failed: %v", err)
 			}
 			if bundle == nil {
 				t.Fatal("Expected non-nil bundle")
