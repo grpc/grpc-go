@@ -1657,7 +1657,6 @@ func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
 			// Verify call credentials processing.
 			callCreds := sc.CallCreds()
 			selectedCallCreds := sc.SelectedCallCreds()
-
 			if len(callCreds) != test.wantCallCreds {
 				t.Errorf("Call creds count = %d, want %d", len(callCreds), test.wantCallCreds)
 			}

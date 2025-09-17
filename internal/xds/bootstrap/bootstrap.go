@@ -181,16 +181,16 @@ func (a *Authority) Equal(other *Authority) bool {
 type ServerConfig struct {
 	serverURI      string
 	channelCreds   []ChannelCreds
-	serverFeatures []string
 	callCreds      []CallCreds
+	serverFeatures []string
 
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
 	selectedCreds     ChannelCreds
+	selectedCallCreds []credentials.PerRPCCredentials
 	credsDialOption   grpc.DialOption
 	extraDialOptions  []grpc.DialOption
-	selectedCallCreds []credentials.PerRPCCredentials
 
 	cleanups []func()
 }
@@ -316,8 +316,8 @@ func (sc *ServerConfig) String() string {
 type serverConfigJSON struct {
 	ServerURI      string         `json:"server_uri,omitempty"`
 	ChannelCreds   []ChannelCreds `json:"channel_creds,omitempty"`
-	ServerFeatures []string       `json:"server_features,omitempty"`
 	CallCreds      []CallCreds    `json:"call_creds,omitempty"`
+	ServerFeatures []string       `json:"server_features,omitempty"`
 }
 
 // MarshalJSON returns marshaled JSON bytes corresponding to this server config.
@@ -325,8 +325,8 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 	server := &serverConfigJSON{
 		ServerURI:      sc.serverURI,
 		ChannelCreds:   sc.channelCreds,
-		ServerFeatures: sc.serverFeatures,
 		CallCreds:      sc.callCreds,
+		ServerFeatures: sc.serverFeatures,
 	}
 	return json.Marshal(server)
 }
@@ -346,8 +346,8 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 
 	sc.serverURI = server.ServerURI
 	sc.channelCreds = server.ChannelCreds
-	sc.serverFeatures = server.ServerFeatures
 	sc.callCreds = server.CallCreds
+	sc.serverFeatures = server.ServerFeatures
 
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
@@ -406,11 +406,11 @@ type ServerConfigTestingOptions struct {
 	// ChannelCreds contains a list of channel credentials to use when talking
 	// to this server. If unspecified, `insecure` credentials will be used.
 	ChannelCreds []ChannelCreds
-	// ServerFeatures represents the list of features supported by this server.
-	ServerFeatures []string
 	// CallCreds contains a list of call credentials to use for individual RPCs
 	// to this server. Optional.
 	CallCreds []CallCreds
+	// ServerFeatures represents the list of features supported by this server.
+	ServerFeatures []string
 }
 
 // ServerConfigForTesting creates a new ServerConfig from the passed in options,
@@ -425,8 +425,8 @@ func ServerConfigForTesting(opts ServerConfigTestingOptions) (*ServerConfig, err
 	scInternal := &serverConfigJSON{
 		ServerURI:      opts.URI,
 		ChannelCreds:   cc,
-		ServerFeatures: opts.ServerFeatures,
 		CallCreds:      opts.CallCreds,
+		ServerFeatures: opts.ServerFeatures,
 	}
 	scJSON, err := json.Marshal(scInternal)
 	if err != nil {

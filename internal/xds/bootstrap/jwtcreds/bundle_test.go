@@ -83,7 +83,7 @@ func TestNewBundle(t *testing.T) {
 				t.Error("Expected non-nil per-RPC credentials for valid JWT config")
 			}
 
-			// Test that call credentials work
+			// Test that call credentials get used
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
