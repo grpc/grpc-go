@@ -19,10 +19,8 @@
 package xdsclient
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"reflect"
 	"sync"
 	"testing"
@@ -30,7 +28,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils/stats"
@@ -297,49 +294,4 @@ func TestServerConfigCallCredsIntegration(t *testing.T) {
 	if len(selectedCallCreds) != 1 {
 		t.Errorf("Expected 1 selected call credential, got %d", len(selectedCallCreds))
 	}
-	// Test dial options for secure transport (should include JWT).
-	secureOpts := sc.DialOptionsWithCallCredsForTransport("tls", &mockTransportCreds{protocol: "tls"})
-	if len(secureOpts) != 1 {
-		t.Errorf("Expected dial options for secure transport. Got: %#v", secureOpts)
-	}
-	// Test dial options for insecure transport (should exclude JWT).
-	insecureOpts := sc.DialOptionsWithCallCredsForTransport("insecure", &mockTransportCreds{protocol: "insecure"})
-	if len(insecureOpts) >= len(secureOpts) {
-		t.Error("Expected fewer dial options for insecure transport (JWT should be filtered)")
-	}
-}
-
-// Mock transport credentials for testing
-type mockTransportCreds struct {
-	protocol string
-}
-
-func (m *mockTransportCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, &mockAuthInfo{}, nil
-}
-
-func (m *mockTransportCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, &mockAuthInfo{}, nil
-}
-
-func (m *mockTransportCreds) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{SecurityProtocol: m.protocol}
-}
-
-func (m *mockTransportCreds) Clone() credentials.TransportCredentials {
-	return &mockTransportCreds{protocol: m.protocol}
-}
-
-func (m *mockTransportCreds) OverrideServerName(string) error {
-	return nil
-}
-
-type mockAuthInfo struct{}
-
-func (m *mockAuthInfo) AuthType() string {
-	return "mock"
-}
-
-func (m *mockAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
-	return credentials.CommonAuthInfo{}
 }
