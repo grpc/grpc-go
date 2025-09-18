@@ -3052,8 +3052,12 @@ func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, co)
 	defer cancel()
 	defer server.stop()
-	client.Close(fmt.Errorf("closed manually by test"))
 	dConn := client.conn.(*deadlineTestConn)
+	// Set both to false before invoking Close() in case some other code set a
+	// deadline above.
+	dConn.observedReadDeadline.Store(false)
+	dConn.observedWriteDeadline.Store(false)
+	client.Close(fmt.Errorf("closed manually by test"))
 	if !dConn.observedReadDeadline.Load() {
 		t.Errorf("Connection read deadline was never set")
 	}
