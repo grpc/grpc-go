@@ -274,22 +274,17 @@ func (bc *benchmarkClient) unaryLoop(conns []*grpc.ClientConn, rpcCountPerConn i
 				// before starting benchmark.
 				if poissonLambda == nil { // Closed loop.
 					for {
-						start := time.Now()
-						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
-							select {
-							case <-bc.stop:
-								return
-							default:
-							}
-							continue
-						}
-						elapse := time.Since(start)
-						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
 							return
 						default:
 						}
+						start := time.Now()
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
+							continue
+						}
+						elapse := time.Since(start)
+						bc.lockingHistograms[idx].add(int64(elapse))
 					}
 				} else { // Open loop.
 					timeBetweenRPCs := time.Duration((rand.ExpFloat64() / *poissonLambda) * float64(time.Second))
