@@ -64,13 +64,13 @@ not git grep "\"github.com/golang/protobuf/*" -- "*.go" ':(exclude)testdata/grpc
 not git grep "\(import \|^\s*\)\"google.golang.org/grpc/interop/grpc_testing" -- "*.go"
 
 # - Ensure that no trailing spaces are found.
-not git grep '[[:blank:]]$'
+not git grep -n '[[:blank:]]$'
 
 # - Ensure that all files have a terminating newline.
 git ls-files | not xargs -I {} sh -c '[ -n "$(tail -c 1 "{}" 2>/dev/null)" ] && echo "{}: No terminating new line found"' | fail_on_output
 
 # - Ensure that no tabs are found in markdown files.
-not git grep $'\t' -- '*.md'
+not git grep -n $'\t' -- '*.md'
 
 # - Ensure all xds proto imports are renamed to *pb or *grpc.
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
