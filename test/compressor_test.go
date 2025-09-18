@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -354,12 +355,10 @@ func (wc *wrapCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
 }
 
 func setupGzipWrapCompressor(t *testing.T) *wrapCompressor {
-	oldC := encoding.GetCompressor("gzip")
-	c := &wrapCompressor{Compressor: oldC}
-	encoding.RegisterCompressor(c)
-	t.Cleanup(func() {
-		encoding.RegisterCompressor(oldC)
-	})
+	regFn := internal.RegisterCompressorForTesting.(func(encoding.Compressor) func())
+	c := &wrapCompressor{Compressor: encoding.GetCompressor("gzip")}
+	unreg := regFn(c)
+	t.Cleanup(unreg)
 	return c
 }
 
@@ -803,7 +802,7 @@ func (f *fakeCompressor) Decompress(io.Reader) (io.Reader, error) {
 func (f *fakeCompressor) Name() string {
 	// Use the name of an existing compressor to avoid interactions with other
 	// tests since compressors can't be un-registered.
-	return "gzip"
+	return "fake"
 }
 
 type nopWriteCloser struct {
@@ -819,12 +818,11 @@ func (nopWriteCloser) Close() error {
 // max receive message size restricted to 99 bytes. The test verifies that the
 // client receives a ResourceExhausted response from the server.
 func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
-	oldC := encoding.GetCompressor("gzip")
-	defer func() {
-		encoding.RegisterCompressor(oldC)
-	}()
 	const messageLen = 100
-	encoding.RegisterCompressor(&fakeCompressor{decompressedMessageSize: messageLen})
+	regFn := internal.RegisterCompressorForTesting.(func(encoding.Compressor) func())
+	compressor := &fakeCompressor{decompressedMessageSize: messageLen}
+	unreg := regFn(compressor)
+	defer unreg()
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil
@@ -839,7 +837,7 @@ func (s) TestDecompressionExceedsMaxMessageSize(t *testing.T) {
 	defer cancel()
 
 	req := &testpb.SimpleRequest{Payload: &testpb.Payload{}}
-	_, err := ss.Client.UnaryCall(ctx, req, grpc.UseCompressor("gzip"))
+	_, err := ss.Client.UnaryCall(ctx, req, grpc.UseCompressor(compressor.Name()))
 	if got, want := status.Code(err), codes.ResourceExhausted; got != want {
 		t.Errorf("Client.UnaryCall(%+v) returned status %v, want %v", req, got, want)
 	}
