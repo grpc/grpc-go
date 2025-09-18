@@ -287,6 +287,7 @@ func (bc *benchmarkClient) unaryLoop(conns []*grpc.ClientConn, rpcCountPerConn i
 						bc.lockingHistograms[idx].add(int64(elapse))
 						select {
 						case <-bc.stop:
+							return
 						default:
 						}
 					}
