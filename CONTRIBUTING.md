@@ -96,47 +96,68 @@ smoothly and quickly.
 
 ### PR Descriptions
 
-- **PR titles** should start with the name of the component being addressed, or
+The title and description of a pull request (PR) becomes a permanent part of our
+version control history and may be read by many people over time. It is
+therefore important to provide clear and complete information.
+
+- **PR titles** should briefly summarize the change.
+
+  1. Should start with the name of the component being addressed, or
   the type of change. Examples: transport, client, server, round_robin, xds,
   cleanup, deps.
 
-- Read and follow the **guidelines for PR titles and descriptions** here:
-  https://google.github.io/eng-practices/review/developer/cl-descriptions.html
+  2. Should be a complete sentence, written as though it was an order. For
+  example, prefer "Create LRS client at init time" instead of "Creating LRS
+  client at init time".
 
-  *particularly* the sections "First Line" and "Body is Informative".
+- **PR descriptions** should give readers all the context they need to
+  understand the change. It should include the following:
 
-  Note: your PR description will be used as the git commit message in a
-  squash-and-merge if your PR is approved. We may make changes to this as
-  necessary.
+  1. **Tracking Issue**: If the PR addresses an issue, it should be mentioned on
+     the first line using `Fixes #<issue>` (to close the issue) or `Updates
+     #<issue>` (if related but not closing). Consider filing an issue if one
+     doesn’t already exist.
 
-- **Does this PR relate to an open issue?** On the first line, please use the
-  tag `Fixes #<issue>` to ensure the issue is closed when the PR is merged. Or
-  use `Updates #<issue>` if the PR is related to an open issue, but does not fix
-  it. Consider filing an issue if one does not already exist.
+  2. **Body** should briefly describe the problem, the solution, and why this
+     approach was preferred, links to design docs or benchmarks if relevant.
 
-- PR descriptions *must* conclude with **release notes** as follows:
+  3. **Release Notes** should be the final section of the description. It should
+     be of the following form:
 
-  ```
-  RELEASE NOTES:
-  * <component>: <summary>
-  ```
+     ```
+     RELEASE NOTES:
+     * <component>: <summary>
+     ```
 
-  This need not match the PR title.
+     This need not match the PR title.
 
-  The summary must:
+     The summary must:
 
-  * be something that gRPC users will understand.
+     - be something that gRPC users will understand.
 
-  * clearly explain the feature being added, the issue being fixed, or the
-    behavior being changed, etc. If fixing a bug, be clear about how the bug
-    can be triggered by an end-user.
+     - clearly explain the feature being added, the issue being fixed, or the
+       behavior being changed, etc. If fixing a bug, be clear about how the bug
+       can be triggered by an end-user.
 
-  * begin with a capital letter and use complete sentences.
+     - begin with a capital letter and use complete sentences.
 
-  * be as short as possible to describe the change being made.
+     - be as short as possible to describe the change being made.
 
-  If a PR is *not* end-user visible -- e.g. a cleanup, testing change, or
-  GitHub-related, use `RELEASE NOTES: n/a`.
+     If a PR is *not* end-user visible -- e.g. a cleanup, testing change, or
+     GitHub-related, use `RELEASE NOTES: n/a`.
+
+Here are some examples of good PR descriptions:
+
+- <https://github.com/grpc/grpc-go/pull/8547>
+- <https://github.com/grpc/grpc-go/pull/8528>
+
+Here are some examples of bad PR descriptions
+
+- <https://github.com/grpc/grpc-go/pull/2992>
+- <https://github.com/grpc/grpc-go/pull/2876>
+
+See here for complete **guidelines for PR titles and descriptions** here:
+<https://google.github.io/eng-practices/review/developer/cl-descriptions.html>
 
 ### PR Process
 
