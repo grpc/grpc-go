@@ -24,14 +24,13 @@ import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
 	"google.golang.org/grpc/internal/xds/clients/grpctransport"
-	"google.golang.org/grpc/internal/xds/clients/lrsclient"
 )
 
 // ReportLoad starts a load reporting stream to the given server. All load
 // reports to the same server share the LRS stream.
 //
-// It returns a lrsclient.LoadStore for the user to report loads.
-func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.LoadStore, func(context.Context)) {
+// It returns a LoadStore for the user to report loads.
+func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (LoadStore, func(context.Context)) {
 	load, err := c.lrsClient.ReportLoad(clients.ServerIdentifier{
 		ServerURI: server.ServerURI(),
 		Extensions: grpctransport.ServerIdentifierExtension{

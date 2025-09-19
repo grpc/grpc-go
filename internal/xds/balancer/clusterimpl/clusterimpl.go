@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/internal/xds/balancer/loadstore"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/clients"
-	"google.golang.org/grpc/internal/xds/clients/lrsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -236,7 +235,7 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 		}
 	}
 	if startNewLoadReport {
-		var loadStore *lrsclient.LoadStore
+		var loadStore xdsclient.LoadStore
 		if b.xdsClient != nil {
 			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(b.lrsServer)
 		}

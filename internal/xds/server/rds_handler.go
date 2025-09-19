@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	igrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
@@ -135,7 +136,7 @@ type rdsWatcher struct {
 	canceled bool // eats callbacks if true
 }
 
-func (rw *rdsWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceData, onDone func()) {
+func (rw *rdsWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) {
 	defer onDone()
 	rw.mu.Lock()
 	if rw.canceled {
@@ -143,12 +144,13 @@ func (rw *rdsWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceDat
 		return
 	}
 	rw.mu.Unlock()
+	rcData := rd.(*xdsresource.RouteConfigResourceData)
 	if rw.logger.V(2) {
-		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, update.Resource)
+		rw.logger.Infof("RDS watch for resource %q received update: %#v", rw.routeName, rcData.Resource)
 	}
 
 	routeName := rw.routeName
-	rwu := rdsWatcherUpdate{data: &update.Resource}
+	rwu := rdsWatcherUpdate{data: &rcData.Resource}
 	rw.parent.updates[routeName] = rwu
 	rw.parent.callback(routeName, rwu)
 }

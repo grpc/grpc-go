@@ -21,6 +21,7 @@ package resolver
 import (
 	"context"
 
+	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
@@ -36,8 +37,9 @@ func newListenerWatcher(resourceName string, parent *xdsResolver) *listenerWatch
 	return lw
 }
 
-func (l *listenerWatcher) ResourceChanged(update *xdsresource.ListenerResourceData, onDone func()) {
-	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(update.Resource); onDone() }
+func (l *listenerWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) {
+	listenerData := rd.(*xdsresource.ListenerResourceData)
+	handleUpdate := func(context.Context) { l.parent.onListenerResourceUpdate(listenerData.Resource); onDone() }
 	l.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }
 
@@ -68,9 +70,10 @@ func newRouteConfigWatcher(resourceName string, parent *xdsResolver) *routeConfi
 	return rw
 }
 
-func (r *routeConfigWatcher) ResourceChanged(u *xdsresource.RouteConfigResourceData, onDone func()) {
+func (r *routeConfigWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) {
+	rcData := rd.(*xdsresource.RouteConfigResourceData)
 	handleUpdate := func(context.Context) {
-		r.parent.onRouteConfigResourceUpdate(r.resourceName, u.Resource)
+		r.parent.onRouteConfigResourceUpdate(r.resourceName, rcData.Resource)
 		onDone()
 	}
 	r.parent.serializer.ScheduleOr(handleUpdate, onDone)

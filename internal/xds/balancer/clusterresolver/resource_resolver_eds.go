@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
+	clientimpl "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
@@ -76,12 +77,13 @@ func newEDSResolver(nameToWatch string, producer xdsresource.Producer, topLevelR
 }
 
 // ResourceChanged is invoked to report an update for the resource being watched.
-func (er *edsDiscoveryMechanism) ResourceChanged(update *xdsresource.EndpointsResourceData, onDone func()) {
+func (er *edsDiscoveryMechanism) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
 	if er.stopped.HasFired() {
 		onDone()
 		return
 	}
 
+	update := rd.(*xdsresource.EndpointsResourceData)
 	er.mu.Lock()
 	er.update = &update.Resource
 	er.mu.Unlock()
