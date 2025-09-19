@@ -262,7 +262,7 @@ func (bc *benchmarkClient) unaryLoop(conns []*grpc.ClientConn, rpcCountPerConn i
 	for ic, conn := range conns {
 		client := testgrpc.NewBenchmarkServiceClient(conn)
 		// For each connection, create rpcCountPerConn goroutines to do rpc.
-		for j := 0; j < rpcCountPerConn; j++ {
+		for j := range rpcCountPerConn {
 			// Create histogram for each goroutine.
 			idx := ic*rpcCountPerConn + j
 			bc.lockingHistograms[idx].histogram = stats.NewHistogram(bc.histogramOptions)
@@ -273,29 +273,18 @@ func (bc *benchmarkClient) unaryLoop(conns []*grpc.ClientConn, rpcCountPerConn i
 				// The worker client needs to wait for some time after client is created,
 				// before starting benchmark.
 				if poissonLambda == nil { // Closed loop.
-					done := make(chan bool)
 					for {
-						go func() {
-							start := time.Now()
-							if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
-								select {
-								case <-bc.stop:
-								case done <- false:
-								}
-								return
-							}
-							elapse := time.Since(start)
-							bc.lockingHistograms[idx].add(int64(elapse))
-							select {
-							case <-bc.stop:
-							case done <- true:
-							}
-						}()
 						select {
 						case <-bc.stop:
 							return
-						case <-done:
+						default:
 						}
+						start := time.Now()
+						if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
+							continue
+						}
+						elapse := time.Since(start)
+						bc.lockingHistograms[idx].add(int64(elapse))
 					}
 				} else { // Open loop.
 					timeBetweenRPCs := time.Duration((rand.ExpFloat64() / *poissonLambda) * float64(time.Second))
