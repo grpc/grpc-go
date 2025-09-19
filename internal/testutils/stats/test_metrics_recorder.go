@@ -35,11 +35,12 @@ import (
 // have taken place. It also persists metrics data keyed on the metrics
 // descriptor.
 type TestMetricsRecorder struct {
-	intCountCh   *testutils.Channel
-	floatCountCh *testutils.Channel
-	intHistoCh   *testutils.Channel
-	floatHistoCh *testutils.Channel
-	intGaugeCh   *testutils.Channel
+	intCountCh       *testutils.Channel
+	floatCountCh     *testutils.Channel
+	intHistoCh       *testutils.Channel
+	floatHistoCh     *testutils.Channel
+	intGaugeCh       *testutils.Channel
+	intUpDownCountCh *testutils.Channel
 
 	// mu protects data.
 	mu sync.Mutex
@@ -50,11 +51,12 @@ type TestMetricsRecorder struct {
 // NewTestMetricsRecorder returns a new TestMetricsRecorder.
 func NewTestMetricsRecorder() *TestMetricsRecorder {
 	return &TestMetricsRecorder{
-		intCountCh:   testutils.NewChannelWithSize(10),
-		floatCountCh: testutils.NewChannelWithSize(10),
-		intHistoCh:   testutils.NewChannelWithSize(10),
-		floatHistoCh: testutils.NewChannelWithSize(10),
-		intGaugeCh:   testutils.NewChannelWithSize(10),
+		intCountCh:       testutils.NewChannelWithSize(10),
+		floatCountCh:     testutils.NewChannelWithSize(10),
+		intHistoCh:       testutils.NewChannelWithSize(10),
+		floatHistoCh:     testutils.NewChannelWithSize(10),
+		intGaugeCh:       testutils.NewChannelWithSize(10),
+		intUpDownCountCh: testutils.NewChannelWithSize(10),
 
 		data: make(map[string]float64),
 	}
@@ -124,6 +126,22 @@ func (r *TestMetricsRecorder) WaitForInt64CountIncr(ctx context.Context, incrWan
 func (r *TestMetricsRecorder) RecordInt64Count(handle *estats.Int64CountHandle, incr int64, labels ...string) {
 	r.intCountCh.ReceiveOrFail()
 	r.intCountCh.Send(MetricsData{
+		Handle:    handle.Descriptor(),
+		IntIncr:   incr,
+		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
+		LabelVals: labels,
+	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.data[handle.Name] = float64(incr)
+}
+
+// RecordInt64UpDownCount sends the metrics data to the intUpDownCountCh channel and updates
+// the internal data map with the recorded value.
+func (r *TestMetricsRecorder) RecordInt64UpDownCount(handle *estats.Int64UpDownCountHandle, incr int64, labels ...string) {
+	r.intUpDownCountCh.ReceiveOrFail()
+	r.intUpDownCountCh.Send(MetricsData{
 		Handle:    handle.Descriptor(),
 		IntIncr:   incr,
 		LabelKeys: append(handle.Labels, handle.OptionalLabels...),
@@ -294,3 +312,7 @@ func (r *NoopMetricsRecorder) RecordFloat64Histo(*estats.Float64HistoHandle, flo
 
 // RecordInt64Gauge is a noop implementation of RecordInt64Gauge.
 func (r *NoopMetricsRecorder) RecordInt64Gauge(*estats.Int64GaugeHandle, int64, ...string) {}
+
+// RecordInt64UpDownCount is a noop implementation of RecordInt64UpDownCount.
+func (r *NoopMetricsRecorder) RecordInt64UpDownCount(*estats.Int64UpDownCountHandle, int64, ...string) {
+}
