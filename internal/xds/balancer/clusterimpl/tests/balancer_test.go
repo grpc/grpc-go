@@ -445,14 +445,8 @@ func (s) TestCircuitBreaking(t *testing.T) {
 		if ctx.Err() != nil {
 			t.Fatalf("Context error: %v", ctx.Err())
 		}
-		_, err := client.FullDuplexCall(ctx)
-		switch {
-		case err == nil:
-			t.Fatalf("client.FullDuplexCall(_) failed with unexpected error got: <nil>, want: %v", err)
-		case status.Code(err) == codes.Unavailable:
-			continue
-		default:
-			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
+		if _, err := client.FullDuplexCall(ctx); status.Code(err) != codes.Unavailable {
+			t.Fatalf("client.FullDuplexCall() returned status %q, want %q", status.Code(err), codes.Unavailable)
 		}
 	}
 
@@ -506,13 +500,12 @@ func (s) TestCircuitBreaking(t *testing.T) {
 // the observed probability is within a certain error_tolerance of the expected
 // probability (p).
 func computeIdealNumRpcs(p, errorTolerance float64) uint64 {
-	numRpcs := uint64(math.Ceil(p * (1 - p) * 5.00 * 5.00 / errorTolerance / errorTolerance))
-	return numRpcs
+	return uint64(math.Ceil(p * (1 - p) * 5.00 * 5.00 / errorTolerance / errorTolerance))
 }
 
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
 // that the drops are reported.
-func (s) TestDropByCategory(t *testing.T) {
+func TestDropByCategory(t *testing.T) {
 	// Create an xDS management server that serves ADS and LRS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
@@ -543,8 +536,8 @@ func (s) TestDropByCategory(t *testing.T) {
 	server := stubserver.StartTestService(t, f)
 	defer server.Stop()
 
-	// Configure xDS resources on the management server with drops configuration
-	// that drops one RPC for every 50 RPCs made.
+	// Configure xDS resources on the management server with drops
+	// configuration that drops one RPC for every 50 RPCs made.
 	const (
 		dropReason      = "test-dropping-category"
 		dropNumerator   = 1
@@ -554,7 +547,7 @@ func (s) TestDropByCategory(t *testing.T) {
 	)
 	wantRPCDropRate := float64(dropNumerator) / float64(dropDenominator)
 	rpcCount := computeIdealNumRpcs(wantRPCDropRate, errorTolerance)
-	t.Logf("Computed rpcCount: %d", rpcCount)
+	t.Logf("About to send %d RPCs to test drop rate of %v", rpcCount, wantRPCDropRate)
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
@@ -595,7 +588,8 @@ func (s) TestDropByCategory(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Ensure the gRPC channel is READY before issuing RPCs to get accurate drop count.
+	// Ensure the gRPC channel is READY before issuing RPCs to get accurate
+	// drop count.
 	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
@@ -620,29 +614,37 @@ func (s) TestDropByCategory(t *testing.T) {
 		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
 	}
 
-	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
-		t.Fatalf("Failure waiting for initial LRS request: %v", err)
-	}
-
 	resp := fakeserver.Response{
 		Resp: &v3lrspb.LoadStatsResponse{
-			SendAllClusters:       true,
-			LoadReportingInterval: durationpb.New(time.Second),
+			Clusters:              []string{resources.Clusters[0].Name},
+			LoadReportingInterval: durationpb.New(50 * time.Millisecond),
 		},
 	}
 	mgmtServer.LRSServer.LRSResponseChan <- &resp
 
-	select {
-	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
-		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
-		for _, cs := range loadStats.ClusterStats {
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timeout when waiting for new loads to be seen on the server")
+		}
+
+		req, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
+		if err != nil {
+			continue
+		}
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
+		if len(loadStats) != 1 {
+			continue
+		}
+		for _, cs := range loadStats {
+			if cs.ClusterName != resources.Clusters[0].Name {
+				t.Fatalf("Received stats for unexpected cluster got: %v, want: %v", cs.ClusterName, resources.Clusters[0].Name)
+			}
 			gotRPCDropRate := float64(cs.TotalDroppedRequests) / float64(rpcCount)
-			if math.Abs(gotRPCDropRate-wantRPCDropRate) > errorTolerance {
-				t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", math.Abs(gotRPCDropRate-wantRPCDropRate), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
+			if (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100) > errorTolerance {
+				t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
 			}
 		}
-	case <-ctx.Done():
-		t.Fatalf("Timeout while waiting for load report on LRS stream: %v", ctx.Err())
+		break
 	}
 
 	// Update the drop configuration to drop 1 out of every 40 RPCs,
@@ -674,7 +676,7 @@ func (s) TestDropByCategory(t *testing.T) {
 
 	wantRPCDropRate = float64(dropNumerator2) / float64(dropDenominator2)
 	rpcCount = computeIdealNumRpcs(wantRPCDropRate, errorTolerance)
-	t.Logf("Computed rpcCount: %d", rpcCount)
+	t.Logf("About to send %d RPCs to test drop rate of %v", rpcCount, wantRPCDropRate)
 
 	for i := 0; i < int(rpcCount); i++ {
 		if ctx.Err() != nil {
@@ -692,17 +694,35 @@ func (s) TestDropByCategory(t *testing.T) {
 		}
 	}
 
-	select {
-	case req := <-mgmtServer.LRSServer.LRSRequestChan.C:
-		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest)
-		for _, cs := range loadStats.ClusterStats {
-			gotRPCDropRate := float64(cs.TotalDroppedRequests) / float64(rpcCount)
-			if math.Abs(gotRPCDropRate-wantRPCDropRate) > errorTolerance {
-				t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", math.Abs(gotRPCDropRate-wantRPCDropRate), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timeout when waiting for new loads to be seen on the server")
+		}
+
+		req, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
+		if err != nil {
+			continue
+		}
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
+		if l := len(loadStats); l != 1 {
+			continue
+		}
+		for _, cs := range loadStats {
+			found := false
+			for _, dr := range cs.DroppedRequests {
+				if dr.Category == dropReason2 {
+					found = true
+					gotRPCDropRate := float64(dr.DroppedCount) / float64(rpcCount)
+					if (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100) > errorTolerance {
+						t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
+					}
+				}
+			}
+			if !found {
+				continue
 			}
 		}
-	case <-ctx.Done():
-		t.Fatalf("Timeout while waiting for load report on LRS stream: %v", ctx.Err())
+		break
 	}
 }
 
@@ -792,7 +812,7 @@ func (s) TestCircuitBreakingLogicalDNS(t *testing.T) {
 		}
 	}
 
-	// Since we are at the max, new streams should fail.  It's possible some are
+	// Since we are at the max, new streams should fail. It's possible some are
 	// allowed due to inherent raciness in the tracking, however.
 	for i := 0; i < 100; i++ {
 		stream, err := client.FullDuplexCall(ctx)
