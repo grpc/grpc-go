@@ -663,3 +663,201 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 		t.Fatalf("Server did not receive load due to error: %v", err)
 	}
 }
+
+// TestReResolution verifies that when a SubConn turns transient failure,
+// re-resolution is triggered.
+func (s) TestReResolution(t *testing.T) {
+	// Create an xDS management server that serves ADS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{})
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start two server backends exposing the test service.
+	backend1 := stubserver.StartTestService(t, nil)
+	defer backend1.Stop()
+	backend1Host, backend1Port := hostAndPortFromAddress(t, backend1.Address)
+
+	backend2 := stubserver.StartTestService(t, nil)
+	defer backend2.Stop()
+	backend2Host, backend2Port := hostAndPortFromAddress(t, backend2.Address)
+
+	// Configure the xDS management server with Logical DNS cluster pointing to backend1.
+	const serviceName = "test-xds-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       backend1Host,
+		Port:       backend1Port,
+	})
+	resources.Clusters = []*v3clusterpb.Cluster{
+		e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+			ClusterName: "cluster-" + serviceName,
+			Type:        e2e.ClusterTypeLogicalDNS,
+			DNSHostName: backend1Host,
+			DNSPort:     backend1Port,
+		}),
+	}
+	resources.Endpoints = nil
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(resolverBuilder),
+	)
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	cc.Connect()
+	client := testgrpc.NewTestServiceClient(cc)
+	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
+
+	// Perform initial RPC to backend1, expect success.
+	var peer peer.Peer
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+		t.Fatalf("Expected initial rpc to backend1 to succeed, got: %v", err)
+	}
+
+	// Verify that the request was sent to backend 1.
+	if got, want := peer.Addr.String(), backend1.Address; got != want {
+		t.Fatalf("EmptyCall() routed to backend %q, want %q", peer.Addr, backend1.Address)
+	}
+
+	// Stop backend1 to simulate failure.
+	backend1.Stop()
+
+	// Update management server with Logical DNS cluster pointing to backend2 now.
+	resources.Clusters[0] = e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
+		ClusterName: "cluster-" + serviceName,
+		Type:        e2e.ClusterTypeLogicalDNS,
+		DNSHostName: backend2Host,
+		DNSPort:     backend2Port,
+	})
+
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("failed to update management server resources to backend2: %v", err)
+	}
+
+	// Wait for client to re-resolve and start routing to backend2.
+	for {
+		if ctx.Err() != nil {
+			t.Fatalf("Timed out while waiting for RPC to be routed to backend2: %v", ctx.Err())
+		}
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer), grpc.WaitForReady(true)); err != nil {
+			t.Logf("RPC failed, possibly during switchover: %v", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		if peer.Addr.String() == backend2.Address {
+			break
+		}
+		t.Logf("RPC routed to %q, waiting for %q", peer.Addr.String(), backend2.Address)
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// TestUpdateLRSServerToNil verifies that updating the cluster's LRS server config from 'Self' to nil
+// correctly closes the LRS stream and ensures no more LRS reports are sent.
+func (s) TestUpdateLRSServerToNil(t *testing.T) {
+	// Create an xDS management server that serves ADS and LRS requests.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	// Configure the xDS management server with default resources.
+	const serviceName = "my-test-xds-service"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       testutils.ParsePort(t, server.Address),
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Clusters[0].LrsServer = &v3corepb.ConfigSource{
+		ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+			Self: &v3corepb.SelfConfigSource{},
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(resolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+
+	cc.Connect()
+	defer cc.Close()
+	client := testgrpc.NewTestServiceClient(cc)
+
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	// Ensure that an LRS stream is created.
+	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("error waiting for initial LRS stream open: %v", err)
+	}
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+		t.Fatalf("error waiting for initial LRS report: %v", err)
+	}
+
+	// Update LRS Server to nil
+	resources.Clusters[0].LrsServer = nil
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that the old LRS stream is not closed.
+	if _, err := mgmtServer.LRSServer.LRSStreamCloseChan.Receive(ctx); err != nil {
+		t.Fatalf("error waiting for initial LRS stream close : %v", err)
+	}
+
+	// Also ensure that a new LRS stream is not created.
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != context.DeadlineExceeded {
+		t.Fatalf("expected no LRS reports after disable, but got: %v", err)
+	}
+}
