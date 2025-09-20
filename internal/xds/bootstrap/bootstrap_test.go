@@ -19,15 +19,20 @@
 package bootstrap
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/jwt"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
@@ -196,6 +201,74 @@ var (
 				"server_features" : ["ignore_resource_deletion", "xds_v3"]
 			}]
 		}`,
+		// example data seeded from
+		// https://github.com/istio/istio/blob/master/pkg/istio-agent/testdata/grpc-bootstrap.json
+		"istioStyleInsecureWithJWTCallCreds": `
+		{
+			"node": {
+                "id": "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+                "metadata": {
+                  "GENERATOR": "grpc",
+                  "INSTANCE_IPS": "127.0.0.1",
+                  "ISTIO_VERSION": "1.26.2",
+                  "WORKLOAD_IDENTITY_SOCKET_FILE": "socket"
+                },
+                "locality": {}
+			},
+			"xds_servers" : [{
+				"server_uri": "unix:///etc/istio/XDS",
+				"channel_creds": [
+					{ "type": "insecure" }
+				],
+				"call_creds": [
+					{ "type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"} }
+				],
+				"server_features" : ["xds_v3"]
+			}]
+		}`,
+		"istioStyleInsecureWithoutCallCreds": `
+		{
+			"node": {
+                "id": "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+                "metadata": {
+                  "GENERATOR": "grpc",
+                  "INSTANCE_IPS": "127.0.0.1",
+                  "ISTIO_VERSION": "1.26.2",
+                  "WORKLOAD_IDENTITY_SOCKET_FILE": "socket"
+                },
+                "locality": {}
+			},
+			"xds_servers" : [{
+				"server_uri": "unix:///etc/istio/XDS",
+				"channel_creds": [
+					{ "type": "insecure" }
+				],
+				"server_features" : ["xds_v3"]
+			}]
+		}`,
+		"istioStyleWithTLSAndJWT": `
+		{
+			"node": {
+                "id": "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+                "metadata": {
+                  "GENERATOR": "grpc",
+                  "INSTANCE_IPS": "127.0.0.1",
+                  "ISTIO_VERSION": "1.26.2",
+                  "WORKLOAD_IDENTITY_SOCKET_FILE": "socket"
+                },
+                "locality": {}
+			},
+			"xds_servers" : [{
+				"server_uri": "unix:///etc/istio/XDS",
+				"channel_creds": [
+					{ "type": "tls", "config": {} }
+				],
+				"call_creds": [
+					{ "type": "jwt_token_file", "config": {"jwt_token_file": "/var/run/secrets/tokens/istio-token"} }
+				],
+				"server_features" : ["xds_v3"]
+			}]
+		}`,
 	}
 	metadata = &structpb.Struct{
 		Fields: map[string]*structpb.Value{
@@ -274,6 +347,82 @@ var (
 			selectedCreds: ChannelCreds{Type: "google_default"},
 		}},
 		node: v3Node,
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+
+	istioNodeMetadata = &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"GENERATOR": {
+				Kind: &structpb.Value_StringValue{StringValue: "grpc"},
+			},
+			"INSTANCE_IPS": {
+				Kind: &structpb.Value_StringValue{StringValue: "127.0.0.1"},
+			},
+			"ISTIO_VERSION": {
+				Kind: &structpb.Value_StringValue{StringValue: "1.26.2"},
+			},
+			"WORKLOAD_IDENTITY_SOCKET_FILE": {
+				Kind: &structpb.Value_StringValue{StringValue: "socket"},
+			},
+		},
+	}
+	jwtCallCreds, _             = jwt.NewTokenFileCallCredentials("/var/run/secrets/tokens/istio-token")
+	selectedJWTCallCreds        = []credentials.PerRPCCredentials{jwtCallCreds}
+	configWithIstioJWTCallCreds = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:         "unix:///etc/istio/XDS",
+			channelCreds:      []ChannelCreds{{Type: "insecure"}},
+			callCreds:         []CallCreds{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
+			serverFeatures:    []string{"xds_v3"},
+			selectedCreds:     ChannelCreds{Type: "insecure"},
+			selectedCallCreds: selectedJWTCallCreds,
+		}},
+		node: node{
+			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+			Metadata:             istioNodeMetadata,
+			userAgentName:        gRPCUserAgentName,
+			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+		},
+		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+
+	configWithIstioStyleNoCallCreds = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:      "unix:///etc/istio/XDS",
+			channelCreds:   []ChannelCreds{{Type: "insecure"}},
+			serverFeatures: []string{"xds_v3"},
+			selectedCreds:  ChannelCreds{Type: "insecure"},
+		}},
+		node: node{
+			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+			Metadata:             istioNodeMetadata,
+			userAgentName:        gRPCUserAgentName,
+			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+		},
+		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
+		clientDefaultListenerResourceNameTemplate: "%s",
+	}
+
+	configWithIstioStyleWithTLSAndJWT = &Config{
+		xDSServers: []*ServerConfig{{
+			serverURI:         "unix:///etc/istio/XDS",
+			channelCreds:      []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
+			callCreds:         []CallCreds{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
+			serverFeatures:    []string{"xds_v3"},
+			selectedCreds:     ChannelCreds{Type: "tls", Config: json.RawMessage("{}")},
+			selectedCallCreds: selectedJWTCallCreds,
+		}},
+		node: node{
+			ID:                   "sidecar~127.0.0.1~pod1.fake-namespace~fake-namespace.svc.cluster.local",
+			Metadata:             istioNodeMetadata,
+			userAgentName:        gRPCUserAgentName,
+			userAgentVersionType: userAgentVersion{UserAgentVersion: grpc.Version},
+			clientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+		},
+		certProviderConfigs:                       map[string]*certprovider.BuildableConfig{},
 		clientDefaultListenerResourceNameTemplate: "%s",
 	}
 )
@@ -432,6 +581,34 @@ func (s) TestGetConfiguration_Success(t *testing.T) {
 		{"goodBootstrap", configWithGoogleDefaultCredsAndV3},
 		{"multipleXDSServers", configWithMultipleServers},
 		{"serverSupportsIgnoreResourceDeletion", configWithGoogleDefaultCredsAndIgnoreResourceDeletion},
+		{"istioStyleInsecureWithoutCallCreds", configWithIstioStyleNoCallCreds},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testGetConfigurationWithFileNameEnv(t, test.name, false, test.wantConfig)
+			testGetConfigurationWithFileContentEnv(t, test.name, false, test.wantConfig)
+		})
+	}
+}
+
+// Tests Istio-style bootstrap configurations with JWT call credentials
+func (s) TestGetConfiguration_IstioStyleWithCallCreds(t *testing.T) {
+	original := envconfig.XDSBootstrapCallCredsEnabled
+	envconfig.XDSBootstrapCallCredsEnabled = true
+	defer func() {
+		envconfig.XDSBootstrapCallCredsEnabled = original
+	}()
+
+	cancel := setupBootstrapOverride(v3BootstrapFileMap)
+	defer cancel()
+
+	tests := []struct {
+		name       string
+		wantConfig *Config
+	}{
+		{"istioStyleInsecureWithJWTCallCreds", configWithIstioJWTCallCreds},
+		{"istioStyleWithTLSAndJWT", configWithIstioStyleWithTLSAndJWT},
 	}
 
 	for _, test := range tests {
@@ -1033,6 +1210,190 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+func (s) TestCallCreds_Equal(t *testing.T) {
+	tests := []struct {
+		name string
+		cc1  CallCreds
+		cc2  CallCreds
+		want bool
+	}{
+		{
+			name: "identical_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			want: true,
+		},
+		{
+			name: "different_types",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCreds{Type: "other_type", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			want: false,
+		},
+		{
+			name: "different_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/different/path"}`)},
+			want: false,
+		},
+		{
+			name: "nil_vs_non-nil_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: nil},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			want: false,
+		},
+		{
+			name: "both_nil_configs",
+			cc1:  CallCreds{Type: "jwt_token_file", Config: nil},
+			cc2:  CallCreds{Type: "jwt_token_file", Config: nil},
+			want: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := test.cc1.Equal(test.cc2)
+			if result != test.want {
+				t.Errorf("CallCreds.Equal() = %v, want %v", result, test.want)
+			}
+		})
+	}
+}
+
+func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
+	original := envconfig.XDSBootstrapCallCredsEnabled
+	defer func() { envconfig.XDSBootstrapCallCredsEnabled = original }()
+	envconfig.XDSBootstrapCallCredsEnabled = true
+	tests := []struct {
+		name          string
+		json          string
+		wantCallCreds []CallCreds
+	}{
+		{
+			name: "valid_call_creds_with_jwt_token_file",
+			json: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}],
+				"call_creds": [
+					{
+						"type": "jwt_token_file",
+						"config": {"jwt_token_file": "/path/to/token.jwt"}
+					}
+				]
+			}`,
+			wantCallCreds: []CallCreds{{
+				Type:   "jwt_token_file",
+				Config: json.RawMessage(`{"jwt_token_file": "/path/to/token.jwt"}`),
+			}},
+		},
+		{
+			name: "multiple_call_creds_types",
+			json: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}],
+				"call_creds": [
+					{"type": "jwt_token_file", "config": {"jwt_token_file": "/token1.jwt"}},
+					{"type": "unsupported_type", "config": {}}
+				]
+			}`,
+			wantCallCreds: []CallCreds{
+				{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/token1.jwt"}`)},
+				{Type: "unsupported_type", Config: json.RawMessage(`{}`)},
+			},
+		},
+		{
+			name: "empty_call_creds_array",
+			json: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}],
+				"call_creds": []
+			}`,
+			wantCallCreds: []CallCreds{},
+		},
+		{
+			name: "unspecified_call_creds_field",
+			json: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}]
+			}`,
+			wantCallCreds: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var sc ServerConfig
+			err := sc.UnmarshalJSON([]byte(test.json))
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(test.wantCallCreds, sc.CallCreds()); diff != "" {
+				t.Errorf("CallCreds mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestServerConfig_Equal_WithCallCreds(t *testing.T) {
+	callCreds := []CallCreds{{
+		Type:   "jwt_token_file",
+		Config: json.RawMessage(`{"jwt_token_file": "/test/token.jwt"}`),
+	}}
+	sc1 := &ServerConfig{
+		serverURI:      "server1",
+		channelCreds:   []ChannelCreds{{Type: "insecure"}},
+		callCreds:      callCreds,
+		serverFeatures: []string{"feature1"},
+	}
+	sc2 := &ServerConfig{
+		serverURI:      "server1",
+		channelCreds:   []ChannelCreds{{Type: "insecure"}},
+		callCreds:      callCreds,
+		serverFeatures: []string{"feature1"},
+	}
+	sc3 := &ServerConfig{
+		serverURI:      "server1",
+		channelCreds:   []ChannelCreds{{Type: "insecure"}},
+		callCreds:      []CallCreds{{Type: "different"}},
+		serverFeatures: []string{"feature1"},
+	}
+
+	if !sc1.Equal(sc2) {
+		t.Error("Equal ServerConfigs with same call creds should be equal")
+	}
+	if sc1.Equal(sc3) {
+		t.Error("ServerConfigs with different call creds should not be equal")
+	}
+}
+
+func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
+	original := envconfig.XDSBootstrapCallCredsEnabled
+	defer func() { envconfig.XDSBootstrapCallCredsEnabled = original }()
+	envconfig.XDSBootstrapCallCredsEnabled = true
+	sc := &ServerConfig{
+		serverURI:    "test-server:443",
+		channelCreds: []ChannelCreds{{Type: "insecure"}},
+		callCreds: []CallCreds{{
+			Type:   "jwt_token_file",
+			Config: json.RawMessage(`{"jwt_token_file":"/test/token.jwt"}`),
+		}},
+		serverFeatures: []string{"test_feature"},
+	}
+
+	data, err := sc.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+
+	// Check Marshal/Unmarshal symmetry.
+	var unmarshaled ServerConfig
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if diff := cmp.Diff(sc.CallCreds(), unmarshaled.CallCreds()); diff != "" {
+		t.Errorf("Marshal/Unmarshal call credentials produces differences:\n%s", diff)
+	}
+}
+
 func newStructProtoFromMap(t *testing.T, input map[string]any) *structpb.Struct {
 	t.Helper()
 
@@ -1200,4 +1561,219 @@ func (s) TestNode_ToProto(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s) TestBootstrap_SelectedCredsAndCallCreds(t *testing.T) {
+	original := envconfig.XDSBootstrapCallCredsEnabled
+	envconfig.XDSBootstrapCallCredsEnabled = true
+	defer func() {
+		envconfig.XDSBootstrapCallCredsEnabled = original
+	}()
+
+	tokenFile := "/token.jwt"
+	tests := []struct {
+		name              string
+		bootstrapConfig   string
+		wantCallCreds     int
+		wantTransportType string
+	}{
+		{
+			name: "JWT_call_creds_with_TLS_channel_creds",
+			bootstrapConfig: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "tls", "config": {}}],
+				"call_creds": [
+					{
+						"type": "jwt_token_file",
+						"config": {"jwt_token_file": "` + tokenFile + `"}
+					}
+				]
+			}`,
+			wantCallCreds:     1,
+			wantTransportType: "tls",
+		},
+		{
+			name: "JWT_call_creds_with_multiple_channel_creds",
+			bootstrapConfig: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "tls", "config": {}}, {"type": "insecure"}],
+				"call_creds": [
+					{
+						"type": "jwt_token_file",
+						"config": {"jwt_token_file": "` + tokenFile + `"}
+					},
+					{
+						"type": "jwt_token_file",
+						"config": {"jwt_token_file": "` + tokenFile + `"}
+					}
+				]
+			}`,
+			wantCallCreds:     2,
+			wantTransportType: "tls", // the first channel creds is selected
+		},
+		{
+			name: "JWT_call_creds_with_insecure_channel_creds",
+			bootstrapConfig: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}],
+				"call_creds": [
+					{
+						"type": "jwt_token_file",
+						"config": {"jwt_token_file": "` + tokenFile + `"}
+					}
+				]
+			}`,
+			wantCallCreds:     1,
+			wantTransportType: "insecure",
+		},
+		{
+			name: "No_call_creds",
+			bootstrapConfig: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}]
+			}`,
+			wantCallCreds:     0,
+			wantTransportType: "insecure",
+		},
+		{
+			name: "No_call_creds_multiple_channel_creds",
+			bootstrapConfig: `{
+				"server_uri": "xds-server:443",
+				"channel_creds": [{"type": "insecure"}, {"type": "tls", "config": {}}]
+			}`,
+			wantCallCreds:     0,
+			wantTransportType: "insecure",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var sc ServerConfig
+			err := sc.UnmarshalJSON([]byte(test.bootstrapConfig))
+			if err != nil {
+				t.Fatalf("Failed to unmarshal bootstrap config: %v", err)
+			}
+
+			// Verify call credentials processing.
+			callCreds := sc.CallCreds()
+			selectedCallCreds := sc.SelectedCallCreds()
+			if len(callCreds) != test.wantCallCreds {
+				t.Errorf("Call creds count = %d, want %d", len(callCreds), test.wantCallCreds)
+			}
+			if len(selectedCallCreds) != test.wantCallCreds {
+				t.Errorf("Selected call creds count = %d, want %d", len(selectedCallCreds), test.wantCallCreds)
+			}
+			// Verify transport credentials are properly selected.
+			if sc.SelectedCreds().Type != test.wantTransportType {
+				t.Errorf("Selected transport creds type = %q, want %q",
+					sc.SelectedCreds().Type, test.wantTransportType)
+			}
+		})
+	}
+}
+
+func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
+	testJWTCreds := &testPerRPCCreds{requireSecurity: true}
+	testInsecureCreds := &testPerRPCCreds{requireSecurity: false}
+
+	sc := &ServerConfig{
+		selectedCallCreds: []credentials.PerRPCCredentials{
+			testJWTCreds,
+			testInsecureCreds,
+		},
+		extraDialOptions: []grpc.DialOption{
+			grpc.WithUserAgent("test-agent"), // extra option
+		},
+	}
+
+	tests := []struct {
+		name           string
+		transportType  string
+		transportCreds credentials.TransportCredentials
+		wantJWTCreds   bool
+		wantOtherCreds bool
+	}{
+		{
+			name:           "insecure_transport_by_type",
+			transportType:  "insecure",
+			transportCreds: nil,
+			wantJWTCreds:   false,
+			wantOtherCreds: true,
+		},
+		{
+			name:           "insecure_transport_by_protocol",
+			transportType:  "custom",
+			transportCreds: insecure.NewCredentials(),
+			wantJWTCreds:   false,
+			wantOtherCreds: true,
+		},
+		{
+			name:           "secure_transport",
+			transportType:  "tls",
+			transportCreds: &testTransportCreds{securityProtocol: "tls"},
+			wantJWTCreds:   true,
+			wantOtherCreds: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			opts := sc.DialOptionsWithCallCredsForTransport(test.transportType, test.transportCreds)
+			// Count dial options (should include extra options + applicable
+			// call creds)
+			wantCount := 2
+			if test.wantJWTCreds {
+				wantCount++
+			}
+			if len(opts) != wantCount {
+				t.Errorf("DialOptions count = %d, want %d", len(opts), wantCount)
+			}
+		})
+	}
+}
+
+type testPerRPCCreds struct {
+	requireSecurity bool
+}
+
+func (c *testPerRPCCreds) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
+	return map[string]string{"test": "metadata"}, nil
+}
+
+func (c *testPerRPCCreds) RequireTransportSecurity() bool {
+	return c.requireSecurity
+}
+
+type testTransportCreds struct {
+	securityProtocol string
+}
+
+func (c *testTransportCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, &testAuthInfo{}, nil
+}
+
+func (c *testTransportCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, &testAuthInfo{}, nil
+}
+
+func (c *testTransportCreds) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{SecurityProtocol: c.securityProtocol}
+}
+
+func (c *testTransportCreds) Clone() credentials.TransportCredentials {
+	return &testTransportCreds{securityProtocol: c.securityProtocol}
+}
+
+func (c *testTransportCreds) OverrideServerName(string) error {
+	return nil
+}
+
+type testAuthInfo struct{}
+
+func (a *testAuthInfo) AuthType() string {
+	return "test"
+}
+
+func (a *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
+	return credentials.CommonAuthInfo{}
 }

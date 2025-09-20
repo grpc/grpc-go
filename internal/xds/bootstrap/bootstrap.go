@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
@@ -81,6 +82,21 @@ func (cc ChannelCreds) String() string {
 	// it is safe to ignore the error here.
 	b, _ := json.Marshal(cc.Config)
 	return cc.Type + "-" + string(b)
+}
+
+// CallCreds contains the call credentials configuration for individual RPCs.
+// It implements gRFC A97 call credentials structure.
+type CallCreds struct {
+	// Type contains a unique name identifying the call credentials type.
+	// Currently only "jwt_token_file" is supported.
+	Type string `json:"type,omitempty"`
+	// Config contains the JSON configuration relevant for the call credentials.
+	Config json.RawMessage `json:"config,omitempty"`
+}
+
+// Equal reports whether cc and other are considered equal.
+func (cc CallCreds) Equal(other CallCreds) bool {
+	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
 }
 
 // ServerConfigs represents a collection of server configurations.
@@ -165,14 +181,16 @@ func (a *Authority) Equal(other *Authority) bool {
 type ServerConfig struct {
 	serverURI      string
 	channelCreds   []ChannelCreds
+	callCreds      []CallCreds
 	serverFeatures []string
 
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
-	selectedCreds    ChannelCreds
-	credsDialOption  grpc.DialOption
-	extraDialOptions []grpc.DialOption
+	selectedCreds     ChannelCreds
+	selectedCallCreds []credentials.PerRPCCredentials
+	credsDialOption   grpc.DialOption
+	extraDialOptions  []grpc.DialOption
 
 	cleanups []func()
 }
@@ -192,6 +210,18 @@ func (sc *ServerConfig) ChannelCreds() []ChannelCreds {
 // used to dedup servers with the same server URI and channel creds.
 func (sc *ServerConfig) ServerFeatures() []string {
 	return sc.serverFeatures
+}
+
+// CallCreds returns the call credentials configuration for this server.
+func (sc *ServerConfig) CallCreds() []CallCreds {
+	return sc.callCreds
+}
+
+// SelectedCallCreds returns the built call credentials that are ready to use.
+// These are the credentials that were successfully built from the call_creds
+// configuration.
+func (sc *ServerConfig) SelectedCallCreds() []credentials.PerRPCCredentials {
+	return sc.selectedCallCreds
 }
 
 // ServerFeaturesIgnoreResourceDeletion returns true if this server supports a
@@ -227,6 +257,24 @@ func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 	return dopts
 }
 
+// DialOptionsWithCallCredsForTransport returns dial options with call
+// credentials but only if they are compatible with the specified transport
+// credentials type. For example, JWT call credentials require secure transport
+// and are skipped for insecure.
+func (sc *ServerConfig) DialOptionsWithCallCredsForTransport(transportCredsType string, transportCreds credentials.TransportCredentials) []grpc.DialOption {
+	dopts := sc.DialOptions()
+	isInsecureTransport := transportCredsType == "insecure" ||
+		(transportCreds != nil && transportCreds.Info().SecurityProtocol == "insecure")
+
+	for _, callCred := range sc.selectedCallCreds {
+		if isInsecureTransport && callCred.RequireTransportSecurity() {
+			continue
+		}
+		dopts = append(dopts, grpc.WithPerRPCCredentials(callCred))
+	}
+	return dopts
+}
+
 // Cleanups returns a collection of functions to be called when the xDS client
 // for this server is closed. Allows cleaning up resources created specifically
 // for this server.
@@ -244,6 +292,8 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 	case sc.serverURI != other.serverURI:
 		return false
 	case !slices.EqualFunc(sc.channelCreds, other.channelCreds, func(a, b ChannelCreds) bool { return a.Equal(b) }):
+		return false
+	case !slices.EqualFunc(sc.callCreds, other.callCreds, func(a, b CallCreds) bool { return a.Equal(b) }):
 		return false
 	case !slices.Equal(sc.serverFeatures, other.serverFeatures):
 		return false
@@ -266,6 +316,7 @@ func (sc *ServerConfig) String() string {
 type serverConfigJSON struct {
 	ServerURI      string         `json:"server_uri,omitempty"`
 	ChannelCreds   []ChannelCreds `json:"channel_creds,omitempty"`
+	CallCreds      []CallCreds    `json:"call_creds,omitempty"`
 	ServerFeatures []string       `json:"server_features,omitempty"`
 }
 
@@ -274,6 +325,7 @@ func (sc *ServerConfig) MarshalJSON() ([]byte, error) {
 	server := &serverConfigJSON{
 		ServerURI:      sc.serverURI,
 		ChannelCreds:   sc.channelCreds,
+		CallCreds:      sc.callCreds,
 		ServerFeatures: sc.serverFeatures,
 	}
 	return json.Marshal(server)
@@ -294,6 +346,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 
 	sc.serverURI = server.ServerURI
 	sc.channelCreds = server.ChannelCreds
+	sc.callCreds = server.CallCreds
 	sc.serverFeatures = server.ServerFeatures
 
 	for _, cc := range server.ChannelCreds {
@@ -314,6 +367,26 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		sc.cleanups = append(sc.cleanups, cancel)
 		break
 	}
+
+	// Process call credentials - unlike channel creds, we use ALL supported
+	// types. Also, call credentials are optional as per gRFC A97.
+	for _, callCred := range server.CallCreds {
+		c := bootstrap.GetCredentials(callCred.Type)
+		if c == nil {
+			// Skip unsupported call credential types (don't fail bootstrap).
+			continue
+		}
+		bundle, cancel, err := c.Build(callCred.Config)
+		if err != nil {
+			// Call credential validation failed - this should fail bootstrap.
+			return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", callCred.Type, err)
+		}
+		if callCredentials := bundle.PerRPCCredentials(); callCredentials != nil {
+			sc.selectedCallCreds = append(sc.selectedCallCreds, callCredentials)
+		}
+		sc.cleanups = append(sc.cleanups, cancel)
+	}
+
 	if sc.serverURI == "" {
 		return fmt.Errorf("xds: `server_uri` field in server config cannot be empty: %s", string(data))
 	}
@@ -333,6 +406,9 @@ type ServerConfigTestingOptions struct {
 	// ChannelCreds contains a list of channel credentials to use when talking
 	// to this server. If unspecified, `insecure` credentials will be used.
 	ChannelCreds []ChannelCreds
+	// CallCreds contains a list of call credentials to use for individual RPCs
+	// to this server. Optional.
+	CallCreds []CallCreds
 	// ServerFeatures represents the list of features supported by this server.
 	ServerFeatures []string
 }
@@ -349,6 +425,7 @@ func ServerConfigForTesting(opts ServerConfigTestingOptions) (*ServerConfig, err
 	scInternal := &serverConfigJSON{
 		ServerURI:      opts.URI,
 		ChannelCreds:   cc,
+		CallCreds:      opts.CallCreds,
 		ServerFeatures: opts.ServerFeatures,
 	}
 	scJSON, err := json.Marshal(scInternal)
