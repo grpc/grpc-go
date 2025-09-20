@@ -41,7 +41,9 @@ import (
 
 const (
 	// The maximum byte size of receive frames.
-	frameLimit              = 64 * 1024 // 64 KB
+	frameLimit = 64 * 1024 // 64 KB
+	// The maximum frame size for the handshake request.
+	maxFrameSize            = 1024 * 1024 // 1 MB
 	rekeyRecordProtocolName = "ALTSRP_GCM_AES128_REKEY"
 )
 
@@ -194,6 +196,7 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 				LocalIdentity:             h.clientOpts.ClientIdentity,
 				TargetName:                h.clientOpts.TargetName,
 				RpcVersions:               h.clientOpts.RPCVersions,
+				MaxFrameSize:              maxFrameSize,
 			},
 		},
 	}
@@ -248,6 +251,7 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 				HandshakeParameters:  params,
 				InBytes:              p[:n],
 				RpcVersions:          h.serverOpts.RPCVersions,
+				MaxFrameSize:         maxFrameSize,
 			},
 		},
 	}
