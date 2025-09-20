@@ -1305,7 +1305,8 @@ func (t *http2Server) Close(err error) {
 // deleteStream deletes the stream s from transport's active streams.
 func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 	t.mu.Lock()
-	if _, ok := t.activeStreams[s.id]; ok {
+	_, isActive := t.activeStreams[s.id]
+	if isActive {
 		delete(t.activeStreams, s.id)
 		if len(t.activeStreams) == 0 {
 			t.idle = time.Now()
@@ -1313,7 +1314,7 @@ func (t *http2Server) deleteStream(s *ServerStream, eosReceived bool) {
 	}
 	t.mu.Unlock()
 
-	if channelz.IsOn() {
+	if channelz.IsOn() && isActive {
 		if eosReceived {
 			t.channelz.SocketMetrics.StreamsSucceeded.Add(1)
 		} else {
