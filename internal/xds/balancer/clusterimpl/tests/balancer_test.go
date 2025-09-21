@@ -734,7 +734,7 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
 	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
-	dnsR.ResolveNowCallback = func(o resolver.ResolveNowOptions) {
+	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		close(resolveNowCh)
 	}
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: fmt.Sprintf("%s:%d", host, port)}}})
