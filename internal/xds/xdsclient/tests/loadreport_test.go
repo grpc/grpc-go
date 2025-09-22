@@ -476,7 +476,7 @@ func (s) TestConcurrentReportLoad(t *testing.T) {
 	wg.Wait()
 
 	// Cancel all the load reporting streams. The last call to cancel is
-	// expectwed to block until a final load report with pending loads is sent.
+	// expected to block until a final load report with pending loads is sent.
 	// But the stream is currently blocked on a recv() call waiting for the LRS
 	// server to send the initial laod reporting response, which it never does.
 	// Hence we use a context with short timeout here.
