@@ -30,7 +30,7 @@ import (
 	"slices"
 	"strings"
 
-	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/encoding/internal"
 	"google.golang.org/grpc/internal/grpcutil"
 )
 
