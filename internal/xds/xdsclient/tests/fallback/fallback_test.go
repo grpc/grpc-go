@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient_test
+package xdsclient_fallback_test
 
 import (
 	"context"
@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -47,11 +48,23 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	_ "google.golang.org/grpc/internal/xds/httpfilter/router" // Register the router filter.
+	_ "google.golang.org/grpc/xds"                            // To ensure internal.NewXDSResolverWithConfigForTesting is set.
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 // Give the fallback tests additional time to complete because they need to
 // first identify failed connections before establishing new ones.
-const defaultFallbackTestTimeout = 2 * defaultTestTimeout
+const defaultFallbackTestTimeout = 20 * time.Second
+const defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 
 func waitForRPCsToReachBackend(ctx context.Context, client testgrpc.TestServiceClient, backend string) error {
 	var lastErr error
