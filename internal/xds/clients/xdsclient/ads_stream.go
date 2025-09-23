@@ -254,7 +254,7 @@ func (s *adsStreamImpl) runner(ctx context.Context) {
 
 		// Backoff state is reset upon successful receipt of at least one
 		// message from the server.
-		if s.recv(ctx, stream) {
+		if s.recv(stream) {
 			return backoff.ErrResetBackoff
 		}
 		return nil
@@ -477,7 +477,7 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 //
 // It returns a boolean indicating whether at least one message was received
 // from the server.
-func (s *adsStreamImpl) recv(ctx context.Context, stream clients.Stream) bool {
+func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 	msgReceived := false
 	for {
 		// Wait for ADS stream level flow control to be available, and send out
