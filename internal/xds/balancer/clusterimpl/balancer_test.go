@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -46,7 +45,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 
-	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -57,15 +55,11 @@ const (
 
 	testClusterName = "test-cluster"
 	testServiceName = "test-eds-service"
-
-	testNamedMetricsKey1 = "test-named1"
-	testNamedMetricsKey2 = "test-named2"
 )
 
 var (
 	testBackendEndpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}}}
 	cmpOpts              = cmp.Options{cmpopts.EquateEmpty(), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{}), sortDataSlice}
-	toleranceCmpOpt      = cmp.Options{cmpopts.EquateApprox(0, 1e-5), cmp.AllowUnexported(loadData{}, localityData{}, requestData{}, serverLoadData{})}
 )
 
 type s struct {
@@ -764,7 +758,6 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, testClusterName2)
 	}
 }
-
 
 // TestUpdateLRSServer covers the cases
 // - the init config specifies "" as the LRS server
