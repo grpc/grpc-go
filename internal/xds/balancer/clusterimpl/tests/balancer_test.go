@@ -700,31 +700,30 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	host, port := hostAndPortFromAddress(t, server.Address)
 
 	const (
-		clusterName       = "test-xds-service"
-		logicalDNSCluster = "logical_dns_cluster"
-		virtualHostName   = "test-route"
+		listenerName = "test-listener" 
+		routeName    = "test-route"   
+		clusterName  = "test-aggregate-cluster"
+		dnsCluster   = "logical-dns-cluster"
 	)
 
 	// Configure xDS resources.
 	ldnsCluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		Type:        e2e.ClusterTypeLogicalDNS,
-		ClusterName: logicalDNSCluster,
+		ClusterName: dnsCluster,
 		DNSHostName: host,
 		DNSPort:     port,
 	})
 	cluster := e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 		ClusterName: clusterName,
 		Type:        e2e.ClusterTypeAggregate,
-		ChildNames:  []string{logicalDNSCluster},
+		ChildNames:  []string{dnsCluster},
 	})
-	route := e2e.DefaultRouteConfig("test-route", virtualHostName, clusterName)
-	listener := e2e.DefaultClientListener(virtualHostName, route.Name)
 	updateOpts := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Endpoints:      nil,
 		Clusters:       []*v3clusterpb.Cluster{cluster, ldnsCluster},
-		Routes:         []*v3routepb.RouteConfiguration{route},
-		Listeners:      []*v3listenerpb.Listener{listener},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, listenerName, clusterName)},
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeName)},
 		SkipValidation: true,
 	}
 
@@ -745,7 +744,7 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 		t.Fatalf("Failed to update xDS resources: %v", err)
 	}
 
-	conn, err := grpc.NewClient("xds:///test-route", grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("xds:///%s", listenerName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -771,8 +770,8 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
 
 	// An RPC at this point is expected to fail.
-	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-		t.Fatal("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE")
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE, got %v want %v", err, codes.Unavailable)
 	}
 
 	// Expect resolver's ResolveNow to be called due to TF state.
@@ -845,10 +844,9 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to dial local test server: %v", err)
 	}
-
 	defer cc.Close()
-	client := testgrpc.NewTestServiceClient(cc)
 
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
@@ -867,7 +865,7 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure that the old LRS stream is not closed.
+	// Ensure that the old LRS stream is closed.
 	if _, err := mgmtServer.LRSServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatalf("Error waiting for initial LRS stream close : %v", err)
 	}
@@ -876,6 +874,6 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("Expected no LRS reports after disable, but got: %v", err)
+		t.Fatalf("Expected no LRS reports after disable, got %v want %v", err, context.DeadlineExceeded)
 	}
 }
