@@ -428,7 +428,6 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	}
 	defer cc.Close()
 
-	cc.Connect()
 	client := testgrpc.NewTestServiceClient(cc)
 
 	// Start maxRequests streams.
@@ -503,9 +502,62 @@ func computeIdealNumRpcs(p, errorTolerance float64) uint64 {
 	return uint64(math.Ceil(p * (1 - p) * 5.00 * 5.00 / errorTolerance / errorTolerance))
 }
 
+func verifyDropRateByCategory(ctx context.Context, client testgrpc.TestServiceClient, rpcCount int, lrsServer *fakeserver.Server, wantCluster, wantDropCategory string, wantDropRate, errorTolerance float64) error {
+	for i := 0; i < rpcCount; i++ {
+		if ctx.Err() != nil {
+			return fmt.Errorf("context error: %v", ctx.Err())
+		}
+		stream, err := client.FullDuplexCall(ctx)
+		switch {
+		case err == nil:
+			// Close stream to avoid exceeding limits.
+			stream.CloseSend()
+		case status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "RPC is dropped"):
+			continue
+		default:
+			return fmt.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
+		}
+	}
+
+	for {
+		if ctx.Err() != nil {
+			return fmt.Errorf("timeout when waiting for load stats")
+		}
+		req, err := lrsServer.LRSRequestChan.Receive(ctx)
+		if err != nil {
+			continue
+		}
+		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
+		if len(loadStats) != 1 || loadStats[0].ClusterName != wantCluster {
+			continue
+		}
+		if loadStats[0].ClusterName != wantCluster {
+			return fmt.Errorf("Received stats for unexpected cluster got: %q, want: %q", loadStats[0].ClusterName, wantCluster)
+		}
+
+		for _, cs := range loadStats {
+			found := false
+			for _, dr := range cs.DroppedRequests {
+				if dr.Category == wantDropCategory {
+					found = true
+					gotRPCDropRate := float64(dr.DroppedCount) / float64(rpcCount)
+					if (math.Trunc(math.Abs(gotRPCDropRate-wantDropRate)*100) / 100) > errorTolerance {
+						return fmt.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", (math.Trunc(math.Abs(gotRPCDropRate-wantDropRate)*100) / 100), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
+					}
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		break
+	}
+	return nil
+}
+
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
 // that the drops are reported.
-func TestDropByCategory(t *testing.T) {
+func (s) TestDropByCategory(t *testing.T) {
 	// Create an xDS management server that serves ADS and LRS requests.
 	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{SupportLoadReportingService: true})
 
@@ -594,22 +646,6 @@ func TestDropByCategory(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	testutils.AwaitState(ctx, t, cc, connectivity.Ready)
 
-	for i := 0; i < int(rpcCount); i++ {
-		if ctx.Err() != nil {
-			t.Fatalf("Context error: %v", ctx.Err())
-		}
-		stream, err := client.FullDuplexCall(ctx)
-		switch {
-		case err == nil:
-			// Close stream to avoid exceeding limits.
-			stream.CloseSend()
-		case status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "RPC is dropped"):
-			continue
-		default:
-			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
-		}
-	}
-
 	if _, err = mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure when waiting for an LRS stream to be opened: %v", err)
 	}
@@ -622,29 +658,8 @@ func TestDropByCategory(t *testing.T) {
 	}
 	mgmtServer.LRSServer.LRSResponseChan <- &resp
 
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timeout when waiting for new loads to be seen on the server")
-		}
-
-		req, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
-		if err != nil {
-			continue
-		}
-		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
-		if len(loadStats) != 1 {
-			continue
-		}
-		for _, cs := range loadStats {
-			if cs.ClusterName != resources.Clusters[0].Name {
-				t.Fatalf("Received stats for unexpected cluster got: %v, want: %v", cs.ClusterName, resources.Clusters[0].Name)
-			}
-			gotRPCDropRate := float64(cs.TotalDroppedRequests) / float64(rpcCount)
-			if (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100) > errorTolerance {
-				t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
-			}
-		}
-		break
+	if err := verifyDropRateByCategory(ctx, client, int(rpcCount), mgmtServer.LRSServer, resources.Clusters[0].Name, dropReason, wantRPCDropRate, errorTolerance); err != nil {
+		t.Fatal(err)
 	}
 
 	// Update the drop configuration to drop 1 out of every 40 RPCs,
@@ -668,7 +683,8 @@ func TestDropByCategory(t *testing.T) {
 			DropPercents: map[string]int{
 				dropReason2: dropNumerator2 * 100 / dropDenominator2, // drops one RPC for every 40 RPCs made
 			},
-		})}
+		}),
+	}
 
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -678,51 +694,8 @@ func TestDropByCategory(t *testing.T) {
 	rpcCount = computeIdealNumRpcs(wantRPCDropRate, errorTolerance)
 	t.Logf("About to send %d RPCs to test drop rate of %v", rpcCount, wantRPCDropRate)
 
-	for i := 0; i < int(rpcCount); i++ {
-		if ctx.Err() != nil {
-			t.Fatalf("Context error: %v", ctx.Err())
-		}
-		stream, err := client.FullDuplexCall(ctx)
-		switch {
-		case err == nil:
-			// Close stream to avoid exceeding limits.
-			stream.CloseSend()
-		case status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), "RPC is dropped"):
-			continue
-		default:
-			t.Errorf("client.FullDuplexCall(_) failed with unexpected error = %v", err)
-		}
-	}
-
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timeout when waiting for new loads to be seen on the server")
-		}
-
-		req, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx)
-		if err != nil {
-			continue
-		}
-		loadStats := req.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
-		if l := len(loadStats); l != 1 {
-			continue
-		}
-		for _, cs := range loadStats {
-			found := false
-			for _, dr := range cs.DroppedRequests {
-				if dr.Category == dropReason2 {
-					found = true
-					gotRPCDropRate := float64(dr.DroppedCount) / float64(rpcCount)
-					if (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100) > errorTolerance {
-						t.Errorf("Drop rate goes out of errortolerance got: %v, want: %v, totalDroppedRequest: %v, totalIssuesRequest: %v", (math.Trunc(math.Abs(gotRPCDropRate-wantRPCDropRate)*100) / 100), errorTolerance, cs.TotalDroppedRequests, cs.UpstreamLocalityStats[0].TotalIssuedRequests)
-					}
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-		break
+	if err := verifyDropRateByCategory(ctx, client, int(rpcCount), mgmtServer.LRSServer, resources.Clusters[0].Name, dropReason2, wantRPCDropRate, errorTolerance); err != nil {
+		t.Fatal(err)
 	}
 }
 
