@@ -27,10 +27,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 )
@@ -92,10 +90,7 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
 	}
 	cc.Connect()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	go testutils.StayConnected(ctx, cc)
-	testutils.AwaitNotState(ctx, t, cc, connectivity.Idle)
+
 	if got, want := <-addrCh, "caseTest2:///localhost:1234"; got != want {
 		cc.Close()
 		t.Fatalf("Dialer got address %q; wanted %q", got, want)
