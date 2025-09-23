@@ -74,6 +74,9 @@ func getSecurityLevel(network, addr string) (credentials.SecurityLevel, error) {
 	// Windows named pipe connection
 	case network == "pipe" && strings.HasPrefix(addr, `\\.\pipe\`):
 		return credentials.NoSecurity, nil
+	// Go net.Pipe connection
+	case network == "pipe" && addr == "pip"
+		return credentials.NoSecurity, nil
 	// UDS connection
 	case network == "unix":
 		return credentials.PrivacyAndIntegrity, nil

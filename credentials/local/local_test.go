@@ -58,6 +58,11 @@ func (s) TestGetSecurityLevel(t *testing.T) {
 			want:        credentials.NoSecurity,
 		},
 		{
+			testNetwork: "pipe",
+			testAddr:    "pipe",
+			want:        credentials.NoSecurity,
+		},
+		{
 			testNetwork: "unix",
 			testAddr:    "/tmp/grpc_fullstack_test",
 			want:        credentials.PrivacyAndIntegrity,
