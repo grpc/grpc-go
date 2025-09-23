@@ -62,20 +62,17 @@ func init() { resolver.Register(testResolverForParser{}) }
 func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 	tests := []struct {
 		target             string
-		wantDialParse      resolver.Target
 		wantNewClientParse resolver.Target
 		wantCustomParse    resolver.Target
 	}{
 		// No scheme is specified.
 		{
 			target:             "://a/b",
-			wantDialParse:      generateTarget("passthrough:///://a/b"),
 			wantNewClientParse: generateTarget("dns:///://a/b"),
 			wantCustomParse:    generateTarget("testresolverforparser:///://a/b"),
 		},
 		{
 			target:             "a//b",
-			wantDialParse:      generateTarget("passthrough:///a//b"),
 			wantNewClientParse: generateTarget("dns:///a//b"),
 			wantCustomParse:    generateTarget("testresolverforparser:///a//b"),
 		},
@@ -83,13 +80,11 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		// An unregistered scheme is specified.
 		{
 			target:             "a:///",
-			wantDialParse:      generateTarget("passthrough:///a:///"),
 			wantNewClientParse: generateTarget("dns:///a:///"),
 			wantCustomParse:    generateTarget("testresolverforparser:///a:///"),
 		},
 		{
 			target:             "a:b",
-			wantDialParse:      generateTarget("passthrough:///a:b"),
 			wantNewClientParse: generateTarget("dns:///a:b"),
 			wantCustomParse:    generateTarget("testresolverforparser:///a:b"),
 		},
@@ -97,25 +92,21 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		// A registered scheme is specified.
 		{
 			target:             "dns://a.server.com/google.com",
-			wantDialParse:      generateTarget("dns://a.server.com/google.com"),
 			wantNewClientParse: generateTarget("dns://a.server.com/google.com"),
 			wantCustomParse:    generateTarget("dns://a.server.com/google.com"),
 		},
 		{
 			target:             "unix-abstract:/ a///://::!@#$%25^&*()b",
-			wantDialParse:      generateTarget("unix-abstract:/ a///://::!@#$%25^&*()b"),
 			wantNewClientParse: generateTarget("unix-abstract:/ a///://::!@#$%25^&*()b"),
 			wantCustomParse:    generateTarget("unix-abstract:/ a///://::!@#$%25^&*()b"),
 		},
 		{
 			target:             "unix-abstract:passthrough:abc",
-			wantDialParse:      generateTarget("unix-abstract:passthrough:abc"),
 			wantNewClientParse: generateTarget("unix-abstract:passthrough:abc"),
 			wantCustomParse:    generateTarget("unix-abstract:passthrough:abc"),
 		},
 		{
 			target:             "passthrough:///unix:///a/b/c",
-			wantDialParse:      generateTarget("passthrough:///unix:///a/b/c"),
 			wantNewClientParse: generateTarget("passthrough:///unix:///a/b/c"),
 			wantCustomParse:    generateTarget("passthrough:///unix:///a/b/c"),
 		},
@@ -123,13 +114,11 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		// Cases for `scheme:absolute-path`.
 		{
 			target:             "dns:/a/b/c",
-			wantDialParse:      generateTarget("dns:/a/b/c"),
 			wantNewClientParse: generateTarget("dns:/a/b/c"),
 			wantCustomParse:    generateTarget("dns:/a/b/c"),
 		},
 		{
 			target:             "unregistered:/a/b/c",
-			wantDialParse:      generateTarget("passthrough:///unregistered:/a/b/c"),
 			wantNewClientParse: generateTarget("dns:///unregistered:/a/b/c"),
 			wantCustomParse:    generateTarget("testresolverforparser:///unregistered:/a/b/c"),
 		},
@@ -138,19 +127,9 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.target, func(t *testing.T) {
 			resetInitialResolverState()
-			cc, err := Dial(test.target, WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("Dial(%q) failed: %v", test.target, err)
-			}
-			cc.Close()
-
-			if !cmp.Equal(cc.parsedTarget, test.wantDialParse) {
-				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantDialParse)
-			}
-
-			cc, err = NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				t.Fatalf("NewClient(%q) failed: %v", test.target, err)
+				t.Fatalf("grpc.NewClient(%q) failed: %v", test.target, err)
 			}
 			cc.Close()
 
@@ -159,19 +138,9 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 			}
 
 			resolver.SetDefaultScheme("testresolverforparser")
-			cc, err = Dial(test.target, WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				t.Fatalf("Dial(%q) failed: %v", test.target, err)
-			}
-			cc.Close()
-
-			if !cmp.Equal(cc.parsedTarget, test.wantCustomParse) {
-				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantDialParse)
-			}
-
 			cc, err = NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("NewClient(%q) failed: %v", test.target, err)
+				t.Fatalf("grpc.NewClient(%q) failed: %v", test.target, err)
 			}
 			cc.Close()
 
@@ -186,18 +155,14 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 
 func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 	targets := []string{
-		"",
-		"unix://a/b/c",
-		"unix://authority",
-		"unix-abstract://authority/a/b/c",
-		"unix-abstract://authority",
+		"unix:/%a/b/c",
 	}
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
-			if cc, err := Dial(target, WithTransportCredentials(insecure.NewCredentials())); err == nil {
+			if cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials())); err == nil {
 				defer cc.Close()
-				t.Fatalf("Dial(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
+				t.Fatalf("grpc.NewClient(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
 			}
 		})
 	}
@@ -205,6 +170,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 
 func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 	resetInitialResolverState()
+	resolver.SetDefaultScheme("passthrough")
 	defScheme := resolver.GetDefaultScheme()
 	tests := []struct {
 		target            string
@@ -273,11 +239,12 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 				return nil, errors.New("dialer error")
 			}
 
-			cc, err := Dial(test.target, WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer))
+			cc, err := NewClient(test.target, WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer))
 			if err != nil {
-				t.Fatalf("Dial(%q) failed: %v", test.target, err)
+				t.Fatalf("grpc.NewClient(%q) failed: %v", test.target, err)
 			}
 			defer cc.Close()
+			cc.Connect()
 
 			select {
 			case addr := <-addrCh:
