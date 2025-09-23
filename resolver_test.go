@@ -90,7 +90,6 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
 	}
 	cc.Connect()
-
 	if got, want := <-addrCh, "caseTest2:///localhost:1234"; got != want {
 		cc.Close()
 		t.Fatalf("Dialer got address %q; wanted %q", got, want)
