@@ -170,7 +170,6 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 
 func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 	resetInitialResolverState()
-	resolver.SetDefaultScheme("passthrough")
 	defScheme := resolver.GetDefaultScheme()
 	tests := []struct {
 		target            string
@@ -200,7 +199,7 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			wantDialerAddress: "127.0.0.1:50051",
 		},
 		{
-			target:            ":///127.0.0.1:50051",
+			target:            "passthrough:///:///127.0.0.1:50051",
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, ":///127.0.0.1:50051"))},
 			wantDialerAddress: ":///127.0.0.1:50051",
 		},
@@ -210,17 +209,17 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			wantDialerAddress: "127.0.0.1:50051",
 		},
 		{
-			target:            "://authority/127.0.0.1:50051",
+			target:            "passthrough:///://authority/127.0.0.1:50051",
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "://authority/127.0.0.1:50051"))},
 			wantDialerAddress: "://authority/127.0.0.1:50051",
 		},
 		{
-			target:            "/unix/socket/address",
+			target:            "passthrough:////unix/socket/address",
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "/unix/socket/address"))},
 			wantDialerAddress: "/unix/socket/address",
 		},
 		{
-			target:            "",
+			target:            "passthrough:///",
 			wantParsed:        resolver.Target{URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, ""))},
 			wantDialerAddress: "",
 		},
