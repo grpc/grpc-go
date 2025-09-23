@@ -700,8 +700,8 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	host, port := hostAndPortFromAddress(t, server.Address)
 
 	const (
-		listenerName = "test-listener" 
-		routeName    = "test-route"   
+		listenerName = "test-listener"
+		routeName    = "test-route"
 		clusterName  = "test-aggregate-cluster"
 		dnsCluster   = "logical-dns-cluster"
 	)
