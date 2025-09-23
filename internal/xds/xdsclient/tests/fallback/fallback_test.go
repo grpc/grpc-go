@@ -742,14 +742,13 @@ func (s) TestFallback_OnStartup_RPCSuccess(t *testing.T) {
 	}
 }
 
-// TestXDSFallback_ThreeServerPromotion verifies that when the primary
-// management server is unavailable, the system attempts to connect to the
-// first fallback server, and if that is also down, to the second fallback
-// server. It also ensures that the system switches back to the first fallback
-// server once it becomes available again, and eventually returns to the
-// primary server when it comes back online, closing connections to the
-// fallback servers accordingly.
-func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
+// Test verifies that when the primary management server is unavailable, the
+// system attempts to connect to the first fallback server, and if that is also
+// down, to the second fallback server. It also ensures that the system switches
+// back to the first fallback server once it becomes available again, and
+// eventually returns to the primary server when it comes back online, closing
+// connections to the fallback servers accordingly.
+func (s) TestFallback_ThreeServerPromotion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultFallbackTestTimeout)
 	defer cancel()
 
@@ -770,34 +769,49 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 
 	// Start three test service backends.
 	backend1 := stubserver.StartTestService(t, nil)
+	backend1Port := testutils.ParsePort(t, backend1.Address)
 	defer backend1.Stop()
 	backend2 := stubserver.StartTestService(t, nil)
+	backend2Port := testutils.ParsePort(t, backend2.Address)
 	defer backend2.Stop()
 	backend3 := stubserver.StartTestService(t, nil)
+	backend3Port := testutils.ParsePort(t, backend3.Address)
 	defer backend3.Stop()
 
 	nodeID := uuid.New().String()
-	const serviceName = "my-service-fallback-xds"
+	const (
+		serviceName              = "my-service-fallback-xds"
+		primaryRouteConfigName   = "primary-route-" + serviceName
+		secondaryRouteConfigName = "secondary-route-" + serviceName
+		tertiaryRouteConfigName  = "tertiary-route-" + serviceName
+		primaryClusterName       = "primary-cluster-" + serviceName
+		secondaryClusterName     = "secondary-cluster-" + serviceName
+		tertiaryClusterName      = "tertiary-cluster-" + serviceName
+		primaryEndpointsName     = "primary-endpoints-" + serviceName
+		secondaryEndpointsName   = "secondary-endpoints-" + serviceName
+		tertiaryEndpointsName    = "tertiary-endpoints-" + serviceName
+	)
 
 	// Configure partial resources on the primary and secondary
 	// management servers.
 	primaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-p")},
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, primaryRouteConfigName)},
 	})
 	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, secondaryRouteConfigName)},
 	})
 
 	// Configure full resources on tertiary management server.
-	tertiaryManagementServer.Update(ctx, e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, backend3.Address),
-		SecLevel:   e2e.SecurityLevelNone,
-	}))
+	updateOpts := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, tertiaryRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(tertiaryRouteConfigName, serviceName, tertiaryClusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(tertiaryClusterName, tertiaryEndpointsName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(tertiaryEndpointsName, "localhost", []uint32{backend3Port})},
+	}
+	tertiaryManagementServer.Update(ctx, updateOpts)
 
 	// Create bootstrap configuration for all three management servers.
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
@@ -874,15 +888,14 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 
 	// Secondary1 becomes available, RPCs go to backend2.
 	secondaryLis.Restart()
-	secondaryManagementServer.Update(ctx, e2e.UpdateOptions{
+	updateOpts = e2e.UpdateOptions{
 		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, "route-s1")},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig("route-s1", serviceName, "cluster-s1")},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster("cluster-s1", "endpoints-s1", e2e.SecurityLevelNone)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
-			e2e.DefaultEndpoint("endpoints-s1", "localhost", []uint32{testutils.ParsePort(t, backend2.Address)}),
-		},
-	})
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, secondaryRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(secondaryRouteConfigName, serviceName, secondaryClusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(secondaryClusterName, secondaryEndpointsName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(secondaryEndpointsName, "localhost", []uint32{backend2Port})},
+	}
+	secondaryManagementServer.Update(ctx, updateOpts)
 
 	secondaryConn, err := secondaryWrappedLis.NewConnCh.Receive(ctx)
 	if err != nil {
@@ -897,13 +910,14 @@ func (s) TestXDSFallback_ThreeServerPromotion(t *testing.T) {
 
 	// Primary becomes available, RPCs go to backend1.
 	primaryLis.Restart()
-	primaryManagementServer.Update(ctx, e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       testutils.ParsePort(t, backend1.Address),
-		SecLevel:   e2e.SecurityLevelNone,
-	}))
+	updateOpts = e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, primaryRouteConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(primaryRouteConfigName, serviceName, primaryClusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(primaryClusterName, primaryEndpointsName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(primaryEndpointsName, "localhost", []uint32{backend1Port})},
+	}
+	primaryManagementServer.Update(ctx, updateOpts)
 
 	if _, err := primaryWrappedLis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for new connection to primary: %v", err)
