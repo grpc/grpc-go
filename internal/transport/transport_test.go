@@ -3209,10 +3209,10 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 
 func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 	// Enable channelz for metrics collection
+	defer internal.ChannelzTurnOffForTesting()
 	if !channelz.IsOn() {
 		channelz.TurnOn()
 	}
-	defer internal.ChannelzTurnOffForTesting()
 
 	// Create a test server with channelz support
 	serverConfig := &ServerConfig{
