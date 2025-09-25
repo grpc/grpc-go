@@ -167,7 +167,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	cmpOpts := []cmp.Option{
 		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
+		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "FilterProvider", "Config"),
 		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
 	}
 	if diff := cmp.Diff(wantUpdate.update, got.update, cmpOpts...); diff != "" {

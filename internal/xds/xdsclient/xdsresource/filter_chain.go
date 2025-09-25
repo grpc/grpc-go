@@ -25,7 +25,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/xds/httpfilter"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -141,12 +140,12 @@ func (fc *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHost
 				// Virtual Host is second priority.
 				override = virtualHost.HTTPFilterConfigOverride[filter.Name]
 			}
-			sb, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
-			if !ok {
+			if !filter.FilterProvider.IsServer() {
 				// Should not happen if it passed xdsClient validation.
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")
 			}
-			si, err := sb.BuildServerInterceptor(filter.Config, override)
+			filterInstance := filter.FilterProvider.Build(filter.Name)
+			si, err := filterInstance.BuildServerInterceptor(filter.Config, override)
 			if err != nil {
 				return VirtualHostWithInterceptors{}, fmt.Errorf("filter construction: %v", err)
 			}

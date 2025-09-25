@@ -351,9 +351,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterConfig},
+						Name:           "customFilter",
+						FilterProvider: httpFilter{},
+						Config:         filterConfig{Cfg: customFilterConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -368,9 +368,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
+						Name:           "customFilter",
+						FilterProvider: httpFilter{},
+						Config:         filterConfig{Cfg: customFilterOldTypedStructConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -385,9 +385,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
+						Name:           "customFilter",
+						FilterProvider: httpFilter{},
+						Config:         filterConfig{Cfg: customFilterNewTypedStructConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -402,9 +402,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterConfig},
+						Name:           "customFilter",
+						FilterProvider: httpFilter{},
+						Config:         filterConfig{Cfg: customFilterConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -424,13 +424,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{{
-					Name:   "customFilter",
-					Filter: httpFilter{},
-					Config: filterConfig{Cfg: customFilterConfig},
+					Name:           "customFilter",
+					FilterProvider: httpFilter{},
+					Config:         filterConfig{Cfg: customFilterConfig},
 				}, {
-					Name:   "customFilter2",
-					Filter: httpFilter{},
-					Config: filterConfig{Cfg: customFilterConfig},
+					Name:           "customFilter2",
+					FilterProvider: httpFilter{},
+					Config:         filterConfig{Cfg: customFilterConfig},
 				},
 					makeRouterFilter(t),
 				},
@@ -462,9 +462,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 				HTTPFilters: []HTTPFilter{
 					{
-						Name:   "clientOnlyCustomFilter",
-						Filter: clientOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
+						Name:           "clientOnlyCustomFilter",
+						FilterProvider: clientOnlyHTTPFilter{},
+						Config:         filterConfig{Cfg: clientOnlyCustomFilterConfig},
 					},
 					makeRouterFilter(t)},
 				Raw: v3LisWithFilters(clientOnlyCustomFilter),
@@ -1729,8 +1729,7 @@ type filterConfig struct {
 
 // httpFilter allows testing the http filter registry and parsing functionality.
 type httpFilter struct {
-	httpfilter.ClientInterceptorBuilder
-	httpfilter.ServerInterceptorBuilder
+	httpfilter.Filter
 }
 
 func (httpFilter) TypeURLs() []string { return []string{"custom.filter"} }
@@ -1743,13 +1742,19 @@ func (httpFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.
 	return filterConfig{Override: override}, nil
 }
 
-func (httpFilter) IsTerminal() bool {
-	return false
+func (httpFilter) IsTerminal() bool { return false }
+func (httpFilter) IsClient() bool   { return true }
+func (httpFilter) IsServer() bool   { return true }
+
+func (e httpFilter) Build(string) httpfilter.Filter {
+	return e
 }
+
+func (httpFilter) Close() error { return nil }
 
 // errHTTPFilter returns errors no matter what is passed to ParseFilterConfig.
 type errHTTPFilter struct {
-	httpfilter.ClientInterceptorBuilder
+	httpfilter.Filter
 }
 
 func (errHTTPFilter) TypeURLs() []string { return []string{"err.custom.filter"} }
@@ -1762,9 +1767,15 @@ func (errHTTPFilter) ParseFilterConfigOverride(proto.Message) (httpfilter.Filter
 	return nil, fmt.Errorf("error from ParseFilterConfigOverride")
 }
 
-func (errHTTPFilter) IsTerminal() bool {
-	return false
+func (errHTTPFilter) IsTerminal() bool { return false }
+func (errHTTPFilter) IsClient() bool   { return true }
+func (errHTTPFilter) IsServer() bool   { return true }
+
+func (c errHTTPFilter) Build(string) httpfilter.Filter {
+	return c
 }
+
+func (errHTTPFilter) Close() error { return nil }
 
 func init() {
 	httpfilter.Register(httpFilter{})
@@ -1775,7 +1786,7 @@ func init() {
 
 // serverOnlyHTTPFilter does not implement ClientInterceptorBuilder
 type serverOnlyHTTPFilter struct {
-	httpfilter.ServerInterceptorBuilder
+	httpfilter.Filter
 }
 
 func (serverOnlyHTTPFilter) TypeURLs() []string { return []string{"serverOnly.custom.filter"} }
@@ -1788,13 +1799,19 @@ func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (h
 	return filterConfig{Override: override}, nil
 }
 
-func (serverOnlyHTTPFilter) IsTerminal() bool {
-	return false
+func (serverOnlyHTTPFilter) IsTerminal() bool { return false }
+func (serverOnlyHTTPFilter) IsClient() bool   { return false }
+func (serverOnlyHTTPFilter) IsServer() bool   { return true }
+
+func (s serverOnlyHTTPFilter) Build(string) httpfilter.Filter {
+	return s
 }
+
+func (serverOnlyHTTPFilter) Close() error { return nil }
 
 // clientOnlyHTTPFilter does not implement ServerInterceptorBuilder
 type clientOnlyHTTPFilter struct {
-	httpfilter.ClientInterceptorBuilder
+	httpfilter.Filter
 }
 
 func (clientOnlyHTTPFilter) TypeURLs() []string { return []string{"clientOnly.custom.filter"} }
@@ -1807,9 +1824,15 @@ func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (h
 	return filterConfig{Override: override}, nil
 }
 
-func (clientOnlyHTTPFilter) IsTerminal() bool {
-	return false
+func (clientOnlyHTTPFilter) IsTerminal() bool { return false }
+func (clientOnlyHTTPFilter) IsClient() bool   { return true }
+func (clientOnlyHTTPFilter) IsServer() bool   { return false }
+
+func (s clientOnlyHTTPFilter) Build(string) httpfilter.Filter {
+	return s
 }
+
+func (clientOnlyHTTPFilter) Close() error { return nil }
 
 var customFilterConfig = &anypb.Any{
 	TypeUrl: "custom.filter",

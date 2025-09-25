@@ -36,10 +36,10 @@ import (
 )
 
 func init() {
-	httpfilter.Register(builder{})
+	httpfilter.Register(provider{})
 }
 
-type builder struct {
+type provider struct {
 }
 
 type config struct {
@@ -47,7 +47,7 @@ type config struct {
 	chainEngine *rbac.ChainEngine
 }
 
-func (builder) TypeURLs() []string {
+func (provider) TypeURLs() []string {
 	return []string{
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
 		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBACPerRoute",
@@ -126,7 +126,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	return config{chainEngine: ce}, nil
 }
 
-func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
+func (provider) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -141,7 +141,7 @@ func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, er
 	return parseConfig(msg)
 }
 
-func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
+func (provider) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	if override == nil {
 		return nil, fmt.Errorf("rbac: nil configuration message provided")
 	}
@@ -156,15 +156,28 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	return parseConfig(msg.Rbac)
 }
 
-func (builder) IsTerminal() bool {
-	return false
+func (provider) IsTerminal() bool { return false }
+func (provider) IsClient() bool   { return false }
+func (provider) IsServer() bool   { return true }
+
+// Build creates a new instance of the filter.
+func (p provider) Build(string) httpfilter.Filter {
+	return filter{}
 }
 
-var _ httpfilter.ServerInterceptorBuilder = builder{}
+var _ httpfilter.Filter = filter{}
+
+type filter struct{}
+
+func (filter) BuildClientInterceptor(_, _ httpfilter.FilterConfig) (resolver.ClientInterceptor, error) {
+	// This filter is not supported on the server. So we return a nil
+	// HTTPFilter, which will not be invoked.
+	return nil, nil
+}
 
 // BuildServerInterceptor is an optional interface builder implements in order
 // to signify it works server side.
-func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
+func (filter) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")
 	}
@@ -193,6 +206,8 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 	}
 	return &interceptor{chainEngine: c.chainEngine}, nil
 }
+
+func (filter) Close() error { return nil }
 
 type interceptor struct {
 	chainEngine *rbac.ChainEngine

@@ -103,7 +103,7 @@ var (
 func makeRouterFilter(t *testing.T) HTTPFilter {
 	routerBuilder := httpfilter.Get(router.TypeURL)
 	routerConfig, _ := routerBuilder.ParseFilterConfig(testutils.MarshalAny(t, &v3routerpb.Router{}))
-	return HTTPFilter{Name: "router", Filter: routerBuilder, Config: routerConfig}
+	return HTTPFilter{Name: "router", FilterProvider: routerBuilder, Config: routerConfig}
 }
 
 func makeRouterFilterList(t *testing.T) []HTTPFilter {
@@ -1100,9 +1100,9 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {HTTPFilters: []HTTPFilter{
 												{
-													Name:   "serverOnlyCustomFilter",
-													Filter: serverOnlyHTTPFilter{},
-													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+													Name:           "serverOnlyCustomFilter",
+													FilterProvider: serverOnlyHTTPFilter{},
+													Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
 												makeRouterFilter(t),
 											},
@@ -1118,9 +1118,9 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 				def: &FilterChain{
 					HTTPFilters: []HTTPFilter{
 						{
-							Name:   "serverOnlyCustomFilter",
-							Filter: serverOnlyHTTPFilter{},
-							Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+							Name:           "serverOnlyCustomFilter",
+							FilterProvider: serverOnlyHTTPFilter{},
+							Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 						},
 						makeRouterFilter(t),
 					},
@@ -1183,14 +1183,14 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {HTTPFilters: []HTTPFilter{
 												{
-													Name:   "serverOnlyCustomFilter",
-													Filter: serverOnlyHTTPFilter{},
-													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+													Name:           "serverOnlyCustomFilter",
+													FilterProvider: serverOnlyHTTPFilter{},
+													Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
 												{
-													Name:   "serverOnlyCustomFilter2",
-													Filter: serverOnlyHTTPFilter{},
-													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+													Name:           "serverOnlyCustomFilter2",
+													FilterProvider: serverOnlyHTTPFilter{},
+													Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
 												makeRouterFilter(t),
 											},
@@ -1205,14 +1205,14 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 				},
 				def: &FilterChain{HTTPFilters: []HTTPFilter{
 					{
-						Name:   "serverOnlyCustomFilter",
-						Filter: serverOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+						Name:           "serverOnlyCustomFilter",
+						FilterProvider: serverOnlyHTTPFilter{},
+						Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
 					{
-						Name:   "serverOnlyCustomFilter2",
-						Filter: serverOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+						Name:           "serverOnlyCustomFilter2",
+						FilterProvider: serverOnlyHTTPFilter{},
+						Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -1305,14 +1305,14 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {HTTPFilters: []HTTPFilter{
 												{
-													Name:   "serverOnlyCustomFilter",
-													Filter: serverOnlyHTTPFilter{},
-													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+													Name:           "serverOnlyCustomFilter",
+													FilterProvider: serverOnlyHTTPFilter{},
+													Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
 												{
-													Name:   "serverOnlyCustomFilter2",
-													Filter: serverOnlyHTTPFilter{},
-													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+													Name:           "serverOnlyCustomFilter2",
+													FilterProvider: serverOnlyHTTPFilter{},
+													Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
 												makeRouterFilter(t),
 											},
@@ -1327,14 +1327,14 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 				},
 				def: &FilterChain{HTTPFilters: []HTTPFilter{
 					{
-						Name:   "serverOnlyCustomFilter",
-						Filter: serverOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+						Name:           "serverOnlyCustomFilter",
+						FilterProvider: serverOnlyHTTPFilter{},
+						Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
 					{
-						Name:   "serverOnlyCustomFilter2",
-						Filter: serverOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+						Name:           "serverOnlyCustomFilter2",
+						FilterProvider: serverOnlyHTTPFilter{},
+						Config:         filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
 					makeRouterFilter(t),
 				},
@@ -2749,13 +2749,23 @@ type filterCfg struct {
 	level string
 }
 
-type filterBuilder struct {
+type filterProvider struct {
+	httpfilter.FilterProvider
+}
+
+func (filterProvider) IsTerminal() bool { return false }
+func (filterProvider) IsClient() bool   { return false }
+func (filterProvider) IsServer() bool   { return true }
+
+func (fp *filterProvider) Build(string) httpfilter.Filter {
+	return testFilter{}
+}
+
+type testFilter struct {
 	httpfilter.Filter
 }
 
-var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
-
-func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+func (testFilter) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
 	var level string
 	level = config.(filterCfg).level
 
@@ -2790,7 +2800,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "one http filter no overrides",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2807,7 +2817,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "one http filter vh override",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2827,7 +2837,7 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "one http filter route override",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2849,9 +2859,9 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "three http filters vh override route override",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor1", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{
@@ -2877,9 +2887,9 @@ func (s) TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			name: "three http filters two vh",
 			filters: []HTTPFilter{
-				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
-				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor1", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", FilterProvider: &filterProvider{}, Config: filterCfg{level: topLevel}},
 			},
 			routeConfig: RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{

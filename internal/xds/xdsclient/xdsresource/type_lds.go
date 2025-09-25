@@ -59,8 +59,9 @@ type HTTPFilter struct {
 	// settings in virtual host / route / weighted cluster configuration (not
 	// yet supported).
 	Name string
-	// Filter is the HTTP filter found in the registry for the config type.
-	Filter httpfilter.Filter
+	// FilterProvider is the HTTP filter provider found in the registry for the
+	// config type.
+	FilterProvider httpfilter.FilterProvider
 	// Config contains the filter's configuration
 	Config httpfilter.FilterConfig
 }

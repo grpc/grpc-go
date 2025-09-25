@@ -109,7 +109,7 @@ func verifyXDSConfig(ctx context.Context, xdsCh chan *xdsresource.XDSConfig, err
 	case update := <-xdsCh:
 		cmpOpts := []cmp.Option{
 			cmpopts.EquateEmpty(),
-			cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
+			cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "FilterProvider", "Config"),
 			cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
 			cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw"),
 		}

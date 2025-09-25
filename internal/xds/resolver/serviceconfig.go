@@ -340,12 +340,12 @@ func newInterceptor(filters []xdsresource.HTTPFilter, clusterOverride, routeOver
 		if override == nil {
 			override = virtualHostOverride[filter.Name]
 		}
-		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
-		if !ok {
+		if !filter.FilterProvider.IsClient() {
 			// Should not happen if it passed xdsClient validation.
 			return nil, fmt.Errorf("filter %q does not support use in client", filter.Name)
 		}
-		i, err := ib.BuildClientInterceptor(filter.Config, override)
+		filterInstance := filter.FilterProvider.Build(filter.Name)
+		i, err := filterInstance.BuildClientInterceptor(filter.Config, override)
 		if err != nil {
 			return nil, fmt.Errorf("error constructing filter: %v", err)
 		}
