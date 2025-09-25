@@ -451,7 +451,10 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		lID := xdsinternal.GetLocalityID(addr)
 		if (lID == clients.Locality{}) {
 			if b.logger.V(2) {
-				b.logger.Infof("Locality ID for %s unexpectedly empty", addr)
+				// TODO: After A74, we should have the entire CDS config,
+				// allowing us to verify if this is indeed a Logical DNS cluster
+				// and avoid logging the message below.
+				b.logger.Infof("No Locality ID found for address %s. This is normal if %q is a Logical DNS cluster.", addr, clusterName)
 			}
 			return
 		}
