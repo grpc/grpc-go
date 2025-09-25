@@ -458,7 +458,7 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 	if s.logger.V(perRPCVerbosityLevel) {
 		s.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
 	} else if s.logger.V(2) {
-		s.logger.Warningf("ADS request sent for type %q, resources: %v, version: %q, nonce: %q", url, names, version, nonce)
+		s.logger.Infof("ADS request sent for type %q, resources: %v, version: %q, nonce: %q", url, names, version, nonce)
 	}
 
 	return nil
