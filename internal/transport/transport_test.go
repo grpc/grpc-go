@@ -3214,155 +3214,138 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 		channelz.TurnOn()
 	}
 
-	// Create a test server with channelz support
-	serverConfig := &ServerConfig{
-		ChannelzParent: channelz.RegisterServer("test server"),
-	}
-	defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
-
-	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
-	defer cancel()
-	defer server.stop()
-	defer client.Close(fmt.Errorf("closed manually by test"))
-
-	waitWhileTrue(t, func() (bool, error) {
-		server.mu.Lock()
-		defer server.mu.Unlock()
-		if len(server.conns) == 0 {
-			return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
+	setupServerAndTransport := func() (*http2Server, func()) {
+		serverConfig := &ServerConfig{
+			ChannelzParent: channelz.RegisterServer("test server"),
 		}
-		return false, nil
-	})
+		server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
 
-	// Get the server transport
-	server.mu.Lock()
-	var serverTransport *http2Server
-	for st := range server.conns {
-		serverTransport = st.(*http2Server)
-		break
+		waitWhileTrue(t, func() (bool, error) {
+			server.mu.Lock()
+			defer server.mu.Unlock()
+			if len(server.conns) == 0 {
+				return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
+			}
+			return false, nil
+		})
+
+		server.mu.Lock()
+		var serverTransport *http2Server
+		for st := range server.conns {
+			serverTransport = st.(*http2Server)
+			break
+		}
+		server.mu.Unlock()
+
+		cleanup := func() {
+			channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
+			cancel()
+			server.stop()
+			client.Close(fmt.Errorf("closed manually by test"))
+		}
+
+		return serverTransport, cleanup
 	}
-	server.mu.Unlock()
 
-	if serverTransport == nil {
-		t.Fatal("Server transport not found")
-	}
-
-	// Test case 1: StreamsSucceeded metric (eosReceived = true)
-	testStreamSucceeded := func(t *testing.T) {
+	createTestStream := func() *ServerStream {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		stream := &ServerStream{
+		return &ServerStream{
 			Stream: &Stream{
 				id:     123,
 				ctx:    ctx,
 				method: "/test.service/testmethod",
 			},
 		}
-
-		serverTransport.mu.Lock()
-		serverTransport.activeStreams[stream.id] = stream
-		serverTransport.mu.Unlock()
-
-		initialSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-		initialFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
-
-		serverTransport.deleteStream(stream, true)
-		serverTransport.deleteStream(stream, true)
-		serverTransport.deleteStream(stream, true)
-
-		finalSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-		finalFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
-
-		if finalSucceeded != initialSucceeded+1 {
-			t.Errorf("StreamsSucceeded: got %d, want %d (incremented by 1)", finalSucceeded, initialSucceeded+1)
-		}
-		if finalFailed != initialFailed {
-			t.Errorf("StreamsFailed: got %d, want %d (unchanged)", finalFailed, initialFailed)
-		}
-
-		serverTransport.mu.Lock()
-		_, exists := serverTransport.activeStreams[stream.id]
-		serverTransport.mu.Unlock()
-		if exists {
-			t.Error("Stream should have been removed from activeStreams")
-		}
 	}
 
-	// Test case 2: StreamsFailed metric (eosReceived = false)
-	testStreamFailed := func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	for _, test := range []struct {
+		name                string
+		eosReceived         bool
+		addToActiveStreams  bool
+		wantStreamSucceeded int64
+		wantStreamFailed    int64
+	}{
+		{
+			name:                "StreamsSucceeded",
+			eosReceived:         true,
+			addToActiveStreams:  true,
+			wantStreamSucceeded: 1,
+			wantStreamFailed:    0,
+		},
+		{
+			name:                "StreamsFailed",
+			eosReceived:         false,
+			addToActiveStreams:  true,
+			wantStreamSucceeded: 0,
+			wantStreamFailed:    1,
+		},
+		{
+			name:                "NonActiveStream",
+			eosReceived:         true,
+			addToActiveStreams:  false,
+			wantStreamSucceeded: 0,
+			wantStreamFailed:    0,
+		},
+		{
+			name:                "NonActiveStreamFalseEOS",
+			eosReceived:         false,
+			addToActiveStreams:  false,
+			wantStreamSucceeded: 0,
+			wantStreamFailed:    0,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			serverTransport, cleanup := setupServerAndTransport()
+			defer cleanup()
 
-		stream := &ServerStream{
-			Stream: &Stream{
-				id:     124,
-				ctx:    ctx,
-				method: "/test.service/testmethod",
-			},
-		}
+			if serverTransport == nil {
+				t.Fatal("Server transport not found")
+			}
 
-		serverTransport.mu.Lock()
-		serverTransport.activeStreams[stream.id] = stream
-		serverTransport.mu.Unlock()
+			stream := createTestStream()
 
-		initialSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-		initialFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+			if test.addToActiveStreams {
+				serverTransport.mu.Lock()
+				serverTransport.activeStreams[stream.id] = stream
+				serverTransport.mu.Unlock()
+			}
 
-		serverTransport.deleteStream(stream, false)
-		serverTransport.deleteStream(stream, false)
-		serverTransport.deleteStream(stream, false)
+			initialSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			initialFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
 
-		finalSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-		finalFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+			// Call deleteStream multiple times to ensure metrics increment only once
+			serverTransport.deleteStream(stream, test.eosReceived)
+			serverTransport.deleteStream(stream, test.eosReceived)
+			serverTransport.deleteStream(stream, test.eosReceived)
 
-		if finalFailed != initialFailed+1 {
-			t.Errorf("StreamsFailed: got %d, want %d (incremented by 1)", finalFailed, initialFailed+1)
-		}
-		if finalSucceeded != initialSucceeded {
-			t.Errorf("StreamsSucceeded: got %d, want %d (unchanged)", finalSucceeded, initialSucceeded)
-		}
+			// For the non-active stream case, also test calling with different eosReceived values
+			if !test.addToActiveStreams {
+				serverTransport.deleteStream(stream, !test.eosReceived)
+			}
 
-		serverTransport.mu.Lock()
-		_, exists := serverTransport.activeStreams[stream.id]
-		serverTransport.mu.Unlock()
-		if exists {
-			t.Error("Stream should have been removed from activeStreams")
-		}
+			finalSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			finalFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			gotSucceededDelta := finalSucceeded - initialSucceeded
+			gotFailedDelta := finalFailed - initialFailed
+
+			if gotSucceededDelta != test.wantStreamSucceeded {
+				t.Errorf("StreamsSucceeded: got delta %d, want %d", gotSucceededDelta, test.wantStreamSucceeded)
+			}
+			if gotFailedDelta != test.wantStreamFailed {
+				t.Errorf("StreamsFailed: got delta %d, want %d", gotFailedDelta, test.wantStreamFailed)
+			}
+
+			if test.addToActiveStreams {
+				serverTransport.mu.Lock()
+				_, exists := serverTransport.activeStreams[stream.id]
+				serverTransport.mu.Unlock()
+				if exists {
+					t.Error("Stream should have been removed from activeStreams")
+				}
+			}
+		})
 	}
-
-	// Test case 3: No metrics incremented for non-active stream
-	// Deliberately do not add stream to activeStreams
-	testNonActiveStream := func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		stream := &ServerStream{
-			Stream: &Stream{
-				id:     125,
-				ctx:    ctx,
-				method: "/test.service/testmethod",
-			},
-		}
-
-		initialSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-		initialFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
-
-		serverTransport.deleteStream(stream, true)
-		serverTransport.deleteStream(stream, false)
-
-		finalSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-		finalFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
-
-		if finalSucceeded != initialSucceeded {
-			t.Errorf("StreamsSucceeded: got %d, want %d (unchanged for non-active stream)", finalSucceeded, initialSucceeded)
-		}
-		if finalFailed != initialFailed {
-			t.Errorf("StreamsFailed: got %d, want %d (unchanged for non-active stream)", finalFailed, initialFailed)
-		}
-	}
-
-	t.Run("StreamsSucceeded", testStreamSucceeded)
-	t.Run("StreamsFailed", testStreamFailed)
-	t.Run("NonActiveStream", testNonActiveStream)
 }
