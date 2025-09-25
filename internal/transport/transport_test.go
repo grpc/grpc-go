@@ -39,6 +39,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -3206,7 +3207,7 @@ func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 	}
 }
 
-func TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
+func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 	// Enable channelz for metrics collection
 	if !channelz.IsOn() {
 		channelz.TurnOn()
