@@ -26,14 +26,13 @@ They can use `Check()` to probe a servers health or they can use `Watch()` to ob
 
 In most cases, clients do not need to directly check backend servers.
 Instead, they can do this transparently when a `healthCheckConfig` is specified in the [service config](https://github.com/grpc/proposal/blob/master/A17-client-side-health-checking.md#service-config-changes) and the [health package](https://pkg.go.dev/google.golang.org/grpc/health) is imported.
-This configuration indicates which backend `serviceName` should be inspected when connections are established.
+The `serviceName` in `healthCheckConfig` will be used in the health check when connections are established.
 An empty string (`""`) typically indicates the overall health of a server should be reported.
 
 ```go
 // import grpc/health to enable transparent client side checking
 import _ "google.golang.org/grpc/health"
 
-// set up appropriate service config and import google.golang.org/grpc/health
 serviceConfig := grpc.WithDefaultServiceConfig(`{
   "loadBalancingPolicy": "round_robin",
   "healthCheckConfig": {
