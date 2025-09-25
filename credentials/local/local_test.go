@@ -59,6 +59,11 @@ func (s) TestGetSecurityLevel(t *testing.T) {
 		},
 		{
 			testNetwork: "pipe",
+			testAddr:    `\\.\pipe\foo`,
+			want:        credentials.NoSecurity,
+		},
+		{
+			testNetwork: "pipe",
 			testAddr:    "pipe",
 			want:        credentials.NoSecurity,
 		},
