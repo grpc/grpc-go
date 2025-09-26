@@ -16,8 +16,8 @@
  *
  */
 
-// Package jwtcreds implements JWT Call Credentials for XDS, configured via xDS
-// Bootstrap File.  For more details, see gRFC A97:
+// Package jwtcreds implements JWT CallCredentials for XDS, configured via xDS
+// Bootstrap File. For more details, see gRFC A97:
 // https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
 package jwtcreds
 
@@ -29,18 +29,10 @@ import (
 	"google.golang.org/grpc/credentials/jwt"
 )
 
-// bundle is an implementation of credentials.Bundle which implements JWT
-// Call Credentials in xDS Bootstrap File per gRFC A97.
-// This bundle only provides call credentials, not transport credentials.
-type bundle struct {
-	callCreds credentials.PerRPCCredentials
-}
-
-// NewBundle returns a credentials.Bundle which implements JWT Call Credentials
-// in xDS Bootstrap File per gRFC A97. This implementation focuses on call credentials
-// only and expects the config to match gRFC A97 structure.
+// NewCallCredentials returns a credentials.PerRPCCredentials The input config
+// should match the structure specified in gRFC A97 structure.
 // See gRFC A97: https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
-func NewBundle(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
+func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
 	var cfg struct {
 		JWTTokenFile string `json:"jwt_token_file"`
 	}
@@ -55,22 +47,5 @@ func NewBundle(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create JWT call credentials: %v", err)
 	}
-
-	bundle := &bundle{
-		callCreds: callCreds,
-	}
-	return bundle, func() {}, nil
-}
-
-func (b *bundle) TransportCredentials() credentials.TransportCredentials {
-	// Transport credentials should be configured separately via channel_creds
-	return nil
-}
-
-func (b *bundle) PerRPCCredentials() credentials.PerRPCCredentials {
-	return b.callCreds
-}
-
-func (b *bundle) NewWithMode(_ string) (credentials.Bundle, error) {
-	return nil, fmt.Errorf("JWT call credentials bundle does not support mode switching")
+	return callCreds, func() {}, nil
 }

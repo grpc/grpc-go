@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func TestNewBundle(t *testing.T) {
+func TestNewCallCredentials(t *testing.T) {
 	token := createTestJWT(t)
 	tokenFile := writeTempFile(t, token)
 
@@ -64,7 +64,7 @@ func TestNewBundle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bundle, cleanup, err := NewBundle(json.RawMessage(tt.config))
+			callCreds, cleanup, err := NewCallCredentials(json.RawMessage(tt.config))
 
 			if !tt.wantSuccess {
 				if err == nil {
@@ -73,22 +73,15 @@ func TestNewBundle(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("NewBundle failed: %v", err)
+				t.Fatalf("NewCallCredentials failed: %v", err)
 			}
-			if bundle == nil {
+			if callCreds == nil {
 				t.Fatal("Expected non-nil bundle")
 			}
 			if cleanup == nil {
 				t.Error("Expected non-nil cleanup function")
 			} else {
 				defer cleanup()
-			}
-			// JWT bundle only deals with PerRPCCredentials, not TransportCredentials.
-			if bundle.TransportCredentials() != nil {
-				t.Error("Expected nil transport credentials for JWT call creds bundle")
-			}
-			if bundle.PerRPCCredentials() == nil {
-				t.Error("Expected non-nil per-RPC credentials for valid JWT config")
 			}
 
 			// Test that call credentials get used
@@ -97,7 +90,7 @@ func TestNewBundle(t *testing.T) {
 			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
 				AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
 			})
-			metadata, err := bundle.PerRPCCredentials().GetRequestMetadata(ctx)
+			metadata, err := callCreds.GetRequestMetadata(ctx)
 			if err != nil {
 				t.Fatalf("GetRequestMetadata failed: %v", err)
 			}
@@ -115,29 +108,13 @@ func TestNewBundle(t *testing.T) {
 	}
 }
 
-func TestBundle_NewWithMode(t *testing.T) {
+func TestCallCredentials_Cleanup(t *testing.T) {
 	token := createTestJWT(t)
 	tokenFile := writeTempFile(t, token)
 	config := `{"jwt_token_file": "` + tokenFile + `"}`
-	bundle, cleanup, err := NewBundle(json.RawMessage(config))
+	_, cleanup, err := NewCallCredentials(json.RawMessage(config))
 	if err != nil {
-		t.Fatalf("NewBundle failed: %v", err)
-	}
-	defer cleanup()
-
-	_, err = bundle.NewWithMode("test_mode")
-	if err == nil {
-		t.Error("Expected error from NewWithMode, got nil")
-	}
-}
-
-func TestBundle_Cleanup(t *testing.T) {
-	token := createTestJWT(t)
-	tokenFile := writeTempFile(t, token)
-	config := `{"jwt_token_file": "` + tokenFile + `"}`
-	_, cleanup, err := NewBundle(json.RawMessage(config))
-	if err != nil {
-		t.Fatalf("NewBundle failed: %v", err)
+		t.Fatalf("NewCallCredentials failed: %v", err)
 	}
 	if cleanup == nil {
 		t.Fatal("Expected non-nil cleanup function")
