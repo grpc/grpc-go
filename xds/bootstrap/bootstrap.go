@@ -31,8 +31,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// channelCredsRegistry is a map from credential type name to ChannelCredential builder.
+// channelCredsRegistry is a map from channel credential type name to
+// ChannelCredential builder.
 var channelCredsRegistry = make(map[string]ChannelCredentials)
+
+// callCredsRegistry is a map from call credential type name to
+// ChannelCredential builder.
 var callCredsRegistry = make(map[string]CallCredentials)
 
 // ChannelCredentials interface encapsulates a credentials.Bundle builder
