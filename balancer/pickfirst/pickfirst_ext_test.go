@@ -483,15 +483,15 @@ func (s) TestPickFirst_ShuffleAddressListNoEndpoints(t *testing.T) {
 	}
 
 	pfBuilder := balancer.Get(pfbalancer.Name)
-	shffleConfig, err := pfBuilder.(balancer.ConfigParser).ParseConfig(json.RawMessage(`{ "shuffleAddressList": true }`))
+	shuffleConfig, err := pfBuilder.(balancer.ConfigParser).ParseConfig(json.RawMessage(`{ "shuffleAddressList": true }`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	noShffleConfig, err := pfBuilder.(balancer.ConfigParser).ParseConfig(json.RawMessage(`{ "shuffleAddressList": false }`))
+	noShuffleConfig, err := pfBuilder.(balancer.ConfigParser).ParseConfig(json.RawMessage(`{ "shuffleAddressList": false }`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	activeCfg := noShffleConfig
+	var activeCfg serviceconfig.LoadBalancingConfig
 
 	bf := stub.BalancerFuncs{
 		Init: func(bd *stub.BalancerData) {
@@ -518,7 +518,7 @@ func (s) TestPickFirst_ShuffleAddressListNoEndpoints(t *testing.T) {
 
 	// Push an update with both addresses and shuffling disabled.  We should
 	// connect to backend 0.
-	activeCfg = noShffleConfig
+	activeCfg = noShuffleConfig
 	resolverState := resolver.State{Addresses: addrs}
 	r.UpdateState(resolverState)
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
@@ -527,7 +527,7 @@ func (s) TestPickFirst_ShuffleAddressListNoEndpoints(t *testing.T) {
 
 	// Send a config with shuffling enabled.  This will reverse the addresses,
 	// but the channel should still be connected to backend 0.
-	activeCfg = shffleConfig
+	activeCfg = shuffleConfig
 	r.UpdateState(resolverState)
 	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
