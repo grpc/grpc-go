@@ -17,15 +17,13 @@
 
 package xdsclient
 
-import (
-	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
-)
+import "google.golang.org/grpc/internal/xds/clients/xdsclient"
 
 // WatchResource uses xDS to discover the resource associated with the provided
 // resource name. The resource type implementation determines how xDS responses
 // are are deserialized and validated, as received from the xDS management
 // server. Upon receipt of a response from the management server, an
 // appropriate callback on the watcher is invoked.
-func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func()) {
-	return c.XDSClient.WatchResource(rType.TypeURL(), resourceName, xdsresource.GenericResourceWatcher(watcher))
+func (c *clientImpl) WatchResource(rType xdsclient.ResourceType, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func()) {
+	return c.xdsClient.WatchResource(rType.TypeURL, resourceName, watcher)
 }

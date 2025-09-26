@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	clientimpl "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	xdstestutils "google.golang.org/grpc/internal/xds/testutils"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
@@ -316,7 +317,7 @@ func (s) TestAuthority_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when waiting for a resource update callback:  %v", err)
 	}
-	gotUpdate := v.(xdsresource.ClusterUpdate)
+	gotUpdate := v.(clusterUpdateErrTuple).update
 	wantUpdate := xdsresource.ClusterUpdate{
 		ClusterName:    clusterName,
 		EDSServiceName: edsSecondaryName,
@@ -351,8 +352,9 @@ func newClusterWatcherV2() *clusterWatcherV2 {
 	}
 }
 
-func (cw *clusterWatcherV2) ResourceChanged(update *xdsresource.ClusterResourceData, onDone func()) {
-	cw.updateCh.Send(update.Resource)
+func (cw *clusterWatcherV2) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
+	clusterData := rd.(*xdsresource.ClusterResourceData)
+	cw.updateCh.Send(clusterUpdateErrTuple{update: clusterData.Resource})
 	onDone()
 }
 

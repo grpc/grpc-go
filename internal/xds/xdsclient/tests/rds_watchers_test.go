@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	clientimpl "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -43,7 +44,7 @@ import (
 
 type noopRouteConfigWatcher struct{}
 
-func (noopRouteConfigWatcher) ResourceChanged(_ *xdsresource.RouteConfigResourceData, onDone func()) {
+func (noopRouteConfigWatcher) ResourceChanged(_ clientimpl.ResourceData, onDone func()) {
 	onDone()
 }
 func (noopRouteConfigWatcher) ResourceError(_ error, onDone func()) {
@@ -66,8 +67,9 @@ func newRouteConfigWatcher() *routeConfigWatcher {
 	return &routeConfigWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (rw *routeConfigWatcher) ResourceChanged(update *xdsresource.RouteConfigResourceData, onDone func()) {
-	rw.updateCh.Send(routeConfigUpdateErrTuple{update: update.Resource})
+func (rw *routeConfigWatcher) ResourceChanged(rd clientimpl.ResourceData, onDone func()) {
+	rcData := rd.(*xdsresource.RouteConfigResourceData)
+	rw.updateCh.Send(routeConfigUpdateErrTuple{update: rcData.Resource})
 	onDone()
 }
 

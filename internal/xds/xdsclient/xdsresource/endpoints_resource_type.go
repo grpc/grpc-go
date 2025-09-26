@@ -18,6 +18,8 @@
 package xdsresource
 
 import (
+	"bytes"
+
 	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource/version"
@@ -33,15 +35,15 @@ const (
 
 var (
 	// Compile time interface checks.
-	_ Type = endpointsResourceType{}
+	_ xdsclient.Decoder      = endpointsResourceType{}
+	_ xdsclient.ResourceData = (*EndpointsResourceData)(nil)
 
-	// Singleton instantiation of the resource type implementation.
-	endpointsType = endpointsResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3EndpointsURL,
-			typeName:                   "EndpointsResource",
-			allResourcesRequiredInSotW: false,
-		},
+	// EndpointsResource is a singleton instance of xdsclient.ResourceType that
+	// defines the configuration for the Endpoints resource.
+	EndpointsResource = xdsclient.ResourceType{
+		TypeURL:                    version.V3EndpointsURL,
+		TypeName:                   EndpointsResourceTypeName,
+		AllResourcesRequiredInSotW: false,
 	}
 )
 
@@ -55,19 +57,22 @@ type endpointsResourceType struct {
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (endpointsResourceType) Decode(_ *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
-	name, rc, err := unmarshalEndpointsResource(resource)
+func (et endpointsResourceType) Decode(resource xdsclient.AnyProto, _ xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	a := &anypb.Any{
+		TypeUrl: resource.TypeURL,
+		Value:   resource.Value,
+	}
+
+	name, rc, err := unmarshalEndpointsResource(a)
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.
 		return nil, err
 	case err != nil:
 		// Protobuf deserialization succeeded, but resource validation failed.
-		return &DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: EndpointsUpdate{}}}, err
+		return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: EndpointsUpdate{}}}, err
 	}
-
-	return &DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: rc}}, nil
-
+	return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: rc}}, nil
 }
 
 // EndpointsResourceData wraps the configuration of an Endpoints resource as
@@ -104,52 +109,40 @@ func (e *EndpointsResourceData) Raw() *anypb.Any {
 	return e.Resource.Raw
 }
 
-// EndpointsWatcher wraps the callbacks to be invoked for different
-// events corresponding to the endpoints resource being watched. gRFC A88
-// contains an exhaustive list of what method is invoked under what conditions.
-type EndpointsWatcher interface {
-	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resource *EndpointsResourceData, done func())
-
-	// ResourceError indicates an error occurred while trying to fetch or
-	// decode the associated resource. The previous version of the resource
-	// should be considered invalid.
-	ResourceError(err error, done func())
-
-	// AmbientError indicates an error occurred after a resource has been
-	// received that should not modify the use of that resource but may provide
-	// useful information about the state of the XDSClient for debugging
-	// purposes. The previous version of the resource should still be
-	// considered valid.
-	AmbientError(err error, done func())
+// Equal returns true if other xdsclient.ResourceData is equal to e.
+func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
+	if e == nil && other == nil {
+		return true
+	}
+	if (e == nil) != (other == nil) {
+		return false
+	}
+	if otherERD, ok := other.(*EndpointsResourceData); ok {
+		return e.RawEqual(otherERD)
+	}
+	return bytes.Equal(e.Bytes(), other.Bytes())
 }
 
-type delegatingEndpointsWatcher struct {
-	watcher EndpointsWatcher
-}
-
-func (d *delegatingEndpointsWatcher) ResourceChanged(data ResourceData, onDone func()) {
-	e := data.(*EndpointsResourceData)
-	d.watcher.ResourceChanged(e, onDone)
-}
-
-func (d *delegatingEndpointsWatcher) ResourceError(err error, onDone func()) {
-	d.watcher.ResourceError(err, onDone)
-}
-
-func (d *delegatingEndpointsWatcher) AmbientError(err error, onDone func()) {
-	d.watcher.AmbientError(err, onDone)
+// Bytes returns the underlying raw bytes of the Endpoints resource.
+func (e *EndpointsResourceData) Bytes() []byte {
+	raw := e.Raw()
+	if raw == nil {
+		return nil
+	}
+	return raw.Value
 }
 
 // WatchEndpoints uses xDS to discover the configuration associated with the
 // provided endpoints resource name.
-func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
-	delegator := &delegatingEndpointsWatcher{watcher: w}
-	return p.WatchResource(endpointsType, name, delegator)
+func WatchEndpoints(p Producer, name string, w xdsclient.ResourceWatcher) (cancel func()) {
+	return p.WatchResource(EndpointsResource, name, w)
 }
 
-// NewGenericEndpointsResourceTypeDecoder returns a xdsclient.Decoder that
-// wraps the xdsresource.endpointsType.
-func NewGenericEndpointsResourceTypeDecoder() xdsclient.Decoder {
-	return &GenericResourceTypeDecoder{ResourceType: endpointsType}
+// NewEndpointsResourceTypeDecoder returns a decoder for Endpoints resources.
+func NewEndpointsResourceTypeDecoder() xdsclient.Decoder {
+	return endpointsResourceType{resourceTypeState: resourceTypeState{
+		typeURL:                    version.V3EndpointsURL,
+		typeName:                   EndpointsResourceTypeName,
+		allResourcesRequiredInSotW: false,
+	}}
 }

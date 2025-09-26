@@ -19,6 +19,7 @@ package cdsbalancer
 import (
 	"context"
 
+	"google.golang.org/grpc/internal/xds/clients/xdsclient"
 	"google.golang.org/grpc/internal/xds/xdsclient/xdsresource"
 )
 
@@ -32,8 +33,9 @@ type clusterWatcher struct {
 	parent *cdsBalancer
 }
 
-func (cw *clusterWatcher) ResourceChanged(u *xdsresource.ClusterResourceData, onDone func()) {
-	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, u.Resource); onDone() }
+func (cw *clusterWatcher) ResourceChanged(rd xdsclient.ResourceData, onDone func()) {
+	clusterData := rd.(*xdsresource.ClusterResourceData)
+	handleUpdate := func(context.Context) { cw.parent.onClusterUpdate(cw.name, clusterData.Resource); onDone() }
 	cw.parent.serializer.ScheduleOr(handleUpdate, onDone)
 }
 
