@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/envconfig"
 )
 
 // channelCredsRegistry is a map from credential type name to ChannelCredential builder.
@@ -91,9 +90,6 @@ func RegisterCallCredentials(c CallCredentials) {
 // GetCallCredentials returns the credentials associated with a given name.
 // If no credentials are registered with the name, nil will be returned.
 func GetCallCredentials(name string) CallCredentials {
-	if name == "jwt_token_file" && !envconfig.XDSBootstrapCallCredsEnabled {
-		return nil
-	}
 	if c, ok := callCredsRegistry[name]; ok {
 		return c
 	}

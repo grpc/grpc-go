@@ -349,25 +349,27 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		break
 	}
 
-	// Process call credentials - unlike channel creds, we use ALL supported
-	// types. Also, call credentials are optional as per gRFC A97.
-	for _, callCredConfig := range server.CallCreds {
-		c := bootstrap.GetCallCredentials(callCredConfig.Type)
-		if c == nil {
-			// Skip unsupported call credential types (don't fail bootstrap).
-			continue
+	if envconfig.XDSBootstrapCallCredsEnabled {
+		// Process call credentials - unlike channel creds, we use ALL supported
+		// types. Also, call credentials are optional as per gRFC A97.
+		for _, callCredConfig := range server.CallCreds {
+			c := bootstrap.GetCallCredentials(callCredConfig.Type)
+			if c == nil {
+				// Skip unsupported call credential types (don't fail bootstrap).
+				continue
+			}
+			callCred, cancel, err := c.Build(callCredConfig.Config)
+			if err != nil {
+				// Call credential validation failed - this should fail bootstrap.
+				return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", callCredConfig.Type, err)
+			}
+			if callCred == nil {
+				continue
+			}
+			sc.selectedCallCreds = append(sc.selectedCallCreds, callCred)
+			sc.extraDialOptions = append(sc.extraDialOptions, grpc.WithPerRPCCredentials(callCred))
+			sc.cleanups = append(sc.cleanups, cancel)
 		}
-		callCred, cancel, err := c.Build(callCredConfig.Config)
-		if err != nil {
-			// Call credential validation failed - this should fail bootstrap.
-			return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", callCredConfig.Type, err)
-		}
-		if callCred == nil {
-			continue
-		}
-		sc.selectedCallCreds = append(sc.selectedCallCreds, callCred)
-		sc.extraDialOptions = append(sc.extraDialOptions, grpc.WithPerRPCCredentials(callCred))
-		sc.cleanups = append(sc.cleanups, cancel)
 	}
 
 	if sc.serverURI == "" {
