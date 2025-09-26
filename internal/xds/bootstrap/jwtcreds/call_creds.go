@@ -1,0 +1,51 @@
+/*
+ *
+ * Copyright 2025 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Package jwtcreds implements JWT CallCredentials for XDS, configured via xDS
+// Bootstrap File. For more details, see gRFC A97:
+// https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
+package jwtcreds
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/jwt"
+)
+
+// NewCallCredentials returns a credentials.PerRPCCredentials The input config
+// should match the structure specified in gRFC A97 structure.
+// See gRFC A97: https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
+func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
+	var cfg struct {
+		JWTTokenFile string `json:"jwt_token_file"`
+	}
+
+	if err := json.Unmarshal(configJSON, &cfg); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal JWT call credentials config: %v", err)
+	}
+	if cfg.JWTTokenFile == "" {
+		return nil, nil, fmt.Errorf("jwt_token_file is required in JWT call credentials config")
+	}
+	callCreds, err := jwt.NewTokenFileCallCredentials(cfg.JWTTokenFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create JWT call credentials: %v", err)
+	}
+	return callCreds, func() {}, nil
+}
