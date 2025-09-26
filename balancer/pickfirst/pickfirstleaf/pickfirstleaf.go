@@ -283,7 +283,7 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		newAddrs = state.ResolverState.Addresses
 		if cfg.ShuffleAddressList {
 			newAddrs = append([]resolver.Address{}, newAddrs...)
-			internal.RandShuffle(len(endpoints), func(i, j int) { endpoints[i], endpoints[j] = endpoints[j], endpoints[i] })
+			internal.RandShuffle(len(newAddrs), func(i, j int) { newAddrs[i], newAddrs[j] = newAddrs[j], newAddrs[i] })
 		}
 	}
 
