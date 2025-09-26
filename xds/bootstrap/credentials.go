@@ -32,7 +32,8 @@ func init() {
 	RegisterChannelCredentials(&insecureCredsBuilder{})
 	RegisterChannelCredentials(&googleDefaultCredsBuilder{})
 	RegisterChannelCredentials(&tlsCredsBuilder{})
-	RegisterChannelCredentials(&jwtCallCredsBuilder{})
+
+	RegisterCallCredentials(&jwtCallCredsBuilder{})
 }
 
 // insecureCredsBuilder implements the `ChannelCredentials` interface defined in
@@ -75,8 +76,8 @@ func (d *googleDefaultCredsBuilder) Name() string {
 // package `xds/bootstrap` and encapsulates JWT call credentials.
 type jwtCallCredsBuilder struct{}
 
-func (j *jwtCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.Bundle, func(), error) {
-	return jwtcreds.NewBundle(configJSON)
+func (j *jwtCallCredsBuilder) Build(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
+	return jwtcreds.NewCallCredentials(configJSON)
 }
 
 func (j *jwtCallCredsBuilder) Name() string {

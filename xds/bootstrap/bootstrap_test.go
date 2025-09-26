@@ -63,7 +63,7 @@ func TestRegisterNew(t *testing.T) {
 	}
 }
 
-func TestCredsBuilders(t *testing.T) {
+func TestChannelCredsBuilders(t *testing.T) {
 	tests := []struct {
 		typename              string
 		builder               ChannelCredentials
@@ -72,6 +72,32 @@ func TestCredsBuilders(t *testing.T) {
 		{"google_default", &googleDefaultCredsBuilder{}, nil},
 		{"insecure", &insecureCredsBuilder{}, nil},
 		{"tls", &tlsCredsBuilder{}, nil},
+	}
+
+	for _, test := range tests {
+		t.Run(test.typename, func(t *testing.T) {
+			if got, want := test.builder.Name(), test.typename; got != want {
+				t.Errorf("%T.Name = %v, want %v", test.builder, got, want)
+			}
+
+			bundle, stop, err := test.builder.Build(test.minimumRequiredConfig)
+			if err != nil {
+				t.Fatalf("%T.Build failed: %v", test.builder, err)
+			}
+			if bundle == nil {
+				t.Errorf("%T.Build returned nil bundle, expected non-nil", test.builder)
+			}
+			stop()
+		})
+	}
+}
+
+func TestCallCredsBuilders(t *testing.T) {
+	tests := []struct {
+		typename              string
+		builder               CallCredentials
+		minimumRequiredConfig json.RawMessage
+	}{
 		{"jwt_token_file", &jwtCallCredsBuilder{}, json.RawMessage(`{"jwt_token_file":"/path/to/token.jwt"}`)},
 	}
 
@@ -108,7 +134,7 @@ func TestTlsCredsBuilder(t *testing.T) {
 }
 
 func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
-	builder := GetChannelCredentials("jwt_call_creds")
+	builder := GetCallCredentials("jwt_call_creds")
 	if builder != nil {
 		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
 	}
@@ -120,9 +146,9 @@ func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
 	}()
 
 	// Test that GetCredentials returns the JWT builder.
-	builder = GetChannelCredentials("jwt_token_file")
+	builder = GetCallCredentials("jwt_token_file")
 	if builder == nil {
-		t.Fatal("GetCredentials(\"jwt_token_file\") returned nil")
+		t.Fatal("GetCallCredentials(\"jwt_token_file\") returned nil")
 	}
 	if got, want := builder.Name(), "jwt_token_file"; got != want {
 		t.Errorf("Retrieved builder name = %q, want %q", got, want)
