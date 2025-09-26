@@ -88,9 +88,8 @@ func (cc ChannelCreds) String() string {
 // It implements gRFC A97 call credentials structure.
 type CallCreds struct {
 	// Type contains a unique name identifying the call credentials type.
-	// Currently only "jwt_token_file" is supported.
 	Type string `json:"type,omitempty"`
-	// Config contains the JSON configuration relevant for the call credentials.
+	// Config contains the JSON configuration for this call credentials.
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
@@ -187,10 +186,10 @@ type ServerConfig struct {
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
-	selectedCreds     ChannelCreds
-	selectedCallCreds []credentials.PerRPCCredentials
-	credsDialOption   grpc.DialOption
-	extraDialOptions  []grpc.DialOption
+	selectedChannelCreds ChannelCreds
+	selectedCallCreds    []credentials.PerRPCCredentials
+	credsDialOption      grpc.DialOption
+	extraDialOptions     []grpc.DialOption
 
 	cleanups []func()
 }
@@ -241,10 +240,10 @@ func (sc *ServerConfig) ServerFeaturesIgnoreResourceDeletion() bool {
 	return false
 }
 
-// SelectedCreds returns the selected credentials configuration for
+// SelectedChannelCreds returns the selected credentials configuration for
 // communicating with this server.
-func (sc *ServerConfig) SelectedCreds() ChannelCreds {
-	return sc.selectedCreds
+func (sc *ServerConfig) SelectedChannelCreds() ChannelCreds {
+	return sc.selectedChannelCreds
 }
 
 // DialOptions returns a slice of all the configured dial options for this
@@ -297,7 +296,7 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 		return false
 	case !slices.Equal(sc.serverFeatures, other.serverFeatures):
 		return false
-	case !sc.selectedCreds.Equal(other.selectedCreds):
+	case !sc.selectedChannelCreds.Equal(other.selectedChannelCreds):
 		return false
 	}
 	return true
@@ -306,10 +305,10 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 // String returns the string representation of the ServerConfig.
 func (sc *ServerConfig) String() string {
 	if len(sc.serverFeatures) == 0 {
-		return fmt.Sprintf("%s-%s", sc.serverURI, sc.selectedCreds.String())
+		return fmt.Sprintf("%s-%s", sc.serverURI, sc.selectedChannelCreds.String())
 	}
 	features := strings.Join(sc.serverFeatures, "-")
-	return strings.Join([]string{sc.serverURI, sc.selectedCreds.String(), features}, "-")
+	return strings.Join([]string{sc.serverURI, sc.selectedChannelCreds.String(), features}, "-")
 }
 
 // The following fields correspond 1:1 with the JSON schema for ServerConfig.
@@ -359,7 +358,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
-		sc.selectedCreds = cc
+		sc.selectedChannelCreds = cc
 		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
 		if d, ok := bundle.(extraDialOptions); ok {
 			sc.extraDialOptions = d.DialOptions()
