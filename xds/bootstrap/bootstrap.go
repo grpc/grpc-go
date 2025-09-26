@@ -51,7 +51,7 @@ type ChannelCredentials interface {
 }
 
 // RegisterChannelCredentials registers ChannelCredentials used for connecting
-// to the xds management server.
+// to the xDS management server.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple credentials are
@@ -82,7 +82,7 @@ type CallCredentials interface {
 }
 
 // RegisterCallCredentials registers CallCredentials used for connecting
-// to the xds management server.
+// to the xDS management server.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple credentials are
