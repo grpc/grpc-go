@@ -1195,7 +1195,7 @@ func (s) TestDefaultBundles(t *testing.T) {
 
 	for _, typename := range tests {
 		t.Run(typename, func(t *testing.T) {
-			if c := bootstrap.GetCredentials(typename); c == nil {
+			if c := bootstrap.GetChannelCredentials(typename); c == nil {
 				t.Errorf(`bootstrap.GetCredentials(%s) credential is nil, want non-nil`, typename)
 			}
 		})

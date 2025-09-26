@@ -29,13 +29,13 @@ import (
 )
 
 func init() {
-	RegisterCredentials(&insecureCredsBuilder{})
-	RegisterCredentials(&googleDefaultCredsBuilder{})
-	RegisterCredentials(&tlsCredsBuilder{})
-	RegisterCredentials(&jwtCallCredsBuilder{})
+	RegisterChannelCredentials(&insecureCredsBuilder{})
+	RegisterChannelCredentials(&googleDefaultCredsBuilder{})
+	RegisterChannelCredentials(&tlsCredsBuilder{})
+	RegisterChannelCredentials(&jwtCallCredsBuilder{})
 }
 
-// insecureCredsBuilder implements the `Credentials` interface defined in
+// insecureCredsBuilder implements the `ChannelCredentials` interface defined in
 // package `xds/bootstrap` and encapsulates an insecure credential.
 type insecureCredsBuilder struct{}
 
@@ -47,7 +47,7 @@ func (i *insecureCredsBuilder) Name() string {
 	return "insecure"
 }
 
-// tlsCredsBuilder implements the `Credentials` interface defined in
+// tlsCredsBuilder implements the `ChannelCredentials` interface defined in
 // package `xds/bootstrap` and encapsulates a TLS credential.
 type tlsCredsBuilder struct{}
 
@@ -59,7 +59,7 @@ func (t *tlsCredsBuilder) Name() string {
 	return "tls"
 }
 
-// googleDefaultCredsBuilder implements the `Credentials` interface defined in
+// googleDefaultCredsBuilder implements the `ChannelCredentials` interface defined in
 // package `xds/bootstrap` and encapsulates a Google Default credential.
 type googleDefaultCredsBuilder struct{}
 

@@ -30,7 +30,7 @@ const testCredsBuilderName = "test_creds"
 var builder = &testCredsBuilder{}
 
 func init() {
-	RegisterCredentials(builder)
+	RegisterChannelCredentials(builder)
 }
 
 type testCredsBuilder struct {
@@ -47,7 +47,7 @@ func (t *testCredsBuilder) Name() string {
 }
 
 func TestRegisterNew(t *testing.T) {
-	c := GetCredentials(testCredsBuilderName)
+	c := GetChannelCredentials(testCredsBuilderName)
 	if c == nil {
 		t.Fatalf("GetCredentials(%q) credential = nil", testCredsBuilderName)
 	}
@@ -66,7 +66,7 @@ func TestRegisterNew(t *testing.T) {
 func TestCredsBuilders(t *testing.T) {
 	tests := []struct {
 		typename              string
-		builder               Credentials
+		builder               ChannelCredentials
 		minimumRequiredConfig json.RawMessage
 	}{
 		{"google_default", &googleDefaultCredsBuilder{}, nil},
@@ -108,7 +108,7 @@ func TestTlsCredsBuilder(t *testing.T) {
 }
 
 func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
-	builder := GetCredentials("jwt_call_creds")
+	builder := GetChannelCredentials("jwt_call_creds")
 	if builder != nil {
 		t.Fatal("Expected nil Credentials for jwt_call_creds when the feature is disabled.")
 	}
@@ -120,7 +120,7 @@ func TestJwtCallCredentials_DisabledIfFeatureNotEnabled(t *testing.T) {
 	}()
 
 	// Test that GetCredentials returns the JWT builder.
-	builder = GetCredentials("jwt_token_file")
+	builder = GetChannelCredentials("jwt_token_file")
 	if builder == nil {
 		t.Fatal("GetCredentials(\"jwt_token_file\") returned nil")
 	}

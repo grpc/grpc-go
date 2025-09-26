@@ -350,7 +350,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
-		c := bootstrap.GetCredentials(cc.Type)
+		c := bootstrap.GetChannelCredentials(cc.Type)
 		if c == nil {
 			continue
 		}
@@ -370,7 +370,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	// Process call credentials - unlike channel creds, we use ALL supported
 	// types. Also, call credentials are optional as per gRFC A97.
 	for _, callCred := range server.CallCreds {
-		c := bootstrap.GetCredentials(callCred.Type)
+		c := bootstrap.GetChannelCredentials(callCred.Type)
 		if c == nil {
 			// Skip unsupported call credential types (don't fail bootstrap).
 			continue
