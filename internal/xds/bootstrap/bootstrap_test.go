@@ -19,11 +19,9 @@
 package bootstrap
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"testing"
 
@@ -31,7 +29,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/jwt"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
@@ -1670,110 +1667,4 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 			}
 		})
 	}
-}
-
-func (s) TestDialOptionsWithCallCredsForTransport(t *testing.T) {
-	testJWTCreds := &testPerRPCCreds{requireSecurity: true}
-	testInsecureCreds := &testPerRPCCreds{requireSecurity: false}
-
-	sc := &ServerConfig{
-		selectedCallCreds: []credentials.PerRPCCredentials{
-			testJWTCreds,
-			testInsecureCreds,
-		},
-		extraDialOptions: []grpc.DialOption{
-			grpc.WithUserAgent("test-agent"), // extra option
-		},
-	}
-
-	tests := []struct {
-		name           string
-		transportType  string
-		transportCreds credentials.TransportCredentials
-		wantJWTCreds   bool
-		wantOtherCreds bool
-	}{
-		{
-			name:           "insecure_transport_by_type",
-			transportType:  "insecure",
-			transportCreds: nil,
-			wantJWTCreds:   false,
-			wantOtherCreds: true,
-		},
-		{
-			name:           "insecure_transport_by_protocol",
-			transportType:  "custom",
-			transportCreds: insecure.NewCredentials(),
-			wantJWTCreds:   false,
-			wantOtherCreds: true,
-		},
-		{
-			name:           "secure_transport",
-			transportType:  "tls",
-			transportCreds: &testTransportCreds{securityProtocol: "tls"},
-			wantJWTCreds:   true,
-			wantOtherCreds: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			opts := sc.DialOptionsWithCallCredsForTransport(test.transportType, test.transportCreds)
-			// Count dial options (should include extra options + applicable
-			// call creds)
-			wantCount := 2
-			if test.wantJWTCreds {
-				wantCount++
-			}
-			if len(opts) != wantCount {
-				t.Errorf("DialOptions count = %d, want %d", len(opts), wantCount)
-			}
-		})
-	}
-}
-
-type testPerRPCCreds struct {
-	requireSecurity bool
-}
-
-func (c *testPerRPCCreds) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
-	return map[string]string{"test": "metadata"}, nil
-}
-
-func (c *testPerRPCCreds) RequireTransportSecurity() bool {
-	return c.requireSecurity
-}
-
-type testTransportCreds struct {
-	securityProtocol string
-}
-
-func (c *testTransportCreds) ClientHandshake(_ context.Context, _ string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, &testAuthInfo{}, nil
-}
-
-func (c *testTransportCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	return rawConn, &testAuthInfo{}, nil
-}
-
-func (c *testTransportCreds) Info() credentials.ProtocolInfo {
-	return credentials.ProtocolInfo{SecurityProtocol: c.securityProtocol}
-}
-
-func (c *testTransportCreds) Clone() credentials.TransportCredentials {
-	return &testTransportCreds{securityProtocol: c.securityProtocol}
-}
-
-func (c *testTransportCreds) OverrideServerName(string) error {
-	return nil
-}
-
-type testAuthInfo struct{}
-
-func (a *testAuthInfo) AuthType() string {
-	return "test"
-}
-
-func (a *testAuthInfo) GetCommonAuthInfo() credentials.CommonAuthInfo {
-	return credentials.CommonAuthInfo{}
 }

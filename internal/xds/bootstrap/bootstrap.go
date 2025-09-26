@@ -256,24 +256,6 @@ func (sc *ServerConfig) DialOptions() []grpc.DialOption {
 	return dopts
 }
 
-// DialOptionsWithCallCredsForTransport returns dial options with call
-// credentials but only if they are compatible with the specified transport
-// credentials type. For example, JWT call credentials require secure transport
-// and are skipped for insecure.
-func (sc *ServerConfig) DialOptionsWithCallCredsForTransport(transportCredsType string, transportCreds credentials.TransportCredentials) []grpc.DialOption {
-	dopts := sc.DialOptions()
-	isInsecureTransport := transportCredsType == "insecure" ||
-		(transportCreds != nil && transportCreds.Info().SecurityProtocol == "insecure")
-
-	for _, callCred := range sc.selectedCallCreds {
-		if isInsecureTransport && callCred.RequireTransportSecurity() {
-			continue
-		}
-		dopts = append(dopts, grpc.WithPerRPCCredentials(callCred))
-	}
-	return dopts
-}
-
 // Cleanups returns a collection of functions to be called when the xDS client
 // for this server is closed. Allows cleaning up resources created specifically
 // for this server.
@@ -369,20 +351,22 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 
 	// Process call credentials - unlike channel creds, we use ALL supported
 	// types. Also, call credentials are optional as per gRFC A97.
-	for _, callCred := range server.CallCreds {
-		c := bootstrap.GetChannelCredentials(callCred.Type)
+	for _, callCredConfig := range server.CallCreds {
+		c := bootstrap.GetCallCredentials(callCredConfig.Type)
 		if c == nil {
 			// Skip unsupported call credential types (don't fail bootstrap).
 			continue
 		}
-		bundle, cancel, err := c.Build(callCred.Config)
+		callCred, cancel, err := c.Build(callCredConfig.Config)
 		if err != nil {
 			// Call credential validation failed - this should fail bootstrap.
-			return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", callCred.Type, err)
+			return fmt.Errorf("failed to build call credentials from bootstrap for %q: %v", callCredConfig.Type, err)
 		}
-		if callCredentials := bundle.PerRPCCredentials(); callCredentials != nil {
-			sc.selectedCallCreds = append(sc.selectedCallCreds, callCredentials)
+		if callCred == nil {
+			continue
 		}
+		sc.selectedCallCreds = append(sc.selectedCallCreds, callCred)
+		sc.extraDialOptions = append(sc.extraDialOptions, grpc.WithPerRPCCredentials(callCred))
 		sc.cleanups = append(sc.cleanups, cancel)
 	}
 
