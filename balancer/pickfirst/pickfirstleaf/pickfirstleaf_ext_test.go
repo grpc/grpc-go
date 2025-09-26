@@ -1152,6 +1152,7 @@ func (s) TestPickFirstLeaf_InterleavingIPv6Preffered(t *testing.T) {
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}},
+				{Addresses: []resolver.Address{{Addr: "[0001:0001:0001:0001:0001:0001:0001:0001]:8080"}}}, // duplicate, should be ignored.
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1111"}}},
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
 				{Addresses: []resolver.Address{{Addr: "3.3.3.3:3"}}},
