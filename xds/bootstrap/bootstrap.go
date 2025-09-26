@@ -60,9 +60,6 @@ func RegisterChannelCredentials(c ChannelCredentials) {
 // GetChannelCredentials returns the credentials associated with a given name.
 // If no credentials are registered with the name, nil will be returned.
 func GetChannelCredentials(name string) ChannelCredentials {
-	if name == "jwt_token_file" && !envconfig.XDSBootstrapCallCredsEnabled {
-		return nil
-	}
 	if c, ok := channelCredsRegistry[name]; ok {
 		return c
 	}
