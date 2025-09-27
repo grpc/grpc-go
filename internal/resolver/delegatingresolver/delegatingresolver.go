@@ -140,8 +140,8 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 			return nil, fmt.Errorf("delegating_resolver: invalid target address %s: %v", target.Endpoint(), err)
 		}
 		r.targetResolverState = &resolver.State{
-			Addresses: []resolver.Address{{Addr: target.Endpoint()}},
-			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
+			Addresses: []resolver.Address{{Addr: add}},
+			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: add}}}},
 		}
 		r.updateTargetResolverState(*r.targetResolverState)
 		return r, nil
@@ -226,7 +226,7 @@ func maybeAddDefaultPort(target, defaultPort string) (string, error) {
 			// the local system is assumed.
 			host = "localhost"
 		}
-		return "", internal.ErrMissingAddr
+		return fmt.Sprintf("%s:%s", host, port), nil
 	}
 	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
 		// target doesn't have port
