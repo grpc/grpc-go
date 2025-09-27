@@ -22,12 +22,14 @@ package delegatingresolver
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/proxyattributes"
+	"google.golang.org/grpc/internal/resolver/dns/internal"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
@@ -39,6 +41,8 @@ var (
 	// HTTPSProxyFromEnvironment will be overwritten in the tests
 	HTTPSProxyFromEnvironment = http.ProxyFromEnvironment
 )
+
+const defaultPort = "443"
 
 // delegatingResolver manages both target URI and proxy address resolution by
 // delegating these tasks to separate child resolvers. Essentially, it acts as
@@ -131,6 +135,10 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
+		add, err := maybeAddDefaultPort(target.Endpoint(), defaultPort)
+		if err != nil {
+			return nil, fmt.Errorf("delegating_resolver: invalid target address %s: %v", target.Endpoint(), err)
+		}
 		r.targetResolverState = &resolver.State{
 			Addresses: []resolver.Address{{Addr: target.Endpoint()}},
 			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: target.Endpoint()}}}},
@@ -200,6 +208,31 @@ func needsProxyResolver(state *resolver.State) bool {
 		}
 	}
 	return false
+}
+
+func maybeAddDefaultPort(target, defaultPort string) (string, error) {
+	if target == "" {
+		return "", internal.ErrMissingAddr
+	}
+	if host, port, err := net.SplitHostPort(target); err == nil {
+		if port == "" {
+			// If the port field is empty (target ends with colon), e.g. "[::1]:",
+			// this is an error.
+			return "", internal.ErrEndsWithColon
+		}
+		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
+		if host == "" {
+			// Keep consistent with net.Dial(): If the host is empty, as in ":80",
+			// the local system is assumed.
+			host = "localhost"
+		}
+		return "", internal.ErrMissingAddr
+	}
+	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
+		// target doesn't have port
+		return fmt.Sprintf("%s:%s", host, port), nil
+	}
+	return "", fmt.Errorf("invalid target address %v", target)
 }
 
 func skipProxy(address resolver.Address) bool {
