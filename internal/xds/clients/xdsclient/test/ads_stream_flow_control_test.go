@@ -20,7 +20,6 @@ package xdsclient_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -125,7 +124,6 @@ func (t *transport) NewStream(ctx context.Context, method string) (clients.Strea
 	stream := &stream{
 		stream: s,
 		recvCh: make(chan struct{}, 1),
-		doneCh: make(chan struct{}),
 	}
 	t.adsStreamCh <- stream
 
@@ -138,9 +136,7 @@ func (t *transport) Close() {
 
 type stream struct {
 	stream grpc.ClientStream
-
 	recvCh chan struct{}
-	doneCh <-chan struct{}
 }
 
 func (s *stream) Send(msg []byte) error {
@@ -150,8 +146,8 @@ func (s *stream) Send(msg []byte) error {
 func (s *stream) Recv() ([]byte, error) {
 	select {
 	case s.recvCh <- struct{}{}:
-	case <-s.doneCh:
-		return nil, errors.New("Recv() called after the test has finished")
+	case <-s.stream.Context().Done():
+		// Unblock the recv() once the stream is done.
 	}
 
 	var typedRes []byte
