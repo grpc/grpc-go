@@ -291,6 +291,7 @@ func DoUnaryCall(tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) erro
 	return nil
 }
 
+// DoUnaryCallWithContext performs a unary RPC with propagated context and given stub and request and response sizes.
 func DoUnaryCallWithContext(ctx context.Context, tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) error {
 	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
