@@ -20,6 +20,8 @@ package clusterimpl_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -31,10 +33,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/pickfirst"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
@@ -43,6 +48,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -1111,5 +1117,194 @@ func (s) TestUpdateLRSServerToNil(t *testing.T) {
 	defer sCancel()
 	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("Expected no LRS reports after disable, got %v want %v", err, context.DeadlineExceeded)
+	}
+}
+
+// Test verifies that child policy was updated on receipt of
+// configuration update.
+func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
+	// Create an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const (
+		serviceName   = "test-child-policy"
+		routeName     = "route-" + serviceName
+		clusterName   = "cluster-" + serviceName
+		endpointsName = "endpoints-" + serviceName
+	)
+
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	// Register stub pickfirst LB policy so that we can catch config changes.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	internal.BalancerUnregister(pfBuilder.Name())
+	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
+	updatedChildPolicy := ""
+	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
+		},
+		Init: func(bd *stub.BalancerData) {
+			bd.ChildBalancer = pfBuilder.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			select {
+			case lbCfgCh <- ccs.BalancerConfig:
+			default:
+			}
+			updatedChildPolicy = pfBuilder.Name()
+			return bd.ChildBalancer.UpdateClientConnState(ccs)
+		},
+		Close: func(bd *stub.BalancerData) {
+			bd.ChildBalancer.Close()
+		},
+	})
+	defer balancer.Register(pfBuilder)
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("client.EmptyCall() failed: %v", err)
+	}
+
+	// Now update the cluster to use "pick_first" as the endpoint picking policy.
+	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
+			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+			},
+		}},
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for pickfirst child policy config")
+	case <-lbCfgCh:
+	}
+
+	if updatedChildPolicy != pfBuilder.Name() {
+		t.Fatalf("Unexpected child policy after config update, got %q, wat %q", updatedChildPolicy, pfBuilder.Name())
+	}
+
+	// New RPC should still be routed successfully
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("EmptyCall() failed after policy update: %v", err)
+	}
+}
+
+// Test verifies that config update fails if child policy config
+// failed to parse.
+func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
+	// Create an xDS management server.
+	mgmtServer := e2e.StartManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
+	defer mgmtServer.Stop()
+
+	// Create bootstrap configuration pointing to the above management server.
+	nodeID := uuid.New().String()
+	bc := e2e.DefaultBootstrapContents(t, nodeID, mgmtServer.Address)
+	testutils.CreateBootstrapFileForTesting(t, bc)
+
+	// Create an xDS resolver with the above bootstrap configuration.
+	if internal.NewXDSResolverWithConfigForTesting == nil {
+		t.Fatalf("internal.NewXDSResolverWithConfigForTesting is nil")
+	}
+	resolverBuilder, err := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))(bc)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// Start a server backend exposing the test service.
+	server := stubserver.StartTestService(t, nil)
+	defer server.Stop()
+
+	const (
+		serviceName   = "test-child-policy"
+		routeName     = "route-" + serviceName
+		clusterName   = "cluster-" + serviceName
+		endpointsName = "endpoints-" + serviceName
+	)
+
+	// Configure the xDS management server with default resources. Override the
+	// default cluster to include pickfirst as an LbPolicy.
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(serviceName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, serviceName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, e2e.SecurityLevelNone)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, "localhost", []uint32{testutils.ParsePort(t, server.Address)})},
+	}
+	resources.Clusters[0].LoadBalancingPolicy = &v3clusterpb.LoadBalancingPolicy{
+		Policies: []*v3clusterpb.LoadBalancingPolicy_Policy{{
+			TypedExtensionConfig: &v3corepb.TypedExtensionConfig{
+				TypedConfig: testutils.MarshalAny(t, &v3pickfirstpb.PickFirst{}),
+			},
+		}},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update xDS resources: %v", err)
+	}
+
+	// Register stub pickfirst LB policy so that we can catch parsing errors.
+	pfBuilder := balancer.Get(pickfirst.Name)
+	internal.BalancerUnregister(pfBuilder.Name())
+	const parseConfigError = "failed to parse config"
+	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			return nil, errors.New(parseConfigError)
+		},
+	})
+	defer balancer.Register(pfBuilder)
+
+	cc, err := grpc.NewClient(fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(resolverBuilder), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatalf("Unexpected error, got <nil> want %v", err)
 	}
 }
