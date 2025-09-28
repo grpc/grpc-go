@@ -253,48 +253,69 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 // of the proxy address.
 func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
 	const (
-		targetTestAddr         = "test.com"
 		envProxyAddr           = "proxytest.com"
 		resolvedProxyTestAddr1 = "11.11.11.11:7687"
 	)
-	overrideTestHTTPSProxy(t, envProxyAddr)
-
-	targetResolver := manual.NewBuilderWithScheme("dns")
-	target := targetResolver.Scheme() + ":///" + targetTestAddr
-	// Set up a manual DNS resolver to control the proxy address resolution.
-	proxyResolver, proxyResolverBuilt := setupDNS(t)
-
-	tcc, stateCh, _ := createTestResolverClientConn(t)
-	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
-		t.Fatalf("Failed to create delegating resolver: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Wait for the proxy resolver to be built before calling UpdateState.
-	mustBuildResolver(ctx, t, proxyResolverBuilt)
-	proxyResolver.UpdateState(resolver.State{
-		Addresses: []resolver.Address{
-			{Addr: resolvedProxyTestAddr1},
+	tests := []struct {
+		name               string
+		target             string
+		wantConnectAddress string
+	}{
+		{
+			name:               "no port in target",
+			target:             "test.com",
+			wantConnectAddress: "test.com:443",
 		},
-	})
-
-	wantState := resolver.State{
-		Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr)},
-		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr)}}},
+		{
+			name:               "port specified in target",
+			target:             "test.com:8080",
+			wantConnectAddress: "test.com:8080",
+		},
 	}
 
-	var gotState resolver.State
-	select {
-	case gotState = <-stateCh:
-	case <-ctx.Done():
-		t.Fatal("Context timed out when waiting for a state update from the delegating resolver")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			overrideTestHTTPSProxy(t, envProxyAddr)
+
+			targetResolver := manual.NewBuilderWithScheme("dns")
+			target := targetResolver.Scheme() + ":///" + test.target
+			// Set up a manual DNS resolver to control the proxy address resolution.
+			proxyResolver, proxyResolverBuilt := setupDNS(t)
+
+			tcc, stateCh, _ := createTestResolverClientConn(t)
+			if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
+				t.Fatalf("Failed to create delegating resolver: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Wait for the proxy resolver to be built before calling UpdateState.
+			mustBuildResolver(ctx, t, proxyResolverBuilt)
+			proxyResolver.UpdateState(resolver.State{
+				Addresses: []resolver.Address{
+					{Addr: resolvedProxyTestAddr1},
+				},
+			})
+
+			wantState := resolver.State{
+				Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, test.wantConnectAddress)},
+				Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, test.wantConnectAddress)}}},
+			}
+
+			var gotState resolver.State
+			select {
+			case gotState = <-stateCh:
+			case <-ctx.Done():
+				t.Fatal("Context timed out when waiting for a state update from the delegating resolver")
+			}
+
+			if diff := cmp.Diff(gotState, wantState); diff != "" {
+				t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
+			}
+		})
 	}
 
-	if diff := cmp.Diff(gotState, wantState); diff != "" {
-		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
-	}
 }
 
 // Tests the scenario where a proxy is configured, and the target URI scheme is
