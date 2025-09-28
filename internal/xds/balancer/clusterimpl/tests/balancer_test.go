@@ -27,6 +27,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1171,6 +1172,7 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	internal.BalancerUnregister(pfBuilder.Name())
 	lbCfgCh := make(chan serviceconfig.LoadBalancingConfig, 1)
 	updatedChildPolicy := ""
+	var mu sync.Mutex
 	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
 		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return pfBuilder.(balancer.ConfigParser).ParseConfig(lbCfg)
@@ -1183,7 +1185,9 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 			case lbCfgCh <- ccs.BalancerConfig:
 			default:
 			}
+			mu.Lock()
 			updatedChildPolicy = pfBuilder.Name()
+			mu.Unlock()
 			return bd.ChildBalancer.UpdateClientConnState(ccs)
 		},
 		Close: func(bd *stub.BalancerData) {
@@ -1221,9 +1225,11 @@ func (s) TestChildPolicyChangeOnConfigUpdate(t *testing.T) {
 	case <-lbCfgCh:
 	}
 
+	mu.Lock()
 	if updatedChildPolicy != pfBuilder.Name() {
 		t.Fatalf("Unexpected child policy after config update, got %q, wat %q", updatedChildPolicy, pfBuilder.Name())
 	}
+	mu.Unlock()
 
 	// New RPC should still be routed successfully
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
