@@ -1291,7 +1291,7 @@ func (s) TestFailedToParseChildPolicyConfig(t *testing.T) {
 	internal.BalancerUnregister(pfBuilder.Name())
 	const parseConfigError = "failed to parse config"
 	stub.Register(pfBuilder.Name(), stub.BalancerFuncs{
-		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+		ParseConfig: func(_ json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 			return nil, errors.New(parseConfigError)
 		},
 	})
