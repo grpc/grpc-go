@@ -29,7 +29,6 @@ import (
 
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/proxyattributes"
-	"google.golang.org/grpc/internal/resolver/dns/internal"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/resolver"
@@ -212,13 +211,13 @@ func needsProxyResolver(state *resolver.State) bool {
 
 func maybeAddDefaultPort(target, defaultPort string) (string, error) {
 	if target == "" {
-		return "", internal.ErrMissingAddr
+		return "", fmt.Errorf("missing address")
 	}
 	if host, port, err := net.SplitHostPort(target); err == nil {
 		if port == "" {
 			// If the port field is empty (target ends with colon), e.g. "[::1]:",
 			// this is an error.
-			return "", internal.ErrEndsWithColon
+			return "", fmt.Errorf("missing port after port-separator colon")
 		}
 		// target has port, i.e ipv4-host:port, [ipv6-host]:port, host-name:port
 		if host == "" {
