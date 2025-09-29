@@ -23,6 +23,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -246,11 +247,13 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithTargetResolution(t *testing.T)
 	}
 }
 
-// Tests the scenario where a proxy is configured, the target URI contains the
-// "dns" scheme, and target resolution is disabled(default behavior). The test
-// verifies that the addresses returned by the delegating resolver include the
-// proxy resolver's addresses, with the unresolved target URI as an attribute
-// of the proxy address.
+// TestDelegatingResolverWithProxy tests the creation of a delegating resolver
+// when a proxy is configured. It verifies both successful creation for valid
+// targets and correct error handling for invalid ones.
+//
+// For successful cases, it ensures the final address is from the proxy resolver
+// and contains the original, correctly-formatted target address as an
+// attribute.
 func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.T) {
 	const (
 		envProxyAddr           = "proxytest.com"
@@ -260,6 +263,7 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 		name               string
 		target             string
 		wantConnectAddress string
+		wantErrorSubstring string
 	}{
 		{
 			name:               "no port in target",
@@ -270,6 +274,21 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 			name:               "port specified in target",
 			target:             "test.com:8080",
 			wantConnectAddress: "test.com:8080",
+		},
+		{
+			name:               "no host specified in target",
+			target:             ":8080",
+			wantConnectAddress: "localhost:8080",
+		},
+		{
+			name:               "colon after host in target but no post",
+			target:             "test.com:",
+			wantErrorSubstring: "missing port after port-separator colon",
+		},
+		{
+			name:               "missing target",
+			target:             "",
+			wantErrorSubstring: "missing address",
 		},
 	}
 
@@ -283,10 +302,23 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 			proxyResolver, proxyResolverBuilt := setupDNS(t)
 
 			tcc, stateCh, _ := createTestResolverClientConn(t)
-			if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
-				t.Fatalf("Failed to create delegating resolver: %v", err)
+			_, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false)
+			if test.wantErrorSubstring != "" {
+				// Case 1: We expected an error.
+				if err == nil {
+					t.Fatalf("Delegating resolver created, want error containing %q", test.wantErrorSubstring)
+				}
+				if !strings.Contains(err.Error(), test.wantErrorSubstring) {
+					t.Fatalf("Delegating resolver failed with error %q, want error containing %q", err.Error(), test.wantErrorSubstring)
+				}
+				// Expected error was found, so the test case for this part is done.
+				return
 			}
 
+			// Case 2: We did NOT expect an error.
+			if err != nil {
+				t.Fatalf("Delegating resolver creation failed unexpectedly with error: %v", err)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 
@@ -315,7 +347,6 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 			}
 		})
 	}
-
 }
 
 // Tests the scenario where a proxy is configured, and the target URI scheme is

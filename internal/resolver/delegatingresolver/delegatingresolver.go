@@ -113,7 +113,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	var err error
 	r.proxyURL, err = proxyURLForTarget(target.Endpoint())
 	if err != nil {
-		return nil, fmt.Errorf("delegating_resolver: failed to determine proxy URL for target %s: %v", target, err)
+		return nil, fmt.Errorf("delegating_resolver: failed to determine proxy URL for target %q: %v", target, err)
 	}
 
 	// proxy is not configured or proxy address excluded using `NO_PROXY` env
@@ -136,7 +136,7 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
 		add, err := maybeAddDefaultPort(target.Endpoint(), defaultPort)
 		if err != nil {
-			return nil, fmt.Errorf("delegating_resolver: invalid target address %s: %v", target.Endpoint(), err)
+			return nil, fmt.Errorf("delegating_resolver: invalid target address %q: %v", target.Endpoint(), err)
 		}
 		r.targetResolverState = &resolver.State{
 			Addresses: []resolver.Address{{Addr: add}},
@@ -225,11 +225,11 @@ func maybeAddDefaultPort(target, defaultPort string) (string, error) {
 			// the local system is assumed.
 			host = "localhost"
 		}
-		return fmt.Sprintf("%s:%s", host, port), nil
+		return net.JoinHostPort(host, port), nil
 	}
 	if host, port, err := net.SplitHostPort(target + ":" + defaultPort); err == nil {
 		// target doesn't have port
-		return fmt.Sprintf("%s:%s", host, port), nil
+		return net.JoinHostPort(host, port), nil
 	}
 	return "", fmt.Errorf("invalid target address %v", target)
 }
