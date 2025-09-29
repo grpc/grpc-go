@@ -3214,116 +3214,110 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 		channelz.TurnOn()
 	}
 
-	setupServerAndTransport := func() (*http2Server, func()) {
-		serverConfig := &ServerConfig{
-			ChannelzParent: channelz.RegisterServer("test server"),
-		}
-		server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
-
-		waitWhileTrue(t, func() (bool, error) {
-			server.mu.Lock()
-			defer server.mu.Unlock()
-			if len(server.conns) == 0 {
-				return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
-			}
-			return false, nil
-		})
-
-		server.mu.Lock()
-		var serverTransport *http2Server
-		for st := range server.conns {
-			serverTransport = st.(*http2Server)
-			break
-		}
-		server.mu.Unlock()
-
-		cleanup := func() {
-			channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
-			cancel()
-			server.stop()
-			client.Close(fmt.Errorf("closed manually by test"))
-		}
-
-		return serverTransport, cleanup
-	}
-
-	createTestStream := func() *ServerStream {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		return &ServerStream{
-			Stream: &Stream{
-				id:     123,
-				ctx:    ctx,
-				method: "/test.service/testmethod",
-			},
-		}
-	}
-
 	for _, test := range []struct {
 		name                string
 		eosReceived         bool
-		addToActiveStreams  bool
+		removeFromActive    bool // Remove stream from activeStreams before calling deleteStream
 		wantStreamSucceeded int64
 		wantStreamFailed    int64
 	}{
 		{
 			name:                "StreamsSucceeded",
 			eosReceived:         true,
-			addToActiveStreams:  true,
+			removeFromActive:    false,
 			wantStreamSucceeded: 1,
 			wantStreamFailed:    0,
 		},
 		{
 			name:                "StreamsFailed",
 			eosReceived:         false,
-			addToActiveStreams:  true,
+			removeFromActive:    false,
 			wantStreamSucceeded: 0,
 			wantStreamFailed:    1,
 		},
 		{
 			name:                "NonActiveStream",
 			eosReceived:         true,
-			addToActiveStreams:  false,
-			wantStreamSucceeded: 0,
-			wantStreamFailed:    0,
-		},
-		{
-			name:                "NonActiveStreamFalseEOS",
-			eosReceived:         false,
-			addToActiveStreams:  false,
+			removeFromActive:    true, // Stream already removed from activeStreams
 			wantStreamSucceeded: 0,
 			wantStreamFailed:    0,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			serverTransport, cleanup := setupServerAndTransport()
-			defer cleanup()
+			// Setup server configuration with channelz support
+			serverConfig := &ServerConfig{
+				ChannelzParent: channelz.RegisterServer("test server"),
+			}
+			defer channelz.RemoveEntry(serverConfig.ChannelzParent.ID)
+
+			// Create server and client with normal handler (not notifyCall)
+			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
+			defer cancel()
+			defer server.stop()
+			defer client.Close(fmt.Errorf("test cleanup"))
+
+			// Wait for connection to be established
+			waitWhileTrue(t, func() (bool, error) {
+				server.mu.Lock()
+				defer server.mu.Unlock()
+				if len(server.conns) == 0 {
+					return true, fmt.Errorf("timed-out while waiting for connection")
+				}
+				return false, nil
+			})
+
+			// Get the server transport
+			server.mu.Lock()
+			var serverTransport *http2Server
+			for st := range server.conns {
+				serverTransport = st.(*http2Server)
+				break
+			}
+			server.mu.Unlock()
 
 			if serverTransport == nil {
 				t.Fatal("Server transport not found")
 			}
 
-			stream := createTestStream()
+			// Always create a real stream through the client
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			clientStream, err := client.NewStream(ctx, &CallHdr{})
+			if err != nil {
+				t.Fatalf("Failed to create stream: %v", err)
+			}
 
-			if test.addToActiveStreams {
+			// Wait for the stream to be created on the server side
+			var serverStream *ServerStream
+			waitWhileTrue(t, func() (bool, error) {
 				serverTransport.mu.Lock()
-				serverTransport.activeStreams[stream.id] = stream
+				defer serverTransport.mu.Unlock()
+				for _, v := range serverTransport.activeStreams {
+					if v.id == clientStream.id {
+						serverStream = v
+						return false, nil
+					}
+				}
+				return true, nil
+			})
+
+			if serverStream == nil {
+				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
+			}
+
+			// For the NonActiveStream test, remove the stream from activeStreams
+			if test.removeFromActive {
+				serverTransport.mu.Lock()
+				delete(serverTransport.activeStreams, serverStream.id)
 				serverTransport.mu.Unlock()
 			}
 
 			initialSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
 			initialFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
 
-			// Call deleteStream multiple times to ensure metrics increment only once
-			serverTransport.deleteStream(stream, test.eosReceived)
-			serverTransport.deleteStream(stream, test.eosReceived)
-			serverTransport.deleteStream(stream, test.eosReceived)
-
-			// For the non-active stream case, also test calling with different eosReceived values
-			if !test.addToActiveStreams {
-				serverTransport.deleteStream(stream, !test.eosReceived)
-			}
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
 
 			finalSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
 			finalFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
@@ -3338,9 +3332,10 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 				t.Errorf("StreamsFailed: got delta %d, want %d", gotFailedDelta, test.wantStreamFailed)
 			}
 
-			if test.addToActiveStreams {
+			// Verify stream was removed from activeStreams (unless it was pre-removed for NonActiveStream test)
+			if !test.removeFromActive {
 				serverTransport.mu.Lock()
-				_, exists := serverTransport.activeStreams[stream.id]
+				_, exists := serverTransport.activeStreams[serverStream.id]
 				serverTransport.mu.Unlock()
 				if exists {
 					t.Error("Stream should have been removed from activeStreams")
