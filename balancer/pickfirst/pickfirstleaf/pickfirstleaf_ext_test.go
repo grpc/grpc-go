@@ -1556,8 +1556,9 @@ func (s) TestPickFirstLeaf_Reconnection(t *testing.T) {
 	}
 
 	// Calling the idle picker should result in the SubConn being re-connected.
-	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
-		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", balancer.ErrNoSubConnAvailable, err)
+	picker := <-cc.NewPickerCh
+	if _, err := picker.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
+		t.Fatalf("picker.Pick() returned error: %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
 
 	select {
