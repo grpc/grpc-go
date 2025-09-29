@@ -352,7 +352,7 @@ func (b *pickfirstBalancer) ExitIdle() {
 	defer b.mu.Unlock()
 	if b.state == connectivity.Idle {
 		// Move the balancer into CONNECTING state immediately. This is done to
-		// avoid staying in IDLE if a resolver update comes in before the first
+		// avoid staying in IDLE if a resolver update arrives before the first
 		// SubConn reports CONNECTING.
 		b.updateBalancerState(balancer.State{
 			ConnectivityState: connectivity.Connecting,
