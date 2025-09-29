@@ -3008,6 +3008,64 @@ func (s) TestClientCloseReturnsEarlyWhenGoAwayWriteHangs(t *testing.T) {
 	ct.Close(errors.New("manually closed by client"))
 }
 
+// deadlineTestConn is a net.Conn wrapper used to assert that deadlines are set
+// during http2Client.Close().
+type deadlineTestConn struct {
+	net.Conn
+	// We use atomic.Bool here since there may be more than one call to
+	// http2Client.Close -- which sets these deadlines -- and not all of them
+	// from the same goroutine as our test. In fact we only care about the first
+	// such invocation, which *does* come from the main goroutine of our test,
+	// but the race detector can't know that and complains (understandably)
+	// about writes from those successive calls when these variables are not
+	// atomic.Bool.
+	//
+	// For more detailed background, see
+	// https://github.com/grpc/grpc-go/pull/8534#discussion_r2297717445 .
+	observedReadDeadline  atomic.Bool
+	observedWriteDeadline atomic.Bool
+}
+
+func (c *deadlineTestConn) SetReadDeadline(t time.Time) error {
+	c.observedReadDeadline.Store(true)
+	return c.Conn.SetReadDeadline(t)
+}
+
+func (c *deadlineTestConn) SetWriteDeadline(t time.Time) error {
+	c.observedWriteDeadline.Store(true)
+	return c.Conn.SetWriteDeadline(t)
+}
+
+// Tests that connection read and write deadlines are set as expected during
+// Close().
+func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
+	dialer := func(_ context.Context, addr string) (net.Conn, error) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return &deadlineTestConn{Conn: conn}, nil
+	}
+	co := ConnectOptions{
+		Dialer: dialer,
+	}
+	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, co)
+	defer cancel()
+	defer server.stop()
+	dConn := client.conn.(*deadlineTestConn)
+	// Set both to false before invoking Close() in case some other code set a
+	// deadline above.
+	dConn.observedReadDeadline.Store(false)
+	dConn.observedWriteDeadline.Store(false)
+	client.Close(fmt.Errorf("closed manually by test"))
+	if !dConn.observedReadDeadline.Load() {
+		t.Errorf("Connection read deadline was never set")
+	}
+	if !dConn.observedWriteDeadline.Load() {
+		t.Errorf("Connection write deadline was never set")
+	}
+}
+
 // TestReadHeaderMultipleBuffers tests the stream when the gRPC headers are
 // split across multiple buffers. It verifies that the reporting of the
 // number of bytes read for flow control is correct.
