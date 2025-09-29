@@ -72,9 +72,6 @@ func (h *clientMetricsHandler) initializeMetrics() {
 func getOrCreateCallInfo(ctx context.Context, cc *grpc.ClientConn, method string, opts ...grpc.CallOption) (context.Context, *callInfo) {
 	ci := getCallInfo(ctx)
 	if ci == nil {
-		if logger.V(2) {
-			logger.Info("Creating new CallInfo since its not present in context")
-		}
 		ci = &callInfo{
 			target: cc.CanonicalTarget(),
 			method: determineMethod(method, opts...),
