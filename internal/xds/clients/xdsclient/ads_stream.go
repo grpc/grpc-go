@@ -322,7 +322,7 @@ func (s *adsStreamImpl) sendNew(stream clients.Stream, typ ResourceType) error {
 		default:
 		}
 	}
-	if s.fc.runIfPending(func() { bufferRequest() }) {
+	if s.fc.runIfPending(bufferRequest) {
 		return nil
 	}
 
@@ -483,7 +483,12 @@ func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 		// Wait for ADS stream level flow control to be available, and send out
 		// a request if anything was buffered while we were waiting for local
 		// processing of the previous response to complete.
-		s.fc.wait()
+		if !s.fc.wait() {
+			if s.logger.V(2) {
+				s.logger.Infof("ADS stream stopped while waiting for flow control")
+			}
+			return msgReceived
+		}
 		s.sendBuffered(stream)
 
 		resources, url, version, nonce, err := s.recvMessage(stream)
@@ -707,14 +712,17 @@ func resourceNames(m map[string]*xdsresource.ResourceWatchState) []string {
 // consumed by all watchers.
 //
 // The lifetime of the flow control is tied to the lifetime of the stream. When
-// the stream is closed, it is the responsibility of the caller to set the
-// pending state to false. This ensures that any goroutine blocked on the flow
-// control's wait method is unblocked.
+// the stream is closed, it is the responsibility of the caller to stop the flow
+// control. This ensures that any goroutine blocked on the flow control's wait
+// method is unblocked.
 type adsFlowControl struct {
-	mu      sync.Mutex
-	cond    *sync.Cond // signals when the most recent update has been consumed
-	pending bool       // indicates if the most recent update is pending consumption
-	stopped bool       // indicates if the ADS stream has been stopped
+	mu sync.Mutex
+	// cond is used to signal when the most recent update has been consumed, or
+	// the flow control has been stopped (in which case, waiters should be
+	// unblocked as well).
+	cond    *sync.Cond
+	pending bool // indicates if the most recent update is pending consumption
+	stopped bool // indicates if the ADS stream has been stopped
 }
 
 // newADSFlowControl returns a new adsFlowControl.
@@ -762,19 +770,21 @@ func (fc *adsFlowControl) runIfPending(f func()) bool {
 	// If there's a pending update, run the function while still holding the
 	// lock. This ensures that the pending state does not change between the
 	// check and the function call.
-	pending := fc.pending
 	if fc.pending {
 		f()
 	}
-	return pending
+	return fc.pending
 }
 
 // wait blocks until all the watchers have consumed the most recent update.
-func (fc *adsFlowControl) wait() {
+// Returns true if the flow control was stopped while waiting, false otherwise.
+func (fc *adsFlowControl) wait() bool {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 
 	for fc.pending && !fc.stopped {
 		fc.cond.Wait()
 	}
+
+	return fc.stopped
 }
