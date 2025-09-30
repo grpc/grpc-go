@@ -330,8 +330,13 @@ func (r *xdsResolver) sendNewServiceConfig(cs stoppableConfigSelector) bool {
 // Only executed in the context of a serializer callback.
 func (r *xdsResolver) newConfigSelector() *configSelector {
 	cs := &configSelector{
-		r:         r,
+		channelID: r.channelID,
 		xdsNodeID: r.xdsClient.BootstrapConfig().Node().GetId(),
+		sendNewServiceConfig: func() {
+			r.serializer.TrySchedule(func(context.Context) {
+				r.sendNewServiceConfig(r.curConfigSelector)
+			})
+		},
 		virtualHost: virtualHost{
 			httpFilterConfigOverride: r.currentVirtualHost.HTTPFilterConfigOverride,
 			retryConfig:              r.currentVirtualHost.RetryConfig,
@@ -606,9 +611,4 @@ func (r *xdsResolver) onRouteConfigResourceError(name string, err error) {
 		return
 	}
 	r.onResourceError(err)
-}
-
-// Only executed in the context of a serializer callback.
-func (r *xdsResolver) onClusterRefDownToZero() {
-	r.sendNewServiceConfig(r.curConfigSelector)
 }
