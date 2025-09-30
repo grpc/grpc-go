@@ -97,10 +97,10 @@ func (s) TestDialWithTimeout(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := NewClient(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
+	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
 	close(dialDone)
 	if err != nil {
-		t.Fatalf("grpc.NewClient failed. Err: %v", err)
+		t.Fatalf("Dial failed. Err: %v", err)
 	}
 	client.Connect()
 	defer client.Close()

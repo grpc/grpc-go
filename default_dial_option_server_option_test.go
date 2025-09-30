@@ -49,7 +49,7 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 	}
 
 	// Ensure the NewClient passes with the extra dial options
-	if cc, err := NewClient("dns:///fake"); err != nil {
+	if cc, err := NewClient("fake"); err != nil {
 		t.Fatalf("grpc.NewClient with insecure credential failed: %v", err)
 	} else {
 		cc.Close()
@@ -71,7 +71,7 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	// due to the global dial options with credentials not being picked up due
 	// to global options being disabled.
 	noTSecStr := "no transport security set"
-	if _, err := NewClient("dns:///fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
+	if _, err := NewClient("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
 		t.Fatalf("grpc.NewClient received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
 	}
 }

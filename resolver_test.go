@@ -84,8 +84,8 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	// This should not find the injected resolver due to the case not matching.
 	// This results in "passthrough" being used with the address as the whole
 	// target.
-	target = "passthrough:///caseTest2:///localhost:1234"
-	cc, err = NewClient(target, WithContextDialer(customDialer), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
+	target = "caseTest2:///localhost:1234"
+	cc, err = NewClient(target, WithContextDialer(customDialer), withDefaultScheme("passthrough"), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Unexpected grpc.NewClient(%q) error: %v", target, err)
 	}
