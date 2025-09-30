@@ -206,7 +206,6 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 			defer cc.Close()
 			cc.Connect()
 			testutils.AwaitState(ctx, t, cc, connectivity.Idle)
-
 		})
 	}
 }
