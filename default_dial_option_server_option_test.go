@@ -30,7 +30,7 @@ import (
 
 func (s) TestAddGlobalDialOptions(t *testing.T) {
 	// Ensure the NewClient fails without credentials
-	if _, err := NewClient("dns:///fake"); err == nil {
+	if _, err := NewClient("fake"); err == nil {
 		t.Fatalf("grpc.NewClient without a credential did not fail")
 	} else {
 		if !strings.Contains(err.Error(), "no transport security set") {
@@ -135,7 +135,7 @@ func (s) TestJoinDialOption(t *testing.T) {
 	const maxRecvSize = 998765
 	const initialWindowSize = 100
 	jdo := newJoinDialOption(WithTransportCredentials(insecure.NewCredentials()), WithReadBufferSize(maxRecvSize), WithInitialWindowSize(initialWindowSize))
-	cc, err := NewClient("dns:///fake", jdo)
+	cc, err := NewClient("fake", jdo)
 	if err != nil {
 		t.Fatalf("grpc.NewClient with insecure credentials failed: %v", err)
 	}
