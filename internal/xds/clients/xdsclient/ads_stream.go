@@ -480,15 +480,16 @@ func (s *adsStreamImpl) sendMessageLocked(stream clients.Stream, names []string,
 func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 	msgReceived := false
 	for {
-		// Wait for ADS stream level flow control to be available, and send out
-		// a request if anything was buffered while we were waiting for local
-		// processing of the previous response to complete.
-		if !s.fc.wait() {
+		// Wait for ADS stream level flow control to be available.
+		if s.fc.wait() {
 			if s.logger.V(2) {
 				s.logger.Infof("ADS stream stopped while waiting for flow control")
 			}
 			return msgReceived
 		}
+
+		// Send out a request if anything was buffered while we were waiting for
+		// local processing of the previous response to complete.
 		s.sendBuffered(stream)
 
 		resources, url, version, nonce, err := s.recvMessage(stream)
