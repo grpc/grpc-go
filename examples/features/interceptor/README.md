@@ -30,7 +30,7 @@ types of interceptors in total.
 
 The type for client-side unary interceptors is
 [`UnaryClientInterceptor`](https://godoc.org/google.golang.org/grpc#UnaryClientInterceptor).
-It is essentially a function type with signature:
+It is a function type with signature:
 
 ```golang
 func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error
