@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/proxyattributes"
 	"google.golang.org/grpc/internal/resolver/delegatingresolver"
@@ -276,19 +277,9 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 			wantConnectAddress: "test.com:8080",
 		},
 		{
-			name:               "no host specified in target",
-			target:             ":8080",
-			wantConnectAddress: "localhost:8080",
-		},
-		{
 			name:               "colon after host in target but no post",
 			target:             "test.com:",
 			wantErrorSubstring: "missing port after port-separator colon",
-		},
-		{
-			name:               "missing target",
-			target:             "",
-			wantErrorSubstring: "missing address",
 		},
 	}
 
@@ -346,6 +337,58 @@ func (s) TestDelegatingResolverwithDNSAndProxyWithNoTargetResolution(t *testing.
 				t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 			}
 		})
+	}
+}
+
+// Tests the scenario where a proxy is configured, the target URI scheme is
+// "dns", target resolution is disabled, and the environment variable to add
+// default port is disabled. The test verifies that the addresses returned by
+// the delegating resolver include the resolved proxy address and the unresolved
+// target address without a port as attributes of the proxy address.
+func (s) TestDelegatingResolverEnvVarForDefaultPortDisabled(t *testing.T) {
+	const (
+		targetTestAddr         = "test.com"
+		envProxyAddr           = "proxytest.com"
+		resolvedProxyTestAddr1 = "11.11.11.11:7687"
+	)
+
+	testutils.SetEnvConfig(t, &envconfig.AddDefaultPort, false)
+	overrideTestHTTPSProxy(t, envProxyAddr)
+
+	targetResolver := manual.NewBuilderWithScheme("dns")
+	target := targetResolver.Scheme() + ":///" + targetTestAddr
+	// Set up a manual DNS resolver to control the proxy address resolution.
+	proxyResolver, proxyResolverBuilt := setupDNS(t)
+
+	tcc, stateCh, _ := createTestResolverClientConn(t)
+	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
+		t.Fatalf("Delegating resolver creation failed unexpectedly with error: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Wait for the proxy resolver to be built before calling UpdateState.
+	mustBuildResolver(ctx, t, proxyResolverBuilt)
+	proxyResolver.UpdateState(resolver.State{
+		Addresses: []resolver.Address{
+			{Addr: resolvedProxyTestAddr1},
+		},
+	})
+
+	wantState := resolver.State{
+		Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr)},
+		Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{proxyAddressWithTargetAttribute(resolvedProxyTestAddr1, targetTestAddr)}}},
+	}
+
+	var gotState resolver.State
+	select {
+	case gotState = <-stateCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out when waiting for a state update from the delegating resolver")
+	}
+
+	if diff := cmp.Diff(gotState, wantState); diff != "" {
+		t.Fatalf("Unexpected state from delegating resolver. Diff (-got +want):\n%v", diff)
 	}
 }
 

@@ -75,6 +75,11 @@ var (
 	// ALTSHandshakerKeepaliveParams is set if we should add the
 	// KeepaliveParams when dial the ALTS handshaker service.
 	ALTSHandshakerKeepaliveParams = boolFromEnv("GRPC_EXPERIMENTAL_ALTS_HANDSHAKER_KEEPALIVE_PARAMS", false)
+
+	// AddDefaultPort is set if the resolver should add the default port when
+	// the target address doesn't contain a port. We will add the default port
+	// 443 for default scheme.
+	AddDefaultPort = boolFromEnv("GRPC_EXPERIMENTAL_RESOLVER_ADD_DEFAULT_PORT", true)
 )
 
 func boolFromEnv(envVar string, def bool) bool {

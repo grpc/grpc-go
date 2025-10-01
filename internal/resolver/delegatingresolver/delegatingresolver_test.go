@@ -37,9 +37,7 @@ func Test(t *testing.T) {
 }
 
 const (
-	targetTestAddr = "test.com"
-	envProxyAddr   = "proxytest.com"
-)
+	targetTestAddr = "test.com")
 
 // overrideHTTPSProxyFromEnvironment function overwrites HTTPSProxyFromEnvironment and
 // returns a function to restore the default values.
