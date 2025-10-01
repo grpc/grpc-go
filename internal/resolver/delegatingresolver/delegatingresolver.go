@@ -84,7 +84,6 @@ func (nopResolver) Close() {}
 //   - non-nil URL, nil error: A proxy is configured, and the proxy URL was
 //     retrieved successfully without any errors.
 func proxyURLForTarget(address string) (*url.URL, error) {
-	parseTarget(address)
 	req := &http.Request{URL: &url.URL{
 		Scheme: "https",
 		Host:   address,
@@ -139,16 +138,13 @@ func New(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOpti
 	// resolution should be handled by the proxy, not the client. Therefore, we
 	// bypass the target resolver and store the unresolved target address.
 	if target.URL.Scheme == "dns" && !targetResolutionEnabled {
-		add := target.Endpoint()
+		addr := target.Endpoint()
 		if envconfig.AddDefaultPort {
-			add, err = maybeAddDefaultPort(target.Endpoint(), defaultPort)
-			if err != nil {
-				return nil, fmt.Errorf("delegating_resolver: invalid target address %q: %v", target.Endpoint(), err)
-			}
+			addr = maybeAddDefaultPort(target.Endpoint(), defaultPort)
 		}
 		r.targetResolverState = &resolver.State{
-			Addresses: []resolver.Address{{Addr: add}},
-			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: add}}}},
+			Addresses: []resolver.Address{{Addr: addr}},
+			Endpoints: []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: addr}}}},
 		}
 		r.updateTargetResolverState(*r.targetResolverState)
 		return r, nil
@@ -236,12 +232,12 @@ func parseTarget(target string) (string, error) {
 	return net.JoinHostPort(host, port), nil
 }
 
-func maybeAddDefaultPort(target, defaultPort string) (string, error) {
+func maybeAddDefaultPort(target, defaultPort string) string {
 	if _, _, err := net.SplitHostPort(target); err == nil {
 		// target already has port
-		return target, nil
+		return target
 	}
-	return net.JoinHostPort(target, defaultPort), nil
+	return net.JoinHostPort(target, defaultPort)
 
 }
 

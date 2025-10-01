@@ -362,8 +362,9 @@ func (s) TestDelegatingResolverEnvVarForDefaultPortDisabled(t *testing.T) {
 
 	tcc, stateCh, _ := createTestResolverClientConn(t)
 	if _, err := delegatingresolver.New(resolver.Target{URL: *testutils.MustParseURL(target)}, tcc, resolver.BuildOptions{}, targetResolver, false); err != nil {
-		t.Fatalf("Delegating resolver creation failed unexpectedly with error: %v", err)
+		t.Fatalf("Failed to create delegating resolver: %v", err)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
