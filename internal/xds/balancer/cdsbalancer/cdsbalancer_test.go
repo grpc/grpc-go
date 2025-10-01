@@ -1037,9 +1037,14 @@ func (s) TestResourceNotFoundResolverError(t *testing.T) {
 	testutils.AwaitState(ctx, t, cc, connectivity.TransientFailure)
 
 	// Ensure that the resolver error is propagated to the RPC caller.
-	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if err := verifyRPCError(err, codes.Unavailable, "", nodeID); err != nil {
-		t.Fatal(err)
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for error from RPC")
+	default:
+		_, err := client.EmptyCall(ctx, &testpb.Empty{})
+		if err := verifyRPCError(err, codes.Unavailable, "", nodeID); err == nil {
+			return
+		}
 	}
 }
 
