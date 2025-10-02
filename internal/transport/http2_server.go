@@ -390,16 +390,15 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	}
 	t.maxStreamID = streamID
 
-	buf := newRecvBuffer()
 	s := &ServerStream{
-		Stream: &Stream{
-			id:  streamID,
-			buf: buf,
-			fc:  &inFlow{limit: uint32(t.initialWindowSize)},
+		Stream: Stream{
+			id: streamID,
+			fc: inFlow{limit: uint32(t.initialWindowSize)},
 		},
 		st:               t,
 		headerWireLength: int(frame.Header().Length),
 	}
+	initRecvBuffer(&s.Stream)
 	var (
 		// if false, content-type was missing or invalid
 		isGRPC      = false
@@ -644,12 +643,12 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		t.adjustWindow(s, uint32(n))
 	}
 	s.ctxDone = s.ctx.Done()
-	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
-	s.trReader = &transportReader{
+	initWriteQuota(&s.Stream, defaultWriteQuota, s.ctxDone)
+	s.trReader = transportReader{
 		reader: &recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctxDone,
-			recv:    s.buf,
+			recv:    &s.buf,
 		},
 		windowHandler: func(n int) {
 			t.updateWindow(s, uint32(n))
@@ -658,7 +657,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	// Register the stream with loopy.
 	t.controlBuf.put(&registerStream{
 		streamID: s.id,
-		wq:       s.wq,
+		wq:       &s.wq,
 	})
 	handle(s)
 	return nil

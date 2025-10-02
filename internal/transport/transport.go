@@ -68,11 +68,10 @@ type recvBuffer struct {
 	err     error
 }
 
-func newRecvBuffer() *recvBuffer {
-	b := &recvBuffer{
+func initRecvBuffer(s *Stream) {
+	s.buf = recvBuffer{
 		c: make(chan recvMsg, 1),
 	}
-	return b
 }
 
 func (b *recvBuffer) put(r recvMsg) {
@@ -290,10 +289,10 @@ type Stream struct {
 	method       string          // the associated RPC method of the stream
 	recvCompress string
 	sendCompress string
-	buf          *recvBuffer
-	trReader     *transportReader
-	fc           *inFlow
-	wq           *writeQuota
+	buf          recvBuffer
+	trReader     transportReader
+	fc           inFlow
+	wq           writeQuota
 
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.
@@ -401,11 +400,23 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	return data, nil
 }
 
+// noCopy may be embedded into structs which must not be copied
+// after the first use.
+//
+// See https://golang.org/issues/8005#issuecomment-190753527
+// for details.
+type noCopy struct {
+}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
+
 // transportReader reads all the data available for this Stream from the transport and
 // passes them into the decoder, which converts them into a gRPC message stream.
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
+	_      noCopy
 	reader *recvBufferReader
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.

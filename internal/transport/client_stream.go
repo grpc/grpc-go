@@ -29,7 +29,7 @@ import (
 
 // ClientStream implements streaming functionality for a gRPC client.
 type ClientStream struct {
-	*Stream // Embed for common stream functionality.
+	Stream // Embed for common stream functionality.
 
 	ct       *http2Client
 	done     chan struct{} // closed at the end of stream to unblock writers.

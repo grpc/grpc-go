@@ -88,9 +88,6 @@ func (s *Stream) readTo(p []byte) (int, error) {
 	}
 
 	if data.Len() != len(p) {
-		if err == nil {
-			err = io.ErrUnexpectedEOF
-		}
 		return 0, err
 	}
 
@@ -1856,17 +1853,16 @@ func waitWhileTrue(t *testing.T, condition func() (bool, error)) {
 func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	testRecvBuffer := newRecvBuffer()
 	s := &Stream{
 		ctx:         ctx,
-		buf:         testRecvBuffer,
 		requestRead: func(int) {},
 	}
-	s.trReader = &transportReader{
+	initRecvBuffer(s)
+	s.trReader = transportReader{
 		reader: &recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
-			recv:    s.buf,
+			recv:    &s.buf,
 		},
 		windowHandler: func(int) {},
 	}
@@ -2591,8 +2587,8 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 	testStream := func() *ClientStream {
 		return &ClientStream{
-			Stream: &Stream{
-				buf: &recvBuffer{
+			Stream: Stream{
+				buf: recvBuffer{
 					c:  make(chan recvMsg),
 					mu: sync.Mutex{},
 				},
@@ -3071,21 +3067,23 @@ func (s) TestCloseSetsConnectionDeadlines(t *testing.T) {
 // number of bytes read for flow control is correct.
 func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	headerLen := 5
-	recvBuffer := newRecvBuffer()
-	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
-	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 	bytesRead := 0
 	s := Stream{
 		requestRead: func(int) {},
-		trReader: &transportReader{
-			reader: &recvBufferReader{
-				recv: recvBuffer,
-			},
-			windowHandler: func(i int) {
-				bytesRead += i
-			},
+	}
+	initRecvBuffer(&s)
+	recvBuffer := &s.buf
+	s.trReader = transportReader{
+		reader: &recvBufferReader{
+			recv: recvBuffer,
+		},
+		windowHandler: func(i int) {
+			bytesRead += i
 		},
 	}
+
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, 3)})
+	recvBuffer.put(recvMsg{buffer: make(mem.SliceBuffer, headerLen-3)})
 
 	header := make([]byte, headerLen)
 	err := s.ReadMessageHeader(header)
@@ -3189,8 +3187,8 @@ func (s) TestServerSendsRSTAfterDeadlineToMisbehavedClient(t *testing.T) {
 func (s) TestClientTransport_Handle1xxHeaders(t *testing.T) {
 	testStream := func() *ClientStream {
 		return &ClientStream{
-			Stream: &Stream{
-				buf: &recvBuffer{
+			Stream: Stream{
+				buf: recvBuffer{
 					c:  make(chan recvMsg),
 					mu: sync.Mutex{},
 				},
