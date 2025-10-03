@@ -369,7 +369,7 @@ var (
 		xDSServers: []*ServerConfig{{
 			serverURI:            "unix:///etc/istio/XDS",
 			channelCreds:         []ChannelCreds{{Type: "insecure"}},
-			callCreds:            []CallCreds{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
+			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
 			serverFeatures:       []string{"xds_v3"},
 			selectedChannelCreds: ChannelCreds{Type: "insecure"},
 			selectedCallCreds:    selectedJWTCallCreds,
@@ -407,7 +407,7 @@ var (
 		xDSServers: []*ServerConfig{{
 			serverURI:            "unix:///etc/istio/XDS",
 			channelCreds:         []ChannelCreds{{Type: "tls", Config: json.RawMessage("{}")}},
-			callCreds:            []CallCreds{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
+			callCredsConfigs:     []CallCredsConfig{{Type: "jwt_token_file", Config: json.RawMessage("{\n\"jwt_token_file\": \"/var/run/secrets/tokens/istio-token\"\n}")}},
 			serverFeatures:       []string{"xds_v3"},
 			selectedChannelCreds: ChannelCreds{Type: "tls", Config: json.RawMessage("{}")},
 			selectedCallCreds:    selectedJWTCallCreds,
@@ -1210,38 +1210,38 @@ func Test(t *testing.T) {
 func (s) TestCallCreds_Equal(t *testing.T) {
 	tests := []struct {
 		name string
-		cc1  CallCreds
-		cc2  CallCreds
+		cc1  CallCredsConfig
+		cc2  CallCredsConfig
 		want bool
 	}{
 		{
 			name: "identical_configs",
-			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc1:  CallCredsConfig{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCredsConfig{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
 			want: true,
 		},
 		{
 			name: "different_types",
-			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			cc2:  CallCreds{Type: "other_type", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc1:  CallCredsConfig{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCredsConfig{Type: "other_type", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
 			want: false,
 		},
 		{
 			name: "different_configs",
-			cc1:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
-			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/different/path"}`)},
+			cc1:  CallCredsConfig{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc2:  CallCredsConfig{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/different/path"}`)},
 			want: false,
 		},
 		{
 			name: "nil_vs_non-nil_configs",
-			cc1:  CallCreds{Type: "jwt_token_file", Config: nil},
-			cc2:  CallCreds{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
+			cc1:  CallCredsConfig{Type: "jwt_token_file", Config: nil},
+			cc2:  CallCredsConfig{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/path/to/token"}`)},
 			want: false,
 		},
 		{
 			name: "both_nil_configs",
-			cc1:  CallCreds{Type: "jwt_token_file", Config: nil},
-			cc2:  CallCreds{Type: "jwt_token_file", Config: nil},
+			cc1:  CallCredsConfig{Type: "jwt_token_file", Config: nil},
+			cc2:  CallCredsConfig{Type: "jwt_token_file", Config: nil},
 			want: true,
 		},
 	}
@@ -1263,7 +1263,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 	tests := []struct {
 		name          string
 		json          string
-		wantCallCreds []CallCreds
+		wantCallCreds []CallCredsConfig
 	}{
 		{
 			name: "valid_call_creds_with_jwt_token_file",
@@ -1277,7 +1277,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 					}
 				]
 			}`,
-			wantCallCreds: []CallCreds{{
+			wantCallCreds: []CallCredsConfig{{
 				Type:   "jwt_token_file",
 				Config: json.RawMessage(`{"jwt_token_file": "/path/to/token.jwt"}`),
 			}},
@@ -1292,7 +1292,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 					{"type": "unsupported_type", "config": {}}
 				]
 			}`,
-			wantCallCreds: []CallCreds{
+			wantCallCreds: []CallCredsConfig{
 				{Type: "jwt_token_file", Config: json.RawMessage(`{"jwt_token_file": "/token1.jwt"}`)},
 				{Type: "unsupported_type", Config: json.RawMessage(`{}`)},
 			},
@@ -1304,7 +1304,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 				"channel_creds": [{"type": "insecure"}],
 				"call_creds": []
 			}`,
-			wantCallCreds: []CallCreds{},
+			wantCallCreds: []CallCredsConfig{},
 		},
 		{
 			name: "unspecified_call_creds_field",
@@ -1323,7 +1323,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if diff := cmp.Diff(test.wantCallCreds, sc.CallCreds()); diff != "" {
+			if diff := cmp.Diff(test.wantCallCreds, sc.CallCredsConfigs()); diff != "" {
 				t.Errorf("CallCreds mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -1331,27 +1331,27 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 }
 
 func (s) TestServerConfig_Equal_WithCallCreds(t *testing.T) {
-	callCreds := []CallCreds{{
+	callCreds := []CallCredsConfig{{
 		Type:   "jwt_token_file",
 		Config: json.RawMessage(`{"jwt_token_file": "/test/token.jwt"}`),
 	}}
 	sc1 := &ServerConfig{
-		serverURI:      "server1",
-		channelCreds:   []ChannelCreds{{Type: "insecure"}},
-		callCreds:      callCreds,
-		serverFeatures: []string{"feature1"},
+		serverURI:        "server1",
+		channelCreds:     []ChannelCreds{{Type: "insecure"}},
+		callCredsConfigs: callCreds,
+		serverFeatures:   []string{"feature1"},
 	}
 	sc2 := &ServerConfig{
-		serverURI:      "server1",
-		channelCreds:   []ChannelCreds{{Type: "insecure"}},
-		callCreds:      callCreds,
-		serverFeatures: []string{"feature1"},
+		serverURI:        "server1",
+		channelCreds:     []ChannelCreds{{Type: "insecure"}},
+		callCredsConfigs: callCreds,
+		serverFeatures:   []string{"feature1"},
 	}
 	sc3 := &ServerConfig{
-		serverURI:      "server1",
-		channelCreds:   []ChannelCreds{{Type: "insecure"}},
-		callCreds:      []CallCreds{{Type: "different"}},
-		serverFeatures: []string{"feature1"},
+		serverURI:        "server1",
+		channelCreds:     []ChannelCreds{{Type: "insecure"}},
+		callCredsConfigs: []CallCredsConfig{{Type: "different"}},
+		serverFeatures:   []string{"feature1"},
 	}
 
 	if !sc1.Equal(sc2) {
@@ -1369,7 +1369,7 @@ func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
 	sc := &ServerConfig{
 		serverURI:    "test-server:443",
 		channelCreds: []ChannelCreds{{Type: "insecure"}},
-		callCreds: []CallCreds{{
+		callCredsConfigs: []CallCredsConfig{{
 			Type:   "jwt_token_file",
 			Config: json.RawMessage(`{"jwt_token_file":"/test/token.jwt"}`),
 		}},
@@ -1386,7 +1386,7 @@ func (s) TestServerConfig_MarshalJSON_WithCallCreds(t *testing.T) {
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
-	if diff := cmp.Diff(sc.CallCreds(), unmarshaled.CallCreds()); diff != "" {
+	if diff := cmp.Diff(sc.CallCredsConfigs(), unmarshaled.CallCredsConfigs()); diff != "" {
 		t.Errorf("Marshal/Unmarshal call credentials produces differences:\n%s", diff)
 	}
 }
@@ -1652,13 +1652,13 @@ func (s) TestBootstrap_SelectedChannelCredsAndCallCreds(t *testing.T) {
 			}
 
 			// Verify call credentials processing.
+			callCredsConfig := sc.CallCredsConfigs()
 			callCreds := sc.CallCreds()
-			selectedCallCreds := sc.SelectedCallCreds()
+			if len(callCredsConfig) != test.wantCallCreds {
+				t.Errorf("Call creds configs count = %d, want %d", len(callCredsConfig), test.wantCallCreds)
+			}
 			if len(callCreds) != test.wantCallCreds {
 				t.Errorf("Call creds count = %d, want %d", len(callCreds), test.wantCallCreds)
-			}
-			if len(selectedCallCreds) != test.wantCallCreds {
-				t.Errorf("Selected call creds count = %d, want %d", len(selectedCallCreds), test.wantCallCreds)
 			}
 			// Verify transport credentials are properly selected.
 			if sc.SelectedChannelCreds().Type != test.wantTransportType {

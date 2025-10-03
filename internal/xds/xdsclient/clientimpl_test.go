@@ -286,11 +286,11 @@ func TestServerConfigCallCredsIntegration(t *testing.T) {
 		t.Fatalf("Failed to unmarshal server config: %v", err)
 	}
 	// Verify call credentials are processed.
-	callCreds := sc.CallCreds()
+	callCreds := sc.CallCredsConfigs()
 	if len(callCreds) != 1 {
 		t.Errorf("Expected 1 call credential, got %d", len(callCreds))
 	}
-	selectedCallCreds := sc.SelectedCallCreds()
+	selectedCallCreds := sc.CallCreds()
 	if len(selectedCallCreds) != 1 {
 		t.Errorf("Expected 1 selected call credential, got %d", len(selectedCallCreds))
 	}
