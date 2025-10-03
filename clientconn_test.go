@@ -102,7 +102,6 @@ func (s) TestDialWithTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
 	}
-	client.Connect()
 	defer client.Close()
 	timeout := time.After(1 * time.Second)
 	select {

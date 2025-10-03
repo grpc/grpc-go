@@ -200,8 +200,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 			defer cancel()
 			cc, err := NewClient(target, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
-				t.Fatalf("grpc.NewClient(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
-
+				t.Fatalf("grpc.NewClient(%q) failed: %v, expected to succeed", target, err)
 			}
 			defer cc.Close()
 			cc.Connect()
