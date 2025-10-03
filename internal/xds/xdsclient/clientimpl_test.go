@@ -261,7 +261,7 @@ func (s) TestBuildXDSClientConfig_Success(t *testing.T) {
 	}
 }
 
-func TestServerConfigCallCredsIntegration(t *testing.T) {
+func (s) TestServerConfigCallCredsIntegration(t *testing.T) {
 	originalJWTEnabled := envconfig.XDSBootstrapCallCredsEnabled
 	envconfig.XDSBootstrapCallCredsEnabled = true
 	defer func() {
