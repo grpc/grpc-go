@@ -107,6 +107,7 @@ func (cc CallCredsConfig) String() string {
 	return cc.Type + "-" + string(b)
 }
 
+// CallCredsConfigs represents a collection of call credentials configurations.
 type CallCredsConfigs []CallCredsConfig
 
 func (ccs CallCredsConfigs) String() string {
