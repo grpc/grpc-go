@@ -963,12 +963,11 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 		ChildNames:  []string{dnsCluster},
 	})
 	updateOpts := e2e.UpdateOptions{
-		NodeID:         nodeID,
-		Endpoints:      nil,
-		Clusters:       []*v3clusterpb.Cluster{cluster, ldnsCluster},
-		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, listenerName, clusterName)},
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeName)},
-		SkipValidation: true,
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(listenerName, routeName)},
+		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeName, listenerName, clusterName)},
+		Clusters:  []*v3clusterpb.Cluster{cluster, ldnsCluster},
+		Endpoints: nil,
 	}
 
 	// Replace DNS resolver with a wrapped resolver to capture ResolveNow calls.
@@ -976,7 +975,7 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	dnsR := manual.NewBuilderWithScheme("dns")
 	dnsResolverBuilder := resolver.Get("dns")
 	resolver.Register(dnsR)
-	t.Cleanup(func() { resolver.Register(dnsResolverBuilder) })
+	defer resolver.Register(dnsResolverBuilder)
 	dnsR.ResolveNowCallback = func(resolver.ResolveNowOptions) {
 		close(resolveNowCh)
 	}
@@ -994,11 +993,9 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	}
 	defer conn.Close()
 
-	conn.Connect()
 	client := testgrpc.NewTestServiceClient(conn)
 
 	// Verify initial RPC routes correctly to backend.
-	testutils.AwaitState(ctx, t, conn, connectivity.Ready)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("client.EmptyCall() failed: %v", err)
 	}
@@ -1008,12 +1005,7 @@ func (s) TestReResolutionAfterTransientFailure(t *testing.T) {
 	lis.Stop()
 	testutils.AwaitState(ctx, t, conn, connectivity.Idle)
 
-	// Make an RPC to reconnect and thereby move to TRANSIENT_FAILURE upon
-	// connection failure.
-	client.EmptyCall(ctx, &testpb.Empty{})
-	testutils.AwaitState(ctx, t, conn, connectivity.TransientFailure)
-
-	// An RPC at this point is expected to fail.
+	// An RPC at this point is expected to fail with TRANSIENT_FAILURE.
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("EmptyCall RPC succeeded when the channel is in TRANSIENT_FAILURE, got %v want %v", err, codes.Unavailable)
 	}
