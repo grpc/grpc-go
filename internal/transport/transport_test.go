@@ -3217,30 +3217,20 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 	for _, test := range []struct {
 		name                string
 		eosReceived         bool
-		removeFromActive    bool // Remove stream from activeStreams before calling deleteStream
 		wantStreamSucceeded int64
 		wantStreamFailed    int64
 	}{
 		{
 			name:                "StreamsSucceeded",
 			eosReceived:         true,
-			removeFromActive:    false,
 			wantStreamSucceeded: 1,
 			wantStreamFailed:    0,
 		},
 		{
 			name:                "StreamsFailed",
 			eosReceived:         false,
-			removeFromActive:    false,
 			wantStreamSucceeded: 0,
 			wantStreamFailed:    1,
-		},
-		{
-			name:                "NonActiveStream",
-			eosReceived:         true,
-			removeFromActive:    true, // Stream already removed from activeStreams
-			wantStreamSucceeded: 0,
-			wantStreamFailed:    0,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -3252,9 +3242,11 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 
 			// Create server and client with normal handler (not notifyCall)
 			server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, ConnectOptions{})
-			defer cancel()
-			defer server.stop()
-			defer client.Close(fmt.Errorf("test cleanup"))
+			defer func() {
+				client.Close(fmt.Errorf("test cleanup"))
+				server.stop()
+				cancel()
+			}()
 
 			// Wait for connection to be established
 			waitWhileTrue(t, func() (bool, error) {
@@ -3305,25 +3297,33 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 				t.Fatalf("Server stream not found for client stream ID %d", clientStream.id)
 			}
 
-			// For the NonActiveStream test, remove the stream from activeStreams
-			if test.removeFromActive {
-				serverTransport.mu.Lock()
-				delete(serverTransport.activeStreams, serverStream.id)
-				serverTransport.mu.Unlock()
-			}
-
-			serverTransport.deleteStream(serverStream, test.eosReceived)
-			serverTransport.deleteStream(serverStream, test.eosReceived)
+			// First call to deleteStream should remove the stream from activeStreams and update metrics
 			serverTransport.deleteStream(serverStream, test.eosReceived)
 
+			// Check metrics after first deleteStream call
 			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
 			streamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
 
 			if streamsSucceeded != test.wantStreamSucceeded {
-				t.Errorf("StreamsSucceeded: got %d, want %d", streamsSucceeded, test.wantStreamSucceeded)
+				t.Errorf("After first deleteStream - StreamsSucceeded: got %d, want %d", streamsSucceeded, test.wantStreamSucceeded)
 			}
 			if streamsFailed != test.wantStreamFailed {
-				t.Errorf("StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
+				t.Errorf("After first deleteStream - StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
+			}
+
+			// Additional calls to deleteStream should not change metrics (stream already deleted)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+			serverTransport.deleteStream(serverStream, test.eosReceived)
+
+			// Verify metrics haven't changed after subsequent calls
+			additionalStreamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			additionalStreamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+
+			if additionalStreamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("After multiple deleteStream calls - StreamsSucceeded changed: got %d, want %d", additionalStreamsSucceeded, test.wantStreamSucceeded)
+			}
+			if additionalStreamsFailed != test.wantStreamFailed {
+				t.Errorf("After multiple deleteStream calls - StreamsFailed changed: got %d, want %d", additionalStreamsFailed, test.wantStreamFailed)
 			}
 		})
 	}
