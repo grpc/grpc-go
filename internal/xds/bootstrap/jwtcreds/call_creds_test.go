@@ -30,22 +30,13 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func TestNewCallCredentials(t *testing.T) {
-	token := createTestJWT(t)
-	tokenFile := writeTempFile(t, token)
+const defaultCtxTimeout = 5 * time.Second
 
+func TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      string
-		wantSuccess bool
+		name   string
+		config string
 	}{
-		{
-			name: "valid_config",
-			config: `{
-				"jwt_token_file": "` + tokenFile + `"
-			}`,
-			wantSuccess: true,
-		},
 		{
 			name:   "empty_file",
 			config: `""`,
@@ -66,45 +57,55 @@ func TestNewCallCredentials(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			callCreds, cleanup, err := NewCallCredentials(json.RawMessage(tt.config))
 
-			if !tt.wantSuccess {
-				if err == nil {
-					t.Fatal("Expected error, got nil")
-				}
-				return
+			if err == nil {
+				t.Fatal("NewCallCredentials: expected error, got nil")
 			}
-			if err != nil {
-				t.Fatalf("NewCallCredentials failed: %v", err)
+			if callCreds != nil {
+				t.Error("NewCallCredentials: Expected nil bundle to be returned")
 			}
-			if callCreds == nil {
-				t.Fatal("Expected non-nil bundle")
-			}
-			if cleanup == nil {
-				t.Error("Expected non-nil cleanup function")
-			} else {
-				defer cleanup()
-			}
-
-			// Test that call credentials get used
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
-				AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
-			})
-			metadata, err := callCreds.GetRequestMetadata(ctx)
-			if err != nil {
-				t.Fatalf("GetRequestMetadata failed: %v", err)
-			}
-			if len(metadata) == 0 {
-				t.Error("Expected metadata to be returned")
-			}
-			authHeader, ok := metadata["authorization"]
-			if !ok {
-				t.Error("Expected authorization header in metadata")
-			}
-			if !strings.HasPrefix(authHeader, "Bearer ") {
-				t.Errorf("Authorization header should start with 'Bearer ', got %q", authHeader)
+			if cleanup != nil {
+				t.Error("NewCallCredentials: Expected nil cleanup function to be returned")
 			}
 		})
+	}
+}
+func TestNewCallCredentialsWithValidConfig(t *testing.T) {
+	token := createTestJWT(t)
+	tokenFile := writeTempFile(t, token)
+	config := `{"jwt_token_file": "` + tokenFile + `"}`
+
+	callCreds, cleanup, err := NewCallCredentials(json.RawMessage(config))
+	if err != nil {
+		t.Fatalf("NewCallCredentials failed: %v", err)
+	}
+	if callCreds == nil {
+		t.Fatal("NewCallCredentials: Expected non-nil bundle to be returned")
+	}
+	if cleanup == nil {
+		t.Error("NewCallCredentials: Expected non-nil cleanup function to be returned")
+	} else {
+		defer cleanup()
+	}
+
+	// Test that call credentials get used
+	ctx, cancel := context.WithTimeout(context.Background(), defaultCtxTimeout)
+	defer cancel()
+	ctx = credentials.NewContextWithRequestInfo(ctx, credentials.RequestInfo{
+		AuthInfo: &testAuthInfo{secLevel: credentials.PrivacyAndIntegrity},
+	})
+	metadata, err := callCreds.GetRequestMetadata(ctx)
+	if err != nil {
+		t.Fatalf("GetRequestMetadata failed: %v", err)
+	}
+	if len(metadata) == 0 {
+		t.Fatal("GetRequestMetadata: Expected metadata to be returned")
+	}
+	authHeader, ok := metadata["authorization"]
+	if !ok {
+		t.Fatal("GetRequestMetadata: Expected authorization header in metadata")
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		t.Errorf("GetRequestMetadata: Authorization header should start with 'Bearer ', got %q", authHeader)
 	}
 }
 
@@ -117,7 +118,7 @@ func TestCallCredentials_Cleanup(t *testing.T) {
 		t.Fatalf("NewCallCredentials failed: %v", err)
 	}
 	if cleanup == nil {
-		t.Fatal("Expected non-nil cleanup function")
+		t.Fatal("NewCallCredentials: Expected non-nil cleanup function")
 	}
 	// Cleanup should not panic
 	cleanup()

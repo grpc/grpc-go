@@ -29,9 +29,9 @@ import (
 	"google.golang.org/grpc/credentials/jwt"
 )
 
-// NewCallCredentials returns a credentials.PerRPCCredentials The input config
-// should match the structure specified in gRFC A97 structure.
-// See gRFC A97: https://github.com/grpc/proposal/blob/master/A97-xds-jwt-call-creds.md
+// NewCallCredentials returns a new JWT token based call credentials. The input
+// config must match the structure specified in gRFC A97. The caller is expected
+// to invoke the second return value when they are done using the returned call creds.
 func NewCallCredentials(configJSON json.RawMessage) (credentials.PerRPCCredentials, func(), error) {
 	var cfg struct {
 		JWTTokenFile string `json:"jwt_token_file"`
