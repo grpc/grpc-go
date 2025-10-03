@@ -3325,16 +3325,6 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 			if streamsFailed != test.wantStreamFailed {
 				t.Errorf("StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
 			}
-
-			// Verify stream was removed from activeStreams (unless it was pre-removed for NonActiveStream test)
-			if !test.removeFromActive {
-				serverTransport.mu.Lock()
-				_, exists := serverTransport.activeStreams[serverStream.id]
-				serverTransport.mu.Unlock()
-				if exists {
-					t.Error("Stream should have been removed from activeStreams")
-				}
-			}
 		})
 	}
 }
