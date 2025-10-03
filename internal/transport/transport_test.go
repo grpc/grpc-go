@@ -3272,8 +3272,9 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 			}
 
 			// Always create a real stream through the client
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
+
 			clientStream, err := client.NewStream(ctx, &CallHdr{})
 			if err != nil {
 				t.Fatalf("Failed to create stream: %v", err)
