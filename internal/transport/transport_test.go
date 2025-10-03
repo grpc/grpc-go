@@ -1859,7 +1859,7 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	}
 	initRecvBuffer(&s.buf)
 	s.trReader = transportReader{
-		reader: &recvBufferReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
 			recv:    &s.buf,
@@ -3074,7 +3074,7 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	initRecvBuffer(&s.buf)
 	recvBuffer := &s.buf
 	s.trReader = transportReader{
-		reader: &recvBufferReader{
+		reader: recvBufferReader{
 			recv: recvBuffer,
 		},
 		windowHandler: func(i int) {

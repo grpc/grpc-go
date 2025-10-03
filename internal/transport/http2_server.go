@@ -645,7 +645,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 	s.ctxDone = s.ctx.Done()
 	initWriteQuota(&s.Stream.wq, defaultWriteQuota, s.ctxDone)
 	s.trReader = transportReader{
-		reader: &recvBufferReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctxDone,
 			recv:    &s.buf,

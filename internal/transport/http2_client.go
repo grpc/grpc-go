@@ -501,7 +501,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 	// So we use the original context here instead of creating a copy.
 	s.ctx = ctx
 	s.trReader = transportReader{
-		reader: &recvBufferReader{
+		reader: recvBufferReader{
 			ctx:     s.ctx,
 			ctxDone: s.ctx.Done(),
 			recv:    &s.buf,

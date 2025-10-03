@@ -122,6 +122,7 @@ func (b *recvBuffer) get() <-chan recvMsg {
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
+	_           noCopy
 	closeStream func(error) // Closes the client transport stream with the given error and nil trailer metadata.
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
@@ -417,7 +418,7 @@ func (*noCopy) Unlock() {}
 // the stream broke.
 type transportReader struct {
 	_      noCopy
-	reader *recvBufferReader
+	reader recvBufferReader
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)

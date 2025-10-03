@@ -425,7 +425,7 @@ func (ht *serverHandlerTransport) HandleStreams(ctx context.Context, startStream
 	}
 	initRecvBuffer(&s.Stream.buf)
 	s.trReader = transportReader{
-		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: &s.buf},
+		reader:        recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: &s.buf},
 		windowHandler: func(int) {},
 	}
 
