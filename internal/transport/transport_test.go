@@ -3312,24 +3312,18 @@ func (s) TestDeleteStreamMetricsIncrementedOnlyOnce(t *testing.T) {
 				serverTransport.mu.Unlock()
 			}
 
-			initialSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-			initialFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
-
 			serverTransport.deleteStream(serverStream, test.eosReceived)
 			serverTransport.deleteStream(serverStream, test.eosReceived)
 			serverTransport.deleteStream(serverStream, test.eosReceived)
 
-			finalSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
-			finalFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
+			streamsSucceeded := serverTransport.channelz.SocketMetrics.StreamsSucceeded.Load()
+			streamsFailed := serverTransport.channelz.SocketMetrics.StreamsFailed.Load()
 
-			gotSucceededDelta := finalSucceeded - initialSucceeded
-			gotFailedDelta := finalFailed - initialFailed
-
-			if gotSucceededDelta != test.wantStreamSucceeded {
-				t.Errorf("StreamsSucceeded: got delta %d, want %d", gotSucceededDelta, test.wantStreamSucceeded)
+			if streamsSucceeded != test.wantStreamSucceeded {
+				t.Errorf("StreamsSucceeded: got %d, want %d", streamsSucceeded, test.wantStreamSucceeded)
 			}
-			if gotFailedDelta != test.wantStreamFailed {
-				t.Errorf("StreamsFailed: got delta %d, want %d", gotFailedDelta, test.wantStreamFailed)
+			if streamsFailed != test.wantStreamFailed {
+				t.Errorf("StreamsFailed: got %d, want %d", streamsFailed, test.wantStreamFailed)
 			}
 
 			// Verify stream was removed from activeStreams (unless it was pre-removed for NonActiveStream test)
