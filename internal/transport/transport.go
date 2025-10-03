@@ -68,11 +68,10 @@ type recvBuffer struct {
 	err     error
 }
 
-func newRecvBuffer() *recvBuffer {
-	b := &recvBuffer{
+func initRecvBuffer(b *recvBuffer) {
+	*b = recvBuffer{
 		c: make(chan recvMsg, 1),
 	}
-	return b
 }
 
 func (b *recvBuffer) put(r recvMsg) {
@@ -123,6 +122,7 @@ func (b *recvBuffer) get() <-chan recvMsg {
 // recvBufferReader implements io.Reader interface to read the data from
 // recvBuffer.
 type recvBufferReader struct {
+	_           noCopy
 	closeStream func(error) // Closes the client transport stream with the given error and nil trailer metadata.
 	ctx         context.Context
 	ctxDone     <-chan struct{} // cache of ctx.Done() (for performance).
@@ -285,27 +285,28 @@ const (
 
 // Stream represents an RPC in the transport layer.
 type Stream struct {
-	id           uint32
 	ctx          context.Context // the associated context of the stream
 	method       string          // the associated RPC method of the stream
 	recvCompress string
 	sendCompress string
-	buf          *recvBuffer
-	trReader     *transportReader
-	fc           *inFlow
-	wq           *writeQuota
 
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.
 	requestRead func(int)
-
-	state streamState
 
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
 
 	trailer metadata.MD // the key-value map of trailer metadata.
+
+	// Non-pointer fields are at the end to optimize GC performance.
+	state    streamState
+	id       uint32
+	buf      recvBuffer
+	trReader transportReader
+	fc       inFlow
+	wq       writeQuota
 }
 
 func (s *Stream) swapState(st streamState) streamState {
@@ -401,16 +402,28 @@ func (s *Stream) read(n int) (data mem.BufferSlice, err error) {
 	return data, nil
 }
 
+// noCopy may be embedded into structs which must not be copied
+// after the first use.
+//
+// See https://golang.org/issues/8005#issuecomment-190753527
+// for details.
+type noCopy struct {
+}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
+
 // transportReader reads all the data available for this Stream from the transport and
 // passes them into the decoder, which converts them into a gRPC message stream.
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
-	reader *recvBufferReader
+	_ noCopy
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
 	er            error
+	reader        recvBufferReader
 }
 
 func (t *transportReader) ReadMessageHeader(header []byte) (int, error) {
