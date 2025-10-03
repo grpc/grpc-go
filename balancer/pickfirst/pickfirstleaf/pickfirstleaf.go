@@ -381,13 +381,14 @@ func (b *pickfirstBalancer) closeSubConnsLocked() {
 
 // deDupAddresses ensures that each address appears only once in the slice.
 func deDupAddresses(addrs []resolver.Address) []resolver.Address {
-	seenAddrs := resolver.NewAddressMapV2[*scData]()
+	seenAddrs := resolver.NewAddressMapV2[bool]()
 	retAddrs := []resolver.Address{}
 
 	for _, addr := range addrs {
 		if _, ok := seenAddrs.Get(addr); ok {
 			continue
 		}
+		seenAddrs.Set(addr, true)
 		retAddrs = append(retAddrs, addr)
 	}
 	return retAddrs

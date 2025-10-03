@@ -201,7 +201,9 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 		ResolverState: resolver.State{
 			Endpoints: []resolver.Endpoint{
 				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}},
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}}, // duplicate, should be ignored.
 				{Addresses: []resolver.Address{{Addr: "2.2.2.2:2"}}},
+				{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}}, // duplicate, should be ignored.
 			},
 		},
 	}
@@ -213,14 +215,35 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 	// once.
 	tfErr := fmt.Errorf("test err: connection refused")
 	sc1 := <-cc.NewSubConnCh
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
+
+	// Move the subconn back to IDLE, it should not be re-connected until the
+	// first pass is complete.
+	shortCtx, shortCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	sc1.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	select {
+	case <-sc1.ConnectCh:
+		t.Fatal("Connect() unexpectedly called on sc1.")
+	case <-shortCtx.Done():
+	}
 
 	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatalf("cc.WaitForPickerWithErr(%v) returned error: %v", balancer.ErrNoSubConnAvailable, err)
 	}
 
 	sc2 := <-cc.NewSubConnCh
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc2.")
+	}
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: tfErr})
 
@@ -230,6 +253,29 @@ func (s) TestPickFirstLeaf_TFPickerUpdate(t *testing.T) {
 
 	// Subsequent TRANSIENT_FAILUREs should be reported only after seeing "# of SubConns"
 	// TRANSIENT_FAILUREs.
+
+	// Both the subconns should be connected in parallel.
+	select {
+	case <-sc1.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc1.")
+	}
+
+	shortCtx, shortCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer shortCancel()
+	select {
+	case <-sc2.ConnectCh:
+		t.Fatal("Connect() called on sc2 before it completed backing-off.")
+	case <-shortCtx.Done():
+	}
+
+	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	select {
+	case <-sc2.ConnectCh:
+	case <-ctx.Done():
+		t.Fatal("Context timed out waiting for Connect() to be called on sc2.")
+	}
+
 	newTfErr := fmt.Errorf("test err: unreachable")
 	sc2.UpdateState(balancer.SubConnState{ConnectivityState: connectivity.TransientFailure, ConnectionError: newTfErr})
 	select {
