@@ -28,11 +28,20 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/grpctest"
 )
 
 const defaultCtxTimeout = 5 * time.Second
 
-func TestNewCallCredentialsWithInValidConfig(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 	tests := []struct {
 		name   string
 		config string
@@ -69,7 +78,7 @@ func TestNewCallCredentialsWithInValidConfig(t *testing.T) {
 		})
 	}
 }
-func TestNewCallCredentialsWithValidConfig(t *testing.T) {
+func (s) TestNewCallCredentialsWithValidConfig(t *testing.T) {
 	token := createTestJWT(t)
 	tokenFile := writeTempFile(t, token)
 	config := `{"jwt_token_file": "` + tokenFile + `"}`
@@ -109,7 +118,7 @@ func TestNewCallCredentialsWithValidConfig(t *testing.T) {
 	}
 }
 
-func TestCallCredentials_Cleanup(t *testing.T) {
+func (s) TestCallCredentials_Cleanup(t *testing.T) {
 	token := createTestJWT(t)
 	tokenFile := writeTempFile(t, token)
 	config := `{"jwt_token_file": "` + tokenFile + `"}`
