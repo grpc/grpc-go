@@ -98,6 +98,25 @@ func (cc CallCredsConfig) Equal(other CallCredsConfig) bool {
 	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
 }
 
+func (cc CallCredsConfig) String() string {
+	if cc.Config == nil {
+		return cc.Type
+	}
+	// We do not expect the Marshal call to fail since we wrote to cc.Config
+	b, _ := json.Marshal(cc.Config)
+	return cc.Type + "-" + string(b)
+}
+
+type CallCredsConfigs []CallCredsConfig
+
+func (ccs CallCredsConfigs) String() string {
+	var creds []string
+	for _, cc := range ccs {
+		creds = append(creds, cc.String())
+	}
+	return strings.Join(creds, ",")
+}
+
 // ServerConfigs represents a collection of server configurations.
 type ServerConfigs []*ServerConfig
 
@@ -212,7 +231,7 @@ func (sc *ServerConfig) ServerFeatures() []string {
 }
 
 // CallCredsConfigs returns the call credentials configuration for this server.
-func (sc *ServerConfig) CallCredsConfigs() []CallCredsConfig {
+func (sc *ServerConfig) CallCredsConfigs() CallCredsConfigs {
 	return sc.callCredsConfigs
 }
 
@@ -287,10 +306,10 @@ func (sc *ServerConfig) Equal(other *ServerConfig) bool {
 // String returns the string representation of the ServerConfig.
 func (sc *ServerConfig) String() string {
 	if len(sc.serverFeatures) == 0 {
-		return fmt.Sprintf("%s-%s", sc.serverURI, sc.selectedChannelCreds.String())
+		return strings.Join([]string{sc.serverURI, sc.selectedChannelCreds.String(), sc.CallCredsConfigs().String()}, "-")
 	}
 	features := strings.Join(sc.serverFeatures, "-")
-	return strings.Join([]string{sc.serverURI, sc.selectedChannelCreds.String(), features}, "-")
+	return strings.Join([]string{sc.serverURI, sc.selectedChannelCreds.String(), features, sc.CallCredsConfigs().String()}, "-")
 }
 
 // The following fields correspond 1:1 with the JSON schema for ServerConfig.

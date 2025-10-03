@@ -1263,7 +1263,7 @@ func (s) TestServerConfig_UnmarshalJSON_WithCallCreds(t *testing.T) {
 	tests := []struct {
 		name          string
 		json          string
-		wantCallCreds []CallCredsConfig
+		wantCallCreds CallCredsConfigs
 	}{
 		{
 			name: "valid_call_creds_with_jwt_token_file",
