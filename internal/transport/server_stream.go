@@ -43,12 +43,13 @@ type ServerStream struct {
 	// Holds compressor names passed in grpc-accept-encoding metadata from the
 	// client.
 	clientAdvertisedCompressors string
-	headerWireLength            int
 
 	// hdrMu protects outgoing header and trailer metadata.
 	hdrMu      sync.Mutex
 	header     metadata.MD // the outgoing header metadata.  Updated by WriteHeader.
 	headerSent atomic.Bool // atomically set when the headers are sent out.
+
+	headerWireLength int
 }
 
 // Read reads an n byte message from the input stream.

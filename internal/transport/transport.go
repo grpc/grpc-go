@@ -285,27 +285,28 @@ const (
 
 // Stream represents an RPC in the transport layer.
 type Stream struct {
-	id           uint32
 	ctx          context.Context // the associated context of the stream
 	method       string          // the associated RPC method of the stream
 	recvCompress string
 	sendCompress string
-	buf          recvBuffer
-	trReader     transportReader
-	fc           inFlow
-	wq           writeQuota
 
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.
 	requestRead func(int)
-
-	state streamState
 
 	// contentSubtype is the content-subtype for requests.
 	// this must be lowercase or the behavior is undefined.
 	contentSubtype string
 
 	trailer metadata.MD // the key-value map of trailer metadata.
+
+	// Non-pointer fields are at the end to optimize GC performance.
+	state    streamState
+	id       uint32
+	buf      recvBuffer
+	trReader transportReader
+	fc       inFlow
+	wq       writeQuota
 }
 
 func (s *Stream) swapState(st streamState) streamState {
@@ -417,12 +418,12 @@ func (*noCopy) Unlock() {}
 // The error is io.EOF when the stream is done or another non-nil error if
 // the stream broke.
 type transportReader struct {
-	_      noCopy
-	reader recvBufferReader
+	_ noCopy
 	// The handler to control the window update procedure for both this
 	// particular stream and the associated transport.
 	windowHandler func(int)
 	er            error
+	reader        recvBufferReader
 }
 
 func (t *transportReader) ReadMessageHeader(header []byte) (int, error) {

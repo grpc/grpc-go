@@ -28,8 +28,7 @@ import (
 // writeQuota is a soft limit on the amount of data a stream can
 // schedule before some of it is written out.
 type writeQuota struct {
-	_     noCopy
-	quota int32
+	_ noCopy
 	// get waits on read from when quota goes less than or equal to zero.
 	// replenish writes on it when quota goes positive again.
 	ch chan struct{}
@@ -39,6 +38,7 @@ type writeQuota struct {
 	// It is implemented as a field so that it can be updated
 	// by tests.
 	replenish func(n int)
+	quota     int32
 }
 
 func initWriteQuota(wq *writeQuota, sz int32, done <-chan struct{}) {
