@@ -491,8 +491,8 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *ClientSt
 		headerChan: make(chan struct{}),
 		doneFunc:   callHdr.DoneFunc,
 	}
-	initRecvBuffer(&s.Stream)
-	initWriteQuota(&s.Stream, defaultWriteQuota, s.done)
+	initRecvBuffer(&s.Stream.buf)
+	initWriteQuota(&s.Stream.wq, defaultWriteQuota, s.done)
 	s.requestRead = func(n int) {
 		t.adjustWindow(s, uint32(n))
 	}

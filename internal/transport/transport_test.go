@@ -1857,7 +1857,7 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 		ctx:         ctx,
 		requestRead: func(int) {},
 	}
-	initRecvBuffer(s)
+	initRecvBuffer(&s.buf)
 	s.trReader = transportReader{
 		reader: &recvBufferReader{
 			ctx:     s.ctx,
@@ -3071,7 +3071,7 @@ func (s) TestReadMessageHeaderMultipleBuffers(t *testing.T) {
 	s := Stream{
 		requestRead: func(int) {},
 	}
-	initRecvBuffer(&s)
+	initRecvBuffer(&s.buf)
 	recvBuffer := &s.buf
 	s.trReader = transportReader{
 		reader: &recvBufferReader{

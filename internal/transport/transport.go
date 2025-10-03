@@ -68,8 +68,8 @@ type recvBuffer struct {
 	err     error
 }
 
-func initRecvBuffer(s *Stream) {
-	s.buf = recvBuffer{
+func initRecvBuffer(b *recvBuffer) {
+	*b = recvBuffer{
 		c: make(chan recvMsg, 1),
 	}
 }
