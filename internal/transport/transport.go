@@ -68,10 +68,8 @@ type recvBuffer struct {
 	err     error
 }
 
-func initRecvBuffer(b *recvBuffer) {
-	*b = recvBuffer{
-		c: make(chan recvMsg, 1),
-	}
+func (b *recvBuffer) init() {
+	b.c = make(chan recvMsg, 1)
 }
 
 func (b *recvBuffer) put(r recvMsg) {

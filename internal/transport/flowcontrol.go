@@ -41,13 +41,11 @@ type writeQuota struct {
 	quota     int32
 }
 
-func initWriteQuota(wq *writeQuota, sz int32, done <-chan struct{}) {
-	*wq = writeQuota{
-		quota: sz,
-		ch:    make(chan struct{}, 1),
-		done:  done,
-	}
-	wq.replenish = wq.realReplenish
+func (w *writeQuota) init(sz int32, done <-chan struct{}) {
+	w.quota = sz
+	w.ch = make(chan struct{}, 1)
+	w.done = done
+	w.replenish = w.realReplenish
 }
 
 func (w *writeQuota) get(sz int32) error {

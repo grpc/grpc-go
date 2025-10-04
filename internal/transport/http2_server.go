@@ -398,7 +398,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		st:               t,
 		headerWireLength: int(frame.Header().Length),
 	}
-	initRecvBuffer(&s.Stream.buf)
+	s.Stream.buf.init()
 	var (
 		// if false, content-type was missing or invalid
 		isGRPC      = false
@@ -643,7 +643,7 @@ func (t *http2Server) operateHeaders(ctx context.Context, frame *http2.MetaHeade
 		t.adjustWindow(s, uint32(n))
 	}
 	s.ctxDone = s.ctx.Done()
-	initWriteQuota(&s.Stream.wq, defaultWriteQuota, s.ctxDone)
+	s.Stream.wq.init(defaultWriteQuota, s.ctxDone)
 	s.trReader = transportReader{
 		reader: recvBufferReader{
 			ctx:     s.ctx,
